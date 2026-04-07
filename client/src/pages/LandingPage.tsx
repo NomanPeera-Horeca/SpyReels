@@ -169,6 +169,57 @@ export default function LandingPage() {
   const handleGoogleLogin = () => {
     window.location.href = getLoginUrl();
   };
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const handleEmailAuth = async () => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const body = authMode === "signup"
+        ? { email: authEmail, password: authPassword, name: authName }
+        : { email: authEmail, password: authPassword };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || "Something went wrong");
+      } else {
+        window.location.href = "/";
+      }
+    } catch {
+      setAuthError("Network error. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authEmail }),
+      });
+      if (res.ok) {
+        setAuthError("Reset link sent! Check your email.");
+      } else {
+        setAuthError("Email not found.");
+      }
+    } catch {
+      setAuthError("Network error. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -177,7 +228,7 @@ export default function LandingPage() {
           <DialogHeader>
             <DialogTitle className="text-center text-2xl font-bold">Welcome to SpyReels</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col items-center gap-6 py-4">
+          <div className="flex flex-col items-center gap-4 py-2 w-full">
             <p className="text-center text-muted-foreground text-sm">Spy on viral Reels. Steal the script. Own the feed.</p>
             <button
               onClick={handleGoogleLogin}
@@ -186,6 +237,84 @@ export default function LandingPage() {
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
               Continue with Google
             </button>
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <div className="flex w-full gap-2 mb-1">
+              <button
+                onClick={() => setAuthMode("login")}
+                className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${authMode === "login" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Log In
+              </button>
+              <button
+                onClick={() => setAuthMode("signup")}
+                className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${authMode === "signup" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Sign Up
+              </button>
+            </div>
+            {authMode === "signup" && (
+              <input
+                type="text"
+                placeholder="Your name"
+                value={authName}
+                onChange={e => setAuthName(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            )}
+            <input
+              type="email"
+              placeholder="Email address"
+              value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            {authError && <p className="text-xs text-red-500 w-full">{authError}</p>}
+            <button
+              onClick={handleEmailAuth}
+              disabled={authLoading}
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {authLoading ? "Please wait..." : authMode === "login" ? "Log In" : "Create Account"}
+            </button>
+            {authMode === "login" && (
+              <button
+                onClick={() => setAuthMode("forgot")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </button>
+            )}
+            {authMode === "forgot" && (
+              <div className="w-full flex flex-col gap-3">
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  onClick={handleForgotPassword}
+                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:opacity-90"
+                >
+                  Send Reset Link
+                </button>
+                <button onClick={() => setAuthMode("login")} className="text-xs text-muted-foreground hover:text-foreground">
+                  Back to Login
+                </button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground text-center">Free to start — no credit card required</p>
           </div>
         </DialogContent>
