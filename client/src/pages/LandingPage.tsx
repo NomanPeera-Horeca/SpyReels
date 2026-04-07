@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getLoginUrl } from "@/const";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -161,13 +162,34 @@ const FAQ = [
 export default function LandingPage() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [isAnnual, setIsAnnual] = useState(true);
-
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const handleGetStarted = () => {
+    setShowLoginModal(true);
+  };
+  const handleGoogleLogin = () => {
     window.location.href = getLoginUrl();
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center text-2xl font-bold">Welcome to SpyReels</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-6 py-4">
+            <p className="text-center text-muted-foreground text-sm">Spy on viral Reels. Steal the script. Own the feed.</p>
+            <button
+              onClick={handleGoogleLogin}
+              className="flex items-center gap-3 w-full justify-center px-6 py-3 border border-border rounded-lg hover:bg-accent transition-colors font-medium"
+            >
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+              Continue with Google
+            </button>
+            <p className="text-xs text-muted-foreground text-center">Free to start — no credit card required</p>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* ─── Navigation ─── */}
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
