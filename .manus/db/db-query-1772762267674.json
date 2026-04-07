@@ -1,0 +1,73 @@
+{
+  "query": "SELECT id, handle, timeframeDays, status, totalReels, errorMessage, createdAt FROM scrape_jobs ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT id, handle, timeframeDays, status, totalReels, errorMessage, createdAt FROM scrape_jobs ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "7",
+      "handle": "natgeo",
+      "timeframeDays": "180",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Instagram rate limit reached. Please wait a few minutes and try again.",
+      "createdAt": "2026-03-06 01:56:14"
+    },
+    {
+      "id": "6",
+      "handle": "mikeybausch",
+      "timeframeDays": "180",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"mikeybausch\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:49:07"
+    },
+    {
+      "id": "5",
+      "handle": "noman_peera",
+      "timeframeDays": "30",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"noman_peera\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:48:21"
+    },
+    {
+      "id": "4",
+      "handle": "owner.com",
+      "timeframeDays": "30",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"owner.com\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:47:36"
+    },
+    {
+      "id": "3",
+      "handle": "owner",
+      "timeframeDays": "30",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"owner\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:47:14"
+    },
+    {
+      "id": "2",
+      "handle": "moanwary",
+      "timeframeDays": "30",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"moanwary\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:46:49"
+    },
+    {
+      "id": "1",
+      "handle": "nomanpeera",
+      "timeframeDays": "30",
+      "status": "failed",
+      "totalReels": "0",
+      "errorMessage": "Failed to resolve user \"nomanpeera\": 429 Too Many Requests – ",
+      "createdAt": "2026-03-06 01:46:32"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\thandle\ttimeframeDays\tstatus\ttotalReels\terrorMessage\tcreatedAt\n7\tnatgeo\t180\tfailed\t0\tInstagram rate limit reached. Please wait a few minutes and try again.\t2026-03-06 01:56:14\n6\tmikeybausch\t180\tfailed\t0\tFailed to resolve user \"mikeybausch\": 429 Too Many Requests – \t2026-03-06 01:49:07\n5\tnoman_peera\t30\tfailed\t0\tFailed to resolve user \"noman_peera\": 429 Too Many Requests – \t2026-03-06 01:48:21\n4\towner.com\t30\tfailed\t0\tFailed to resolve user \"owner.com\": 429 Too Many Requests – \t2026-03-06 01:47:36\n3\towner\t30\tfailed\t0\tFailed to resolve user \"owner\": 429 Too Many Requests – \t2026-03-06 01:47:14\n2\tmoanwary\t30\tfailed\t0\tFailed to resolve user \"moanwary\": 429 Too Many Requests – \t2026-03-06 01:46:49\n1\tnomanpeera\t30\tfailed\t0\tFailed to resolve user \"nomanpeera\": 429 Too Many Requests – \t2026-03-06 01:46:32\n",
+  "stderr": "",
+  "execution_time_ms": 204
+}

@@ -1,0 +1,368 @@
+# Project TODO
+
+- [x] Database schema for scrape jobs, reels, and transcriptions
+- [x] Backend scraper API: accept Instagram handle + timeframe, fetch all Reels via GraphQL
+- [x] Backend endpoint: list reels with sorting/filtering (views, likes, comments, date)
+- [x] Backend transcription endpoint: download audio, transcribe, identify hook
+- [x] Backend Google Sheets export endpoint
+- [x] Frontend: Dashboard layout with DashboardLayout sidebar
+- [x] Frontend: Scrape form (handle input + timeframe dropdown)
+- [x] Frontend: Reels list with thumbnails, stats, and links
+- [x] Frontend: Dropdown filter/sort menu with instant refresh
+- [x] Frontend: Transcribe button per reel with results display
+- [x] Frontend: Google Sheets export button (Connect to Sheets)
+- [x] Frontend: CSV export button
+- [x] Frontend: History page showing past scrape jobs
+- [x] Vitest tests for backend procedures (10 tests passing)
+- [x] BUG: All scrape jobs failing - fixed by using clips/user POST endpoint with curl
+- [ ] Display error message on failed jobs in History page
+- [x] Fix Dashboard URL query param parsing (wouter vs window.location.search)
+- [x] BUG: curl not found in production - fixed using got-scraping with browser TLS fingerprint impersonation
+- [x] BUG: Only 1 reel returned for @noman_peera - fixed: clips endpoint returns non-chronological order, now paginate fully and filter by date
+- [x] BUG: Transcription not working - fixed audio/mp4 content type for Whisper, use got-scraping for video download
+- [x] Redesign transcript UI with timestamped segments like sample (00:00, 00:06, etc.)
+- [x] Add Copy Text, Copy with Timestamps, and Export SRT buttons to transcript dialog
+- [x] Keep hook analysis in tabbed view alongside transcript
+- [x] Add retry capability for failed transcriptions
+- [x] Add segments JSON column to transcriptions table
+- [x] BUG: Transcription stuck in "Transcribing..." state on production - fixed: backend works (direct Whisper API), frontend now polls every 3s while transcriptions are processing
+- [x] Add follower count column to scrape_jobs table
+- [x] Store follower count during scrape from profile data
+- [x] Add engagement rate sorting: (likes + comments) / followers × 100
+- [x] Display engagement rate % on each reel row
+- [x] Return follower count from reels.list endpoint
+- [x] Include engagement rate in CSV and Google Sheets exports
+- [x] Show follower count in dashboard header
+- [x] Update tests for new engagement rate calculation (11 tests passing)
+- [x] BUG: Transcription dialog content overflows outside the box with no scrollbar - fixed: added overflow-hidden + flex layout to DialogContent, replaced ScrollArea with overflow-y-auto divs
+- [x] RE-CREATE SCRIPT: Database schema for generated scripts (reelId, topic, gradeLevel, originalStructure, generatedScript, readabilityAnalysis)
+- [x] RE-CREATE SCRIPT: Backend viral structure analysis (Hook, Body, Transition, CTA identification via LLM)
+- [x] RE-CREATE SCRIPT: Backend script generation with grade-level readability (Grade 2-6 + Auto)
+- [x] RE-CREATE SCRIPT: Backend Hemingway-style analysis (passive voice, complex sentences, adverbs)
+- [x] RE-CREATE SCRIPT: Frontend split-view dialog (left: original transcript, right: generated script)
+- [x] RE-CREATE SCRIPT: Topic/angle input text box for script customization
+- [x] RE-CREATE SCRIPT: Grade-level dropdown selector (Grade 2, 3, 4, 5, 6, Auto)
+- [x] RE-CREATE SCRIPT: Hemingway highlighting (passive voice, complex sentences, adverbs)
+- [x] RE-CREATE SCRIPT: Script timer with Slow/Average/Fast delivery estimates
+- [x] RE-CREATE SCRIPT: Add "Re-Create Script" button next to "View Transcript" in dashboard rows
+- [x] RE-CREATE SCRIPT: Tests for new backend procedures (17 tests passing)
+- [x] PROFILE PREVIEW: Backend endpoint to fetch Instagram profile info (avatar, name, bio, followers, posts)
+- [x] PROFILE PREVIEW: Show profile card on Scrape Reels page after entering handle (avatar, name, bio, follower count, post count)
+- [x] PROFILE PREVIEW: Confirm button to verify correct handle before scraping
+- [x] TELEPROMPTER: Full-screen teleprompter mode with large text display
+- [x] TELEPROMPTER: Adjustable auto-scroll speed
+- [x] TELEPROMPTER: Smart take tracking - if person repeats, start from where they left off
+- [x] TELEPROMPTER: After 5-10 takes on a section, auto-jump to that section instead of scrolling from top
+- [x] TELEPROMPTER: Integrate into Re-Create Script dialog
+- [x] TELEPROMPTER: Tests for new features (20 tests passing)
+- [x] SAVED REELS: Database table for saved/bookmarked reels
+- [x] SAVED REELS: Backend CRUD (save, unsave, list saved, checkBatch)
+- [x] SAVED REELS: Save/bookmark button on each reel row in dashboard
+- [x] SAVED REELS: "Saved Reels" page accessible from sidebar
+- [x] SAVED REELS: Sidebar menu item for Saved Reels
+- [x] FIX RE-CREATE: Topic input now optional (same topic by default, click to change)
+- [x] FIX RE-CREATE: Updated LLM prompt to keep same topic, just rewrite body differently with same structure/hook
+- [x] UI OVERHAUL: Replace dialog-based Re-Create with inline expandable panels
+- [x] UI OVERHAUL: One-click Re-Create from dashboard row with inline results
+- [x] UI OVERHAUL: Streamlined batch workflow for 30-40 scripts
+- [x] UI OVERHAUL: Tests for new features (28 tests passing)
+- [x] BUG: Profile preview card missing profile picture/avatar - fixed: proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
+- [x] BUG: Teleprompter auto-jumping not working - fixed: use refs for mutable state to avoid stale closures, pause animation before jumping, use instant scroll instead of smooth
+- [x] SCRIPT LIBRARY: Database tables for scripts, tags, and script versions
+- [x] SCRIPT LIBRARY: Default stage tags (Scripting, Rehearsing, Filming, Editing, Posting) + custom user tags
+- [x] SCRIPT LIBRARY: Save script from Re-Create panel with post date, tags, and notes
+- [x] SCRIPT LIBRARY: "My Scripts" page in sidebar with tag filtering, date sorting, search
+- [x] SCRIPT LIBRARY: Tag management (create, edit, delete custom tags)
+- [x] SCRIPT EDITOR: Inline editing of generated scripts (textarea with save)
+- [x] SCRIPT EDITOR: AI grammar/spell check (auto-correct sentence structure, spelling)
+- [x] SCRIPT EDITOR: "Rewrite with AI" button for iterative improvements
+- [x] SCRIPT EDITOR: Version history - save each iteration, compare drafts, restore versions
+- [x] SCRIPT EDITOR: "Approve" button to mark final script as approved
+- [x] SCRIPT EDITOR: Tests for new backend procedures (37 tests passing)
+- [x] SAVED REELS ACTIONS: Add Transcribe and Re-Create buttons to each saved reel row (same as Dashboard)
+- [x] SAVED REELS ACTIONS: Add "Transcribe All" batch button to transcribe all saved reels at once
+- [x] SAVED REELS ACTIONS: Add inline expandable panels for transcript/re-create on saved reels
+- [x] VOICE TELEPROMPTER: Integrate Web Speech API for voice recognition in teleprompter
+- [x] VOICE TELEPROMPTER: Auto-advance to next section when voice matches spoken words
+- [x] VOICE TELEPROMPTER: No clicking needed - voice-driven section progression
+- [x] SEARCH REELS: New "Search Reels" page in sidebar
+- [x] SEARCH REELS: Search by keyword (topic search across Instagram reels)
+- [x] SEARCH REELS: Search by handle (fetch reels from specific creator)
+- [x] SEARCH REELS: Sort results by views, likes, engagement rate
+- [x] SEARCH REELS: Transcribe and Re-Create actions on search results
+- [x] KANBAN/CALENDAR: Kanban board view for My Scripts (columns: Scripting, Rehearsing, Filming, Editing, Posting)
+- [x] KANBAN/CALENDAR: Calendar view showing scripts by post date
+- [x] KANBAN/CALENDAR: Drag-and-drop to change stage/date
+- [x] SCRIPT EXPORT: Download as .txt
+- [x] SCRIPT EXPORT: Download as .docx
+- [x] SCRIPT EXPORT: Download as .pdf
+- [x] SCRIPT EXPORT: Connect to Google Docs
+- [x] GOOGLE DOCS: Backend endpoint to create a Google Doc from script content
+- [x] GOOGLE DOCS: Format document with title, metadata, and script body
+- [x] GOOGLE DOCS: Return shareable Google Docs link to user
+- [x] GOOGLE DOCS: Add "Export to Google Docs" button in ScriptExport dropdown
+- [x] GOOGLE DOCS: Tests for the new endpoint
+- [x] BUG: Saved Reels Re-Create says "Transcribe first" even when transcript already exists
+- [x] BUG: Search Reels keyword search returns "No reels found" for valid keywords like "marketing"
+- [x] UX OVERHAUL: Remove Hook Analysis from inline panel
+- [x] UX OVERHAUL: All-in-one inline workflow (Transcribe → Re-Create → Edit → Save/Approve/Tag) without leaving dashboard
+- [x] UX OVERHAUL: Calendar date picker with day + preferred posting time
+- [x] UX OVERHAUL: Show competitor posting day and time on each reel row
+- [x] UX OVERHAUL: Default timezone CST, user can change in settings
+- [x] UX OVERHAUL: Timezone preference stored in DB user_preferences table
+- [x] UX OVERHAUL: Settings page for timezone preference
+- [x] UX OVERHAUL: Direct save-to-draft or approve+tag from inline panel
+- [x] UX OVERHAUL: Apply same inline workflow to Saved Reels page
+- [x] UX OVERHAUL: Apply same inline workflow to Search Reels page
+- [x] CHROME EXT: Backend API endpoints for extension (auth, subscription check, transcribe, save, AI remake)
+- [x] CHROME EXT: Extension manifest v3 with content scripts for instagram.com
+- [x] CHROME EXT: In-feed sorting toolbar on Instagram profiles (Views, Likes, Comments, Engagement Rate)
+- [x] CHROME EXT: Overlay buttons on each Reel thumbnail (Transcribe, Save, AI Remake)
+- [x] CHROME EXT: Transcribe feature - free 3/day, extract audio to text popup
+- [x] CHROME EXT: Save to Dashboard - one-click send reel to SaaS
+- [x] CHROME EXT: AI Remake - paid feature, generate script in popup with teleprompter link
+- [x] CHROME EXT: Freemium paywall - 3 free transcriptions/day, paid AI Remake
+- [x] CHROME EXT: High-conversion upgrade modal for free users
+- [x] CHROME EXT: Subscription status check via API
+- [x] CHROME EXT: Popup UI with login, status, and quick actions
+- [x] CHROME EXT: Stripe payment integration for $29/mo subscription
+- [ ] REWRITE: Add "Rewrite" button with grade level dropdown (Grade 2-8 + Auto) to re-create panel
+- [ ] REWRITE: Script timing selector (15s, 30s, 45s, 60s, 90s) to adjust script length
+- [ ] REWRITE: AI delivery cues on each line (tone, pace, emphasis, gestures) based on viral structure
+- [ ] REWRITE: Backend AI prompts for rewrite with grade level, timing, and cues
+- [ ] REWRITE: Apply rewrite features to Dashboard, Saved Reels, and Search Reels
+- [x] SEARCH UI: Copy exact same inline workflow from Dashboard to Search Reels (transcribe, re-create, grade/duration/cues, save/approve/tag with calendar)
+- [x] SEARCH UI: Handle search shows profile preview (avatar, bio, followers, verified, private warning) same as Scrape Reels page
+- [x] SEARCH UI: Add 3rd "URL" tab to paste up to 20 Instagram reel URLs directly
+- [x] SEARCH UI: Backend endpoint to fetch reel data from direct URLs
+- [x] REWRITE TOOLBAR: Apply same rewrite toolbar from Search Reels to Dashboard page
+- [x] REWRITE TOOLBAR: Apply same rewrite toolbar from Search Reels to Saved Reels page
+- [x] REWRITE TOOLBAR: Ensure consistent grade level, duration, delivery cues across all three pages
+- [x] REFACTOR: Extract shared InlineWorkflow component into components/InlineWorkflow.tsx
+- [x] REFACTOR: Extract shared helper functions (formatTimestamp, segmentsToSRT, formatTimingDuration, formatPostedTime) into shared file
+- [x] REFACTOR: Extract shared constants (GRADE_OPTIONS, DURATION_OPTIONS, TIME_OPTIONS) into shared file
+- [x] REFACTOR: Extract StructureBlock and ScriptWithCues sub-components into shared file
+- [x] REFACTOR: Update Dashboard.tsx to import shared InlineWorkflow
+- [x] REFACTOR: Update SavedReels.tsx to import shared InlineWorkflow
+- [x] REFACTOR: Update SearchReels.tsx to import shared InlineWorkflow
+- [x] BUG: URL ingestion returns 0 views/likes/comments, @owner as creator, wrong date - backend not fetching real reel metadata
+- [x] BUG: Keyword search returns different results than Instagram explore - currently uses AI to find creators then fetches their reels, should search across ALL reels like Instagram does
+- [x] UX: Add loading progress indicator for URL ingestion showing real-time progress as each URL is fetched
+- [x] EXTENSION: Chrome extension manifest v3 with proper permissions for Instagram
+- [x] EXTENSION: Sort Feed side panel - sort reels by Likes, Views, Comments, Engagement Rate, Date
+- [x] EXTENSION: Save Reel button injected on Instagram reels (one-click save to dashboard Saved Reels)
+- [x] EXTENSION: Transcribe button on reels - 3 free transcriptions then paid
+- [x] EXTENSION: Re-Create script from transcription directly in extension
+- [x] EXTENSION: Calendar integration - add transcribed reel to calendar in dashboard
+- [x] EXTENSION: Profile sort - sort creator's reels by engagement metrics on their profile page
+- [x] EXTENSION: Backend API endpoints for extension auth and usage tracking (free tier limit)
+- [x] EXTENSION: Mobile-friendly save workflow (save on phone, transcribe later on desktop)
+- [x] EXTENSION: Package as installable ZIP
+- [x] PRICING: Research competitor pricing (SortFeed, Flick, Later, Metricool, Iconosquare)
+- [x] PRICING: Design 5-tier pricing model (Free, Starter, Pro, Business, Agency) with feature matrix
+- [x] PRICING: Set up Stripe integration with webdev_add_feature
+- [x] PRICING: Database schema for subscriptions, usage tracking, feature limits
+- [x] PRICING: Backend subscription management (create checkout, webhook, portal, feature enforcement)
+- [x] PRICING: High-conversion pricing page with monthly/yearly toggle, social proof, urgency
+- [x] PRICING: Feature gating across all pages (soft locks with upgrade prompts)
+- [x] PRICING: Server-side usage enforcement (checkUsageLimit + incrementUsage in all procedures)
+- [x] PRICING: Frontend useUsageGate hook and UpgradePrompt component
+- [x] PRICING: Usage gates on Scrape, Search, Transcribe, Re-Create, Rewrite, Export
+- [x] PRICING: Billing page with usage meters mapped to backend data
+- [x] PRICING: Tests for usage gating and feature limits (130 tests passing)
+- [x] PRICING: Billing management page (current plan, usage meters, invoices)
+- [x] PRICING: Annual discount to push yearly subscriptions (save 40%+)
+- [x] PRICING: Chrome extension tier integration (free 3 transcribes, paid unlimited)
+- [x] LANDING PAGE: Public homepage for unauthenticated visitors
+- [x] LANDING PAGE: Hero section with headline, subheadline, CTA, and product screenshot
+- [x] LANDING PAGE: Feature showcase with icons and descriptions of key capabilities
+- [x] LANDING PAGE: Early adopter incentive section (launch pricing, founder's note)
+- [x] LANDING PAGE: Transparency section ("We're new — here's your advantage")
+- [x] LANDING PAGE: Pricing preview section linking to full pricing page
+- [x] LANDING PAGE: FAQ section addressing common objections
+- [x] LANDING PAGE: Footer with navigation links
+- [x] LANDING PAGE: Route unauthenticated users to landing page, authenticated to dashboard
+- [x] LEGAL: Terms of Service page with chargeback/refund protection language
+- [x] LEGAL: Privacy Policy page (GDPR-friendly, data collection transparency)
+- [x] LEGAL: Link ToS and Privacy Policy in landing page footer and signup flow
+- [x] ADMIN: Owner/admin gets unlimited access bypassing all plan limits
+- [x] BLOG: Database schema for blog posts (title, slug, content, author, published_at, tags, meta)
+- [x] BLOG: Admin-only CRUD for creating/editing/publishing blog posts
+- [x] BLOG: Public blog listing page with SEO-friendly URLs
+- [x] BLOG: Individual blog post page with structured data
+- [x] BLOG: Navigation link in landing page and dashboard
+- [x] SEO: Meta tags (title, description, canonical) on all public pages
+- [x] SEO: Open Graph and Twitter Card meta tags
+- [x] SEO: JSON-LD structured data (Organization, WebApplication, FAQPage, HowTo, BlogPosting)
+- [x] SEO: Dynamic sitemap.xml generation
+- [x] SEO: robots.txt configuration
+- [x] SEO: LLM-friendly content structure (clear definitions, FAQ schema, how-to schema)
+- [x] REBRAND: Update app title to SpyReels
+- [x] REBRAND: Update landing page copy with SpyReels branding
+- [x] REBRAND: Update pricing page with SpyReels branding
+- [x] REBRAND: Update SEO meta tags, JSON-LD, Open Graph for SpyReels
+- [x] REBRAND: Update Terms of Service for SpyReels
+- [x] REBRAND: Update Privacy Policy for SpyReels
+- [x] REBRAND: Update DashboardLayout and internal pages
+- [x] REBRAND: Update sitemap and robots.txt references
+- [x] REBRAND: Update blog pages with SpyReels branding
+- [x] LOGO: Set Concept 2 (magnifying glass + play button) as app logo via VITE_APP_LOGO
+- [x] LOGO: Generate and set favicon from Concept 2
+- [x] LOGO: Update landing page to use the new logo
+- [x] BUG: Favicon not showing on published site - fix favicon integration (regenerated multi-size ICO with 16/32/48px, added PNG fallback)
+- [x] EXTENSION PAGE: Build /extension download page with hero, features, screenshots, and "Add to Chrome" button
+- [x] EXTENSION PAGE: Host extension ZIP for direct download from the page
+- [x] BUG: Title tag still shows old name on published site - user updated VITE_APP_TITLE in Settings
+- [x] BUG: Favicon still not showing on published site - switched to CDN URLs for favicon links
+- [x] UX: Add Chrome Extension link/button to landing page navigation bar and footer
+- [x] LEGAL: Ensure /privacy page has proper privacy policy content for Chrome Web Store submission (added Chrome Extension section)
+- [x] LEGAL: Ensure /terms page has proper terms of service content (updated logo on both pages)
+- [x] BUG: Stripe webhook errors - fixed with upsert logic, safe timestamp parsing, and customer.subscription.created handler
+- [x] FEATURE: Telegram bot integration - users share Instagram Reel links to Telegram bot from mobile
+- [x] DB: Create telegram_connections table (userId, telegramChatId, linkCode, connected status)
+- [x] DB: Create collected_reels table (userId, shortcode, caption, views, likes, comments, thumbnail, videoUrl, reelUrl, duration, postedAt, ownerUsername, source)
+- [x] BACKEND: Telegram bot webhook handler to receive messages and extract Instagram URLs
+- [x] BACKEND: Link-code generation and verification flow to connect Telegram to SpyReels account
+- [x] BACKEND: tRPC procedures for collected reels (list, delete, transcribe, recreate)
+- [x] UI: New "Collected Reels" page with InlineWorkflow support (transcribe, recreate, save script)
+- [x] UI: Telegram connection settings in Settings page (generate link code, show connection status)
+- [x] UI: Add "Collected Reels" to sidebar navigation
+- [x] TESTS: Write tests for Telegram bot and collected reels features (21 tests passing)
+- [x] BUG: Collected Reels metadata not fetching - fixed by adding page HTML scraping as primary strategy (gets video URL, likes, comments, thumbnail, caption)
+- [x] BUG: Collected Reels transcription not working - fixed by ensuring video URL is fetched via page HTML scraping
+- [x] IMPROVEMENT: Added Refresh All button to re-fetch metadata for all incomplete reels
+- [x] IMPROVEMENT: Added Refresh Data button for individual reels missing video URL
+- [x] IMPROVEMENT: Added refreshAll tRPC procedure for batch re-fetching
+- [x] BUG-T1: Date selection picks wrong date - fixed with parseDateSafe() on server and formatDateForInput() on client to avoid UTC timezone shift
+- [x] BUG-T1: Mobile UI responsive fixes across all pages - Dashboard, SavedReels, CollectedReels, SearchReels, MyScripts, ScriptEditor, Home
+- [x] BUG-T1: Transcription status clarity - added colored badges (Transcribed/Processing/Failed) on reel cards
+- [x] BUG-T1: Buttons overlapping fixed - icon-only on mobile, text labels on desktop for action buttons
+- [x] BUG-T1: Dashboard overview - shows stats (reels scraped, scripts, saved, collected), quick actions, recent scrape jobs, recent scripts
+- [x] TIER2: Phrase Swapper tool - swap key phrases with alternatives while keeping meaning
+- [x] TIER2: Simplifier tool - simplify complex language to make scripts more conversational
+- [x] TIER2: Grade Level adjuster - rewrite at different reading levels (Tone: casual/professional/academic/gen_z/storyteller)
+- [x] TIER2: Make Shorter tool - condense script to fit 30s/45s/60s/90s reel duration
+- [x] TIER2: Highlight & Rewrite - select text in editor, floating toolbar appears to rewrite selection with optional instruction
+- [x] TIER2: Rewrite with Angle/Idea - New Angle button with dialog to enter custom angle/perspective
+- [x] TIER2: Script editing toolbar UI in ScriptEditor page - full toolbar with all tools, dropdowns, loading states
+- [x] TIER2: Backend LLM procedures for all script editing tools (phraseSwap, simplify, adjustTone, makeShorter, rewriteSelection)
+- [x] TIER2: Tests for script editing tools (23 tests passing)
+- [x] BUG-T2: Collected Reels "Refresh All" error - getCollectedReels is not defined, fixed to use getCollectedReelsByUser
+- [x] BUG-T2: Blog page database error - blog_posts table missing from database, created via SQL
+- [x] BUG-T2: Dashboard job click doesn't navigate to job detail - fixed by using wouter's useSearch instead of useLocation for query param reactivity
+- [x] LLM DISCOVERY: Create llms.txt file describing SpyReels for AI crawlers
+- [x] LLM DISCOVERY: Serve llms.txt at /llms.txt route
+- [x] SEO: Add Google Search Console verification meta tag to index.html
+- [x] BLOG: Write and publish "How to Transcribe Instagram Reels Automatically"
+- [x] BLOG: Write and publish "How to Spy on Competitor Instagram Reels"
+- [x] BLOG: Write and publish "5 Viral Instagram Reel Hook Formulas"
+- [x] BLOG: Write and publish "How to Write Instagram Reel Scripts That Go Viral"
+- [x] BLOG: Write and publish "Best Instagram Reels Analytics Tools in 2026"
+- [x] CONVERSION: Add inline CTA banners inside blog posts (Try SpyReels Free buttons)
+- [x] CONVERSION: Add lead magnet section at end of blog posts (free downloadable resource)
+- [x] CONVERSION: Add sticky signup prompt/banner on blog pages
+- [x] CONVERSION: Update existing blog post content with mid-article CTAs
+- [x] IDEA-TO-SCRIPT: Database schema for script ideas (idea text, status, generated script reference)
+- [x] IDEA-TO-SCRIPT: Backend procedures for submitting ideas and processing queue
+- [x] IDEA-TO-SCRIPT: AI background generation - process ideas into full reel scripts
+- [x] IDEA-TO-SCRIPT: Quick-submit UI - users can rapidly drop ideas one after another
+- [x] IDEA-TO-SCRIPT: Queue/status view showing pending, processing, and completed ideas
+- [x] IDEA-TO-SCRIPT: Link completed ideas to My Scripts for editing/export
+- [x] IDEA-TO-SCRIPT: Add navigation entry in sidebar
+- [x] IDEA-VOICE: Add microphone recording button to Idea to Script page
+- [x] IDEA-VOICE: Browser audio capture using MediaRecorder API (webm format)
+- [x] IDEA-VOICE: Upload recorded audio to S3 and transcribe via Whisper
+- [x] IDEA-VOICE: Add video recording option (extract audio from video)
+- [x] IDEA-VOICE: Transcribed text auto-fills the idea input field
+- [x] IDEA-VALIDATE: AI reviews idea before script generation (relevance, clarity, viral potential)
+- [x] IDEA-VALIDATE: AI suggests improved version of the idea (better hook angle, clearer topic)
+- [x] IDEA-VALIDATE: User can Accept (generate script), Reject (discard), or Edit the AI suggestion
+- [x] IDEA-VALIDATE: Show validation result inline with accept/reject/edit buttons
+- [x] IDEA-VALIDATE: Only generate script after user explicitly accepts the validated idea
+- [x] BUG: Idea edit flow doesn't work properly - fixed: edit action now re-validates via validateIdeaInBackground instead of skipping to script generation, enabling proper back-and-forth loop
+- [x] LIBRARY: Backend procedure to aggregate all transcripts across sources (scraped, saved, collected, searched reels)
+- [x] LIBRARY: Backend procedure to aggregate all generated scripts (re-create, rewrite, idea-to-script)
+- [x] LIBRARY: Search by keyword across transcript text and script content
+- [x] LIBRARY: Filter by date range, source page, creator/handle
+- [x] LIBRARY: My Library page with Transcripts and Scripts tabs
+- [x] LIBRARY: Quick actions on each item (copy, export, open in editor, view source reel)
+- [x] LIBRARY: Add My Library to sidebar navigation
+- [x] TIER1-UX: Rename "Scrape Reels" to "Research Reels" conversion-friendly name
+- [x] TIER1-UX: Rename "History" to "Account Monitoring" 
+- [x] TIER1-UX: Reorder sidebar menu to match user journey (Research → Library → Scripts → Plan → Share)
+- [x] TIER1-UX: Simplify and make menu more appealing and customer-friendly
+- [x] TIER1-PASTE: Add "Paste Your Script" feature for users who already have scripts from ChatGPT
+- [x] TIER1-PLANNER: Default sort scripts by date in planner/calendar view
+- [x] SHARE: Add share script via Email option
+- [x] SHARE: Add share script via WhatsApp option
+- [x] SHARE: Add share script via Telegram option
+- [x] SHARE: Include SpyReels branding in shared content for viral growth
+- [x] BUG: Paste Script save fails - reelId/recreatedScriptId expect number but receive null, sourceHandle expects string but gets null
+- [x] PASTE: Add date picker to plan post date before saving
+- [x] PASTE: Add approve option so script goes directly to My Scripts as approved
+- [x] MONITORING: Add "Last synced X days ago" display on each account row
+- [x] MONITORING: Add Re-sync button that fetches only reels since last sync date
+- [x] MONITORING: Backend procedure for incremental re-sync (deduplicate by shortcode)
+- [x] DASHBOARD: Add date range filter dropdown on dashboard reel list view
+- [x] UX: Remove Search Reels tab from sidebar and navigation completely
+- [x] BUG: Profile pictures not showing on Account Monitoring page (using UI Avatars as placeholder)
+- [x] MONITORING: Add delete/remove option for scrape jobs from Account Monitoring
+- [x] MONITORING: Block duplicate research if handle already in monitoring - redirect to re-sync
+- [x] MONITORING: Hide re-sync button if last sync was within 24 hours
+- [x] MONITORING: Profile pics show generated avatars (real IG pics require DB migration - deferred)
+- [x] MONITORING: Remove/stop monitoring button visible on each entry + deduplication
+- [x] BUG: Dashboard back arrow should go to where user came from (history or research) - implemented smart back navigation with URL param (from=history|research|dashboard)
+- [x] BUG: Dashboard shows "No reels" flash before data loads - added loading skeleton with 8 animated placeholder rows while reels fetch
+- [x] FEATURE: Store Instagram profile pic URL in scrapeJobs and display real pics - added profilePicUrl column, proxy through S3 during scrape/resync, display on Account Monitoring and Dashboard with fallback to UI Avatars
+- [x] FIX: scrape.start test failing due to duplicate handle detection - use unique handles in tests
+- [x] TESTS: Added 5 new tests for profilePicUrl, duplicate prevention, and delete (204 total passing)
+- [x] COLLECTED REELS: Add engagement rate display on each reel card (green % with trend icon, matching Account Monitoring)
+- [x] COLLECTED REELS: Add date filter dropdown by posted date (All Time, Last 7/14/30/60/90/180 Days)
+- [x] COLLECTED REELS: Replace sort dropdown with full options matching Account Monitoring (Highest Views, Highest Likes, Highest Comments, Highest Engagement Rate, Date Newest, Date Oldest)
+- [x] BUG: Collected Reels transcription not displaying after completion - added server-side transcription status lookup, Transcribed badge, Transcript/Re-Create buttons matching Account Monitoring UI
+- [x] BUG: Collected Reels thumbnail images cut off on left side - added flex-none to thumbnail container
+- [x] BUG: Collected Reels Refresh button not updating views - Refresh now available for all ready reels
+- [x] BUG: Collected Reels Refresh All not working properly - now refreshes ALL reels including ready ones for stat updates
+- [x] BUG: Scraping takes 30+ minutes for accounts with 700+ reels (@danmartell) - added 500 reel hard cap and 5-minute timeout
+- [x] SAFEGUARD: Add maximum reel limit per scrape (500 reels hard cap, breaks mid-page too)
+- [x] SAFEGUARD: Add scrape timeout (5 minutes max) to prevent infinite scrapes
+- [x] SAFEGUARD: Progress reporting with reel count updates during scrape (already existed via onProgress callback)
+- [x] BUG: Collected Reels views stay at 0 after Refresh/Refresh All - root cause: Instagram restricts play_count for unauthenticated page scrapes (returns null). Fix: preserve existing values when refresh returns 0, only update when new data is better. Likes/comments DO update correctly.
+- [x] BACKEND: Cross-reference collected reels with Account Monitoring data to pull view counts (matches by shortcode, picks highest viewCount from any scrape job)
+- [x] UI: Show views + engagement rate when cross-referenced data available, hide both when views are 0 and account not monitored
+- [ ] BUG: Stripe integration not working - investigate and fix
+- [x] UI: Replace all Post Date pickers with date + preferred time picker (friendly date display + time dropdown) - created reusable PostDateTimePicker component, updated PasteScript.tsx and ScriptEditor.tsx
+- [x] BUG: Search Reels page (/search) showing 404 on deployed site - added missing route and import in App.tsx
+- [x] CAPTION: Research-backed AI caption generator with SEO-optimized captions for Instagram Reels
+- [x] CAPTION: Backend tRPC endpoint for caption generation using LLM with viral caption research
+- [x] CAPTION: 7 caption styles (Storytelling, Question-Based, CTA-Focused, Educational, Curiosity Gap, Bold/Controversial, Relatable)
+- [x] CAPTION: Smart 5-hashtag selection framework (1 Brand + 2 Industry + 1 Topic + 1 Audience/Location)
+- [x] CAPTION: SEO optimization with primary keyword in first line, secondary keywords throughout
+- [x] CAPTION: UI component for caption display with one-click copy (caption + hashtags)
+- [x] CAPTION: Integrate into Script Editor page (generate caption from script content)
+- [x] CAPTION: Store generated captions in database with scripts
+- [x] CAPTION: Tests for caption generation backend (6 tests passing)
+- [x] CAPTION-V2: Update LLM prompt with marketingharry 6-step rules (hook 7-10 words, CTA formula A+B, formatting with emojis/line breaks, keyword repetition 2-3x, space after CTA before hashtags)
+- [x] CAPTION-V2: Add caption length selector (Auto/Short/Medium/Long) — Auto adapts based on script length
+- [x] CAPTION-V2: Add proven hook templates from marketingharry (25 tips, steal this blueprint, stop doing these mistakes, etc.)
+- [x] CAPTION-V2: Caption must provide extra value beyond the video, not just summarize it
+- [x] CAPTION-V2: Update backend input schema to accept captionLength parameter
+- [x] CAPTION-V2: Update UI with length selector dropdown
+- [x] CAPTION-V3: Update hashtag framework to Ava's 3x3 strategy (2 Video Topic + 2 Target Audience + 1 Dream Result)
+- [x] CAPTION-V3: Make caption Generate button highly visible with gradient/glow so users notice it immediately
+- [x] BUG: Fix copy buttons for caption and hashtags not working (clipboard API fallback added)
+- [x] CAPTION-V4: Revert to simpler layout (full-width dropdowns, no gradient border) with purple generate button
+- [x] CAPTION-V4: Add pop-out/maximize button to view caption in a larger dialog
+- [x] CAPTION-V4: Make caption text editable inline
+- [x] CAPTION-V4: Make hashtags editable (add/remove/edit)
+- [x] CAPTION-V4: Save edited caption and hashtags to database
+- [x] NOTIFY: Send notifyOwner() notification when new user signs up (name, email, time)
+- [x] NOTIFY: Send Telegram message to owner when new user signs up
+- [x] NOTIFY: Detect first-time signup in OAuth callback (new user vs returning user)
+- [x] ADMIN: Add lastActiveAt column to users table and update on every authenticated request
+- [x] ADMIN: Create admin-only tRPC endpoints for user list with plan, activity, retention data
+- [x] ADMIN: Overview cards (total users, paid users, MRR, active today/week/month)
+- [x] ADMIN: Users table with name, email, plan, signup date, last active, scripts created, reels scraped
+- [x] ADMIN: Retention metrics (last login, days since last visit, active/churned status)
+- [x] ADMIN: Per-user usage stats (scripts, reels, transcriptions, captions)
+- [x] ADMIN: Add Admin Dashboard page to sidebar navigation (owner-only)

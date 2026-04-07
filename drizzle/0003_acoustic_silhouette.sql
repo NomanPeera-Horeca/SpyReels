@@ -1,0 +1,1 @@
+ALTER TABLE `scrape_jobs` ADD `followerCount` int DEFAULT 0 NOT NULL;

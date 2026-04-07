@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE collected_reels SET status = 'pending', errorMessage = NULL WHERE shortcode = 'DC4XkjKyK6_';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute UPDATE collected_reels SET status = 'pending', errorMessage = NULL WHERE shortcode = 'DC4XkjKyK6_';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 62
+}

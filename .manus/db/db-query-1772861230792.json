@@ -1,0 +1,58 @@
+{
+  "query": "SELECT sr.id, sr.reelId, sr.jobId, t.id as tid, t.status, CASE WHEN t.transcript IS NULL THEN 'NULL' WHEN t.transcript = '' THEN 'EMPTY' ELSE CONCAT('HAS_DATA(', LENGTH(t.transcript), ')') END as transcript_status FROM saved_reels sr LEFT JOIN transcriptions t ON t.reelId = sr.reelId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT sr.id, sr.reelId, sr.jobId, t.id as tid, t.status, CASE WHEN t.transcript IS NULL THEN 'NULL' WHEN t.transcript = '' THEN 'EMPTY' ELSE CONCAT('HAS_DATA(', LENGTH(t.transcript), ')') END as transcript_status FROM saved_reels sr LEFT JOIN transcriptions t ON t.reelId = sr.reelId;",
+  "rows": [
+    {
+      "id": "30001",
+      "reelId": "60224",
+      "jobId": "60004",
+      "tid": "60001",
+      "status": "completed",
+      "transcript_status": "HAS_DATA(599)"
+    },
+    {
+      "id": "30003",
+      "reelId": "90032",
+      "jobId": "90001",
+      "tid": "60002",
+      "status": "completed",
+      "transcript_status": "HAS_DATA(658)"
+    },
+    {
+      "id": "1",
+      "reelId": "60152",
+      "jobId": "60003",
+      "tid": "NULL",
+      "status": "NULL",
+      "transcript_status": "NULL"
+    },
+    {
+      "id": "2",
+      "reelId": "60168",
+      "jobId": "60003",
+      "tid": "NULL",
+      "status": "NULL",
+      "transcript_status": "NULL"
+    },
+    {
+      "id": "3",
+      "reelId": "60166",
+      "jobId": "60003",
+      "tid": "NULL",
+      "status": "NULL",
+      "transcript_status": "NULL"
+    },
+    {
+      "id": "30002",
+      "reelId": "60235",
+      "jobId": "60004",
+      "tid": "NULL",
+      "status": "NULL",
+      "transcript_status": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\treelId\tjobId\ttid\tstatus\ttranscript_status\n30001\t60224\t60004\t60001\tcompleted\tHAS_DATA(599)\n30003\t90032\t90001\t60002\tcompleted\tHAS_DATA(658)\n1\t60152\t60003\tNULL\tNULL\tNULL\n2\t60168\t60003\tNULL\tNULL\tNULL\n3\t60166\t60003\tNULL\tNULL\tNULL\n30002\t60235\t60004\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

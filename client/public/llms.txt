@@ -1,0 +1,57 @@
+# SpyReels
+
+> SpyReels is a SaaS platform that helps Instagram content creators and marketers spy on viral Reels, transcribe them with AI, and re-create winning scripts for their own content. It combines competitor analysis, AI-powered transcription, script generation, and content planning into one tool.
+
+SpyReels solves the problem of manually researching viral Instagram Reels. Instead of scrolling for hours, creators can scrape any public Instagram account's Reels, sort by engagement rate, transcribe the audio, and use AI to generate new scripts based on proven viral structures.
+
+Key capabilities:
+
+- **Scrape Instagram Reels** from any public account with engagement metrics (views, likes, comments, engagement rate)
+- **AI Transcription** of Reel audio with timestamped segments, SRT export, and hook identification
+- **AI Script Re-Creation** that analyzes viral structure (Hook, Body, Transition, CTA) and generates new scripts at adjustable reading levels (Grade 2-8)
+- **Script Editing Tools** including Phrase Swapper, Simplifier, Tone Adjuster, Make Shorter, Highlight & Rewrite, and Rewrite with New Angle
+- **Content Calendar** with Kanban board, calendar view, and drag-and-drop scheduling for planned posts
+- **Teleprompter** with voice-driven auto-scroll, smart take tracking, and adjustable speed
+- **Chrome Extension** for sorting, saving, and transcribing Reels directly from Instagram
+- **Search Reels** by keyword, creator handle, or direct URL (up to 20 URLs at once)
+- **Telegram Bot Integration** to collect Reels from mobile by sharing links to @SpyReelsBot
+
+SpyReels is built for solo creators, social media managers, agencies, and anyone who creates short-form video content for Instagram. It is not a scheduling or posting tool — it focuses on the research, scripting, and pre-production workflow.
+
+## Pricing
+
+- [Free Plan](https://spyreels.ai/pricing): 2 scrapes/month, 3 transcriptions/month, basic teleprompter, limited search
+- [Starter Plan — $19/month](https://spyreels.ai/pricing): 10 scrapes/month, 30 transcriptions, 15 AI script re-creations, CSV/Sheets export, calendar and Kanban views
+- [Pro Plan — $49/month](https://spyreels.ai/pricing): 50 scrapes/month, 200 transcriptions, 100 re-creations, AI delivery cues, voice teleprompter, Google Docs/PDF export, up to 3 team members
+- [Business Plan — $99/month](https://spyreels.ai/pricing): 200 scrapes/month, 1000 transcriptions, 500 re-creations, 10 team members, 3 workspaces, API access
+- [Agency Plan — $199/month](https://spyreels.ai/pricing): Unlimited scrapes, transcriptions, and re-creations, 25 team members, 10 workspaces, white-label, dedicated support
+
+Annual billing saves approximately 40% on all paid plans.
+
+## Features
+
+- [Scrape Instagram Reels](https://spyreels.ai): Enter any public Instagram handle and timeframe to collect all Reels with views, likes, comments, engagement rate, and posting date
+- [Search Reels](https://spyreels.ai): Search by keyword to discover trending creators and Reels, search by handle, or paste up to 20 Reel URLs directly
+- [AI Transcription](https://spyreels.ai): One-click transcription with timestamped segments, copy text, copy with timestamps, and SRT export
+- [AI Script Re-Creation](https://spyreels.ai): Generate new scripts based on viral Reel structures with adjustable grade level (Grade 2-8), target duration (15s-90s), and AI delivery cues (tone, pace, emphasis, gestures)
+- [Script Editor](https://spyreels.ai): Full editing suite with AI tools — Phrase Swapper, Simplifier, Tone Adjuster (casual/professional/academic/gen-z/storyteller), Make Shorter, Highlight & Rewrite selection, Rewrite with custom angle
+- [Script Library](https://spyreels.ai): Save, tag, and organize scripts with custom workflow stages (Scripting, Rehearsing, Filming, Editing, Posting) plus custom tags
+- [Content Calendar](https://spyreels.ai): Calendar and Kanban board views for planning content schedules with preferred posting day and time
+- [Teleprompter](https://spyreels.ai): Full-screen teleprompter with adjustable speed, voice-driven auto-advance via Web Speech API, and smart take tracking
+- [Chrome Extension](https://spyreels.ai/extension): Sort Instagram feeds by engagement, save Reels to dashboard, transcribe and re-create scripts directly from Instagram
+- [Telegram Bot](https://spyreels.ai): Share Reel links from mobile to @SpyReelsBot, they appear in Collected Reels for later transcription and scripting
+- [Export Options](https://spyreels.ai): CSV, Google Sheets, Google Docs, PDF, DOCX, and SRT export formats
+
+## Pages
+
+- [Homepage](https://spyreels.ai): Landing page with product overview, feature showcase, pricing preview, and FAQ
+- [Pricing](https://spyreels.ai/pricing): Detailed pricing page with 5 tiers, feature comparison matrix, monthly/yearly toggle
+- [Chrome Extension](https://spyreels.ai/extension): Download page for the SpyReels Chrome Extension with features and installation guide
+- [Blog](https://spyreels.ai/blog): Industry insights, product updates, and tips for Instagram content creators
+- [Terms of Service](https://spyreels.ai/terms): Legal terms governing use of SpyReels
+- [Privacy Policy](https://spyreels.ai/privacy): Data collection, usage, and GDPR compliance information
+
+## Optional
+
+- [Sitemap](https://spyreels.ai/sitemap.xml): Full XML sitemap of all public pages and blog posts
+- [Robots.txt](https://spyreels.ai/robots.txt): Crawler access rules for SpyReels

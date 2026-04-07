@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `script_ideas` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`idea` text NOT NULL,\n\t`niche` varchar(128),\n\t`tone` varchar(64) DEFAULT 'engaging',\n\t`gradeLevel` varchar(16) DEFAULT 'auto',\n\t`generatedScript` text,\n\t`generatedTitle` varchar(256),\n\t`viralStructure` json,\n\t`savedScriptId` int,\n\t`status` enum('queued','processing','completed','failed') NOT NULL DEFAULT 'queued',\n\t`errorMessage` text,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `script_ideas_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute CREATE TABLE `script_ideas` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`idea` text NOT NULL,\n\t`niche` varchar(128),\n\t`tone` varchar(64) DEFAULT 'engaging',\n\t`gradeLevel` varchar(16) DEFAULT 'auto',\n\t`generatedScript` text,\n\t`generatedTitle` varchar(256),\n\t`viralStructure` json,\n\t`savedScriptId` int,\n\t`status` enum('queued','processing','completed','failed') NOT NULL DEFAULT 'queued',\n\t`errorMessage` text,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `script_ideas_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 178
+}

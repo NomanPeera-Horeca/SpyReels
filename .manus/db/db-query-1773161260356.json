@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `blog_posts` (`id` int AUTO_INCREMENT NOT NULL, `authorId` int NOT NULL, `title` varchar(512) NOT NULL, `slug` varchar(512) NOT NULL, `excerpt` text, `content` text NOT NULL, `coverImageUrl` text, `tags` json, `metaTitle` varchar(512), `metaDescription` text, `status` enum('draft','published') NOT NULL DEFAULT 'draft', `publishedAt` timestamp, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, CONSTRAINT `blog_posts_id` PRIMARY KEY(`id`), CONSTRAINT `blog_posts_slug_unique` UNIQUE(`slug`));",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute CREATE TABLE `blog_posts` (`id` int AUTO_INCREMENT NOT NULL, `authorId` int NOT NULL, `title` varchar(512) NOT NULL, `slug` varchar(512) NOT NULL, `excerpt` text, `content` text NOT NULL, `coverImageUrl` text, `tags` json, `metaTitle` varchar(512), `metaDescription` text, `status` enum('draft','published') NOT NULL DEFAULT 'draft', `publishedAt` timestamp, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, CONSTRAINT `blog_posts_id` PRIMARY KEY(`id`), CONSTRAINT `blog_posts_slug_unique` UNIQUE(`slug`));",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 182
+}

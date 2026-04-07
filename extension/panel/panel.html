@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="header-left">
+      <span class="logo">📊</span>
+      <span class="title">SpyReels</span>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn" id="refreshBtn" title="Refresh">↻</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <!-- Not Connected State -->
+  <div id="notConnected" class="empty-state hidden">
+    <div class="empty-icon">🔗</div>
+    <h3>Not Connected</h3>
+    <p>Connect to your SpyReels to use all features.</p>
+    <button class="btn btn-primary" id="connectFromPanel">Open Extension Settings</button>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav" id="tabNav">
+    <button class="tab active" data-tab="sort">📊 Sort</button>
+    <button class="tab" data-tab="saved">💾 Saved</button>
+    <button class="tab" data-tab="transcribe">📝 Transcribe</button>
+  </div>
+
+  <!-- Sort Tab -->
+  <div class="tab-content active" id="tab-sort">
+    <div class="sort-controls">
+      <div class="control-row">
+        <label>Sort by</label>
+        <div class="radio-group">
+          <label class="radio-option active" data-sort="likes">
+            <input type="radio" name="sortBy" value="likes" checked> ❤ Likes
+          </label>
+          <label class="radio-option" data-sort="views">
+            <input type="radio" name="sortBy" value="views"> 👁 Views
+          </label>
+          <label class="radio-option" data-sort="comments">
+            <input type="radio" name="sortBy" value="comments"> 💬 Comments
+          </label>
+          <label class="radio-option" data-sort="engagement">
+            <input type="radio" name="sortBy" value="engagement"> 📈 Eng. Rate
+          </label>
+          <label class="radio-option" data-sort="oldest">
+            <input type="radio" name="sortBy" value="oldest"> 📅 Oldest
+          </label>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <label>Filter</label>
+        <div class="filter-row">
+          <select id="filterType" class="select-sm">
+            <option value="posts">Posts</option>
+            <option value="reels">Reels Only</option>
+          </select>
+          <select id="filterCount" class="select-sm">
+            <option value="25">Latest 25</option>
+            <option value="50">Latest 50</option>
+            <option value="100">Latest 100</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-sm" id="sortBtn">
+        ↕ Sort Feed
+      </button>
+    </div>
+
+    <!-- Sort Results -->
+    <div id="sortResults" class="results-list">
+      <div class="empty-state-sm">
+        <p>Navigate to a creator's profile on Instagram, then click "Sort Feed" to sort their content by engagement.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved Tab -->
+  <div class="tab-content" id="tab-saved">
+    <div class="saved-header">
+      <p class="saved-info">Reels you save from Instagram appear here and sync to your dashboard.</p>
+    </div>
+    <div id="savedList" class="results-list">
+      <div class="empty-state-sm">
+        <p>No saved reels yet. Click the 💾 button on any reel to save it.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transcribe Tab -->
+  <div class="tab-content" id="tab-transcribe">
+    <!-- Free tier notice -->
+    <div class="tier-notice" id="tierNotice">
+      <div class="tier-header">
+        <span class="tier-badge">FREE</span>
+        <span class="tier-count"><span id="transcribeCount">0</span>/3 used</span>
+      </div>
+      <div class="tier-progress">
+        <div class="tier-progress-fill" id="tierProgress" style="width: 0%"></div>
+      </div>
+      <p class="tier-text">Upgrade for unlimited transcriptions & re-creates</p>
+    </div>
+
+    <!-- Current Reel Info -->
+    <div id="currentReel" class="current-reel hidden">
+      <div class="reel-preview">
+        <img id="reelThumb" class="reel-thumb" src="" alt="">
+        <div class="reel-info">
+          <p class="reel-caption" id="reelCaption">-</p>
+          <p class="reel-meta" id="reelMeta">-</p>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="transcribeBtn">
+          📝 Transcribe
+        </button>
+        <button class="btn btn-outline btn-sm" id="saveReelBtn">
+          💾 Save to Dashboard
+        </button>
+      </div>
+    </div>
+
+    <!-- No Reel Selected -->
+    <div id="noReel" class="empty-state-sm">
+      <p>Navigate to a reel on Instagram to transcribe it. The reel info will appear here automatically.</p>
+    </div>
+
+    <!-- Transcription Result -->
+    <div id="transcriptResult" class="hidden">
+      <div class="result-section">
+        <div class="result-header">
+          <h4>📝 Transcript</h4>
+          <button class="icon-btn-sm" id="copyTranscript" title="Copy">📋</button>
+        </div>
+        <div class="result-text" id="transcriptText"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Re-Create Section -->
+      <div class="result-section">
+        <h4>✨ Re-Create Script</h4>
+        <div class="recreate-options">
+          <div class="option-row">
+            <label>Grade Level</label>
+            <select id="gradeLevel" class="select-sm">
+              <option value="auto">Auto</option>
+              <option value="2">Grade 2</option>
+              <option value="3">Grade 3</option>
+              <option value="4">Grade 4</option>
+              <option value="5">Grade 5</option>
+              <option value="6">Grade 6</option>
+              <option value="7">Grade 7</option>
+              <option value="8">Grade 8</option>
+            </select>
+          </div>
+          <div class="option-row">
+            <label>Duration</label>
+            <select id="targetDuration" class="select-sm">
+              <option value="any">Any</option>
+              <option value="15">15s</option>
+              <option value="30">30s</option>
+              <option value="45">45s</option>
+              <option value="60">60s</option>
+              <option value="90">90s</option>
+            </select>
+          </div>
+          <div class="option-row">
+            <label>Delivery Cues</label>
+            <label class="toggle">
+              <input type="checkbox" id="addCues" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="recreateBtn">
+          ✨ Re-Create Script
+        </button>
+      </div>
+
+      <!-- Re-Created Script -->
+      <div id="recreatedResult" class="hidden">
+        <div class="result-section">
+          <div class="result-header">
+            <h4>✨ Re-Created Script</h4>
+            <button class="icon-btn-sm" id="copyRecreated" title="Copy">📋</button>
+          </div>
+          <div class="result-text" id="recreatedText"></div>
+
+          <!-- Calendar Section -->
+          <div class="calendar-section">
+            <h4>📅 Add to Calendar</h4>
+            <div class="calendar-row">
+              <input type="date" id="postDate" class="input-sm">
+              <input type="time" id="postTime" class="input-sm" value="09:00">
+            </div>
+            <div class="calendar-row">
+              <select id="scriptStatus" class="select-sm">
+                <option value="draft">Draft</option>
+                <option value="approved">Approved</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" id="addToCalendarBtn">
+              📅 Save & Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p id="loadingText">Processing...</p>
+  </div>
+
+  <!-- Upgrade Modal -->
+  <div id="upgradeModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-icon">🔒</div>
+      <h3>Free Limit Reached</h3>
+      <p>You've used all 3 free transcriptions. Upgrade to Pro for unlimited access to:</p>
+      <ul class="upgrade-features">
+        <li>✓ Unlimited transcriptions</li>
+        <li>✓ Unlimited re-creates</li>
+        <li>✓ Calendar scheduling</li>
+        <li>✓ Priority processing</li>
+      </ul>
+      <button class="btn btn-primary" id="upgradeBtn">Upgrade to Pro</button>
+      <button class="btn btn-outline" id="closeModal">Maybe Later</button>
+    </div>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

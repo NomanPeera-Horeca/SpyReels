@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, reelId, status, LENGTH(transcript) as transcript_length, LEFT(transcript, 100) as transcript_preview FROM transcriptions ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT id, reelId, status, LENGTH(transcript) as transcript_length, LEFT(transcript, 100) as transcript_preview FROM transcriptions ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "reelId": "90032",
+      "status": "completed",
+      "transcript_length": "658",
+      "transcript_preview": "Let's price a cocktail together. Your Tom Collins sells for $8.50. You price it off based off of ing"
+    },
+    {
+      "id": "60001",
+      "reelId": "60224",
+      "status": "completed",
+      "transcript_length": "599",
+      "transcript_preview": "D students for sure end up being millionaires more than A students. D students are smart enough to k"
+    },
+    {
+      "id": "30005",
+      "reelId": "60188",
+      "status": "completed",
+      "transcript_length": "683",
+      "transcript_preview": "Chat GPT is a yes man. It literally agrees with you on everything. It tells you you're amazing. It's"
+    },
+    {
+      "id": "30004",
+      "reelId": "60243",
+      "status": "completed",
+      "transcript_length": "458",
+      "transcript_preview": "What was your best investment? Marrying you. Okay. That's real talk. I would sell everything else. T"
+    },
+    {
+      "id": "30003",
+      "reelId": "60146",
+      "status": "completed",
+      "transcript_length": "1072",
+      "transcript_preview": "Here are three menu items that print money for your restaurant and where you should put them on your"
+    },
+    {
+      "id": "30002",
+      "reelId": "60056",
+      "status": "completed",
+      "transcript_length": "599",
+      "transcript_preview": "D students for sure end up being millionaires more than A students. D students are smart enough to k"
+    },
+    {
+      "id": "30001",
+      "reelId": "60075",
+      "status": "completed",
+      "transcript_length": "458",
+      "transcript_preview": "What was your best investment? Marrying you. Okay. That's real talk. I would sell everything else. T"
+    },
+    {
+      "id": "16",
+      "reelId": "30508",
+      "status": "completed",
+      "transcript_length": "1341",
+      "transcript_preview": "Most restaurants shut down because the owners never learned how to use psychology in their offers or"
+    },
+    {
+      "id": "15",
+      "reelId": "30501",
+      "status": "completed",
+      "transcript_length": "1454",
+      "transcript_preview": "Most restaurants go bankrupt not because of bad food but because they don't know how to design their"
+    },
+    {
+      "id": "14",
+      "reelId": "30513",
+      "status": "completed",
+      "transcript_length": "1229",
+      "transcript_preview": "When a restaurant offers 10 or 15% off, they're not just wasting their own time, they're wasting the"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\treelId\tstatus\ttranscript_length\ttranscript_preview\n60002\t90032\tcompleted\t658\tLet's price a cocktail together. Your Tom Collins sells for $8.50. You price it off based off of ing\n60001\t60224\tcompleted\t599\tD students for sure end up being millionaires more than A students. D students are smart enough to k\n30005\t60188\tcompleted\t683\tChat GPT is a yes man. It literally agrees with you on everything. It tells you you're amazing. It's\n30004\t60243\tcompleted\t458\tWhat was your best investment? Marrying you. Okay. That's real talk. I would sell everything else. T\n30003\t60146\tcompleted\t1072\tHere are three menu items that print money for your restaurant and where you should put them on your\n30002\t60056\tcompleted\t599\tD students for sure end up being millionaires more than A students. D students are smart enough to k\n30001\t60075\tcompleted\t458\tWhat was your best investment? Marrying you. Okay. That's real talk. I would sell everything else. T\n16\t30508\tcompleted\t1341\tMost restaurants shut down because the owners never learned how to use psychology in their offers or\n15\t30501\tcompleted\t1454\tMost restaurants go bankrupt not because of bad food but because they don't know how to design their\n14\t30513\tcompleted\t1229\tWhen a restaurant offers 10 or 15% off, they're not just wasting their own time, they're wasting the\n",
+  "stderr": "",
+  "execution_time_ms": 104
+}

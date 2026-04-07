@@ -1,0 +1,1 @@
+ALTER TABLE `saved_scripts` ADD `postTime` varchar(8);

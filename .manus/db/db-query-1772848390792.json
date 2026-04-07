@@ -1,0 +1,70 @@
+{
+  "query": "SELECT * FROM transcriptions ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT * FROM transcriptions ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "6",
+      "reelId": "30169",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:49:25",
+      "updatedAt": "2026-03-07 01:50:49"
+    },
+    {
+      "id": "5",
+      "reelId": "30073",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:36:41",
+      "updatedAt": "2026-03-07 01:39:45"
+    },
+    {
+      "id": "4",
+      "reelId": "30073",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:28:27",
+      "updatedAt": "2026-03-07 01:28:49"
+    },
+    {
+      "id": "3",
+      "reelId": "30041",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:26:27",
+      "updatedAt": "2026-03-07 01:26:53"
+    },
+    {
+      "id": "2",
+      "reelId": "30033",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:22:15",
+      "updatedAt": "2026-03-07 01:24:50"
+    },
+    {
+      "id": "1",
+      "reelId": "30001",
+      "transcript": "NULL",
+      "hookAnalysis": "NULL",
+      "status": "failed",
+      "errorMessage": "Transcription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}",
+      "createdAt": "2026-03-07 01:18:45",
+      "updatedAt": "2026-03-07 01:19:18"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\treelId\ttranscript\thookAnalysis\tstatus\terrorMessage\tcreatedAt\tupdatedAt\n6\t30169\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:49:25\t2026-03-07 01:50:49\n5\t30073\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:36:41\t2026-03-07 01:39:45\n4\t30073\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:28:27\t2026-03-07 01:28:49\n3\t30041\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:26:27\t2026-03-07 01:26:53\n2\t30033\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:22:15\t2026-03-07 01:24:50\n1\t30001\tNULL\tNULL\tfailed\tTranscription service request failed: 400 Bad Request: {\"error\":{\"message\":\"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null},\"usage\":{\"type\":\"duration\",\"seconds\":0}}\t2026-03-07 01:18:45\t2026-03-07 01:19:18\n",
+  "stderr": "",
+  "execution_time_ms": 85
+}

@@ -1,0 +1,24 @@
+{
+  "query": "SELECT t.id, t.reelId, t.status, t.transcript IS NULL as is_null, LENGTH(t.transcript) as len FROM transcriptions t JOIN saved_reels sr ON sr.reelId = t.reelId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT t.id, t.reelId, t.status, t.transcript IS NULL as is_null, LENGTH(t.transcript) as len FROM transcriptions t JOIN saved_reels sr ON sr.reelId = t.reelId;",
+  "rows": [
+    {
+      "id": "60001",
+      "reelId": "60224",
+      "status": "completed",
+      "is_null": "0",
+      "len": "599"
+    },
+    {
+      "id": "60002",
+      "reelId": "90032",
+      "status": "completed",
+      "is_null": "0",
+      "len": "658"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\treelId\tstatus\tis_null\tlen\n60001\t60224\tcompleted\t0\t599\n60002\t90032\tcompleted\t0\t658\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

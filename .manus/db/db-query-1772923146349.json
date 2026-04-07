@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, userId, shortcode, status, errorMessage, ownerUsername, viewCount, likeCount, commentCount, thumbnailUrl, videoUrl, source, createdAt FROM collected_reels ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT id, userId, shortcode, status, errorMessage, ownerUsername, viewCount, likeCount, commentCount, thumbnailUrl, videoUrl, source, createdAt FROM collected_reels ORDER BY id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "shortcode": "DC4XkjKyK6_",
+      "status": "ready",
+      "errorMessage": "NULL",
+      "ownerUsername": "owner",
+      "viewCount": "0",
+      "likeCount": "0",
+      "commentCount": "0",
+      "thumbnailUrl": "https://scontent-sof1-1.cdninstagram.com/v/t51.71878-15/501662203_1052063146863218_8401504950645260463_n.jpg?stp=dst-jpg_e15_p640x640_tt6&_nc_ht=scontent-sof1-1.cdninstagram.com&_nc_cat=102&_nc_oc=Q6cZ2QGUKlBlwJeCm9de8NAaOiU5KWC-cYFZTri0S0P3rc8i_IwcjLN-zb8ytUy3rkDoDZbtdC0npcixOhk-sXvsoloX&_nc_ohc=42LewQNZgSAQ7kNvwFVrqz8&_nc_gid=68QXq0kHcmM5QEPwPs6wrQ&edm=ALY_pVYBAAAA&ccb=7-5&oh=00_Afyd6ya9rfYQsC-56KmL3aWW4qbGqxv8d67GpajLZn-rVw&oe=69B26D75&_nc_sid=57e406",
+      "videoUrl": "NULL",
+      "source": "telegram",
+      "createdAt": "2026-03-07 22:37:09"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tshortcode\tstatus\terrorMessage\townerUsername\tviewCount\tlikeCount\tcommentCount\tthumbnailUrl\tvideoUrl\tsource\tcreatedAt\n1\t1\tDC4XkjKyK6_\tready\tNULL\towner\t0\t0\t0\thttps://scontent-sof1-1.cdninstagram.com/v/t51.71878-15/501662203_1052063146863218_8401504950645260463_n.jpg?stp=dst-jpg_e15_p640x640_tt6&_nc_ht=scontent-sof1-1.cdninstagram.com&_nc_cat=102&_nc_oc=Q6cZ2QGUKlBlwJeCm9de8NAaOiU5KWC-cYFZTri0S0P3rc8i_IwcjLN-zb8ytUy3rkDoDZbtdC0npcixOhk-sXvsoloX&_nc_ohc=42LewQNZgSAQ7kNvwFVrqz8&_nc_gid=68QXq0kHcmM5QEPwPs6wrQ&edm=ALY_pVYBAAAA&ccb=7-5&oh=00_Afyd6ya9rfYQsC-56KmL3aWW4qbGqxv8d67GpajLZn-rVw&oe=69B26D75&_nc_sid=57e406\tNULL\ttelegram\t2026-03-07 22:37:09\n",
+  "stderr": "",
+  "execution_time_ms": 93
+}

@@ -1,0 +1,26 @@
+{
+  "query": "SELECT t.id, t.reelId, t.status, LENGTH(t.transcript) as transcript_length, LEFT(t.transcript, 80) as preview, sr.userId FROM transcriptions t JOIN saved_reels sr ON sr.reelId = t.reelId ORDER BY t.id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT t.id, t.reelId, t.status, LENGTH(t.transcript) as transcript_length, LEFT(t.transcript, 80) as preview, sr.userId FROM transcriptions t JOIN saved_reels sr ON sr.reelId = t.reelId ORDER BY t.id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "reelId": "90032",
+      "status": "completed",
+      "transcript_length": "658",
+      "preview": "Let's price a cocktail together. Your Tom Collins sells for $8.50. You price it ",
+      "userId": "1"
+    },
+    {
+      "id": "60001",
+      "reelId": "60224",
+      "status": "completed",
+      "transcript_length": "599",
+      "preview": "D students for sure end up being millionaires more than A students. D students a",
+      "userId": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\treelId\tstatus\ttranscript_length\tpreview\tuserId\n60002\t90032\tcompleted\t658\tLet's price a cocktail together. Your Tom Collins sells for $8.50. You price it \t1\n60001\t60224\tcompleted\t599\tD students for sure end up being millionaires more than A students. D students a\t1\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `script_ideas` MODIFY COLUMN `status` enum('queued','validating','awaiting_approval','processing','completed','failed') NOT NULL DEFAULT 'queued';\nALTER TABLE `script_ideas` ADD `aiSuggestion` text;\nALTER TABLE `script_ideas` ADD `aiReasoning` text;\nALTER TABLE `script_ideas` ADD `viralScore` int;\nALTER TABLE `script_ideas` ADD `validationStatus` enum('pending','validated','accepted','rejected','edited') DEFAULT 'pending';\nALTER TABLE `script_ideas` ADD `audioUrl` varchar(1024);\nALTER TABLE `script_ideas` ADD `inputMethod` enum('text','voice','video') DEFAULT 'text';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute ALTER TABLE `script_ideas` MODIFY COLUMN `status` enum('queued','validating','awaiting_approval','processing','completed','failed') NOT NULL DEFAULT 'queued';\nALTER TABLE `script_ideas` ADD `aiSuggestion` text;\nALTER TABLE `script_ideas` ADD `aiReasoning` text;\nALTER TABLE `script_ideas` ADD `viralScore` int;\nALTER TABLE `script_ideas` ADD `validationStatus` enum('pending','validated','accepted','rejected','edited') DEFAULT 'pending';\nALTER TABLE `script_ideas` ADD `audioUrl` varchar(1024);\nALTER TABLE `script_ideas` ADD `inputMethod` enum('text','voice','video') DEFAULT 'text';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3155
+}

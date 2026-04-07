@@ -1,0 +1,32 @@
+{
+  "query": "SELECT id, shortcode, ownerUsername, viewCount, likeCount, commentCount, LEFT(videoUrl, 50) as videoUrlPrefix, LEFT(thumbnailUrl, 50) as thumbPrefix, status FROM collected_reels;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SELECT id, shortcode, ownerUsername, viewCount, likeCount, commentCount, LEFT(videoUrl, 50) as videoUrlPrefix, LEFT(thumbnailUrl, 50) as thumbPrefix, status FROM collected_reels;",
+  "rows": [
+    {
+      "id": "1",
+      "shortcode": "DC4XkjKyK6_",
+      "ownerUsername": "owner",
+      "viewCount": "0",
+      "likeCount": "0",
+      "commentCount": "0",
+      "videoUrlPrefix": "NULL",
+      "thumbPrefix": "https://scontent-sof1-1.cdninstagram.com/v/t51.718",
+      "status": "pending"
+    },
+    {
+      "id": "30001",
+      "shortcode": "DVmT71Vjchp",
+      "ownerUsername": "thrivewithcandicee",
+      "viewCount": "0",
+      "likeCount": "0",
+      "commentCount": "0",
+      "videoUrlPrefix": "NULL",
+      "thumbPrefix": "https://scontent-sof1-1.cdninstagram.com/v/t51.827",
+      "status": "ready"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tshortcode\townerUsername\tviewCount\tlikeCount\tcommentCount\tvideoUrlPrefix\tthumbPrefix\tstatus\n1\tDC4XkjKyK6_\towner\t0\t0\t0\tNULL\thttps://scontent-sof1-1.cdninstagram.com/v/t51.718\tpending\n30001\tDVmT71Vjchp\tthrivewithcandicee\t0\t0\t0\tNULL\thttps://scontent-sof1-1.cdninstagram.com/v/t51.827\tready\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

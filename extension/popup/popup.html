@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f14;
+      color: #e4e4e7;
+      padding: 0;
+    }
+    .header {
+      background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: white;
+    }
+    .header p {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 2px;
+    }
+    .content { padding: 16px 20px; }
+    .status-card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .status-row:last-child { margin-bottom: 0; }
+    .status-label {
+      font-size: 12px;
+      color: #a1a1aa;
+    }
+    .status-value {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-connected { color: #22c55e; }
+    .status-disconnected { color: #ef4444; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-free {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+    }
+    .badge-pro {
+      background: rgba(234, 179, 8, 0.15);
+      color: #fbbf24;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #71717a;
+      margin-bottom: 8px;
+    }
+    .input-group { margin-bottom: 12px; }
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #a1a1aa;
+      margin-bottom: 4px;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 8px;
+      color: #e4e4e7;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-group input:focus {
+      border-color: #6d28d9;
+    }
+    .input-group input::placeholder {
+      color: #52525b;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: #6d28d9;
+      color: white;
+    }
+    .btn-primary:hover { background: #5b21b6; }
+    .btn-outline {
+      background: transparent;
+      color: #a1a1aa;
+      border: 1px solid #2a2a3a;
+    }
+    .btn-outline:hover {
+      background: #1a1a24;
+      color: #e4e4e7;
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+    .btn + .btn { margin-top: 8px; }
+    .divider {
+      height: 1px;
+      background: #2a2a3a;
+      margin: 16px 0;
+    }
+    .free-counter {
+      text-align: center;
+      padding: 12px;
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .free-counter .count {
+      font-size: 24px;
+      font-weight: 700;
+      color: #818cf8;
+    }
+    .free-counter .total {
+      font-size: 14px;
+      color: #52525b;
+    }
+    .free-counter p {
+      font-size: 11px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: #2a2a3a;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #6d28d9;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+    .features-list {
+      list-style: none;
+      padding: 0;
+    }
+    .features-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 12px;
+      color: #a1a1aa;
+    }
+    .features-list li .icon { font-size: 14px; }
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid #2a2a3a;
+      text-align: center;
+    }
+    .footer a {
+      color: #818cf8;
+      text-decoration: none;
+      font-size: 11px;
+    }
+    .footer a:hover { text-decoration: underline; }
+    .hidden { display: none; }
+    .toast {
+      position: fixed;
+      bottom: 12px;
+      left: 20px;
+      right: 20px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      z-index: 100;
+      animation: slideUp 0.3s ease;
+    }
+    .toast-success { background: #166534; color: #bbf7d0; }
+    .toast-error { background: #7f1d1d; color: #fecaca; }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-icon">📊</div>
+    <div>
+      <h1>SpyReels</h1>
+      <p>Instagram Reels Analyzer</p>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Connection Status -->
+    <div class="status-card">
+      <div class="status-row">
+        <span class="status-label">Dashboard</span>
+        <span class="status-value" id="connectionStatus">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Plan</span>
+        <span id="planBadge"><span class="badge badge-free">Free (3 transcriptions)</span></span>
+      </div>
+    </div>
+
+    <!-- Free Transcription Counter -->
+    <div class="free-counter">
+      <div>
+        <span class="count" id="freeCount">0</span>
+        <span class="total"> / 3</span>
+      </div>
+      <p>Free transcriptions used</p>
+      <div class="progress-bar">
+        <div class="progress-fill" id="freeProgress" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Settings -->
+    <div class="section-title">Settings</div>
+    <div class="input-group">
+      <label>Dashboard URL</label>
+      <input type="url" id="dashboardUrl" placeholder="https://your-dashboard.manus.space" />
+    </div>
+
+    <button class="btn btn-primary" id="connectBtn">
+      🔗 Connect to Dashboard
+    </button>
+
+    <button class="btn btn-outline" id="openDashboardBtn">
+      ↗ Open Dashboard
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Features -->
+    <div class="section-title">Features</div>
+    <ul class="features-list">
+      <li><span class="icon">📊</span> Sort feed by views, likes, engagement</li>
+      <li><span class="icon">💾</span> Save reels to dashboard with one click</li>
+      <li><span class="icon">📝</span> Transcribe reels (3 free, then upgrade)</li>
+      <li><span class="icon">✨</span> Re-create scripts with AI</li>
+      <li><span class="icon">📅</span> Schedule to content calendar</li>
+      <li><span class="icon">📱</span> Save on mobile, transcribe on desktop</li>
+    </ul>
+
+    <div id="disconnectSection" class="hidden">
+      <div class="divider"></div>
+      <button class="btn btn-danger" id="disconnectBtn">
+        Disconnect
+      </button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="#" id="helpLink">Help & Support</a>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

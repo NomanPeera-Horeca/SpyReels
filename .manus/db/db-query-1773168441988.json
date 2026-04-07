@@ -1,0 +1,67 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4VYqcTALPrCPzzj.0b4848dd3552 --database dX6p9AmjDXRxHekGRTFonS --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "blog_posts"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "collected_reels"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "extension_tokens"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "extension_usage"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "monthly_usage"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "recreated_scripts"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "reels"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "saved_reels"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "saved_scripts"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "scrape_jobs"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "script_tag_assignments"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "script_tags"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "script_versions"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "subscriptions"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "telegram_connections"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "transcriptions"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "user_preferences"
+    },
+    {
+      "Tables_in_dX6p9AmjDXRxHekGRTFonS": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_dX6p9AmjDXRxHekGRTFonS\n__drizzle_migrations\nblog_posts\ncollected_reels\nextension_tokens\nextension_usage\nmonthly_usage\nrecreated_scripts\nreels\nsaved_reels\nsaved_scripts\nscrape_jobs\nscript_tag_assignments\nscript_tags\nscript_versions\nsubscriptions\ntelegram_connections\ntranscriptions\nuser_preferences\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}
