@@ -1485,7 +1485,7 @@ The hook MUST be 7-10 words. Count them.`
         }
 
         const { ENV } = await import("./_core/env");
-        if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
+        if (!process.env.OPENAI_API_KEY) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Transcription service not configured" });
         }
 
@@ -1497,13 +1497,13 @@ The hook MUST be 7-10 words. Count them.`
         formData.append("prompt", "Transcribe this Instagram Reel video.");
         formData.append("language", "en");
 
-        const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
-        const whisperUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
+        const baseUrl = "https://api.openai.com/";
+        const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
 
         const whisperResponse = await fetch(whisperUrl, {
           method: "POST",
           headers: {
-            authorization: `Bearer ${ENV.forgeApiKey}`,
+            authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             "Accept-Encoding": "identity",
           },
           body: formData,
@@ -3070,8 +3070,8 @@ async function runTranscription(
     // Call Whisper API directly with the video buffer as mp4
     // This avoids the S3 round-trip and content-type detection issues
     const { ENV } = await import("./_core/env");
-    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      throw new Error("Transcription service not configured");
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const formData = new FormData();
@@ -3082,13 +3082,13 @@ async function runTranscription(
     formData.append("prompt", "Transcribe this Instagram Reel video. Include all spoken words.");
     formData.append("language", "en");
 
-    const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
-    const whisperUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
+    const baseUrl = "https://api.openai.com/";
+    const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
 
     const whisperResponse = await fetch(whisperUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
+        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Accept-Encoding": "identity",
       },
       body: formData,
