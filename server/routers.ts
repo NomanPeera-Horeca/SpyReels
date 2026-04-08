@@ -1312,7 +1312,7 @@ The hook MUST be 7-10 words. Count them.`
           }
         });
 
-        const raw = response.choices[0]?.message?.content as string;
+        const raw = ((response.choices[0]?.message?.content as string) || "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         let result: { caption: string; hashtags: string[]; primaryKeyword: string; hookType: string };
         try {
           result = JSON.parse(raw);
