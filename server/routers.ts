@@ -3880,7 +3880,7 @@ If the idea is already great (8+), the suggestion can be similar to the original
     await updateScriptIdea(ideaId, {
       aiSuggestion: validation.improvedIdea,
       aiReasoning: validation.reasoning,
-      viralScore: Math.min(10, Math.max(1, Math.round(validation.viralScore))),
+      viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
       validationStatus: "validated",
       status: "awaiting_approval",
     } as any);
