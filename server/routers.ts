@@ -1572,7 +1572,7 @@ The hook MUST be 7-10 words. Count them.`
 
         let viralStructure: Record<string, any>;
         try {
-          viralStructure = JSON.parse(String(structureResponse.choices[0].message.content) || "{}");
+          viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
         } catch {
           viralStructure = { error: "Failed to parse" };
         }
@@ -3302,7 +3302,7 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     let viralStructure: Record<string, unknown>;
     try {
-      viralStructure = JSON.parse(String(structureResponse.choices[0].message.content) || "{}");
+      viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
     } catch {
       viralStructure = { error: "Failed to parse structure" };
     }
@@ -3456,7 +3456,7 @@ Return ONLY valid JSON.`;
 
     let readabilityAnalysis: Record<string, unknown>;
     try {
-      readabilityAnalysis = JSON.parse(String(hemingwayResponse.choices[0].message.content) || "{}");
+      readabilityAnalysis = JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
     } catch {
       readabilityAnalysis = { error: "Failed to parse readability analysis" };
     }
@@ -3635,7 +3635,7 @@ Return ONLY valid JSON.`;
 
     let readabilityAnalysis: Record<string, unknown>;
     try {
-      readabilityAnalysis = JSON.parse(String(hemingwayResponse.choices[0].message.content) || "{}");
+      readabilityAnalysis = JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
     } catch {
       readabilityAnalysis = { error: "Failed to parse readability analysis" };
     }
@@ -3760,7 +3760,7 @@ Return JSON with:
 
     let viralStructure: Record<string, any>;
     try {
-      viralStructure = JSON.parse(String(structureResponse.choices[0].message.content) || "{}");
+      viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
     } catch {
       viralStructure = { error: "Failed to parse structure" };
     }
@@ -3875,7 +3875,7 @@ If the idea is already great (8+), the suggestion can be similar to the original
     const content = response.choices?.[0]?.message?.content;
     if (!content) throw new Error("No validation response from AI");
 
-    const validation = JSON.parse(content);
+    const validation = JSON.parse((content || "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
 
     await updateScriptIdea(ideaId, {
       aiSuggestion: validation.improvedIdea,
