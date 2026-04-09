@@ -30,20 +30,6 @@ import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Sun, Moon } from "lucide-react";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Radar, label: "Research", path: "/" },
-  { icon: Inbox, label: "Collected Reels", path: "/collected" },
-  { icon: Eye, label: "Account Monitoring", path: "/history" },
-  { icon: FileText, label: "My Scripts", path: "/scripts" },
-  { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-  { icon: Library, label: "My Library", path: "/library" },
-  { icon: Bookmark, label: "Saved Reels", path: "/saved" },
-  { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-  { icon: CreditCard, label: "Billing", path: "/billing" },
-];
-
 const adminMenuItems = [
   { icon: Shield, label: "Admin", path: "/admin" },
 ];
@@ -106,9 +92,23 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
+  const menuItems = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: Radar, label: "Research", path: "/" },
+    { icon: Inbox, label: "Collected Reels", path: "/collected" },
+    { icon: Eye, label: "Account Monitoring", path: "/history" },
+    { icon: FileText, label: "My Scripts", path: "/scripts" },
+    { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
+    { icon: Library, label: "My Library", path: "/library" },
+    { icon: Bookmark, label: "Saved Reels", path: "/saved" },
+    { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
+    { icon: theme === "dark" ? Sun : Moon, label: theme === "dark" ? "Light mode (beta)" : "Dark mode", path: "__theme__" },
+    { icon: Settings, label: "Settings", path: "/settings" },
+    { icon: CreditCard, label: "Billing", path: "/billing" },
+  ];
+  const activeMenuItem = menuItems.find((item) => item.path === location);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -176,19 +176,12 @@ function DashboardLayoutContent({
                 </div>
               ) : null}
             </div>
-            <button
-              onClick={toggleTheme}
-              className="ml-auto h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
-              title={theme === "dark" ? "Switch to light mode (beta)" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {menuItems.map((item) => {
-                const isActive = location === item.path;
+                const isActive = location === item.path && item.path !== "__theme__";
                 return (
                   <Fragment key={item.path}>
                     {item.label === "Dashboard" && (
@@ -206,7 +199,7 @@ function DashboardLayoutContent({
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         isActive={isActive}
-                        onClick={() => setLocation(item.path)}
+                        onClick={() => item.path === "__theme__" ? toggleTheme?.() : setLocation(item.path)}
                         tooltip={item.label}
                         className="h-10 transition-all font-normal"
                       >
