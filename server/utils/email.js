@@ -7,6 +7,7 @@ export async function sendWelcomeEmail(toEmail, firstName) {
 
   await resend.emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    reply_to: "nomanpeera@gmail.com",
     to: toEmail,
     subject: "You just made a move most creators never do 👊",
     html: `
@@ -29,6 +30,7 @@ export async function sendPasswordResetEmail(toEmail, resetLink) {
 export async function sendPaymentConfirmationEmail(toEmail, firstName, planName, planPrice, nextBillingDate) {
   await resend.emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    reply_to: "nomanpeera@gmail.com",
     to: toEmail,
     subject: `You're in, ${firstName}. Let's get you your first viral Reel. 🎯`,
     html: `

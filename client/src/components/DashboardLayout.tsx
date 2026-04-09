@@ -23,29 +23,23 @@ import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, Eye, LogOut, PanelLeft, Radar, Bookmark, FileText, Settings, CreditCard, Sparkles, PenSquare, Inbox, Lightbulb, Library, ClipboardPaste, Shield } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
-  // 1. Research & Discover
-  { icon: Radar, label: "Research Reels", path: "/" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: Radar, label: "Research", path: "/" },
   { icon: Inbox, label: "Collected Reels", path: "/collected" },
-  // 2. Content Hub
+  { icon: Eye, label: "Account Monitoring", path: "/history" },
+  { icon: FileText, label: "My Scripts", path: "/scripts" },
+  { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
   { icon: Library, label: "My Library", path: "/library" },
   { icon: Bookmark, label: "Saved Reels", path: "/saved" },
-  { icon: FileText, label: "My Scripts", path: "/scripts" },
-  // 3. Create
-  { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
   { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
-  // 4. Overview & Account
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Eye, label: "Account Monitoring", path: "/history" },
   { icon: Settings, label: "Settings", path: "/settings" },
-  { icon: Sparkles, label: "Pricing", path: "/pricing" },
   { icon: CreditCard, label: "Billing", path: "/billing" },
-  { icon: PenSquare, label: "Blog", path: "/blog" },
 ];
 
 const adminMenuItems = [
@@ -186,19 +180,33 @@ function DashboardLayoutContent({
               {menuItems.map((item) => {
                 const isActive = location === item.path;
                 return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className="h-10 transition-all font-normal"
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <Fragment key={item.path}>
+                    {item.label === "Dashboard" && (
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Overview</div>
+                    )}
+                    {item.label === "Research" && (
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Discover</div>
+                    )}
+                    {item.label === "My Scripts" && (
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Create</div>
+                    )}
+                    {item.label === "Settings" && (
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Account</div>
+                    )}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className="h-10 transition-all font-normal"
+                      >
+                        <item.icon
+                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </Fragment>
                 );
               })}
               {user?.role === "admin" && adminMenuItems.map((item) => {

@@ -51,6 +51,7 @@ import {
 } from "@/components/InlineWorkflow";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type SortOption =
   | "views_desc"
@@ -70,6 +71,7 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[
 ];
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const jobId = useMemo(() => {
@@ -271,17 +273,32 @@ export default function Dashboard() {
     const collectedReels = collectedListQuery.data || [];
     const completedJobs = jobs.filter(j => j.status === "completed");
     const totalReelsScraped = completedJobs.reduce((sum, j) => sum + (j.totalReels || 0), 0);
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const firstName = user?.name?.split(" ")[0] || "there";
+    const timeSavedMinutes = totalReelsScraped * 5;
+    const timeSavedHours = (timeSavedMinutes / 60).toFixed(1);
     const isLoading = jobsListQuery.isLoading;
 
     return (
       <div className="max-w-5xl mx-auto px-2 sm:px-0">
-        {/* Welcome header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your SpyReels overview at a glance</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting}, {firstName} 👋</h1>
+          <p className="text-sm text-muted-foreground mt-1">Here is what SpyReels has done for you so far.</p>
         </div>
 
-        {/* Quick Stats */}
+        {totalReelsScraped > 0 && (
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+              <Clock className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">You have saved approximately {timeSavedHours} hours of manual research</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Based on {totalReelsScraped} reels researched at 5 mins per reel manually</p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-card border border-border/40 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -377,12 +394,36 @@ export default function Dashboard() {
             </div>
           ) : jobs.length === 0 ? (
             <div className="bg-card border border-border/40 rounded-lg p-8 text-center">
-              <Film className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-3">No research jobs yet. Start by analyzing an Instagram account.</p>
-              <Button size="sm" onClick={() => setLocation("/")}>
-                <Search className="mr-2 h-3.5 w-3.5" />
-                Start Your First Research
-              </Button>
+              <div className="max-w-sm mx-auto">
+                <p className="text-sm font-semibold text-foreground mb-4">Get started in 3 steps</p>
+                <div className="space-y-3 text-left mb-6">
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center shrink-0 text-xs font-bold text-white">1</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Research a competitor</p>
+                      <p className="text-xs text-muted-foreground">Enter any Instagram handle to spy on their viral Reels</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/40 flex items-center justify-center shrink-0 text-xs font-bold text-white">2</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Pick a viral Reel and transcribe it</p>
+                      <p className="text-xs text-muted-foreground">See exactly what they said and why it worked</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-bold text-white">3</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Hit Re-Create and get your script</p>
+                      <p className="text-xs text-muted-foreground">AI writes a script based on what made it go viral</p>
+                    </div>
+                  </div>
+                </div>
+                <Button size="sm" onClick={() => setLocation("/")}>
+                  <Search className="mr-2 h-3.5 w-3.5" />
+                  Start Your First Research
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-1.5">
