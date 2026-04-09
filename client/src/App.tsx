@@ -26,6 +26,7 @@ import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
 import SearchReels from "./pages/SearchReels";
 import AdminDashboard from "./pages/AdminDashboard";
+import ResetPassword from "./pages/ResetPassword";
 
 function DashboardRouter() {
   return (
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/blog" component={BlogList} />
       <Route path="/blog/:slug" component={BlogPost} />
       <Route path="/extension" component={Extension} />
+      <Route path="/reset-password" component={ResetPassword} />
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
       <Route component={DashboardRouter} />
     </Switch>

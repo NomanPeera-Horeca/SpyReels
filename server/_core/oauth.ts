@@ -5,6 +5,7 @@ import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 import { notifyOwnerViaTelegram } from "../telegramBot";
 import axios from "axios";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "../utils/email.js";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -74,6 +75,7 @@ export function registerOAuthRoutes(app: Express) {
           `🔑 <b>Login:</b> Google`,
           `🕐 <b>Time:</b> ${signupTime}`,
         ].join("\n")).catch(console.warn);
+        sendWelcomeEmail(userEmail, googleUser.name?.split(" ")[0] || "there").catch(console.warn);
         console.log(`[OAuth] New user signup: ${userName} (${userEmail})`);
       }
       const sessionToken = await sdk.createSessionToken(openId, {
@@ -145,6 +147,7 @@ export function registerOAuthRoutes(app: Express) {
         passwordHash,
         lastSignedIn: new Date(),
       });
+      sendWelcomeEmail(email, name?.split(" ")[0] || "there").catch(console.warn);
       const sessionToken = await sdk.createSessionToken(openId, {
         name: name || "",
         expiresInMs: ONE_YEAR_MS,
@@ -155,6 +158,76 @@ export function registerOAuthRoutes(app: Express) {
     } catch (error) {
       console.error("[Auth] Register failed", error);
       res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Forgot password
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "Email required" });
+      return;
+    }
+    try {
+      const user = await db.getUserByEmail(email);
+      if (!user) {
+        res.json({ success: true }); // Don't reveal if email exists
+        return;
+      }
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+      const mysql = await import("mysql2/promise");
+      const conn = await mysql.default.createConnection(process.env.DATABASE_URL!);
+      await conn.execute(
+        "INSERT INTO password_reset_tokens (userId, token, expiresAt) VALUES (?, ?, ?)",
+        [user.id, token, expiresAt]
+      );
+      await conn.end();
+      const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
+      await sendPasswordResetEmail(email, resetUrl);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Auth] Forgot password failed", error);
+      res.status(500).json({ error: "Failed to send reset email" });
+    }
+  });
+
+  // Reset password
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(400).json({ error: "Token and password required" });
+      return;
+    }
+    try {
+      const mysql = await import("mysql2/promise");
+      const conn = await mysql.default.createConnection(process.env.DATABASE_URL!);
+      const [rows] = await conn.execute(
+        "SELECT * FROM password_reset_tokens WHERE token = ? AND usedAt IS NULL AND expiresAt > NOW()",
+        [token]
+      ) as any;
+      if (!rows.length) {
+        await conn.end();
+        res.status(400).json({ error: "Invalid or expired reset token" });
+        return;
+      }
+      const resetToken = rows[0];
+      const bcrypt = await import("bcryptjs");
+      const passwordHash = await bcrypt.hash(password, 12);
+      await conn.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        [passwordHash, resetToken.userId]
+      );
+      await conn.execute(
+        "UPDATE password_reset_tokens SET usedAt = NOW() WHERE id = ?",
+        [resetToken.id]
+      );
+      await conn.end();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Auth] Reset password failed", error);
+      res.status(500).json({ error: "Failed to reset password" });
     }
   });
 }
