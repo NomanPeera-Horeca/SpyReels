@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { subscriptions, monthlyUsage } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY, STRIPE_INTERVAL_METADATA_KEY } from "./products";
+import { sendPaymentConfirmationEmail } from "../utils/email.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-02-24.acacia" as any,
@@ -242,6 +243,16 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
             currentPeriodEnd: periodEnd,
           });
           console.log(`[Stripe Webhook] checkout.session.completed: userId=${userId}, plan=${planId}, interval=${interval}`);
+          const customerEmail = session.metadata?.customer_email;
+          const customerName = session.metadata?.customer_name || "there";
+          const firstName = customerName.split(" ")[0];
+          const plan = PLANS[planId];
+          const planName = plan ? plan.name + " Plan" : planId + " Plan";
+          const planPrice = plan ? (interval === "yearly" ? (plan.yearlyTotal / 100 / 12).toFixed(2) : (plan.monthlyPrice / 100).toFixed(2)) : "0";
+          const nextBilling = periodEnd ? periodEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "next month";
+          if (customerEmail) {
+            sendPaymentConfirmationEmail(customerEmail, firstName, planName, planPrice, nextBilling).catch(console.warn);
+          }
         } catch (err: any) {
           console.error(`[Stripe Webhook] Error processing checkout.session.completed: ${err.message}`);
           throw err;
