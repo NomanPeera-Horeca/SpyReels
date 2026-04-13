@@ -387,7 +387,8 @@ export default function CollectedReels() {
           const isReady = reel.status === "ready";
 
           // Transcription state: from server data (persisted) or pending in-session
-          const hasTranscription = reel.transcriptionStatus === "completed";
+          const hasTranscription = reel.transcriptionStatus === "completed" &&
+            !!reel.transcriptionReelId;
           const isTranscriptionProcessing = reel.transcriptionStatus === "processing" || pendingTranscriptions.has(reel.id);
           const mappedReelId = reel.transcriptionReelId;
 

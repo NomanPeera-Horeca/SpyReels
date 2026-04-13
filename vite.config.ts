@@ -184,4 +184,7 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
-});
+  test: {
+    exclude: ['tests/e2e/**', 'node_modules/**']
+  },
+} as import("vite").UserConfig & { test: { exclude: string[] } });
