@@ -165,6 +165,8 @@ import {
   CalendarIcon,
   Check,
   Clock,
+  Eye,
+  EyeOff,
   Moon,
   Sun,
   X,
@@ -186,6 +188,8 @@ export default function ComponentsShowcase() {
   const [selectedYear, setSelectedYear] = useState("");
   const [dialogInput, setDialogInput] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // AI ChatBox demo state
   const [chatMessages, setChatMessages] = useState<Message[]>([
@@ -926,11 +930,39 @@ export default function ComponentsShowcase() {
                   <CardContent className="space-y-2">
                     <div className="space-y-1">
                       <Label htmlFor="current">Current password</Label>
-                      <Input id="current" type="password" />
+                      <div className="relative">
+                        <Input
+                          id="current"
+                          type={showCurrentPassword ? "text" : "password"}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-md"
+                          aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                        >
+                          {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="new">New password</Label>
-                      <Input id="new" type="password" />
+                      <div className="relative">
+                        <Input
+                          id="new"
+                          type={showNewPassword ? "text" : "password"}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-md"
+                          aria-label={showNewPassword ? "Hide password" : "Show password"}
+                        >
+                          {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                   </CardContent>
                   <CardFooter>

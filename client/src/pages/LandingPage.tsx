@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Film, Search, FileText, Mic, Calendar, Chrome,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
-  Sparkles, Eye, BarChart3, Download, Bot, Layers,
+  Sparkles, Eye, EyeOff, BarChart3, Download, Bot, Layers,
   Check, X, Crown, Rocket, Building2, Star
 } from "lucide-react";
 
@@ -175,6 +175,7 @@ export default function LandingPage() {
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
   const handleEmailAuth = async () => {
     setAuthError("");
     setAuthLoading(true);
@@ -260,7 +261,23 @@ export default function LandingPage() {
               <input type="text" placeholder="Your name" value={authName} onChange={e => setAuthName(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             )}
             <input type="email" placeholder="Email address" value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-            <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            <div className="relative w-full">
+              <input
+                type={showAuthPassword ? "text" : "password"}
+                placeholder="Password"
+                value={authPassword}
+                onChange={e => setAuthPassword(e.target.value)}
+                className="w-full px-4 py-2.5 pr-10 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAuthPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-md"
+                aria-label={showAuthPassword ? "Hide password" : "Show password"}
+              >
+                {showAuthPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {authError && <p className="text-xs text-red-500 w-full">{authError}</p>}
             <button onClick={handleEmailAuth} disabled={authLoading} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
               {authLoading ? "Please wait..." : authMode === "login" ? "Log In" : "Create Account"}
