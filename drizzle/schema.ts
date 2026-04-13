@@ -343,6 +343,7 @@ export const collectedReels = mysqlTable("collected_reels", {
   source: mysqlEnum("source", ["telegram", "url_paste", "extension"]).default("telegram").notNull(),
   status: mysqlEnum("status", ["pending", "ready", "failed"]).default("pending").notNull(), // pending = fetching metadata
   errorMessage: text("errorMessage"),
+  transcriptionReelId: int("transcriptionReelId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -2008,43 +2008,42 @@ The hook MUST be 7-10 words. Count them.`
       
       const { getDb } = await import("./db");
       const { reels: reelsTable, transcriptions, scrapeJobs } = await import("../drizzle/schema");
-      const { eq, and, inArray } = await import("drizzle-orm");
+      const { inArray } = await import("drizzle-orm");
       const db = await getDb();
       if (!db) return reels.map(r => ({
         ...r,
-        transcriptionReelId: null as number | null,
+        transcriptionReelId: r.transcriptionReelId ?? null,
         transcriptionStatus: null as string | null,
         monitoredViewCount: null as number | null,
         monitoredFollowerCount: null as number | null,
       }));
       
+      const transcriptionReelIds = Array.from(
+        new Set(
+          reels
+            .map((r) => r.transcriptionReelId)
+            .filter((id): id is number => id != null && id > 0)
+        )
+      );
+      const txnStatusByReelId = new Map<number, string>();
+      if (transcriptionReelIds.length > 0) {
+        const txns = await db
+          .select({ reelId: transcriptions.reelId, status: transcriptions.status })
+          .from(transcriptions)
+          .where(inArray(transcriptions.reelId, transcriptionReelIds));
+        for (const t of txns) {
+          txnStatusByReelId.set(t.reelId, t.status);
+        }
+      }
+
       const readyReels = reels.filter(r => r.status === "ready");
       const shortcodes = readyReels.map(r => r.shortcode);
       
-      // Map for transcription status (jobId=0 reels created during collected reel transcription)
-      let reelMap = new Map<string, { id: number; transcriptionStatus: string | null }>();
       // Map for cross-referenced view counts from Account Monitoring scrapes
       let monitoredDataMap = new Map<string, { viewCount: number; followerCount: number }>();
       
       if (shortcodes.length > 0) {
-        // 1. Transcription lookup (jobId=0)
-        const matchingReels = await db.select({ id: reelsTable.id, shortcode: reelsTable.shortcode })
-          .from(reelsTable)
-          .where(and(eq(reelsTable.jobId, 0), inArray(reelsTable.shortcode, shortcodes)));
-        
-        if (matchingReels.length > 0) {
-          const reelIds = matchingReels.map(r => r.id);
-          const txns = await db.select({ reelId: transcriptions.reelId, status: transcriptions.status })
-            .from(transcriptions)
-            .where(inArray(transcriptions.reelId, reelIds));
-          
-          const txnMap = new Map(txns.map(t => [t.reelId, t.status]));
-          for (const mr of matchingReels) {
-            reelMap.set(mr.shortcode, { id: mr.id, transcriptionStatus: txnMap.get(mr.id) || null });
-          }
-        }
-        
-        // 2. Cross-reference with Account Monitoring: find matching reels from real scrape jobs (jobId > 0)
+        // Cross-reference with Account Monitoring: find matching reels from real scrape jobs (jobId > 0)
         // This gives us view counts that Instagram doesn't expose via page scraping
         const monitoredReels = await db.select({
           shortcode: reelsTable.shortcode,
@@ -2055,7 +2054,7 @@ The hook MUST be 7-10 words. Count them.`
           .where(inArray(reelsTable.shortcode, shortcodes));
         
         // Get follower counts from scrape jobs for engagement rate calculation
-        const jobIds = [...new Set(monitoredReels.filter(r => r.jobId > 0).map(r => r.jobId))];
+        const jobIds = Array.from(new Set(monitoredReels.filter(r => r.jobId > 0).map(r => r.jobId)));
         let jobFollowerMap = new Map<number, number>();
         if (jobIds.length > 0) {
           const jobs = await db.select({ id: scrapeJobs.id, followerCount: scrapeJobs.followerCount })
@@ -2079,12 +2078,14 @@ The hook MUST be 7-10 words. Count them.`
       }
       
       return reels.map(r => {
-        const match = reelMap.get(r.shortcode);
         const monitored = monitoredDataMap.get(r.shortcode);
         return {
           ...r,
-          transcriptionReelId: match?.id || null,
-          transcriptionStatus: match?.transcriptionStatus || null,
+          transcriptionReelId: r.transcriptionReelId ?? null,
+          transcriptionStatus:
+            r.transcriptionReelId != null
+              ? txnStatusByReelId.get(r.transcriptionReelId) ?? null
+              : null,
           // Cross-referenced data from Account Monitoring
           monitoredViewCount: monitored?.viewCount ?? null,
           monitoredFollowerCount: monitored?.followerCount ?? null,
@@ -2214,7 +2215,6 @@ The hook MUST be 7-10 words. Count them.`
         // Check if transcription already exists for this shortcode (via reels table)
         // For collected reels, we store transcription data directly in a separate approach:
         // We'll create a temporary reel entry to reuse the transcription system
-        const { insertReels: insertReelsFn } = await import("./db");
         const tempReelData = {
           jobId: 0, // 0 = collected reel, not from a scrape job
           shortcode: reel.shortcode,
@@ -2232,22 +2232,22 @@ The hook MUST be 7-10 words. Count them.`
 
         // Check if we already have a reel entry for this shortcode
         const { getDb } = await import("./db");
-        const { reels: reelsTable } = await import("../drizzle/schema");
-        const { eq, and } = await import("drizzle-orm");
+        const { reels: reelsTable, collectedReels } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        let existingReels = await db.select().from(reelsTable)
-          .where(and(eq(reelsTable.shortcode, reel.shortcode), eq(reelsTable.jobId, 0)))
-          .limit(1);
-
         let reelId: number;
-        if (existingReels.length > 0) {
-          reelId = existingReels[0].id;
+        if (reel.transcriptionReelId != null && reel.transcriptionReelId > 0) {
+          reelId = reel.transcriptionReelId;
         } else {
           const result = await db.insert(reelsTable).values(tempReelData);
           reelId = result[0].insertId;
         }
+
+        await db.update(collectedReels)
+          .set({ transcriptionReelId: reelId })
+          .where(eq(collectedReels.id, input.collectedReelId));
 
         // Check for existing transcription
         const existingTranscription = await getTranscriptionByReelId(reelId);
@@ -3107,6 +3107,12 @@ async function runTranscription(
     };
 
     const transcript = whisperResult.text;
+
+    if (!transcript || transcript.trim().length === 0) {
+      throw new Error(
+        "Whisper returned empty transcript. The video may have no speech or audio."
+      );
+    }
 
     // Store segments for timestamped display
     const segments = (whisperResult.segments || []).map((s) => ({
