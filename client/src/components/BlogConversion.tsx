@@ -202,23 +202,17 @@ export function StickySignupBar() {
 export function SocialProofBanner() {
   return (
     <div className="my-8 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-      <div className="flex items-center gap-2">
-        <div className="flex -space-x-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/40 to-primary/20 border-2 border-background flex items-center justify-center text-[10px] font-bold text-primary"
-            >
-              {String.fromCharCode(64 + i)}
-            </div>
-          ))}
-        </div>
-        <span>Trusted by <strong className="text-foreground">12,000+</strong> creators</span>
-      </div>
-      <div className="h-4 w-px bg-border/50 hidden sm:block" />
-      <span>Analyzed <strong className="text-foreground">500K+</strong> Reels</span>
-      <div className="h-4 w-px bg-border/50 hidden sm:block" />
-      <span><strong className="text-foreground">Free</strong> plan available</span>
+      <span>
+        Trusted by <strong className="text-foreground">12,000+</strong> creators
+      </span>
+      <span className="text-border/70">·</span>
+      <span>
+        Analyzed <strong className="text-foreground">500K+</strong> Reels
+      </span>
+      <span className="text-border/70">·</span>
+      <span>
+        <strong className="text-foreground">Free</strong> plan available
+      </span>
     </div>
   );
 }

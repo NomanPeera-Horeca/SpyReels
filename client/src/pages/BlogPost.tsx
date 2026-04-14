@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Clock3, Film, Share2, Tag } from "lucide-react";
+import { ArrowLeft, Calendar, Clock3, Copy, Film, Linkedin, Mail, MessageCircle, Share2, Tag } from "lucide-react";
 import { Link, useParams } from "wouter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,6 +8,7 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   InlineCTA,
   LeadMagnet,
@@ -115,6 +116,7 @@ export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
 
   const { data: post, isLoading, error } = trpc.blog.bySlug.useQuery(
     { slug: slug || "" },
@@ -149,6 +151,24 @@ export default function BlogPost() {
     if (!allPublished || !post) return [];
     return allPublished.filter((p) => p.slug !== post.slug).slice(0, 2);
   }, [allPublished, post]);
+
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Link copied!");
+    } catch {
+      toast.error("Could not copy link");
+    } finally {
+      setShareOpen(false);
+    }
+  };
+
+  const openShareUrl = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShareOpen(false);
+  };
 
   const markdownComponents = useMemo(
     () => ({
@@ -302,19 +322,67 @@ export default function BlogPost() {
               <span className="font-semibold text-lg tracking-tight">SpyReels</span>
             </Link>
             <div className="flex items-center gap-4">
-              <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href);
-                    toast.success("Link copied!");
-                  } catch {
-                    toast.error("Could not copy link");
-                  }
-                }}
-                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                <Share2 className="h-4 w-4" /> Share
-              </button>
+              <Popover open={shareOpen} onOpenChange={setShareOpen}>
+                <PopoverTrigger asChild>
+                  <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    <Share2 className="h-4 w-4" /> Share
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-64 p-2 bg-card border-border/60">
+                  <div className="flex flex-col">
+                    <button
+                      onClick={handleCopyLink}
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                    >
+                      <Copy className="h-4 w-4" /> Copy link
+                    </button>
+                    <button
+                      onClick={() =>
+                        openShareUrl(
+                          `https://wa.me/?text=${encodeURIComponent(`Check this out: ${shareUrl}`)}`
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                    >
+                      <MessageCircle className="h-4 w-4" /> Share on WhatsApp
+                    </button>
+                    <button
+                      onClick={() =>
+                        openShareUrl(
+                          `https://twitter.com/intent/tweet?url=${encodeURIComponent(
+                            shareUrl
+                          )}&text=${encodeURIComponent(post.title)}`
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                    >
+                      <span className="w-4 text-center font-semibold">𝕏</span> Share on X (Twitter)
+                    </button>
+                    <button
+                      onClick={() =>
+                        openShareUrl(
+                          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                    >
+                      <Linkedin className="h-4 w-4" /> Share on LinkedIn
+                    </button>
+                    <button
+                      onClick={() =>
+                        openShareUrl(
+                          `mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(
+                            `Check this out: ${shareUrl}`
+                          )}`
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                    >
+                      <Mail className="h-4 w-4" /> Share via Email
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Link href="/blog" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
                 <ArrowLeft className="h-4 w-4" /> All Posts
               </Link>
