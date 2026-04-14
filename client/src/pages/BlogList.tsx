@@ -2,7 +2,10 @@ import { Film, ArrowLeft, Calendar, Tag, ArrowRight, Sparkles } from "lucide-rea
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { StickySignupBar, SocialProofBanner } from "@/components/BlogConversion";
+import { StickySignupBar } from "@/components/BlogConversion";
+
+const SPYREELS_LOGO =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
 export default function BlogList() {
   const { data: posts, isLoading } = trpc.blog.published.useQuery();
@@ -14,9 +17,7 @@ export default function BlogList() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Film className="h-5 w-5 text-primary" />
-              </div>
+              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
               <span className="font-semibold text-lg tracking-tight">SpyReels</span>
             </Link>
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -61,7 +62,9 @@ export default function BlogList() {
         </div>
 
         {/* Social Proof */}
-        <SocialProofBanner />
+        <div className="mt-3 mb-2 text-sm text-muted-foreground">
+          Trusted by <strong className="text-foreground">12,000+</strong> creators
+        </div>
 
         {isLoading ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 mt-8">
@@ -125,13 +128,15 @@ export default function BlogList() {
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/30">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {post.publishedAt
+                        {post.status === "draft"
+                          ? "Draft"
+                          : post.publishedAt
                           ? new Date(post.publishedAt).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
                               year: "numeric",
                             })
-                          : "Draft"}
+                          : "Published"}
                       </div>
                       <span className="text-xs text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
                         Read <ArrowRight className="h-3 w-3" />

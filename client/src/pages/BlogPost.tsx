@@ -7,12 +7,16 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
+import { toast } from "sonner";
 import {
   InlineCTA,
   LeadMagnet,
   SocialProofBanner,
   StickySignupBar,
 } from "@/components/BlogConversion";
+
+const SPYREELS_LOGO =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
 const SLUG_CTA_MAP: Record<
   string,
@@ -294,14 +298,19 @@ export default function BlogPost() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Film className="h-5 w-5 text-primary" />
-              </div>
+              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
               <span className="font-semibold text-lg tracking-tight">SpyReels</span>
             </Link>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigator.clipboard.writeText(window.location.href)}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast.success("Link copied!");
+                  } catch {
+                    toast.error("Could not copy link");
+                  }
+                }}
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
                 <Share2 className="h-4 w-4" /> Share
@@ -396,14 +405,20 @@ export default function BlogPost() {
 
             <LeadMagnet type={ctaConfig.leadMagnet} />
 
-            <div className="mt-12 rounded-2xl border border-border/50 bg-card/60 p-6">
+            <div className="mt-12 rounded-2xl border border-primary/20 p-6 bg-gradient-to-br from-[#111827] via-[#1f1b2e] to-[#0f172a]">
               <div className="flex items-start gap-3">
                 <div className="h-11 w-11 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-semibold">
                   NP
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">Noah Perry</p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="font-semibold text-foreground text-lg">Noah Perry</p>
+                  <p className="text-primary/90 text-sm font-medium mt-0.5">Founder &amp; CEO</p>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                      Instagram Growth Expert · 12,000+ creators helped
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-3">
                     Founder & CEO of SpyReels.
                   </p>
                 </div>
@@ -429,9 +444,27 @@ export default function BlogPost() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   {relatedPosts.map((item) => (
                     <Link key={item.id} href={`/blog/${item.slug}`}>
-                      <article className="h-full rounded-xl border border-border/50 bg-card/50 p-4 hover:border-primary/30 transition-colors">
-                        <p className="font-medium text-foreground mb-2 line-clamp-2">{item.title}</p>
-                        {item.excerpt && <p className="text-sm text-muted-foreground line-clamp-3">{item.excerpt}</p>}
+                      <article className="h-full rounded-xl border border-border/50 bg-card/50 overflow-hidden hover:border-primary/30 transition-colors">
+                        {item.coverImageUrl ? (
+                          <div className="h-36 overflow-hidden">
+                            <img
+                              src={item.coverImageUrl}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="h-36 flex items-end p-3"
+                            style={{ background: "linear-gradient(135deg, #7C3AED 0%, #4C1D95 55%, #111827 100%)" }}
+                          >
+                            <p className="text-white/95 text-sm font-medium line-clamp-2">{item.title}</p>
+                          </div>
+                        )}
+                        <div className="p-4">
+                          <p className="font-medium text-foreground mb-2 line-clamp-2">{item.title}</p>
+                          {item.excerpt && <p className="text-sm text-muted-foreground line-clamp-3">{item.excerpt}</p>}
+                        </div>
                       </article>
                     </Link>
                   ))}
