@@ -81,9 +81,9 @@ export default function BlogList() {
             <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Film className="h-8 w-8 text-primary" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">Coming Soon</h2>
+            <h2 className="text-xl font-semibold mb-2">No posts published yet</h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              We're working on insightful articles about Instagram Reels strategy, content creation, and growth tactics. Check back soon!
+              Check back soon for new articles on Instagram Reels strategy, content creation, and growth tactics.
             </p>
           </div>
         ) : (
