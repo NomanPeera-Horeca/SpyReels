@@ -33,6 +33,7 @@ function DashboardRouter() {
     <DashboardLayout>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/research" component={Home} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />
