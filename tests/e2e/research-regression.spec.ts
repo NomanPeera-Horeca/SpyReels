@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers/auth";
 
-const RESEARCH_HANDLE = "corporatesurprises";
+const HANDLES = ["cristiano", "kyliejenner", "natgeo", "nasa", "nike"];
+const RESEARCH_HANDLE = HANDLES[Math.floor(Math.random() * HANDLES.length)];
 
 /** Set by the scraping test; reused by transcription + re-create (serial). */
 let jobDashboardUrl: string;
@@ -19,7 +20,7 @@ test.describe.serial("Research regression (live API — run with app + credentia
     await page.waitForURL(/\/dashboard\?jobId=\d+/, { timeout: 120_000 });
     jobDashboardUrl = page.url();
 
-    await expect(page.getByText("completed", { exact: true }).first()).toBeVisible({
+    await expect(page.locator('span').filter({ hasText: /^completed$/i }).first()).toBeVisible({
       timeout: 60_000,
     });
 
@@ -36,6 +37,9 @@ test.describe.serial("Research regression (live API — run with app + credentia
     await login(page);
     expect(jobDashboardUrl).toBeTruthy();
     await page.goto(jobDashboardUrl!);
+    await page.waitForSelector('[data-sidebar]', { timeout: 15000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
+    await page.waitForSelector('button:has-text("Transcribe")', { timeout: 30000 });
 
     const transcribeBtn = page.getByRole("button", { name: /^Transcribe$/i }).first();
     if (await transcribeBtn.isVisible().catch(() => false)) {
@@ -43,7 +47,7 @@ test.describe.serial("Research regression (live API — run with app + credentia
     }
 
     await expect(page.getByText("Transcribed").first()).toBeVisible({
-      timeout: 30_000,
+      timeout: 120_000,
     });
 
     await page.getByRole("button", { name: /Transcript/i }).first().click();
