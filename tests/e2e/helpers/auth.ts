@@ -29,11 +29,5 @@ export async function login(page: Page) {
     .getByRole("button", { name: "Log In", exact: true })
     .last()
     .click();
-  await page.waitForFunction(
-    () => {
-      const p = new URL(window.location.href).pathname;
-      return p === "/" || p.includes("dashboard");
-    },
-    { timeout: 15_000 }
-  );
+  await page.waitForSelector('[data-sidebar], nav.sidebar, #dashboard, [class*="sidebar"]', { timeout: 15000 });
 }

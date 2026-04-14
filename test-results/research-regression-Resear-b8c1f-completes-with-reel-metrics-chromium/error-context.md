@@ -12,432 +12,122 @@
 # Error details
 
 ```
-Test timeout of 120000ms exceeded.
-```
+Error: locator.fill: Test ended.
+Call log:
+  - waiting for locator('#handle')
 
 ```
-Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile '/Users/nomanpeera/Desktop/reels-dashboard/test-results/.playwright-artifacts-0/traces/6ebcf295932422b33342-8132f691aafc4975140c.network' -> '/Users/nomanpeera/Desktop/reels-dashboard/test-results/.playwright-artifacts-0/traces/6ebcf295932422b33342-8132f691aafc4975140c-pwnetcopy-1.network'
-```
 
-# Page snapshot
+# Test source
 
-```yaml
-- generic [ref=e2]:
-  - region "Notifications alt+T"
-  - generic [ref=e3]:
-    - navigation [ref=e4]:
-      - generic [ref=e6]:
-        - generic [ref=e7]:
-          - img "SpyReels" [ref=e8]
-          - generic [ref=e9]: SpyReels
-        - generic [ref=e10]:
-          - link "Features" [ref=e11] [cursor=pointer]:
-            - /url: "#features"
-          - link "How It Works" [ref=e12] [cursor=pointer]:
-            - /url: "#how-it-works"
-          - link "Pricing" [ref=e13] [cursor=pointer]:
-            - /url: "#pricing"
-          - link "FAQ" [ref=e14] [cursor=pointer]:
-            - /url: "#faq"
-        - generic [ref=e15]:
-          - button "Log In" [ref=e16] [cursor=pointer]
-          - button "Start Free" [ref=e17] [cursor=pointer]:
-            - text: Start Free
-            - img
-    - generic [ref=e19]:
-      - generic [ref=e20]:
-        - generic [ref=e21]:
-          - img
-          - text: 12,000+ creators are already using SpyReels
-        - heading "Why are their Reels getting 100K views and yours are getting 200?" [level=1] [ref=e22]
-        - paragraph [ref=e23]: SpyReels shows you exactly which Reels are going viral in your niche, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from zero to filming in under 10 minutes.
-        - paragraph [ref=e24]: While you are reading this, other creators in your niche are already using this.
-        - generic [ref=e25]:
-          - button "Start Free — No Credit Card" [ref=e26] [cursor=pointer]:
-            - text: Start Free — No Credit Card
-            - img
-          - link "See how it works" [ref=e27] [cursor=pointer]:
-            - /url: "#how-it-works"
-            - text: See how it works
-            - img [ref=e28]
-        - paragraph [ref=e30]: Free plan includes 2 scrapes, 3 transcriptions, and 5 saved scripts per month
-      - generic [ref=e31]:
-        - generic [ref=e32]:
-          - img [ref=e33]
-          - generic [ref=e35]: 12,000+ creators
-        - generic [ref=e36]:
-          - img [ref=e37]
-          - generic [ref=e39]: 2.4M+ Reels analyzed
-        - generic [ref=e40]:
-          - img [ref=e41]
-          - generic [ref=e44]: 180,000+ scripts generated
-        - generic [ref=e45]:
-          - img [ref=e46]
-          - generic [ref=e49]: Avg 9 min from research to script
-      - img "SpyReels dashboard" [ref=e52]
-    - generic [ref=e54]:
-      - paragraph [ref=e55]: The difference between creators who grow and creators who don't
-      - generic [ref=e56]:
-        - generic [ref=e57]:
-          - generic [ref=e58]:
-            - img [ref=e59]
-            - generic [ref=e62]: Without SpyReels
-          - list [ref=e63]:
-            - listitem [ref=e64]:
-              - img [ref=e65]
-              - text: Spend 3 hours scrolling for content ideas
-            - listitem [ref=e68]:
-              - img [ref=e69]
-              - text: Post and hope the algorithm picks it up
-            - listitem [ref=e72]:
-              - img [ref=e73]
-              - text: No idea why some Reels go viral and yours don't
-            - listitem [ref=e76]:
-              - img [ref=e77]
-              - text: Manually transcribe videos to study the script
-            - listitem [ref=e80]:
-              - img [ref=e81]
-              - text: Write scripts from scratch every single time
-        - generic [ref=e84]:
-          - generic [ref=e85]:
-            - img [ref=e86]
-            - generic [ref=e88]: With SpyReels
-          - list [ref=e89]:
-            - listitem [ref=e90]:
-              - img [ref=e91]
-              - text: See every viral Reel in your niche in 60 seconds
-            - listitem [ref=e93]:
-              - img [ref=e94]
-              - text: Know exactly what works before you film anything
-            - listitem [ref=e96]:
-              - img [ref=e97]
-              - text: Transcribe any Reel in one click, word for word
-            - listitem [ref=e99]:
-              - img [ref=e100]
-              - text: Get a ready-to-film script in under 2 minutes
-            - listitem [ref=e102]:
-              - img [ref=e103]
-              - text: Post with confidence knowing the formula works
-    - generic [ref=e106]:
-      - generic [ref=e107]:
-        - generic [ref=e108]: What creators are saying
-        - heading "Real creators. Real results." [level=2] [ref=e109]
-        - paragraph [ref=e110]: Creators in every niche are using SpyReels to study what works and grow faster.
-      - generic [ref=e111]:
-        - generic [ref=e113]:
-          - generic [ref=e114]:
-            - img [ref=e115]
-            - img [ref=e117]
-            - img [ref=e119]
-            - img [ref=e121]
-            - img [ref=e123]
-          - paragraph [ref=e125]: "\"I typed in a fitness creator with 2M followers and saw their top 10 Reels instantly. Transcribed the one with 800K views, got my script, filmed it the same day. That Reel got 34K views. My previous best was 1,200.\""
-          - generic [ref=e126]:
-            - generic [ref=e127]: MT
-            - generic [ref=e128]:
-              - paragraph [ref=e129]: Marcus T.
-              - paragraph [ref=e130]: Fitness and nutrition creator · 14K followers
-        - generic [ref=e132]:
-          - generic [ref=e133]:
-            - img [ref=e134]
-            - img [ref=e136]
-            - img [ref=e138]
-            - img [ref=e140]
-            - img [ref=e142]
-          - paragraph [ref=e144]: "\"I spent months trying to figure out why my recipes never got traction. SpyReels showed me in 5 minutes that short punchy hooks with a surprise ending were getting all the views in my niche. Game changer.\""
-          - generic [ref=e145]:
-            - generic [ref=e146]: PS
-            - generic [ref=e147]:
-              - paragraph [ref=e148]: Priya S.
-              - paragraph [ref=e149]: Food and recipe creator · 28K followers
-        - generic [ref=e151]:
-          - generic [ref=e152]:
-            - img [ref=e153]
-            - img [ref=e155]
-            - img [ref=e157]
-            - img [ref=e159]
-            - img [ref=e161]
-          - paragraph [ref=e163]: "\"As a real estate agent trying to grow on Instagram, I had no idea what content worked. SpyReels showed me every top performing Reel in my niche. I went from 400 views to 22K on my next video.\""
-          - generic [ref=e164]:
-            - generic [ref=e165]: DR
-            - generic [ref=e166]:
-              - paragraph [ref=e167]: Daniel R.
-              - paragraph [ref=e168]: Real estate creator · 9K followers
-        - generic [ref=e170]:
-          - generic [ref=e171]:
-            - img [ref=e172]
-            - img [ref=e174]
-            - img [ref=e176]
-            - img [ref=e178]
-            - img [ref=e180]
-          - paragraph [ref=e182]: "\"I used to spend 4 hours every Sunday researching content ideas. Now I spend 15 minutes on SpyReels and have a full week of scripts ready to film. It is not even close.\""
-          - generic [ref=e183]:
-            - generic [ref=e184]: AM
-            - generic [ref=e185]:
-              - paragraph [ref=e186]: Aisha M.
-              - paragraph [ref=e187]: Personal finance creator · 41K followers
-        - generic [ref=e189]:
-          - generic [ref=e190]:
-            - img [ref=e191]
-            - img [ref=e193]
-            - img [ref=e195]
-            - img [ref=e197]
-            - img [ref=e199]
-          - paragraph [ref=e201]: "\"Every big creator I looked up to was clearly using some kind of system. SpyReels is that system. I finally understand what makes content go viral and I can replicate it every single week.\""
-          - generic [ref=e202]:
-            - generic [ref=e203]: JK
-            - generic [ref=e204]:
-              - paragraph [ref=e205]: Jordan K.
-              - paragraph [ref=e206]: Lifestyle and mindset creator · 19K followers
-        - generic [ref=e208]:
-          - generic [ref=e209]:
-            - img [ref=e210]
-            - img [ref=e212]
-            - img [ref=e214]
-            - img [ref=e216]
-            - img [ref=e218]
-          - paragraph [ref=e220]: "\"I found 3 viral Reels in my niche, transcribed them all in under 10 minutes, and had scripts for my entire week done before lunch. I have not missed a posting day since I started using SpyReels.\""
-          - generic [ref=e221]:
-            - generic [ref=e222]: LB
-            - generic [ref=e223]:
-              - paragraph [ref=e224]: Lauren B.
-              - paragraph [ref=e225]: Beauty and skincare creator · 33K followers
-    - generic [ref=e227]:
-      - generic [ref=e228]:
-        - generic [ref=e229]: Everything you need to go viral
-        - heading "Stop guessing. Start knowing." [level=2] [ref=e230]
-        - paragraph [ref=e231]: "Every feature is built around one goal: getting you from zero ideas to ready-to-film script as fast as possible."
-      - generic [ref=e232]:
-        - generic [ref=e234]:
-          - img [ref=e236]
-          - heading "See every Reel your competitor has ever posted" [level=3] [ref=e238]
-          - paragraph [ref=e239]: Enter any public Instagram handle and see every Reel ranked by views, likes, engagement rate and comments. Know what is working for them before you film anything.
-        - generic [ref=e241]:
-          - img [ref=e243]
-          - heading "Find viral Reels in your niche in seconds" [level=3] [ref=e246]
-          - paragraph [ref=e247]: Search by keyword or paste any Reel URL. Filter by engagement rate, view count, or date. Stop scrolling for hours. Find what is working in your niche in under 60 seconds.
-        - generic [ref=e249]:
-          - img [ref=e251]
-          - heading "Know word for word what top creators are saying" [level=3] [ref=e254]
-          - paragraph [ref=e255]: One click transcription with timestamped segments. See the exact hook, the exact words, the exact structure that made a Reel hit 500K views. No more guessing.
-        - generic [ref=e257]:
-          - img [ref=e259]
-          - heading "Get a ready-to-film script in under 2 minutes" [level=3] [ref=e262]
-          - paragraph [ref=e263]: AI reverse-engineers the viral formula and rewrites it in your voice for your niche. You get a complete script with delivery cues, hook, body, and CTA. Ready to film.
-        - generic [ref=e265]:
-          - img [ref=e267]
-          - heading "Never lose a good idea again" [level=3] [ref=e270]
-          - paragraph [ref=e271]: Save scripts, organize by status, schedule on a calendar. From idea to posted Reel, everything lives in one place. No more notes apps, no more lost drafts.
-        - link "Sort any creator's feed by engagement on Instagram The SpyReels Chrome extension lets you sort any creator's feed by engagement rate, save Reels, and transcribe without leaving Instagram. Learn more" [ref=e272] [cursor=pointer]:
-          - /url: /extension
-          - generic [ref=e274]:
-            - img [ref=e276]
-            - heading "Sort any creator's feed by engagement on Instagram" [level=3] [ref=e281]
-            - paragraph [ref=e282]: The SpyReels Chrome extension lets you sort any creator's feed by engagement rate, save Reels, and transcribe without leaving Instagram.
-            - generic [ref=e283]:
-              - text: Learn more
-              - img [ref=e284]
-    - generic [ref=e287]:
-      - generic [ref=e288]:
-        - generic [ref=e289]: Simple 3-step workflow
-        - heading "From zero ideas to ready-to-film in 10 minutes" [level=2] [ref=e290]
-        - paragraph [ref=e291]: No more hours scrolling for inspiration. This is the workflow top creators wish they had when they started.
-      - generic [ref=e292]:
-        - generic [ref=e295]:
-          - generic [ref=e296]:
-            - img [ref=e298]
-            - generic [ref=e301]: "01"
-          - heading "Pick a creator winning in your niche" [level=3] [ref=e302]
-          - paragraph [ref=e303]: Enter their Instagram handle. SpyReels pulls every Reel they have posted, sorted by what is actually performing. You see their top 10 viral Reels in seconds.
-        - generic [ref=e306]:
-          - generic [ref=e307]:
-            - img [ref=e309]
-            - generic [ref=e311]: "02"
-          - heading "Transcribe the one that blew up" [level=3] [ref=e312]
-          - paragraph [ref=e313]: One click. You get the full transcript with timestamps, the hook word for word, the structure, the CTA. You now know exactly why it went viral.
-        - generic [ref=e315]:
-          - generic [ref=e316]:
-            - img [ref=e318]
-            - generic [ref=e320]: "03"
-          - heading "Get your script and film it today" [level=3] [ref=e321]
-          - paragraph [ref=e322]: AI takes their viral formula and writes your version. Your niche, your voice, your angle. Teleprompter included. Most creators film within an hour of getting the script.
-      - generic [ref=e323]:
-        - img "SpyReels workflow"
-    - generic [ref=e329]:
-      - generic [ref=e330]: The truth about going viral
-      - heading "The creators winning on Instagram are not more talented than you." [level=2] [ref=e331]
-      - generic [ref=e332]:
-        - paragraph [ref=e333]: They just know what works before they hit record. They study what is already going viral in their niche, they understand why it worked, and they create their version. That is the entire strategy.
-        - paragraph [ref=e334]: SpyReels gives you that exact intelligence in minutes. See what is going viral, transcribe it, understand the formula, get a script. The creators doing this consistently are the ones growing consistently.
-        - paragraph [ref=e335]: The ones not doing it are posting into the void and wondering why nothing works.
-      - generic [ref=e336]:
-        - button "Start for Free" [ref=e337] [cursor=pointer]:
-          - text: Start for Free
-          - img
-        - generic [ref=e338]:
-          - img [ref=e339]
-          - generic [ref=e341]: 14-day money-back guarantee on all paid plans
-    - generic [ref=e343]:
-      - generic [ref=e344]:
-        - generic [ref=e345]: Simple, transparent pricing
-        - heading "Start free. Upgrade when you're ready." [level=2] [ref=e346]
-        - paragraph [ref=e347]: No tricks, no hidden fees. The free plan is genuinely useful.
-        - generic [ref=e348]:
-          - generic [ref=e349]: Monthly
-          - button [ref=e350] [cursor=pointer]
-          - generic [ref=e352]: Annual
-          - generic [ref=e353]: Save 40%+
-      - generic [ref=e354]:
-        - generic [ref=e356]:
-          - generic [ref=e357]:
-            - img [ref=e358]
-            - heading "Free" [level=3] [ref=e360]
-          - generic [ref=e361]: $0
-          - paragraph [ref=e362]: forever
-          - paragraph [ref=e363]: Try everything. No credit card.
-          - button "Start Free" [ref=e364] [cursor=pointer]
-          - list [ref=e365]:
-            - listitem [ref=e366]:
-              - img [ref=e367]
-              - generic [ref=e369]: 2 handle scrapes/month
-            - listitem [ref=e370]:
-              - img [ref=e371]
-              - generic [ref=e373]: 3 transcriptions/month
-            - listitem [ref=e374]:
-              - img [ref=e375]
-              - generic [ref=e377]: 5 saved scripts
-            - listitem [ref=e378]:
-              - img [ref=e379]
-              - generic [ref=e381]: Chrome extension basics
-        - generic [ref=e383]:
-          - generic [ref=e384]:
-            - img [ref=e385]
-            - heading "Starter" [level=3] [ref=e390]
-          - generic [ref=e391]: $11/mo
-          - paragraph [ref=e392]:
-            - generic [ref=e393]: $19/mo
-            - text: billed annually
-          - paragraph [ref=e394]: For creators getting serious.
-          - button "Get Started" [ref=e395] [cursor=pointer]
-          - list [ref=e396]:
-            - listitem [ref=e397]:
-              - img [ref=e398]
-              - generic [ref=e400]: 10 scrapes/month
-            - listitem [ref=e401]:
-              - img [ref=e402]
-              - generic [ref=e404]: 30 transcriptions/month
-            - listitem [ref=e405]:
-              - img [ref=e406]
-              - generic [ref=e408]: 15 AI re-creations
-            - listitem [ref=e409]:
-              - img [ref=e410]
-              - generic [ref=e412]: CSV & Google Sheets export
-        - generic [ref=e413]:
-          - generic [ref=e415]: Most Popular
-          - generic [ref=e416]:
-            - generic [ref=e417]:
-              - img [ref=e418]
-              - heading "Pro" [level=3] [ref=e420]
-            - generic [ref=e421]: $29/mo
-            - paragraph [ref=e422]:
-              - generic [ref=e423]: $49/mo
-              - text: billed annually
-            - paragraph [ref=e424]: The full content machine.
-            - button "Get Started" [ref=e425] [cursor=pointer]
-            - list [ref=e426]:
-              - listitem [ref=e427]:
-                - img [ref=e428]
-                - generic [ref=e430]: 50 scrapes/month
-              - listitem [ref=e431]:
-                - img [ref=e432]
-                - generic [ref=e434]: 200 transcriptions/month
-              - listitem [ref=e435]:
-                - img [ref=e436]
-                - generic [ref=e438]: 100 AI re-creations
-              - listitem [ref=e439]:
-                - img [ref=e440]
-                - generic [ref=e442]: Voice teleprompter & smart takes
-        - generic [ref=e444]:
-          - generic [ref=e445]:
-            - img [ref=e446]
-            - heading "Business" [level=3] [ref=e450]
-          - generic [ref=e451]: $59/mo
-          - paragraph [ref=e452]:
-            - generic [ref=e453]: $99/mo
-            - text: billed annually
-          - paragraph [ref=e454]: For teams and agencies.
-          - button "Get Started" [ref=e455] [cursor=pointer]
-          - list [ref=e456]:
-            - listitem [ref=e457]:
-              - img [ref=e458]
-              - generic [ref=e460]: 200 scrapes/month
-            - listitem [ref=e461]:
-              - img [ref=e462]
-              - generic [ref=e464]: 1,000 transcriptions/month
-            - listitem [ref=e465]:
-              - img [ref=e466]
-              - generic [ref=e468]: 500 AI re-creations
-            - listitem [ref=e469]:
-              - img [ref=e470]
-              - generic [ref=e472]: 10 team members + API access
-    - generic [ref=e475]:
-      - generic [ref=e476]:
-        - img [ref=e477]
-        - paragraph [ref=e479]: 14-day money-back guarantee
-      - generic [ref=e480]:
-        - img [ref=e481]
-        - paragraph [ref=e484]: Cancel anytime, no contracts
-      - generic [ref=e485]:
-        - img [ref=e486]
-        - paragraph [ref=e488]: Free plan, no credit card
-      - generic [ref=e489]:
-        - img [ref=e490]
-        - paragraph [ref=e493]: Export all your data anytime
-    - generic [ref=e495]:
-      - heading "Questions? We have answers." [level=2] [ref=e497]
-      - generic [ref=e498]:
-        - button "How is this different from just manually scrolling Instagram?" [ref=e500] [cursor=pointer]:
-          - generic [ref=e501]: How is this different from just manually scrolling Instagram?
-          - img [ref=e502]
-        - button "Will Instagram ban my account for using this?" [ref=e505] [cursor=pointer]:
-          - generic [ref=e506]: Will Instagram ban my account for using this?
-          - img [ref=e507]
-        - button "How fast can I actually get a script?" [ref=e510] [cursor=pointer]:
-          - generic [ref=e511]: How fast can I actually get a script?
-          - img [ref=e512]
-        - button "Do I need to be a big creator for this to work?" [ref=e515] [cursor=pointer]:
-          - generic [ref=e516]: Do I need to be a big creator for this to work?
-          - img [ref=e517]
-        - button "What if I don't like it after paying?" [ref=e520] [cursor=pointer]:
-          - generic [ref=e521]: What if I don't like it after paying?
-          - img [ref=e522]
-        - button "Can I save money with annual billing?" [ref=e525] [cursor=pointer]:
-          - generic [ref=e526]: Can I save money with annual billing?
-          - img [ref=e527]
-    - generic [ref=e533]:
-      - heading "Your competitors are already using this." [level=2] [ref=e534]
-      - paragraph [ref=e535]: Every day you wait is another day they study what works and you guess. Start free in 30 seconds.
-      - button "Start Free Now" [ref=e536] [cursor=pointer]:
-        - text: Start Free Now
-        - img
-      - paragraph [ref=e537]: No credit card required. Free plan available forever.
-    - contentinfo [ref=e538]:
-      - generic [ref=e540]:
-        - generic [ref=e541]:
-          - img "SpyReels" [ref=e542]
-          - generic [ref=e543]: SpyReels
-        - generic [ref=e544]:
-          - link "Features" [ref=e545] [cursor=pointer]:
-            - /url: "#features"
-          - link "Pricing" [ref=e546] [cursor=pointer]:
-            - /url: "#pricing"
-          - link "FAQ" [ref=e547] [cursor=pointer]:
-            - /url: "#faq"
-          - link "Chrome Extension" [ref=e548] [cursor=pointer]:
-            - /url: /extension
-          - link "Terms" [ref=e549] [cursor=pointer]:
-            - /url: /terms
-          - link "Privacy" [ref=e550] [cursor=pointer]:
-            - /url: /privacy
-        - paragraph [ref=e551]: © 2026 SpyReels. All rights reserved.
+```ts
+  1   | import { test, expect } from "@playwright/test";
+  2   | import { login } from "./helpers/auth";
+  3   | 
+  4   | const RESEARCH_HANDLE = "corporatesurprises";
+  5   | 
+  6   | /** Set by the scraping test; reused by transcription + re-create (serial). */
+  7   | let jobDashboardUrl: string;
+  8   | 
+  9   | test.describe.serial("Research regression (live API — run with app + credentials)", () => {
+  10  |   test("Instagram scraping completes with reel metrics", async ({ page }) => {
+  11  |     test.setTimeout(120_000);
+  12  |     await login(page);
+  13  |     await page.goto("/");
+> 14  |     await page.locator("#handle").fill(RESEARCH_HANDLE);
+      |                                   ^ Error: locator.fill: Test ended.
+  15  |     await expect(page.getByText("followers", { exact: false })).toBeVisible({
+  16  |       timeout: 25_000,
+  17  |     });
+  18  |     await page.getByRole("button", { name: /Start Research/i }).click();
+  19  |     await page.waitForURL(/\/dashboard\?jobId=\d+/, { timeout: 120_000 });
+  20  |     jobDashboardUrl = page.url();
+  21  | 
+  22  |     await expect(page.getByText("completed", { exact: true }).first()).toBeVisible({
+  23  |       timeout: 60_000,
+  24  |     });
+  25  | 
+  26  |     const firstReelStats = page.locator("span.flex.items-center.gap-1").filter({
+  27  |       hasText: /[\d.KM]+/,
+  28  |     });
+  29  |     await expect(firstReelStats.first()).toBeVisible({ timeout: 20_000 });
+  30  |     const statText = await firstReelStats.first().innerText();
+  31  |     expect(statText).toMatch(/[1-9]/);
+  32  |   });
+  33  | 
+  34  |   test("Transcription: transcript appears and survives refresh", async ({ page }) => {
+  35  |     test.setTimeout(120_000);
+  36  |     await login(page);
+  37  |     expect(jobDashboardUrl).toBeTruthy();
+  38  |     await page.goto(jobDashboardUrl!);
+  39  | 
+  40  |     const transcribeBtn = page.getByRole("button", { name: /^Transcribe$/i }).first();
+  41  |     if (await transcribeBtn.isVisible().catch(() => false)) {
+  42  |       await transcribeBtn.click();
+  43  |     }
+  44  | 
+  45  |     await expect(page.getByText("Transcribed").first()).toBeVisible({
+  46  |       timeout: 30_000,
+  47  |     });
+  48  | 
+  49  |     await page.getByRole("button", { name: /Transcript/i }).first().click();
+  50  | 
+  51  |     await expect(page.getByRole("heading", { name: "Transcript" })).toBeVisible({
+  52  |       timeout: 15_000,
+  53  |     });
+  54  |     const transcriptPanel = page
+  55  |       .locator("div.mb-4")
+  56  |       .filter({ has: page.getByRole("heading", { name: "Transcript" }) })
+  57  |       .locator("div.rounded-lg")
+  58  |       .first();
+  59  |     await expect(transcriptPanel).toBeVisible({ timeout: 15_000 });
+  60  |     const transcriptText = await transcriptPanel.innerText();
+  61  |     expect(transcriptText.toLowerCase().trim()).not.toBe("no speech detected");
+  62  |     expect(transcriptText.replace(/\s+/g, " ").trim().length).toBeGreaterThan(10);
+  63  | 
+  64  |     await page.reload();
+  65  |     await expect(page.getByText("completed", { exact: true }).first()).toBeVisible({
+  66  |       timeout: 30_000,
+  67  |     });
+  68  |     await page.getByRole("button", { name: /Transcript/i }).first().click();
+  69  |     const transcriptAfter = page
+  70  |       .locator("div.mb-4")
+  71  |       .filter({ has: page.getByRole("heading", { name: "Transcript" }) })
+  72  |       .locator("div.rounded-lg")
+  73  |       .first();
+  74  |     await expect(transcriptAfter).toBeVisible({ timeout: 15_000 });
+  75  |     expect((await transcriptAfter.innerText()).replace(/\s+/g, " ").trim().length).toBeGreaterThan(
+  76  |       10
+  77  |     );
+  78  |   });
+  79  | 
+  80  |   test("Re-Create: generated script is shown in editor", async ({ page }) => {
+  81  |     test.setTimeout(120_000);
+  82  |     await login(page);
+  83  |     expect(jobDashboardUrl).toBeTruthy();
+  84  |     await page.goto(jobDashboardUrl!);
+  85  | 
+  86  |     await expect(page.getByText("Transcribed").first()).toBeVisible({ timeout: 15_000 });
+  87  |     await page.getByRole("button", { name: /Re-Create/i }).first().click();
+  88  |     const generateBtn = page.getByRole("button", { name: /Generate Script/i });
+  89  |     if (await generateBtn.isVisible().catch(() => false)) {
+  90  |       await generateBtn.click();
+  91  |       await expect(page.getByText("Analyzing viral structure")).toBeHidden({
+  92  |         timeout: 30_000,
+  93  |       });
+  94  |     }
+  95  |     await expect(page.getByRole("heading", { name: "Your Script" })).toBeVisible({
+  96  |       timeout: 30_000,
+  97  |     });
+  98  |     await page
+  99  |       .getByRole("heading", { name: "Your Script" })
+  100 |       .locator("..")
+  101 |       .getByRole("button", { name: /^Edit$/ })
+  102 |       .click();
+  103 |     const scriptField = page.locator('textarea[placeholder="Edit your script..."]');
+  104 |     await expect(scriptField).toBeVisible({ timeout: 15_000 });
+  105 |     expect((await scriptField.inputValue()).trim().length).toBeGreaterThan(20);
+  106 |   });
+  107 | });
+  108 | 
 ```
