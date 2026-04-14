@@ -1,12 +1,23 @@
-import { Film, ArrowLeft, Calendar, Tag, Share2 } from "lucide-react";
+import { ArrowLeft, Calendar, Clock3, Film, Share2, Tag } from "lucide-react";
 import { Link, useParams } from "wouter";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { useEffect, useMemo, useState } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useMemo } from "react";
 import { getLoginUrl } from "@/const";
-import { InlineCTA, LeadMagnet, StickySignupBar, SocialProofBanner } from "@/components/BlogConversion";
+import {
+  InlineCTA,
+  LeadMagnet,
+  SocialProofBanner,
+  StickySignupBar,
+} from "@/components/BlogConversion";
 
-// Map slugs to specific CTA/lead magnet variants for relevance
-const SLUG_CTA_MAP: Record<string, { midCta: "default" | "spy" | "script"; leadMagnet: "template" | "checklist" | "guide" }> = {
+const SLUG_CTA_MAP: Record<
+  string,
+  { midCta: "default" | "spy" | "script"; leadMagnet: "template" | "checklist" | "guide" }
+> = {
   "how-to-transcribe-instagram-reels-automatically": { midCta: "default", leadMagnet: "checklist" },
   "spy-on-competitor-instagram-reels-strategy": { midCta: "spy", leadMagnet: "guide" },
   "viral-instagram-reel-hook-formulas": { midCta: "script", leadMagnet: "template" },
@@ -14,119 +25,243 @@ const SLUG_CTA_MAP: Record<string, { midCta: "default" | "spy" | "script"; leadM
   "best-instagram-reels-analytics-tools-2026": { midCta: "spy", leadMagnet: "guide" },
 };
 
-/**
- * Injects an inline CTA into HTML content after the 3rd <h2> or halfway through
- */
-function injectMidArticleCTA(html: string, ctaHtml: string): string {
-  const h2Regex = /<h2[\s>]/gi;
-  let match;
-  let count = 0;
-  let insertPos = -1;
+type TocItem = { id: string; text: string; level: 2 | 3 };
 
-  while ((match = h2Regex.exec(html)) !== null) {
-    count++;
-    if (count === 3) {
-      insertPos = match.index;
-      break;
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/--+/g, "-");
+}
+
+function normalizeContentToMarkdown(raw: string): string {
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const normalized: string[] = [];
+  let inFaq = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    const prev = i > 0 ? lines[i - 1].trim() : "";
+
+    if (!trimmed) {
+      normalized.push("");
+      continue;
     }
+
+    if (/^#{1,3}\s+/.test(trimmed)) {
+      normalized.push(trimmed);
+      continue;
+    }
+
+    if (/^frequently asked questions/i.test(trimmed)) {
+      inFaq = true;
+      normalized.push(`## ${trimmed}`);
+      continue;
+    }
+
+    const isListLine = /^[-*•]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed);
+    const endsWithPeriod = /\.$/.test(trimmed);
+    const endsWithQuestion = /\?$/.test(trimmed);
+    const startsCapital = /^[A-Z]/.test(trimmed);
+    const hasMidSentencePunctuation = /[.!?;:](?=.{2,})/.test(trimmed.slice(0, -1));
+    const isShort = trimmed.length <= 100;
+    const afterBlankLine = prev === "";
+
+    const looksLikeSectionTitle =
+      isShort &&
+      !isListLine &&
+      afterBlankLine &&
+      startsCapital &&
+      !hasMidSentencePunctuation &&
+      (!endsWithPeriod || endsWithQuestion);
+
+    if (inFaq && endsWithQuestion && !isListLine) {
+      normalized.push(`### ${trimmed}`);
+      continue;
+    }
+
+    if (looksLikeSectionTitle) {
+      normalized.push(`## ${trimmed}`);
+      continue;
+    }
+
+    normalized.push(trimmed);
   }
 
-  // If fewer than 3 h2s, insert at roughly 40% of content
-  if (insertPos === -1) {
-    insertPos = Math.floor(html.length * 0.4);
-    // Find the nearest closing </p> tag to avoid breaking HTML
-    const nearestP = html.indexOf("</p>", insertPos);
-    if (nearestP !== -1) {
-      insertPos = nearestP + 4;
-    }
-  }
+  return normalized.join("\n\n");
+}
 
-  return html.slice(0, insertPos) + ctaHtml + html.slice(insertPos);
+function extractToc(markdown: string): TocItem[] {
+  return markdown
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("## ") || line.startsWith("### "))
+    .map((line) => {
+      const level = line.startsWith("### ") ? 3 : 2;
+      const text = line.replace(/^###?\s+/, "");
+      return { id: slugify(text), text, level };
+    });
 }
 
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
+  const [progress, setProgress] = useState(0);
+  const [activeHeading, setActiveHeading] = useState("");
+
   const { data: post, isLoading, error } = trpc.blog.bySlug.useQuery(
     { slug: slug || "" },
     { enabled: !!slug }
   );
+  const { data: allPublished } = trpc.blog.published.useQuery();
 
   const ctaConfig = useMemo(() => {
     if (!slug) return { midCta: "default" as const, leadMagnet: "template" as const };
     return SLUG_CTA_MAP[slug] || { midCta: "default" as const, leadMagnet: "template" as const };
   }, [slug]);
 
-  // Inject mid-article CTA placeholder into content
-  const processedContent = useMemo(() => {
-    if (!post?.content) return "";
-    const ctaPlaceholder = '<div id="mid-article-cta-slot"></div>';
-    return injectMidArticleCTA(post.content, ctaPlaceholder);
-  }, [post?.content]);
+  const markdown = useMemo(() => normalizeContentToMarkdown(post?.content || ""), [post?.content]);
+  const toc = useMemo(() => extractToc(markdown), [markdown]);
 
-  // Update page title and meta for SEO
+  const readTime = useMemo(() => {
+    const words = markdown.replace(/[#>*_`[\]()!-]/g, " ").split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.ceil(words / 200));
+  }, [markdown]);
+
+  const contentParts = useMemo(() => {
+    if (!markdown) return { first: "", second: "" };
+    const blocks = markdown.split("\n\n");
+    const mid = Math.ceil(blocks.length / 2);
+    return {
+      first: blocks.slice(0, mid).join("\n\n"),
+      second: blocks.slice(mid).join("\n\n"),
+    };
+  }, [markdown]);
+
+  const relatedPosts = useMemo(() => {
+    if (!allPublished || !post) return [];
+    return allPublished.filter((p) => p.slug !== post.slug).slice(0, 2);
+  }, [allPublished, post]);
+
+  const markdownComponents = useMemo(
+    () => ({
+      h2: ({ children }: any) => {
+        const text = String(children);
+        const id = slugify(text);
+        return (
+          <h2 id={id} className="scroll-mt-24 pl-4 border-l-2 border-primary/60 text-[26px] font-semibold mt-12 mb-4">
+            <a href={`#${id}`} className="hover:text-primary transition-colors">{children}</a>
+          </h2>
+        );
+      },
+      h3: ({ children }: any) => {
+        const text = String(children);
+        const id = slugify(text);
+        return (
+          <h3 id={id} className="scroll-mt-24 text-[20px] font-medium mt-9 mb-3">
+            <a href={`#${id}`} className="hover:text-primary transition-colors">{children}</a>
+          </h3>
+        );
+      },
+      p: ({ children }: any) => <p className="text-[17px] leading-[1.8] text-muted-foreground mb-5">{children}</p>,
+      blockquote: ({ children }: any) => (
+        <blockquote className="border-l-2 border-primary/60 pl-4 py-1 text-muted-foreground italic bg-primary/5 rounded-r-md my-6">
+          {children}
+        </blockquote>
+      ),
+      ul: ({ children }: any) => <ul className="list-disc pl-6 space-y-2 text-[17px] leading-[1.8] text-muted-foreground mb-5">{children}</ul>,
+      ol: ({ children }: any) => <ol className="list-decimal pl-6 space-y-2 text-[17px] leading-[1.8] text-muted-foreground mb-5">{children}</ol>,
+      img: ({ ...props }: any) => <img {...props} className="rounded-xl border border-border/50 my-8 w-full" />,
+      code: ({ inline, className, children, ...props }: any) => {
+        const match = /language-(\w+)/.exec(className || "");
+        const code = String(children).replace(/\n$/, "");
+        if (!inline) {
+          return (
+            <SyntaxHighlighter
+              style={oneDark}
+              language={match?.[1] || "text"}
+              PreTag="div"
+              customStyle={{ borderRadius: "0.75rem", padding: "1rem", margin: "1.25rem 0" }}
+              {...props}
+            >
+              {code}
+            </SyntaxHighlighter>
+          );
+        }
+        return <code className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-sm">{children}</code>;
+      },
+      strong: ({ children }: any) => <strong className="text-foreground font-semibold">{children}</strong>,
+    }),
+    []
+  );
+
   useEffect(() => {
-    if (post) {
-      document.title = (post.metaTitle || post.title) + " | SpyReels Blog";
-      let metaDesc = document.querySelector('meta[name="description"]');
-      if (!metaDesc) {
-        metaDesc = document.createElement("meta");
-        metaDesc.setAttribute("name", "description");
-        document.head.appendChild(metaDesc);
-      }
-      metaDesc.setAttribute("content", post.metaDescription || post.excerpt || "");
+    const original = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = "smooth";
+    return () => {
+      document.documentElement.style.scrollBehavior = original;
+    };
+  }, []);
 
-      let script = document.getElementById("blog-post-jsonld");
-      if (!script) {
-        script = document.createElement("script");
-        script.id = "blog-post-jsonld";
-        script.setAttribute("type", "application/ld+json");
-        document.head.appendChild(script);
-      }
-      script.textContent = JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        headline: post.title,
-        description: post.metaDescription || post.excerpt || "",
-        image: post.coverImageUrl || undefined,
-        datePublished: post.publishedAt ? new Date(post.publishedAt).toISOString() : undefined,
-        dateModified: new Date(post.updatedAt).toISOString(),
-        author: { "@type": "Organization", name: "SpyReels" },
-        publisher: { "@type": "Organization", name: "SpyReels" },
-        mainEntityOfPage: { "@type": "WebPage", "@id": window.location.href },
-        keywords: (post.tags as string[])?.join(", ") || "",
-      });
+  useEffect(() => {
+    const onScroll = () => {
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      const nextProgress = total > 0 ? (window.scrollY / total) * 100 : 0;
+      setProgress(Math.min(100, Math.max(0, nextProgress)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-      return () => {
-        document.title = "SpyReels";
-        const el = document.getElementById("blog-post-jsonld");
-        if (el) el.remove();
-      };
+  useEffect(() => {
+    if (!post) return;
+    document.title = post.metaTitle || post.title;
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement("meta");
+      metaDesc.setAttribute("name", "description");
+      document.head.appendChild(metaDesc);
     }
+    metaDesc.setAttribute("content", post.metaDescription || post.excerpt || "");
   }, [post]);
+
+  useEffect(() => {
+    if (!toc.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]?.target?.id) {
+          setActiveHeading(visible[0].target.id);
+        }
+      },
+      { rootMargin: "-120px 0px -60% 0px", threshold: 0.1 }
+    );
+
+    toc.forEach((item) => {
+      const el = document.getElementById(item.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [toc, markdown]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <Link href="/" className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Film className="h-5 w-5 text-primary" />
-                </div>
-                <span className="font-semibold text-lg tracking-tight">SpyReels</span>
-              </Link>
-            </div>
-          </div>
-        </nav>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 animate-pulse space-y-6">
-          <div className="h-8 bg-muted/30 rounded w-3/4" />
-          <div className="h-4 bg-muted/30 rounded w-1/3" />
-          <div className="h-64 bg-muted/30 rounded" />
+        <div className="h-1 w-full bg-muted/20">
+          <div className="h-full bg-primary/50 animate-pulse" style={{ width: "30%" }} />
+        </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-pulse space-y-6">
+          <div className="h-[280px] rounded-2xl bg-muted/20" />
+          <div className="h-12 rounded bg-muted/20 w-3/4" />
+          <div className="h-5 rounded bg-muted/20 w-1/3" />
           <div className="space-y-3">
-            <div className="h-4 bg-muted/30 rounded w-full" />
-            <div className="h-4 bg-muted/30 rounded w-5/6" />
-            <div className="h-4 bg-muted/30 rounded w-4/6" />
+            <div className="h-5 rounded bg-muted/20 w-full" />
+            <div className="h-5 rounded bg-muted/20 w-5/6" />
+            <div className="h-5 rounded bg-muted/20 w-4/6" />
           </div>
         </div>
       </div>
@@ -137,7 +272,7 @@ export default function BlogPost() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Post Not Found</h1>
+          <h1 className="text-2xl font-semibold mb-2">Post Not Found</h1>
           <p className="text-muted-foreground mb-6">This article doesn't exist or has been removed.</p>
           <Link href="/blog" className="text-primary hover:underline">
             &larr; Back to Blog
@@ -149,149 +284,185 @@ export default function BlogPost() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Nav */}
+      <div className="fixed top-0 left-0 right-0 z-[60] h-1 bg-transparent">
+        <div className="h-full bg-primary transition-[width] duration-100" style={{ width: `${progress}%` }} />
+      </div>
+
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-16 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Film className="h-5 w-5 text-primary" />
               </div>
               <span className="font-semibold text-lg tracking-tight">SpyReels</span>
             </Link>
-            <Link href="/blog" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="h-4 w-4" /> All Posts
-            </Link>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigator.clipboard.writeText(window.location.href)}
+                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <Share2 className="h-4 w-4" /> Share
+              </button>
+              <Link href="/blog" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                <ArrowLeft className="h-4 w-4" /> All Posts
+              </Link>
+            </div>
           </div>
         </div>
       </nav>
 
-      <article className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        {/* Tags */}
-        {post.tags && (post.tags as string[]).length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {(post.tags as string[]).map((tag) => (
-              <span key={tag} className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-                <Tag className="h-3 w-3" /> {tag}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="max-w-[720px]">
+          <div className="rounded-2xl overflow-hidden h-[400px] mb-8 border border-border/50 relative">
+            {post.coverImageUrl ? (
+              <img src={post.coverImageUrl} alt={post.title} className="w-full h-full object-cover" />
+            ) : (
+              <div
+                className="w-full h-full flex items-end p-8"
+                style={{ background: "linear-gradient(135deg, #7C3AED 0%, #4C1D95 55%, #111827 100%)" }}
+              >
+                <p className="text-white/95 text-xl sm:text-2xl font-semibold max-w-xl">{post.title}</p>
+              </div>
+            )}
+          </div>
+
+          {post.tags && (post.tags as string[]).length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(post.tags as string[]).map((tag) => (
+                <span key={tag} className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <h1 className="text-[36px] sm:text-[42px] leading-tight font-semibold mb-4">{post.title}</h1>
+
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-b border-border/50 pb-6 mb-8">
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-semibold">
+                NP
+              </div>
+              <span>Noah Perry</span>
+            </div>
+            <span className="inline-flex items-center gap-1.5">
+              <Clock3 className="h-4 w-4" />
+              {readTime} min read
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              {post.status === "draft"
+                ? "Draft"
+                : post.publishedAt
+                  ? new Date(post.publishedAt).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "Published"}
+            </span>
+            {post.status === "draft" && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Draft
               </span>
-            ))}
+            )}
           </div>
-        )}
-
-        {/* Title */}
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4">
-          {post.title}
-        </h1>
-
-        {/* Meta */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-8 pb-8 border-b border-border/50">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {post.publishedAt
-              ? new Date(post.publishedAt).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : "Draft"}
-          </div>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-            }}
-            className="flex items-center gap-1.5 hover:text-foreground transition-colors"
-          >
-            <Share2 className="h-4 w-4" /> Share
-          </button>
         </div>
 
-        {/* Social Proof */}
-        <SocialProofBanner />
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,720px)_240px] gap-10">
+          <article className="max-w-[720px]">
+            <SocialProofBanner />
 
-        {/* Cover image */}
-        {post.coverImageUrl && (
-          <div className="rounded-xl overflow-hidden mb-10">
-            <img
-              src={post.coverImageUrl}
-              alt={post.title}
-              className="w-full h-auto"
-            />
-          </div>
-        )}
+            <div className="mt-8 space-y-8">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents as any}
+              >
+                {contentParts.first}
+              </ReactMarkdown>
 
-        {/* Content - Part 1: before mid-article CTA */}
-        {(() => {
-          const parts = processedContent.split('<div id="mid-article-cta-slot"></div>');
-          return (
-            <>
-              <div
-                className="prose prose-invert prose-lg max-w-none
-                  [&_h2]:text-foreground [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:mt-10 [&_h2]:mb-4
-                  [&_h3]:text-foreground [&_h3]:text-xl [&_h3]:font-medium [&_h3]:mt-8 [&_h3]:mb-3
-                  [&_p]:text-muted-foreground [&_p]:leading-relaxed [&_p]:mb-4
-                  [&_strong]:text-foreground
-                  [&_a]:text-primary [&_a]:underline
-                  [&_ul]:text-muted-foreground [&_ol]:text-muted-foreground
-                  [&_li]:mb-1
-                  [&_blockquote]:border-l-primary [&_blockquote]:text-muted-foreground
-                  [&_code]:text-primary [&_code]:bg-primary/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
-                  [&_pre]:bg-card [&_pre]:border [&_pre]:border-border/50 [&_pre]:rounded-lg
-                  [&_table]:w-full [&_table]:border-collapse [&_table]:my-6
-                  [&_th]:bg-card [&_th]:border [&_th]:border-border/50 [&_th]:px-4 [&_th]:py-2 [&_th]:text-left [&_th]:text-foreground [&_th]:font-semibold
-                  [&_td]:border [&_td]:border-border/50 [&_td]:px-4 [&_td]:py-2 [&_td]:text-muted-foreground
-                  [&_img]:rounded-lg"
-                dangerouslySetInnerHTML={{ __html: parts[0] || "" }}
-              />
-
-              {/* Mid-article CTA */}
               <InlineCTA variant={ctaConfig.midCta} />
 
-              {/* Content - Part 2: after mid-article CTA */}
-              {parts[1] && (
-                <div
-                  className="prose prose-invert prose-lg max-w-none
-                    [&_h2]:text-foreground [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:mt-10 [&_h2]:mb-4
-                    [&_h3]:text-foreground [&_h3]:text-xl [&_h3]:font-medium [&_h3]:mt-8 [&_h3]:mb-3
-                    [&_p]:text-muted-foreground [&_p]:leading-relaxed [&_p]:mb-4
-                    [&_strong]:text-foreground
-                    [&_a]:text-primary [&_a]:underline
-                    [&_ul]:text-muted-foreground [&_ol]:text-muted-foreground
-                    [&_li]:mb-1
-                    [&_blockquote]:border-l-primary [&_blockquote]:text-muted-foreground
-                    [&_code]:text-primary [&_code]:bg-primary/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
-                    [&_pre]:bg-card [&_pre]:border [&_pre]:border-border/50 [&_pre]:rounded-lg
-                    [&_table]:w-full [&_table]:border-collapse [&_table]:my-6
-                    [&_th]:bg-card [&_th]:border [&_th]:border-border/50 [&_th]:px-4 [&_th]:py-2 [&_th]:text-left [&_th]:text-foreground [&_th]:font-semibold
-                    [&_td]:border [&_td]:border-border/50 [&_td]:px-4 [&_td]:py-2 [&_td]:text-muted-foreground
-                    [&_img]:rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: parts[1] }}
-                />
-              )}
-            </>
-          );
-        })()}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents as any}
+              >
+                {contentParts.second}
+              </ReactMarkdown>
+            </div>
 
-        {/* Lead Magnet */}
-        <LeadMagnet type={ctaConfig.leadMagnet} />
+            <LeadMagnet type={ctaConfig.leadMagnet} />
 
-        {/* Bottom CTA */}
-        <div className="mt-16 p-8 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 text-center">
-          <h3 className="text-xl font-semibold mb-2">Ready to grow your Reels?</h3>
-          <p className="text-muted-foreground mb-4">
-            Start analyzing top-performing content and creating viral scripts today.
-          </p>
-          <a
-            href={getLoginUrl()}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-          >
-            Try SpyReels Free
-          </a>
+            <div className="mt-12 rounded-2xl border border-border/50 bg-card/60 p-6">
+              <div className="flex items-start gap-3">
+                <div className="h-11 w-11 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-semibold">
+                  NP
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Noah Perry</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Content strategist at SpyReels. Helping creators grow faster by studying what already works.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 p-8 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 text-center">
+              <h3 className="text-xl font-semibold mb-2">Ready to grow your Reels?</h3>
+              <p className="text-muted-foreground mb-4">
+                Start analyzing top-performing content and creating viral scripts today.
+              </p>
+              <a
+                href={getLoginUrl()}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+              >
+                Try SpyReels Free
+              </a>
+            </div>
+
+            {relatedPosts.length > 0 && (
+              <section className="mt-14">
+                <h3 className="text-xl font-semibold mb-4">Related Posts</h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {relatedPosts.map((item) => (
+                    <Link key={item.id} href={`/blog/${item.slug}`}>
+                      <article className="h-full rounded-xl border border-border/50 bg-card/50 p-4 hover:border-primary/30 transition-colors">
+                        <p className="font-medium text-foreground mb-2 line-clamp-2">{item.title}</p>
+                        {item.excerpt && <p className="text-sm text-muted-foreground line-clamp-3">{item.excerpt}</p>}
+                      </article>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </article>
+
+          <aside className="hidden lg:block">
+            {toc.length > 0 && (
+              <div className="sticky top-24 rounded-xl border border-border/50 bg-card/40 p-4">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">On this page</p>
+                <div className="space-y-1">
+                  {toc.map((item) => (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      className={`block text-sm transition-colors ${
+                        item.level === 3 ? "pl-3" : ""
+                      } ${activeHeading === item.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {item.text}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
-      </article>
+      </main>
 
-      {/* Footer */}
       <footer className="border-t border-border/50 py-8 mt-12">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-muted-foreground/60">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-muted-foreground/60">
           <span>&copy; {new Date().getFullYear()} SpyReels</span>
           <div className="flex gap-4">
             <Link href="/terms" className="hover:text-foreground">Terms</Link>
@@ -301,7 +472,6 @@ export default function BlogPost() {
         </div>
       </footer>
 
-      {/* Sticky signup bar */}
       <StickySignupBar />
     </div>
   );
