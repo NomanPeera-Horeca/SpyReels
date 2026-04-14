@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { usePostHog } from "@posthog/react";
 import { useRoute, useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -67,7 +68,9 @@ import { ShareScript } from "@/components/ShareScript";
 import { PostDateTimePicker } from "@/components/PostDateTimePicker";
 
 /** Parse a date string/Date to a Date object for the calendar picker */
-function parseDateValue(val: string | Date | null | undefined): Date | undefined {
+function parseDateValue(
+  val: string | Date | null | undefined
+): Date | undefined {
   if (!val) return undefined;
   const d = typeof val === "string" ? new Date(val) : val;
   return isNaN(d.getTime()) ? undefined : d;
@@ -104,7 +107,10 @@ export default function ScriptEditor() {
   const [captionBrandTag, setCaptionBrandTag] = useState("");
   const [generatedCaption, setGeneratedCaption] = useState<string | null>(null);
   const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([]);
-  const [captionMeta, setCaptionMeta] = useState<{ primaryKeyword?: string; hookType?: string }>({});
+  const [captionMeta, setCaptionMeta] = useState<{
+    primaryKeyword?: string;
+    hookType?: string;
+  }>({});
   const [captionDialogOpen, setCaptionDialogOpen] = useState(false);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [editableCaption, setEditableCaption] = useState("");
@@ -127,17 +133,24 @@ export default function ScriptEditor() {
       setPostDate(parseDateValue(script.postDate));
       setPostTime((script as any).postTime || "09:00");
       // Load saved caption data
-      if ((script as any).generatedCaption) setGeneratedCaption((script as any).generatedCaption);
+      if ((script as any).generatedCaption)
+        setGeneratedCaption((script as any).generatedCaption);
       if ((script as any).generatedHashtags) {
-        try { setGeneratedHashtags(JSON.parse((script as any).generatedHashtags)); } catch {}
+        try {
+          setGeneratedHashtags(JSON.parse((script as any).generatedHashtags));
+        } catch {}
       }
-      if ((script as any).captionStyle) setCaptionStyle((script as any).captionStyle);
+      if ((script as any).captionStyle)
+        setCaptionStyle((script as any).captionStyle);
     }
   }, [script, hasUnsavedChanges]);
+
+  const posthog = usePostHog();
 
   // --- Mutations ---
   const updateMutation = trpc.scripts.update.useMutation({
     onSuccess: () => {
+      posthog?.capture("script_saved", { script_id: scriptId });
       utils.scripts.get.invalidate({ id: scriptId! });
       utils.scripts.list.invalidate();
       setHasUnsavedChanges(false);
@@ -146,7 +159,7 @@ export default function ScriptEditor() {
   });
 
   const grammarMutation = trpc.scripts.grammarCheck.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -156,7 +169,7 @@ export default function ScriptEditor() {
   });
 
   const rewriteMutation = trpc.scripts.aiRewrite.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       setActiveTool(null);
@@ -168,7 +181,7 @@ export default function ScriptEditor() {
   });
 
   const phraseSwapMutation = trpc.scripts.phraseSwap.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -178,7 +191,7 @@ export default function ScriptEditor() {
   });
 
   const simplifyMutation = trpc.scripts.simplify.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -188,7 +201,7 @@ export default function ScriptEditor() {
   });
 
   const adjustToneMutation = trpc.scripts.adjustTone.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -198,7 +211,7 @@ export default function ScriptEditor() {
   });
 
   const makeShorterMutation = trpc.scripts.makeShorter.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -208,7 +221,7 @@ export default function ScriptEditor() {
   });
 
   const rewriteSelectionMutation = trpc.scripts.rewriteSelection.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       setShowSelectionPopup(false);
@@ -221,7 +234,7 @@ export default function ScriptEditor() {
   });
 
   const rewriteWithAngleMutation = trpc.scripts.rewriteWithAngle.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       setActiveTool(null);
@@ -233,10 +246,13 @@ export default function ScriptEditor() {
   });
 
   const captionMutation = trpc.scripts.generateCaption.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setGeneratedCaption(data.caption);
       setGeneratedHashtags(data.hashtags);
-      setCaptionMeta({ primaryKeyword: data.primaryKeyword, hookType: data.hookType });
+      setCaptionMeta({
+        primaryKeyword: data.primaryKeyword,
+        hookType: data.hookType,
+      });
       utils.scripts.get.invalidate({ id: scriptId! });
       toast.success("Caption generated!");
     },
@@ -244,7 +260,7 @@ export default function ScriptEditor() {
   });
 
   const restoreVersionMutation = trpc.scripts.restoreVersion.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setEditedContent(data.content);
       setHasUnsavedChanges(false);
       utils.scripts.get.invalidate({ id: scriptId! });
@@ -310,12 +326,15 @@ export default function ScriptEditor() {
   const wordCount = editedContent.trim().split(/\s+/).filter(Boolean).length;
   const estimatedDuration = Math.round(wordCount / 3);
 
-  const assignedTagIds = new Set(script?.tags?.map((t) => t.id) || []);
-  const availableTags = tagsQuery.data?.filter((t) => !assignedTagIds.has(t.id)) || [];
+  const assignedTagIds = new Set(script?.tags?.map(t => t.id) || []);
+  const availableTags =
+    tagsQuery.data?.filter(t => !assignedTagIds.has(t.id)) || [];
 
   if (!scriptId) {
     return (
-      <div className="p-6 text-center text-muted-foreground">Script not found</div>
+      <div className="p-6 text-center text-muted-foreground">
+        Script not found
+      </div>
     );
   }
 
@@ -329,7 +348,9 @@ export default function ScriptEditor() {
 
   if (!script) {
     return (
-      <div className="p-6 text-center text-muted-foreground">Script not found</div>
+      <div className="p-6 text-center text-muted-foreground">
+        Script not found
+      </div>
     );
   }
 
@@ -339,12 +360,16 @@ export default function ScriptEditor() {
         {/* Top Bar */}
         <div className="border-b px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/scripts")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/scripts")}
+            >
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <input
               value={editedTitle}
-              onChange={(e) => {
+              onChange={e => {
                 setEditedTitle(e.target.value);
                 setHasUnsavedChanges(true);
               }}
@@ -352,14 +377,20 @@ export default function ScriptEditor() {
               placeholder="Script title..."
             />
             {script.status === "approved" ? (
-              <Badge className="bg-green-600 text-white shrink-0">Approved</Badge>
+              <Badge className="bg-green-600 text-white shrink-0">
+                Approved
+              </Badge>
             ) : (
-              <Badge variant="secondary" className="shrink-0">Draft</Badge>
+              <Badge variant="secondary" className="shrink-0">
+                Draft
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {hasUnsavedChanges && (
-              <span className="text-xs text-amber-500 font-medium hidden sm:inline">Unsaved</span>
+              <span className="text-xs text-amber-500 font-medium hidden sm:inline">
+                Unsaved
+              </span>
             )}
             <Button
               variant="outline"
@@ -376,9 +407,16 @@ export default function ScriptEditor() {
               onClick={handleApprove}
             >
               <CheckCircle2 className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">{script.status === "approved" ? "Unapprove" : "Approve"}</span>
+              <span className="hidden sm:inline">
+                {script.status === "approved" ? "Unapprove" : "Approve"}
+              </span>
             </Button>
-            <ShareScript title={editedTitle} content={editedContent} variant="button" size="sm" />
+            <ShareScript
+              title={editedTitle}
+              content={editedContent}
+              variant="button"
+              size="sm"
+            />
           </div>
         </div>
 
@@ -397,7 +435,10 @@ export default function ScriptEditor() {
                       size="sm"
                       onClick={() => {
                         if (!scriptId) return;
-                        grammarMutation.mutate({ scriptId, content: editedContent });
+                        grammarMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                        });
                       }}
                       disabled={isAnyMutationPending}
                       className="gap-1.5 h-8"
@@ -421,7 +462,10 @@ export default function ScriptEditor() {
                       size="sm"
                       onClick={() => {
                         if (!scriptId) return;
-                        phraseSwapMutation.mutate({ scriptId, content: editedContent });
+                        phraseSwapMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                        });
                       }}
                       disabled={isAnyMutationPending}
                       className="gap-1.5 h-8"
@@ -434,7 +478,9 @@ export default function ScriptEditor() {
                       <span className="hidden sm:inline">Swap Phrases</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Swap key phrases with fresh, punchy alternatives</TooltipContent>
+                  <TooltipContent>
+                    Swap key phrases with fresh, punchy alternatives
+                  </TooltipContent>
                 </Tooltip>
 
                 {/* Simplifier */}
@@ -445,7 +491,10 @@ export default function ScriptEditor() {
                       size="sm"
                       onClick={() => {
                         if (!scriptId) return;
-                        simplifyMutation.mutate({ scriptId, content: editedContent });
+                        simplifyMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                        });
                       }}
                       disabled={isAnyMutationPending}
                       className="gap-1.5 h-8"
@@ -458,7 +507,9 @@ export default function ScriptEditor() {
                       <span className="hidden sm:inline">Simplify</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Simplify language — make it conversational</TooltipContent>
+                  <TooltipContent>
+                    Simplify language — make it conversational
+                  </TooltipContent>
                 </Tooltip>
 
                 {/* Tone / Grade Level */}
@@ -482,24 +533,73 @@ export default function ScriptEditor() {
                         </Button>
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
-                    <TooltipContent>Change the tone & style of your script</TooltipContent>
+                    <TooltipContent>
+                      Change the tone & style of your script
+                    </TooltipContent>
                   </Tooltip>
                   <DropdownMenuContent align="start">
-                    <DropdownMenuLabel className="text-xs">Adjust Tone</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs">
+                      Adjust Tone
+                    </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => scriptId && adjustToneMutation.mutate({ scriptId, content: editedContent, tone: "casual" })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        adjustToneMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          tone: "casual",
+                        })
+                      }
+                    >
                       <span className="mr-2">😎</span> Casual & Friendly
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && adjustToneMutation.mutate({ scriptId, content: editedContent, tone: "professional" })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        adjustToneMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          tone: "professional",
+                        })
+                      }
+                    >
                       <span className="mr-2">💼</span> Professional
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && adjustToneMutation.mutate({ scriptId, content: editedContent, tone: "academic" })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        adjustToneMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          tone: "academic",
+                        })
+                      }
+                    >
                       <span className="mr-2">🎓</span> Educational / TED Talk
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && adjustToneMutation.mutate({ scriptId, content: editedContent, tone: "gen_z" })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        adjustToneMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          tone: "gen_z",
+                        })
+                      }
+                    >
                       <span className="mr-2">🔥</span> Gen Z / TikTok Vibes
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && adjustToneMutation.mutate({ scriptId, content: editedContent, tone: "storyteller" })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        adjustToneMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          tone: "storyteller",
+                        })
+                      }
+                    >
                       <span className="mr-2">📖</span> Storyteller
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -526,22 +626,66 @@ export default function ScriptEditor() {
                         </Button>
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
-                    <TooltipContent>Condense script to fit a target duration</TooltipContent>
+                    <TooltipContent>
+                      Condense script to fit a target duration
+                    </TooltipContent>
                   </Tooltip>
                   <DropdownMenuContent align="start">
-                    <DropdownMenuLabel className="text-xs">Target Duration</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs">
+                      Target Duration
+                    </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => scriptId && makeShorterMutation.mutate({ scriptId, content: editedContent, targetSeconds: 30 })}>
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 30 seconds (~90 words)
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        makeShorterMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          targetSeconds: 30,
+                        })
+                      }
+                    >
+                      <Timer className="w-3.5 h-3.5 mr-2" /> 30 seconds (~90
+                      words)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && makeShorterMutation.mutate({ scriptId, content: editedContent, targetSeconds: 45 })}>
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 45 seconds (~135 words)
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        makeShorterMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          targetSeconds: 45,
+                        })
+                      }
+                    >
+                      <Timer className="w-3.5 h-3.5 mr-2" /> 45 seconds (~135
+                      words)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && makeShorterMutation.mutate({ scriptId, content: editedContent, targetSeconds: 60 })}>
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 60 seconds (~180 words)
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        makeShorterMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          targetSeconds: 60,
+                        })
+                      }
+                    >
+                      <Timer className="w-3.5 h-3.5 mr-2" /> 60 seconds (~180
+                      words)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => scriptId && makeShorterMutation.mutate({ scriptId, content: editedContent, targetSeconds: 90 })}>
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 90 seconds (~270 words)
+                    <DropdownMenuItem
+                      onClick={() =>
+                        scriptId &&
+                        makeShorterMutation.mutate({
+                          scriptId,
+                          content: editedContent,
+                          targetSeconds: 90,
+                        })
+                      }
+                    >
+                      <Timer className="w-3.5 h-3.5 mr-2" /> 90 seconds (~270
+                      words)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -555,17 +699,23 @@ export default function ScriptEditor() {
                       variant={activeTool === "rewrite" ? "default" : "outline"}
                       size="sm"
                       onClick={() => {
-                        setActiveTool(activeTool === "rewrite" ? null : "rewrite");
+                        setActiveTool(
+                          activeTool === "rewrite" ? null : "rewrite"
+                        );
                         setToolInput("");
                       }}
-                      disabled={isAnyMutationPending && activeTool !== "rewrite"}
+                      disabled={
+                        isAnyMutationPending && activeTool !== "rewrite"
+                      }
                       className="gap-1.5 h-8"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Rewrite</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Rewrite with custom instructions</TooltipContent>
+                  <TooltipContent>
+                    Rewrite with custom instructions
+                  </TooltipContent>
                 </Tooltip>
 
                 {/* Rewrite with Angle */}
@@ -585,7 +735,9 @@ export default function ScriptEditor() {
                       <span className="hidden sm:inline">New Angle</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Rewrite from a completely new angle or perspective</TooltipContent>
+                  <TooltipContent>
+                    Rewrite from a completely new angle or perspective
+                  </TooltipContent>
                 </Tooltip>
 
                 <div className="flex-1" />
@@ -603,7 +755,9 @@ export default function ScriptEditor() {
                       <span className="hidden md:inline">Teleprompter</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Practice reading with teleprompter</TooltipContent>
+                  <TooltipContent>
+                    Practice reading with teleprompter
+                  </TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
@@ -637,12 +791,16 @@ export default function ScriptEditor() {
                 <Button
                   variant={activeTab === "versions" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setActiveTab(activeTab === "versions" ? "edit" : "versions")}
+                  onClick={() =>
+                    setActiveTab(activeTab === "versions" ? "edit" : "versions")
+                  }
                   className="gap-1.5 h-8"
                 >
                   <History className="w-3.5 h-3.5" />
                   <span className="hidden md:inline">Versions</span>
-                  <span className="text-[10px]">({script.versions?.length || 0})</span>
+                  <span className="text-[10px]">
+                    ({script.versions?.length || 0})
+                  </span>
                 </Button>
               </div>
 
@@ -653,10 +811,10 @@ export default function ScriptEditor() {
                   <Input
                     placeholder="How should I rewrite? (e.g., 'more casual', 'add humor', 'make it controversial')..."
                     value={toolInput}
-                    onChange={(e) => setToolInput(e.target.value)}
+                    onChange={e => setToolInput(e.target.value)}
                     className="h-8 text-sm flex-1"
                     autoFocus
-                    onKeyDown={(e) => {
+                    onKeyDown={e => {
                       if (e.key === "Enter" && scriptId) {
                         rewriteMutation.mutate({
                           scriptId,
@@ -690,7 +848,15 @@ export default function ScriptEditor() {
                     )}
                     Rewrite
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8" onClick={() => { setActiveTool(null); setToolInput(""); }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => {
+                      setActiveTool(null);
+                      setToolInput("");
+                    }}
+                  >
                     <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -702,10 +868,10 @@ export default function ScriptEditor() {
                   <Input
                     placeholder="What angle? (e.g., 'from a beginner's perspective', 'as a controversial take', 'personal story')..."
                     value={toolInput}
-                    onChange={(e) => setToolInput(e.target.value)}
+                    onChange={e => setToolInput(e.target.value)}
                     className="h-8 text-sm flex-1"
                     autoFocus
-                    onKeyDown={(e) => {
+                    onKeyDown={e => {
                       if (e.key === "Enter" && scriptId && toolInput.trim()) {
                         rewriteWithAngleMutation.mutate({
                           scriptId,
@@ -729,7 +895,9 @@ export default function ScriptEditor() {
                         angle: toolInput,
                       });
                     }}
-                    disabled={rewriteWithAngleMutation.isPending || !toolInput.trim()}
+                    disabled={
+                      rewriteWithAngleMutation.isPending || !toolInput.trim()
+                    }
                     className="h-8"
                   >
                     {rewriteWithAngleMutation.isPending ? (
@@ -739,7 +907,15 @@ export default function ScriptEditor() {
                     )}
                     Apply Angle
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8" onClick={() => { setActiveTool(null); setToolInput(""); }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => {
+                      setActiveTool(null);
+                      setToolInput("");
+                    }}
+                  >
                     <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -750,7 +926,8 @@ export default function ScriptEditor() {
             {isAnyMutationPending && (
               <div className="px-4 py-1.5 bg-purple-500/10 border-b border-purple-500/20 flex items-center gap-2 text-xs text-purple-400 shrink-0">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                AI is working on your script... This usually takes a few seconds.
+                AI is working on your script... This usually takes a few
+                seconds.
               </div>
             )}
 
@@ -760,12 +937,12 @@ export default function ScriptEditor() {
                 <Textarea
                   ref={textareaRef}
                   value={editedContent}
-                  onChange={(e) => {
+                  onChange={e => {
                     setEditedContent(e.target.value);
                     setHasUnsavedChanges(true);
                   }}
                   onMouseUp={handleTextSelect}
-                  onKeyUp={(e) => {
+                  onKeyUp={e => {
                     if (e.shiftKey) handleTextSelect();
                   }}
                   className="min-h-[500px] text-base leading-relaxed resize-none border-none focus-visible:ring-0 p-0 bg-transparent"
@@ -786,7 +963,7 @@ export default function ScriptEditor() {
                   Version History
                 </h3>
                 <div className="space-y-3">
-                  {script.versions?.map((version) => (
+                  {script.versions?.map(version => (
                     <div
                       key={version.id}
                       className="border rounded-lg p-3 hover:border-primary/50 transition-colors"
@@ -800,10 +977,10 @@ export default function ScriptEditor() {
                             {version.changeType === "initial"
                               ? "Initial"
                               : version.changeType === "manual_edit"
-                              ? "Manual Edit"
-                              : version.changeType === "ai_rewrite"
-                              ? "AI Rewrite"
-                              : "Grammar Fix"}
+                                ? "Manual Edit"
+                                : version.changeType === "ai_rewrite"
+                                  ? "AI Rewrite"
+                                  : "Grammar Fix"}
                           </Badge>
                           <span className="text-[11px] text-muted-foreground">
                             {new Date(version.createdAt).toLocaleString()}
@@ -858,7 +1035,7 @@ export default function ScriptEditor() {
                 Tags
               </h4>
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {script.tags?.map((tag) => (
+                {script.tags?.map(tag => (
                   <span
                     key={tag.id}
                     className="px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1 group/tag"
@@ -870,7 +1047,10 @@ export default function ScriptEditor() {
                     {tag.name}
                     <button
                       onClick={() =>
-                        removeTagMutation.mutate({ scriptId: scriptId!, tagId: tag.id })
+                        removeTagMutation.mutate({
+                          scriptId: scriptId!,
+                          tagId: tag.id,
+                        })
                       }
                       className="opacity-0 group-hover/tag:opacity-100 transition-opacity"
                     >
@@ -882,18 +1062,25 @@ export default function ScriptEditor() {
               {availableTags.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full text-xs gap-1 h-7">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs gap-1 h-7"
+                    >
                       <Plus className="w-3 h-3" />
                       Add Tag
                       <ChevronDown className="w-3 h-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    {availableTags.map((tag) => (
+                    {availableTags.map(tag => (
                       <DropdownMenuItem
                         key={tag.id}
                         onClick={() =>
-                          assignTagMutation.mutate({ scriptId: scriptId!, tagId: tag.id })
+                          assignTagMutation.mutate({
+                            scriptId: scriptId!,
+                            tagId: tag.id,
+                          })
                         }
                       >
                         <span
@@ -916,12 +1103,12 @@ export default function ScriptEditor() {
               </h4>
               <PostDateTimePicker
                 date={postDate}
-                onDateChange={(d) => {
+                onDateChange={d => {
                   setPostDate(d);
                   setHasUnsavedChanges(true);
                 }}
                 time={postTime}
-                onTimeChange={(t) => {
+                onTimeChange={t => {
                   setPostTime(t);
                   setHasUnsavedChanges(true);
                 }}
@@ -937,7 +1124,7 @@ export default function ScriptEditor() {
               </h4>
               <Textarea
                 value={editedNotes}
-                onChange={(e) => {
+                onChange={e => {
                   setEditedNotes(e.target.value);
                   setHasUnsavedChanges(true);
                 }}
@@ -956,7 +1143,7 @@ export default function ScriptEditor() {
               {/* Style selector */}
               <select
                 value={captionStyle}
-                onChange={(e) => setCaptionStyle(e.target.value)}
+                onChange={e => setCaptionStyle(e.target.value)}
                 className="w-full text-xs rounded-md border bg-background px-2 py-1.5 mb-2"
               >
                 <option value="educational">Educational / Value</option>
@@ -971,7 +1158,7 @@ export default function ScriptEditor() {
               {/* Length selector */}
               <select
                 value={captionLength}
-                onChange={(e) => setCaptionLength(e.target.value)}
+                onChange={e => setCaptionLength(e.target.value)}
                 className="w-full text-xs rounded-md border bg-background px-2 py-1.5 mb-2"
               >
                 <option value="auto">Auto (adapts to script length)</option>
@@ -983,7 +1170,7 @@ export default function ScriptEditor() {
               {/* Niche input */}
               <Input
                 value={captionNiche}
-                onChange={(e) => setCaptionNiche(e.target.value)}
+                onChange={e => setCaptionNiche(e.target.value)}
                 placeholder="Your niche (e.g., fitness, marketing)"
                 className="text-xs h-7 mb-2"
               />
@@ -991,7 +1178,7 @@ export default function ScriptEditor() {
               {/* Brand hashtag */}
               <Input
                 value={captionBrandTag}
-                onChange={(e) => setCaptionBrandTag(e.target.value)}
+                onChange={e => setCaptionBrandTag(e.target.value)}
                 placeholder="Brand hashtag (optional)"
                 className="text-xs h-7 mb-2"
               />
@@ -1020,7 +1207,11 @@ export default function ScriptEditor() {
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                {captionMutation.isPending ? "Generating..." : generatedCaption ? "Regenerate Caption" : "Generate Caption & Hashtags"}
+                {captionMutation.isPending
+                  ? "Generating..."
+                  : generatedCaption
+                    ? "Regenerate Caption"
+                    : "Generate Caption & Hashtags"}
               </Button>
 
               {/* Generated caption display */}
@@ -1028,7 +1219,9 @@ export default function ScriptEditor() {
                 <div className="space-y-2">
                   {/* Caption header with actions */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Caption</span>
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                      Caption
+                    </span>
                     <div className="flex items-center gap-1">
                       <button
                         className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
@@ -1036,7 +1229,9 @@ export default function ScriptEditor() {
                         onClick={() => {
                           setIsEditingCaption(true);
                           setEditableCaption(generatedCaption);
-                          setEditableHashtags(generatedHashtags.map(t => `#${t}`).join(" "));
+                          setEditableHashtags(
+                            generatedHashtags.map(t => `#${t}`).join(" ")
+                          );
                         }}
                       >
                         <Pencil className="w-3 h-3" />
@@ -1046,7 +1241,9 @@ export default function ScriptEditor() {
                         title="Expand"
                         onClick={() => {
                           setEditableCaption(generatedCaption);
-                          setEditableHashtags(generatedHashtags.map(t => `#${t}`).join(" "));
+                          setEditableHashtags(
+                            generatedHashtags.map(t => `#${t}`).join(" ")
+                          );
                           setCaptionDialogOpen(true);
                         }}
                       >
@@ -1056,7 +1253,9 @@ export default function ScriptEditor() {
                         className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 transition-colors"
                         onClick={async () => {
                           try {
-                            await navigator.clipboard.writeText(generatedCaption);
+                            await navigator.clipboard.writeText(
+                              generatedCaption
+                            );
                             toast.success("Caption copied!");
                           } catch {
                             const ta = document.createElement("textarea");
@@ -1081,14 +1280,16 @@ export default function ScriptEditor() {
                     <div className="space-y-2">
                       <textarea
                         value={editableCaption}
-                        onChange={(e) => setEditableCaption(e.target.value)}
+                        onChange={e => setEditableCaption(e.target.value)}
                         className="w-full text-xs bg-muted/50 rounded-lg p-2.5 min-h-[120px] leading-relaxed border border-purple-500/30 focus:outline-none focus:border-purple-500 resize-y"
                       />
                       <div>
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground mb-1 block">Hashtags</span>
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground mb-1 block">
+                          Hashtags
+                        </span>
                         <input
                           value={editableHashtags}
-                          onChange={(e) => setEditableHashtags(e.target.value)}
+                          onChange={e => setEditableHashtags(e.target.value)}
                           className="w-full text-xs bg-muted/50 rounded-md p-2 border border-purple-500/30 focus:outline-none focus:border-purple-500"
                           placeholder="#tag1 #tag2 #tag3"
                         />
@@ -1099,7 +1300,10 @@ export default function ScriptEditor() {
                           className="flex-1 text-xs h-7 gap-1 bg-purple-600 hover:bg-purple-700 text-white"
                           onClick={() => {
                             setGeneratedCaption(editableCaption);
-                            const tags = editableHashtags.split(/\s+/).map(t => t.replace(/^#/, "")).filter(Boolean);
+                            const tags = editableHashtags
+                              .split(/\s+/)
+                              .map(t => t.replace(/^#/, ""))
+                              .filter(Boolean);
                             setGeneratedHashtags(tags);
                             setIsEditingCaption(false);
                             // Save to DB
@@ -1136,11 +1340,15 @@ export default function ScriptEditor() {
                   {!isEditingCaption && generatedHashtags.length > 0 && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">Hashtags ({generatedHashtags.length})</span>
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                          Hashtags ({generatedHashtags.length})
+                        </span>
                         <button
                           className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 transition-colors"
                           onClick={async () => {
-                            const hashtagStr = generatedHashtags.map(t => `#${t}`).join(" ");
+                            const hashtagStr = generatedHashtags
+                              .map(t => `#${t}`)
+                              .join(" ");
                             try {
                               await navigator.clipboard.writeText(hashtagStr);
                               toast.success("Hashtags copied!");
@@ -1180,7 +1388,9 @@ export default function ScriptEditor() {
                       size="sm"
                       className="w-full text-xs gap-1.5 h-7"
                       onClick={async () => {
-                        const hashtagStr = generatedHashtags.map(t => `#${t}`).join(" ");
+                        const hashtagStr = generatedHashtags
+                          .map(t => `#${t}`)
+                          .join(" ");
                         const full = `${generatedCaption}\n\n${hashtagStr}`;
                         try {
                           await navigator.clipboard.writeText(full);
@@ -1204,28 +1414,34 @@ export default function ScriptEditor() {
                   )}
 
                   {/* Meta info */}
-                  {!isEditingCaption && (captionMeta.primaryKeyword || captionMeta.hookType) && (
-                    <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t">
-                      {captionMeta.hookType && <div>Hook: {captionMeta.hookType}</div>}
-                      {captionMeta.primaryKeyword && <div>SEO keyword: {captionMeta.primaryKeyword}</div>}
-                    </div>
-                  )}
+                  {!isEditingCaption &&
+                    (captionMeta.primaryKeyword || captionMeta.hookType) && (
+                      <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t">
+                        {captionMeta.hookType && (
+                          <div>Hook: {captionMeta.hookType}</div>
+                        )}
+                        {captionMeta.primaryKeyword && (
+                          <div>SEO keyword: {captionMeta.primaryKeyword}</div>
+                        )}
+                      </div>
+                    )}
                 </div>
               )}
             </div>
 
             {/* Original Script */}
-            {script.originalContent && script.originalContent !== script.content && (
-              <div>
-                <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                  Original AI Script
-                </h4>
-                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto leading-relaxed">
-                  {script.originalContent.slice(0, 500)}
-                  {script.originalContent.length > 500 ? "..." : ""}
+            {script.originalContent &&
+              script.originalContent !== script.content && (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+                    Original AI Script
+                  </h4>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto leading-relaxed">
+                    {script.originalContent.slice(0, 500)}
+                    {script.originalContent.length > 500 ? "..." : ""}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Timing */}
             <div>
@@ -1265,19 +1481,23 @@ export default function ScriptEditor() {
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Selected text:</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Selected text:
+                </label>
                 <div className="text-sm bg-muted/50 rounded-lg p-3 max-h-32 overflow-y-auto leading-relaxed border">
                   "{selectedText}"
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">How should I rewrite it?</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  How should I rewrite it?
+                </label>
                 <Input
                   placeholder="e.g., 'make it punchier', 'add a question', 'more emotional'..."
                   value={selectionInstruction}
-                  onChange={(e) => setSelectionInstruction(e.target.value)}
+                  onChange={e => setSelectionInstruction(e.target.value)}
                   autoFocus
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === "Enter" && scriptId) {
                       rewriteSelectionMutation.mutate({
                         scriptId,
@@ -1291,7 +1511,14 @@ export default function ScriptEditor() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setShowSelectionPopup(false); setSelectedText(""); setSelectionInstruction(""); }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSelectionPopup(false);
+                  setSelectedText("");
+                  setSelectionInstruction("");
+                }}
+              >
                 Cancel
               </Button>
               <Button
@@ -1332,20 +1559,24 @@ export default function ScriptEditor() {
             <div className="space-y-4">
               {/* Editable caption */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Caption</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Caption
+                </label>
                 <textarea
                   value={editableCaption}
-                  onChange={(e) => setEditableCaption(e.target.value)}
+                  onChange={e => setEditableCaption(e.target.value)}
                   className="w-full text-sm bg-muted/50 rounded-lg p-3 min-h-[200px] leading-relaxed border focus:outline-none focus:border-purple-500 resize-y"
                 />
               </div>
 
               {/* Editable hashtags */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Hashtags</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Hashtags
+                </label>
                 <input
                   value={editableHashtags}
-                  onChange={(e) => setEditableHashtags(e.target.value)}
+                  onChange={e => setEditableHashtags(e.target.value)}
                   className="w-full text-sm bg-muted/50 rounded-lg p-3 border focus:outline-none focus:border-purple-500"
                   placeholder="#tag1 #tag2 #tag3 #tag4 #tag5"
                 />
@@ -1354,8 +1585,12 @@ export default function ScriptEditor() {
               {/* Meta info */}
               {(captionMeta.primaryKeyword || captionMeta.hookType) && (
                 <div className="text-xs text-muted-foreground space-y-0.5 pt-2 border-t">
-                  {captionMeta.hookType && <div>Hook type: {captionMeta.hookType}</div>}
-                  {captionMeta.primaryKeyword && <div>SEO keyword: {captionMeta.primaryKeyword}</div>}
+                  {captionMeta.hookType && (
+                    <div>Hook type: {captionMeta.hookType}</div>
+                  )}
+                  {captionMeta.primaryKeyword && (
+                    <div>SEO keyword: {captionMeta.primaryKeyword}</div>
+                  )}
                 </div>
               )}
             </div>
@@ -1388,7 +1623,10 @@ export default function ScriptEditor() {
                 className="bg-purple-600 hover:bg-purple-700 text-white"
                 onClick={() => {
                   setGeneratedCaption(editableCaption);
-                  const tags = editableHashtags.split(/\s+/).map(t => t.replace(/^#/, "")).filter(Boolean);
+                  const tags = editableHashtags
+                    .split(/\s+/)
+                    .map(t => t.replace(/^#/, ""))
+                    .filter(Boolean);
                   setGeneratedHashtags(tags);
                   // Save to DB
                   if (scriptId) {

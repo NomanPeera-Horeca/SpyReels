@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { usePostHog } from "@posthog/react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +22,24 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, Eye, LogOut, PanelLeft, Radar, Bookmark, FileText, Settings, CreditCard, Sparkles, PenSquare, Inbox, Lightbulb, Library, ClipboardPaste, Shield } from "lucide-react";
+import {
+  LayoutDashboard,
+  Eye,
+  LogOut,
+  PanelLeft,
+  Radar,
+  Bookmark,
+  FileText,
+  Settings,
+  CreditCard,
+  Sparkles,
+  PenSquare,
+  Inbox,
+  Lightbulb,
+  Library,
+  ClipboardPaste,
+  Shield,
+} from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -30,9 +48,7 @@ import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Sun, Moon } from "lucide-react";
 
-const adminMenuItems = [
-  { icon: Shield, label: "Admin", path: "/admin" },
-];
+const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -87,6 +103,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const posthog = usePostHog();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -94,6 +111,15 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    if (user) {
+      posthog?.identify(String(user.id), {
+        email: user.email,
+        name: user.name,
+      });
+    }
+  }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Radar, label: "Research", path: "/" },
@@ -104,11 +130,15 @@ function DashboardLayoutContent({
     { icon: Library, label: "My Library", path: "/library" },
     { icon: Bookmark, label: "Saved Reels", path: "/saved" },
     { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
-    { icon: theme === "dark" ? Sun : Moon, label: theme === "dark" ? "Light mode (beta)" : "Dark mode", path: "__theme__" },
+    {
+      icon: theme === "dark" ? Sun : Moon,
+      label: theme === "dark" ? "Light mode (beta)" : "Dark mode",
+      path: "__theme__",
+    },
     { icon: Settings, label: "Settings", path: "/settings" },
     { icon: CreditCard, label: "Billing", path: "/billing" },
   ];
-  const activeMenuItem = menuItems.find((item) => item.path === location);
+  const activeMenuItem = menuItems.find(item => item.path === location);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -119,8 +149,7 @@ function DashboardLayoutContent({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      const sidebarLeft =
-        sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
       const newWidth = e.clientX - sidebarLeft;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth);
@@ -162,14 +191,22 @@ function DashboardLayoutContent({
                 aria-label="Toggle navigation"
               >
                 {isCollapsed ? (
-                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png" alt="SpyReels" className="h-6 w-6" />
+                  <img
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+                    alt="SpyReels"
+                    className="h-6 w-6"
+                  />
                 ) : (
                   <PanelLeft className="h-4 w-4 text-muted-foreground" />
                 )}
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png" alt="SpyReels" className="h-7 w-7" />
+                  <img
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+                    alt="SpyReels"
+                    className="h-7 w-7"
+                  />
                   <span className="font-semibold tracking-tight truncate text-foreground">
                     SpyReels
                   </span>
@@ -180,26 +217,39 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map((item) => {
-                const isActive = location === item.path && item.path !== "__theme__";
+              {menuItems.map(item => {
+                const isActive =
+                  location === item.path && item.path !== "__theme__";
                 return (
                   <Fragment key={item.path}>
                     {item.label === "Dashboard" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Overview</div>
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Overview
+                      </div>
                     )}
                     {item.label === "Research" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Discover</div>
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Discover
+                      </div>
                     )}
                     {item.label === "My Scripts" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Create</div>
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Create
+                      </div>
                     )}
                     {item.label === "Settings" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Account</div>
+                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Account
+                      </div>
                     )}
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         isActive={isActive}
-                        onClick={() => item.path === "__theme__" ? toggleTheme?.() : setLocation(item.path)}
+                        onClick={() =>
+                          item.path === "__theme__"
+                            ? toggleTheme?.()
+                            : setLocation(item.path)
+                        }
                         tooltip={item.label}
                         className="h-10 transition-all font-normal"
                       >
@@ -212,24 +262,25 @@ function DashboardLayoutContent({
                   </Fragment>
                 );
               })}
-              {user?.role === "admin" && adminMenuItems.map((item) => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className="h-10 transition-all font-normal"
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : "text-purple-400"}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {user?.role === "admin" &&
+                adminMenuItems.map(item => {
+                  const isActive = location === item.path;
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className="h-10 transition-all font-normal"
+                      >
+                        <item.icon
+                          className={`h-4 w-4 ${isActive ? "text-primary" : "text-purple-400"}`}
+                        />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
             </SidebarMenu>
           </SidebarContent>
 
@@ -254,7 +305,11 @@ function DashboardLayoutContent({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={() => {
+                    posthog?.capture("user_signed_out");
+                    posthog?.reset();
+                    logout();
+                  }}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />

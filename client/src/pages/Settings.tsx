@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -43,6 +44,7 @@ const TIMEZONES = [
 ];
 
 export default function Settings() {
+  const posthog = usePostHog();
   const prefsQuery = trpc.preferences.get.useQuery();
   const telegramQuery = trpc.telegram.status.useQuery();
   const updatePrefs = trpc.preferences.update.useMutation({
@@ -57,7 +59,7 @@ export default function Settings() {
     onSuccess: () => {
       telegramQuery.refetch();
     },
-    onError: (err) => toast.error(err.message),
+    onError: err => toast.error(err.message),
   });
 
   const disconnectTelegram = trpc.telegram.disconnect.useMutation({
@@ -66,7 +68,7 @@ export default function Settings() {
       toast.success("Telegram disconnected");
       setLinkCode(null);
     },
-    onError: (err) => toast.error(err.message),
+    onError: err => toast.error(err.message),
   });
 
   const [timezone, setTimezone] = useState("America/Chicago");
@@ -80,12 +82,14 @@ export default function Settings() {
     }
   }, [prefsQuery.data?.timezone]);
 
-  const hasChanges = timezone !== (prefsQuery.data?.timezone || "America/Chicago");
+  const hasChanges =
+    timezone !== (prefsQuery.data?.timezone || "America/Chicago");
   const isConnected = telegramQuery.data?.connected;
 
   const handleGenerateCode = () => {
+    posthog?.capture("telegram_connect_initiated");
     generateLinkCode.mutate(undefined, {
-      onSuccess: (data) => {
+      onSuccess: data => {
         setLinkCode(data.code);
         setLinkCodeExpiry(data.expiresAt);
         setBotUsername(data.botUsername);
@@ -104,14 +108,18 @@ export default function Settings() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3 mb-6">
         <SettingsIcon className="h-6 w-6 text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          Settings
+        </h1>
       </div>
 
       {/* Telegram Connection Section */}
       <div className="rounded-lg border border-border/50 bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <Send className="h-4 w-4 text-blue-400" />
-          <h2 className="text-sm font-semibold text-foreground">Telegram Bot Connection</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Telegram Bot Connection
+          </h2>
           {isConnected && (
             <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400">
               <CheckCircle className="h-3 w-3" /> Connected
@@ -120,8 +128,9 @@ export default function Settings() {
         </div>
 
         <p className="text-xs text-muted-foreground mb-4">
-          Connect your Telegram account to collect Instagram Reels from your phone.
-          Share any Reel link to the SpyReels bot and it appears in your Collected Reels tab.
+          Connect your Telegram account to collect Instagram Reels from your
+          phone. Share any Reel link to the SpyReels bot and it appears in your
+          Collected Reels tab.
         </p>
 
         {isConnected ? (
@@ -132,7 +141,10 @@ export default function Settings() {
                 <span>
                   Connected
                   {telegramQuery.data?.telegramUsername && (
-                    <> as <strong>@{telegramQuery.data.telegramUsername}</strong></>
+                    <>
+                      {" "}
+                      as <strong>@{telegramQuery.data.telegramUsername}</strong>
+                    </>
                   )}
                 </span>
               </div>
@@ -173,11 +185,19 @@ export default function Settings() {
           <div className="space-y-4">
             {!linkCode ? (
               <div>
-                <Button onClick={handleGenerateCode} disabled={generateLinkCode.isPending}>
+                <Button
+                  onClick={handleGenerateCode}
+                  disabled={generateLinkCode.isPending}
+                >
                   {generateLinkCode.isPending ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                      Generating...
+                    </>
                   ) : (
-                    <><Send className="mr-2 h-4 w-4" /> Connect Telegram</>
+                    <>
+                      <Send className="mr-2 h-4 w-4" /> Connect Telegram
+                    </>
                   )}
                 </Button>
               </div>
@@ -185,14 +205,23 @@ export default function Settings() {
               <div className="space-y-4">
                 {/* Step 1: Open bot */}
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                    1
+                  </span>
                   <div>
-                    <p className="text-sm text-foreground font-medium">Open the SpyReels Bot on Telegram</p>
+                    <p className="text-sm text-foreground font-medium">
+                      Open the SpyReels Bot on Telegram
+                    </p>
                     <Button
                       variant="outline"
                       size="sm"
                       className="mt-2 h-7 text-xs"
-                      onClick={() => window.open(`https://t.me/${botUsername || "SpyReelsBot"}`, "_blank")}
+                      onClick={() =>
+                        window.open(
+                          `https://t.me/${botUsername || "SpyReelsBot"}`,
+                          "_blank"
+                        )
+                      }
                     >
                       <ExternalLink className="mr-1.5 h-3 w-3" />
                       Open @{botUsername || "SpyReelsBot"}
@@ -202,14 +231,23 @@ export default function Settings() {
 
                 {/* Step 2: Send code */}
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                    2
+                  </span>
                   <div>
-                    <p className="text-sm text-foreground font-medium">Send this code to the bot</p>
+                    <p className="text-sm text-foreground font-medium">
+                      Send this code to the bot
+                    </p>
                     <div className="mt-2 flex items-center gap-2">
                       <div className="bg-muted/50 border border-border rounded-md px-4 py-2 font-mono text-lg tracking-[0.3em] text-foreground font-bold select-all">
                         {linkCode}
                       </div>
-                      <Button variant="outline" size="sm" className="h-9" onClick={handleCopyCode}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={handleCopyCode}
+                      >
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -222,19 +260,32 @@ export default function Settings() {
 
                 {/* Step 3: Done */}
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</span>
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                    3
+                  </span>
                   <div>
-                    <p className="text-sm text-foreground font-medium">Start sharing Reel links!</p>
+                    <p className="text-sm text-foreground font-medium">
+                      Start sharing Reel links!
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Once connected, share any Instagram Reel link to the bot from your phone.
-                      On Instagram: tap Share → Share to Telegram → select SpyReels Bot.
+                      Once connected, share any Instagram Reel link to the bot
+                      from your phone. On Instagram: tap Share → Share to
+                      Telegram → select SpyReels Bot.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 mt-2">
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={handleGenerateCode} disabled={generateLinkCode.isPending}>
-                    <Loader2 className={`mr-1.5 h-3 w-3 ${generateLinkCode.isPending ? "animate-spin" : "hidden"}`} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={handleGenerateCode}
+                    disabled={generateLinkCode.isPending}
+                  >
+                    <Loader2
+                      className={`mr-1.5 h-3 w-3 ${generateLinkCode.isPending ? "animate-spin" : "hidden"}`}
+                    />
                     Generate New Code
                   </Button>
                 </div>
@@ -248,26 +299,32 @@ export default function Settings() {
       <div className="rounded-lg border border-border/50 bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <Globe className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Timezone Preference</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Timezone Preference
+          </h2>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          All posting times for competitor reels and your scheduled scripts will be displayed in this timezone.
-          Default is Central Standard Time (CST).
+          All posting times for competitor reels and your scheduled scripts will
+          be displayed in this timezone. Default is Central Standard Time (CST).
         </p>
 
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="text-xs text-muted-foreground mb-1.5 block">Your Timezone</label>
+            <label className="text-xs text-muted-foreground mb-1.5 block">
+              Your Timezone
+            </label>
             <Select value={timezone} onValueChange={setTimezone}>
               <SelectTrigger className="bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TIMEZONES.map((tz) => (
+                {TIMEZONES.map(tz => (
                   <SelectItem key={tz.value} value={tz.value}>
                     <span className="flex items-center gap-2">
                       <span>{tz.label}</span>
-                      <span className="text-muted-foreground text-xs">({tz.offset})</span>
+                      <span className="text-muted-foreground text-xs">
+                        ({tz.offset})
+                      </span>
                     </span>
                   </SelectItem>
                 ))}
@@ -281,9 +338,13 @@ export default function Settings() {
             className="shrink-0"
           >
             {updatePrefs.isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+              </>
             ) : (
-              <><Check className="mr-2 h-4 w-4" /> Save</>
+              <>
+                <Check className="mr-2 h-4 w-4" /> Save
+              </>
             )}
           </Button>
         </div>
@@ -291,8 +352,14 @@ export default function Settings() {
         <div className="mt-4 p-3 rounded-md bg-muted/30 border border-border/30">
           <p className="text-xs text-muted-foreground">
             <strong className="text-foreground">Current:</strong>{" "}
-            {new Date().toLocaleString("en-US", { timeZone: timezone, weekday: "long", hour: "numeric", minute: "2-digit", hour12: true })}
-            {" "}({TIMEZONES.find(t => t.value === timezone)?.label || timezone})
+            {new Date().toLocaleString("en-US", {
+              timeZone: timezone,
+              weekday: "long",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })}{" "}
+            ({TIMEZONES.find(t => t.value === timezone)?.label || timezone})
           </p>
         </div>
       </div>

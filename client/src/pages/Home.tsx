@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,12 +40,14 @@ import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 
 function formatCount(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000_000)
+    return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
   return n.toString();
 }
 
 export default function Home() {
+  const posthog = usePostHog();
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState("30");
   const [, setLocation] = useLocation();
@@ -84,13 +87,13 @@ export default function Home() {
   const scrapeGate = useUsageGate("scrapeCount");
 
   const startScrape = trpc.scrape.start.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       toast.success("Scraping started!", {
         description: `Job #${data.jobId} is now collecting reels for @${handle.replace(/^@/, "")}`,
       });
       setLocation(`/dashboard?jobId=${data.jobId}&from=research`);
     },
-    onError: (error) => {
+    onError: error => {
       toast.error("Failed to start scraping", {
         description: error.message,
       });
@@ -108,12 +111,19 @@ export default function Home() {
       return;
     }
     if (!scrapeGate.allowed) {
-      toast.error(`Scrape limit reached (${scrapeGate.used}/${scrapeGate.limit})`, {
-        description: "Upgrade your plan for more scrapes.",
-        action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-      });
+      toast.error(
+        `Scrape limit reached (${scrapeGate.used}/${scrapeGate.limit})`,
+        {
+          description: "Upgrade your plan for more scrapes.",
+          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+        }
+      );
       return;
     }
+    posthog?.capture("research_started", {
+      handle: handle.replace(/^@/, "").trim(),
+      timeframe_days: parseInt(timeframe),
+    });
     startScrape.mutate({
       handle: handle.trim(),
       timeframeDays: parseInt(timeframe),
@@ -139,7 +149,9 @@ export default function Home() {
 
       <Card className="border-border/50 bg-card">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg text-card-foreground">New Research Job</CardTitle>
+          <CardTitle className="text-lg text-card-foreground">
+            New Research Job
+          </CardTitle>
           <CardDescription>
             Provide the account details to start collecting Reels data.
           </CardDescription>
@@ -147,7 +159,10 @@ export default function Home() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="handle" className="text-sm font-medium text-card-foreground">
+              <Label
+                htmlFor="handle"
+                className="text-sm font-medium text-card-foreground"
+              >
                 Instagram Handle
               </Label>
               <div className="relative">
@@ -156,7 +171,7 @@ export default function Home() {
                   id="handle"
                   placeholder="e.g. natgeo"
                   value={handle}
-                  onChange={(e) => setHandle(e.target.value)}
+                  onChange={e => setHandle(e.target.value)}
                   className="pl-10 h-11 bg-background"
                 />
                 {isLoadingProfile && (
@@ -186,7 +201,7 @@ export default function Home() {
                         src={profile.profilePicUrl}
                         alt={profile.username}
                         className="w-16 h-16 rounded-full object-cover border-2 border-border"
-                        onError={(e) => {
+                        onError={e => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
@@ -207,7 +222,10 @@ export default function Home() {
                         <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />
                       )}
                       {profile.isPrivate && (
-                        <Badge variant="outline" className="text-[10px] h-4 border-orange-500/50 text-orange-400">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-4 border-orange-500/50 text-orange-400"
+                        >
                           <Lock className="mr-0.5 h-2.5 w-2.5" />
                           Private
                         </Badge>
@@ -215,11 +233,16 @@ export default function Home() {
                     </div>
 
                     {profile.fullName && (
-                      <p className="text-xs text-muted-foreground mb-1">{profile.fullName}</p>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {profile.fullName}
+                      </p>
                     )}
 
                     {profile.category && (
-                      <Badge variant="secondary" className="text-[10px] h-4 mb-1.5">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] h-4 mb-1.5"
+                      >
                         {profile.category}
                       </Badge>
                     )}
@@ -233,16 +256,28 @@ export default function Home() {
                     {/* Stats */}
                     <div className="flex items-center gap-4 text-xs">
                       <div className="text-center">
-                        <p className="font-bold text-foreground">{formatCount(profile.postCount)}</p>
-                        <p className="text-muted-foreground text-[10px]">posts</p>
+                        <p className="font-bold text-foreground">
+                          {formatCount(profile.postCount)}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          posts
+                        </p>
                       </div>
                       <div className="text-center">
-                        <p className="font-bold text-foreground">{formatCount(profile.followerCount)}</p>
-                        <p className="text-muted-foreground text-[10px]">followers</p>
+                        <p className="font-bold text-foreground">
+                          {formatCount(profile.followerCount)}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          followers
+                        </p>
                       </div>
                       <div className="text-center">
-                        <p className="font-bold text-foreground">{formatCount(profile.followingCount)}</p>
-                        <p className="text-muted-foreground text-[10px]">following</p>
+                        <p className="font-bold text-foreground">
+                          {formatCount(profile.followingCount)}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          following
+                        </p>
                       </div>
                       {profile.externalUrl && (
                         <a
@@ -266,7 +301,8 @@ export default function Home() {
                     <Separator className="my-3" />
                     <p className="text-xs text-orange-400 flex items-center gap-1.5">
                       <Lock className="h-3 w-3" />
-                      This account is private. Only public accounts can be scraped.
+                      This account is private. Only public accounts can be
+                      scraped.
                     </p>
                   </>
                 )}
@@ -284,7 +320,10 @@ export default function Home() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="timeframe" className="text-sm font-medium text-card-foreground">
+              <Label
+                htmlFor="timeframe"
+                className="text-sm font-medium text-card-foreground"
+              >
                 Timeframe
               </Label>
               <Select value={timeframe} onValueChange={setTimeframe}>
@@ -313,11 +352,13 @@ export default function Home() {
               />
             )}
 
-            {!scrapeGate.isLoading && scrapeGate.allowed && scrapeGate.limit > 0 && (
-              <p className="text-xs text-muted-foreground text-center">
-                {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
-              </p>
-            )}
+            {!scrapeGate.isLoading &&
+              scrapeGate.allowed &&
+              scrapeGate.limit > 0 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
+                </p>
+              )}
 
             <Button
               type="submit"
@@ -360,12 +401,14 @@ export default function Home() {
             label: "Transcribe",
             desc: "Get full transcripts with hook analysis for any Reel",
           },
-        ].map((item) => (
+        ].map(item => (
           <div
             key={item.label}
             className="rounded-lg border border-border/50 bg-card/50 p-4"
           >
-            <p className="text-sm font-medium text-card-foreground mb-1">{item.label}</p>
+            <p className="text-sm font-medium text-card-foreground mb-1">
+              {item.label}
+            </p>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {item.desc}
             </p>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { usePostHog } from "@posthog/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function CollectedReels() {
+  const posthog = usePostHog();
   const collectedQuery = trpc.collected.list.useQuery(undefined, {
     refetchInterval: 5000, // Poll for updates from Telegram bot
   });
@@ -84,7 +86,9 @@ export default function CollectedReels() {
   const [addingUrl, setAddingUrl] = useState(false);
 
   // Track pending transcriptions (in-session only, for loading state)
-  const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<number>>(new Set());
+  const [pendingTranscriptions, setPendingTranscriptions] = useState<
+    Set<number>
+  >(new Set());
 
   const deleteMutation = trpc.collected.delete.useMutation({
     onSuccess: () => {
@@ -94,16 +98,17 @@ export default function CollectedReels() {
   });
 
   const addByUrlMutation = trpc.collected.addByUrl.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       utils.collected.list.invalidate();
       if (data.duplicate) {
         toast.info("This reel is already in your collection");
       } else {
+        posthog?.capture("reel_added_by_url");
         toast.success("Reel added! Fetching metadata...");
       }
       setUrlInput("");
     },
-    onError: (err) => {
+    onError: err => {
       toast.error(err.message);
     },
   });
@@ -116,7 +121,7 @@ export default function CollectedReels() {
   });
 
   const refreshAllMutation = trpc.collected.refreshAll.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       utils.collected.list.invalidate();
       if (data.refreshed > 0) {
         toast.success(`Refreshing ${data.refreshed} reel(s)...`);
@@ -128,14 +133,17 @@ export default function CollectedReels() {
 
   const transcribeMutation = trpc.collected.transcribe.useMutation({
     onSuccess: (data, variables) => {
-      setPendingTranscriptions((prev) => {
+      posthog?.capture("reel_transcribed", {
+        collected_reel_id: variables.collectedReelId,
+      });
+      setPendingTranscriptions(prev => {
         const next = new Set(prev);
         next.add(variables.collectedReelId);
         return next;
       });
       utils.collected.list.invalidate();
     },
-    onError: (err) => {
+    onError: err => {
       toast.error(err.message);
     },
   });
@@ -148,23 +156,27 @@ export default function CollectedReels() {
     const days = parseInt(dateFilter);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    return collectedReels.filter((r) => {
+    return collectedReels.filter(r => {
       if (!r.postedAt) return false;
       return new Date(r.postedAt).getTime() >= cutoff.getTime();
     });
   }, [collectedReels, dateFilter]);
 
   // Helper to get the best available view count (cross-referenced from Account Monitoring, or collected reel's own)
-  const getEffectiveViews = (item: typeof collectedReels[0]) => {
-    if (item.monitoredViewCount && item.monitoredViewCount > 0) return item.monitoredViewCount;
+  const getEffectiveViews = (item: (typeof collectedReels)[0]) => {
+    if (item.monitoredViewCount && item.monitoredViewCount > 0)
+      return item.monitoredViewCount;
     return item.viewCount || 0;
   };
   // Helper to get engagement rate using cross-referenced follower count or collected reel's own
-  const getEngagementRate = (item: typeof collectedReels[0]) => {
+  const getEngagementRate = (item: (typeof collectedReels)[0]) => {
     const views = getEffectiveViews(item);
-    const followerCount = item.monitoredFollowerCount || item.ownerFollowerCount;
+    const followerCount =
+      item.monitoredFollowerCount || item.ownerFollowerCount;
     if (!followerCount || followerCount === 0) return null;
-    return ((item.likeCount || 0) + (item.commentCount || 0)) / followerCount * 100;
+    return (
+      (((item.likeCount || 0) + (item.commentCount || 0)) / followerCount) * 100
+    );
   };
 
   // Apply sort
@@ -177,9 +189,13 @@ export default function CollectedReels() {
       case "likes":
         return all.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
       case "comments":
-        return all.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+        return all.sort(
+          (a, b) => (b.commentCount || 0) - (a.commentCount || 0)
+        );
       case "engagement":
-        return all.sort((a, b) => (getEngagementRate(b) || 0) - (getEngagementRate(a) || 0));
+        return all.sort(
+          (a, b) => (getEngagementRate(b) || 0) - (getEngagementRate(a) || 0)
+        );
       case "date_oldest":
         return all.sort((a, b) => {
           const aTime = a.postedAt ? new Date(a.postedAt).getTime() : 0;
@@ -189,29 +205,37 @@ export default function CollectedReels() {
       case "date_newest":
       default:
         return all.sort((a, b) => {
-          const aTime = a.postedAt ? new Date(a.postedAt).getTime() : new Date(a.createdAt).getTime();
-          const bTime = b.postedAt ? new Date(b.postedAt).getTime() : new Date(b.createdAt).getTime();
+          const aTime = a.postedAt
+            ? new Date(a.postedAt).getTime()
+            : new Date(a.createdAt).getTime();
+          const bTime = b.postedAt
+            ? new Date(b.postedAt).getTime()
+            : new Date(b.createdAt).getTime();
           return bTime - aTime;
         });
     }
   }, [filteredReels, sortBy]);
 
   // Group by source for stats
-  const telegramReels = collectedReels.filter((r) => r.source === "telegram");
+  const telegramReels = collectedReels.filter(r => r.source === "telegram");
 
   const handleAddUrl = () => {
     if (!urlInput.trim()) return;
     setAddingUrl(true);
-    addByUrlMutation.mutate({ url: urlInput.trim() }, {
-      onSettled: () => setAddingUrl(false),
-    });
+    addByUrlMutation.mutate(
+      { url: urlInput.trim() },
+      {
+        onSettled: () => setAddingUrl(false),
+      }
+    );
   };
 
   const isTelegramConnected = telegramQuery.data?.connected;
   const botUsername = telegramQuery.data?.botUsername;
 
   // Get the current sort option for display
-  const currentSortOption = SORT_OPTIONS.find(o => o.value === sortBy) || SORT_OPTIONS[4];
+  const currentSortOption =
+    SORT_OPTIONS.find(o => o.value === sortBy) || SORT_OPTIONS[4];
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -223,8 +247,10 @@ export default function CollectedReels() {
             Collected Reels
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {collectedReels.length} reel{collectedReels.length !== 1 ? "s" : ""} collected
-            {telegramReels.length > 0 && ` (${telegramReels.length} from Telegram)`}
+            {collectedReels.length} reel{collectedReels.length !== 1 ? "s" : ""}{" "}
+            collected
+            {telegramReels.length > 0 &&
+              ` (${telegramReels.length} from Telegram)`}
           </p>
         </div>
 
@@ -237,7 +263,11 @@ export default function CollectedReels() {
               onClick={() => refreshAllMutation.mutate()}
               disabled={refreshAllMutation.isPending}
             >
-              {refreshAllMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+              {refreshAllMutation.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1 h-3 w-3" />
+              )}
               Refresh All
             </Button>
           )}
@@ -248,8 +278,10 @@ export default function CollectedReels() {
               <SelectValue placeholder="All Time" />
             </SelectTrigger>
             <SelectContent>
-              {DATE_FILTERS.map((f) => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+              {DATE_FILTERS.map(f => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -258,12 +290,14 @@ export default function CollectedReels() {
           <Select value={sortBy} onValueChange={setSortBy}>
             <SelectTrigger className="w-52 h-8 text-xs">
               <div className="flex items-center gap-1.5">
-                {currentSortOption && <currentSortOption.icon className="h-3 w-3" />}
+                {currentSortOption && (
+                  <currentSortOption.icon className="h-3 w-3" />
+                )}
                 <span>{currentSortOption?.label}</span>
               </div>
             </SelectTrigger>
             <SelectContent>
-              {SORT_OPTIONS.map((opt) => (
+              {SORT_OPTIONS.map(opt => (
                 <SelectItem key={opt.value} value={opt.value}>
                   <div className="flex items-center gap-2">
                     <opt.icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -282,16 +316,19 @@ export default function CollectedReels() {
           <div className="flex items-start gap-3">
             <Send className="h-5 w-5 text-blue-400 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-foreground mb-1">Connect Telegram to Collect Reels from Mobile</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-1">
+                Connect Telegram to Collect Reels from Mobile
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">
-                Share Instagram Reel links directly from your phone to the SpyReels Telegram bot.
-                They'll appear here automatically for transcription and script generation.
+                Share Instagram Reel links directly from your phone to the
+                SpyReels Telegram bot. They'll appear here automatically for
+                transcription and script generation.
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                onClick={() => window.location.href = "/settings"}
+                onClick={() => (window.location.href = "/settings")}
               >
                 <Send className="mr-1.5 h-3 w-3" />
                 Connect Telegram in Settings
@@ -307,7 +344,9 @@ export default function CollectedReels() {
           <div className="flex items-center gap-2 text-xs text-emerald-400">
             <Send className="h-3.5 w-3.5" />
             <span>
-              Telegram connected{botUsername ? ` — share Reel links to @${botUsername}` : ""}. They'll appear here automatically.
+              Telegram connected
+              {botUsername ? ` — share Reel links to @${botUsername}` : ""}.
+              They'll appear here automatically.
             </span>
           </div>
         </div>
@@ -320,8 +359,8 @@ export default function CollectedReels() {
           <Input
             placeholder="Paste Instagram Reel URL here..."
             value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
+            onChange={e => setUrlInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAddUrl()}
             className="pl-9 h-9 text-sm"
           />
         </div>
@@ -331,7 +370,11 @@ export default function CollectedReels() {
           onClick={handleAddUrl}
           disabled={addingUrl || !urlInput.trim()}
         >
-          {addingUrl ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+          {addingUrl ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+          )}
           Add Reel
         </Button>
       </div>
@@ -347,22 +390,31 @@ export default function CollectedReels() {
       {!collectedQuery.isLoading && collectedReels.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Inbox className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h2 className="text-lg font-medium text-foreground mb-2">No collected reels yet</h2>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            No collected reels yet
+          </h2>
           <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Collect reels by sharing Instagram links to the Telegram bot from your phone,
-            or paste URLs above. Then transcribe and generate scripts right here.
+            Collect reels by sharing Instagram links to the Telegram bot from
+            your phone, or paste URLs above. Then transcribe and generate
+            scripts right here.
           </p>
           <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">1</span>
+              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                1
+              </span>
               <span>See a viral Reel on Instagram</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">2</span>
+              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                2
+              </span>
               <span>Tap Share → Share to Telegram → SpyReels Bot</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">3</span>
+              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                3
+              </span>
               <span>It appears here — transcribe and re-create!</span>
             </div>
           </div>
@@ -378,7 +430,7 @@ export default function CollectedReels() {
 
       {/* Reel List */}
       <div className="space-y-1">
-        {sortedReels.map((reel) => {
+        {sortedReels.map(reel => {
           const effectiveViews = getEffectiveViews(reel);
           const engagementRate = getEngagementRate(reel);
           const isExpanded = expandedReel === reel.id;
@@ -387,21 +439,33 @@ export default function CollectedReels() {
           const isReady = reel.status === "ready";
 
           // Transcription state: from server data (persisted) or pending in-session
-          const hasTranscription = reel.transcriptionStatus === "completed" &&
+          const hasTranscription =
+            reel.transcriptionStatus === "completed" &&
             !!reel.transcriptionReelId;
-          const isTranscriptionProcessing = reel.transcriptionStatus === "processing" || pendingTranscriptions.has(reel.id);
+          const isTranscriptionProcessing =
+            reel.transcriptionStatus === "processing" ||
+            pendingTranscriptions.has(reel.id);
           const mappedReelId = reel.transcriptionReelId;
 
           return (
-            <div key={reel.id} className="rounded-lg border border-border bg-card overflow-hidden">
+            <div
+              key={reel.id}
+              className="rounded-lg border border-border bg-card overflow-hidden"
+            >
               <div
                 className={`flex items-center gap-3 sm:gap-4 p-2 sm:p-3 hover:bg-accent/30 transition-colors cursor-pointer ${isExpanded ? "bg-accent/20" : ""}`}
-                onClick={() => isReady && setExpandedReel(isExpanded ? null : reel.id)}
+                onClick={() =>
+                  isReady && setExpandedReel(isExpanded ? null : reel.id)
+                }
               >
                 {/* Thumbnail - fixed sizing to prevent cutoff */}
                 <div className="relative w-16 h-20 rounded-md overflow-hidden bg-muted shrink-0 flex-none">
                   {reel.thumbnailUrl ? (
-                    <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={reel.thumbnailUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       {isPending ? (
@@ -418,7 +482,11 @@ export default function CollectedReels() {
                   )}
                   {/* Source badge */}
                   <span className="absolute top-1 right-1 text-[9px] bg-black/70 text-white px-1 rounded">
-                    {reel.source === "telegram" ? "TG" : reel.source === "extension" ? "EXT" : "URL"}
+                    {reel.source === "telegram"
+                      ? "TG"
+                      : reel.source === "extension"
+                        ? "EXT"
+                        : "URL"}
                   </span>
                 </div>
 
@@ -433,35 +501,58 @@ export default function CollectedReels() {
                   {isFailed && (
                     <div className="flex items-center gap-2 text-sm text-destructive">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      <span>{reel.errorMessage || "Failed to fetch reel data"}</span>
+                      <span>
+                        {reel.errorMessage || "Failed to fetch reel data"}
+                      </span>
                     </div>
                   )}
                   {isReady && (
                     <>
                       <div className="flex items-center gap-2 mb-0.5">
                         {reel.ownerUsername && (
-                          <span className="text-xs font-medium text-primary">@{reel.ownerUsername}</span>
+                          <span className="text-xs font-medium text-primary">
+                            @{reel.ownerUsername}
+                          </span>
                         )}
                         {hasTranscription && (
-                          <span className="text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
+                          <span className="text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">
+                            Transcribed
+                          </span>
                         )}
                         {isTranscriptionProcessing && !hasTranscription && (
-                          <span className="text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
+                          <span className="text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">
+                            Processing
+                          </span>
                         )}
                       </div>
-                      <p className="text-sm text-foreground line-clamp-2 leading-snug">{reel.caption || "No caption"}</p>
+                      <p className="text-sm text-foreground line-clamp-2 leading-snug">
+                        {reel.caption || "No caption"}
+                      </p>
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
                         {effectiveViews > 0 && (
-                          <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {formatNumber(effectiveViews)}</span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />{" "}
+                            {formatNumber(effectiveViews)}
+                          </span>
                         )}
-                        <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {formatNumber(reel.likeCount || 0)}</span>
-                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {formatNumber(reel.commentCount || 0)}</span>
+                        <span className="flex items-center gap-1">
+                          <Heart className="h-3 w-3" />{" "}
+                          {formatNumber(reel.likeCount || 0)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MessageCircle className="h-3 w-3" />{" "}
+                          {formatNumber(reel.commentCount || 0)}
+                        </span>
                         {engagementRate !== null && engagementRate > 0 && (
-                          <span className="flex items-center gap-1 text-emerald-400"><TrendingUp className="h-3 w-3" /> {engagementRate.toFixed(2)}%</span>
+                          <span className="flex items-center gap-1 text-emerald-400">
+                            <TrendingUp className="h-3 w-3" />{" "}
+                            {engagementRate.toFixed(2)}%
+                          </span>
                         )}
                         {reel.postedAt && (
                           <span className="flex items-center gap-1 text-amber-400/80">
-                            <Clock className="h-3 w-3" /> {formatPostedTime(reel.postedAt, userTimezone)}
+                            <Clock className="h-3 w-3" />{" "}
+                            {formatPostedTime(reel.postedAt, userTimezone)}
                           </span>
                         )}
                       </div>
@@ -470,22 +561,48 @@ export default function CollectedReels() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end"
+                  onClick={e => e.stopPropagation()}
+                >
                   {isFailed && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => retryMutation.mutate({ id: reel.id })} disabled={retryMutation.isPending}>
-                      <RefreshCw className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Retry</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => retryMutation.mutate({ id: reel.id })}
+                      disabled={retryMutation.isPending}
+                    >
+                      <RefreshCw className="h-3 w-3 sm:mr-1" />{" "}
+                      <span className="hidden sm:inline">Retry</span>
                     </Button>
                   )}
 
                   {isPending && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs" disabled>
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Fetching...
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled
+                    >
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />{" "}
+                      Fetching...
                     </Button>
                   )}
 
                   {isReady && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => retryMutation.mutate({ id: reel.id })} disabled={retryMutation.isPending}>
-                      {retryMutation.isPending ? <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 sm:mr-1" />}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => retryMutation.mutate({ id: reel.id })}
+                      disabled={retryMutation.isPending}
+                    >
+                      {retryMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 sm:mr-1" />
+                      )}
                       <span className="hidden sm:inline">Refresh</span>
                     </Button>
                   )}
@@ -508,21 +625,30 @@ export default function CollectedReels() {
                           size="sm"
                           className="h-7 text-xs"
                           onClick={() => {
-                            transcribeMutation.mutate({ collectedReelId: reel.id });
+                            transcribeMutation.mutate({
+                              collectedReelId: reel.id,
+                            });
                             toast.info("Transcription started...");
                             setExpandedReel(reel.id);
                           }}
-                          disabled={transcribeMutation.isPending || isTranscriptionProcessing}
+                          disabled={
+                            transcribeMutation.isPending ||
+                            isTranscriptionProcessing
+                          }
                         >
                           {isTranscriptionProcessing ? (
                             <>
                               <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              <span className="hidden sm:inline">Transcribing...</span>
+                              <span className="hidden sm:inline">
+                                Transcribing...
+                              </span>
                             </>
                           ) : (
                             <>
                               <FileText className="h-3 w-3 sm:mr-1" />
-                              <span className="hidden sm:inline">Transcribe</span>
+                              <span className="hidden sm:inline">
+                                Transcribe
+                              </span>
                             </>
                           )}
                         </Button>
@@ -535,21 +661,39 @@ export default function CollectedReels() {
                           className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
                           onClick={() => setExpandedReel(reel.id)}
                         >
-                          <Wand2 className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Re-Create</span>
+                          <Wand2 className="h-3 w-3 sm:mr-1" />{" "}
+                          <span className="hidden sm:inline">Re-Create</span>
                         </Button>
                       )}
                     </>
                   )}
 
                   {reel.reelUrl && (
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => window.open(reel.reelUrl, "_blank")} title="Open on Instagram">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => window.open(reel.reelUrl, "_blank")}
+                      title="Open on Instagram"
+                    >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
                   )}
 
                   {isReady && (
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpandedReel(isExpanded ? null : reel.id)}>
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() =>
+                        setExpandedReel(isExpanded ? null : reel.id)
+                      }
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                   )}
 
@@ -582,16 +726,27 @@ export default function CollectedReels() {
                 <div className="p-4 border-t border-border bg-accent/10">
                   <div className="text-center py-4">
                     <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground mb-3">Transcribe this reel first to unlock Re-Create and script generation.</p>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Transcribe this reel first to unlock Re-Create and script
+                      generation.
+                    </p>
                     <Button
                       size="sm"
                       onClick={() => {
                         transcribeMutation.mutate({ collectedReelId: reel.id });
                         toast.info("Transcription started...");
                       }}
-                      disabled={transcribeMutation.isPending || isTranscriptionProcessing}
+                      disabled={
+                        transcribeMutation.isPending ||
+                        isTranscriptionProcessing
+                      }
                     >
-                      {transcribeMutation.isPending || isTranscriptionProcessing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
+                      {transcribeMutation.isPending ||
+                      isTranscriptionProcessing ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileText className="mr-1.5 h-3.5 w-3.5" />
+                      )}
                       Transcribe Now
                     </Button>
                   </div>
@@ -623,11 +778,13 @@ function CollectedReelWorkflow({
 }) {
   const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
     { reelId },
-    { refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data && data.status === "completed") return false;
-      return 3000;
-    }},
+    {
+      refetchInterval: query => {
+        const data = query.state.data;
+        if (data && data.status === "completed") return false;
+        return 3000;
+      },
+    }
   );
 
   const transcription = transcriptionQuery.data;

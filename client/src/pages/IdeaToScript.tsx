@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePostHog } from "@posthog/react";
 import {
   Lightbulb, Send, Loader2, CheckCircle2, XCircle, Clock,
   Trash2, RotateCcw, FileText, Plus, ChevronDown, Zap,
@@ -55,6 +56,7 @@ function ViralScoreBadge({ score }: { score: number }) {
 }
 
 export default function IdeaToScript() {
+  const posthog = usePostHog();
   const { user } = useAuth();
 
   const [ideaText, setIdeaText] = useState("");
