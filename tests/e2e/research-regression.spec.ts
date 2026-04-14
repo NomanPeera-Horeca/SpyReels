@@ -10,7 +10,7 @@ test.describe.serial("Research regression (live API — run with app + credentia
   test("Instagram scraping completes with reel metrics", async ({ page }) => {
     test.setTimeout(120_000);
     await login(page);
-    await page.goto("/research");
+    await page.goto("/");
     await page.locator("#handle").fill(RESEARCH_HANDLE);
     await expect(page.getByText("followers", { exact: false })).toBeVisible({
       timeout: 25_000,
