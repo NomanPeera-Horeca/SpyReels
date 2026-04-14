@@ -43,7 +43,6 @@ function normalizeContentToMarkdown(raw: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    const prev = i > 0 ? lines[i - 1].trim() : "";
 
     if (!trimmed) {
       normalized.push("");
@@ -62,27 +61,30 @@ function normalizeContentToMarkdown(raw: string): string {
     }
 
     const isListLine = /^[-*•]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed);
-    const endsWithPeriod = /\.$/.test(trimmed);
-    const endsWithQuestion = /\?$/.test(trimmed);
+    const endsWithPeriod = trimmed.endsWith(".");
+    const endsWithQuestion = trimmed.endsWith("?");
     const startsCapital = /^[A-Z]/.test(trimmed);
-    const hasMidSentencePunctuation = /[.!?;:](?=.{2,})/.test(trimmed.slice(0, -1));
-    const isShort = trimmed.length <= 100;
-    const afterBlankLine = prev === "";
+    const hasCommaEarly = trimmed.slice(0, 30).includes(",");
+    const isShort = trimmed.length < 120;
 
-    const looksLikeSectionTitle =
+    const isHeadingCandidate =
       isShort &&
-      !isListLine &&
-      afterBlankLine &&
+      !endsWithPeriod &&
       startsCapital &&
-      !hasMidSentencePunctuation &&
-      (!endsWithPeriod || endsWithQuestion);
+      !hasCommaEarly &&
+      !isListLine;
 
-    if (inFaq && endsWithQuestion && !isListLine) {
+    if (isHeadingCandidate && endsWithQuestion && inFaq) {
       normalized.push(`### ${trimmed}`);
       continue;
     }
 
-    if (looksLikeSectionTitle) {
+    if (isHeadingCandidate && endsWithQuestion && !inFaq) {
+      normalized.push(`## ${trimmed}`);
+      continue;
+    }
+
+    if (isHeadingCandidate) {
       normalized.push(`## ${trimmed}`);
       continue;
     }
@@ -313,7 +315,7 @@ export default function BlogPost() {
       </nav>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="max-w-[720px]">
+        <div className="max-w-[720px] w-full">
           <div className="rounded-2xl overflow-hidden h-[400px] mb-8 border border-border/50 relative">
             {post.coverImageUrl ? (
               <img src={post.coverImageUrl} alt={post.title} className="w-full h-full object-cover" />
@@ -402,7 +404,7 @@ export default function BlogPost() {
                 <div>
                   <p className="font-semibold text-foreground">Noah Perry</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Content strategist at SpyReels. Helping creators grow faster by studying what already works.
+                    Founder & CEO of SpyReels.
                   </p>
                 </div>
               </div>

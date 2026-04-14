@@ -310,6 +310,7 @@ export default function LandingPage() {
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
               <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
+              <a href="/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Blog</a>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={handleGetStarted} className="bg-transparent">Log In</Button>
@@ -732,6 +733,7 @@ export default function LandingPage() {
               <a href="#features" className="hover:text-foreground transition-colors">Features</a>
               <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
+              <a href="/blog" className="hover:text-foreground transition-colors">Blog</a>
               <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>

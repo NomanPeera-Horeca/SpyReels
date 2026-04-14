@@ -171,7 +171,7 @@ export function StickySignupBar() {
                 Ready to spy on viral Reels?
               </p>
               <p className="text-xs text-muted-foreground hidden sm:block">
-                Join 1,000+ creators using SpyReels to reverse-engineer viral content.
+                Join 12,000+ creators using SpyReels to reverse-engineer viral content.
               </p>
             </div>
           </div>
@@ -213,7 +213,7 @@ export function SocialProofBanner() {
             </div>
           ))}
         </div>
-        <span>Trusted by <strong className="text-foreground">1,000+</strong> creators</span>
+        <span>Trusted by <strong className="text-foreground">12,000+</strong> creators</span>
       </div>
       <div className="h-4 w-px bg-border/50 hidden sm:block" />
       <span>Analyzed <strong className="text-foreground">500K+</strong> Reels</span>
