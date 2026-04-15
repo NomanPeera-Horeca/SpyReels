@@ -735,6 +735,7 @@ export default function LandingPage() {
               <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
               <a href="/blog" className="hover:text-foreground transition-colors">Blog</a>
               <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a>
+              <a href="https://spyreels.getrewardful.com/signup" className="hover:text-foreground transition-colors" target="_blank" rel="noopener noreferrer">Affiliates</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
             </div>
