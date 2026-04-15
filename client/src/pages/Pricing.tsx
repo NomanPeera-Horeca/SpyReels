@@ -145,7 +145,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
       },
       {
         label: "AI script re-creations/month",
-        free: false,
+        free: 3,
         starter: 15,
         pro: 100,
         business: 500,
@@ -153,7 +153,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
       },
       {
         label: "Rewrites per script",
-        free: false,
+        free: 3,
         starter: 2,
         pro: 10,
         business: "Unlimited",
@@ -325,7 +325,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
       },
       {
         label: "Re-Create in extension",
-        free: false,
+        free: "3/mo",
         starter: "5/mo",
         pro: "50/mo",
         business: "250/mo",

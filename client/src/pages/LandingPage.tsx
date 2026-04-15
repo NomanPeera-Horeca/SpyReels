@@ -93,7 +93,7 @@ const PRICING_PREVIEW = [
     description: "Try everything. No credit card.",
     icon: Zap,
     color: "text-zinc-400",
-    highlights: ["2 handle scrapes/month", "3 transcriptions/month", "5 saved scripts", "Chrome extension basics"],
+    highlights: ["2 handle scrapes/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Chrome extension basics"],
   },
   {
     name: "Starter",
