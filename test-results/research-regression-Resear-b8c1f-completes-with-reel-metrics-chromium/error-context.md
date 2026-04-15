@@ -16,7 +16,7 @@ Test timeout of 120000ms exceeded.
 ```
 
 ```
-TimeoutError: page.waitForURL: Timeout 120000ms exceeded.
+Error: page.waitForURL: Test timeout of 120000ms exceeded.
 =========================== logs ===========================
 waiting for navigation until "load"
 ============================================================
@@ -112,29 +112,29 @@ waiting for navigation until "load"
                   - img [ref=e126]
                   - textbox "Instagram Handle" [ref=e129]:
                     - /placeholder: e.g. natgeo
-                    - text: kyliejenner
+                    - text: nike
                   - img [ref=e130]
                 - paragraph [ref=e133]: Enter the username without the @ symbol. The account must be public.
               - generic [ref=e136]:
                 - generic [ref=e137]:
-                  - heading "kyliejenner" [level=3] [ref=e138]
+                  - heading "nike" [level=3] [ref=e138]
                   - img [ref=e139]
-                - paragraph [ref=e142]: Kylie
-                - paragraph [ref=e143]: "@kyliecosmetics @khy"
+                - paragraph [ref=e142]: Nike
+                - paragraph [ref=e143]: Just Do It.
                 - generic [ref=e144]:
                   - generic [ref=e145]:
-                    - paragraph [ref=e146]: 7.4K
+                    - paragraph [ref=e146]: 1.6K
                     - paragraph [ref=e147]: posts
                   - generic [ref=e148]:
-                    - paragraph [ref=e149]: 390.6M
+                    - paragraph [ref=e149]: 297.6M
                     - paragraph [ref=e150]: followers
                   - generic [ref=e151]:
-                    - paragraph [ref=e152]: "137"
+                    - paragraph [ref=e152]: "240"
                     - paragraph [ref=e153]: following
-                  - link "kyliecosmetics.com/" [ref=e154] [cursor=pointer]:
-                    - /url: http://kyliecosmetics.com/
+                  - link "empli.fi/nike" [ref=e154] [cursor=pointer]:
+                    - /url: http://empli.fi/nike
                     - img [ref=e155]
-                    - generic [ref=e159]: kyliecosmetics.com/
+                    - generic [ref=e159]: empli.fi/nike
               - generic [ref=e160]:
                 - generic [ref=e161]: Timeframe
                 - combobox [ref=e162] [cursor=pointer]:
@@ -182,7 +182,7 @@ waiting for navigation until "load"
   18  |     });
   19  |     await page.getByRole("button", { name: /Start Research/i }).click();
 > 20  |     await page.waitForURL(/\/dashboard\?jobId=\d+/, { timeout: 120_000 });
-      |                ^ TimeoutError: page.waitForURL: Timeout 120000ms exceeded.
+      |                ^ Error: page.waitForURL: Test timeout of 120000ms exceeded.
   21  |     jobDashboardUrl = page.url();
   22  | 
   23  |     await expect(page.locator('span').filter({ hasText: /^completed$/i }).first()).toBeVisible({

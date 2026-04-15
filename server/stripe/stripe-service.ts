@@ -73,8 +73,9 @@ export async function createCheckoutSession(opts: {
   planId: PlanId;
   interval: BillingInterval;
   origin: string;
+  referralId?: string;
 }): Promise<string> {
-  const { userId, email, name, planId, interval, origin } = opts;
+  const { userId, email, name, planId, interval, origin, referralId } = opts;
 
   const priceId = await getOrCreatePrice(planId, interval);
 
@@ -115,7 +116,7 @@ export async function createCheckoutSession(opts: {
     success_url: `${origin}/billing?success=true&plan=${planId}`,
     cancel_url: `${origin}/pricing?canceled=true`,
     allow_promotion_codes: true,
-    client_reference_id: userId.toString(),
+    ...(referralId ? { client_reference_id: referralId } : {}),
     metadata: {
       user_id: userId.toString(),
       customer_email: email,

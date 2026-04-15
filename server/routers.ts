@@ -139,6 +139,7 @@ export const appRouter = router({
         planId: z.enum(["starter", "pro", "business", "agency"]),
         interval: z.enum(["monthly", "yearly"]),
         origin: z.string(),
+        referralId: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const url = await createCheckoutSession({
@@ -148,6 +149,7 @@ export const appRouter = router({
           planId: input.planId as PlanId,
           interval: input.interval as BillingInterval,
           origin: input.origin,
+          referralId: input.referralId,
         });
         return { url };
       }),

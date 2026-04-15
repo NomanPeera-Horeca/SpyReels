@@ -481,10 +481,14 @@ export default function Pricing() {
       interval: isAnnual ? "yearly" : "monthly",
       current_plan: currentPlan,
     });
+    const referralId =
+      typeof window !== "undefined" && (window as any).Rewardful?.referral;
     checkoutMutation.mutate({
       planId: planId as any,
       interval: isAnnual ? "yearly" : "monthly",
       origin: window.location.origin,
+      referralId:
+        typeof referralId === "string" ? referralId : undefined,
     });
   };
 
