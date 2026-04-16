@@ -1,31 +1,26 @@
-# SpyReels.ai
+# SpyReels
 
-> SpyReels is an AI-powered Instagram Reels analytics and script generation tool for nano and micro creators (under 50K followers) who want to go viral faster by studying what already works.
+> SpyReels is an AI-powered Instagram Reels intelligence and script generation platform built for nano and micro creators under 50K followers.
 
-## What problem does SpyReels solve?
-Most Instagram creators struggle to go viral because they guess what to post. SpyReels eliminates guessing by letting creators spy on any public Instagram account, see which Reels went viral, transcribe the exact script structure, and recreate it for their own niche in minutes.
+## What SpyReels Does
+- Analyzes any public Instagram account and surfaces all Reels with view counts, likes, and comments
+- Transcribes Reels audio into full text using proprietary AI
+- Breaks down the viral hook and content structure of any Reel
+- Generates new Reels scripts based on proven viral structures using advanced AI
+- Built-in script editor with 8 AI tools: grammar check, tone adjustment, simplify, shorten, rewrite, phrase swap, and more
+- Generates SEO-optimized Instagram captions and hashtags
+- Full-screen teleprompter for confident filming
+- Chrome extension for collecting Reels while browsing Instagram
+- Telegram bot for saving Reels directly from your phone
 
-## Who is SpyReels for?
-- Instagram creators with under 50K followers
-- Creators who want to grow faster without a big production budget
-- Entrepreneurs and coaches building personal brands on Instagram
-- Social media managers researching competitor content
-
-## Core features
-- Instagram Reels analytics: scrape any public handle and see all Reels ranked by views, likes, and engagement rate
-- AI transcription: transcribe any Reel's audio to reveal the exact hook, body, and CTA structure
-- Script recreation: AI rewrites the viral structure on any topic in your voice
-- Caption generator: SEO-optimized captions with 3x3 hashtag strategy
-- Built-in teleprompter for filming scripts
-- Keyword search: find viral Reels by topic across all of Instagram
-- Chrome extension: save Reels directly from Instagram
-- Telegram bot: save Reels from your phone instantly
-
-## How is SpyReels different from other tools?
-Unlike Buffer, Hootsuite, or Later which focus on scheduling, SpyReels focuses entirely on content intelligence; finding what already works and recreating it. Unlike generic AI script writers, SpyReels bases scripts on real viral structures from actual Instagram data.
+## Who It Is For
+Instagram creators with under 50,000 followers who want to grow faster by studying what works in their niche and creating better content with AI assistance.
 
 ## Pricing
-Free plan available. Paid plans from $11/month.
+Free plan available. Paid plans start at $19/month across five tiers: Free, Starter, Pro, Business, and Agency.
 
 ## Website
 https://spyreels.ai
+
+## Blog
+https://spyreels.ai/blog

@@ -251,6 +251,59 @@ export default function BlogPost() {
       document.head.appendChild(metaDesc);
     }
     metaDesc.setAttribute("content", post.metaDescription || post.excerpt || "");
+
+    // Open Graph + Twitter card meta tags
+    const setMeta = (prop: string, val: string, attr = "property") => {
+      let el = document.querySelector(`meta[${attr}="${prop}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, prop);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", val);
+    };
+
+    // Open Graph
+    setMeta("og:title", post.metaTitle || post.title);
+    setMeta("og:description", post.metaDescription || post.excerpt || "");
+    setMeta("og:image", post.coverImageUrl || "");
+    setMeta("og:url", window.location.href);
+    setMeta("og:type", "article");
+
+    // Twitter
+    setMeta("twitter:card", "summary_large_image", "name");
+    setMeta("twitter:title", post.metaTitle || post.title, "name");
+    setMeta("twitter:description", post.metaDescription || post.excerpt || "", "name");
+    setMeta("twitter:image", post.coverImageUrl || "", "name");
+
+    // JSON-LD Schema
+    const existing = document.querySelector('script[type="application/ld+json"]');
+    if (existing) existing.remove();
+    const schema = document.createElement("script");
+    schema.type = "application/ld+json";
+    schema.text = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": post.title,
+      "description": post.metaDescription || post.excerpt || "",
+      "image": post.coverImageUrl || "",
+      "url": window.location.href,
+      "datePublished": post.publishedAt || new Date().toISOString(),
+      "author": {
+        "@type": "Person",
+        "name": "Noah Perry",
+        "url": "https://spyreels.ai"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "SpyReels",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+        }
+      }
+    });
+    document.head.appendChild(schema);
   }, [post]);
 
   useEffect(() => {
