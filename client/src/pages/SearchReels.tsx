@@ -411,7 +411,10 @@ export default function SearchReels() {
             [reel.shortcode]: { text: data.transcript, segments: data.segments as Segment[] },
           }));
           setTranscribing((prev) => ({ ...prev, [reel.shortcode]: false }));
-          toast.success("Transcription complete!");
+          toast.success(`✅ @${reel.ownerUsername} - transcription complete! Scroll down on that reel to see the script.`, { duration: 6000 });
+          setTimeout(() => {
+            document.getElementById(`transcript-${reel.shortcode}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 500);
         },
         onError: (err) => {
           setTranscribing((prev) => ({ ...prev, [reel.shortcode]: false }));
@@ -873,7 +876,15 @@ function ReelRow({
 
   return (
     <>
-      <tr className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${isExpanded ? "bg-muted/10" : ""}`}>
+      <tr
+        className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${
+          isTranscribing
+            ? "border-2 border-blue-500 animate-pulse"
+            : hasTranscript
+              ? "border-2 border-green-500"
+              : ""
+        } ${isExpanded ? "bg-muted/10" : ""}`}
+      >
         {/* Reel info */}
         <td className="py-2.5 px-3">
           <div className="flex items-center gap-3">
@@ -957,7 +968,20 @@ function ReelRow({
 
         {/* Actions */}
         <td className="py-2.5 px-3">
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex flex-col items-center">
+            {isTranscribing && (
+              <div className="flex items-center gap-1 text-xs text-blue-400 font-medium mb-1 animate-pulse">
+                <span>⏳</span>
+                <span>Transcribing... 15-30 seconds</span>
+              </div>
+            )}
+            {hasTranscript && !isTranscribing && (
+              <div className="flex items-center gap-1 text-xs text-green-400 font-medium mb-1">
+                <span>✅</span>
+                <span>Transcript Ready</span>
+              </div>
+            )}
+            <div className="flex items-center justify-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1000,6 +1024,7 @@ function ReelRow({
               </TooltipTrigger>
               <TooltipContent>Open on Instagram</TooltipContent>
             </Tooltip>
+            </div>
           </div>
         </td>
       </tr>
@@ -1007,7 +1032,7 @@ function ReelRow({
       {/* Expanded Inline Workflow Panel */}
       {isExpanded && (
         <tr>
-          <td colSpan={8} className="p-0">
+          <td colSpan={8} className="p-0" id={`transcript-${reel.shortcode}`}>
             <SearchInlineWorkflow
               reel={reel}
               hasTranscript={hasTranscript}

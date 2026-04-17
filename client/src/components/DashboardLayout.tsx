@@ -27,7 +27,6 @@ import {
   Eye,
   LogOut,
   PanelLeft,
-  Radar,
   Bookmark,
   FileText,
   Settings,
@@ -122,7 +121,6 @@ function DashboardLayoutContent({
   }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    { icon: Radar, label: "Research", path: "/" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
     { icon: Eye, label: "Account Monitoring", path: "/history" },
     { icon: FileText, label: "My Scripts", path: "/scripts" },

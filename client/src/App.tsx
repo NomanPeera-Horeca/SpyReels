@@ -24,7 +24,6 @@ import CollectedReels from "./pages/CollectedReels";
 import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
-import SearchReels from "./pages/SearchReels";
 import AdminDashboard from "./pages/AdminDashboard";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -42,7 +41,6 @@ function DashboardRouter() {
         <Route path="/ideas" component={IdeaToScript} />
         <Route path="/library" component={Library} />
         <Route path="/paste" component={PasteScript} />
-        <Route path="/search" component={SearchReels} />
         <Route path="/history" component={History} />
         <Route path="/settings" component={Settings} />
         <Route path="/pricing" component={Pricing} />
