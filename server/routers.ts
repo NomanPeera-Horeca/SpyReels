@@ -129,7 +129,7 @@ export const appRouter = router({
 
     plans: publicProcedure.query(() => {
       return Object.entries(PLANS).map(([id, plan]) => ({
-        id,
+        planId: id,
         ...plan,
       }));
     }),
@@ -820,9 +820,9 @@ export const appRouter = router({
         if (input.notes !== undefined) updateData.notes = input.notes;
         if (input.status !== undefined) updateData.status = input.status;
         if (input.gradeLevel !== undefined) updateData.gradeLevel = input.gradeLevel;
-        if (input.generatedCaption !== undefined) updateData.generatedCaption = input.generatedCaption;
-        if (input.generatedHashtags !== undefined) updateData.generatedHashtags = input.generatedHashtags;
-        if (input.captionStyle !== undefined) updateData.captionStyle = input.captionStyle;
+        if (input.generatedCaption !== undefined) (updateData as any).generatedCaption = input.generatedCaption;
+        if (input.generatedHashtags !== undefined) (updateData as any).generatedHashtags = input.generatedHashtags;
+        if (input.captionStyle !== undefined) (updateData as any).captionStyle = input.captionStyle;
         if (input.content !== undefined) {
           updateData.content = input.content;
           updateData.wordCount = input.content.trim().split(/\s+/).length;
@@ -1330,7 +1330,7 @@ The hook MUST be 7-10 words. Count them.`
           generatedCaption: result.caption,
           generatedHashtags: JSON.stringify(hashtags),
           captionStyle: input.style,
-        });
+        } as any);
 
         return {
           caption: result.caption,
@@ -3883,7 +3883,8 @@ If the idea is already great (8+), the suggestion can be similar to the original
     const content = response.choices?.[0]?.message?.content;
     if (!content) throw new Error("No validation response from AI");
 
-    const validation = JSON.parse((content || "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+    const contentStr = typeof content === "string" ? content : "";
+    const validation = JSON.parse(contentStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
 
     await updateScriptIdea(ideaId, {
       aiSuggestion: validation.improvedIdea,

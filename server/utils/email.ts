@@ -53,3 +53,15 @@ export async function sendPasswordResetEmail(toEmail: string, resetLink: string)
     `,
   });
 }
+
+export async function sendPaymentConfirmationEmail(
+  toEmail: string,
+  firstName: string,
+  planName: string,
+  planPrice: string,
+  nextBillingDate: string
+) {
+  // Import and delegate to the JS implementation
+  const { sendPaymentConfirmationEmail: sendEmail } = await import("./email.js");
+  return sendEmail(toEmail, firstName, planName, planPrice, nextBillingDate);
+}

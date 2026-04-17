@@ -867,7 +867,7 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
     for (const idea of ideas) {
       if (idea.savedScriptId && savedIdeaIds.has(idea.savedScriptId)) continue;
       scripts.push({
-        id: idea.id, title: idea.generatedTitle || idea.ideaText.slice(0, 60),
+        id: idea.id, title: idea.generatedTitle || (idea.idea || "").slice(0, 60),
         content: idea.generatedScript || "", sourceHandle: null,
         status: "draft", source: "idea",
         wordCount: (idea.generatedScript || "").split(/\s+/).length,
