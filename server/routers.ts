@@ -3083,57 +3083,112 @@ async function runTranscription(
   }
 ): Promise<void> {
   try {
-    let videoUrl = reel.videoUrl;
+    // Always fetch fresh URL to avoid expired Instagram video URLs
+    const initialFresh = await fetchReelByShortcode(reel.shortcode);
+    if (!initialFresh?.videoUrl) {
+      throw new Error(
+        "Could not retrieve video URL for this reel. The video may no longer be available."
+      );
+    }
+    let videoUrl = initialFresh.videoUrl;
 
-    if (!videoUrl) {
-      const freshData = await fetchReelByShortcode(reel.shortcode);
-      if (!freshData?.videoUrl) {
-        throw new Error(
-          "Could not retrieve video URL for this reel. The video may no longer be available."
+    const { gotScraping } = await import("got-scraping");
+    let videoResponse:
+      | { statusCode: number; body: Buffer }
+      | undefined;
+    let lastError: Error | null = null;
+    download: for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        videoResponse = await gotScraping({
+          url: videoUrl,
+          responseType: "buffer",
+          timeout: { request: 30000 },
+          headerGeneratorOptions: {
+            browsers: [{ name: "chrome", minVersion: 120 }],
+            operatingSystems: ["windows"],
+          },
+        });
+        if (videoResponse.statusCode === 200) {
+          break download;
+        }
+        if (videoResponse.statusCode === 403 || videoResponse.statusCode === 404) {
+          const freshData = await fetchReelByShortcode(reel.shortcode);
+          if (freshData?.videoUrl) {
+            videoUrl = freshData.videoUrl;
+          }
+        }
+        lastError = new Error(
+          `Failed to download video: HTTP ${videoResponse.statusCode}`
+        );
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
+      if (attempt < 3) {
+        await new Promise((r) =>
+          setTimeout(r, 1000 * 2 ** (attempt - 1))
         );
       }
-      videoUrl = freshData.videoUrl;
+    }
+    if (!videoResponse || videoResponse.statusCode !== 200) {
+      throw new Error(
+        `Failed to download video after 3 attempts. ${lastError?.message || ""}`.trim()
+      );
     }
 
-    // Download video using got-scraping to bypass TLS fingerprinting
-    const { gotScraping } = await import("got-scraping");
-    const videoResponse = await gotScraping({
-      url: videoUrl,
-      responseType: "buffer",
-      headerGeneratorOptions: {
-        browsers: [{ name: "chrome", minVersion: 120 }],
-        operatingSystems: ["windows"],
-      },
-    });
-
-    if (videoResponse.statusCode !== 200) {
-      throw new Error(`Failed to download video: ${videoResponse.statusCode}`);
-    }
-
-    const videoBuffer = Buffer.from(videoResponse.body);
-
-    // Check file size (16MB limit for Whisper)
-    const sizeMB = videoBuffer.length / (1024 * 1024);
-    if (sizeMB > 16) {
-      throw new Error(`Video file too large (${sizeMB.toFixed(1)}MB). Maximum is 16MB.`);
-    }
-
-    // Call Whisper API directly with the video buffer as mp4
-    // This avoids the S3 round-trip and content-type detection issues
-    const { ENV } = await import("./_core/env");
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
+    const videoBuffer = Buffer.from(videoResponse.body);
+    const rawVideoSizeMB = videoBuffer.length / (1024 * 1024);
+    if (rawVideoSizeMB > 200) {
+      throw new Error(
+        `Video download too large (${rawVideoSizeMB.toFixed(1)}MB). Maximum is 200MB.`
+      );
+    }
+
+    const audioBuffer = await new Promise<Buffer>(async (resolve, reject) => {
+      const { spawn } = await import("node:child_process");
+      const chunks: Buffer[] = [];
+      const ffmpeg = spawn("ffmpeg", [
+        "-i",
+        "pipe:0",
+        "-vn",
+        "-acodec",
+        "libmp3lame",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-b:a",
+        "32k",
+        "-f",
+        "mp3",
+        "pipe:1",
+      ]);
+      ffmpeg.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      ffmpeg.stdout.on("end", () => resolve(Buffer.concat(chunks)));
+      ffmpeg.stderr.on("data", () => {}); // suppress ffmpeg logs
+      ffmpeg.on("error", reject);
+      ffmpeg.stdin.end(videoBuffer);
+    });
+
+    const audioSizeMB = audioBuffer.length / (1024 * 1024);
+    if (audioSizeMB > 25) {
+      throw new Error("Reel too long to transcribe. Maximum 25 minutes.");
+    }
+
     const formData = new FormData();
-    const audioBlob = new Blob([new Uint8Array(videoBuffer)], { type: "video/mp4" });
-    formData.append("file", audioBlob, `${reel.shortcode}.mp4`);
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
+      type: "audio/mpeg",
+    });
+    formData.append("file", audioBlob, `${reel.shortcode}.mp3`);
     formData.append("model", "whisper-1");
     formData.append("response_format", "verbose_json");
-    formData.append("prompt", "Transcribe this Instagram Reel video. Include all spoken words.");
+    formData.append("prompt", "Instagram Reel transcript:");
     formData.append("language", "en");
+    formData.append("temperature", "0");
 
-    const baseUrl = "https://api.openai.com/";
     const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
 
     const whisperResponse = await fetch(whisperUrl, {
@@ -3187,6 +3242,10 @@ async function runTranscription(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[runTranscription] ${message}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
     await updateTranscription(transcriptionId, {
       status: "failed",
       errorMessage: message,
