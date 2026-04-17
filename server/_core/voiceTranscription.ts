@@ -25,8 +25,6 @@
  * });
  * ```
  */
-import { ENV } from "./env";
-
 export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
   language?: string; // Optional: specify language code (e.g., "en", "es", "zh")
@@ -125,14 +123,10 @@ export async function transcribeAudio(
     formData.append("file", audioBlob, filename);
     
     formData.append("model", "whisper-1");
+    formData.append("temperature", "0");
     formData.append("response_format", "verbose_json");
     
-    // Add prompt - use custom prompt if provided, otherwise generate based on language
-    const prompt = options.prompt || (
-      options.language 
-        ? `Transcribe the user's voice to text, the user's working language is ${getLanguageName(options.language)}`
-        : "Transcribe the user's voice to text"
-    );
+    const prompt = options.prompt || "Instagram Reel transcript:";
     formData.append("prompt", prompt);
 
     // Step 4: Call the transcription service
@@ -194,35 +188,6 @@ function getFileExtension(mimeType: string): string {
   };
   
   return mimeToExt[mimeType] || 'audio';
-}
-
-/**
- * Helper function to get full language name from ISO code
- */
-function getLanguageName(langCode: string): string {
-  const langMap: Record<string, string> = {
-    'en': 'English',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'ru': 'Russian',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'zh': 'Chinese',
-    'ar': 'Arabic',
-    'hi': 'Hindi',
-    'nl': 'Dutch',
-    'pl': 'Polish',
-    'tr': 'Turkish',
-    'sv': 'Swedish',
-    'da': 'Danish',
-    'no': 'Norwegian',
-    'fi': 'Finnish',
-  };
-  
-  return langMap[langCode] || langCode;
 }
 
 /**
