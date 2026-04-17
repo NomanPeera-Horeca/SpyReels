@@ -1452,32 +1452,47 @@ The hook MUST be 7-10 words. Count them.`
           });
         }
         await incrementUsage(ctx.user.id, "transcribeCount");
-        let videoUrl = input.videoUrl;
-
-        if (!videoUrl) {
-          const freshData = await fetchReelByShortcode(input.shortcode);
-          if (!freshData?.videoUrl) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Could not retrieve video URL for this reel.",
-            });
-          }
-          videoUrl = freshData.videoUrl;
+        // Always fetch fresh URL to avoid expired Instagram video URLs
+        const freshData = await fetchReelByShortcode(input.shortcode);
+        if (!freshData?.videoUrl) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not retrieve video URL for this reel.",
+          });
         }
+        let videoUrl = freshData.videoUrl;
 
         // Download and transcribe the video
         const { gotScraping } = await import("got-scraping");
-        const videoResponse = await gotScraping({
-          url: videoUrl,
-          responseType: "buffer",
-          headerGeneratorOptions: {
-            browsers: [{ name: "chrome", minVersion: 120 }],
-            operatingSystems: ["windows"],
-          },
-        });
-
-        if (videoResponse.statusCode !== 200) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to download video" });
+        let videoResponse;
+        let lastError: Error | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            videoResponse = await gotScraping({
+              url: videoUrl,
+              responseType: "buffer",
+              timeout: { request: 30000 },
+              headerGeneratorOptions: {
+                browsers: [{ name: "chrome", minVersion: 120 }],
+                operatingSystems: ["windows"],
+              },
+            });
+            if (videoResponse.statusCode === 200) break;
+            // If URL expired, fetch fresh URL and retry
+            if (videoResponse.statusCode === 403 || videoResponse.statusCode === 404) {
+              const freshData = await fetchReelByShortcode(input.shortcode);
+              if (freshData?.videoUrl) videoUrl = freshData.videoUrl;
+            }
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+            if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+          }
+        }
+        if (!videoResponse || videoResponse.statusCode !== 200) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to download video after 3 attempts. ${lastError?.message || ""}`.trim()
+          });
         }
 
         const videoBuffer = Buffer.from(videoResponse.body);
@@ -1496,8 +1511,9 @@ The hook MUST be 7-10 words. Count them.`
         formData.append("file", audioBlob, `${input.shortcode}.mp4`);
         formData.append("model", "whisper-1");
         formData.append("response_format", "verbose_json");
-        formData.append("prompt", "Transcribe this Instagram Reel video.");
+        formData.append("prompt", "Instagram Reel transcript:");
         formData.append("language", "en");
+        formData.append("temperature", "0");
 
         const baseUrl = "https://api.openai.com/";
         const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
