@@ -119,6 +119,63 @@ export default function SearchReels() {
   const [transcripts, setTranscripts] = useState<Record<string, { text: string; segments: Segment[] }>>({});
   const [transcribing, setTranscribing] = useState<Record<string, boolean>>({});
 
+  const intelligence = useMemo(() => {
+    if (searchType !== "handle" || results.length === 0) return null;
+
+    // Average views, likes, comments
+    const avgViews = Math.round(results.reduce((sum, r) => sum + r.viewCount, 0) / results.length);
+    const avgLikes = Math.round(results.reduce((sum, r) => sum + r.likeCount, 0) / results.length);
+    const avgComments = Math.round(results.reduce((sum, r) => sum + r.commentCount, 0) / results.length);
+
+    // Engagement rate
+    const engagementRate = avgViews > 0 ? ((avgLikes + avgComments) / avgViews * 100).toFixed(2) : "0";
+
+    // Posting frequency - reels per week
+    const dates = results.map(r => new Date(r.postedAt)).sort((a, b) => a.getTime() - b.getTime());
+    const daySpan = dates.length > 1 ? (dates[dates.length - 1].getTime() - dates[0].getTime()) / (1000 * 60 * 60 * 24) : 30;
+    const reelsPerWeek = daySpan > 0 ? ((results.length / daySpan) * 7).toFixed(1) : "N/A";
+
+    // Best day to post - from top 5 reels by views
+    const top5 = [...results].sort((a, b) => b.viewCount - a.viewCount).slice(0, 5);
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayCounts: Record<number, number> = {};
+    top5.forEach(r => {
+      const day = new Date(r.postedAt).getDay();
+      dayCounts[day] = (dayCounts[day] || 0) + 1;
+    });
+    const bestDayNum = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const bestDay = bestDayNum !== undefined ? days[Number(bestDayNum)] : "N/A";
+
+    // Best time to post - from top 5 reels
+    const hourCounts: Record<number, number> = {};
+    top5.forEach(r => {
+      const hour = new Date(r.postedAt).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+    const bestHourNum = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const bestHour = bestHourNum !== undefined ?
+      (Number(bestHourNum) === 0 ? "12am" : Number(bestHourNum) < 12 ? `${bestHourNum}am` : Number(bestHourNum) === 12 ? "12pm" : `${Number(bestHourNum) - 12}pm`)
+      : "N/A";
+
+    // Short vs long performance
+    const shortReels = results.filter(r => r.duration <= 30);
+    const longReels = results.filter(r => r.duration > 30);
+    const avgShortViews = shortReels.length > 0 ? Math.round(shortReels.reduce((sum, r) => sum + r.viewCount, 0) / shortReels.length) : 0;
+    const avgLongViews = longReels.length > 0 ? Math.round(longReels.reduce((sum, r) => sum + r.viewCount, 0) / longReels.length) : 0;
+    const bestFormat = shortReels.length === 0 ? "Long (30s+)" : longReels.length === 0 ? "Short (under 30s)" : avgShortViews > avgLongViews ? "Short (under 30s)" : "Long (30s+)";
+
+    // View velocity - compare newest 3 vs oldest 3
+    const sorted = [...results].sort((a, b) => new Date(a.postedAt).getTime() - new Date(b.postedAt).getTime());
+    const oldest3 = sorted.slice(0, 3);
+    const newest3 = sorted.slice(-3);
+    const avgOldViews = Math.round(oldest3.reduce((sum, r) => sum + r.viewCount, 0) / oldest3.length);
+    const avgNewViews = Math.round(newest3.reduce((sum, r) => sum + r.viewCount, 0) / newest3.length);
+    const trend = avgNewViews > avgOldViews * 1.1 ? "Growing" : avgNewViews < avgOldViews * 0.9 ? "Declining" : "Stable";
+    const trendColor = trend === "Growing" ? "text-green-400" : trend === "Declining" ? "text-red-400" : "text-yellow-400";
+
+    return { avgViews, avgLikes, avgComments, engagementRate, reelsPerWeek, bestDay, bestHour, bestFormat, trend, trendColor };
+  }, [results, searchType]);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
@@ -699,6 +756,52 @@ export default function SearchReels() {
                 </p>
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Account Intelligence Panel */}
+      {searchType === "handle" && intelligence && results.length > 0 && (
+        <Card className="border-border/50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <CardContent className="py-4">
+            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+              <span>🧠</span>
+              <span>Account Intelligence</span>
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{formatNumber(intelligence.avgViews)}</p>
+                <p className="text-[10px] text-muted-foreground">Avg Views / Reel</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{intelligence.engagementRate}%</p>
+                <p className="text-[10px] text-muted-foreground">Engagement Rate</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{intelligence.reelsPerWeek}</p>
+                <p className="text-[10px] text-muted-foreground">Reels / Week</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className={`text-lg font-bold ${intelligence.trendColor}`}>{intelligence.trend}</p>
+                <p className="text-[10px] text-muted-foreground">View Trend</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{intelligence.bestDay}</p>
+                <p className="text-[10px] text-muted-foreground">Best Day to Post</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{intelligence.bestHour}</p>
+                <p className="text-[10px] text-muted-foreground">Best Time to Post</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{intelligence.bestFormat}</p>
+                <p className="text-[10px] text-muted-foreground">Best Format</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3 text-center">
+                <p className="text-lg font-bold text-foreground">{formatNumber(intelligence.avgLikes)}</p>
+                <p className="text-[10px] text-muted-foreground">Avg Likes / Reel</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
