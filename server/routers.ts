@@ -95,6 +95,10 @@ import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
 
+// Transcription queue - max 1 concurrent transcription to prevent memory exhaustion
+let activeTranscriptions = 0;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 1;
+
 /**
  * Parse a date string safely to avoid timezone shift.
  * When given a date-only string like "2025-03-10", new Date() creates UTC midnight
@@ -1452,6 +1456,11 @@ The hook MUST be 7-10 words. Count them.`
           });
         }
         await incrementUsage(ctx.user.id, "transcribeCount");
+        while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+        activeTranscriptions++;
+        try {
         // Always fetch fresh URL to avoid expired Instagram video URLs
         const freshData = await fetchReelByShortcode(input.shortcode);
         if (!freshData?.videoUrl) {
@@ -1495,20 +1504,41 @@ The hook MUST be 7-10 words. Count them.`
           });
         }
 
-        const videoBuffer = Buffer.from(videoResponse.body);
-        const sizeMB = videoBuffer.length / (1024 * 1024);
-        if (sizeMB > 16) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Video too large (${sizeMB.toFixed(1)}MB). Max 16MB.` });
-        }
-
-        const { ENV } = await import("./_core/env");
         if (!process.env.OPENAI_API_KEY) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Transcription service not configured" });
         }
 
+        // Extract audio only using ffmpeg - reduces 50MB video to 1MB audio
+        // This is how Descript and other professional tools handle video transcription
+        const videoBuffer = Buffer.from(videoResponse.body);
+        const audioBuffer = await new Promise<Buffer>(async (resolve, reject) => {
+          const { spawn } = await import("node:child_process");
+          const chunks: Buffer[] = [];
+          const ffmpeg = spawn("ffmpeg", [
+            "-i", "pipe:0",           // read from stdin
+            "-vn",                     // no video
+            "-acodec", "libmp3lame",   // encode as mp3
+            "-ar", "16000",            // 16kHz sample rate (optimal for Whisper)
+            "-ac", "1",               // mono audio
+            "-b:a", "32k",            // low bitrate sufficient for speech
+            "-f", "mp3",              // output format
+            "pipe:1"                  // write to stdout
+          ]);
+          ffmpeg.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+          ffmpeg.stdout.on("end", () => resolve(Buffer.concat(chunks)));
+          ffmpeg.stderr.on("data", () => {}); // suppress ffmpeg logs
+          ffmpeg.on("error", reject);
+          ffmpeg.stdin.end(videoBuffer);
+        });
+
+        const sizeMB = audioBuffer.length / (1024 * 1024);
+        if (sizeMB > 16) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Audio too large (${sizeMB.toFixed(1)}MB).` });
+        }
+
         const formData = new FormData();
-        const audioBlob = new Blob([new Uint8Array(videoBuffer)], { type: "video/mp4" });
-        formData.append("file", audioBlob, `${input.shortcode}.mp4`);
+        const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: "audio/mpeg" });
+        formData.append("file", audioBlob, `${input.shortcode}.mp3`);
         formData.append("model", "whisper-1");
         formData.append("response_format", "verbose_json");
         formData.append("prompt", "Instagram Reel transcript:");
@@ -1533,10 +1563,13 @@ The hook MUST be 7-10 words. Count them.`
         }
 
         const result = await whisperResponse.json() as { text: string; segments: any[] };
-        return {
-          transcript: result.text,
-          segments: (result.segments || []).map((s: any) => ({ start: s.start, end: s.end, text: s.text?.trim() })),
-        };
+          return {
+            transcript: result.text,
+            segments: result.segments,
+          };
+        } finally {
+          activeTranscriptions--;
+        }
       }),
 
     /** Re-create a script from a search result reel transcript */
