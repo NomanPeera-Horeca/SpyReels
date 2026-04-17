@@ -61,3 +61,33 @@ Keep three variants: teaching, selling, storytelling. Under each, save two worke
 Same template, five hooks, pick two to film. Hooks change outcomes more than minor word tweaks in the body. If you only write one hook, you are guessing. If you write five, you are choosing.
 
 SpyReels pairs well with an instagram reels script template workflow because it helps you start from proven structures in your niche instead of inventing structure from zero every time. You can study winners, extract patterns, and then run your template with better inputs. Templates make you fast. SpyReels makes your inputs smarter.
+
+## Frequently Asked Questions
+
+### Why use an instagram reels script template at all?
+
+Because blank pages waste your week. A good **instagram reels script template** forces you to answer who, why, proof, payoff, and CTA before you ramble.
+
+### What is the simplest template that still works?
+
+Hook, stakes, proof, payoff, CTA. One sentence per block first. Expand after the spine is true.
+
+### Will I sound generic?
+
+Only if you skip proof and voice. Templates handle shape. You bring specifics only you know.
+
+### How do I adapt the template for a thirty second Reel?
+
+Cut beats, not clarity. One proof moment is often enough. Keep one CTA.
+
+### Can I break the template?
+
+Yes, once your baseline is strong. Break it for news, raw story, or suspense formats.
+
+### Does SpyReels help with templates?
+
+**SpyReels** helps you fill the template with better inputs by showing what actually won in your niche. You still write the lines.
+
+### Generator first or template first?
+
+Template first if you are still finding your voice. Generator as assistant after you know what “you” sounds like.

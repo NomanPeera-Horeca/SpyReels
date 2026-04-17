@@ -61,3 +61,33 @@ Take a viral script shape and rewrite it under constraints: half the words, no a
 Set a timer. Thirty minutes of tape review beats three hours of half-attention scrolling. Stop when you have one actionable change for your next post. Research addiction feels productive but it is procrastination wearing a lab coat.
 
 SpyReels is the tool layer for people who reverse engineer viral instagram reels as a habit: pull competitor Reels, focus on what actually performed, and move from pattern recognition to a script you can film. You still supply the judgment and the voice. SpyReels makes the tape-review step faster so you publish more informed work.
+
+## Frequently Asked Questions
+
+### What does it mean to reverse engineer viral instagram reels?
+
+It means you break a Reel into beats: hook, tension, proof, payoff, CTA. You study the order and the job each beat does. You do not copy someone’s story. When you **reverse engineer viral instagram reels** right, you walk out with a map you can reuse.
+
+### Do I need a transcript?
+
+It helps. Your ears lie. Text shows short sentences and repeated phrases. If you cannot get a transcript, rewatch with pause and timestamp the cuts.
+
+### How long should a reverse engineering session take?
+
+Set a timer for thirty minutes. One Reel, one lesson. More time often becomes scrolling.
+
+### Is it legal?
+
+Public content is public. Learn structure. Do not lift unique phrasing or personal stories.
+
+### I keep collecting screenshots but never post. Fix?
+
+End every session with one filmed test next week. No test, no point.
+
+### Can SpyReels speed this up?
+
+Yes. **SpyReels** pulls competitor Reels and performance context so you spend less time hunting and more time mapping beats.
+
+### Mega accounts only: bad idea?
+
+Usually yes. Their views can hide weak hooks. Mix in smaller winners.

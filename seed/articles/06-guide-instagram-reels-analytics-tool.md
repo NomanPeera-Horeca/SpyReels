@@ -53,3 +53,33 @@ Do a two-week trial like you mean it: log in three times, run your weekly review
 If you never write down what you learned, you will re-learn the same lesson every month. Keep a single doc: competitor wins, your wins, your losses, and the next three tests. The tool surfaces signal. Your notes turn signal into skill.
 
 SpyReels is built as an instagram reels analytics tool in the sense creators actually need: competitor intelligence tied to Reels performance signals, faster sorting than scrolling a profile, and a path from “I see what worked” to “I can write what to film.” You still make the creative calls. SpyReels helps you stop guessing in the dark.
+
+## Frequently Asked Questions
+
+### Do I need an instagram reels analytics tool if Instagram shows insights?
+
+App insights help your own posts. They do not sort a competitor’s whole Reel history by performance. A real **instagram reels analytics tool** workflow answers: what patterns are winning in your market, not just what you posted last Tuesday.
+
+### What should I track weekly?
+
+Hook clarity, proof, pacing, CTA fit, plus saves and comments that show intent. Pick one business number too: leads, sales, or DMs. If your **instagram reels analytics tool** session ends with no next test, you wasted the login.
+
+### Can a tool guarantee viral?
+
+No. Walk away from that sales page. Tools surface signals. You still write and film.
+
+### Why do my charts look good but growth feels flat?
+
+You might be moving vanity metrics. Views can go up while trust goes nowhere. Tie each chart back to one creative change you will ship next week.
+
+### Is competitor data even legal?
+
+Public Reels are public. Study patterns, do not steal lines or private data. If a tool pushes shady scraping, skip it.
+
+### How does SpyReels compare for this job?
+
+**SpyReels** focuses on Reels competitor intel and turning winners into scripts. It is not a generic social scheduler. Use it when you want speed from signal to script.
+
+### Solo vs agency: what changes?
+
+Solo needs speed and a simple weekly review. Agency needs repeatable exports and the same report shape per client. Pick a tool your team will actually open on Mondays.

@@ -61,3 +61,33 @@ Post twenty Reels in thirty days, minimum. Same niche sentence every time. Each 
 Under ten thousand followers, the scoreboard is skill and learning speed, not fame. If you compare your week three to someone’s year three, you will feel behind every time. Compare this week to last week: clearer hook, better proof, stronger CTA, faster filming.
 
 SpyReels helps creators who are figuring out how to grow instagram with reels under 10k followers by making competitor research and script structure faster. You can see what is winning in your niche, learn the shape of those winners, and turn patterns into scripts you can film this week. Growth still takes reps. SpyReels makes the reps smarter.
+
+## Frequently Asked Questions
+
+### Can you actually grow with Reels under 10K followers?
+
+Yes, but you play a different game. You need tight hooks, proof, and a clear who. **How to grow instagram with reels under 10k followers** is mostly about clarity and reps, not hacks.
+
+### How many times a week should I post?
+
+Post a cadence you will not quit. Three solid Reels beats seven one week and zero the next. Consistency trains you and the audience.
+
+### Do I need pro gear?
+
+No. You need a readable face or screen, decent audio, and a script that respects the viewer’s time. Proof beats polish at small size.
+
+### Why do I get views but not followers?
+
+Your Reel might entertain strangers without telling them why they should stick around. Say who you help, show one proof point, and give one simple follow reason.
+
+### Should I niche down harder?
+
+Usually yes. If your Reel could belong to ten accounts, you are too broad. Tighten the first line until it only fits you and your buyer.
+
+### Where does SpyReels help here?
+
+**SpyReels** speeds up learning what works in your niche so your reps are smarter, not random. You still film. It helps you pick better patterns faster.
+
+### Is buying followers a shortcut?
+
+No. It poisons your data and your trust. Do not.
