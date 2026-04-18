@@ -1471,102 +1471,40 @@ The hook MUST be 7-10 words. Count them.`
         }
         let videoUrl = freshData.videoUrl;
 
-        // Download and transcribe the video
-        const { gotScraping } = await import("got-scraping");
-        let videoResponse;
-        let lastError: Error | null = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            videoResponse = await gotScraping({
-              url: videoUrl,
-              responseType: "buffer",
-              timeout: { request: 30000 },
-              headerGeneratorOptions: {
-                browsers: [{ name: "chrome", minVersion: 120 }],
-                operatingSystems: ["windows"],
-              },
-            });
-            if (videoResponse.statusCode === 200) break;
-            // If URL expired, fetch fresh URL and retry
-            if (videoResponse.statusCode === 403 || videoResponse.statusCode === 404) {
-              const freshData = await fetchReelByShortcode(input.shortcode);
-              if (freshData?.videoUrl) videoUrl = freshData.videoUrl;
-            }
-          } catch (err) {
-            lastError = err instanceof Error ? err : new Error(String(err));
-            if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+        // Call the new Deepgram-based transcription pipeline
+        // This handles: download + retry + ffmpeg + Deepgram Nova-3 + classify
+        const { transcribeReel } = await import("./services/transcribeReel.js");
+        const result = await transcribeReel({
+          videoUrl,
+          shortcode: input.shortcode,
+        });
+
+        if (!result.success) {
+          // No-speech is a valid outcome (music/visual-only reel), not an error.
+          // Return empty transcript/segments so the existing frontend fallback
+          // ("No speech detected") renders cleanly.
+          if (result.errorCode === "NO_SPEECH_DETECTED") {
+            return {
+              transcript: "",
+              segments: [],
+            };
           }
-        }
-        if (!videoResponse || videoResponse.statusCode !== 200) {
+          // Map remaining error codes to appropriate TRPC error codes
+          const code = result.errorCode === "REEL_TOO_LONG" ? "BAD_REQUEST"
+            : result.errorCode === "VIDEO_TOO_LARGE" ? "BAD_REQUEST"
+            : result.errorCode === "DEEPGRAM_RATE_LIMIT" ? "TOO_MANY_REQUESTS"
+            : "INTERNAL_SERVER_ERROR";
           throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: `Failed to download video after 3 attempts. ${lastError?.message || ""}`.trim()
+            code,
+            message: result.userMessage,
+            cause: { errorCode: result.errorCode },
           });
         }
 
-        if (!process.env.OPENAI_API_KEY) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Transcription service not configured" });
-        }
-
-        // Extract audio only using ffmpeg - reduces 50MB video to 1MB audio
-        // This is how Descript and other professional tools handle video transcription
-        const videoBuffer = Buffer.from(videoResponse.body);
-        const audioBuffer = await new Promise<Buffer>(async (resolve, reject) => {
-          const { spawn } = await import("node:child_process");
-          const chunks: Buffer[] = [];
-          const ffmpeg = spawn("ffmpeg", [
-            "-i", "pipe:0",           // read from stdin
-            "-vn",                     // no video
-            "-acodec", "libmp3lame",   // encode as mp3
-            "-ar", "16000",            // 16kHz sample rate (optimal for Whisper)
-            "-ac", "1",               // mono audio
-            "-b:a", "32k",            // low bitrate sufficient for speech
-            "-f", "mp3",              // output format
-            "pipe:1"                  // write to stdout
-          ]);
-          ffmpeg.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-          ffmpeg.stdout.on("end", () => resolve(Buffer.concat(chunks)));
-          ffmpeg.stderr.on("data", () => {}); // suppress ffmpeg logs
-          ffmpeg.on("error", reject);
-          ffmpeg.stdin.end(videoBuffer);
-        });
-
-        const sizeMB = audioBuffer.length / (1024 * 1024);
-        if (sizeMB > 16) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Audio too large (${sizeMB.toFixed(1)}MB).` });
-        }
-
-        const formData = new FormData();
-        const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: "audio/mpeg" });
-        formData.append("file", audioBlob, `${input.shortcode}.mp3`);
-        formData.append("model", "whisper-1");
-        formData.append("response_format", "verbose_json");
-        formData.append("prompt", "Instagram Reel transcript:");
-        formData.append("language", "en");
-        formData.append("temperature", "0");
-
-        const baseUrl = "https://api.openai.com/";
-        const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
-
-        const whisperResponse = await fetch(whisperUrl, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Accept-Encoding": "identity",
-          },
-          body: formData,
-        });
-
-        if (!whisperResponse.ok) {
-          const errorText = await whisperResponse.text().catch(() => "");
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Transcription failed: ${errorText}` });
-        }
-
-        const result = await whisperResponse.json() as { text: string; segments: any[] };
-          return {
-            transcript: result.text,
-            segments: result.segments,
-          };
+        return {
+          transcript: result.transcript,
+          segments: result.segments,
+        };
         } finally {
           activeTranscriptions--;
         }
