@@ -3030,146 +3030,38 @@ async function runTranscription(
     }
     let videoUrl = initialFresh.videoUrl;
 
-    const { gotScraping } = await import("got-scraping");
-    let videoResponse:
-      | { statusCode: number; body: Buffer }
-      | undefined;
-    let lastError: Error | null = null;
-    download: for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        videoResponse = await gotScraping({
-          url: videoUrl,
-          responseType: "buffer",
-          timeout: { request: 30000 },
-          headerGeneratorOptions: {
-            browsers: [{ name: "chrome", minVersion: 120 }],
-            operatingSystems: ["windows"],
-          },
+    // Call the new Deepgram-based transcription pipeline
+    const { transcribeReel } = await import("./services/transcribeReel.js");
+    const result = await transcribeReel({
+      videoUrl,
+      shortcode: reel.shortcode,
+    });
+
+    if (!result.success) {
+      // No-speech is a valid outcome (music/visual-only reel).
+      // Save empty transcript + "no speech" marker so the UI can
+      // render the appropriate state.
+      if (result.errorCode === "NO_SPEECH_DETECTED") {
+        await updateTranscription(transcriptionId, {
+          transcript: "",
+          segments: [],
+          hookAnalysis: "",
+          status: "completed",
         });
-        if (videoResponse.statusCode === 200) {
-          break download;
-        }
-        if (videoResponse.statusCode === 403 || videoResponse.statusCode === 404) {
-          const freshData = await fetchReelByShortcode(reel.shortcode);
-          if (freshData?.videoUrl) {
-            videoUrl = freshData.videoUrl;
-          }
-        }
-        lastError = new Error(
-          `Failed to download video: HTTP ${videoResponse.statusCode}`
-        );
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
+        return;
       }
-      if (attempt < 3) {
-        await new Promise((r) =>
-          setTimeout(r, 1000 * 2 ** (attempt - 1))
-        );
-      }
-    }
-    if (!videoResponse || videoResponse.statusCode !== 200) {
-      throw new Error(
-        `Failed to download video after 3 attempts. ${lastError?.message || ""}`.trim()
-      );
+      // All other errors: mark the job as failed with the friendly message
+      throw new Error(result.userMessage);
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
-    }
-
-    const videoBuffer = Buffer.from(videoResponse.body);
-    const rawVideoSizeMB = videoBuffer.length / (1024 * 1024);
-    if (rawVideoSizeMB > 200) {
-      throw new Error(
-        `Video download too large (${rawVideoSizeMB.toFixed(1)}MB). Maximum is 200MB.`
-      );
-    }
-
-    const audioBuffer = await new Promise<Buffer>(async (resolve, reject) => {
-      const { spawn } = await import("node:child_process");
-      const chunks: Buffer[] = [];
-      const ffmpeg = spawn("ffmpeg", [
-        "-i",
-        "pipe:0",
-        "-vn",
-        "-acodec",
-        "libmp3lame",
-        "-ar",
-        "16000",
-        "-ac",
-        "1",
-        "-b:a",
-        "32k",
-        "-f",
-        "mp3",
-        "pipe:1",
-      ]);
-      ffmpeg.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-      ffmpeg.stdout.on("end", () => resolve(Buffer.concat(chunks)));
-      ffmpeg.stderr.on("data", () => {}); // suppress ffmpeg logs
-      ffmpeg.on("error", reject);
-      ffmpeg.stdin.end(videoBuffer);
-    });
-
-    const audioSizeMB = audioBuffer.length / (1024 * 1024);
-    if (audioSizeMB > 25) {
-      throw new Error("Reel too long to transcribe. Maximum 25 minutes.");
-    }
-
-    const formData = new FormData();
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
-      type: "audio/mpeg",
-    });
-    formData.append("file", audioBlob, `${reel.shortcode}.mp3`);
-    formData.append("model", "whisper-1");
-    formData.append("response_format", "verbose_json");
-    formData.append("prompt", "Instagram Reel transcript:");
-    formData.append("language", "en");
-    formData.append("temperature", "0");
-
-    const whisperUrl = "https://api.openai.com/v1/audio/transcriptions";
-
-    const whisperResponse = await fetch(whisperUrl, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Accept-Encoding": "identity",
-      },
-      body: formData,
-    });
-
-    if (!whisperResponse.ok) {
-      const errorText = await whisperResponse.text().catch(() => "");
-      throw new Error(`Whisper API error ${whisperResponse.status}: ${errorText}`);
-    }
-
-    const whisperResult = await whisperResponse.json() as {
-      text: string;
-      language: string;
-      duration: number;
-      segments: Array<{ id: number; start: number; end: number; text: string }>;
-    };
-
-    const transcript = whisperResult.text;
-
-    if (!transcript || transcript.trim().length === 0) {
-      throw new Error(
-        "Whisper returned empty transcript. The video may have no speech or audio."
-      );
-    }
-
-    // Store segments for timestamped display
-    const segments = (whisperResult.segments || []).map((s) => ({
-      start: s.start,
-      end: s.end,
-      text: s.text.trim(),
-    }));
+    const transcript = result.transcript;
+    const segments = result.segments;
 
     const hookAnalysis = await analyzeHook(
       transcript,
       reel.caption || "",
       reel.thumbnailUrl || "",
-      whisperResult.segments
+      segments as any
     );
 
     await updateTranscription(transcriptionId, {
