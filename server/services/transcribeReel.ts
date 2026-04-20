@@ -189,7 +189,20 @@ async function extractAudio(
   });
 }
 
-export async function transcribeReel(input: {
+// Error codes that represent transient infrastructure issues (network blips,
+// Deepgram 5xx/429, timeouts, and unclassified system errors). Retrying these
+// once with a short delay usually succeeds. Everything else (NO_SPEECH_DETECTED,
+// VIDEO_TOO_LARGE, REEL_TOO_LONG, AUDIO_EXTRACTION_FAILED) is a permanent
+// outcome where retrying won't change the answer.
+const TRANSIENT_ERROR_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  "NETWORK_ERROR",
+  "TIMEOUT",
+  "DEEPGRAM_RATE_LIMIT",
+  "DEEPGRAM_SERVICE_DOWN",
+  "UNKNOWN",
+]);
+
+async function attemptTranscription(input: {
   videoUrl: string;
   shortcode: string;
 }): Promise<TranscriptionResult> {
@@ -310,4 +323,35 @@ export async function transcribeReel(input: {
       err instanceof Error ? err.message : String(err)
     );
   }
+}
+
+/**
+ * Public entry point. Runs attemptTranscription once; on transient failure
+ * (network/timeout/Deepgram 5xx/429/UNKNOWN), waits 2s and retries exactly
+ * once. Non-transient failures (no speech, too large, too long, bad audio)
+ * return immediately. Always returns a TranscriptionResult — never throws.
+ */
+export async function transcribeReel(input: {
+  videoUrl: string;
+  shortcode: string;
+}): Promise<TranscriptionResult> {
+  const result = await attemptTranscription(input);
+  if (result.success) return result;
+
+  if (!TRANSIENT_ERROR_CODES.has(result.errorCode)) {
+    return result;
+  }
+
+  console.log(
+    `[transcribe] retry_attempt reelId=${input.shortcode} originalError=${result.errorCode}`
+  );
+  await new Promise((r) => setTimeout(r, 2000));
+
+  const retryResult = await attemptTranscription(input);
+  if (!retryResult.success) {
+    console.log(
+      `[transcribe] retry_failed reelId=${input.shortcode} originalError=${result.errorCode} retryError=${retryResult.errorCode}`
+    );
+  }
+  return retryResult;
 }
