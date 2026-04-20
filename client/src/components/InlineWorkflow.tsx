@@ -318,6 +318,11 @@ export function InlineWorkflow({
   const t = transcriptionQuery.data;
   const segments: Segment[] = (t?.segments as any) || [];
   const transcript = t?.transcript || "";
+  const transcriptionStatus = t?.status;
+  const isTranscribing =
+    transcriptionStatus === "processing" ||
+    transcriptionStatus === "pending" ||
+    (hasTranscription && transcriptionQuery.isLoading);
 
   const script = scriptQuery.data;
   const generatedScript = script?.generatedScript || "";
@@ -458,13 +463,30 @@ export function InlineWorkflow({
 
       <div className="p-4">
         {/* ── Section 1: Transcript ── */}
-        <TranscriptSection
-          segments={segments}
-          transcript={transcript}
-          onCopyTranscript={handleCopyTranscript}
-          onCopyTimestamped={handleCopyTimestamped}
-          onExportSRT={handleExportSRT}
-        />
+        {isTranscribing ? (
+          <div className="flex flex-col items-center gap-3 py-8 mb-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Transcribing...</p>
+          </div>
+        ) : transcriptionStatus === "failed" ? (
+          <div className="flex flex-col items-center gap-3 py-8 mb-4">
+            <p className="text-sm text-destructive">Transcription failed. Please retry.</p>
+          </div>
+        ) : !transcript && !segments.length && transcriptionStatus === "completed" ? (
+          <div className="flex flex-col items-center gap-3 py-8 mb-4">
+            <p className="text-sm text-muted-foreground text-center px-4">
+              Looks like this one&apos;s all vibes, no voice. Try a reel with narration to unlock scripts and hooks.
+            </p>
+          </div>
+        ) : (
+          <TranscriptSection
+            segments={segments}
+            transcript={transcript}
+            onCopyTranscript={handleCopyTranscript}
+            onCopyTimestamped={handleCopyTimestamped}
+            onExportSRT={handleExportSRT}
+          />
+        )}
 
         <Separator className="my-4" />
 
