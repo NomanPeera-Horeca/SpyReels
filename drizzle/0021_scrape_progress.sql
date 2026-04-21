@@ -1,0 +1,5 @@
+ALTER TABLE scrape_jobs
+  ADD COLUMN currentStep VARCHAR(32) NOT NULL DEFAULT 'pending',
+  ADD COLUMN reelsFound INT NOT NULL DEFAULT 0,
+  ADD COLUMN estimatedTotal INT NOT NULL DEFAULT 30,
+  ADD COLUMN progressPercent INT NOT NULL DEFAULT 0;

@@ -88,10 +88,9 @@ export default function Home() {
 
   const startScrape = trpc.scrape.start.useMutation({
     onSuccess: data => {
-      toast.success("Scraping started!", {
-        description: `Job #${data.jobId} is now collecting reels for @${handle.replace(/^@/, "")}`,
-      });
-      setLocation(`/dashboard?jobId=${data.jobId}&from=research`);
+      // Route to the dedicated scraping progress page; the toast would be
+      // redundant on top of the full-page experience there.
+      setLocation(`/scraping?jobId=${data.jobId}`);
     },
     onError: error => {
       toast.error("Failed to start scraping", {

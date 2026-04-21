@@ -242,6 +242,7 @@ export const appRouter = router({
           handle: input.handle.replace(/^@/, "").trim(),
           timeframeDays: input.timeframeDays,
           status: "running",
+          currentStep: "connecting",
         });
 
         // Track usage
@@ -261,6 +262,29 @@ export const appRouter = router({
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
         return job;
+      }),
+
+    /**
+     * Lightweight progress poll used by the dedicated scraping UI. Returns
+     * just the fields needed for the multi-step view so we can hit this on
+     * a 1.5s interval without shipping the full job row every time.
+     */
+    progress: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return {
+          status: job.status,
+          currentStep: job.currentStep,
+          reelsFound: job.reelsFound,
+          estimatedTotal: job.estimatedTotal,
+          progressPercent: job.progressPercent,
+          errorMessage: job.errorMessage,
+          handle: job.handle,
+          timeframeDays: job.timeframeDays,
+        };
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -2867,9 +2891,43 @@ async function runScrapeJob(
   timeframeDays: number
 ): Promise<void> {
   try {
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(handle, timeframeDays, (count) => {
-      updateScrapeJob(jobId, { totalReels: count }).catch(() => {});
-    }, { maxReels: 500, timeoutMs: 5 * 60 * 1000 });
+    // Stage 1: connecting → about to call Instagram for the profile.
+    await updateScrapeJob(jobId, {
+      status: "running",
+      currentStep: "connecting",
+      progressPercent: 5,
+    });
+
+    // Stage 2: fetching_profile → scrapeReels will call fetchProfile as its
+    // first step; we can't peek inside the function, so we mark the stage at
+    // the boundary.
+    await updateScrapeJob(jobId, {
+      currentStep: "fetching_profile",
+      progressPercent: 15,
+    });
+
+    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
+      handle,
+      timeframeDays,
+      (count) => {
+        // Stage 3: pulling_reels → scales 20→80 against a visual baseline
+        // of 30 reels; caps at 80 so we always leave headroom for ranking.
+        updateScrapeJob(jobId, {
+          currentStep: "pulling_reels",
+          totalReels: count,
+          reelsFound: count,
+          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+        }).catch(() => {});
+      },
+      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+    );
+
+    // Stage 4: ranking → insert + finalize. Set before pic proxy so the UI
+    // has a visible "analyzing" beat even when the proxy work is quick.
+    await updateScrapeJob(jobId, {
+      currentStep: "ranking",
+      progressPercent: 85,
+    });
 
     // Proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
     let proxiedPicUrl = "";
@@ -2900,6 +2958,8 @@ async function runScrapeJob(
         totalReels: 0,
         followerCount,
         profilePicUrl: proxiedPicUrl || undefined,
+        currentStep: "complete",
+        progressPercent: 100,
       });
       return;
     }
@@ -2926,12 +2986,18 @@ async function runScrapeJob(
       totalReels: reelData.length,
       followerCount,
       profilePicUrl: proxiedPicUrl || undefined,
+      currentStep: "complete",
+      reelsFound: reelData.length,
+      progressPercent: 100,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    // Failure preserves the last progressPercent the UI saw — just flip the
+    // terminal flags so the client can show the error state.
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
+      currentStep: "failed",
     });
   }
 }
@@ -2943,9 +3009,33 @@ async function runResyncJob(
   daysSinceSync: number
 ): Promise<void> {
   try {
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(handle, daysSinceSync, (count) => {
-      updateScrapeJob(jobId, { totalReels: count }).catch(() => {});
-    }, { maxReels: 500, timeoutMs: 5 * 60 * 1000 });
+    await updateScrapeJob(jobId, {
+      currentStep: "connecting",
+      progressPercent: 5,
+    });
+    await updateScrapeJob(jobId, {
+      currentStep: "fetching_profile",
+      progressPercent: 15,
+    });
+
+    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
+      handle,
+      daysSinceSync,
+      (count) => {
+        updateScrapeJob(jobId, {
+          currentStep: "pulling_reels",
+          totalReels: count,
+          reelsFound: count,
+          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+        }).catch(() => {});
+      },
+      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+    );
+
+    await updateScrapeJob(jobId, {
+      currentStep: "ranking",
+      progressPercent: 85,
+    });
 
     // Proxy profile pic through S3 (refresh on each resync for freshness)
     let proxiedPicUrl = "";
@@ -3001,6 +3091,11 @@ async function runResyncJob(
       status: "completed",
       profilePicUrl: proxiedPicUrl || undefined,
     });
+    await updateScrapeJob(jobId, {
+      currentStep: "complete",
+      reelsFound: totalReels,
+      progressPercent: 100,
+    });
 
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
   } catch (error) {
@@ -3008,6 +3103,7 @@ async function runResyncJob(
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
+      currentStep: "failed",
     });
   }
 }

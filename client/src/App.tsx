@@ -7,6 +7,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import ScrapingProgress from "./pages/ScrapingProgress";
 import History from "./pages/History";
 import SavedReels from "./pages/SavedReels";
 import MyScripts from "./pages/MyScripts";
@@ -33,6 +34,7 @@ function DashboardRouter() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/research" component={Home} />
+        <Route path="/scraping" component={ScrapingProgress} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />

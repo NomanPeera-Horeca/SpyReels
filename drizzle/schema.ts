@@ -32,6 +32,13 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   followerCount: int("followerCount").default(0).notNull(),
   profilePicUrl: text("profilePicUrl"),
   errorMessage: text("errorMessage"),
+  // Fine-grained progress for the dedicated scraping UI. Values map to the
+  // 5 stages of the pipeline: pending → connecting → fetching_profile →
+  // pulling_reels → ranking → complete, with `failed` as a terminal error.
+  currentStep: varchar("currentStep", { length: 32 }).default("pending").notNull(),
+  reelsFound: int("reelsFound").default(0).notNull(),
+  estimatedTotal: int("estimatedTotal").default(30).notNull(),
+  progressPercent: int("progressPercent").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
