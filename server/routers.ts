@@ -95,9 +95,12 @@ import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
 
-// Transcription queue - max 1 concurrent transcription to prevent memory exhaustion
+// Transcription queue - cap concurrent transcriptions to prevent memory exhaustion
+// and to avoid cascading Instagram CDN rate-limits on batch kickoffs (e.g.
+// "Transcribe All" from a single Render IP). Used by search.transcribe AND
+// runTranscription (which backs both transcribe.start and collectedReels.transcribe).
 let activeTranscriptions = 0;
-const MAX_CONCURRENT_TRANSCRIPTIONS = 1;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 
 /**
  * Parse a date string safely to avoid timezone shift.
@@ -3020,6 +3023,14 @@ async function runTranscription(
     thumbnailUrl: string | null;
   }
 ): Promise<void> {
+  // Serialize with the same process-local semaphore that search.transcribe
+  // uses. Prevents cascading Instagram CDN rate-limits when batch kickoffs
+  // (e.g. "Transcribe All" on Saved Reels) fan out many reels in parallel
+  // from our single Render IP.
+  while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  activeTranscriptions++;
   try {
     // Always fetch fresh URL to avoid expired Instagram video URLs
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
@@ -3080,6 +3091,8 @@ async function runTranscription(
       status: "failed",
       errorMessage: message,
     });
+  } finally {
+    activeTranscriptions--;
   }
 }
 
