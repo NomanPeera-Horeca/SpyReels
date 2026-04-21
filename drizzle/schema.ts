@@ -1,4 +1,4 @@
-import { bigint, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -389,3 +389,123 @@ export const scriptIdeas = mysqlTable("script_ideas", {
 
 export type ScriptIdea = typeof scriptIdeas.$inferSelect;
 export type InsertScriptIdea = typeof scriptIdeas.$inferInsert;
+
+/* ────────────────────────────────────────────────────────────────────
+ * Featured Accounts
+ *
+ * A curated catalog of Instagram creators grouped by niche. Unlike the
+ * user-driven `scrape_jobs` flow, these accounts are scraped centrally
+ * and served read-only to every user. Tables:
+ *
+ *   niches                    ← top-level catalog, grouped into
+ *                                broader buckets (groupName)
+ *   featured_accounts         ← the creator accounts themselves
+ *   featured_account_niches   ← N:N junction (an account can sit in
+ *                                multiple niches, one marked primary)
+ *   featured_reels            ← top-N reels per account (rank 1-30)
+ * ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * Niche catalog — structured taxonomy used to browse featured accounts.
+ * `groupName` buckets niches into the 5 top-level tabs in the UI
+ * (business-money, creator-economy, lifestyle, personal-family,
+ * entertainment-culture). `iconName` is a lucide-react icon name.
+ */
+export const niches = mysqlTable("niches", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  groupName: varchar("groupName", { length: 32 }).notNull(),
+  iconName: varchar("iconName", { length: 32 }).notNull(),
+  description: text("description"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Niche = typeof niches.$inferSelect;
+export type InsertNiche = typeof niches.$inferInsert;
+
+/**
+ * Featured creator accounts. Scraped on two cadences:
+ *   - lastIncrementalScrape: cheap diff-style refresh
+ *   - lastFullScrape:         periodic deep rebuild of the top reels
+ */
+export const featuredAccounts = mysqlTable("featured_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  handle: varchar("handle", { length: 128 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 256 }),
+  followerCount: int("followerCount").default(0).notNull(),
+  avgEngagementRate: decimal("avgEngagementRate", { precision: 5, scale: 2 }).default("0.00").notNull(),
+  profilePicUrl: text("profilePicUrl"),
+  bio: text("bio"),
+  totalReelsEver: int("totalReelsEver").default(0).notNull(),
+  lastIncrementalScrape: timestamp("lastIncrementalScrape"),
+  lastFullScrape: timestamp("lastFullScrape"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FeaturedAccount = typeof featuredAccounts.$inferSelect;
+export type InsertFeaturedAccount = typeof featuredAccounts.$inferInsert;
+
+/**
+ * N:N join between featured_accounts and niches. `isPrimary` marks the
+ * canonical niche for the account (used for single-niche UI contexts).
+ * Composite PK on (accountId, nicheId) guarantees an account cannot be
+ * tagged with the same niche twice.
+ */
+export const featuredAccountNiches = mysqlTable(
+  "featured_account_niches",
+  {
+    accountId: int("accountId")
+      .notNull()
+      .references(() => featuredAccounts.id, { onDelete: "cascade" }),
+    nicheId: int("nicheId")
+      .notNull()
+      .references(() => niches.id, { onDelete: "cascade" }),
+    isPrimary: boolean("isPrimary").default(false).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.accountId, table.nicheId] }),
+  })
+);
+
+export type FeaturedAccountNiche = typeof featuredAccountNiches.$inferSelect;
+export type InsertFeaturedAccountNiche = typeof featuredAccountNiches.$inferInsert;
+
+/**
+ * Top-N reels per featured account. `rank` is 1..30 within an account's
+ * scrape window. Unique (featuredAccountId, reelShortcode) prevents a
+ * reel from appearing twice under the same account.
+ */
+export const featuredReels = mysqlTable(
+  "featured_reels",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    featuredAccountId: int("featuredAccountId")
+      .notNull()
+      .references(() => featuredAccounts.id, { onDelete: "cascade" }),
+    reelShortcode: varchar("reelShortcode", { length: 64 }).notNull(),
+    caption: text("caption"),
+    viewCount: int("viewCount").default(0).notNull(),
+    likeCount: int("likeCount").default(0).notNull(),
+    commentCount: int("commentCount").default(0).notNull(),
+    engagementRate: decimal("engagementRate", { precision: 5, scale: 2 }),
+    thumbnailUrl: text("thumbnailUrl"),
+    videoUrl: text("videoUrl"),
+    duration: int("duration"),
+    postedAt: timestamp("postedAt").notNull(),
+    rank: int("rank"),
+    scrapedAt: timestamp("scrapedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    reelPerAccountUnique: uniqueIndex("featured_reels_account_shortcode_unique").on(
+      table.featuredAccountId,
+      table.reelShortcode
+    ),
+  })
+);
+
+export type FeaturedReel = typeof featuredReels.$inferSelect;
+export type InsertFeaturedReel = typeof featuredReels.$inferInsert;
