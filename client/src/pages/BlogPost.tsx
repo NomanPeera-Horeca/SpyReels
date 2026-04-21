@@ -97,7 +97,7 @@ function normalizeContentToMarkdown(raw: string): string {
     normalized.push(trimmed);
   }
 
-  return normalized.join("\n\n");
+  return normalized.join("\n\n").replace(/^(\|.*\|)\n\n(?=\|)/gm, "$1\n");
 }
 
 function extractToc(markdown: string): TocItem[] {
