@@ -218,6 +218,24 @@ export default function BlogPost() {
         return <code className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-sm">{children}</code>;
       },
       strong: ({ children }: any) => <strong className="text-foreground font-semibold">{children}</strong>,
+      table: ({ children }: any) => (
+        <div className="my-6 w-full overflow-x-auto rounded-lg border border-zinc-800">
+          <table className="w-full border-collapse text-[15px]">{children}</table>
+        </div>
+      ),
+      thead: ({ children }: any) => <thead className="bg-zinc-900/60">{children}</thead>,
+      tbody: ({ children }: any) => <tbody>{children}</tbody>,
+      tr: ({ children }: any) => (
+        <tr className="border-b border-zinc-800 last:border-b-0 transition-colors hover:bg-zinc-900/40">
+          {children}
+        </tr>
+      ),
+      th: ({ children }: any) => (
+        <th className="px-4 py-3 text-left font-semibold text-foreground">{children}</th>
+      ),
+      td: ({ children }: any) => (
+        <td className="px-4 py-3 text-left text-muted-foreground align-top">{children}</td>
+      ),
     }),
     []
   );
