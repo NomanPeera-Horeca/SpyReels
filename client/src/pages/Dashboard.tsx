@@ -37,6 +37,8 @@ import {
   Users,
   Grid3X3,
   List,
+  X,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,6 +56,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
+import Tooltip from "@/components/Tooltip";
 
 type SortOption =
   | "views_desc"
@@ -73,6 +76,40 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[
   { value: "date_desc", label: "Date (Newest)", icon: <CalendarIcon className="h-3.5 w-3.5" /> },
   { value: "date_asc", label: "Date (Oldest)", icon: <CalendarIcon className="h-3.5 w-3.5" /> },
 ];
+
+type BadgeConfidence = "high" | "medium" | "low";
+
+function toReadableNiche(slug: string | null | undefined): string {
+  if (!slug) return "Unknown niche";
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function AiBadge({
+  nicheSlug,
+  confidence,
+}: {
+  nicheSlug: string;
+  confidence: BadgeConfidence;
+}) {
+  const confidenceStyles: Record<BadgeConfidence, string> = {
+    high: "border-emerald-400/40 bg-emerald-500/15 text-emerald-300",
+    medium: "border-amber-400/40 bg-amber-500/15 text-amber-300",
+    low: "border-zinc-400/40 bg-zinc-500/15 text-zinc-300",
+  };
+  return (
+    <Tooltip content={`AI-classified niche with ${confidence} confidence`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${confidenceStyles[confidence]}`}
+      >
+        <Sparkles className="h-3 w-3" />
+        AI: {toReadableNiche(nicheSlug)} ({confidence})
+      </span>
+    </Tooltip>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -298,6 +335,15 @@ export default function Dashboard() {
     },
     onError: (error) => {
       toast.error("Google Sheets export failed", { description: error.message });
+    },
+  });
+  const dismissDemoBanner = trpc.onboarding.dismissDemoBanner.useMutation({
+    onSuccess: () => {
+      utils.onboarding.getState.invalidate();
+      toast.success("Demo banner dismissed");
+    },
+    onError: (error) => {
+      toast.error("Could not dismiss demo banner", { description: error.message });
     },
   });
 
@@ -598,47 +644,102 @@ export default function Dashboard() {
 
   const job = jobQuery.data;
   const isLoading = job?.status === "running" || job?.status === "pending";
+  const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
+  const canShowAiBadge =
+    !!job?.classifiedNicheSlug &&
+    !!job?.classifiedConfidence &&
+    (job.classifiedConfidence === "high" ||
+      job.classifiedConfidence === "medium" ||
+      job.classifiedConfidence === "low");
 
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="min-w-0">
+          {showDemoBanner && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 p-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-amber-400/20 text-base">
+                📺
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-300">This is a demo dashboard preloaded for you.</p>
+                <p className="text-xs text-muted-foreground">Ready to spy on a real creator?</p>
+              </div>
+              <Button size="sm" className="shrink-0" onClick={() => setLocation("/research")}>
+                Start a new spy session
+              </Button>
+              <Tooltip content="Hide this banner">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 shrink-0"
+                  onClick={() => dismissDemoBanner.mutate()}
+                  disabled={dismissDemoBanner.isPending}
+                >
+                  {dismissDemoBanner.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                </Button>
+              </Tooltip>
+            </div>
+          )}
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
-                  if (fromPage === "history") {
-                    setLocation("/history");
-                  } else if (fromPage === "research") {
-                    setLocation("/");
-                  } else if (fromPage === "dashboard") {
-                    setLocation("/dashboard");
-                  } else {
-                    setLocation("/history");
-                  }
-                }}>
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                  {job ? `@${job.handle}` : "Loading..."}
-                </h1>
-                {job && (
-                  <Badge
-                    variant={
-                      job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                <Tooltip content="Back to Spy Viral Reels">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
+                    if (fromPage === "history") {
+                      setLocation("/history");
+                    } else if (fromPage === "research") {
+                      setLocation("/");
+                    } else if (fromPage === "dashboard") {
+                      setLocation("/dashboard");
+                    } else {
+                      setLocation("/history");
                     }
-                    className="text-xs"
-                  >
-                    {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                    {job.status}
-                  </Badge>
-                )}
+                  }}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                    {job ? `@${job.handle}` : "Loading..."}
+                  </h1>
+                  {canShowAiBadge && (
+                    <AiBadge
+                      nicheSlug={job.classifiedNicheSlug!}
+                      confidence={job.classifiedConfidence as BadgeConfidence}
+                    />
+                  )}
+                  {job && (
+                    <Tooltip content="All reels successfully collected. Use Account Monitoring to re-sync.">
+                      <Badge
+                        variant={
+                          job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                        {job.status}
+                      </Badge>
+                    </Tooltip>
+                  )}
+                </div>
               </div>
               {job && (
                 <p className="text-sm text-muted-foreground ml-11">
                   {sortedReels.length}{dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels{dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
                   {followerCount > 0 && <> &middot; {formatNumber(followerCount)} followers</>}
+                  {job.classifiedNicheSlug && (
+                    <>
+                      {" "}
+                      &middot;{" "}
+                      <span className="text-primary">{toReadableNiche(job.classifiedNicheSlug)}</span>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -646,99 +747,113 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
               {job?.status === "completed" && reelsData.length > 0 && (
                 <>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
-                      <SelectValue placeholder="Date range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="7">Last 7 Days</SelectItem>
-                      <SelectItem value="14">Last 14 Days</SelectItem>
-                      <SelectItem value="30">Last 30 Days</SelectItem>
-                      <SelectItem value="60">Last 60 Days</SelectItem>
-                      <SelectItem value="90">Last 90 Days</SelectItem>
-                      <SelectItem value="180">Last 180 Days</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Tooltip content="Filter reels by date posted">
+                    <div>
+                      <Select value={dateFilter} onValueChange={setDateFilter}>
+                        <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
+                          <SelectValue placeholder="Date range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="7">Last 7 Days</SelectItem>
+                          <SelectItem value="14">Last 14 Days</SelectItem>
+                          <SelectItem value="30">Last 30 Days</SelectItem>
+                          <SelectItem value="60">Last 60 Days</SelectItem>
+                          <SelectItem value="90">Last 90 Days</SelectItem>
+                          <SelectItem value="180">Last 180 Days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Tooltip>
 
-                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                    <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
-                      <SelectValue placeholder="Sort by..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-2">
-                            {opt.icon}
-                            {opt.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Tooltip content="Change how reels are sorted">
+                    <div>
+                      <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                        <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
+                          <SelectValue placeholder="Sort by..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span className="flex items-center gap-2">
+                                {opt.icon}
+                                {opt.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Tooltip>
 
-                  <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
+                  <Tooltip content="Switch between detailed list and visual grid view">
+                    <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
+                      <Button
+                        variant={viewMode === "list" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setViewMode("list")}
+                      >
+                        <List className="h-3.5 w-3.5 mr-1" />
+                        List
+                      </Button>
+                      <Button
+                        variant={viewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setViewMode("grid")}
+                      >
+                        <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                        Grid
+                      </Button>
+                    </div>
+                  </Tooltip>
+
+                  <Tooltip content="Download all reels data as a CSV file">
                     <Button
-                      variant={viewMode === "list" ? "default" : "ghost"}
+                      variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setViewMode("list")}
+                      className="h-9"
+                      onClick={() => {
+                        if (!exportGate.allowed) {
+                          toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
+                            description: "Upgrade your plan for more exports.",
+                            action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                          });
+                          return;
+                        }
+                        exportCsv.mutate({ jobId: jobId! });
+                      }}
+                      disabled={exportCsv.isPending}
                     >
-                      <List className="h-3.5 w-3.5 mr-1" />
-                      List
+                      {exportCsv.isPending ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5 sm:mr-2" />
+                      )}
+                      <span className="hidden sm:inline">Export CSV</span>
                     </Button>
+                  </Tooltip>
+
+                  <Tooltip content="Live-sync this data to a Google Sheet">
                     <Button
-                      variant={viewMode === "grid" ? "default" : "ghost"}
                       size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setViewMode("grid")}
+                      className="h-9"
+                      onClick={() => {
+                        if (sheetsAvailable.data?.available) {
+                          setShowSheetsDialog(true);
+                        } else {
+                          toast.info("Google Sheets not configured", {
+                            description:
+                              "Add your Google service account credentials in Settings to enable Google Sheets export.",
+                          });
+                        }
+                      }}
                     >
-                      <Grid3X3 className="h-3.5 w-3.5 mr-1" />
-                      Grid
+                      <Sheet className="h-3.5 w-3.5 sm:mr-2" />
+                      <span className="hidden sm:inline">Connect to Sheets</span>
                     </Button>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={() => {
-                      if (!exportGate.allowed) {
-                        toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
-                          description: "Upgrade your plan for more exports.",
-                          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                        });
-                        return;
-                      }
-                      exportCsv.mutate({ jobId: jobId! });
-                    }}
-                    disabled={exportCsv.isPending}
-                  >
-                    {exportCsv.isPending ? (
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5 sm:mr-2" />
-                    )}
-                    <span className="hidden sm:inline">Export CSV</span>
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    className="h-9"
-                    onClick={() => {
-                      if (sheetsAvailable.data?.available) {
-                        setShowSheetsDialog(true);
-                      } else {
-                        toast.info("Google Sheets not configured", {
-                          description:
-                            "Add your Google service account credentials in Settings to enable Google Sheets export.",
-                        });
-                      }
-                    }}
-                  >
-                    <Sheet className="h-3.5 w-3.5 sm:mr-2" />
-                    <span className="hidden sm:inline">Connect to Sheets</span>
-                  </Button>
+                  </Tooltip>
                 </>
               )}
             </div>
