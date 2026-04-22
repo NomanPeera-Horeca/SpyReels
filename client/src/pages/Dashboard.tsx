@@ -79,6 +79,11 @@ export default function Dashboard() {
     const id = params.get("jobId");
     return id ? parseInt(id, 10) : null;
   }, [searchString]);
+  const featuredAccountId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    const id = params.get("featuredAccountId");
+    return id ? parseInt(id, 10) : null;
+  }, [searchString]);
   const fromPage = useMemo(() => {
     const params = new URLSearchParams(searchString);
     return params.get("from") || null;
@@ -93,6 +98,37 @@ export default function Dashboard() {
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
   const utils = trpc.useUtils();
+  const ensureDemoJob = trpc.featured.ensureDemoJob.useMutation();
+  const [featuredResolveError, setFeaturedResolveError] = useState<string | null>(null);
+  const [featuredResolveNotFound, setFeaturedResolveNotFound] = useState(false);
+  const [featuredResolveKey, setFeaturedResolveKey] = useState(0);
+
+  const resolveFeaturedJob = useCallback(async () => {
+    if (!featuredAccountId || jobId) return;
+    setFeaturedResolveError(null);
+    setFeaturedResolveNotFound(false);
+    try {
+      const resolved = await ensureDemoJob.mutateAsync({ featuredAccountId });
+      setLocation(`/dashboard?jobId=${resolved.jobId}`, { replace: true });
+    } catch (error: any) {
+      const code = error?.data?.code;
+      if (code === "NOT_FOUND") {
+        setFeaturedResolveNotFound(true);
+        setFeaturedResolveError(
+          error?.message || "That featured creator is no longer available."
+        );
+        return;
+      }
+      setFeaturedResolveError(
+        error?.message || "Could not load featured creator reels right now."
+      );
+    }
+  }, [ensureDemoJob, featuredAccountId, jobId, setLocation]);
+
+  useEffect(() => {
+    if (!featuredAccountId || jobId) return;
+    resolveFeaturedJob();
+  }, [featuredAccountId, jobId, featuredResolveKey, resolveFeaturedJob]);
 
   // Usage gates for feature gating
   const transcribeGate = useUsageGate("transcribeCount");
@@ -261,10 +297,58 @@ export default function Dashboard() {
   });
 
   // Dashboard overview data (only fetched when no jobId)
-  const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: !jobId });
-  const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: !jobId });
-  const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: !jobId });
-  const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: !jobId });
+  const showOverview = !jobId && !featuredAccountId;
+  const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: showOverview });
+  const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: showOverview });
+  const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: showOverview });
+  const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
+
+  if (!jobId && featuredAccountId) {
+    if (ensureDemoJob.isPending) {
+      return (
+        <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
+          <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-3">
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+            </div>
+            <h2 className="text-lg font-semibold text-foreground">Loading creator reels...</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Preparing a dashboard view for this featured creator.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (featuredResolveError) {
+      return (
+        <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
+          <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
+            <h2 className="text-lg font-semibold text-foreground">
+              {featuredResolveNotFound
+                ? "Featured creator unavailable"
+                : "Could not load creator reels"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">{featuredResolveError}</p>
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <Button
+                onClick={() => {
+                  setFeaturedResolveError(null);
+                  setFeaturedResolveNotFound(false);
+                  setFeaturedResolveKey((v) => v + 1);
+                }}
+              >
+                Retry
+              </Button>
+              <Button variant="outline" onClick={() => setLocation("/")}>
+                Back to Spy Viral Reels
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   if (!jobId) {
     const jobs = jobsListQuery.data || [];

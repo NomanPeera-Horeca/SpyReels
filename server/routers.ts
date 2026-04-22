@@ -959,6 +959,74 @@ Return JSON only:
           confidence,
         };
       }),
+
+    /**
+     * Resolve a user-scoped demo scrape job for a featured account id.
+     * Used by /dashboard?featuredAccountId=<id> deep-links from /research:
+     *
+     * - If this user already has a demo job for the creator handle, reuse it.
+     * - Otherwise seed one on demand via seedDemoScrape.
+     *
+     * Mutation (not query) because it may write a new scrape_jobs row.
+     */
+    ensureDemoJob: protectedProcedure
+      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+
+        const accountRows = await db!
+          .select({
+            handle: featuredAccounts.handle,
+            isActive: featuredAccounts.isActive,
+          })
+          .from(featuredAccounts)
+          .where(eq(featuredAccounts.id, input.featuredAccountId))
+          .limit(1);
+
+        if (accountRows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Featured creator not found",
+          });
+        }
+
+        const account = accountRows[0];
+        const existingDemo = await db!
+          .select({ id: scrapeJobs.id })
+          .from(scrapeJobs)
+          .where(
+            and(
+              eq(scrapeJobs.userId, ctx.user.id),
+              eq(scrapeJobs.handle, account.handle),
+              eq(scrapeJobs.isDemo, true),
+              eq(scrapeJobs.status, "completed")
+            )
+          )
+          .orderBy(desc(scrapeJobs.createdAt))
+          .limit(1);
+
+        // If the creator was deactivated after this user already got a demo
+        // copy, keep serving the existing job.
+        if (existingDemo.length > 0) {
+          return { jobId: existingDemo[0].id };
+        }
+
+        if (!account.isActive) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Featured creator is unavailable",
+          });
+        }
+
+        const seededJobId = await seedDemoScrape(ctx.user.id, account.handle);
+        if (seededJobId == null) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not prepare creator reels right now",
+          });
+        }
+        return { jobId: seededJobId };
+      }),
   }),
 
   // ── Transcription ──
