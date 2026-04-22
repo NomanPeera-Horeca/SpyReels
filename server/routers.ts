@@ -691,6 +691,53 @@ export const appRouter = router({
       }),
 
     /**
+     * Resolve a catalog featured account by Instagram handle: stable id
+     * plus primary niche (or first niche by `sortOrder` when no primary
+     * flag). Used by the job dashboard sidebar to (a) exclude the current
+     * creator from `relatedCreators` and (b) derive niche for demo jobs
+     * when `classifiedNicheSlug` is unset.
+     */
+    accountContextByHandle: protectedProcedure
+      .input(z.object({ handle: z.string().trim().min(1).max(128) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const normalized = input.handle.replace(/^@/, "").trim().toLowerCase();
+
+        const rows = await db!
+          .select({
+            featuredAccountId: featuredAccounts.id,
+            nicheSlug: niches.slug,
+            nicheName: niches.name,
+            isPrimary: featuredAccountNiches.isPrimary,
+          })
+          .from(featuredAccounts)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.accountId, featuredAccounts.id)
+          )
+          .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
+          .where(
+            and(eq(featuredAccounts.handle, normalized), eq(featuredAccounts.isActive, true))
+          )
+          .orderBy(desc(featuredAccountNiches.isPrimary), asc(niches.sortOrder))
+          .limit(1);
+
+        if (rows.length === 0) {
+          return {
+            featuredAccountId: null as number | null,
+            nicheSlug: null as string | null,
+            nicheName: null as string | null,
+          };
+        }
+
+        return {
+          featuredAccountId: rows[0].featuredAccountId,
+          nicheSlug: rows[0].nicheSlug,
+          nicheName: rows[0].nicheName,
+        };
+      }),
+
+    /**
      * Related creators for the dashboard right sidebar ("Top creators in
      * this niche"). Returns other active featured accounts tagged with
      * `nicheSlug`, ordered by follower count desc, optionally excluding

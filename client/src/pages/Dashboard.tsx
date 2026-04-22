@@ -30,6 +30,7 @@ import {
   BookmarkCheck,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Search,
   Inbox,
   PenLine,
@@ -140,6 +141,9 @@ export default function Dashboard() {
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
   const utils = trpc.useUtils();
+  const billingSubscriptionQuery = trpc.billing.subscription.useQuery(undefined, {
+    enabled: !!jobId,
+  });
   const ensureDemoJob = trpc.featured.ensureDemoJob.useMutation();
   const [featuredResolveError, setFeaturedResolveError] = useState<string | null>(null);
   const [featuredResolveNotFound, setFeaturedResolveNotFound] = useState(false);
@@ -186,6 +190,50 @@ export default function Dashboard() {
       },
     }
   );
+
+  const job = jobQuery.data;
+
+  const featuredHandleContext = trpc.featured.accountContextByHandle.useQuery(
+    { handle: job?.handle ?? "" },
+    { enabled: Boolean(jobId && job?.handle && job.status === "completed") }
+  );
+
+  const nicheSlugForSidebar = useMemo(() => {
+    if (!job || job.status !== "completed") return null;
+    if (job.classifiedNicheSlug) return job.classifiedNicheSlug;
+    if (job.isDemo && featuredHandleContext.data?.nicheSlug) {
+      return featuredHandleContext.data.nicheSlug;
+    }
+    return null;
+  }, [job, featuredHandleContext.data]);
+
+  const sidebarNicheLabel = useMemo(() => {
+    if (!job || job.status !== "completed") return "";
+    if (job.classifiedNicheSlug) return toReadableNiche(job.classifiedNicheSlug);
+    if (job.isDemo && featuredHandleContext.data?.nicheName) {
+      return featuredHandleContext.data.nicheName;
+    }
+    return "";
+  }, [job, featuredHandleContext.data]);
+
+  const canQueryRelated =
+    Boolean(nicheSlugForSidebar) &&
+    !!job &&
+    job.status === "completed" &&
+    featuredHandleContext.isFetched;
+
+  const relatedCreatorsQuery = trpc.featured.relatedCreators.useQuery(
+    {
+      nicheSlug: nicheSlugForSidebar!,
+      excludeAccountId: featuredHandleContext.data?.featuredAccountId ?? undefined,
+      limit: 5,
+    },
+    { enabled: canQueryRelated }
+  );
+
+  const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
+  const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
+  const jobComplete = job?.status === "completed";
 
   const reelsQuery = trpc.reels.list.useQuery(
     { jobId: jobId! },
@@ -642,7 +690,6 @@ export default function Dashboard() {
     );
   }
 
-  const job = jobQuery.data;
   const isLoading = job?.status === "running" || job?.status === "pending";
   const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
   const canShowAiBadge =
@@ -1177,30 +1224,171 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <aside className="hidden xl:block sticky top-6 self-start space-y-4">
-          <div className="rounded-xl border border-border/40 bg-card p-4">
-            <div className="h-4 w-40 bg-muted rounded animate-pulse" />
-            <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
-            <div className="space-y-2 mt-4">
-              {Array.from({ length: 4 }).map((_, idx) => (
-                <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
-              ))}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/40 bg-card p-4">
-            <div className="h-4 w-36 bg-muted rounded animate-pulse" />
-            <div className="h-3 w-52 bg-muted/80 rounded mt-2 animate-pulse" />
-            <div className="space-y-2 mt-4">
-              {Array.from({ length: 3 }).map((_, idx) => (
-                <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
-              ))}
-            </div>
-          </div>
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <div className="h-4 w-44 bg-primary/20 rounded animate-pulse" />
-            <div className="h-3 w-full bg-primary/15 rounded mt-3 animate-pulse" />
-            <div className="h-9 w-full bg-primary/25 rounded mt-4 animate-pulse" />
-          </div>
+        <aside className="hidden xl:block sticky top-6 self-start max-h-[calc(100vh-3rem)] space-y-4 overflow-y-auto">
+          {!jobComplete ? (
+            <>
+              <div className="rounded-xl border border-border/40 bg-card p-4">
+                <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
+                <div className="space-y-2 mt-4">
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/40 bg-card p-4">
+                <div className="h-4 w-36 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-52 bg-muted/80 rounded mt-2 animate-pulse" />
+                <div className="space-y-2 mt-4">
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="h-4 w-44 bg-primary/20 rounded animate-pulse" />
+                <div className="h-3 w-full bg-primary/15 rounded mt-3 animate-pulse" />
+                <div className="h-9 w-full bg-primary/25 rounded mt-4 animate-pulse" />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Related creators — hidden when no niche context (graceful CTA instead) */}
+              {!featuredHandleContext.isFetched ? (
+                <div className="rounded-xl border border-border/40 bg-card p-4">
+                  <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+                  <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
+                  <div className="space-y-2 mt-4">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+              ) : !nicheSlugForSidebar ? (
+                <div className="rounded-xl border border-border/40 bg-card p-4 text-center">
+                  <p className="text-sm font-medium text-foreground">Start exploring creators</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Browse featured creators by niche to compare what is working in your space.
+                  </p>
+                  <Button size="sm" className="mt-4 w-full" onClick={() => setLocation("/research")}>
+                    Start exploring creators
+                  </Button>
+                </div>
+              ) : relatedCreatorsQuery.isPending ? (
+                <div className="rounded-xl border border-border/40 bg-card p-4">
+                  <div className="h-5 w-48 bg-muted rounded animate-pulse" />
+                  <div className="h-3 w-28 bg-muted/80 rounded mt-2 animate-pulse" />
+                  <div className="space-y-2 mt-4">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border/40 bg-card p-4">
+                  <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                    Top creators in this <em className="text-primary not-italic">niche</em>
+                  </h3>
+                  {sidebarNicheLabel && (
+                    <div className="mt-1 inline-block rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                      {sidebarNicheLabel}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                    Also spying on <span className="text-foreground">@{job.handle}</span>? Here are more creators in
+                    the same niche.
+                  </p>
+                  {relatedCreatorsQuery.data?.length === 0 ? (
+                    <p className="mt-4 text-center text-xs text-muted-foreground">No related creators in this niche yet</p>
+                  ) : (
+                    <div className="mt-3 flex flex-col gap-2">
+                      {relatedCreatorsQuery.data?.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setLocation(`/dashboard?featuredAccountId=${c.id}`)}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
+                            {c.profilePicUrl ? (
+                              <img src={c.profilePicUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              (c.displayName || c.handle).slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {c.displayName || `@${c.handle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{c.handle} · {formatNumber(c.followerCount)} ·{" "}
+                              <span className="font-mono text-emerald-400">{c.avgEngagementRate.toFixed(2)}%</span>
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Going viral now — placeholder */}
+              <div className="rounded-xl border border-border/40 bg-card p-4">
+                <div className="flex items-start gap-2">
+                  <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                    Going <em className="text-primary not-italic">viral</em> now
+                  </h3>
+                </div>
+                <div className="mt-4 flex flex-col items-center rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-8 text-center">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Trending creators coming soon</p>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    We&apos;ll surface creators blowing up in your niche right here.
+                  </p>
+                </div>
+              </div>
+
+              {/* Upgrade */}
+              {!hideUpgradeSidebarPanel && (
+                <div className="rounded-xl border border-primary/25 bg-gradient-to-br from-primary/15 via-fuchsia-500/10 to-transparent p-4 text-center">
+                  {billingPlan === "pro" ? (
+                    <>
+                      <h3 className="font-serif text-base font-normal text-foreground">Thanks for being on Pro</h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        You have full access to deep creator research and script workflows.
+                      </p>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Need team seats and higher limits?{" "}
+                        <button
+                          type="button"
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                          onClick={() => setLocation("/billing")}
+                        >
+                          Go Business
+                        </button>
+                      </p>
+                      <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
+                        Manage billing
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-serif text-base font-normal text-foreground">Unlock unlimited spying</h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        Upgrade for unlimited creator research and more script generations each month.
+                      </p>
+                      <Button size="sm" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
+                        View plans & billing
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </aside>
       </div>
 
