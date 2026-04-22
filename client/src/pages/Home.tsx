@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,6 @@ import {
   CheckCircle2,
   XCircle,
   Lock,
-  Users,
   ImageIcon,
   BadgeCheck,
   ExternalLink,
@@ -48,6 +47,7 @@ function formatCount(n: number): string {
 
 export default function Home() {
   const posthog = usePostHog();
+  const utils = trpc.useUtils();
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState("30");
   const [, setLocation] = useLocation();
@@ -85,6 +85,134 @@ export default function Home() {
   const profileError = profile?.found === false ? profile.error : null;
 
   const scrapeGate = useUsageGate("scrapeCount");
+  const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const [selectedNicheSlug, setSelectedNicheSlug] = useState<string>("all");
+
+  type NicheRow = { slug: string; name: string };
+  const allNiches = useMemo<NicheRow[]>(
+    () =>
+      nicheGroupsQuery.data?.groups.flatMap((group) =>
+        group.niches.map((niche) => ({ slug: niche.slug, name: niche.name }))
+      ) ?? [],
+    [nicheGroupsQuery.data]
+  );
+  const nicheNameBySlug = useMemo(
+    () => new Map(allNiches.map((niche) => [niche.slug, niche.name])),
+    [allNiches]
+  );
+
+  const accountsBySelectedNicheQuery = trpc.featured.accountsByNiche.useQuery(
+    { nicheSlug: selectedNicheSlug },
+    {
+      enabled: selectedNicheSlug !== "all",
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  type FeaturedCreator = {
+    id: number;
+    handle: string;
+    displayName: string;
+    followerCount: number;
+    avgEngagementRate: number;
+    profilePicUrl: string;
+    totalReelsEver: number;
+    reelsAvailable: number;
+    nicheName: string;
+  };
+
+  const allCacheRef = useRef<Record<string, FeaturedCreator[]>>({});
+  const [allCreators, setAllCreators] = useState<FeaturedCreator[]>([]);
+  const [allCreatorsLoading, setAllCreatorsLoading] = useState(false);
+  const [allCreatorsError, setAllCreatorsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedNicheSlug !== "all") return;
+    if (allNiches.length === 0) return;
+    let cancelled = false;
+
+    const key = allNiches
+      .map((niche) => niche.slug)
+      .sort()
+      .join("|");
+
+    const load = async () => {
+      const cached = allCacheRef.current[key];
+      if (cached) {
+        setAllCreators(cached);
+        setAllCreatorsError(null);
+        return;
+      }
+
+      setAllCreatorsLoading(true);
+      setAllCreatorsError(null);
+      try {
+        const perNiche = await Promise.all(
+          allNiches.map(async (niche) => {
+            const creators = await utils.featured.accountsByNiche.fetch({
+              nicheSlug: niche.slug,
+            });
+            return creators.map((creator) => ({
+              ...creator,
+              nicheName: niche.name,
+            }));
+          })
+        );
+
+        const deduped = new Map<number, FeaturedCreator>();
+        for (const group of perNiche) {
+          for (const creator of group) {
+            const existing = deduped.get(creator.id);
+            if (!existing || creator.followerCount > existing.followerCount) {
+              deduped.set(creator.id, creator);
+            }
+          }
+        }
+
+        const merged = Array.from(deduped.values()).sort(
+          (a, b) => b.followerCount - a.followerCount
+        );
+        allCacheRef.current[key] = merged;
+        if (!cancelled) setAllCreators(merged);
+      } catch (error) {
+        if (!cancelled) {
+          setAllCreatorsError(
+            error instanceof Error ? error.message : "Failed to load creators"
+          );
+          setAllCreators([]);
+        }
+      } finally {
+        if (!cancelled) setAllCreatorsLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [allNiches, selectedNicheSlug, utils.featured.accountsByNiche]);
+
+  const featuredCreators = useMemo<FeaturedCreator[]>(() => {
+    if (selectedNicheSlug === "all") return allCreators;
+    const nicheName = nicheNameBySlug.get(selectedNicheSlug) ?? "Featured";
+    return (accountsBySelectedNicheQuery.data ?? []).map((creator) => ({
+      ...creator,
+      nicheName,
+    }));
+  }, [accountsBySelectedNicheQuery.data, allCreators, nicheNameBySlug, selectedNicheSlug]);
+
+  const featuredLoading =
+    selectedNicheSlug === "all"
+      ? allCreatorsLoading || nicheGroupsQuery.isLoading
+      : accountsBySelectedNicheQuery.isLoading;
+  const featuredError =
+    selectedNicheSlug === "all"
+      ? allCreatorsError
+      : accountsBySelectedNicheQuery.error?.message ?? null;
 
   const startScrape = trpc.scrape.start.useMutation({
     onSuccess: data => {
@@ -130,8 +258,8 @@ export default function Home() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-3 sm:px-0 pt-4 sm:pt-8 md:pt-16">
-      <div className="mb-10">
+    <div className="mx-auto w-full max-w-6xl px-3 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+      <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Film className="h-5 w-5 text-primary" />
@@ -146,250 +274,396 @@ export default function Home() {
         </p>
       </div>
 
-      <Card className="border-border/50 bg-card">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg text-card-foreground">
-            New Spy Session
-          </CardTitle>
-          <CardDescription>
-            Provide the account details to start collecting Reels data.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label
-                htmlFor="handle"
-                className="text-sm font-medium text-card-foreground"
-              >
-                Instagram Handle
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="handle"
-                  placeholder="e.g. natgeo"
-                  value={handle}
-                  onChange={e => setHandle(e.target.value)}
-                  className="pl-10 h-11 bg-background"
-                />
-                {isLoadingProfile && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-                {!isLoadingProfile && profileFound && (
-                  <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
-                )}
-                {!isLoadingProfile && profileError && (
-                  <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
-                )}
+      <div className="max-w-2xl">
+        <Card className="border-border/50 bg-card">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-card-foreground">
+              New Spy Session
+            </CardTitle>
+            <CardDescription>
+              Provide the account details to start collecting Reels data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="handle"
+                  className="text-sm font-medium text-card-foreground"
+                >
+                  Instagram Handle
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="handle"
+                    placeholder="e.g. natgeo"
+                    value={handle}
+                    onChange={e => setHandle(e.target.value)}
+                    className="pl-10 h-11 bg-background"
+                  />
+                  {isLoadingProfile && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                  {!isLoadingProfile && profileFound && (
+                    <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                  )}
+                  {!isLoadingProfile && profileError && (
+                    <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter the username without the @ symbol. The account must be
+                  public.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Enter the username without the @ symbol. The account must be
-                public.
-              </p>
-            </div>
 
-            {/* Profile Preview Card */}
-            {profileFound && profile.found && (
-              <div className="rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="flex items-start gap-4">
-                  {/* Profile Picture */}
-                  <div className="shrink-0">
-                    {profile.profilePicUrl ? (
-                      <img
-                        src={profile.profilePicUrl}
-                        alt={profile.username}
-                        className="w-16 h-16 rounded-full object-cover border-2 border-border"
-                        onError={e => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center border-2 border-border">
-                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Profile Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-sm font-bold text-foreground truncate">
-                        {profile.username}
-                      </h3>
-                      {profile.isVerified && (
-                        <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />
+              {/* Profile Preview Card */}
+              {profileFound && profile.found && (
+                <div className="rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-start gap-4">
+                    {/* Profile Picture */}
+                    <div className="shrink-0">
+                      {profile.profilePicUrl ? (
+                        <img
+                          src={profile.profilePicUrl}
+                          alt={profile.username}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                          onError={e => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center border-2 border-border">
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
                       )}
-                      {profile.isPrivate && (
+                    </div>
+
+                    {/* Profile Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className="text-sm font-bold text-foreground truncate">
+                          {profile.username}
+                        </h3>
+                        {profile.isVerified && (
+                          <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />
+                        )}
+                        {profile.isPrivate && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 border-orange-500/50 text-orange-400"
+                          >
+                            <Lock className="mr-0.5 h-2.5 w-2.5" />
+                            Private
+                          </Badge>
+                        )}
+                      </div>
+
+                      {profile.fullName && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {profile.fullName}
+                        </p>
+                      )}
+
+                      {profile.category && (
                         <Badge
-                          variant="outline"
-                          className="text-[10px] h-4 border-orange-500/50 text-orange-400"
+                          variant="secondary"
+                          className="text-[10px] h-4 mb-1.5"
                         >
-                          <Lock className="mr-0.5 h-2.5 w-2.5" />
-                          Private
+                          {profile.category}
                         </Badge>
                       )}
-                    </div>
 
-                    {profile.fullName && (
-                      <p className="text-xs text-muted-foreground mb-1">
-                        {profile.fullName}
-                      </p>
-                    )}
-
-                    {profile.category && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] h-4 mb-1.5"
-                      >
-                        {profile.category}
-                      </Badge>
-                    )}
-
-                    {profile.biography && (
-                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-2">
-                        {profile.biography}
-                      </p>
-                    )}
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 text-xs">
-                      <div className="text-center">
-                        <p className="font-bold text-foreground">
-                          {formatCount(profile.postCount)}
+                      {profile.biography && (
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-2">
+                          {profile.biography}
                         </p>
-                        <p className="text-muted-foreground text-[10px]">
-                          posts
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-foreground">
-                          {formatCount(profile.followerCount)}
-                        </p>
-                        <p className="text-muted-foreground text-[10px]">
-                          followers
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-foreground">
-                          {formatCount(profile.followingCount)}
-                        </p>
-                        <p className="text-muted-foreground text-[10px]">
-                          following
-                        </p>
-                      </div>
-                      {profile.externalUrl && (
-                        <a
-                          href={profile.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-primary hover:underline ml-auto"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          <span className="text-[10px] truncate max-w-[120px]">
-                            {profile.externalUrl.replace(/^https?:\/\//, "")}
-                          </span>
-                        </a>
                       )}
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 text-xs">
+                        <div className="text-center">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.postCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            posts
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.followerCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            followers
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.followingCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            following
+                          </p>
+                        </div>
+                        {profile.externalUrl && (
+                          <a
+                            href={profile.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:underline ml-auto"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            <span className="text-[10px] truncate max-w-[120px]">
+                              {profile.externalUrl.replace(/^https?:\/\//, "")}
+                            </span>
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {profile.isPrivate && (
+                  {profile.isPrivate && (
+                    <>
+                      <Separator className="my-3" />
+                      <p className="text-xs text-orange-400 flex items-center gap-1.5">
+                        <Lock className="h-3 w-3" />
+                        This account is private. Only public accounts can be
+                        scraped.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Profile Error */}
+              {profileError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 animate-in fade-in duration-200">
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <XCircle className="h-3 w-3 shrink-0" />
+                    {profileError}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="timeframe"
+                  className="text-sm font-medium text-card-foreground"
+                >
+                  Timeframe
+                </Label>
+                <Select value={timeframe} onValueChange={setTimeframe}>
+                  <SelectTrigger className="h-11 bg-background">
+                    <Clock className="h-4 w-4 text-muted-foreground mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                    <SelectItem value="180">Last 180 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Reels posted within this window will be collected.
+                </p>
+              </div>
+
+              {!scrapeGate.isLoading && !scrapeGate.allowed && (
+                <UpgradePrompt
+                  action="scrapeCount"
+                  used={scrapeGate.used}
+                  limit={scrapeGate.limit}
+                  planRequired={scrapeGate.planRequired}
+                  variant="inline"
+                />
+              )}
+
+              {!scrapeGate.isLoading &&
+                scrapeGate.allowed &&
+                scrapeGate.limit > 0 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
+                  </p>
+                )}
+
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full h-12 text-base font-medium"
+                disabled={
+                  startScrape.isPending ||
+                  !handle.trim() ||
+                  (profile?.found === true && profile.isPrivate) ||
+                  !scrapeGate.allowed
+                }
+              >
+                {startScrape.isPending ? (
                   <>
-                    <Separator className="my-3" />
-                    <p className="text-xs text-orange-400 flex items-center gap-1.5">
-                      <Lock className="h-3 w-3" />
-                      This account is private. Only public accounts can be
-                      scraped.
-                    </p>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    Start Spying
+                    <ArrowRight className="ml-2 h-5 w-5" />
                   </>
                 )}
-              </div>
-            )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
 
-            {/* Profile Error */}
-            {profileError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 animate-in fade-in duration-200">
-                <p className="text-xs text-destructive flex items-center gap-1.5">
-                  <XCircle className="h-3 w-3 shrink-0" />
-                  {profileError}
-                </p>
-              </div>
-            )}
+      <Separator className="my-10" />
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="timeframe"
-                className="text-sm font-medium text-card-foreground"
-              >
-                Timeframe
-              </Label>
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger className="h-11 bg-background">
-                  <Clock className="h-4 w-4 text-muted-foreground mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">Last 30 days</SelectItem>
-                  <SelectItem value="90">Last 90 days</SelectItem>
-                  <SelectItem value="180">Last 180 days</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Reels posted within this window will be collected.
-              </p>
-            </div>
+      <section>
+        <div className="mb-5">
+          <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-primary">
+            Instant research · No waiting
+          </span>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+            Or spy on top viral creators
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+            Hand-picked creators with massive audiences. Their top viral reels
+            are already analyzed and ready.
+          </p>
+        </div>
 
-            {!scrapeGate.isLoading && !scrapeGate.allowed && (
-              <UpgradePrompt
-                action="scrapeCount"
-                used={scrapeGate.used}
-                limit={scrapeGate.limit}
-                planRequired={scrapeGate.planRequired}
-                variant="inline"
-              />
-            )}
-
-            {!scrapeGate.isLoading &&
-              scrapeGate.allowed &&
-              scrapeGate.limit > 0 && (
-                <p className="text-xs text-muted-foreground text-center">
-                  {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
-                </p>
-              )}
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full h-12 text-base font-medium"
-              disabled={
-                startScrape.isPending ||
-                !handle.trim() ||
-                (profile?.found === true && profile.isPrivate) ||
-                !scrapeGate.allowed
-              }
+        <div className="sticky top-0 z-10 mb-5 -mx-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur">
+          <div className="flex w-max gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedNicheSlug("all")}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                selectedNicheSlug === "all"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+              }`}
             >
-              {startScrape.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  Start Spying
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              All niches
+            </button>
+            {allNiches.map((niche) => (
+              <button
+                key={niche.slug}
+                type="button"
+                onClick={() => setSelectedNicheSlug(niche.slug)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  selectedNicheSlug === niche.slug
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {niche.name}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            {selectedNicheSlug === "all"
+              ? "Top creators"
+              : `Top creators · ${(
+                  nicheNameBySlug.get(selectedNicheSlug) ?? selectedNicheSlug
+                ).toUpperCase()}`}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Sort: Followers (high to low)
+          </span>
+        </div>
+
+        {featuredLoading ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading featured creators...
+          </div>
+        ) : featuredError ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            Failed to load featured creators: {featuredError}
+          </div>
+        ) : featuredCreators.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card px-4 py-6 text-center">
+            <p className="text-lg font-semibold text-foreground">
+              More creators coming to this niche soon
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use the spy session card above to research any handle directly.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {featuredCreators.map((creator) => (
+              <button
+                key={creator.id}
+                type="button"
+                onClick={() => setLocation(`/dashboard?featuredAccountId=${creator.id}`)}
+                className="rounded-xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/90"
+              >
+                <div className="mb-3 inline-flex rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
+                  {creator.nicheName}
+                </div>
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
+                    {creator.profilePicUrl ? (
+                      <img
+                        src={creator.profilePicUrl}
+                        alt={creator.handle}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
+                        {creator.handle.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {creator.displayName}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      @{creator.handle}
+                    </p>
+                  </div>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-3 border-y border-border py-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Followers
+                    </p>
+                    <p className="font-mono text-sm text-foreground">
+                      {formatCount(creator.followerCount)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Avg ER
+                    </p>
+                    <p className="font-mono text-sm text-emerald-500">
+                      {creator.avgEngagementRate.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">
+                    {creator.reelsAvailable} viral reels ready
+                  </span>
+                  <span className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground transition group-hover:text-primary">
+                    See Reels →
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="mt-10 grid grid-cols-1 gap-4 border-t border-border pt-8 sm:grid-cols-3">
         {[
           {
-            label: "Research",
+            label: "Spy",
             desc: "Collect all Reels metadata from any public account",
           },
           {
@@ -400,15 +674,15 @@ export default function Home() {
             label: "Transcribe",
             desc: "Get full transcripts with hook analysis for any Reel",
           },
-        ].map(item => (
+        ].map((item) => (
           <div
             key={item.label}
             className="rounded-lg border border-border/50 bg-card/50 p-4"
           >
-            <p className="text-sm font-medium text-card-foreground mb-1">
+            <p className="mb-1 text-sm font-medium text-card-foreground">
               {item.label}
             </p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {item.desc}
             </p>
           </div>
