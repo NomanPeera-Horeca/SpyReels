@@ -35,6 +35,8 @@ import {
   PenLine,
   ArrowRight,
   Users,
+  Grid3X3,
+  List,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,6 +62,8 @@ type SortOption =
   | "engagement_desc"
   | "date_desc"
   | "date_asc";
+
+type ViewMode = "list" | "grid";
 
 const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
   { value: "views_desc", label: "Highest Views", icon: <Eye className="h-3.5 w-3.5" /> },
@@ -90,6 +94,7 @@ export default function Dashboard() {
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
@@ -430,8 +435,8 @@ export default function Dashboard() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground text-sm">Research Reels</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Analyze any Instagram account</p>
+                <p className="font-medium text-foreground text-sm">Spy Viral Reels</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Spy on any public Instagram creator</p>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
@@ -465,7 +470,7 @@ export default function Dashboard() {
         {/* Recent Scrape Jobs */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Recent Research Jobs</h2>
+            <h2 className="text-sm font-semibold text-foreground">Recent Spy Sessions</h2>
             {jobs.length > 5 && (
               <Button variant="link" size="sm" className="text-xs" onClick={() => setLocation("/history")}>
                 View all
@@ -484,7 +489,7 @@ export default function Dashboard() {
                   <div className="flex items-start gap-3">
                     <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center shrink-0 text-xs font-bold text-white">1</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Research a competitor</p>
+                      <p className="text-sm font-medium text-foreground">Start a spy session</p>
                       <p className="text-xs text-muted-foreground">Enter any Instagram handle to spy on their viral Reels</p>
                     </div>
                   </div>
@@ -505,7 +510,7 @@ export default function Dashboard() {
                 </div>
                 <Button size="sm" onClick={() => setLocation("/")}>
                   <Search className="mr-2 h-3.5 w-3.5" />
-                  Start Your First Research
+                  Start Your First Spy Session
                 </Button>
               </div>
             </div>
@@ -595,402 +600,494 @@ export default function Dashboard() {
   const isLoading = job?.status === "running" || job?.status === "pending";
 
   return (
-    <div className="max-w-6xl mx-auto px-2 sm:px-0">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
-              if (fromPage === "history") {
-                setLocation("/history");
-              } else if (fromPage === "research") {
-                setLocation("/");
-              } else if (fromPage === "dashboard") {
-                setLocation("/dashboard");
-              } else {
-                setLocation("/history");
-              }
-            }}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {job ? `@${job.handle}` : "Loading..."}
-            </h1>
-            {job && (
-              <Badge
-                variant={
-                  job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
-                }
-                className="text-xs"
-              >
-                {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                {job.status}
-              </Badge>
-            )}
-          </div>
-          {job && (
-            <p className="text-sm text-muted-foreground ml-11">
-              {sortedReels.length}{dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels{dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
-              {followerCount > 0 && <> &middot; {formatNumber(followerCount)} followers</>}
-            </p>
-          )}
-        </div>
-
-                <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
-          {job?.status === "completed" && reelsData.length > 0 && (
-            <>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
-                  <SelectValue placeholder="Date range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="7">Last 7 Days</SelectItem>
-                  <SelectItem value="14">Last 14 Days</SelectItem>
-                  <SelectItem value="30">Last 30 Days</SelectItem>
-                  <SelectItem value="60">Last 60 Days</SelectItem>
-                  <SelectItem value="90">Last 90 Days</SelectItem>
-                  <SelectItem value="180">Last 180 Days</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
-                  <SelectValue placeholder="Sort by..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className="flex items-center gap-2">
-                        {opt.icon}
-                        {opt.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9"
-                onClick={() => {
-                  if (!exportGate.allowed) {
-                    toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
-                      description: "Upgrade your plan for more exports.",
-                      action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                    });
-                    return;
-                  }
-                  exportCsv.mutate({ jobId: jobId! });
-                }}
-                disabled={exportCsv.isPending}
-              >
-                {exportCsv.isPending ? (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5 sm:mr-2" />
-                )}
-                <span className="hidden sm:inline">Export CSV</span>
-              </Button>
-
-              <Button
-                size="sm"
-                className="h-9"
-                onClick={() => {
-                  if (sheetsAvailable.data?.available) {
-                    setShowSheetsDialog(true);
+    <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
+        <div className="min-w-0">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
+                  if (fromPage === "history") {
+                    setLocation("/history");
+                  } else if (fromPage === "research") {
+                    setLocation("/");
+                  } else if (fromPage === "dashboard") {
+                    setLocation("/dashboard");
                   } else {
-                    toast.info("Google Sheets not configured", {
-                      description:
-                        "Add your Google service account credentials in Settings to enable Google Sheets export.",
-                    });
+                    setLocation("/history");
                   }
-                }}
-              >
-                <Sheet className="h-3.5 w-3.5 sm:mr-2" />
-                <span className="hidden sm:inline">Connect to Sheets</span>
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+                }}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  {job ? `@${job.handle}` : "Loading..."}
+                </h1>
+                {job && (
+                  <Badge
+                    variant={
+                      job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                    }
+                    className="text-xs"
+                  >
+                    {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                    {job.status}
+                  </Badge>
+                )}
+              </div>
+              {job && (
+                <p className="text-sm text-muted-foreground ml-11">
+                  {sortedReels.length}{dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels{dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
+                  {followerCount > 0 && <> &middot; {formatNumber(followerCount)} followers</>}
+                </p>
+              )}
+            </div>
 
-      {/* Loading state */}
-      {isLoading && (
-        <div className="border border-border/50 bg-card rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="text-center">
-              <p className="text-foreground font-medium">Scraping in progress...</p>
-              <p className="text-sm text-muted-foreground mt-1">{job?.totalReels || 0} reels found so far</p>
+            <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
+              {job?.status === "completed" && reelsData.length > 0 && (
+                <>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
+                      <SelectValue placeholder="Date range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="7">Last 7 Days</SelectItem>
+                      <SelectItem value="14">Last 14 Days</SelectItem>
+                      <SelectItem value="30">Last 30 Days</SelectItem>
+                      <SelectItem value="60">Last 60 Days</SelectItem>
+                      <SelectItem value="90">Last 90 Days</SelectItem>
+                      <SelectItem value="180">Last 180 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                    <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
+                      <SelectValue placeholder="Sort by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <span className="flex items-center gap-2">
+                            {opt.icon}
+                            {opt.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setViewMode("list")}
+                    >
+                      <List className="h-3.5 w-3.5 mr-1" />
+                      List
+                    </Button>
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setViewMode("grid")}
+                    >
+                      <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                      Grid
+                    </Button>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={() => {
+                      if (!exportGate.allowed) {
+                        toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
+                          description: "Upgrade your plan for more exports.",
+                          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                        });
+                        return;
+                      }
+                      exportCsv.mutate({ jobId: jobId! });
+                    }}
+                    disabled={exportCsv.isPending}
+                  >
+                    {exportCsv.isPending ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 sm:mr-2" />
+                    )}
+                    <span className="hidden sm:inline">Export CSV</span>
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    className="h-9"
+                    onClick={() => {
+                      if (sheetsAvailable.data?.available) {
+                        setShowSheetsDialog(true);
+                      } else {
+                        toast.info("Google Sheets not configured", {
+                          description:
+                            "Add your Google service account credentials in Settings to enable Google Sheets export.",
+                        });
+                      }
+                    }}
+                  >
+                    <Sheet className="h-3.5 w-3.5 sm:mr-2" />
+                    <span className="hidden sm:inline">Connect to Sheets</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Failed state */}
-      {job?.status === "failed" && (
-        <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <p className="text-destructive font-medium">Scraping failed</p>
-            <p className="text-sm text-muted-foreground text-center max-w-md">
-              {job.errorMessage || "An unknown error occurred"}
-            </p>
-            <Button variant="outline" onClick={() => setLocation("/")}>
-              Try again
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading skeleton while reels are being fetched */}
-      {job?.status === "completed" && reelsQuery.isLoading && (
-        <div className="space-y-1">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse">
-              <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
-              <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="h-4 bg-muted rounded w-3/4" />
-                <div className="flex gap-3">
-                  <div className="h-3 bg-muted rounded w-16" />
-                  <div className="h-3 bg-muted rounded w-12" />
-                  <div className="h-3 bg-muted rounded w-14" />
+          {/* Loading state */}
+          {isLoading && (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-foreground font-medium">Scraping in progress...</p>
+                  <p className="text-sm text-muted-foreground mt-1">{job?.totalReels || 0} reels found so far</p>
                 </div>
               </div>
-              <div className="flex gap-1 shrink-0">
-                <div className="h-8 w-8 bg-muted rounded" />
-                <div className="h-8 w-8 bg-muted rounded" />
+            </div>
+          )}
+
+          {/* Failed state */}
+          {job?.status === "failed" && (
+            <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <p className="text-destructive font-medium">Scraping failed</p>
+                <p className="text-sm text-muted-foreground text-center max-w-md">
+                  {job.errorMessage || "An unknown error occurred"}
+                </p>
+                <Button variant="outline" onClick={() => setLocation("/")}>
+                  Try again
+                </Button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Usage limit banner */}
-      {!transcribeGate.isLoading && !transcribeGate.allowed && (
-        <div className="mb-4">
-          <UpgradePrompt
-            action="transcribeCount"
-            used={transcribeGate.used}
-            limit={transcribeGate.limit}
-            planRequired={transcribeGate.planRequired}
-            variant="banner"
-          />
-        </div>
-      )}
-
-      {/* Reels list */}
-      {job?.status === "completed" && sortedReels.length > 0 && (
-        <div className="space-y-1">
-          {sortedReels.map((reel, index) => {
-            const isExpanded = expandedReelId === reel.id;
-            const hasTranscription = reel.transcription?.status === "completed";
-            const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
-            const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
-            const isSaved = !!savedMap[reel.id];
-
-            return (
-              <div key={reel.id} className="rounded-lg border border-border/30 overflow-hidden">
-                {/* Reel Row */}
-                <div
-                  className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
-                    isExpanded ? "bg-card border-b border-border/30" : ""
-                  }`}
-                  onClick={() => {
-                    if (isExpanded) {
-                      setExpandedReelId(null);
-                    } else {
-                      setExpandedReelId(reel.id);
-                    }
-                  }}
-                >
-                  {/* Rank */}
-                  <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
-                    {index + 1}
-                  </span>
-
-                  {/* Thumbnail */}
-                  <div className="relative shrink-0 w-14 h-18 rounded-md overflow-hidden bg-muted">
-                    {reel.thumbnailUrl ? (
-                      <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Film className="h-4 w-4 text-muted-foreground/50" />
-                      </div>
-                    )}
-                    {reel.duration && (
-                      <span className="absolute bottom-0.5 right-0.5 text-[9px] font-mono bg-black/70 text-white px-1 rounded">
-                        {Math.floor(reel.duration / 60)}:{(reel.duration % 60).toString().padStart(2, "0")}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm text-foreground line-clamp-1 leading-snug">
-                        {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
-                      </p>
-                      {hasTranscription && (
-                        <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
-                      )}
-                      {isProcessing && (
-                        <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
-                      )}
-                      {isFailed && (
-                        <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Eye className="h-3 w-3" />
-                        {formatNumber(reel.viewCount)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Heart className="h-3 w-3" />
-                        {formatNumber(reel.likeCount)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {formatNumber(reel.commentCount)}
-                      </span>
-                      {reel.engagementRate > 0 && (
-                        <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                          <TrendingUp className="h-3 w-3" />
-                          {reel.engagementRate.toFixed(2)}%
-                        </span>
-                      )}
-                      {/* Competitor posting day & time in user timezone */}
-                      <span className="flex items-center gap-1 text-amber-400/80">
-                        <Clock className="h-3 w-3" />
-                        {formatPostedTime(reel.postedAt, userTimezone)}
-                      </span>
+          {/* Loading skeleton while reels are being fetched */}
+          {job?.status === "completed" && reelsQuery.isLoading && (
+            <div className="space-y-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse">
+                  <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
+                  <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 bg-muted rounded w-3/4" />
+                    <div className="flex gap-3">
+                      <div className="h-3 bg-muted rounded w-16" />
+                      <div className="h-3 bg-muted rounded w-12" />
+                      <div className="h-3 bg-muted rounded w-14" />
                     </div>
                   </div>
+                  <div className="flex gap-1 shrink-0">
+                    <div className="h-8 w-8 bg-muted rounded" />
+                    <div className="h-8 w-8 bg-muted rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
-                      onClick={() => toggleSave.mutate({ reelId: reel.id, jobId: jobId! })}
-                      disabled={toggleSave.isPending}
-                      title={isSaved ? "Remove from saved" : "Save reel"}
+          {/* Usage limit banner */}
+          {!transcribeGate.isLoading && !transcribeGate.allowed && (
+            <div className="mb-4">
+              <UpgradePrompt
+                action="transcribeCount"
+                used={transcribeGate.used}
+                limit={transcribeGate.limit}
+                planRequired={transcribeGate.planRequired}
+                variant="banner"
+              />
+            </div>
+          )}
+
+          {/* Reels list */}
+          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "list" && (
+            <div className="space-y-1">
+              {sortedReels.map((reel, index) => {
+                const isExpanded = expandedReelId === reel.id;
+                const hasTranscription = reel.transcription?.status === "completed";
+                const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+                const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
+                const isSaved = !!savedMap[reel.id];
+
+                return (
+                  <div key={reel.id} className="rounded-lg border border-border/30 overflow-hidden">
+                    {/* Reel Row */}
+                    <div
+                      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
+                        isExpanded ? "bg-card border-b border-border/30" : ""
+                      }`}
+                      onClick={() => {
+                        if (isExpanded) {
+                          setExpandedReelId(null);
+                        } else {
+                          setExpandedReelId(reel.id);
+                        }
+                      }}
                     >
-                      {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-                    </Button>
+                      {/* Rank */}
+                      <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
+                        {index + 1}
+                      </span>
 
-                    {hasTranscription ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => setExpandedReelId(reel.id)}
-                      >
-                        <FileText className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Transcript</span>
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => {
-                          if (!transcribeGate.allowed) {
-                            toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
-                              description: "Upgrade your plan for more transcriptions.",
-                              action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                            });
-                            return;
-                          }
+                      {/* Thumbnail */}
+                      <div className="relative shrink-0 w-14 h-18 rounded-md overflow-hidden bg-muted">
+                        {reel.thumbnailUrl ? (
+                          <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Film className="h-4 w-4 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        {reel.duration && (
+                          <span className="absolute bottom-0.5 right-0.5 text-[9px] font-mono bg-black/70 text-white px-1 rounded">
+                            {Math.floor(reel.duration / 60)}:{(reel.duration % 60).toString().padStart(2, "0")}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm text-foreground line-clamp-1 leading-snug">
+                            {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
+                          </p>
+                          {hasTranscription && (
+                            <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
+                          )}
+                          {isProcessing && (
+                            <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
+                          )}
+                          {isFailed && (
+                            <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {formatNumber(reel.viewCount)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Heart className="h-3 w-3" />
+                            {formatNumber(reel.likeCount)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MessageCircle className="h-3 w-3" />
+                            {formatNumber(reel.commentCount)}
+                          </span>
+                          {reel.engagementRate > 0 && (
+                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                              <TrendingUp className="h-3 w-3" />
+                              {reel.engagementRate.toFixed(2)}%
+                            </span>
+                          )}
+                          {/* Competitor posting day & time in user timezone */}
+                          <span className="flex items-center gap-1 text-amber-400/80">
+                            <Clock className="h-3 w-3" />
+                            {formatPostedTime(reel.postedAt, userTimezone)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
+                          onClick={() => toggleSave.mutate({ reelId: reel.id, jobId: jobId! })}
+                          disabled={toggleSave.isPending}
+                          title={isSaved ? "Remove from saved" : "Save reel"}
+                        >
+                          {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                        </Button>
+
+                        {hasTranscription ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={() => setExpandedReelId(reel.id)}
+                          >
+                            <FileText className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Transcript</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              if (!transcribeGate.allowed) {
+                                toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+                                  description: "Upgrade your plan for more transcriptions.",
+                                  action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                                });
+                                return;
+                              }
+                              setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                              startTranscription.mutate({ reelId: reel.id });
+                            }}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                <span className="hidden sm:inline">Transcribing...</span>
+                              </>
+                            ) : isFailed ? (
+                              <>
+                                <FileText className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline">Retry</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline">Transcribe</span>
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {hasTranscription && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                            onClick={() => setExpandedReelId(reel.id)}
+                          >
+                            <Wand2 className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Re-Create</span>
+                          </Button>
+                        )}
+
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
+                          <a href={reel.reelUrl} target="_blank" rel="noopener noreferrer" title="Open on Instagram">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground"
+                          onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
+                        >
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Expanded inline workflow panel */}
+                    {isExpanded && (
+                      <InlineWorkflow
+                        reelId={reel.id}
+                        handle={job?.handle || ""}
+                        hasTranscription={hasTranscription}
+                        isProcessing={isProcessing}
+                        onTranscribe={() => {
                           setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
                           startTranscription.mutate({ reelId: reel.id });
                         }}
-                        disabled={isProcessing}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                            <span className="hidden sm:inline">Transcribing...</span>
-                          </>
-                        ) : isFailed ? (
-                          <>
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Retry</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Transcribe</span>
-                          </>
-                        )}
-                      </Button>
+                        userTimezone={userTimezone}
+                        postedAt={reel.postedAt}
+                      />
                     )}
-
-                    {hasTranscription && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                        onClick={() => setExpandedReelId(reel.id)}
-                      >
-                        <Wand2 className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Re-Create</span>
-                      </Button>
-                    )}
-
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <a href={reel.reelUrl} target="_blank" rel="noopener noreferrer" title="Open on Instagram">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-muted-foreground"
-                      onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
-                    >
-                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          )}
 
-                {/* Expanded inline workflow panel */}
-                {isExpanded && (
-                  <InlineWorkflow
-                    reelId={reel.id}
-                    handle={job?.handle || ""}
-                    hasTranscription={hasTranscription}
-                    isProcessing={isProcessing}
-                    onTranscribe={() => {
-                      setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                      startTranscription.mutate({ reelId: reel.id });
-                    }}
-                    userTimezone={userTimezone}
-                    postedAt={reel.postedAt}
-                  />
-                )}
+          {/* Grid view */}
+          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {sortedReels.map((reel, index) => (
+                <button
+                  key={reel.id}
+                  type="button"
+                  className="group relative aspect-[9/14] overflow-hidden rounded-lg border border-border/40 bg-card text-left"
+                  onClick={() => window.open(reel.reelUrl, "_blank", "noopener,noreferrer")}
+                >
+                  {reel.thumbnailUrl ? (
+                    <img
+                      src={reel.thumbnailUrl}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-muted/40 flex items-center justify-center">
+                      <Film className="h-5 w-5 text-muted-foreground/60" />
+                    </div>
+                  )}
+                  <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
+                    #{index + 1}
+                  </div>
+                  {reel.engagementRate > 0 && (
+                    <div className="absolute right-2 top-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                      {reel.engagementRate.toFixed(2)}%
+                    </div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent p-3">
+                    <p className="text-xs text-white line-clamp-2">{reel.caption || "No caption"}</p>
+                    <p className="mt-1 text-[10px] font-mono text-white/80">
+                      {formatNumber(reel.viewCount)} views
+                      {reel.duration ? ` · ${formatDuration(reel.duration)}` : ""}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Empty state - only show when reels have loaded but are empty */}
+          {job?.status === "completed" && !reelsQuery.isLoading && sortedReels.length === 0 && (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Film className="h-12 w-12 text-muted-foreground/30" />
+                <p className="text-muted-foreground">
+                  No reels found for @{job.handle} in the last {job.timeframeDays} days.
+                </p>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Empty state - only show when reels have loaded but are empty */}
-      {job?.status === "completed" && !reelsQuery.isLoading && sortedReels.length === 0 && (
-        <div className="border border-border/50 bg-card rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <Film className="h-12 w-12 text-muted-foreground/30" />
-            <p className="text-muted-foreground">
-              No reels found for @{job.handle} in the last {job.timeframeDays} days.
-            </p>
+        <aside className="hidden xl:block sticky top-6 self-start space-y-4">
+          <div className="rounded-xl border border-border/40 bg-card p-4">
+            <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+            <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
+            <div className="space-y-2 mt-4">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+          <div className="rounded-xl border border-border/40 bg-card p-4">
+            <div className="h-4 w-36 bg-muted rounded animate-pulse" />
+            <div className="h-3 w-52 bg-muted/80 rounded mt-2 animate-pulse" />
+            <div className="space-y-2 mt-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="h-4 w-44 bg-primary/20 rounded animate-pulse" />
+            <div className="h-3 w-full bg-primary/15 rounded mt-3 animate-pulse" />
+            <div className="h-9 w-full bg-primary/25 rounded mt-4 animate-pulse" />
+          </div>
+        </aside>
+      </div>
 
       {/* Google Sheets Dialog */}
       <Dialog open={showSheetsDialog} onOpenChange={setShowSheetsDialog}>
