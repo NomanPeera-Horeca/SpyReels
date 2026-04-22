@@ -137,7 +137,7 @@ export default function Home() {
             <Film className="h-5 w-5 text-primary" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Research Viral Reels
+            Spy Viral Reels
           </h1>
         </div>
         <p className="text-muted-foreground text-sm leading-relaxed">
@@ -149,7 +149,7 @@ export default function Home() {
       <Card className="border-border/50 bg-card">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg text-card-foreground">
-            New Research Job
+            New Spy Session
           </CardTitle>
           <CardDescription>
             Provide the account details to start collecting Reels data.
@@ -377,7 +377,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  Start Research
+                  Start Spying
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </>
               )}

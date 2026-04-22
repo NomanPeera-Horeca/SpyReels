@@ -270,7 +270,7 @@ export default function Billing() {
                   <Separator />
                   <div className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
                     <div>
-                      <p className="text-sm font-medium text-purple-300">Running low on credits?</p>
+                      <p className="text-sm font-medium text-purple-300">Running low on spy credits?</p>
                       <p className="text-xs text-zinc-500">Upgrade to Pro for 200 transcriptions and 100 AI re-creations per month</p>
                     </div>
                     <Button
