@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -98,9 +98,11 @@ export async function getUserByEmail(email: string) {
 // ── Onboarding state ──
 
 /**
- * The 5 onboarding fields (4 booleans + `demoSeededAt`). The dashboard
- * demo banner (spec §7.4) keys off `demoSeededAt`, so it's returned
- * alongside the flags in a single call.
+ * All 8 onboarding fields in one call: the 5 first-run flags/timestamps
+ * (4 booleans + `demoSeededAt`) plus the Section 3 onboarding-flow
+ * fields (`selectedNicheSlugs`, `onboardingCompletedAt`, `onboardingSkippedAt`).
+ * Bundled so the OnboardingGate + dashboard demo banner can decide
+ * visibility in a single network round-trip.
  */
 export async function getOnboardingState(userId: number) {
   const db = await getDb();
@@ -112,6 +114,9 @@ export async function getOnboardingState(userId: number) {
       hasCompletedFirstSpy: users.hasCompletedFirstSpy,
       hasDismissedDemoBanner: users.hasDismissedDemoBanner,
       demoSeededAt: users.demoSeededAt,
+      selectedNicheSlugs: users.selectedNicheSlugs,
+      onboardingCompletedAt: users.onboardingCompletedAt,
+      onboardingSkippedAt: users.onboardingSkippedAt,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -140,6 +145,241 @@ export async function updateOnboardingState(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(users).set(data).where(eq(users.id, userId));
+}
+
+// ── Onboarding completion + demo seed (Section 3) ──
+
+/**
+ * Seeds a demo scrape for a freshly-onboarded user by cloning a
+ * featured account's stored top reels into the normal reels pipeline
+ * (spec §3). The resulting scrape_jobs row is marked `status="completed"`
+ * with the same field shape as runScrapeJob's normal completion path,
+ * plus `isDemo=true` so the dashboard banner visibility check and the
+ * hasCompletedFirstSpy auto-flip can tell it apart from a real scrape.
+ *
+ * Account selection:
+ *   - If `preferredHandle` resolves to an active featured account with
+ *     ≥1 stored reel, use it.
+ *   - Otherwise fall back to the "richness winner" — the active
+ *     featured account with the highest (reelCount × avgEngagementRate).
+ *     Same ordering powers the onboarding "Pick for me" card and the
+ *     onboarding-skipped path.
+ *
+ * Resilience: every failure path is swallowed and surfaced as a `null`
+ * return so callers never need try/catch around the seed — `null`
+ * simply means "no demo dashboard for this user, proceed anyway".
+ * Partial failures (job row inserted but reel batch blew up) clean up
+ * the orphan job so the user doesn't see an empty dashboard.
+ */
+export async function seedDemoScrape(
+  userId: number,
+  preferredHandle?: string
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[seedDemoScrape] db unavailable, skipping seed for user", userId);
+    return null;
+  }
+
+  let jobId: number | null = null;
+  try {
+    type Candidate = {
+      id: number;
+      handle: string;
+      displayName: string | null;
+      followerCount: number;
+      profilePicUrl: string | null;
+    };
+    let chosen: Candidate | undefined;
+
+    if (preferredHandle) {
+      const normalized = preferredHandle.replace(/^@/, "").trim().toLowerCase();
+      const byHandle = await db
+        .select({
+          id: featuredAccounts.id,
+          handle: featuredAccounts.handle,
+          displayName: featuredAccounts.displayName,
+          followerCount: featuredAccounts.followerCount,
+          profilePicUrl: featuredAccounts.profilePicUrl,
+          reelCount: sql<number>`COUNT(${featuredReels.id})`,
+        })
+        .from(featuredAccounts)
+        .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .where(and(eq(featuredAccounts.handle, normalized), eq(featuredAccounts.isActive, true)))
+        .groupBy(
+          featuredAccounts.id,
+          featuredAccounts.handle,
+          featuredAccounts.displayName,
+          featuredAccounts.followerCount,
+          featuredAccounts.profilePicUrl
+        )
+        .limit(1);
+      if (byHandle.length > 0 && Number(byHandle[0].reelCount) > 0) {
+        chosen = byHandle[0];
+      } else {
+        console.warn(
+          `[seedDemoScrape] preferred handle "${preferredHandle}" not found or has 0 reels, falling back to richness winner`
+        );
+      }
+    }
+
+    if (!chosen) {
+      // Richness = reelCount × avgEngagementRate, scoped to active
+      // accounts that actually have stored reels. Pure density metric;
+      // the tradeoff (pet accounts often win over business accounts)
+      // is accepted per §3 spec ("densest possible dashboard").
+      const winner = await db
+        .select({
+          id: featuredAccounts.id,
+          handle: featuredAccounts.handle,
+          displayName: featuredAccounts.displayName,
+          followerCount: featuredAccounts.followerCount,
+          profilePicUrl: featuredAccounts.profilePicUrl,
+        })
+        .from(featuredAccounts)
+        .innerJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .where(eq(featuredAccounts.isActive, true))
+        .groupBy(
+          featuredAccounts.id,
+          featuredAccounts.handle,
+          featuredAccounts.displayName,
+          featuredAccounts.followerCount,
+          featuredAccounts.profilePicUrl
+        )
+        .orderBy(sql`COUNT(${featuredReels.id}) * ${featuredAccounts.avgEngagementRate} DESC`)
+        .limit(1);
+      if (winner.length === 0) {
+        console.warn(
+          "[seedDemoScrape] no eligible featured accounts (empty pool?), skipping seed for user",
+          userId
+        );
+        return null;
+      }
+      chosen = winner[0];
+    }
+
+    // Replay the scrape-featured-accounts script's pre-ranked top reels
+    // in rank order (1..30). `rank` is reserved in MySQL 8+; Drizzle
+    // auto-escapes it via the schema mapping so the query builder is
+    // safe here, unlike the hand-written SQL in the scrape script.
+    const sourceReels = await db
+      .select()
+      .from(featuredReels)
+      .where(eq(featuredReels.featuredAccountId, chosen.id))
+      .orderBy(asc(featuredReels.rank));
+
+    if (sourceReels.length === 0) {
+      console.warn(
+        `[seedDemoScrape] chosen account @${chosen.handle} has 0 reels after re-check, skipping`
+      );
+      return null;
+    }
+
+    // Mirror runScrapeJob's normal completion shape (server/routers.ts
+    // L3487-3495) field-for-field so the dashboard can't tell the
+    // difference between a demo job and a real one — except via
+    // isDemo, which is the only legitimate discriminator.
+    jobId = await createScrapeJob({
+      userId,
+      handle: chosen.handle,
+      timeframeDays: 365,
+      status: "completed",
+      totalReels: sourceReels.length,
+      followerCount: chosen.followerCount,
+      profilePicUrl: chosen.profilePicUrl ?? undefined,
+      currentStep: "complete",
+      reelsFound: sourceReels.length,
+      progressPercent: 100,
+      isDemo: true,
+    });
+
+    // Copy featured_reels → reels. reelUrl is synthesized from the
+    // shortcode (canonical IG format). ownerUsername is set to the
+    // featured account handle. featured_reels-only fields
+    // (engagementRate, rank, scrapedAt) are dropped — the dashboard
+    // recomputes engagement rate on the fly from view/like/comment
+    // counts, and rank is implicit in the insertion order.
+    await insertReels(
+      sourceReels.map((r) => ({
+        jobId: jobId!,
+        shortcode: r.reelShortcode,
+        caption: r.caption,
+        viewCount: r.viewCount,
+        likeCount: r.likeCount,
+        commentCount: r.commentCount,
+        thumbnailUrl: r.thumbnailUrl,
+        videoUrl: r.videoUrl,
+        reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+        duration: r.duration,
+        postedAt: r.postedAt,
+        ownerUsername: chosen!.handle,
+      }))
+    );
+
+    console.log(
+      `[seedDemoScrape] seeded demo for user ${userId}: job #${jobId}, @${chosen.handle}, ${sourceReels.length} reels`
+    );
+    return jobId;
+  } catch (error) {
+    console.error("[seedDemoScrape] failed for user", userId, ":", error);
+    if (jobId !== null) {
+      try {
+        await deleteScrapeJob(jobId);
+      } catch (cleanupError) {
+        console.error("[seedDemoScrape] cleanup of partial job", jobId, "failed:", cleanupError);
+      }
+    }
+    return null;
+  }
+}
+
+/**
+ * Stamps the user as having completed onboarding. Writes the niche
+ * selection (assumed already deduped by the caller), the completion
+ * timestamp, and optionally `demoSeededAt` — only when the paired
+ * demo-seed succeeded, so `user.demoSeededAt IS NOT NULL` remains a
+ * reliable "real demo dashboard exists" signal.
+ *
+ * Idempotency lives at the tRPC boundary (the mutation guards on
+ * `onboardingCompletedAt IS NOT NULL` before calling this). Repeated
+ * calls here are harmless — they just rewrite the same columns.
+ */
+export async function markOnboardingComplete(
+  userId: number,
+  nicheSlugs: string[],
+  demoSeededAt: Date | null
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates: Partial<
+    Pick<User, "selectedNicheSlugs" | "onboardingCompletedAt" | "demoSeededAt">
+  > = {
+    selectedNicheSlugs: nicheSlugs,
+    onboardingCompletedAt: new Date(),
+  };
+  if (demoSeededAt) {
+    updates.demoSeededAt = demoSeededAt;
+  }
+  await db.update(users).set(updates).where(eq(users.id, userId));
+}
+
+/**
+ * Marks onboarding as skipped. `demoSeededAt` follows the same "only
+ * stamp on success" rule as markOnboardingComplete.
+ */
+export async function markOnboardingSkipped(
+  userId: number,
+  demoSeededAt: Date | null
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates: Partial<Pick<User, "onboardingSkippedAt" | "demoSeededAt">> = {
+    onboardingSkippedAt: new Date(),
+  };
+  if (demoSeededAt) {
+    updates.demoSeededAt = demoSeededAt;
+  }
+  await db.update(users).set(updates).where(eq(users.id, userId));
 }
 
 // ── Scrape Jobs ──

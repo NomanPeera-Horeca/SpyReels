@@ -84,13 +84,16 @@ import {
   deleteScrapeJob,
   getOnboardingState,
   updateOnboardingState,
+  seedDemoScrape,
+  markOnboardingComplete,
+  markOnboardingSkipped,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
-import { eq, ne, desc, asc, sql, and } from "drizzle-orm";
+import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
@@ -557,6 +560,99 @@ export const appRouter = router({
           totalReelsEver: r.totalReelsEver,
           reelsAvailable: Number(r.reelsAvailable),
         }));
+      }),
+
+    /**
+     * Batch version of `accountsByNiche` for the /onboarding Step 2 UI
+     * (spec §3). Takes N slugs, returns a map of slug → accounts using
+     * the exact same creator shape and filter rules as the single-slug
+     * endpoint. Keeps the onboarding page to one round-trip regardless
+     * of how many niches the user picked.
+     *
+     * Slugs are deduped up front. Unknown slugs resolve to an empty
+     * array rather than throwing — the UI shows an empty state for
+     * empty sections, which is the same behavior it needs for niches
+     * with zero active creators anyway (edge case #3).
+     */
+    accountsByNicheSlugs: protectedProcedure
+      .input(z.object({ slugs: z.array(z.string().trim().min(1)).min(1).max(30) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const dedupedSlugs = Array.from(new Set(input.slugs));
+
+        // Seed the output map so every requested slug has an entry
+        // (empty array for unknowns / no-creator niches). Downstream
+        // code can rely on `result[slug]` existing without a defined
+        // check.
+        const grouped: Record<
+          string,
+          {
+            id: number;
+            handle: string;
+            displayName: string;
+            followerCount: number;
+            avgEngagementRate: number;
+            profilePicUrl: string;
+            totalReelsEver: number;
+            reelsAvailable: number;
+          }[]
+        > = {};
+        for (const slug of dedupedSlugs) grouped[slug] = [];
+
+        // Single join covers all slugs; we partition by slug client-
+        // side (cheaper than N queries). Filter rules match
+        // `accountsByNiche` exactly: active accounts with ≥1 stored
+        // reel, sorted by follower count desc within each niche.
+        const rows = await db!
+          .select({
+            slug: niches.slug,
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            totalReelsEver: featuredAccounts.totalReelsEver,
+            reelsAvailable: sql<number>`COUNT(${featuredReels.id})`,
+          })
+          .from(niches)
+          .innerJoin(featuredAccountNiches, eq(featuredAccountNiches.nicheId, niches.id))
+          .innerJoin(
+            featuredAccounts,
+            and(
+              eq(featuredAccounts.id, featuredAccountNiches.accountId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+          .where(inArray(niches.slug, dedupedSlugs))
+          .groupBy(
+            niches.slug,
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            featuredAccounts.totalReelsEver
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(asc(niches.slug), desc(featuredAccounts.followerCount));
+
+        for (const r of rows) {
+          grouped[r.slug].push({
+            id: r.id,
+            handle: r.handle,
+            displayName: r.displayName ?? "",
+            followerCount: r.followerCount,
+            avgEngagementRate: Number(r.avgEngagementRate),
+            profilePicUrl: r.profilePicUrl ?? "",
+            totalReelsEver: r.totalReelsEver,
+            reelsAvailable: Number(r.reelsAvailable),
+          });
+        }
+
+        return { groups: grouped };
       }),
 
     /**
@@ -2306,12 +2402,14 @@ The hook MUST be 7-10 words. Count them.`
       }),
   }),
 
-  // ── Onboarding state (first-run experience flags) ──
+  // ── Onboarding state (first-run experience flags + flow) ──
   onboarding: router({
     /**
-     * Returns all 5 onboarding fields in one call. The dashboard demo
-     * banner (spec §7.4) keys off `demoSeededAt`, so it's bundled here
-     * instead of requiring a second round-trip.
+     * Returns all 8 onboarding fields in one call. The dashboard demo
+     * banner (spec §7.4) keys off `demoSeededAt`, the OnboardingGate
+     * keys off the `onboarding{Completed,Skipped}At` timestamps, and
+     * the Step 1 niche grid pre-hydrates off `selectedNicheSlugs` —
+     * all bundled here so the client only pays one round-trip.
      */
     getState: protectedProcedure.query(async ({ ctx }) => {
       const state = await getOnboardingState(ctx.user.id);
@@ -2329,6 +2427,9 @@ The hook MUST be 7-10 words. Count them.`
         hasCompletedFirstSpy: state.hasCompletedFirstSpy,
         hasDismissedDemoBanner: state.hasDismissedDemoBanner,
         demoSeededAt: state.demoSeededAt,
+        selectedNicheSlugs: state.selectedNicheSlugs ?? [],
+        onboardingCompletedAt: state.onboardingCompletedAt,
+        onboardingSkippedAt: state.onboardingSkippedAt,
       };
     }),
 
@@ -2348,6 +2449,101 @@ The hook MUST be 7-10 words. Count them.`
     dismissDemoBanner: protectedProcedure.mutation(async ({ ctx }) => {
       await updateOnboardingState(ctx.user.id, { hasDismissedDemoBanner: true });
       return { success: true };
+    }),
+
+    /**
+     * Finalizes /onboarding: records the user's niche picks, optionally
+     * seeds a demo scrape for the creator they chose, and stamps the
+     * completion timestamp. Robust to every failure mode — per the
+     * "demo seed failure must not block onboarding" rule, a seed
+     * failure still returns `success: true` with `demoJobId: null`.
+     *
+     * Response variants:
+     *   - Happy path:        { success, demoJobId: <id>, alreadyComplete: false }
+     *   - Handle not found:  { success, demoJobId: <id>, alreadyComplete: false,
+     *                          warning: "selected_creator_not_found" }
+     *   - Seed failed:       { success, demoJobId: null, alreadyComplete: false }
+     *   - Already complete:  { success, demoJobId: null, alreadyComplete: true }
+     */
+    complete: protectedProcedure
+      .input(
+        z.object({
+          selectedNicheSlugs: z.array(z.string().trim().min(1)).min(1),
+          featuredAccountHandle: z.string().trim().min(1).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const state = await getOnboardingState(ctx.user.id);
+        if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
+          return {
+            success: true as const,
+            demoJobId: null,
+            alreadyComplete: true as const,
+          };
+        }
+
+        // Dedupe slugs defensively — the client shouldn't send dupes,
+        // but if a race or bug slips one through, we don't want to
+        // store a malformed JSON array on the user row.
+        const dedupedSlugs = Array.from(new Set(input.selectedNicheSlugs));
+
+        // Detect the fallback case so we can surface the warning to
+        // the client without a second DB round-trip: if the user
+        // passed a handle AND that handle doesn't resolve, the seed
+        // falls back to the richness winner and we annotate the
+        // response.
+        let warning: "selected_creator_not_found" | undefined;
+        if (input.featuredAccountHandle) {
+          const normalized = input.featuredAccountHandle.replace(/^@/, "").trim().toLowerCase();
+          const exists = await (await getDb())!
+            .select({ id: featuredAccounts.id })
+            .from(featuredAccounts)
+            .where(
+              and(
+                eq(featuredAccounts.handle, normalized),
+                eq(featuredAccounts.isActive, true)
+              )
+            )
+            .limit(1);
+          if (exists.length === 0) {
+            warning = "selected_creator_not_found";
+          }
+        }
+
+        const demoJobId = await seedDemoScrape(
+          ctx.user.id,
+          input.featuredAccountHandle
+        );
+        await markOnboardingComplete(
+          ctx.user.id,
+          dedupedSlugs,
+          demoJobId !== null ? new Date() : null
+        );
+        return {
+          success: true as const,
+          demoJobId,
+          alreadyComplete: false as const,
+          ...(warning ? { warning } : {}),
+        };
+      }),
+
+    /**
+     * User hit "Skip setup". No niche prefs captured, but we still seed
+     * a demo (using the richness winner) so their dashboard isn't
+     * empty on arrival. Idempotent — re-calling after completion or
+     * a prior skip is a no-op.
+     */
+    skip: protectedProcedure.mutation(async ({ ctx }) => {
+      const state = await getOnboardingState(ctx.user.id);
+      if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
+        return { success: true as const, alreadyDone: true as const };
+      }
+      const demoJobId = await seedDemoScrape(ctx.user.id);
+      await markOnboardingSkipped(
+        ctx.user.id,
+        demoJobId !== null ? new Date() : null
+      );
+      return { success: true as const, alreadyDone: false as const };
     }),
   }),
 

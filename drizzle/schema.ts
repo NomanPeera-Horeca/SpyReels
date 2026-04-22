@@ -25,6 +25,15 @@ export const users = mysqlTable("users", {
   hasCompletedFirstSpy: boolean("hasCompletedFirstSpy").default(false).notNull(),
   hasDismissedDemoBanner: boolean("hasDismissedDemoBanner").default(false).notNull(),
   demoSeededAt: datetime("demoSeededAt", { mode: "date" }),
+  // Onboarding flow state (Section 3). `selectedNicheSlugs` stores the
+  // niches picked on /onboarding Step 1 as a JSON array of slugs; it
+  // feeds future recommendation surfaces. `onboardingCompletedAt` and
+  // `onboardingSkippedAt` are mutually exclusive in practice — the
+  // OnboardingGate component uses either being non-null as the signal
+  // to bypass the /onboarding redirect.
+  selectedNicheSlugs: json("selectedNicheSlugs").$type<string[]>(),
+  onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
+  onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -58,6 +67,10 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   classifiedNicheSlug: varchar("classifiedNicheSlug", { length: 64 }),
   classifiedConfidence: mysqlEnum("classifiedConfidence", ["high", "medium", "low"]),
   classifiedAt: datetime("classifiedAt", { mode: "date" }),
+  // True when this scrape_jobs row was created by the signup demo-seed
+  // path (Section 3). Used by the dashboard's demo banner visibility
+  // check (spec §7.4) and the hasCompletedFirstSpy auto-flip guard.
+  isDemo: boolean("isDemo").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
