@@ -2,8 +2,10 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { FEATURE_LAUNCH_DATE_ISO, ONBOARDING_NICHES, ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Search, ArrowRight, ArrowLeft, PencilLine, Sparkles } from "lucide-react";
+import { usePostHog } from "@posthog/react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { normalizeAnalyticsHandle } from "@/lib/utils";
 
 type Creator = {
   id: number;
@@ -33,6 +35,7 @@ function formatCount(n: number): string {
 }
 
 export default function OnboardingPage() {
+  const posthog = usePostHog();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<1 | 2>(1);
   const [search, setSearch] = useState("");
@@ -50,6 +53,15 @@ export default function OnboardingPage() {
 
   const completeMutation = trpc.onboarding.complete.useMutation();
   const skipMutation = trpc.onboarding.skip.useMutation();
+
+  const goToCreatorStep = () => {
+    if (selectedNiches.length === 0) return;
+    posthog?.capture("onboarding_niches_selected", {
+      niche_slugs: [...selectedNiches],
+      count: selectedNiches.length,
+    });
+    setStep(2);
+  };
 
   const shouldBypassOnboarding = useMemo(() => {
     if (!user) return false;
@@ -128,6 +140,10 @@ export default function OnboardingPage() {
       if (scoreB !== scoreA) return scoreB - scoreA;
       return Number(b.followerCount) - Number(a.followerCount);
     })[0];
+    posthog?.capture("onboarding_creator_selected", {
+      creator_handle: normalizeAnalyticsHandle(picked.handle),
+      is_pick_for_me: true,
+    });
     setSelectedCreatorHandle(picked.handle);
   };
 
@@ -140,6 +156,13 @@ export default function OnboardingPage() {
         selectedNicheSlugs: selectedNiches,
         ...(selectedCreatorHandle ? { featuredAccountHandle: selectedCreatorHandle } : {}),
       });
+      if (!result.alreadyComplete) {
+        posthog?.capture("onboarding_completed", {
+          niches_selected: selectedNiches.length,
+          demo_creator_handle: normalizeAnalyticsHandle(result.demoCreatorHandle ?? ""),
+          demo_seeded: Boolean(result.demoJobId),
+        });
+      }
       if ("warning" in result && result.warning === "selected_creator_not_found") {
         setCompletionText("Your pick wasn’t available, so we selected a great fallback creator.");
       }
@@ -153,7 +176,15 @@ export default function OnboardingPage() {
     setIsCompleting(true);
     setCompletionText("Picking a great default creator for you...");
     try {
-      await skipMutation.mutateAsync();
+      const result = await skipMutation.mutateAsync();
+      if (!result.alreadyDone) {
+        posthog?.capture("onboarding_skipped");
+        posthog?.capture("onboarding_completed", {
+          niches_selected: 0,
+          demo_creator_handle: normalizeAnalyticsHandle(result.demoCreatorHandle ?? ""),
+          demo_seeded: Boolean(result.demoJobId),
+        });
+      }
       setLocation("/dashboard");
     } finally {
       setIsCompleting(false);
@@ -353,7 +384,13 @@ export default function OnboardingPage() {
                               <button
                                 key={`${slug}-${creator.id}`}
                                 type="button"
-                                onClick={() => setSelectedCreatorHandle(creator.handle)}
+                                onClick={() => {
+                                  posthog?.capture("onboarding_creator_selected", {
+                                    creator_handle: normalizeAnalyticsHandle(creator.handle),
+                                    is_pick_for_me: false,
+                                  });
+                                  setSelectedCreatorHandle(creator.handle);
+                                }}
                                 className={`relative rounded-xl border p-4 text-left transition ${
                                   selected
                                     ? "border-primary bg-primary/8"
@@ -447,7 +484,7 @@ export default function OnboardingPage() {
             <button
               type="button"
               disabled={!canContinueStep1}
-              onClick={() => setStep(2)}
+              onClick={goToCreatorStep}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Continue

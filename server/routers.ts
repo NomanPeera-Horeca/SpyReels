@@ -2594,6 +2594,7 @@ The hook MUST be 7-10 words. Count them.`
             success: true as const,
             demoJobId: null,
             alreadyComplete: true as const,
+            demoCreatorHandle: null as string | null,
           };
         }
 
@@ -2634,10 +2635,16 @@ The hook MUST be 7-10 words. Count them.`
           dedupedSlugs,
           demoJobId !== null ? new Date() : null
         );
+        let demoCreatorHandle: string | null = null;
+        if (demoJobId) {
+          const seededJob = await getScrapeJob(demoJobId);
+          demoCreatorHandle = seededJob?.handle ?? null;
+        }
         return {
           success: true as const,
           demoJobId,
           alreadyComplete: false as const,
+          demoCreatorHandle,
           ...(warning ? { warning } : {}),
         };
       }),
@@ -2651,14 +2658,29 @@ The hook MUST be 7-10 words. Count them.`
     skip: protectedProcedure.mutation(async ({ ctx }) => {
       const state = await getOnboardingState(ctx.user.id);
       if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
-        return { success: true as const, alreadyDone: true as const };
+        return {
+          success: true as const,
+          alreadyDone: true as const,
+          demoJobId: null as null,
+          demoCreatorHandle: null as string | null,
+        };
       }
       const demoJobId = await seedDemoScrape(ctx.user.id);
       await markOnboardingSkipped(
         ctx.user.id,
         demoJobId !== null ? new Date() : null
       );
-      return { success: true as const, alreadyDone: false as const };
+      let demoCreatorHandle: string | null = null;
+      if (demoJobId) {
+        const seededJob = await getScrapeJob(demoJobId);
+        demoCreatorHandle = seededJob?.handle ?? null;
+      }
+      return {
+        success: true as const,
+        alreadyDone: false as const,
+        demoJobId,
+        demoCreatorHandle,
+      };
     }),
   }),
 

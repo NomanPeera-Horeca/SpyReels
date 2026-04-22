@@ -250,8 +250,11 @@ export default function Home() {
       !onboardingState.hasCompletedFirstSpy
   );
 
-  const dismissWelcome = async () => {
+  const dismissWelcome = async (action?: "tour" | "demo" | "dismiss") => {
     setIsWelcomeOpen(false);
+    if (action) {
+      posthog?.capture("welcome_modal_action", { action });
+    }
     try {
       await dismissWelcomeMutation.mutateAsync();
       await onboardingStateQuery.refetch();
@@ -264,6 +267,7 @@ export default function Home() {
     setHintDismissedLocally(true);
     try {
       await dismissHintCardMutation.mutateAsync();
+      posthog?.capture("hint_card_dismissed");
       await onboardingStateQuery.refetch();
     } catch {
       // non-blocking UI hide
@@ -916,7 +920,7 @@ export default function Home() {
             <Tooltip content="Dismiss. We won't show this again.">
               <button
                 type="button"
-                onClick={dismissWelcome}
+                onClick={() => dismissWelcome("dismiss")}
                 className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
                 aria-label="Close welcome modal"
               >
@@ -935,7 +939,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={async () => {
-                  await dismissWelcome();
+                  await dismissWelcome("tour");
                   toast.info("Tour coming soon! Explore on your own for now.");
                 }}
                 className="flex w-full items-center justify-between rounded-xl bg-primary px-4 py-3 text-left text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
@@ -950,7 +954,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={async () => {
-                  await dismissWelcome();
+                  await dismissWelcome("demo");
                   toast.info(
                     "Demo video coming soon. Try starting a spy session to see SpyReels in action."
                   );
@@ -966,7 +970,7 @@ export default function Home() {
 
               <button
                 type="button"
-                onClick={dismissWelcome}
+                onClick={() => dismissWelcome("dismiss")}
                 className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
               >
                 <ArrowLeft className="h-3 w-3" />

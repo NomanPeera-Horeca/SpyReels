@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { normalizeAnalyticsHandle } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 
 type SortOption =
@@ -113,6 +115,7 @@ function AiBadge({
 }
 
 export default function Dashboard() {
+  const posthog = usePostHog();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const searchString = useSearch();
@@ -133,6 +136,21 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const setViewModeTracked = useCallback(
+    (next: ViewMode) => {
+      setViewMode((prev) => {
+        if (prev === next) return prev;
+        posthog?.capture("view_toggled", { mode: next });
+        return next;
+      });
+    },
+    [posthog]
+  );
+
+  const prevJobStatusRef = useRef<string | undefined>(undefined);
+  const prevHasCompletedFirstSpyRef = useRef<boolean | undefined>(undefined);
+  /** Ensures `first_spy_completed` fires at most once per browser session (milestone, not per job). */
+  const firstSpyMilestoneLoggedRef = useRef(false);
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
@@ -190,6 +208,31 @@ export default function Dashboard() {
       },
     }
   );
+
+  useEffect(() => {
+    const j = jobQuery.data;
+    const status = j?.status;
+    const prevStatus = prevJobStatusRef.current;
+    const transitionedToCompleted =
+      status === "completed" &&
+      prevStatus !== undefined &&
+      prevStatus !== "completed";
+
+    if (transitionedToCompleted && j && !j.isDemo) {
+      const hadPriorFirstSpyComplete = prevHasCompletedFirstSpyRef.current === true;
+      if (!hadPriorFirstSpyComplete && !firstSpyMilestoneLoggedRef.current) {
+        posthog?.capture("first_spy_completed", {
+          handle: normalizeAnalyticsHandle(j.handle),
+          niche_slug: j.classifiedNicheSlug ?? null,
+          job_id: j.id,
+        });
+        firstSpyMilestoneLoggedRef.current = true;
+      }
+    }
+
+    prevJobStatusRef.current = status;
+    prevHasCompletedFirstSpyRef.current = user?.hasCompletedFirstSpy ?? false;
+  }, [jobQuery.data, user?.hasCompletedFirstSpy, posthog]);
 
   const job = jobQuery.data;
 
@@ -387,6 +430,7 @@ export default function Dashboard() {
   });
   const dismissDemoBanner = trpc.onboarding.dismissDemoBanner.useMutation({
     onSuccess: () => {
+      posthog?.capture("demo_banner_dismissed");
       utils.onboarding.getState.invalidate();
       toast.success("Demo banner dismissed");
     },
@@ -712,7 +756,14 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold text-amber-300">This is a demo dashboard preloaded for you.</p>
                 <p className="text-xs text-muted-foreground">Ready to spy on a real creator?</p>
               </div>
-              <Button size="sm" className="shrink-0" onClick={() => setLocation("/research")}>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  posthog?.capture("demo_banner_cta_clicked");
+                  setLocation("/research");
+                }}
+              >
                 Start a new spy session
               </Button>
               <Tooltip content="Hide this banner">
@@ -839,7 +890,7 @@ export default function Dashboard() {
                         variant={viewMode === "list" ? "default" : "ghost"}
                         size="sm"
                         className="h-7 px-2 text-xs"
-                        onClick={() => setViewMode("list")}
+                        onClick={() => setViewModeTracked("list")}
                       >
                         <List className="h-3.5 w-3.5 mr-1" />
                         List
@@ -848,7 +899,7 @@ export default function Dashboard() {
                         variant={viewMode === "grid" ? "default" : "ghost"}
                         size="sm"
                         className="h-7 px-2 text-xs"
-                        onClick={() => setViewMode("grid")}
+                        onClick={() => setViewModeTracked("grid")}
                       >
                         <Grid3X3 className="h-3.5 w-3.5 mr-1" />
                         Grid
@@ -1306,7 +1357,16 @@ export default function Dashboard() {
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => setLocation(`/dashboard?featuredAccountId=${c.id}`)}
+                          onClick={() => {
+                            if (job?.handle && nicheSlugForSidebar) {
+                              posthog?.capture("related_creator_clicked", {
+                                from_creator_handle: normalizeAnalyticsHandle(job.handle),
+                                to_creator_handle: normalizeAnalyticsHandle(c.handle),
+                                from_niche: nicheSlugForSidebar,
+                              });
+                            }
+                            setLocation(`/dashboard?featuredAccountId=${c.id}`);
+                          }}
                           className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
                         >
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
