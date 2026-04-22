@@ -701,7 +701,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="min-w-0">
           {showDemoBanner && (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 p-4">
@@ -1224,7 +1224,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <aside className="hidden xl:block sticky top-6 self-start max-h-[calc(100vh-3rem)] space-y-4 overflow-y-auto">
+        <aside className="min-w-0 w-full space-y-4 border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           {!jobComplete ? (
             <>
               <div className="rounded-xl border border-border/40 bg-card p-4">
