@@ -40,12 +40,21 @@ import {
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import Tooltip from "@/components/Tooltip";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
     return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
   return n.toString();
+}
+
+function TipDot() {
+  return (
+    <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground">
+      i
+    </span>
+  );
 }
 
 export default function Home() {
@@ -348,14 +357,16 @@ export default function Home() {
                 Get your first viral script in 3 minutes.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={dismissHint}
-              className="rounded-md p-1 text-muted-foreground transition hover:bg-card hover:text-foreground"
-              aria-label="Dismiss hint card"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
+            <Tooltip content="Dismiss. We won't show this again.">
+              <button
+                type="button"
+                onClick={dismissHint}
+                className="rounded-md p-1 text-muted-foreground transition hover:bg-card hover:text-foreground"
+                aria-label="Dismiss hint card"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
@@ -406,7 +417,14 @@ export default function Home() {
                   htmlFor="handle"
                   className="text-sm font-medium text-card-foreground"
                 >
-                  Instagram Handle
+                  <span className="inline-flex items-center gap-1.5">
+                    Instagram Handle
+                    <Tooltip content="Enter the username without the @ symbol. The account must be public.">
+                      <span>
+                        <TipDot />
+                      </span>
+                    </Tooltip>
+                  </span>
                 </Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -567,7 +585,14 @@ export default function Home() {
                   htmlFor="timeframe"
                   className="text-sm font-medium text-card-foreground"
                 >
-                  Timeframe
+                  <span className="inline-flex items-center gap-1.5">
+                    Timeframe
+                    <Tooltip content="We'll collect every Reel this creator posted within this date window.">
+                      <span>
+                        <TipDot />
+                      </span>
+                    </Tooltip>
+                  </span>
                 </Label>
                 <Select value={timeframe} onValueChange={setTimeframe}>
                   <SelectTrigger className="h-11 bg-background">
@@ -599,7 +624,14 @@ export default function Home() {
                 scrapeGate.allowed &&
                 scrapeGate.limit > 0 && (
                   <p className="text-xs text-muted-foreground text-center">
-                    {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
+                    <span className="inline-flex items-center gap-1.5">
+                      {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
+                      <Tooltip content="Your plan includes 50 spy credits per month. Resets on the 1st of every month.">
+                        <span>
+                          <TipDot />
+                        </span>
+                      </Tooltip>
+                    </span>
                   </p>
                 )}
 
@@ -658,7 +690,9 @@ export default function Home() {
                   : "border-border bg-card text-muted-foreground hover:text-foreground"
               }`}
             >
-              All niches
+              <Tooltip content="Show every featured creator across all niches">
+                <span>All niches</span>
+              </Tooltip>
             </button>
             {allNiches.map((niche) => (
               <button
@@ -671,7 +705,25 @@ export default function Home() {
                     : "border-border bg-card text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {niche.name}
+                {niche.slug === "business-entrepreneurship" ? (
+                  <Tooltip content="Entrepreneurs, founders, CEOs">
+                    <span>{niche.name}</span>
+                  </Tooltip>
+                ) : niche.slug === "marketing-sales" ? (
+                  <Tooltip content="Growth, sales, branding experts">
+                    <span>{niche.name}</span>
+                  </Tooltip>
+                ) : niche.slug === "content-marketing" ? (
+                  <Tooltip content="Creators who teach content creation">
+                    <span>{niche.name}</span>
+                  </Tooltip>
+                ) : niche.slug === "investing-crypto" ? (
+                  <Tooltip content="Stocks, crypto, wealth building">
+                    <span>{niche.name}</span>
+                  </Tooltip>
+                ) : (
+                  niche.name
+                )}
               </button>
             ))}
           </div>
@@ -784,7 +836,14 @@ export default function Home() {
                 <div className="mb-3 grid grid-cols-2 gap-3 border-y border-border py-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Followers
+                      <span className="inline-flex items-center gap-1">
+                        Followers
+                        <Tooltip content="Total Instagram followers as of last sync">
+                          <span>
+                            <TipDot />
+                          </span>
+                        </Tooltip>
+                      </span>
                     </p>
                     <p className="font-mono text-sm text-foreground">
                       {formatCount(creator.followerCount)}
@@ -792,7 +851,14 @@ export default function Home() {
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Avg ER
+                      <span className="inline-flex items-center gap-1">
+                        Avg ER
+                        <Tooltip content="Engagement rate = (likes + comments) / followers. Higher = more engaged audience.">
+                          <span>
+                            <TipDot />
+                          </span>
+                        </Tooltip>
+                      </span>
                     </p>
                     <p className="font-mono text-sm text-emerald-500">
                       {creator.avgEngagementRate.toFixed(2)}%
@@ -801,7 +867,9 @@ export default function Home() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    {creator.reelsAvailable} viral reels ready
+                    <Tooltip content="Top 30 viral reels already analyzed and ready to view">
+                      <span>{creator.reelsAvailable} viral reels ready</span>
+                    </Tooltip>
                   </span>
                   <span className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground transition group-hover:text-primary">
                     See Reels →
@@ -845,14 +913,16 @@ export default function Home() {
       {isWelcomeOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-xl rounded-2xl border border-border bg-card p-8">
-            <button
-              type="button"
-              onClick={dismissWelcome}
-              className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
-              aria-label="Close welcome modal"
-            >
-              <XCircle className="h-5 w-5" />
-            </button>
+            <Tooltip content="Dismiss. We won't show this again.">
+              <button
+                type="button"
+                onClick={dismissWelcome}
+                className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
+                aria-label="Close welcome modal"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </Tooltip>
             <p className="mb-2 text-3xl">👋</p>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground">
               Welcome to <span className="italic text-primary">SpyReels</span>
