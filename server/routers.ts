@@ -3583,6 +3583,35 @@ async function buildExportData(jobId: number) {
   return { csvContent, filename };
 }
 
+/**
+ * Flip `hasCompletedFirstSpy` exactly once for a user's first successful
+ * non-demo scrape completion. Guard rails:
+ *  - Demo-seeded jobs never count as first spies (`scrapeJob.isDemo`).
+ *  - If the flag is already true, skip the write.
+ *  - Missing job/user rows are treated as no-ops (defensive).
+ *
+ * This helper intentionally only runs from runScrapeJob completion paths.
+ * Resync and failed jobs must not mutate this onboarding flag.
+ */
+async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
+  try {
+    const job = await getScrapeJob(jobId);
+    if (!job) return;
+    if (job.isDemo) return;
+
+    const onboardingState = await getOnboardingState(job.userId);
+    if (!onboardingState) return;
+    if (onboardingState.hasCompletedFirstSpy) return;
+
+    await updateOnboardingState(job.userId, { hasCompletedFirstSpy: true });
+  } catch (error) {
+    console.warn(
+      `[maybeMarkFirstSpyCompleted] Non-fatal error for job ${jobId}:`,
+      error
+    );
+  }
+}
+
 /** Background scrape job runner */
 async function runScrapeJob(
   jobId: number,
@@ -3660,6 +3689,7 @@ async function runScrapeJob(
         currentStep: "complete",
         progressPercent: 100,
       });
+      await maybeMarkFirstSpyCompleted(jobId);
       return;
     }
 
@@ -3689,6 +3719,7 @@ async function runScrapeJob(
       reelsFound: reelData.length,
       progressPercent: 100,
     });
+    await maybeMarkFirstSpyCompleted(jobId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     // Failure preserves the last progressPercent the UI saw — just flip the
