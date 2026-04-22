@@ -27,6 +27,7 @@ import {
   Search,
   Clock,
   ArrowRight,
+  ArrowLeft,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -34,6 +35,8 @@ import {
   ImageIcon,
   BadgeCheck,
   ExternalLink,
+  Sparkles,
+  PlayCircle,
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -85,11 +88,20 @@ export default function Home() {
   const profileError = profile?.found === false ? profile.error : null;
 
   const scrapeGate = useUsageGate("scrapeCount");
+  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const dismissWelcomeMutation = trpc.onboarding.dismissWelcome.useMutation();
+  const dismissHintCardMutation = trpc.onboarding.dismissHintCard.useMutation();
   const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const [selectedNicheSlug, setSelectedNicheSlug] = useState<string>("all");
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const [hintDismissedLocally, setHintDismissedLocally] = useState(false);
+  const initializedNicheDefaultRef = useRef(false);
 
   type NicheRow = { slug: string; name: string };
   const allNiches = useMemo<NicheRow[]>(
@@ -129,6 +141,7 @@ export default function Home() {
   const [allCreators, setAllCreators] = useState<FeaturedCreator[]>([]);
   const [allCreatorsLoading, setAllCreatorsLoading] = useState(false);
   const [allCreatorsError, setAllCreatorsError] = useState<string | null>(null);
+  const [allRetryNonce, setAllRetryNonce] = useState(0);
 
   useEffect(() => {
     if (selectedNicheSlug !== "all") return;
@@ -194,7 +207,59 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [allNiches, selectedNicheSlug, utils.featured.accountsByNiche]);
+  }, [allNiches, selectedNicheSlug, utils.featured.accountsByNiche, allRetryNonce]);
+
+  useEffect(() => {
+    const onboardingState = onboardingStateQuery.data;
+    if (!onboardingState) return;
+    if (onboardingState.hasSeenWelcome) return;
+    setIsWelcomeOpen(true);
+  }, [onboardingStateQuery.data]);
+
+  useEffect(() => {
+    if (initializedNicheDefaultRef.current) return;
+
+    const selectedNicheSlugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
+    if (selectedNicheSlugs.length === 0) {
+      initializedNicheDefaultRef.current = true;
+      return;
+    }
+    if (allNiches.length === 0) return;
+
+    const firstAvailable = selectedNicheSlugs.find((slug) =>
+      allNiches.some((niche) => niche.slug === slug)
+    );
+    setSelectedNicheSlug(firstAvailable ?? "all");
+    initializedNicheDefaultRef.current = true;
+  }, [allNiches, onboardingStateQuery.data?.selectedNicheSlugs]);
+
+  const onboardingState = onboardingStateQuery.data;
+  const showHintCard = Boolean(
+    onboardingState &&
+      !hintDismissedLocally &&
+      !onboardingState.hasDismissedHintCard &&
+      !onboardingState.hasCompletedFirstSpy
+  );
+
+  const dismissWelcome = async () => {
+    setIsWelcomeOpen(false);
+    try {
+      await dismissWelcomeMutation.mutateAsync();
+      await onboardingStateQuery.refetch();
+    } catch {
+      // non-blocking UI close; state will re-sync on next refresh
+    }
+  };
+
+  const dismissHint = async () => {
+    setHintDismissedLocally(true);
+    try {
+      await dismissHintCardMutation.mutateAsync();
+      await onboardingStateQuery.refetch();
+    } catch {
+      // non-blocking UI hide
+    }
+  };
 
   const featuredCreators = useMemo<FeaturedCreator[]>(() => {
     if (selectedNicheSlug === "all") return allCreators;
@@ -273,6 +338,56 @@ export default function Home() {
           Reels data including views, likes, comments, and more.
         </p>
       </div>
+
+      {showHintCard ? (
+        <div className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-primary">New to SpyReels?</p>
+              <p className="text-xs text-muted-foreground">
+                Get your first viral script in 3 minutes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissHint}
+              className="rounded-md p-1 text-muted-foreground transition hover:bg-card hover:text-foreground"
+              aria-label="Dismiss hint card"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
+              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                1
+              </span>
+              <p>
+                <span className="font-medium text-foreground">Pick a creator.</span>{" "}
+                Type any @handle or click a featured viral creator below.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
+              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                2
+              </span>
+              <p>
+                <span className="font-medium text-foreground">See viral reels instantly.</span>{" "}
+                Sort by engagement, views, or date.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
+              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                3
+              </span>
+              <p>
+                <span className="font-medium text-foreground">Transcribe, then generate.</span>{" "}
+                Rewrite any hook in your voice with AI.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="max-w-2xl">
         <Card className="border-border/50 bg-card">
@@ -576,13 +691,51 @@ export default function Home() {
         </div>
 
         {featuredLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading featured creators...
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={idx} className="rounded-xl border border-border bg-card p-4">
+                <div className="mb-3 h-5 w-36 animate-pulse rounded bg-muted" />
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-3 border-y border-border py-3">
+                  <div className="space-y-2">
+                    <div className="h-2 w-14 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 w-14 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+                <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
           </div>
         ) : featuredError ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            Failed to load featured creators: {featuredError}
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-4 text-sm">
+            <p className="text-destructive">
+              Failed to load featured creators: {featuredError}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => {
+                if (selectedNicheSlug === "all") {
+                  setAllRetryNonce((v) => v + 1);
+                } else {
+                  accountsBySelectedNicheQuery.refetch();
+                }
+              }}
+            >
+              Retry
+            </Button>
           </div>
         ) : featuredCreators.length === 0 ? (
           <div className="rounded-lg border border-border bg-card px-4 py-6 text-center">
@@ -688,6 +841,71 @@ export default function Home() {
           </div>
         ))}
       </div>
+
+      {isWelcomeOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-xl rounded-2xl border border-border bg-card p-8">
+            <button
+              type="button"
+              onClick={dismissWelcome}
+              className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
+              aria-label="Close welcome modal"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
+            <p className="mb-2 text-3xl">👋</p>
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
+              Welcome to <span className="italic text-primary">SpyReels</span>
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Spy on top Instagram creators, <span className="text-foreground">steal what&apos;s working</span>, and turn it into your next viral post.
+            </p>
+
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  await dismissWelcome();
+                  toast.info("Tour coming soon! Explore on your own for now.");
+                }}
+                className="flex w-full items-center justify-between rounded-xl bg-primary px-4 py-3 text-left text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  60-second tour
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await dismissWelcome();
+                  toast.info(
+                    "Demo video coming soon. Try starting a spy session to see SpyReels in action."
+                  );
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-background"
+              >
+                <span className="flex items-center gap-2">
+                  <PlayCircle className="h-4 w-4" />
+                  Watch 2-min demo
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={dismissWelcome}
+                className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Continue without walkthrough
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
