@@ -1,6 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import OnboardingGate from "@/components/OnboardingGate";
 import NotFound from "@/pages/NotFound";
+import OnboardingPage from "@/pages/onboarding";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
@@ -67,8 +69,13 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPost} />
       <Route path="/extension" component={Extension} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/onboarding" component={OnboardingPage} />
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
-      <Route component={DashboardRouter} />
+      <Route>
+        <OnboardingGate>
+          <DashboardRouter />
+        </OnboardingGate>
+      </Route>
     </Switch>
   );
 }
