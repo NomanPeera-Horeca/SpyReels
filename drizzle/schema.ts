@@ -1,4 +1,4 @@
-import { bigint, boolean, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, datetime, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -39,6 +39,14 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   reelsFound: int("reelsFound").default(0).notNull(),
   estimatedTotal: int("estimatedTotal").default(30).notNull(),
   progressPercent: int("progressPercent").default(0).notNull(),
+  // Classification cache — populated by featured.classifyHandle for
+  // arbitrary (non-featured) handles so the dashboard can show the
+  // "AI ✦" niche badge and pull related creators without re-spending
+  // an LLM call on every page load. All three are NULL until the
+  // classification runs for this job.
+  classifiedNicheSlug: varchar("classifiedNicheSlug", { length: 64 }),
+  classifiedConfidence: mysqlEnum("classifiedConfidence", ["high", "medium", "low"]),
+  classifiedAt: datetime("classifiedAt", { mode: "date" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

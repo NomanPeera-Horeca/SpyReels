@@ -88,7 +88,7 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
-import { eq, desc, asc, sql, and } from "drizzle-orm";
+import { eq, ne, desc, asc, sql, and } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
@@ -590,6 +590,276 @@ export const appRouter = router({
           postedAt: r.postedAt,
           rank: r.rank ?? 0,
         }));
+      }),
+
+    /**
+     * Related creators for the dashboard right sidebar ("Top creators in
+     * this niche"). Returns other active featured accounts tagged with
+     * `nicheSlug`, ordered by follower count desc, optionally excluding
+     * the account currently being viewed (so we don't show @garyvee as
+     * "related" on @garyvee's own dashboard).
+     *
+     * Uses INNER JOINs — an account only shows up if it actually has the
+     * niche tag. The `nicheName` field comes from `niches.name` for the
+     * matched row, which is convenient for the sidebar eyebrow copy.
+     *
+     * Mirrors `accountsByNiche`'s LEFT JOIN + HAVING guard so we never
+     * surface a creator with zero stored reels — clicking them would
+     * land on an empty dashboard. `isActive=true` is not a strong enough
+     * invariant on its own (a future row could be active without a
+     * successful scrape yet).
+     */
+    relatedCreators: protectedProcedure
+      .input(
+        z.object({
+          nicheSlug: z.string(),
+          excludeAccountId: z.number().int().positive().optional(),
+          // Cap at 50 so a misconfigured caller can't pull the whole catalog.
+          limit: z.number().int().positive().max(50).default(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+
+        const whereClauses = [
+          eq(niches.slug, input.nicheSlug),
+          eq(featuredAccounts.isActive, true),
+        ];
+        if (input.excludeAccountId !== undefined) {
+          whereClauses.push(ne(featuredAccounts.id, input.excludeAccountId));
+        }
+
+        const rows = await db!
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            nicheName: niches.name,
+          })
+          .from(niches)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.nicheId, niches.id)
+          )
+          .innerJoin(
+            featuredAccounts,
+            eq(featuredAccounts.id, featuredAccountNiches.accountId)
+          )
+          .leftJoin(
+            featuredReels,
+            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+          )
+          .where(and(...whereClauses))
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            niches.name
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount))
+          .limit(input.limit);
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          nicheName: r.nicheName,
+        }));
+      }),
+
+    /**
+     * Classify an arbitrary Instagram handle into one of the 30 niches
+     * using Claude Sonnet. Only called for handles outside the featured
+     * catalog — the "AI ✦" niche badge on the dashboard flags this
+     * classified-on-the-fly path.
+     *
+     * Caching design:
+     *   - When `scrapeJobId` is provided AND the job belongs to the
+     *     caller, we read-through / write-through the cache columns on
+     *     the `scrape_jobs` row so the dashboard can re-read without
+     *     spending another LLM call on every page load.
+     *   - Without a job id we just classify and return — useful for
+     *     ad-hoc callers (admin tools, batch scripts).
+     *
+     * Note on input shape: the spec (§1.2) lists only `{handle, bio,
+     * captions}`. Adding the optional `scrapeJobId` is the cleanest way
+     * to satisfy the "cache on the job row" directive from the same
+     * section without introducing a second mutation. Clients that don't
+     * need caching can simply omit it.
+     *
+     * Mutation (not query) because (a) it writes cache state and (b)
+     * the LLM call has real billing side effects — tRPC conventionally
+     * treats queries as idempotent/cacheable, which this isn't.
+     */
+    classifyHandle: protectedProcedure
+      .input(
+        z.object({
+          handle: z.string().trim().min(1),
+          bio: z.string().optional(),
+          // Cap at 5 captions per spec; the helper below also trims
+          // each one so a pathological caller can't blow the prompt.
+          captions: z.array(z.string()).max(5).optional(),
+          scrapeJobId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+
+        // 1) If caller provided a job id, authorize and check the cache.
+        type ScrapeJobRow = typeof scrapeJobs.$inferSelect;
+        let cacheableJob: ScrapeJobRow | undefined;
+        if (input.scrapeJobId !== undefined) {
+          const found = await db!
+            .select()
+            .from(scrapeJobs)
+            .where(
+              and(
+                eq(scrapeJobs.id, input.scrapeJobId),
+                eq(scrapeJobs.userId, ctx.user.id)
+              )
+            )
+            .limit(1);
+          if (found.length === 0) {
+            // NOT_FOUND (not FORBIDDEN) to avoid leaking existence of
+            // other users' jobs.
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Scrape job not found",
+            });
+          }
+          cacheableJob = found[0];
+
+          // Cache hit — skip the LLM call entirely.
+          if (
+            cacheableJob.classifiedNicheSlug &&
+            cacheableJob.classifiedConfidence
+          ) {
+            const nicheRow = await db!
+              .select({ name: niches.name })
+              .from(niches)
+              .where(eq(niches.slug, cacheableJob.classifiedNicheSlug))
+              .limit(1);
+            if (nicheRow.length > 0) {
+              return {
+                nicheSlug: cacheableJob.classifiedNicheSlug,
+                nicheName: nicheRow[0].name,
+                confidence: cacheableJob.classifiedConfidence,
+              };
+            }
+            // Cache has a stale slug (niche renamed/deleted). Fall
+            // through and re-classify rather than 500.
+          }
+        }
+
+        // 2) Pull the full niche list for both prompt and validation.
+        const allNiches = await db!
+          .select({ slug: niches.slug, name: niches.name })
+          .from(niches)
+          .orderBy(asc(niches.sortOrder));
+        if (allNiches.length === 0) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "No niches configured",
+          });
+        }
+
+        // 3) Build the prompt. Caption text is flattened + length-capped
+        //    to bound the prompt and keep the model on-task.
+        const nicheList = allNiches
+          .map((n) => `- ${n.slug}: ${n.name}`)
+          .join("\n");
+        const captionLines = (input.captions ?? [])
+          .slice(0, 5)
+          .map((c) => `- ${c.replace(/\s+/g, " ").slice(0, 400)}`)
+          .join("\n");
+
+        const prompt = `You are classifying an Instagram creator into one of 30 niches for a content analytics tool.
+
+Creator handle: @${input.handle}
+Bio: ${input.bio?.trim() ? input.bio.trim() : "(none)"}
+Recent reel captions:
+${captionLines || "(none)"}
+
+Available niches (slug: name):
+${nicheList}
+
+Return JSON only:
+{
+  "nicheSlug": "<one slug from the list>",
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "<one sentence>"
+}`;
+
+        // 4) Call Claude Sonnet via the existing invokeLLM wrapper.
+        //    json_object mode (not json_schema) keeps things simple;
+        //    we validate the slug against the DB below anyway.
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You classify Instagram creators into niches. Respond with valid JSON only — no prose, no markdown, no code fences.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const raw = String(
+          response.choices[0]?.message?.content ?? ""
+        ).trim();
+        let parsed: { nicheSlug?: unknown; confidence?: unknown };
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Classifier returned non-JSON output",
+          });
+        }
+
+        // 5) Validate slug — the model can hallucinate niches that
+        //    aren't in our list. Also coerce confidence to the enum.
+        const nicheMatch = allNiches.find(
+          (n) => typeof parsed.nicheSlug === "string" && n.slug === parsed.nicheSlug
+        );
+        if (!nicheMatch) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Classifier returned unknown niche slug: ${String(parsed.nicheSlug)}`,
+          });
+        }
+        const confidence: "high" | "medium" | "low" =
+          parsed.confidence === "high" ||
+          parsed.confidence === "medium" ||
+          parsed.confidence === "low"
+            ? parsed.confidence
+            : "low";
+
+        // 6) Write-through the cache if we authorized a job row.
+        if (cacheableJob) {
+          await updateScrapeJob(cacheableJob.id, {
+            classifiedNicheSlug: nicheMatch.slug,
+            classifiedConfidence: confidence,
+            classifiedAt: new Date(),
+          });
+        }
+
+        return {
+          nicheSlug: nicheMatch.slug,
+          nicheName: nicheMatch.name,
+          confidence,
+        };
       }),
   }),
 
