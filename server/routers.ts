@@ -82,6 +82,8 @@ import {
   getExistingShortcodes,
   updateScrapeJobResync,
   deleteScrapeJob,
+  getOnboardingState,
+  updateOnboardingState,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
 import { invokeLLM } from "./_core/llm";
@@ -2302,6 +2304,51 @@ The hook MUST be 7-10 words. Count them.`
         await upsertUserPreferences(ctx.user.id, { timezone: input.timezone });
         return { success: true };
       }),
+  }),
+
+  // ── Onboarding state (first-run experience flags) ──
+  onboarding: router({
+    /**
+     * Returns all 5 onboarding fields in one call. The dashboard demo
+     * banner (spec §7.4) keys off `demoSeededAt`, so it's bundled here
+     * instead of requiring a second round-trip.
+     */
+    getState: protectedProcedure.query(async ({ ctx }) => {
+      const state = await getOnboardingState(ctx.user.id);
+      if (!state) {
+        // ctx.user is set by `requireUser`, so the row must exist. If
+        // it doesn't, something upstream is very wrong.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+      return {
+        hasSeenWelcome: state.hasSeenWelcome,
+        hasDismissedHintCard: state.hasDismissedHintCard,
+        hasCompletedFirstSpy: state.hasCompletedFirstSpy,
+        hasDismissedDemoBanner: state.hasDismissedDemoBanner,
+        demoSeededAt: state.demoSeededAt,
+      };
+    }),
+
+    /** Fires on any welcome-modal action (close, tour, demo, overlay). */
+    dismissWelcome: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasSeenWelcome: true });
+      return { success: true };
+    }),
+
+    /** 3-step hint card on /research dismissed via its X button. */
+    dismissHintCard: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasDismissedHintCard: true });
+      return { success: true };
+    }),
+
+    /** Dashboard demo banner X button (spec §7.4). */
+    dismissDemoBanner: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasDismissedDemoBanner: true });
+      return { success: true };
+    }),
   }),
 
   // ── Blog ──

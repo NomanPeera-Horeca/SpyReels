@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -93,6 +93,53 @@ export async function getUserByEmail(email: string) {
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+// ── Onboarding state ──
+
+/**
+ * The 5 onboarding fields (4 booleans + `demoSeededAt`). The dashboard
+ * demo banner (spec §7.4) keys off `demoSeededAt`, so it's returned
+ * alongside the flags in a single call.
+ */
+export async function getOnboardingState(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select({
+      hasSeenWelcome: users.hasSeenWelcome,
+      hasDismissedHintCard: users.hasDismissedHintCard,
+      hasCompletedFirstSpy: users.hasCompletedFirstSpy,
+      hasDismissedDemoBanner: users.hasDismissedDemoBanner,
+      demoSeededAt: users.demoSeededAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return result[0];
+}
+
+/**
+ * Partial update for any subset of the onboarding fields. Mirrors the
+ * `updateScrapeJob` pattern — the `Partial<Pick<...>>` keeps callers
+ * from accidentally mutating fields outside this surface.
+ */
+export async function updateOnboardingState(
+  userId: number,
+  data: Partial<
+    Pick<
+      User,
+      | "hasSeenWelcome"
+      | "hasDismissedHintCard"
+      | "hasCompletedFirstSpy"
+      | "hasDismissedDemoBanner"
+      | "demoSeededAt"
+    >
+  >
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set(data).where(eq(users.id, userId));
 }
 
 // ── Scrape Jobs ──

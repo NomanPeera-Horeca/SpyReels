@@ -1,0 +1,6 @@
+ALTER TABLE users
+  ADD COLUMN hasSeenWelcome BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN hasDismissedHintCard BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN hasCompletedFirstSpy BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN hasDismissedDemoBanner BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN demoSeededAt DATETIME NULL;

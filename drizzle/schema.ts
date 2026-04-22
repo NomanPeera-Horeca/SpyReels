@@ -14,6 +14,17 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }),
+  // Onboarding state — first-run experience flags (welcome modal,
+  // 3-step hint card, completed first spy, demo banner). `demoSeededAt`
+  // is set once on signup if we pre-populate a demo scrape job so the
+  // dashboard isn't empty on arrival (spec §3). `hasCompletedFirstSpy`
+  // is flipped server-side when a scrape job completes (deferred to
+  // Section 3 — not pre-wired here).
+  hasSeenWelcome: boolean("hasSeenWelcome").default(false).notNull(),
+  hasDismissedHintCard: boolean("hasDismissedHintCard").default(false).notNull(),
+  hasCompletedFirstSpy: boolean("hasCompletedFirstSpy").default(false).notNull(),
+  hasDismissedDemoBanner: boolean("hasDismissedDemoBanner").default(false).notNull(),
+  demoSeededAt: datetime("demoSeededAt", { mode: "date" }),
 });
 
 export type User = typeof users.$inferSelect;
