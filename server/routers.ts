@@ -87,8 +87,8 @@ import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, 
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
-import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels } from "../drizzle/schema";
-import { eq, desc, asc, sql } from "drizzle-orm";
+import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
+import { eq, desc, asc, sql, and } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
@@ -404,6 +404,192 @@ export const appRouter = router({
             };
           }),
         };
+      }),
+  }),
+
+  // ── Featured Accounts (pre-scraped catalog browsed by niche) ──
+  featured: router({
+    /**
+     * All niches grouped by `groupName`, with a per-niche count of active
+     * accounts that have at least one reel stored. Used by the initial
+     * "browse by niche" UI — the 5 group cards and their niche subcards.
+     * Niches with zero usable accounts are filtered out (they look broken).
+     */
+    nicheGroups: protectedProcedure.query(async () => {
+      const db = await getDb();
+      const rows = await db!
+        .select({
+          id: niches.id,
+          slug: niches.slug,
+          name: niches.name,
+          iconName: niches.iconName,
+          description: niches.description,
+          groupName: niches.groupName,
+          sortOrder: niches.sortOrder,
+          // Count distinct active accounts with at least one reel. The
+          // LEFT JOIN chain keeps niches with zero matches visible in the
+          // raw rows; we filter those out in JS below.
+          accountCount: sql<number>`COUNT(DISTINCT ${featuredReels.featuredAccountId})`,
+        })
+        .from(niches)
+        .leftJoin(featuredAccountNiches, eq(featuredAccountNiches.nicheId, niches.id))
+        .leftJoin(
+          featuredAccounts,
+          and(
+            eq(featuredAccounts.id, featuredAccountNiches.accountId),
+            eq(featuredAccounts.isActive, true)
+          )
+        )
+        .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .groupBy(
+          niches.id,
+          niches.slug,
+          niches.name,
+          niches.iconName,
+          niches.description,
+          niches.groupName,
+          niches.sortOrder
+        )
+        .orderBy(asc(niches.groupName), asc(niches.sortOrder));
+
+      // Drop empty niches and group by groupName in a single pass.
+      const groupMap = new Map<
+        string,
+        {
+          id: number;
+          slug: string;
+          name: string;
+          iconName: string;
+          description: string;
+          accountCount: number;
+        }[]
+      >();
+      for (const row of rows) {
+        const accountCount = Number(row.accountCount);
+        if (accountCount <= 0) continue;
+        const bucket = groupMap.get(row.groupName) ?? [];
+        bucket.push({
+          id: row.id,
+          slug: row.slug,
+          name: row.name,
+          iconName: row.iconName,
+          description: row.description ?? "",
+          accountCount,
+        });
+        groupMap.set(row.groupName, bucket);
+      }
+
+      return {
+        groups: Array.from(groupMap, ([groupName, nichesInGroup]) => ({
+          groupName,
+          niches: nichesInGroup,
+        })),
+      };
+    }),
+
+    /**
+     * All active featured accounts tagged with `nicheSlug`, sorted by
+     * follower count desc. Accounts with zero stored reels are omitted —
+     * clicking them would show an empty state, which isn't the goal.
+     */
+    accountsByNiche: protectedProcedure
+      .input(z.object({ nicheSlug: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const nicheMatch = await db!
+          .select({ id: niches.id })
+          .from(niches)
+          .where(eq(niches.slug, input.nicheSlug))
+          .limit(1);
+        if (nicheMatch.length === 0) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Niche not found" });
+        }
+        const nicheId = nicheMatch[0].id;
+
+        const rows = await db!
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            totalReelsEver: featuredAccounts.totalReelsEver,
+            reelsAvailable: sql<number>`COUNT(${featuredReels.id})`,
+          })
+          .from(featuredAccounts)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.accountId, featuredAccounts.id)
+          )
+          .leftJoin(
+            featuredReels,
+            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+          )
+          .where(
+            and(
+              eq(featuredAccountNiches.nicheId, nicheId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            featuredAccounts.totalReelsEver
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount));
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          // decimal(5,2) comes back from mysql2 as a string — coerce at boundary.
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          totalReelsEver: r.totalReelsEver,
+          reelsAvailable: Number(r.reelsAvailable),
+        }));
+      }),
+
+    /**
+     * Pre-ranked top 30 reels for a featured account. `rank` was computed
+     * at scrape time (1 = highest engagement rate), so we just read it
+     * back in order. This is the "magic moment" — zero-latency reels.
+     */
+    topReels: protectedProcedure
+      .input(z.object({ accountId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const rows = await db!
+          .select()
+          .from(featuredReels)
+          .where(eq(featuredReels.featuredAccountId, input.accountId))
+          // `rank` is a MySQL 8 reserved word, but drizzle auto-backticks
+          // identifiers on the query-builder path so this is safe.
+          .orderBy(asc(featuredReels.rank))
+          .limit(30);
+
+        return rows.map((r) => ({
+          id: r.id,
+          reelShortcode: r.reelShortcode,
+          caption: r.caption,
+          viewCount: r.viewCount,
+          likeCount: r.likeCount,
+          commentCount: r.commentCount,
+          // decimal(5,2) → string; null possible on older rows.
+          engagementRate: r.engagementRate == null ? 0 : Number(r.engagementRate),
+          thumbnailUrl: r.thumbnailUrl ?? "",
+          videoUrl: r.videoUrl ?? "",
+          duration: r.duration ?? 0,
+          postedAt: r.postedAt,
+          rank: r.rank ?? 0,
+        }));
       }),
   }),
 
