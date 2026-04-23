@@ -808,6 +808,158 @@ export const appRouter = router({
       }),
 
     /**
+     * Featured accounts matching onboarding “picked” handles. Same
+     * anti-empty guard as `relatedCreators` (at least one stored reel),
+     * ordered by followers desc.
+     */
+    creatorsByHandles: protectedProcedure
+      .input(
+        z.object({
+          handles: z.array(z.string().trim().min(1)).min(1).max(5),
+          excludeHandle: z.string().trim().optional(),
+          limit: z.number().int().positive().max(20).default(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) {
+          return [] as {
+            id: number;
+            handle: string;
+            displayName: string;
+            followerCount: number;
+            avgEngagementRate: number;
+            profilePicUrl: string;
+            nicheName: string;
+          }[];
+        }
+        const exclude = input.excludeHandle
+          ?.replace(/^@/, "")
+          .trim()
+          .toLowerCase();
+        const unique = new Set(
+          input.handles
+            .map((h) => h.replace(/^@/, "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        if (exclude) unique.delete(exclude);
+        const list = Array.from(unique).slice(0, 5);
+        if (list.length === 0) return [];
+
+        const whereClauses = [
+          inArray(featuredAccounts.handle, list),
+          eq(featuredAccounts.isActive, true),
+        ];
+
+        const rows = await db
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+          })
+          .from(featuredAccounts)
+          .leftJoin(
+            featuredReels,
+            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+          )
+          .where(and(...whereClauses))
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount))
+          .limit(input.limit);
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          nicheName: "",
+        }));
+      }),
+
+    /**
+     * Top recent reels in the user’s onboarding niches (by primary niche tag),
+     * posted in the last 7 days, for the “Going viral” sidebar.
+     */
+    goingViralByNiches: protectedProcedure
+      .input(
+        z.object({
+          slugs: z.array(z.string().trim().min(1)).max(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const slugs = Array.from(
+          new Set(input.slugs.map((s) => s.trim().toLowerCase()).filter(Boolean))
+        ).slice(0, 5);
+        if (slugs.length === 0) return [];
+
+        const db = await getDb();
+        if (!db) return [];
+
+        const rows = await db
+          .select({
+            reelId: featuredReels.id,
+            shortcode: featuredReels.reelShortcode,
+            thumbnailUrl: featuredReels.thumbnailUrl,
+            viewCount: featuredReels.viewCount,
+            creatorHandle: featuredAccounts.handle,
+            creatorName: featuredAccounts.displayName,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            featuredAccountId: featuredAccounts.id,
+          })
+          .from(featuredReels)
+          .innerJoin(
+            featuredAccounts,
+            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+          )
+          .innerJoin(
+            featuredAccountNiches,
+            and(
+              eq(featuredAccountNiches.accountId, featuredAccounts.id),
+              eq(featuredAccountNiches.isPrimary, true)
+            )
+          )
+          .innerJoin(
+            niches,
+            and(
+              eq(niches.id, featuredAccountNiches.nicheId),
+              inArray(niches.slug, slugs)
+            )
+          )
+          .where(
+            and(
+              eq(featuredAccounts.isActive, true),
+              sql`${featuredReels.postedAt} >= DATE_SUB(NOW(), INTERVAL 7 DAY)`
+            )
+          )
+          .orderBy(desc(featuredReels.viewCount))
+          .limit(5);
+
+        return rows.map((r) => ({
+          reelId: String(r.reelId),
+          shortcode: r.shortcode,
+          thumbnailUrl: r.thumbnailUrl ?? "",
+          viewCount: r.viewCount,
+          creatorHandle: r.creatorHandle,
+          creatorName: r.creatorName ?? "",
+          profilePicUrl: r.profilePicUrl ?? "",
+          featuredAccountId: String(r.featuredAccountId),
+        }));
+      }),
+
+    /**
      * Classify an arbitrary Instagram handle into one of the 30 niches
      * using Claude Sonnet. Only called for handles outside the featured
      * catalog — the "AI ✦" niche badge on the dashboard flags this

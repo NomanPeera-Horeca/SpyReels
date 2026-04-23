@@ -264,21 +264,6 @@ export default function Dashboard() {
     return "";
   }, [job, featuredHandleContext.data]);
 
-  const canQueryRelated =
-    Boolean(nicheSlugForSidebar) &&
-    !!job &&
-    job.status === "completed" &&
-    featuredHandleContext.isFetched;
-
-  const relatedCreatorsQuery = trpc.featured.relatedCreators.useQuery(
-    {
-      nicheSlug: nicheSlugForSidebar!,
-      excludeAccountId: featuredHandleContext.data?.featuredAccountId ?? undefined,
-      limit: 5,
-    },
-    { enabled: canQueryRelated }
-  );
-
   const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
   const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
   const jobComplete = job?.status === "completed";
@@ -311,6 +296,75 @@ export default function Dashboard() {
     if (fromReel) return fromReel;
     return fromJob;
   }, [job?.handle, reelsData]);
+
+  const onboardingPickHandles = useMemo(() => {
+    const raw = user?.selectedCreatorHandles;
+    if (!raw || !Array.isArray(raw) || raw.length === 0) return [] as string[];
+    const current = stripAtHandle(displayScrapeHandle || job?.handle || "").toLowerCase();
+    return [
+      ...new Set(
+        raw
+          .map((h) => stripAtHandle(h).toLowerCase())
+          .filter((h) => h.length > 0 && h !== current)
+      ),
+    ].slice(0, 5);
+  }, [user?.selectedCreatorHandles, displayScrapeHandle, job?.handle]);
+
+  const creatorsByHandlesQuery = trpc.featured.creatorsByHandles.useQuery(
+    {
+      handles: onboardingPickHandles,
+      excludeHandle: displayScrapeHandle || job?.handle,
+      limit: 5,
+    },
+    { enabled: jobComplete && onboardingPickHandles.length > 0 }
+  );
+
+  const tier1Decided = onboardingPickHandles.length === 0 || creatorsByHandlesQuery.isFetched;
+  const showRelatedFromPicks =
+    onboardingPickHandles.length > 0 && (creatorsByHandlesQuery.data?.length ?? 0) > 0;
+
+  const canQueryRelatedTier2 =
+    jobComplete &&
+    tier1Decided &&
+    !showRelatedFromPicks &&
+    Boolean(nicheSlugForSidebar) &&
+    featuredHandleContext.isFetched;
+
+  const relatedCreatorsQuery = trpc.featured.relatedCreators.useQuery(
+    {
+      nicheSlug: nicheSlugForSidebar!,
+      excludeAccountId: featuredHandleContext.data?.featuredAccountId ?? undefined,
+      limit: 5,
+    },
+    { enabled: canQueryRelatedTier2 }
+  );
+
+  const goingViralSlugs = useMemo(
+    () => [...new Set((user?.selectedNicheSlugs ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean))].slice(0, 5),
+    [user?.selectedNicheSlugs]
+  );
+
+  const goingViralQuery = trpc.featured.goingViralByNiches.useQuery(
+    { slugs: goingViralSlugs },
+    { enabled: jobComplete && goingViralSlugs.length > 0 }
+  );
+
+  const relatedPanelLoading =
+    (onboardingPickHandles.length > 0 && !creatorsByHandlesQuery.isFetched) ||
+    (tier1Decided &&
+      !showRelatedFromPicks &&
+      Boolean(nicheSlugForSidebar) &&
+      !featuredHandleContext.isFetched) ||
+    (canQueryRelatedTier2 && relatedCreatorsQuery.isPending);
+
+  const showRelatedPanel =
+    showRelatedFromPicks ||
+    relatedPanelLoading ||
+    (canQueryRelatedTier2 && (relatedCreatorsQuery.data?.length ?? 0) > 0);
+
+  const showGoingViralPanel =
+    goingViralSlugs.length > 0 &&
+    (goingViralQuery.isPending || (goingViralQuery.data?.length ?? 0) > 0);
 
   const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
@@ -1346,54 +1400,87 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              {/* Related creators — hidden when no niche context (graceful CTA instead) */}
-              {!featuredHandleContext.isFetched ? (
-                <div className="rounded-xl border border-border/40 bg-card p-4">
-                  <div className="h-4 w-40 bg-muted rounded animate-pulse" />
-                  <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
-                  <div className="space-y-2 mt-4">
-                    {Array.from({ length: 4 }).map((_, idx) => (
-                      <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
-                    ))}
-                  </div>
-                </div>
-              ) : !nicheSlugForSidebar ? (
-                <div className="rounded-xl border border-border/40 bg-card p-4 text-center">
-                  <p className="text-sm font-medium text-foreground">Start exploring creators</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Browse featured creators by niche to compare what is working in your space.
-                  </p>
-                  <Button size="sm" className="mt-4 w-full" onClick={() => setLocation("/research")}>
-                    Start exploring creators
-                  </Button>
-                </div>
-              ) : relatedCreatorsQuery.isPending ? (
-                <div className="rounded-xl border border-border/40 bg-card p-4">
-                  <div className="h-5 w-48 bg-muted rounded animate-pulse" />
-                  <div className="h-3 w-28 bg-muted/80 rounded mt-2 animate-pulse" />
-                  <div className="space-y-2 mt-4">
-                    {Array.from({ length: 4 }).map((_, idx) => (
-                      <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border/40 bg-card p-4">
-                  <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
-                    Top creators in this <em className="text-primary not-italic">niche</em>
-                  </h3>
-                  {sidebarNicheLabel && (
-                    <div className="mt-1 inline-block rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                      {sidebarNicheLabel}
+              {showRelatedPanel && (
+                relatedPanelLoading ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <div className="h-5 w-48 bg-muted rounded animate-pulse" />
+                    <div className="h-3 w-28 bg-muted/80 rounded mt-2 animate-pulse" />
+                    <div className="space-y-2 mt-4">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                      ))}
                     </div>
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                    Also spying on <span className="text-foreground">@{(displayScrapeHandle || job.handle)}</span>? Here are more creators in
-                    the same niche.
-                  </p>
-                  {relatedCreatorsQuery.data?.length === 0 ? (
-                    <p className="mt-4 text-center text-xs text-muted-foreground">No related creators in this niche yet</p>
-                  ) : (
+                  </div>
+                ) : showRelatedFromPicks ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Related <em className="text-primary not-italic">creators</em>
+                    </h3>
+                    <p className="mt-1 text-[11px] text-muted-foreground">From your picks</p>
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      Creators you chose during onboarding. Open their featured dashboards to compare.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {creatorsByHandlesQuery.data?.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            posthog?.capture("related_creator_clicked", {
+                              panel: "onboarding_picks",
+                              from_creator_handle: normalizeAnalyticsHandle(
+                                displayScrapeHandle || job?.handle || ""
+                              ),
+                              to_creator_handle: normalizeAnalyticsHandle(c.handle),
+                              from_niche: nicheSlugForSidebar ?? null,
+                            });
+                            setLocation(`/dashboard?featuredAccountId=${c.id}`);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
+                            {c.profilePicUrl ? (
+                              <img
+                                src={c.profilePicUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (c.displayName || c.handle).slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {c.displayName || `@${c.handle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{c.handle} · {formatNumber(c.followerCount)} ·{" "}
+                              <span className="font-mono text-emerald-400">
+                                {c.avgEngagementRate.toFixed(2)}%
+                              </span>
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Related <em className="text-primary not-italic">creators</em>
+                    </h3>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Top creators in this niche</p>
+                    {sidebarNicheLabel && (
+                      <div className="mt-1 inline-block rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                        {sidebarNicheLabel}
+                      </div>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      Also spying on <span className="text-foreground">@{(displayScrapeHandle || job.handle)}</span>? Here
+                      are more creators in the same niche.
+                    </p>
                     <div className="mt-3 flex flex-col gap-2">
                       {relatedCreatorsQuery.data?.map((c) => (
                         <button
@@ -1402,6 +1489,7 @@ export default function Dashboard() {
                           onClick={() => {
                             if (job?.handle && nicheSlugForSidebar) {
                               posthog?.capture("related_creator_clicked", {
+                                panel: "niche_fallback",
                                 from_creator_handle: normalizeAnalyticsHandle(job.handle),
                                 to_creator_handle: normalizeAnalyticsHandle(c.handle),
                                 from_niche: nicheSlugForSidebar,
@@ -1413,7 +1501,12 @@ export default function Dashboard() {
                         >
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
                             {c.profilePicUrl ? (
-                              <img src={c.profilePicUrl} alt="" className="h-full w-full object-cover" />
+                              <img
+                                src={c.profilePicUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
                             ) : (
                               (c.displayName || c.handle).slice(0, 2).toUpperCase()
                             )}
@@ -1424,34 +1517,76 @@ export default function Dashboard() {
                             </p>
                             <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                               @{c.handle} · {formatNumber(c.followerCount)} ·{" "}
-                              <span className="font-mono text-emerald-400">{c.avgEngagementRate.toFixed(2)}%</span>
+                              <span className="font-mono text-emerald-400">
+                                {c.avgEngagementRate.toFixed(2)}%
+                              </span>
                             </p>
                           </div>
                           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )
               )}
 
-              {/* Going viral now — placeholder */}
-              <div className="rounded-xl border border-border/40 bg-card p-4">
-                <div className="flex items-start gap-2">
-                  <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
-                    Going <em className="text-primary not-italic">viral</em> now
-                  </h3>
-                </div>
-                <div className="mt-4 flex flex-col items-center rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-8 text-center">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <TrendingUp className="h-5 w-5" />
+              {showGoingViralPanel && (
+                goingViralQuery.isPending ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <div className="h-5 w-44 bg-muted rounded animate-pulse" />
+                    <div className="mt-3 space-y-2">
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="h-16 rounded-lg bg-muted/60 animate-pulse" />
+                      ))}
+                    </div>
                   </div>
-                  <p className="text-sm font-medium text-foreground">Trending creators coming soon</p>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    We&apos;ll surface creators blowing up in your niche right here.
-                  </p>
-                </div>
-              </div>
+                ) : (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Going <em className="text-primary not-italic">viral</em> now
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      High-view Reels in your niches (last 7 days)
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {goingViralQuery.data?.map((r) => (
+                        <button
+                          key={r.reelId}
+                          type="button"
+                          onClick={() =>
+                            setLocation(`/dashboard?featuredAccountId=${r.featuredAccountId}`)
+                          }
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
+                            {r.thumbnailUrl ? (
+                              <img
+                                src={r.thumbnailUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Film className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {r.creatorName || `@${r.creatorHandle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{r.creatorHandle} · {formatNumber(r.viewCount)} views
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
 
               {/* Upgrade */}
               {!hideUpgradeSidebarPanel && (
