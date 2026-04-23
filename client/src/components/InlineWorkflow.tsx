@@ -282,6 +282,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [saveStatus, setSaveStatus] = useState<"draft" | "approved">("draft");
   const [, navigate] = useLocation();
+  const trpcUtils = trpc.useUtils();
 
   const tagsQuery = trpc.tags.list.useQuery();
 
@@ -299,6 +300,10 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const generateMutation = trpc.recreate.generate.useMutation({
     onSuccess: (data) => {
       setActiveScriptId(data.scriptId);
+      // Let Dashboard's `recreate.checkBatch` pick up the new script so
+      // the grid/list action button flips to "Open My Script ✓" without
+      // the user having to refresh.
+      trpcUtils.recreate.checkBatch.invalidate();
     },
     onError: (error) => {
       toast.error("Script generation failed", { description: error.message });

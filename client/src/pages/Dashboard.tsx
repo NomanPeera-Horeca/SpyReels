@@ -55,6 +55,10 @@ import {
   formatDuration,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
+import {
+  ReelActionButtons,
+  type ReelActionSource,
+} from "@/components/ReelActionButtons";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -428,6 +432,18 @@ export default function Dashboard() {
     { enabled: reelIds.length > 0 }
   );
   const savedMap = savedBatchQuery.data || {};
+
+  /**
+   * Tells each card whether the current user already has a recreated
+   * script for that reel. Used by the shared `ReelActionButtons` to
+   * swap "Make My Version" for "Open My Script ✓". Same XOR contract
+   * as saved.checkBatch.
+   */
+  const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
+    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
+    { enabled: reelIds.length > 0 }
+  );
+  const recreateMap = recreateBatchQuery.data || {};
 
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
@@ -1262,99 +1278,55 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
-                          onClick={() => {
+                      {/* Actions — delegated to the shared ReelActionButtons
+                          (Commit 5) so List + Grid call identical mutations. */}
+                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end">
+                        <ReelActionButtons
+                          source={
+                            isFeaturedView
+                              ? { source: "featured", featuredReelId: reel.id }
+                              : { source: "user_job", reelId: reel.id, jobId: jobId! }
+                          }
+                          reelId={reel.id}
+                          reelUrl={reel.reelUrl}
+                          isSaved={isSaved}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isFailed={isFailed}
+                          hasScript={!!recreateMap[reel.id]}
+                          saveBusy={toggleSave.isPending}
+                          onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
                             } else {
                               toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                             }
                           }}
-                          disabled={toggleSave.isPending}
-                          title={isSaved ? "Remove from saved" : "Save reel"}
-                        >
-                          {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-                        </Button>
-
-                        {hasTranscription ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2"
-                            onClick={() => setExpandedReelId(reel.id)}
-                          >
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Transcript</span>
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2"
-                            onClick={() => {
-                              if (!transcribeGate.allowed) {
-                                toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
-                                  description: "Upgrade your plan for more transcriptions.",
-                                  action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                                });
-                                return;
-                              }
-                              setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                              if (isFeaturedView) {
-                                startTranscription.mutate({ featuredReelId: reel.id });
-                              } else {
-                                startTranscription.mutate({ reelId: reel.id });
-                              }
-                            }}
-                            disabled={isProcessing}
-                          >
-                            {isProcessing ? (
-                              <>
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                <span className="hidden sm:inline">Transcribing...</span>
-                              </>
-                            ) : isFailed ? (
-                              <>
-                                <FileText className="h-3 w-3 sm:mr-1" />
-                                <span className="hidden sm:inline">Retry</span>
-                              </>
-                            ) : (
-                              <>
-                                <FileText className="h-3 w-3 sm:mr-1" />
-                                <span className="hidden sm:inline">Transcribe</span>
-                              </>
-                            )}
-                          </Button>
-                        )}
-
-                        {hasTranscription && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                            onClick={() => setExpandedReelId(reel.id)}
-                          >
-                            <Wand2 className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Re-Create</span>
-                          </Button>
-                        )}
-
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                          <a href={reel.reelUrl} target="_blank" rel="noopener noreferrer" title="Open on Instagram">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-
+                          onTranscribe={() => {
+                            if (!transcribeGate.allowed) {
+                              toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+                                description: "Upgrade your plan for more transcriptions.",
+                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                              });
+                              return;
+                            }
+                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                            if (isFeaturedView) {
+                              startTranscription.mutate({ featuredReelId: reel.id });
+                            } else {
+                              startTranscription.mutate({ reelId: reel.id });
+                            }
+                          }}
+                          onExpand={() => setExpandedReelId(reel.id)}
+                        />
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 text-muted-foreground"
-                          onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedReelId(isExpanded ? null : reel.id);
+                          }}
                         >
                           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </Button>
@@ -1401,45 +1373,220 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Grid view */}
+          {/* Grid view — Commit 5 gives every card the same actions as List
+              (bookmark overlay, transcribe/recreate strip, stats bar, IG
+              link). Card click no longer jumps straight to IG; the tiny
+              link icon in the bottom-right does that instead. Click on
+              the card body expands the inline workflow, mirroring List. */}
           {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {sortedReels.map((reel, index) => (
-                <button
-                  key={reel.id}
-                  type="button"
-                  className="group relative aspect-[9/14] overflow-hidden rounded-lg border border-border/40 bg-card text-left"
-                  onClick={() => window.open(reel.reelUrl, "_blank", "noopener,noreferrer")}
-                >
-                  {reel.thumbnailUrl ? (
-                    <img
-                      src={reel.thumbnailUrl}
-                      alt=""
-                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-muted/40 flex items-center justify-center">
-                      <Film className="h-5 w-5 text-muted-foreground/60" />
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {sortedReels.map((reel, index) => {
+                  const isExpanded = expandedReelId === reel.id;
+                  const hasTranscription = reel.transcription?.status === "completed";
+                  const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+                  const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
+                  const isSaved = !!savedMap[reel.id];
+
+                  const source: ReelActionSource = isFeaturedView
+                    ? { source: "featured", featuredReelId: reel.id }
+                    : { source: "user_job", reelId: reel.id, jobId: jobId! };
+
+                  return (
+                    <div
+                      key={reel.id}
+                      className={`group relative rounded-lg border overflow-hidden bg-card transition-colors ${
+                        isExpanded ? "border-primary/40" : "border-border/40 hover:border-border/70"
+                      }`}
+                    >
+                      <div
+                        className="relative aspect-[9/14] cursor-pointer"
+                        onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
+                      >
+                        {reel.thumbnailUrl ? (
+                          <img
+                            src={reel.thumbnailUrl}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-muted/40 flex items-center justify-center">
+                            <Film className="h-5 w-5 text-muted-foreground/60" />
+                          </div>
+                        )}
+                        <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
+                          #{index + 1}
+                        </div>
+                        {reel.engagementRate > 0 && (
+                          <div className="absolute left-2 bottom-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                            {reel.engagementRate.toFixed(2)}%
+                          </div>
+                        )}
+                        {/* Bookmark overlay (spec #1) — always visible so
+                            state is discoverable without hover. */}
+                        <button
+                          type="button"
+                          className={`absolute right-2 top-2 rounded-full p-1.5 backdrop-blur transition-colors ${
+                            isSaved
+                              ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                              : "bg-black/55 text-white/90 hover:bg-black/75"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isFeaturedView) {
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                            }
+                          }}
+                          disabled={toggleSave.isPending}
+                          title={isSaved ? "Remove from saved" : "Save reel"}
+                          aria-label={isSaved ? "Remove from saved" : "Save reel"}
+                        >
+                          {isSaved ? (
+                            <BookmarkCheck className="h-3.5 w-3.5" />
+                          ) : (
+                            <Bookmark className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        {/* External IG link (spec #4) — smaller icon, no
+                            label, moved to bottom-right so it doesn't
+                            compete with the bookmark above. */}
+                        <a
+                          href={reel.reelUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-2 bottom-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
+                          title="Open on Instagram"
+                          aria-label="Open on Instagram"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        {reel.duration && (
+                          <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
+                            {formatDuration(reel.duration)}
+                          </span>
+                        )}
+                        {hasTranscription && (
+                          <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                            Transcribed
+                          </span>
+                        )}
+                        {isProcessing && (
+                          <span className="absolute left-2 top-10 rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950 animate-pulse">
+                            Processing
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-2.5 space-y-2">
+                        <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
+                          {reel.caption || (
+                            <span className="text-muted-foreground italic">No caption</span>
+                          )}
+                        </p>
+                        {/* Stats bar (spec #3) — parity with List view. */}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                          <span>{formatNumber(reel.viewCount)} views</span>
+                          <span aria-hidden>·</span>
+                          <span>{formatNumber(reel.likeCount)} likes</span>
+                          <span aria-hidden>·</span>
+                          <span>{formatNumber(reel.commentCount)} comments</span>
+                          {reel.engagementRate > 0 && (
+                            <>
+                              <span aria-hidden>·</span>
+                              <span className="text-emerald-400 font-medium">
+                                {reel.engagementRate.toFixed(2)}%
+                              </span>
+                            </>
+                          )}
+                          <span aria-hidden>·</span>
+                          <span className="text-amber-400/80">
+                            {formatPostedTime(reel.postedAt, userTimezone)}
+                          </span>
+                        </div>
+                        {/* Quick-action strip (spec #2). Bookmark + IG
+                            link are already on the thumbnail, so the
+                            strip carries Transcribe + Make My Version
+                            only. */}
+                        <ReelActionButtons
+                          source={source}
+                          reelId={reel.id}
+                          reelUrl={reel.reelUrl}
+                          isSaved={isSaved}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isFailed={isFailed}
+                          hasScript={!!recreateMap[reel.id]}
+                          saveBusy={toggleSave.isPending}
+                          hideBookmark
+                          hideExternalLink
+                          compact
+                          onToggleSave={() => {
+                            if (isFeaturedView) {
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                            }
+                          }}
+                          onTranscribe={() => {
+                            if (!transcribeGate.allowed) {
+                              toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+                                description: "Upgrade your plan for more transcriptions.",
+                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                              });
+                              return;
+                            }
+                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                            if (isFeaturedView) {
+                              startTranscription.mutate({ featuredReelId: reel.id });
+                            } else {
+                              startTranscription.mutate({ reelId: reel.id });
+                            }
+                          }}
+                          onExpand={() => setExpandedReelId(reel.id)}
+                        />
+                      </div>
+
+                      {isExpanded && (
+                        <div className="border-t border-border/40">
+                          {isFeaturedView ? (
+                            <InlineWorkflow
+                              reelSource="featured"
+                              featuredReelId={reel.id}
+                              handle={displayScrapeHandle || job?.handle || ""}
+                              hasTranscription={hasTranscription}
+                              isProcessing={isProcessing}
+                              onTranscribe={() => {
+                                setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                                startTranscription.mutate({ featuredReelId: reel.id });
+                              }}
+                              userTimezone={userTimezone}
+                              postedAt={reel.postedAt}
+                            />
+                          ) : (
+                            <InlineWorkflow
+                              reelSource="user_job"
+                              reelId={reel.id}
+                              handle={displayScrapeHandle || job?.handle || ""}
+                              hasTranscription={hasTranscription}
+                              isProcessing={isProcessing}
+                              onTranscribe={() => {
+                                setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                                startTranscription.mutate({ reelId: reel.id });
+                              }}
+                              userTimezone={userTimezone}
+                              postedAt={reel.postedAt}
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
-                    #{index + 1}
-                  </div>
-                  {reel.engagementRate > 0 && (
-                    <div className="absolute right-2 top-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                      {reel.engagementRate.toFixed(2)}%
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent p-3">
-                    <p className="text-xs text-white line-clamp-2">{reel.caption || "No caption"}</p>
-                    <p className="mt-1 text-[10px] font-mono text-white/80">
-                      {formatNumber(reel.viewCount)} views
-                      {reel.duration ? ` · ${formatDuration(reel.duration)}` : ""}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
 

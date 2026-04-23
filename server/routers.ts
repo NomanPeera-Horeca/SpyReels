@@ -101,7 +101,7 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
-import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
+import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels, recreatedScripts } from "../drizzle/schema";
 import type { Transcription } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -1797,6 +1797,63 @@ Return JSON only:
           return getRecreatedScriptsByFeaturedReelId(input.featuredReelId);
         }
         return getRecreatedScriptsByReelId(input.reelId!);
+      }),
+
+    /**
+     * Batch "has this reel been re-created by this user yet?" check. Used
+     * by dashboard cards (Commit 5 grid buttons) so every tile can show
+     * "Make My Version" vs "Open My Script ✓" without N per-reel network
+     * calls. Returns a map keyed by the input id; missing keys = no
+     * script. Exactly one of reelIds / featuredReelIds must be non-empty.
+     */
+    checkBatch: protectedProcedure
+      .input(
+        z
+          .object({
+            reelIds: z.array(z.number()).optional(),
+            featuredReelIds: z.array(z.number()).optional(),
+          })
+          .refine(
+            (d) =>
+              (d.reelIds && d.reelIds.length > 0) !==
+              (d.featuredReelIds && d.featuredReelIds.length > 0),
+            {
+              message:
+                "Provide exactly one of reelIds or featuredReelIds (non-empty)",
+            }
+          )
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const map: Record<number, boolean> = {};
+        if (input.featuredReelIds && input.featuredReelIds.length > 0) {
+          const rows = await db
+            .select({ featuredReelId: recreatedScripts.featuredReelId })
+            .from(recreatedScripts)
+            .where(
+              and(
+                eq(recreatedScripts.userId, ctx.user.id),
+                inArray(
+                  recreatedScripts.featuredReelId as any,
+                  input.featuredReelIds
+                )
+              )
+            );
+          for (const r of rows) if (r.featuredReelId != null) map[r.featuredReelId] = true;
+          return map;
+        }
+        const rows = await db
+          .select({ reelId: recreatedScripts.reelId })
+          .from(recreatedScripts)
+          .where(
+            and(
+              eq(recreatedScripts.userId, ctx.user.id),
+              inArray(recreatedScripts.reelId as any, input.reelIds!)
+            )
+          );
+        for (const r of rows) if (r.reelId != null) map[r.reelId] = true;
+        return map;
       }),
   }),
 
