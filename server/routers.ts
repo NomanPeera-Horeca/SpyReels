@@ -3369,6 +3369,55 @@ The hook MUST be 7-10 words. Count them.`
      * empty on arrival. Idempotent — re-calling after completion or
      * a prior skip is a no-op.
      */
+    /**
+     * Settings → "Your Interests" save (Commit 8). Lets a user change
+     * their onboarding-era picks after the fact. Intentionally does NOT
+     * re-seed a demo scrape or flip any onboarding timestamps — that's
+     * the one-time first-run ceremony owned by `complete` / `skip`.
+     *
+     * Creators are optional because users who went through "Pick for
+     * me" in onboarding don't own a curated list; passing an empty
+     * array clears the field.
+     */
+    updatePreferences: protectedProcedure
+      .input(
+        z.object({
+          selectedNicheSlugs: z.array(z.string().trim().min(1)).max(5),
+          selectedCreatorHandles: z
+            .array(z.string().trim().min(1))
+            .max(5)
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+        // `null` vs `[]`: we store empty arrays as null so the sidebar
+        // "Your Interests" panel's `data != null` check cleanly
+        // distinguishes "user opted out" from "user picked zero".
+        const niches = input.selectedNicheSlugs.length > 0
+          ? input.selectedNicheSlugs
+          : null;
+        const creators =
+          input.selectedCreatorHandles == null ||
+          input.selectedCreatorHandles.length === 0
+            ? null
+            : input.selectedCreatorHandles;
+        await db
+          .update(users)
+          .set({
+            selectedNicheSlugs: niches,
+            selectedCreatorHandles: creators,
+          })
+          .where(eq(users.id, ctx.user.id));
+        return { success: true as const };
+      }),
+
     skip: protectedProcedure.mutation(async ({ ctx }) => {
       const state = await getOnboardingState(ctx.user.id);
       if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
