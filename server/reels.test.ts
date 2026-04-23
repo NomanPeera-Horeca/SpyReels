@@ -311,6 +311,8 @@ vi.mock("./storage", () => ({
     key: "test-key",
     url: "https://storage.example.com/test.mp4",
   }),
+  storageHead: vi.fn().mockResolvedValue(true),
+  r2ObjectPublicUrl: (key: string) => `https://storage.example.com/bucket/${key}`,
 }));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;

@@ -92,6 +92,7 @@ import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, 
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
+import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -338,27 +339,11 @@ export const appRouter = router({
       .query(async ({ input }) => {
         try {
           const profile = await fetchProfile(input.handle);
-          // Proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
-          let proxiedPicUrl = "";
-          if (profile.profilePicUrl) {
-            try {
-              const { gotScraping } = await import("got-scraping");
-              const picRes = await gotScraping({
-                url: profile.profilePicUrl,
-                responseType: "buffer",
-                timeout: { request: 10000 },
-                retry: { limit: 0 },
-              });
-              if (picRes.statusCode === 200 && picRes.rawBody) {
-                const suffix = Math.random().toString(36).slice(2, 8);
-                const key = `profile-pics/${profile.username}-${suffix}.jpg`;
-                const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-                proxiedPicUrl = url;
-              }
-            } catch {
-              // If proxy fails, leave empty - UI shows fallback icon
-            }
-          }
+          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.profilePicUrl
+          );
           return {
             found: true as const,
             username: profile.username,
@@ -2395,24 +2380,11 @@ The hook MUST be 7-10 words. Count them.`
       .query(async ({ input }) => {
         try {
           const profile = await fetchProfile(input.handle);
-          let proxiedPicUrl = "";
-          if (profile.profilePicUrl) {
-            try {
-              const { gotScraping: gs } = await import("got-scraping");
-              const picRes = await gs({
-                url: profile.profilePicUrl,
-                responseType: "buffer",
-                timeout: { request: 10000 },
-                retry: { limit: 0 },
-              });
-              if (picRes.statusCode === 200 && picRes.rawBody) {
-                const suffix = Math.random().toString(36).slice(2, 8);
-                const key = `profile-pics/${profile.username}-${suffix}.jpg`;
-                const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-                proxiedPicUrl = url;
-              }
-            } catch {}
-          }
+          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.profilePicUrl
+          );
           return {
             found: true as const,
             username: profile.username,
@@ -3836,28 +3808,11 @@ async function runScrapeJob(
       progressPercent: 85,
     });
 
-    // Proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
-    let proxiedPicUrl = "";
-    if (profilePicUrl) {
-      try {
-        const { gotScraping: gs } = await import("got-scraping");
-        const picRes = await gs({
-          url: profilePicUrl,
-          responseType: "buffer",
-          timeout: { request: 10000 },
-          retry: { limit: 0 },
-        });
-        if (picRes.statusCode === 200 && picRes.rawBody) {
-          const suffix = Math.random().toString(36).slice(2, 8);
-          const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
-          const key = `profile-pics/${cleanHandle}-${suffix}.jpg`;
-          const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-          proxiedPicUrl = url;
-        }
-      } catch {
-        // If proxy fails, leave empty - UI shows fallback avatar
-      }
-    }
+    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
+    const proxiedPicUrl = await ensureProfilePicOnR2(
+      cleanHandle,
+      profilePicUrl
+    );
 
     if (reelData.length === 0) {
       await updateScrapeJob(jobId, {
@@ -3946,28 +3901,11 @@ async function runResyncJob(
       progressPercent: 85,
     });
 
-    // Proxy profile pic through S3 (refresh on each resync for freshness)
-    let proxiedPicUrl = "";
-    if (profilePicUrl) {
-      try {
-        const { gotScraping: gs } = await import("got-scraping");
-        const picRes = await gs({
-          url: profilePicUrl,
-          responseType: "buffer",
-          timeout: { request: 10000 },
-          retry: { limit: 0 },
-        });
-        if (picRes.statusCode === 200 && picRes.rawBody) {
-          const suffix = Math.random().toString(36).slice(2, 8);
-          const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
-          const key = `profile-pics/${cleanHandle}-${suffix}.jpg`;
-          const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-          proxiedPicUrl = url;
-        }
-      } catch {
-        // If proxy fails, keep existing pic
-      }
-    }
+    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
+    const proxiedPicUrl = await ensureProfilePicOnR2(
+      cleanHandle,
+      profilePicUrl
+    );
 
     // Get existing shortcodes to deduplicate
     const existingShortcodes = new Set(await getExistingShortcodes(jobId));

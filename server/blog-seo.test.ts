@@ -151,7 +151,11 @@ vi.mock("./instagram", () => ({
   searchReelsByHandle: vi.fn(),
 }));
 vi.mock("./_core/llm", () => ({ invokeLLM: vi.fn() }));
-vi.mock("./storage", () => ({ storagePut: vi.fn() }));
+vi.mock("./storage", () => ({
+  storagePut: vi.fn(),
+  storageHead: vi.fn().mockResolvedValue(true),
+  r2ObjectPublicUrl: (key: string) => `https://r2.test/${key}`,
+}));
 vi.mock("./googleSheets", () => ({
   isGoogleSheetsConfigured: vi.fn().mockReturnValue(false),
   exportToGoogleSheets: vi.fn(),

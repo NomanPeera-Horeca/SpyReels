@@ -21,6 +21,7 @@
 import "dotenv/config";
 import mysql from "mysql2/promise";
 import { fetchProfile, scrapeReels, type ReelData } from "../server/instagram";
+import { ensureProfilePicOnR2 } from "../server/profilePicR2";
 
 const TIMEFRAME_DAYS = 365;
 const TOP_N = 30;
@@ -84,31 +85,14 @@ function isPermanentError(err: unknown): boolean {
 }
 
 /**
- * Attempt to proxy the IG profile pic through Cloudflare R2, matching the
- * behavior of server/routers.ts runScrapeJob. If R2 creds are missing or
- * the upload fails, fall back to the raw IG CDN URL — the UI's already
- * set up to handle both.
+ * Store profile pic on R2 at the canonical key (see server/profilePicR2.ts).
+ * If R2 is unavailable, fall back to the raw IG URL (UI handles expiry).
  */
-async function proxyProfilePic(handle: string, rawUrl: string): Promise<string> {
+async function profilePicR2OrRaw(handle: string, rawUrl: string): Promise<string> {
   if (!rawUrl) return "";
-  try {
-    const { gotScraping } = await import("got-scraping");
-    const { storagePut } = await import("../server/storage");
-    const picRes = await gotScraping({
-      url: rawUrl,
-      responseType: "buffer",
-      timeout: { request: 10000 },
-    });
-    if (picRes.statusCode === 200 && picRes.rawBody) {
-      const suffix = Date.now().toString(36);
-      const key = `profile-pics/featured/${handle}-${suffix}.jpg`;
-      const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-      return url;
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`    ⚠  pic proxy failed for @${handle} (${msg.slice(0, 80)}); using raw URL`);
-  }
+  const clean = handle.replace(/^@/, "").trim().toLowerCase();
+  const onR2 = await ensureProfilePicOnR2(clean, rawUrl);
+  if (onR2) return onR2;
   return rawUrl;
 }
 
@@ -189,7 +173,7 @@ async function scrapeOneAccount(
   );
 
   // --- 3. Proxy profile pic (best-effort) ---------------------------------
-  const proxiedPic = await proxyProfilePic(handle, profilePicUrl);
+  const proxiedPic = await profilePicR2OrRaw(handle, profilePicUrl);
 
   // --- 4. Upsert reels, then delete stale ones ----------------------------
   for (let i = 0; i < topN.length; i++) {
