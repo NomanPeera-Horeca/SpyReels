@@ -3180,8 +3180,9 @@ The hook MUST be 7-10 words. Count them.`
         const txns = await db
           .select({ reelId: transcriptions.reelId, status: transcriptions.status })
           .from(transcriptions)
-          .where(inArray(transcriptions.reelId, transcriptionReelIds));
+          .where(inArray(transcriptions.reelId as any, transcriptionReelIds));
         for (const t of txns) {
+          if (t.reelId == null) continue;
           txnStatusByReelId.set(t.reelId, t.status);
         }
       }

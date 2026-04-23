@@ -595,17 +595,42 @@ export async function isReelSaved(userId: number, reelId: number): Promise<boole
   return result.length > 0;
 }
 
-export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReel & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
+/**
+ * Saved scraped-reel rows joined with their reel + scrape_job. Featured-
+ * catalog saves (identified by a populated `featuredReelId`) are filtered
+ * out here and surfaced via a sibling helper added in Commit 3b; the
+ * narrow return type (reelId / jobId guaranteed non-null) lets existing
+ * frontend callers keep working without null checks.
+ */
+type SavedReelScraped = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> & {
+  reelId: number;
+  jobId: number;
+  featuredReelId: null;
+};
+
+export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const saved = await db.select().from(savedReels).where(eq(savedReels.userId, userId)).orderBy(desc(savedReels.createdAt));
-  const results: Array<SavedReel & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> = [];
+  const results: Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> = [];
   for (const s of saved) {
+    // Featured-catalog saves (featuredReelId populated) are surfaced via
+    // a separate helper added in Commit 3b; skip them here so this one
+    // keeps its "user scrape jobs only" contract and its return shape.
+    if (s.reelId == null || s.jobId == null) continue;
     const reelRows = await db.select().from(reels).where(eq(reels.id, s.reelId)).limit(1);
     const jobRows = await db.select().from(scrapeJobs).where(eq(scrapeJobs.id, s.jobId)).limit(1);
     if (reelRows[0] && jobRows[0]) {
       const tRows = await db.select().from(transcriptions).where(eq(transcriptions.reelId, s.reelId)).limit(1);
-      results.push({ ...s, reel: reelRows[0], job: jobRows[0], transcription: tRows[0] });
+      results.push({
+        ...s,
+        reelId: s.reelId,
+        jobId: s.jobId,
+        featuredReelId: null,
+        reel: reelRows[0],
+        job: jobRows[0],
+        transcription: tRows[0],
+      });
     }
   }
   return results;
@@ -1050,11 +1075,15 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
     if (reelIds.length > 0) {
       let tRows = await db.select().from(transcriptions).where(
         and(
-          inArray(transcriptions.reelId, reelIds),
+          // `reelId` is nullable post-migration 0028; narrow via cast
+          // since we only want scraped-reel rows here (featuredReelId-
+          // driven rows never land in reelMap anyway).
+          inArray(transcriptions.reelId as any, reelIds),
           eq(transcriptions.status, "completed")
         )
       );
       for (const t of tRows) {
+        if (t.reelId == null) continue;
         const reel = reelMap[t.reelId];
         if (!reel) continue;
         scrapedTranscripts.push({
@@ -1082,7 +1111,7 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
         const t = await db.select().from(transcriptions).where(
           and(eq(transcriptions.reelId, matchingReels[0].id), eq(transcriptions.status, "completed"))
         ).limit(1);
-        if (t.length > 0) {
+        if (t.length > 0 && t[0].reelId != null) {
           collectedTranscripts.push({
             id: t[0].id, reelId: t[0].reelId, transcript: t[0].transcript, hookAnalysis: t[0].hookAnalysis,
             status: t[0].status, createdAt: t[0].createdAt, source: "collected",
@@ -1159,6 +1188,10 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
 
     for (const r of recreated) {
       if (savedRecreatedIds.has(r.id)) continue; // Already in saved scripts
+      // Featured-reel-backed recreated scripts (reelId null) are surfaced
+      // via a dedicated library path added in Commit 3b; skip them here
+      // so the scraped-reel lookup below stays type-safe.
+      if (r.reelId == null) continue;
       const reel = await db.select().from(reels).where(eq(reels.id, r.reelId)).limit(1);
       // Generate a better title for recreated scripts
       let title = r.topic || "Untitled Script";

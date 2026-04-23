@@ -105,10 +105,17 @@ export type InsertReel = typeof reels.$inferInsert;
 
 /**
  * Transcriptions generated on-demand for individual reels.
+ *
+ * Exactly one of (`reelId`, `featuredReelId`) must be non-null. This is
+ * enforced at the application layer (see `transcribe.*` handlers) since
+ * MySQL can't express a cheap "xor" CHECK on nullable columns without
+ * function dependencies. `reelId` points at `reels.id` (user-scraped),
+ * `featuredReelId` at `featured_reels.id` (catalog).
  */
 export const transcriptions = mysqlTable("transcriptions", {
   id: int("id").autoincrement().primaryKey(),
-  reelId: int("reelId").notNull(),
+  reelId: int("reelId"),
+  featuredReelId: int("featuredReelId"),
   transcript: text("transcript"),
   segments: json("segments"),
   hookAnalysis: text("hookAnalysis"),
@@ -123,10 +130,14 @@ export type InsertTranscription = typeof transcriptions.$inferInsert;
 
 /**
  * Re-created scripts generated from viral reel structures.
+ *
+ * Exactly one of (`reelId`, `featuredReelId`) must be non-null —
+ * enforced in the `recreate.*` handlers.
  */
 export const recreatedScripts = mysqlTable("recreated_scripts", {
   id: int("id").autoincrement().primaryKey(),
-  reelId: int("reelId").notNull(),
+  reelId: int("reelId"),
+  featuredReelId: int("featuredReelId"),
   userId: int("userId").notNull(),
   topic: text("topic").notNull(),
   gradeLevel: varchar("gradeLevel", { length: 16 }).notNull(), // "auto", "2", "3", "4", "5", "6"
@@ -144,12 +155,18 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
 
 /**
  * Saved/bookmarked reels for quick access.
+ *
+ * Exactly one of the two ID sources must be populated:
+ *   - user-scraped: (`reelId` + `jobId`) both non-null, `featuredReelId` null.
+ *   - featured catalog: `featuredReelId` non-null, `reelId` and `jobId` null.
+ * Enforced in the `saved.toggle` handler.
  */
 export const savedReels = mysqlTable("saved_reels", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  reelId: int("reelId").notNull(),
-  jobId: int("jobId").notNull(),
+  reelId: int("reelId"),
+  jobId: int("jobId"),
+  featuredReelId: int("featuredReelId"),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
