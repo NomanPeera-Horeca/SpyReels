@@ -27,7 +27,6 @@ import {
   Search,
   Clock,
   ArrowRight,
-  ArrowLeft,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -35,8 +34,6 @@ import {
   ImageIcon,
   BadgeCheck,
   ExternalLink,
-  Sparkles,
-  PlayCircle,
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -130,14 +127,12 @@ export default function Home() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  const dismissWelcomeMutation = trpc.onboarding.dismissWelcome.useMutation();
   const dismissHintCardMutation = trpc.onboarding.dismissHintCard.useMutation();
   const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const [selectedNicheSlug, setSelectedNicheSlug] = useState<string>("all");
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const [hintDismissedLocally, setHintDismissedLocally] = useState(false);
   const initializedNicheDefaultRef = useRef(false);
 
@@ -248,13 +243,6 @@ export default function Home() {
   }, [allNiches, selectedNicheSlug, utils.featured.accountsByNiche, allRetryNonce]);
 
   useEffect(() => {
-    const onboardingState = onboardingStateQuery.data;
-    if (!onboardingState) return;
-    if (onboardingState.hasSeenWelcome) return;
-    setIsWelcomeOpen(true);
-  }, [onboardingStateQuery.data]);
-
-  useEffect(() => {
     if (initializedNicheDefaultRef.current) return;
 
     const selectedNicheSlugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
@@ -279,18 +267,7 @@ export default function Home() {
       !onboardingState.hasCompletedFirstSpy
   );
 
-  const dismissWelcome = async (action?: "tour" | "demo" | "dismiss") => {
-    setIsWelcomeOpen(false);
-    if (action) {
-      posthog?.capture("welcome_modal_action", { action });
-    }
-    try {
-      await dismissWelcomeMutation.mutateAsync();
-      await onboardingStateQuery.refetch();
-    } catch {
-      // non-blocking UI close; state will re-sync on next refresh
-    }
-  };
+  // PostHog `welcome_modal_action` — event name reserved for a future Supademo / tour (no modal yet).
 
   const dismissHint = async () => {
     setHintDismissedLocally(true);
@@ -933,72 +910,6 @@ export default function Home() {
         ))}
       </div>
 
-      {isWelcomeOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-xl rounded-2xl border border-border bg-card p-8">
-            <Tooltip content="Dismiss. We won't show this again.">
-              <button
-                type="button"
-                onClick={() => dismissWelcome("dismiss")}
-                className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
-                aria-label="Close welcome modal"
-              >
-                <XCircle className="h-5 w-5" />
-              </button>
-            </Tooltip>
-            <p className="mb-2 text-3xl">👋</p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-              Welcome to <span className="italic text-primary">SpyReels</span>
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Spy on top Instagram creators, <span className="text-foreground">steal what&apos;s working</span>, and turn it into your next viral post.
-            </p>
-
-            <div className="mt-6 space-y-3">
-              <button
-                type="button"
-                onClick={async () => {
-                  await dismissWelcome("tour");
-                  toast.info("Tour coming soon! Explore on your own for now.");
-                }}
-                className="flex w-full items-center justify-between rounded-xl bg-primary px-4 py-3 text-left text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-              >
-                <span className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  60-second tour
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  await dismissWelcome("demo");
-                  toast.info(
-                    "Demo video coming soon. Try starting a spy session to see SpyReels in action."
-                  );
-                }}
-                className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-background"
-              >
-                <span className="flex items-center gap-2">
-                  <PlayCircle className="h-4 w-4" />
-                  Watch 2-min demo
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => dismissWelcome("dismiss")}
-                className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
-              >
-                <ArrowLeft className="h-3 w-3" />
-                Continue without walkthrough
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
