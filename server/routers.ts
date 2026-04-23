@@ -478,6 +478,114 @@ export const appRouter = router({
     }),
 
     /**
+     * Read-only featured catalog dashboard: account + reels from
+     * `featured_*` tables (no per-user scrape_jobs copy). Transcription
+     * join via `transcriptions.featuredReelId` is stubbed empty until
+     * migration 0028 / Commit 3a.
+     */
+    getDashboardData: protectedProcedure
+      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+
+        const accountRows = await db
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+          })
+          .from(featuredAccounts)
+          .where(
+            and(
+              eq(featuredAccounts.id, input.featuredAccountId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (accountRows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This creator isn't available",
+          });
+        }
+
+        const acc = accountRows[0];
+
+        const nicheRows = await db
+          .select({ slug: niches.slug, name: niches.name })
+          .from(featuredAccountNiches)
+          .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
+          .where(
+            and(
+              eq(featuredAccountNiches.accountId, acc.id),
+              eq(featuredAccountNiches.isPrimary, true)
+            )
+          )
+          .limit(1);
+
+        const classifiedNicheSlug = nicheRows[0]?.slug ?? null;
+        const primaryNicheName = nicheRows[0]?.name ?? "";
+
+        const reelRows = await db
+          .select()
+          .from(featuredReels)
+          .where(eq(featuredReels.featuredAccountId, acc.id))
+          .orderBy(desc(featuredReels.viewCount));
+
+        const fc = acc.followerCount || 0;
+
+        const reels = reelRows.map((r) => {
+          const engagementRate =
+            fc > 0
+              ? ((r.likeCount + r.commentCount) / fc) * 100
+              : 0;
+          return {
+            id: r.id,
+            featuredReelId: r.id,
+            shortcode: r.reelShortcode,
+            thumbnailUrl: r.thumbnailUrl ?? "",
+            videoUrl: r.videoUrl ?? "",
+            caption: r.caption ?? "",
+            viewCount: r.viewCount,
+            likeCount: r.likeCount,
+            commentCount: r.commentCount,
+            duration: r.duration,
+            postedAt: r.postedAt,
+            reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+            ownerUsername: acc.handle,
+            engagementRate: Math.round(engagementRate * 100) / 100,
+            transcription: null as null,
+          };
+        });
+
+        return {
+          isFeaturedView: true as const,
+          account: {
+            id: acc.id,
+            handle: acc.handle,
+            displayName: acc.displayName ?? "",
+            profilePicUrl: acc.profilePicUrl ?? "",
+            followerCount: acc.followerCount,
+            avgEngagement: Number(acc.avgEngagementRate),
+            classifiedNicheSlug,
+            primaryNicheName,
+          },
+          followerCount: fc,
+          reels,
+        };
+      }),
+
+    /**
      * All active featured accounts tagged with `nicheSlug`, sorted by
      * follower count desc. Accounts with zero stored reels are omitted —
      * clicking them would show an empty state, which isn't the goal.
