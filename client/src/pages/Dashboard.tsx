@@ -665,10 +665,19 @@ export default function Dashboard() {
   }
 
   if (!jobId && !featuredAccountId) {
-    const jobs = jobsListQuery.data || [];
+    const allJobs = jobsListQuery.data || [];
     const scripts = scriptsListQuery.data || [];
     const savedReels = savedListQuery.data || [];
     const collectedReels = collectedListQuery.data || [];
+    /**
+     * Blocker 1 fix: overview stats and Recent Spy Sessions must reflect
+     * ONLY user-initiated research. `seedDemoScrape()` writes a
+     * `scrape_jobs` row with `isDemo: true` during onboarding, which
+     * previously inflated "Reels Researched" / "hours saved" and
+     * populated Recent Spy Sessions with a fake session. Filter here
+     * so new users see honest zeros and a proper empty state.
+     */
+    const jobs = allJobs.filter(j => !j.isDemo);
     const completedJobs = jobs.filter(j => j.status === "completed");
     const totalReelsScraped = completedJobs.reduce((sum, j) => sum + (j.totalReels || 0), 0);
     const hour = new Date().getHours();
@@ -812,15 +821,21 @@ export default function Dashboard() {
                   <div className="flex items-start gap-3">
                     <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-bold text-white">3</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Hit Re-Create and get your script</p>
+                      <p className="text-sm font-medium text-foreground">Click Make My Version to generate your script</p>
                       <p className="text-xs text-muted-foreground">AI writes a script based on what made it go viral</p>
                     </div>
                   </div>
                 </div>
-                <Button size="sm" onClick={() => setLocation("/")}>
-                  <Search className="mr-2 h-3.5 w-3.5" />
-                  Start Your First Spy Session
-                </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <Button size="sm" onClick={() => setLocation("/research")}>
+                    <Search className="mr-2 h-3.5 w-3.5" />
+                    Start Your First Spy Session
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setLocation("/research")}>
+                    Browse featured creators
+                    <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
