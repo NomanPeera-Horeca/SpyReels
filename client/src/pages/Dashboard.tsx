@@ -90,6 +90,11 @@ function toReadableNiche(slug: string | null | undefined): string {
     .join(" ");
 }
 
+/** Strip @ for display; avoid placeholder "owner" if scraper left bad job.handle — fall back to first reel. */
+function stripAtHandle(h: string | undefined | null) {
+  return (h ?? "").replace(/^@/, "").trim();
+}
+
 function AiBadge({
   nicheSlug,
   confidence,
@@ -296,6 +301,16 @@ export default function Dashboard() {
 
   const reelsData = reelsQuery.data?.reels || [];
   const followerCount = reelsQuery.data?.followerCount || 0;
+
+  /** Real IG handle for display; if job.handle is a bad placeholder, use first reel's owner. */
+  const displayScrapeHandle = useMemo(() => {
+    const fromJob = stripAtHandle(job?.handle);
+    if (fromJob && fromJob.toLowerCase() !== "owner") return fromJob;
+    const first = reelsData[0] as { ownerUsername?: string } | undefined;
+    const fromReel = stripAtHandle(first?.ownerUsername);
+    if (fromReel) return fromReel;
+    return fromJob;
+  }, [job?.handle, reelsData]);
 
   const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
@@ -807,7 +822,7 @@ export default function Dashboard() {
                 </Tooltip>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                    {job ? `@${job.handle}` : "Loading..."}
+                    {job ? `@${displayScrapeHandle || stripAtHandle(job.handle)}` : "Loading..."}
                   </h1>
                   {canShowAiBadge && (
                     <AiBadge
@@ -832,8 +847,18 @@ export default function Dashboard() {
               </div>
               {job && (
                 <p className="text-sm text-muted-foreground ml-11">
-                  {sortedReels.length}{dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels{dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
-                  {followerCount > 0 && <> &middot; {formatNumber(followerCount)} followers</>}
+                  {job.status === "completed" && reelsQuery.isLoading && reelsData.length === 0 ? (
+                    "Loading reels…"
+                  ) : (
+                    <>
+                      {sortedReels.length}
+                      {dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels
+                      {dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
+                    </>
+                  )}
+                  {followerCount > 0 && job.status === "completed" && !(reelsQuery.isLoading && reelsData.length === 0) && (
+                    <> &middot; {formatNumber(followerCount)} followers</>
+                  )}
                   {job.classifiedNicheSlug && (
                     <>
                       {" "}
@@ -870,7 +895,7 @@ export default function Dashboard() {
                   <Tooltip content="Change how reels are sorted">
                     <div>
                       <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                        <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
+                        <SelectTrigger className="h-9 w-[min(100%,20rem)] min-w-[16rem] max-w-none bg-card text-sm">
                           <SelectValue placeholder="Sort by..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -1207,7 +1232,7 @@ export default function Dashboard() {
                     {isExpanded && (
                       <InlineWorkflow
                         reelId={reel.id}
-                        handle={job?.handle || ""}
+                        handle={displayScrapeHandle || job?.handle || ""}
                         hasTranscription={hasTranscription}
                         isProcessing={isProcessing}
                         onTranscribe={() => {
@@ -1272,7 +1297,7 @@ export default function Dashboard() {
               <div className="flex flex-col items-center justify-center gap-4">
                 <Film className="h-12 w-12 text-muted-foreground/30" />
                 <p className="text-muted-foreground">
-                  No reels found for @{job.handle} in the last {job.timeframeDays} days.
+                  No reels found for @{(displayScrapeHandle || job.handle)} in the last {job.timeframeDays} days.
                 </p>
               </div>
             </div>
@@ -1349,7 +1374,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                    Also spying on <span className="text-foreground">@{job.handle}</span>? Here are more creators in
+                    Also spying on <span className="text-foreground">@{(displayScrapeHandle || job.handle)}</span>? Here are more creators in
                     the same niche.
                   </p>
                   {relatedCreatorsQuery.data?.length === 0 ? (

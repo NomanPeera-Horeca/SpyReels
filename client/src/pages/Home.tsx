@@ -49,6 +49,35 @@ function formatCount(n: number): string {
   return n.toString();
 }
 
+/** Featured grid: show DB URL or fall back to initials if load fails (expired IG CDN, etc.). */
+function FeaturedProfileAvatar({
+  profilePicUrl,
+  handle,
+}: {
+  profilePicUrl: string;
+  handle: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const initials = handle.slice(0, 2).toUpperCase();
+  if (!profilePicUrl?.trim() || failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
+        {initials}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={profilePicUrl}
+      alt=""
+      className="h-full w-full object-cover"
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function TipDot() {
   return (
     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground">
@@ -816,17 +845,7 @@ export default function Home() {
                 </div>
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
-                    {creator.profilePicUrl ? (
-                      <img
-                        src={creator.profilePicUrl}
-                        alt={creator.handle}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
-                        {creator.handle.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
+                    <FeaturedProfileAvatar profilePicUrl={creator.profilePicUrl} handle={creator.handle} />
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">

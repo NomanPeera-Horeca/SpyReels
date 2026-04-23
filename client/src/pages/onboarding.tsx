@@ -44,6 +44,28 @@ function shuffleInPlace<T>(arr: T[]): T[] {
   return arr;
 }
 
+function OnboardingProfilePic({ profilePicUrl, handle }: { profilePicUrl: string; handle: string }) {
+  const [failed, setFailed] = useState(false);
+  const initials = handle.slice(0, 2).toUpperCase();
+  if (!profilePicUrl?.trim() || failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
+        {initials}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={profilePicUrl}
+      alt={`@${handle}`}
+      className="h-full w-full object-cover"
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export default function OnboardingPage() {
   const posthog = usePostHog();
   const [, setLocation] = useLocation();
@@ -283,9 +305,7 @@ export default function OnboardingPage() {
                   {selectedNiches.length}
                 </span>
                 <span className="text-sm">
-                  {selectedNiches.length === 0
-                    ? "No niches selected"
-                    : `${selectedNiches.length} of ${MAX_NICHES} niches selected`}
+                  {`${selectedNiches.length} of ${MAX_NICHES} niches selected`}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -446,17 +466,10 @@ export default function OnboardingPage() {
 
                                 <div className="mb-3 flex items-center gap-3">
                                   <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
-                                    {creator.profilePicUrl ? (
-                                      <img
-                                        src={creator.profilePicUrl}
-                                        alt={`@${creator.handle}`}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
-                                        {creator.handle.slice(0, 2).toUpperCase()}
-                                      </div>
-                                    )}
+                                    <OnboardingProfilePic
+                                      profilePicUrl={creator.profilePicUrl}
+                                      handle={creator.handle}
+                                    />
                                   </div>
                                   <div>
                                     <div className="text-sm font-semibold">
