@@ -234,6 +234,30 @@ export const appRouter = router({
           });
         }
 
+        // Search-to-featured shortcut: if the requested handle is already
+        // a featured creator we show the instant Path-B dashboard instead
+        // of burning a scrape quota on a duplicate pull. Case-insensitive,
+        // @ already stripped via `normalizedHandle`.
+        const db = await getDb();
+        if (db) {
+          const featuredMatch = await db
+            .select({ id: featuredAccounts.id })
+            .from(featuredAccounts)
+            .where(
+              and(
+                sql`LOWER(${featuredAccounts.handle}) = ${normalizedHandle}`,
+                eq(featuredAccounts.isActive, true)
+              )
+            )
+            .limit(1);
+          if (featuredMatch.length > 0) {
+            return {
+              redirect: "featured" as const,
+              featuredAccountId: featuredMatch[0].id,
+            };
+          }
+        }
+
         // Check usage limit before starting
         const usageCheck = await checkUsageLimit(ctx.user.id, "scrapeCount", ctx.user.openId);
         if (!usageCheck.allowed) {

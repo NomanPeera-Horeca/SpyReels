@@ -300,6 +300,19 @@ export default function Home() {
 
   const startScrape = trpc.scrape.start.useMutation({
     onSuccess: data => {
+      // Search-to-featured shortcut (Commit 2.5): backend detected the
+      // handle already exists as a featured creator, so jump straight to
+      // the instant Path-B dashboard instead of scraping.
+      if ("redirect" in data && data.redirect === "featured") {
+        posthog?.capture("search_routed_to_featured", {
+          handle: handle.replace(/^@/, "").trim().toLowerCase(),
+          featured_account_id: data.featuredAccountId,
+        });
+        setLocation(
+          `/dashboard?featuredAccountId=${data.featuredAccountId}&from=research`
+        );
+        return;
+      }
       // Route to the dedicated scraping progress page; the toast would be
       // redundant on top of the full-page experience there.
       setLocation(`/scraping?jobId=${data.jobId}`);

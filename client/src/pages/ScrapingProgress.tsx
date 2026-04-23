@@ -141,6 +141,12 @@ export default function ScrapingProgress() {
   // the user to the fresh /scraping URL.
   const retryMutation = trpc.scrape.start.useMutation({
     onSuccess: (d) => {
+      // Commit 2.5: handle featured shortcut in retry too (e.g. the creator
+      // was promoted to featured after the first failed attempt).
+      if ("redirect" in d && d.redirect === "featured") {
+        setLocation(`/dashboard?featuredAccountId=${d.featuredAccountId}`);
+        return;
+      }
       setLocation(`/scraping?jobId=${d.jobId}`);
     },
     onError: (err) => {
