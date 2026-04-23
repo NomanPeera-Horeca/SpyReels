@@ -130,6 +130,34 @@ function parseDateSafe(dateStr: string): Date {
   return new Date(dateStr + "T12:00:00");
 }
 
+/**
+ * Formats the precomputed best posting day+hour into a human-readable
+ * phrase for the featured dashboard header (Commit 6). Returns null
+ * when either input is missing so the header hides the segment cleanly
+ * instead of saying "Posts null around null o'clock".
+ *
+ * Hour is stored in UTC (matches featured_reels.postedAt) but formatting
+ * uses UTC here — per-user timezone conversion is a Commit 6+ follow-up;
+ * spec copy ("weekdays around 2 PM") is rough enough that UTC is fine.
+ */
+function formatBestPostingTime(
+  day: string | null,
+  hour: number | null
+): string | null {
+  if (day == null || hour == null) return null;
+  const weekendDays = new Set(["saturday", "sunday"]);
+  const dayLower = day.toLowerCase();
+  const is12h = ((hour + 11) % 12) + 1;
+  const ampm = hour < 12 ? "AM" : "PM";
+  const timeStr = `${is12h} ${ampm}`;
+  // "Posts weekdays around 2 PM" vs "Posts Sundays around 10 AM".
+  if (weekendDays.has(dayLower)) {
+    const capitalized = dayLower.charAt(0).toUpperCase() + dayLower.slice(1);
+    return `Posts ${capitalized}s around ${timeStr}`;
+  }
+  return `Posts weekdays around ${timeStr}`;
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -535,6 +563,8 @@ export const appRouter = router({
             profilePicUrl: featuredAccounts.profilePicUrl,
             followerCount: featuredAccounts.followerCount,
             avgEngagementRate: featuredAccounts.avgEngagementRate,
+            bestPostingHour: featuredAccounts.bestPostingHour,
+            bestPostingDay: featuredAccounts.bestPostingDay,
           })
           .from(featuredAccounts)
           .where(
@@ -612,6 +642,15 @@ export const appRouter = router({
             avgEngagement: Number(acc.avgEngagementRate),
             classifiedNicheSlug,
             primaryNicheName,
+            // Commit 6 — formatted best posting window for the dashboard
+            // header. Null when either column is null (backfill hasn't
+            // run or the account has zero reels). Formatting lives on the
+            // server so mobile + desktop + any future surface render
+            // identically.
+            bestPostingTime: formatBestPostingTime(
+              acc.bestPostingDay,
+              acc.bestPostingHour
+            ),
           },
           followerCount: fc,
           reels,

@@ -492,6 +492,15 @@ export const featuredAccounts = mysqlTable("featured_accounts", {
   totalReelsEver: int("totalReelsEver").default(0).notNull(),
   lastIncrementalScrape: timestamp("lastIncrementalScrape"),
   lastFullScrape: timestamp("lastFullScrape"),
+  /**
+   * Precomputed best posting window (Commit 6 / migration 0030).
+   * Populated by `scripts/backfill-best-posting-time.ts` which tallies
+   * the day-of-week + hour-of-day of every `featured_reels.postedAt`.
+   * UTC; the dashboard header formats to the user's timezone. Null
+   * means "not enough data yet" — the header hides the segment.
+   */
+  bestPostingHour: int("bestPostingHour"),
+  bestPostingDay: varchar("bestPostingDay", { length: 10 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -244,6 +244,7 @@ export default function Dashboard() {
           profilePicUrl: null as string | null,
           displayName: null as string | null,
           avgEngagement: null as number | null,
+          bestPostingTime: null as string | null,
         };
       }
       return {
@@ -260,6 +261,7 @@ export default function Dashboard() {
         profilePicUrl: featuredData.account.profilePicUrl,
         displayName: featuredData.account.displayName,
         avgEngagement: featuredData.account.avgEngagement,
+        bestPostingTime: featuredData.account.bestPostingTime,
       };
     }
     return scrapeJobData;
@@ -909,85 +911,188 @@ export default function Dashboard() {
               </Tooltip>
             </div>
           )}
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <Tooltip content="Back to Spy Viral Reels">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
-                    if (fromPage === "history") {
-                      setLocation("/history");
-                    } else if (fromPage === "research") {
-                      setLocation("/");
-                    } else if (fromPage === "dashboard") {
-                      setLocation("/dashboard");
-                    } else {
-                      setLocation("/history");
-                    }
-                  }}>
+          {/* Header. Featured view (Commit 6) renders a distinct profile
+              card with a large avatar + follower / engagement / posting-
+              time stats; the user-scrape flow keeps its condensed header.
+              The sort/filter/view-toggle cluster on the right is shared. */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+            {isFeaturedView ? (
+              <div className="flex items-start gap-3 min-w-0">
+                <Tooltip content="Back">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 mt-1 shrink-0"
+                    onClick={() => {
+                      if (fromPage === "history") setLocation("/history");
+                      else if (fromPage === "research") setLocation("/");
+                      else if (fromPage === "dashboard") setLocation("/dashboard");
+                      else setLocation("/history");
+                    }}
+                  >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 </Tooltip>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                    {(() => {
-                      const h = displayScrapeHandle || stripAtHandle(job?.handle);
-                      return h ? `@${h}` : "Loading...";
-                    })()}
-                  </h1>
-                  {canShowAiBadge && (
-                    <AiBadge
-                      nicheSlug={job.classifiedNicheSlug!}
-                      confidence={job.classifiedConfidence as BadgeConfidence}
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 flex items-center justify-center text-lg font-semibold text-white">
+                  {featuredData?.account.profilePicUrl ? (
+                    <img
+                      src={featuredData.account.profilePicUrl}
+                      alt={`@${featuredData.account.handle}`}
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
                     />
+                  ) : (
+                    (
+                      featuredData?.account.displayName ||
+                      featuredData?.account.handle ||
+                      "?"
+                    )
+                      .slice(0, 2)
+                      .toUpperCase()
                   )}
-                  {job && (
-                    <Tooltip content="All reels successfully collected. Use Account Monitoring to re-sync.">
-                      <Badge
-                        variant={
-                          job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {(() => {
+                        const h = displayScrapeHandle || stripAtHandle(job?.handle);
+                        return h ? `@${h}` : "Loading...";
+                      })()}
+                    </h1>
+                    {canShowAiBadge && (
+                      <AiBadge
+                        nicheSlug={job.classifiedNicheSlug!}
+                        confidence={job.classifiedConfidence as BadgeConfidence}
+                      />
+                    )}
+                  </div>
+                  {featuredData?.account.displayName && (
+                    <p className="text-sm text-muted-foreground">
+                      {featuredData.account.displayName}
+                    </p>
+                  )}
+                  {/* Line 2: stats bar. Each segment is conditional so the
+                      dot separators never collapse into "• •" when a
+                      value is missing (e.g. backfill not yet run). */}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {(() => {
+                      const segments: React.ReactNode[] = [];
+                      if (followerCount > 0) {
+                        segments.push(
+                          <span key="followers">
+                            {formatNumber(followerCount)} followers
+                          </span>
+                        );
+                      }
+                      if (featuredData && featuredData.account.avgEngagement > 0) {
+                        segments.push(
+                          <span key="engagement">
+                            {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
+                          </span>
+                        );
+                      }
+                      if (featuredData?.account.bestPostingTime) {
+                        segments.push(
+                          <span key="posting-time">
+                            {featuredData.account.bestPostingTime}
+                          </span>
+                        );
+                      }
+                      if (segments.length === 0) return null;
+                      const joined: React.ReactNode[] = [];
+                      segments.forEach((s, i) => {
+                        if (i > 0) {
+                          joined.push(
+                            <span key={`sep-${i}`} className="mx-1.5" aria-hidden>
+                              &middot;
+                            </span>
+                          );
                         }
-                        className="text-xs"
-                      >
-                        {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                        {job.status}
-                      </Badge>
-                    </Tooltip>
+                        joined.push(s);
+                      });
+                      return joined;
+                    })()}
+                  </p>
+                  {job && job.classifiedNicheSlug && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="text-primary">
+                        {toReadableNiche(job.classifiedNicheSlug)}
+                      </span>
+                    </p>
                   )}
                 </div>
               </div>
-              {job && (
-                <p className="text-sm text-muted-foreground ml-11">
-                  {job.status === "completed" && reelsLoading && reelsData.length === 0 ? (
-                    "Loading reels…"
-                  ) : (
-                    <>
-                      {sortedReels.length}
-                      {dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels
-                      {dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
-                    </>
-                  )}
-                  {followerCount > 0 && job.status === "completed" && !(reelsLoading && reelsData.length === 0) && (
-                    <> &middot; {formatNumber(followerCount)} followers</>
-                  )}
-                  {isFeaturedView &&
-                    featuredData &&
-                    featuredData.account.avgEngagement > 0 && (
+            ) : (
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <Tooltip content="Back to Spy Viral Reels">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
+                      if (fromPage === "history") {
+                        setLocation("/history");
+                      } else if (fromPage === "research") {
+                        setLocation("/");
+                      } else if (fromPage === "dashboard") {
+                        setLocation("/dashboard");
+                      } else {
+                        setLocation("/history");
+                      }
+                    }}>
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {(() => {
+                        const h = displayScrapeHandle || stripAtHandle(job?.handle);
+                        return h ? `@${h}` : "Loading...";
+                      })()}
+                    </h1>
+                    {canShowAiBadge && (
+                      <AiBadge
+                        nicheSlug={job.classifiedNicheSlug!}
+                        confidence={job.classifiedConfidence as BadgeConfidence}
+                      />
+                    )}
+                    {job && (
+                      <Tooltip content="All reels successfully collected. Use Account Monitoring to re-sync.">
+                        <Badge
+                          variant={
+                            job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          {job.status}
+                        </Badge>
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+                {job && (
+                  <p className="text-sm text-muted-foreground ml-11">
+                    {job.status === "completed" && reelsLoading && reelsData.length === 0 ? (
+                      "Loading reels…"
+                    ) : (
                       <>
-                        {" "}
-                        &middot; {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
+                        {sortedReels.length}
+                        {dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels
+                        {dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
                       </>
                     )}
-                  {job.classifiedNicheSlug && (
-                    <>
-                      {" "}
-                      &middot;{" "}
-                      <span className="text-primary">{toReadableNiche(job.classifiedNicheSlug)}</span>
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
+                    {followerCount > 0 && job.status === "completed" && !(reelsLoading && reelsData.length === 0) && (
+                      <> &middot; {formatNumber(followerCount)} followers</>
+                    )}
+                    {job.classifiedNicheSlug && (
+                      <>
+                        {" "}
+                        &middot;{" "}
+                        <span className="text-primary">{toReadableNiche(job.classifiedNicheSlug)}</span>
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
               {job?.status === "completed" && reelsData.length > 0 && (
