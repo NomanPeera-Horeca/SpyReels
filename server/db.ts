@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -567,6 +567,48 @@ export async function getRecreatedScriptsByReelId(reelId: number): Promise<Recre
   return db.select().from(recreatedScripts).where(eq(recreatedScripts.reelId, reelId)).orderBy(desc(recreatedScripts.createdAt));
 }
 
+// ── Featured Reel helpers (Path B: catalog-backed transcribe/recreate/save) ──
+
+/** Fetch a featured_reels row by id (returns undefined if missing). */
+export async function getFeaturedReelById(id: number): Promise<FeaturedReel | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(featuredReels)
+    .where(eq(featuredReels.id, id))
+    .limit(1);
+  return rows[0];
+}
+
+/** Latest transcription for a featured reel, or undefined. */
+export async function getTranscriptionByFeaturedReelId(
+  featuredReelId: number
+): Promise<Transcription | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(transcriptions)
+    .where(eq(transcriptions.featuredReelId, featuredReelId))
+    .orderBy(desc(transcriptions.createdAt))
+    .limit(1);
+  return rows[0];
+}
+
+/** All recreated scripts attached to a featured reel (newest first). */
+export async function getRecreatedScriptsByFeaturedReelId(
+  featuredReelId: number
+): Promise<RecreatedScript[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .select()
+    .from(recreatedScripts)
+    .where(eq(recreatedScripts.featuredReelId, featuredReelId))
+    .orderBy(desc(recreatedScripts.createdAt));
+}
+
 // ── Saved Reels ──
 
 export async function saveReel(data: InsertSavedReel): Promise<number> {
@@ -593,6 +635,144 @@ export async function isReelSaved(userId: number, reelId: number): Promise<boole
   if (!db) throw new Error("Database not available");
   const result = await db.select().from(savedReels).where(and(eq(savedReels.userId, userId), eq(savedReels.reelId, reelId))).limit(1);
   return result.length > 0;
+}
+
+// ── Saved Reels (featured variant) ──
+
+/** Save a featured-catalog reel. Returns the saved_reels row id. */
+export async function saveFeaturedReel(userId: number, featuredReelId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedReels).values({
+    userId,
+    reelId: null,
+    jobId: null,
+    featuredReelId,
+  });
+  return result[0].insertId;
+}
+
+export async function unsaveFeaturedReel(userId: number, featuredReelId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(savedReels)
+    .where(
+      and(
+        eq(savedReels.userId, userId),
+        eq(savedReels.featuredReelId, featuredReelId)
+      )
+    );
+}
+
+export async function isFeaturedReelSaved(
+  userId: number,
+  featuredReelId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: savedReels.id })
+    .from(savedReels)
+    .where(
+      and(
+        eq(savedReels.userId, userId),
+        eq(savedReels.featuredReelId, featuredReelId)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Saved featured-reel rows joined with their featured_reels + featured_accounts
+ * and any existing transcription. Shape mirrors `getSavedReelsWithDetails`
+ * closely so the frontend can render both with minimal branching — the
+ * `source: "featured"` discriminator tells the UI which navigation path to
+ * use (clicking the handle should open /dashboard?featuredAccountId=…).
+ */
+type SavedReelFeatured = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> & {
+  reelId: null;
+  jobId: null;
+  featuredReelId: number;
+};
+
+export async function getSavedFeaturedReelsWithDetails(
+  userId: number
+): Promise<
+  Array<
+    SavedReelFeatured & {
+      featuredReel: FeaturedReel;
+      featuredAccount: {
+        id: number;
+        handle: string;
+        displayName: string | null;
+        followerCount: number;
+        profilePicUrl: string | null;
+      };
+      transcription?: Transcription;
+    }
+  >
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const saved = await db
+    .select()
+    .from(savedReels)
+    .where(eq(savedReels.userId, userId))
+    .orderBy(desc(savedReels.createdAt));
+
+  const out: Array<
+    SavedReelFeatured & {
+      featuredReel: FeaturedReel;
+      featuredAccount: {
+        id: number;
+        handle: string;
+        displayName: string | null;
+        followerCount: number;
+        profilePicUrl: string | null;
+      };
+      transcription?: Transcription;
+    }
+  > = [];
+
+  for (const s of saved) {
+    if (s.featuredReelId == null) continue;
+    const [fr] = await db
+      .select()
+      .from(featuredReels)
+      .where(eq(featuredReels.id, s.featuredReelId))
+      .limit(1);
+    if (!fr) continue;
+    const [acc] = await db
+      .select({
+        id: featuredAccounts.id,
+        handle: featuredAccounts.handle,
+        displayName: featuredAccounts.displayName,
+        followerCount: featuredAccounts.followerCount,
+        profilePicUrl: featuredAccounts.profilePicUrl,
+      })
+      .from(featuredAccounts)
+      .where(eq(featuredAccounts.id, fr.featuredAccountId))
+      .limit(1);
+    if (!acc) continue;
+    const [txn] = await db
+      .select()
+      .from(transcriptions)
+      .where(eq(transcriptions.featuredReelId, fr.id))
+      .orderBy(desc(transcriptions.createdAt))
+      .limit(1);
+    out.push({
+      ...s,
+      reelId: null,
+      jobId: null,
+      featuredReelId: s.featuredReelId,
+      featuredReel: fr,
+      featuredAccount: acc,
+      transcription: txn,
+    });
+  }
+  return out;
 }
 
 /**

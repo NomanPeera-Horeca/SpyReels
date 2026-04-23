@@ -111,6 +111,9 @@ export default function SavedReels() {
     let started = 0;
     for (const item of untranscribed) {
       try {
+        // Commit 3c will branch the "Transcribe All" action on `item.source`.
+        // For 3b we only kick off scraped rows to avoid breaking behavior.
+        if (item.reelId == null) continue;
         await transcribeMutation.mutateAsync({ reelId: item.reelId });
         started++;
       } catch { /* continue */ }
@@ -190,7 +193,11 @@ export default function SavedReels() {
               const engagementRate = item.job.followerCount
                 ? (((reel.likeCount || 0) + (reel.commentCount || 0)) / item.job.followerCount) * 100
                 : null;
-              const isExpanded = expandedReel === item.reelId;
+              // `rowKey` discriminates expanded state between scraped and
+              // featured rows (they can share a numeric id across tables).
+              // For 3b we fall back to reelId; 3c makes this source-aware.
+              const rowKey = item.reelId ?? item.featuredReelId ?? 0;
+              const isExpanded = expandedReel === rowKey;
               const hasTranscript = !!item.transcription && item.transcription.status === "completed";
               const isProcessing = item.transcription?.status === "processing";
 
@@ -198,7 +205,7 @@ export default function SavedReels() {
                 <div key={item.id} className="rounded-lg border border-border bg-card overflow-hidden">
                   <div
                     className={`flex items-center gap-2 sm:gap-4 p-2 sm:p-3 hover:bg-accent/30 transition-colors cursor-pointer ${isExpanded ? "bg-accent/20" : ""}`}
-                    onClick={() => setExpandedReel(isExpanded ? null : item.reelId)}
+                    onClick={() => setExpandedReel(isExpanded ? null : rowKey)}
                   >
                     {/* Thumbnail */}
                     <div className="relative w-16 h-20 rounded-md overflow-hidden bg-muted shrink-0">
@@ -238,19 +245,19 @@ export default function SavedReels() {
                     <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
                       <Button variant={hasTranscript ? "ghost" : "outline"} size="sm" className="h-7 text-xs" onClick={() => {
                         if (hasTranscript || isProcessing) {
-                          setExpandedReel(item.reelId);
-                        } else {
+                          setExpandedReel(rowKey);
+                        } else if (item.reelId != null) {
                           transcribeMutation.mutate({ reelId: item.reelId });
                           toast.info("Transcription started...");
-                          setExpandedReel(item.reelId);
+                          setExpandedReel(rowKey);
                         }
-                      }} disabled={transcribeMutation.isPending}>
+                      }} disabled={transcribeMutation.isPending || item.reelId == null}>
                         <FileText className="h-3 w-3 sm:mr-1" />
                         <span className="hidden sm:inline">{hasTranscript ? "Transcript" : isProcessing ? "Transcribing..." : "Transcribe"}</span>
                       </Button>
 
                       {hasTranscript && (
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setExpandedReel(item.reelId)}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setExpandedReel(rowKey)}>
                           <Wand2 className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Re-Create</span>
                         </Button>
                       )}
@@ -261,26 +268,41 @@ export default function SavedReels() {
                         </Button>
                       )}
 
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpandedReel(isExpanded ? null : item.reelId)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpandedReel(isExpanded ? null : rowKey)}>
                         {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </Button>
 
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => unsaveMutation.mutate({ reelId: item.reelId, jobId: item.jobId })} disabled={unsaveMutation.isPending} title="Remove from saved">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => {
+                          if (item.source === "featured" && item.featuredReelId != null) {
+                            unsaveMutation.mutate({ featuredReelId: item.featuredReelId });
+                          } else if (item.reelId != null && item.jobId != null) {
+                            unsaveMutation.mutate({ reelId: item.reelId, jobId: item.jobId });
+                          }
+                        }}
+                        disabled={unsaveMutation.isPending}
+                        title="Remove from saved"
+                      >
                         <BookmarkX className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
 
-                  {/* Expanded inline workflow */}
-                  {isExpanded && (
+                  {/* Expanded inline workflow (scraped rows only in 3b; 3c enables featured) */}
+                  {isExpanded && item.reelId != null && (
                     <InlineWorkflow
                       reelId={item.reelId}
                       handle={handle}
                       hasTranscription={hasTranscript}
                       isProcessing={!!isProcessing}
                       onTranscribe={() => {
-                        transcribeMutation.mutate({ reelId: item.reelId });
-                        toast.info("Transcription started...");
+                        if (item.reelId != null) {
+                          transcribeMutation.mutate({ reelId: item.reelId });
+                          toast.info("Transcription started...");
+                        }
                       }}
                       userTimezone={userTimezone}
                       postedAt={reel.postedAt}

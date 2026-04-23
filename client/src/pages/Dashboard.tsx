@@ -508,7 +508,9 @@ export default function Dashboard() {
     onSuccess: (data, variables) => {
       if (data.status === "completed") {
         toast.success("Transcription already available!");
-        setExpandedReelId(variables.reelId);
+        // `reelId` may be undefined when Commit 3c wires a featured call —
+        // the expand/pending-set keying only makes sense for scrape rows.
+        if (variables.reelId != null) setExpandedReelId(variables.reelId);
       } else {
         toast.info("Transcription started", {
           description: "Processing audio... This may take up to a minute.",
@@ -517,11 +519,13 @@ export default function Dashboard() {
       reelsQuery.refetch();
     },
     onError: (error, variables) => {
-      setPendingTranscriptions((prev) => {
-        const next = new Set(prev);
-        next.delete(variables.reelId);
-        return next;
-      });
+      if (variables.reelId != null) {
+        setPendingTranscriptions((prev) => {
+          const next = new Set(prev);
+          next.delete(variables.reelId!);
+          return next;
+        });
+      }
       toast.error("Transcription failed", { description: error.message });
     },
   });

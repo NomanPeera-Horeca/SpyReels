@@ -87,6 +87,13 @@ import {
   seedDemoScrape,
   markOnboardingComplete,
   markOnboardingSkipped,
+  getFeaturedReelById,
+  getTranscriptionByFeaturedReelId,
+  getRecreatedScriptsByFeaturedReelId,
+  saveFeaturedReel,
+  unsaveFeaturedReel,
+  isFeaturedReelSaved,
+  getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
 import { invokeLLM } from "./_core/llm";
@@ -94,6 +101,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels } from "../drizzle/schema";
+import type { Transcription } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
@@ -1373,14 +1381,63 @@ Return JSON only:
   // ── Transcription ──
   transcribe: router({
     start: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .mutation(async ({ ctx, input }) => {
-        const reel = await getReelById(input.reelId);
-        if (!reel) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+        // Resolve the source reel into a single view-model shape that
+        // `runTranscription` already understands (id, shortcode, videoUrl,
+        // caption, thumbnailUrl). The existing transcription lookup is
+        // likewise parametrised by source so we don't collide keyspaces
+        // across the `reelId` / `featuredReelId` columns.
+        const source: "user" | "featured" =
+          input.featuredReelId != null ? "featured" : "user";
+        let reelForRun: {
+          id: number;
+          shortcode: string;
+          videoUrl: string | null;
+          caption: string | null;
+          thumbnailUrl: string | null;
+        };
+
+        if (source === "featured") {
+          const fr = await getFeaturedReelById(input.featuredReelId!);
+          if (!fr) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
+          }
+          reelForRun = {
+            id: fr.id,
+            shortcode: fr.reelShortcode,
+            videoUrl: fr.videoUrl,
+            caption: fr.caption,
+            thumbnailUrl: fr.thumbnailUrl,
+          };
+        } else {
+          const reel = await getReelById(input.reelId!);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          reelForRun = {
+            id: reel.id,
+            shortcode: reel.shortcode,
+            videoUrl: reel.videoUrl,
+            caption: reel.caption,
+            thumbnailUrl: reel.thumbnailUrl,
+          };
         }
 
-        const existing = await getTranscriptionByReelId(input.reelId);
+        const existing =
+          source === "featured"
+            ? await getTranscriptionByFeaturedReelId(input.featuredReelId!)
+            : await getTranscriptionByReelId(input.reelId!);
         if (existing && existing.status === "completed") {
           return { transcriptionId: existing.id, status: "completed" as const };
         }
@@ -1408,14 +1465,15 @@ Return JSON only:
         }
 
         const transcriptionId = await createTranscription({
-          reelId: input.reelId,
+          reelId: source === "user" ? input.reelId! : null,
+          featuredReelId: source === "featured" ? input.featuredReelId! : null,
           status: "processing",
         });
 
         // Track usage
         await incrementUsage(ctx.user.id, "transcribeCount");
 
-        runTranscription(transcriptionId, reel).catch((err) => {
+        runTranscription(transcriptionId, reelForRun).catch((err) => {
           console.error(`Transcription ${transcriptionId} failed:`, err);
         });
 
@@ -1423,9 +1481,22 @@ Return JSON only:
       }),
 
     status: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .query(async ({ input }) => {
-        const transcription = await getTranscriptionByReelId(input.reelId);
+        const transcription =
+          input.featuredReelId != null
+            ? await getTranscriptionByFeaturedReelId(input.featuredReelId)
+            : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
   }),
@@ -1527,19 +1598,40 @@ Return JSON only:
     /** Start script re-creation: analyze viral structure + generate new script */
     generate: protectedProcedure
       .input(
-        z.object({
-          reelId: z.number(),
-          topic: z.string().max(2000).optional().default(""),
-          gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
-        })
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+            topic: z.string().max(2000).optional().default(""),
+            gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
       )
       .mutation(async ({ ctx, input }) => {
-        const reel = await getReelById(input.reelId);
-        if (!reel) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+        const source: "user" | "featured" =
+          input.featuredReelId != null ? "featured" : "user";
+        let caption = "";
+        let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
+
+        if (source === "featured") {
+          const fr = await getFeaturedReelById(input.featuredReelId!);
+          if (!fr) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
+          }
+          caption = fr.caption ?? "";
+          transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
+        } else {
+          const reel = await getReelById(input.reelId!);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          caption = reel.caption ?? "";
+          transcription = await getTranscriptionByReelId(input.reelId!);
         }
 
-        const transcription = await getTranscriptionByReelId(input.reelId);
         if (!transcription || transcription.status !== "completed" || !transcription.transcript) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -1563,7 +1655,8 @@ Return JSON only:
         await incrementUsage(ctx.user.id, "recreateCount");
 
         const scriptId = await createRecreatedScript({
-          reelId: input.reelId,
+          reelId: source === "user" ? input.reelId! : null,
+          featuredReelId: source === "featured" ? input.featuredReelId! : null,
           userId: ctx.user.id,
           topic: effectiveTopic,
           gradeLevel: input.gradeLevel,
@@ -1571,7 +1664,7 @@ Return JSON only:
         });
 
         // Run generation in background
-        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, reel.caption || "", effectiveTopic, input.gradeLevel).catch((err: unknown) => {
+        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
 
@@ -1607,13 +1700,27 @@ Return JSON only:
         }
         await incrementUsage(ctx.user.id, "rewriteCount");
 
-        // Get the original reel for context
-        const reel = existingScript.reelId ? await getReelById(existingScript.reelId) : null;
-        const transcription = existingScript.reelId ? await getTranscriptionByReelId(existingScript.reelId) : null;
+        // Get the original source (user-scrape reel OR featured reel) for
+        // caption + transcript context. The new rewrite row inherits whichever
+        // id the previous row carried so the "exactly one" invariant holds.
+        let reelCaption = "";
+        let reelTranscript = "";
+        if (existingScript.featuredReelId != null) {
+          const fr = await getFeaturedReelById(existingScript.featuredReelId);
+          reelCaption = fr?.caption ?? "";
+          const t = await getTranscriptionByFeaturedReelId(existingScript.featuredReelId);
+          reelTranscript = t?.transcript ?? "";
+        } else if (existingScript.reelId != null) {
+          const reel = await getReelById(existingScript.reelId);
+          reelCaption = reel?.caption ?? "";
+          const t = await getTranscriptionByReelId(existingScript.reelId);
+          reelTranscript = t?.transcript ?? "";
+        }
 
         // Create a new script entry for the rewrite
         const newScriptId = await createRecreatedScript({
-          reelId: existingScript.reelId!,
+          reelId: existingScript.reelId,
+          featuredReelId: existingScript.featuredReelId,
           userId: ctx.user.id,
           topic: existingScript.topic || "SAME_TOPIC",
           gradeLevel: input.gradeLevel,
@@ -1625,8 +1732,8 @@ Return JSON only:
           newScriptId,
           existingScript.generatedScript,
           existingScript.viralStructure as Record<string, unknown> | null,
-          transcription?.transcript || "",
-          reel?.caption || "",
+          reelTranscript,
+          reelCaption,
           input.gradeLevel,
           input.targetDuration,
           input.addCues
@@ -1646,52 +1753,239 @@ Return JSON only:
         return script;
       }),
 
-    /** List all recreated scripts for a reel */
+    /** List all recreated scripts for a reel (either source). */
     list: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .query(async ({ input }) => {
-        return getRecreatedScriptsByReelId(input.reelId);
+        if (input.featuredReelId != null) {
+          return getRecreatedScriptsByFeaturedReelId(input.featuredReelId);
+        }
+        return getRecreatedScriptsByReelId(input.reelId!);
       }),
   }),
 
   // ── Saved Reels ──
   saved: router({
-    /** Toggle save/unsave a reel */
+    /**
+     * Toggle save/unsave a reel. Accepts either the user-scrape pair
+     * (`reelId` + `jobId`) or a featured-catalog id (`featuredReelId`);
+     * exactly one must be provided. The db helpers keep the two keyspaces
+     * separate so the "exactly-one-column-populated" invariant holds.
+     */
     toggle: protectedProcedure
-      .input(z.object({ reelId: z.number(), jobId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            jobId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => {
+              const userPair = d.reelId != null && d.jobId != null;
+              const userPartial =
+                (d.reelId != null) !== (d.jobId != null); // one but not both
+              const featured = d.featuredReelId != null;
+              if (userPartial) return false;
+              return userPair !== featured;
+            },
+            {
+              message:
+                "Provide exactly one of (reelId + jobId) OR featuredReelId",
+            }
+          )
+      )
       .mutation(async ({ ctx, input }) => {
-        const alreadySaved = await isReelSaved(ctx.user.id, input.reelId);
-        if (alreadySaved) {
-          await unsaveReel(ctx.user.id, input.reelId);
-          return { saved: false } as const;
-        } else {
-          await saveReel({ userId: ctx.user.id, reelId: input.reelId, jobId: input.jobId });
+        if (input.featuredReelId != null) {
+          const alreadySaved = await isFeaturedReelSaved(ctx.user.id, input.featuredReelId);
+          if (alreadySaved) {
+            await unsaveFeaturedReel(ctx.user.id, input.featuredReelId);
+            return { saved: false } as const;
+          }
+          await saveFeaturedReel(ctx.user.id, input.featuredReelId);
           return { saved: true } as const;
         }
+        const alreadySaved = await isReelSaved(ctx.user.id, input.reelId!);
+        if (alreadySaved) {
+          await unsaveReel(ctx.user.id, input.reelId!);
+          return { saved: false } as const;
+        }
+        await saveReel({ userId: ctx.user.id, reelId: input.reelId!, jobId: input.jobId! });
+        return { saved: true } as const;
       }),
 
-    /** Check if a reel is saved */
+    /** Check if a reel is saved (either source). */
     check: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .query(async ({ ctx, input }) => {
-        const saved = await isReelSaved(ctx.user.id, input.reelId);
-        return { saved };
+        if (input.featuredReelId != null) {
+          return { saved: await isFeaturedReelSaved(ctx.user.id, input.featuredReelId) };
+        }
+        return { saved: await isReelSaved(ctx.user.id, input.reelId!) };
       }),
 
-    /** Check which reels from a list are saved */
+    /**
+     * Check which reels from a list are saved. Callers pass EITHER
+     * `reelIds` (job view) OR `featuredReelIds` (featured view). Returned
+     * map is keyed by whichever id type was supplied.
+     */
     checkBatch: protectedProcedure
-      .input(z.object({ reelIds: z.array(z.number()) }))
+      .input(
+        z
+          .object({
+            reelIds: z.array(z.number()).optional(),
+            featuredReelIds: z.array(z.number()).optional(),
+          })
+          .refine(
+            (d) =>
+              (d.reelIds != null && d.featuredReelIds == null) ||
+              (d.reelIds == null && d.featuredReelIds != null),
+            {
+              message:
+                "Provide exactly one of reelIds or featuredReelIds",
+            }
+          )
+      )
       .query(async ({ ctx, input }) => {
         const savedMap: Record<number, boolean> = {};
-        for (const reelId of input.reelIds) {
-          savedMap[reelId] = await isReelSaved(ctx.user.id, reelId);
+        if (input.featuredReelIds) {
+          for (const id of input.featuredReelIds) {
+            savedMap[id] = await isFeaturedReelSaved(ctx.user.id, id);
+          }
+        } else {
+          for (const id of input.reelIds!) {
+            savedMap[id] = await isReelSaved(ctx.user.id, id);
+          }
         }
         return savedMap;
       }),
 
-    /** List all saved reels with full details */
+    /**
+     * List all saved reels with full details. Merges the two sources
+     * behind a single normalized shape — each item exposes `source`
+     * ("scraped" | "featured") so the frontend can route clicks to the
+     * correct dashboard URL. Shape keeps the `reel` + `job` fields the
+     * existing UI already consumes for scraped rows; featured rows synth
+     * the same keys from `featured_reels` / `featured_accounts`.
+     */
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getSavedReelsWithDetails(ctx.user.id);
+      const scraped = await getSavedReelsWithDetails(ctx.user.id);
+      const featured = await getSavedFeaturedReelsWithDetails(ctx.user.id);
+
+      type ListedSaved = {
+        id: number;
+        createdAt: Date;
+        source: "scraped" | "featured";
+        reelId: number | null;
+        jobId: number | null;
+        featuredReelId: number | null;
+        reel: {
+          id: number;
+          shortcode: string;
+          thumbnailUrl: string | null;
+          videoUrl: string | null;
+          caption: string | null;
+          viewCount: number;
+          likeCount: number;
+          commentCount: number;
+          duration: number | null;
+          postedAt: Date;
+          reelUrl: string;
+          ownerUsername: string | null;
+        };
+        job: {
+          id: number;
+          handle: string;
+          followerCount: number;
+          featuredAccountId: number | null;
+        };
+        transcription?: Transcription;
+      };
+
+      const scrapedItems: ListedSaved[] = scraped.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        source: "scraped" as const,
+        reelId: s.reelId,
+        jobId: s.jobId,
+        featuredReelId: null,
+        reel: {
+          id: s.reel.id,
+          shortcode: s.reel.shortcode,
+          thumbnailUrl: s.reel.thumbnailUrl,
+          videoUrl: s.reel.videoUrl,
+          caption: s.reel.caption,
+          viewCount: s.reel.viewCount ?? 0,
+          likeCount: s.reel.likeCount ?? 0,
+          commentCount: s.reel.commentCount ?? 0,
+          duration: s.reel.duration,
+          postedAt: s.reel.postedAt,
+          reelUrl: s.reel.reelUrl,
+          ownerUsername: s.reel.ownerUsername,
+        },
+        job: {
+          id: s.job.id,
+          handle: s.job.handle,
+          followerCount: s.job.followerCount ?? 0,
+          featuredAccountId: null,
+        },
+        transcription: s.transcription,
+      }));
+
+      const featuredItems: ListedSaved[] = featured.map((f) => ({
+        id: f.id,
+        createdAt: f.createdAt,
+        source: "featured" as const,
+        reelId: null,
+        jobId: null,
+        featuredReelId: f.featuredReelId,
+        reel: {
+          id: f.featuredReel.id,
+          shortcode: f.featuredReel.reelShortcode,
+          thumbnailUrl: f.featuredReel.thumbnailUrl,
+          videoUrl: f.featuredReel.videoUrl,
+          caption: f.featuredReel.caption,
+          viewCount: f.featuredReel.viewCount ?? 0,
+          likeCount: f.featuredReel.likeCount ?? 0,
+          commentCount: f.featuredReel.commentCount ?? 0,
+          duration: f.featuredReel.duration,
+          postedAt: f.featuredReel.postedAt,
+          reelUrl: `https://www.instagram.com/reel/${f.featuredReel.reelShortcode}/`,
+          ownerUsername: f.featuredAccount.handle,
+        },
+        job: {
+          id: f.featuredAccount.id,
+          handle: f.featuredAccount.handle,
+          followerCount: f.featuredAccount.followerCount ?? 0,
+          featuredAccountId: f.featuredAccount.id,
+        },
+        transcription: f.transcription,
+      }));
+
+      const combined = [...scrapedItems, ...featuredItems].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      );
+      return combined;
     }),
   }),
 
