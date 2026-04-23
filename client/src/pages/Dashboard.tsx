@@ -1013,27 +1013,41 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Loading skeleton while reels are being fetched */}
+          {/* Reels list loading: 95% until the list query finishes (then 100% = data rendered) */}
           {job?.status === "completed" && reelsQuery.isLoading && (
-            <div className="space-y-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse">
-                  <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
-                  <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="flex gap-3">
-                      <div className="h-3 bg-muted rounded w-16" />
-                      <div className="h-3 bg-muted rounded w-12" />
-                      <div className="h-3 bg-muted rounded w-14" />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+                    style={{ width: "95%" }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Almost there...</p>
+              </div>
+              <div className="space-y-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse"
+                  >
+                    <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
+                    <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="h-4 bg-muted rounded w-3/4" />
+                      <div className="flex gap-3">
+                        <div className="h-3 bg-muted rounded w-16" />
+                        <div className="h-3 bg-muted rounded w-12" />
+                        <div className="h-3 bg-muted rounded w-14" />
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <div className="h-8 w-8 bg-muted rounded" />
+                      <div className="h-8 w-8 bg-muted rounded" />
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <div className="h-8 w-8 bg-muted rounded" />
-                    <div className="h-8 w-8 bg-muted rounded" />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 

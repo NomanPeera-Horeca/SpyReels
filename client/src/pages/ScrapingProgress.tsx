@@ -181,7 +181,11 @@ export default function ScrapingProgress() {
   }
 
   const displayHandle = handle ? `@${handle}` : "your account";
-  const pctClamped = Math.min(100, Math.max(0, progressPercent));
+  const rawPct = Math.min(100, Math.max(0, progressPercent));
+  // Cap the bar at 95% while the job is in-flight; 100% is reserved for the
+  // dashboard when reels are actually in the list (see Dashboard).
+  const pctClamped =
+    status === "completed" ? rawPct : Math.min(95, rawPct);
 
   return (
     <div className="mx-auto max-w-2xl px-3 sm:px-0 pt-4 sm:pt-8 md:pt-16 pb-16">
@@ -258,7 +262,7 @@ export default function ScrapingProgress() {
               ? "Done!"
               : remainingSec > 0
                 ? `About ${remainingSec} second${remainingSec === 1 ? "" : "s"} remaining`
-                : "Wrapping up..."}
+                : "Almost there..."}
           </span>
         </div>
       </div>
