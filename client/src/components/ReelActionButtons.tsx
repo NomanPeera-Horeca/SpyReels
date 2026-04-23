@@ -41,6 +41,14 @@ export interface ReelActionButtonsProps {
   onToggleSave: () => void;
   onTranscribe: () => void;
   onExpand: () => void;
+  /**
+   * Commit 9 — fired by the "Make My Version" / "Open My Script ✓"
+   * button. Parents use this to expand the row (if collapsed) AND
+   * trigger a scroll-to + pulse on the Re-create section. Separate
+   * from `onExpand` (which is fired by the Transcript button) so
+   * clicking "View Transcript" doesn't pulse the recreate area.
+   */
+  onMakeVersion: () => void;
 
   saveBusy?: boolean;
   transcribeDisabled?: boolean;
@@ -71,6 +79,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     onToggleSave,
     onTranscribe,
     onExpand,
+    onMakeVersion,
     saveBusy,
     transcribeDisabled,
     compact,
@@ -145,11 +154,17 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         <Button
           variant="outline"
           size="sm"
-          className={`h-7 text-xs px-2 border-primary/30 ${
-            hasScript ? "bg-primary/10 text-primary" : "text-primary hover:bg-primary/10"
+          className={`h-7 text-xs px-2 ${
+            hasScript
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+              : "border-primary/30 text-primary hover:bg-primary/10"
           }`}
-          onClick={onExpand}
-          title={hasScript ? "Open your script" : "Make your version"}
+          onClick={onMakeVersion}
+          title={
+            hasScript
+              ? "Click to open your generated script"
+              : "Write your own viral script using this reel's hook and structure"
+          }
         >
           <Wand2 className="h-3 w-3 sm:mr-1" />
           <span className={labelClass}>

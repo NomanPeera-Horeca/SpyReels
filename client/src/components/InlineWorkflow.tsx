@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -236,6 +236,15 @@ export type InlineWorkflowProps = {
   onTranscribe: () => void;
   userTimezone: string;
   postedAt: Date | string;
+  /**
+   * Commit 9 — monotonically-increasing nonce from the Dashboard's
+   * "Make My Version" click handler. When this changes, the Re-create
+   * section scrolls into view and plays a 2-second pulse. Passing
+   * `undefined` is a no-op. Using a nonce (vs a boolean) lets a user
+   * re-click the button on an already-expanded row and still get the
+   * visual cue — the signal fires every click, not just the first.
+   */
+  scrollPulseSignal?: number;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -283,6 +292,41 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [saveStatus, setSaveStatus] = useState<"draft" | "approved">("draft");
   const [, navigate] = useLocation();
   const trpcUtils = trpc.useUtils();
+
+  // Commit 9 — ref for the Re-create section so the Dashboard's
+  // "Make My Version" click can scroll here + pulse. We respect
+  // prefers-reduced-motion both for scroll behavior and animation.
+  const recreateSectionRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (props.scrollPulseSignal == null) return;
+    // 50ms gives the parent's `setExpandedReelId` a frame to mount
+    // this component before we try to scroll to a ref that wouldn't
+    // exist yet on the first click of a collapsed row.
+    const timer = window.setTimeout(() => {
+      const node = recreateSectionRef.current;
+      if (!node) return;
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      node.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "center",
+      });
+      // Clear any stale pulse class before re-adding, so back-to-back
+      // clicks restart the animation instead of it finishing silently.
+      node.classList.remove("pulse-highlight");
+      // Force reflow so the re-added class restarts the animation.
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      void node.offsetWidth;
+      node.classList.add("pulse-highlight");
+      const removeTimer = window.setTimeout(() => {
+        node.classList.remove("pulse-highlight");
+      }, 2100);
+      return () => window.clearTimeout(removeTimer);
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [props.scrollPulseSignal]);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
@@ -464,7 +508,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
           <FileText className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Re-Create and workflow features</p>
+          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Make My Version and workflow features</p>
           <Button onClick={onTranscribe} disabled={isProcessing}>
             {isProcessing ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</>
@@ -523,6 +567,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
         {/* ── Section 2: Re-Create ── */}
         {!activeScriptId || !script || script.status !== "completed" ? (
           <RecreateSection
+            sectionRef={recreateSectionRef}
             activeScriptId={activeScriptId}
             scriptStatus={script?.status}
             errorMessage={script?.errorMessage ?? undefined}
@@ -541,6 +586,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
         ) : (
           /* ── Section 3: Completed script - Edit, Save, Approve ── */
           <CompletedScriptSection
+            sectionRef={recreateSectionRef}
             displayScript={displayScript}
             generatedScript={generatedScript}
             editMode={editMode}
@@ -803,7 +849,7 @@ export function SearchInlineWorkflow({
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
           <FileText className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Re-Create and workflow features</p>
+          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Make My Version and workflow features</p>
           <Button onClick={onTranscribe}>
             <FileText className="mr-2 h-4 w-4" /> Transcribe Now
           </Button>
@@ -980,6 +1026,7 @@ function TranscriptSection({
 }
 
 function RecreateSection({
+  sectionRef,
   activeScriptId,
   scriptStatus,
   errorMessage,
@@ -995,6 +1042,7 @@ function RecreateSection({
   previousScripts,
   onSelectScript,
 }: {
+  sectionRef?: React.Ref<HTMLDivElement>;
   activeScriptId: number | null;
   scriptStatus?: string;
   errorMessage?: string;
@@ -1011,8 +1059,15 @@ function RecreateSection({
   onSelectScript: (id: number) => void;
 }) {
   return (
-    <div>
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Re-Create Script</h4>
+    <div ref={sectionRef}>
+      <div className="mb-3">
+        <h4 className="text-sm font-semibold text-foreground">
+          Make this viral hit YOURS
+        </h4>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Generate a new script in your voice, inspired by this reel's viral hook and structure.
+        </p>
+      </div>
 
       {/* Processing state */}
       {((activeScriptId && scriptStatus === "processing") || isGenerating) && (
@@ -1080,11 +1135,12 @@ function RecreateSection({
             className="h-9 shrink-0"
             onClick={onGenerate}
             disabled={isGenerating}
+            title="Write your own viral script using this reel's hook and structure"
           >
             {isGenerating ? (
               <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating...</>
             ) : (
-              <><Wand2 className="mr-1.5 h-3.5 w-3.5" /> Generate Script</>
+              <><Wand2 className="mr-1.5 h-3.5 w-3.5" /> Make My Version</>
             )}
           </Button>
         </div>
@@ -1119,6 +1175,7 @@ function RecreateSection({
 }
 
 function CompletedScriptSection({
+  sectionRef,
   displayScript,
   generatedScript,
   editMode,
@@ -1197,9 +1254,10 @@ function CompletedScriptSection({
   onSave: () => void;
   isSaving: boolean;
   userTimezone: string;
+  sectionRef?: React.Ref<HTMLDivElement>;
 }) {
   return (
-    <div>
+    <div ref={sectionRef}>
       {/* Script header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">

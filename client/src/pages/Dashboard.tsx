@@ -184,6 +184,26 @@ export default function Dashboard() {
   /** Ensures `first_spy_completed` fires at most once per browser session (milestone, not per job). */
   const firstSpyMilestoneLoggedRef = useRef(false);
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
+  /**
+   * Commit 9 — (reelId, nonce) pair that tells the corresponding
+   * InlineWorkflow instance to scroll to its Re-create section and
+   * pulse. We bump `nonce` on every "Make My Version" click so
+   * repeated clicks on the already-expanded row still fire the cue —
+   * this is the fix for "users click Re-Create and nothing appears
+   * to happen". Nulling this out isn't required; stale values are
+   * ignored once their reelId no longer matches.
+   */
+  const [recreatePulse, setRecreatePulse] = useState<{
+    reelId: number;
+    nonce: number;
+  } | null>(null);
+  const triggerRecreatePulse = useCallback((reelId: number) => {
+    setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    setRecreatePulse((prev) => ({
+      reelId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+    }));
+  }, []);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
 
@@ -474,7 +494,7 @@ export default function Dashboard() {
     onSuccess: (data) => {
       utils.saved.checkBatch.invalidate();
       utils.saved.list.invalidate();
-      toast.success(data.saved ? "Reel saved" : "Reel removed from saved");
+      toast.success(data.saved ? "Saved" : "Removed from saved");
     },
   });
 
@@ -1446,6 +1466,7 @@ export default function Dashboard() {
                             }
                           }}
                           onExpand={() => setExpandedReelId(reel.id)}
+                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
                         />
                         <Button
                           variant="ghost"
@@ -1478,6 +1499,11 @@ export default function Dashboard() {
                           }}
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
+                          scrollPulseSignal={
+                            recreatePulse?.reelId === reel.id
+                              ? recreatePulse.nonce
+                              : undefined
+                          }
                         />
                       ) : (
                         <InlineWorkflow
@@ -1492,6 +1518,11 @@ export default function Dashboard() {
                           }}
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
+                          scrollPulseSignal={
+                            recreatePulse?.reelId === reel.id
+                              ? recreatePulse.nonce
+                              : undefined
+                          }
                         />
                       )
                     )}
@@ -1675,6 +1706,7 @@ export default function Dashboard() {
                             }
                           }}
                           onExpand={() => setExpandedReelId(reel.id)}
+                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
                         />
                       </div>
 
@@ -1693,6 +1725,11 @@ export default function Dashboard() {
                               }}
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
+                              scrollPulseSignal={
+                                recreatePulse?.reelId === reel.id
+                                  ? recreatePulse.nonce
+                                  : undefined
+                              }
                             />
                           ) : (
                             <InlineWorkflow
@@ -1707,6 +1744,11 @@ export default function Dashboard() {
                               }}
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
+                              scrollPulseSignal={
+                                recreatePulse?.reelId === reel.id
+                                  ? recreatePulse.nonce
+                                  : undefined
+                              }
                             />
                           )}
                         </div>

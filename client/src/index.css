@@ -162,4 +162,37 @@
       max-width: 1400px;
     }
   }
+
+  /*
+   * Commit 9 — Re-create flow pulse.
+   * Applied to the "Make this viral hit YOURS" section ~50ms after a
+   * user clicks the Make My Version action; JS removes the class
+   * after 2s. Two fades keeps the cue visible without reading as
+   * "something is wrong". `prefers-reduced-motion` users get a
+   * static ring so the visual anchor still works but nothing moves.
+   */
+  .pulse-highlight {
+    position: relative;
+    border-radius: 0.5rem;
+    animation: pulse-highlight 1s ease-in-out 2;
+  }
+
+  @keyframes pulse-highlight {
+    0% {
+      box-shadow: 0 0 0 0 oklch(0.65 0.2 280 / 0);
+    }
+    50% {
+      box-shadow: 0 0 0 6px oklch(0.65 0.2 280 / 0.35);
+    }
+    100% {
+      box-shadow: 0 0 0 0 oklch(0.65 0.2 280 / 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-highlight {
+      animation: none;
+      box-shadow: 0 0 0 2px oklch(0.65 0.2 280 / 0.45);
+    }
+  }
 }
