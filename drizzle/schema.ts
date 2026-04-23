@@ -549,6 +549,30 @@ export const featuredReels = mysqlTable(
     postedAt: timestamp("postedAt").notNull(),
     rank: int("rank"),
     scrapedAt: timestamp("scrapedAt").defaultNow().notNull(),
+    /**
+     * Cached transcription for Path B (featured catalog). Populated by
+     * the backfill script + lazy fallback in `transcribe.start`. Because
+     * featured reels are a shared catalog, the transcript is computed
+     * once and fanned out to all users who click "Transcribe" — no per-
+     * user row in `transcriptions` for featured reels.
+     *
+     * `no_speech` is a valid terminal state (music/visual-only reel)
+     * distinct from `failed` so the UI can show the right empty state.
+     */
+    transcriptionStatus: mysqlEnum("transcriptionStatus", [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+      "no_speech",
+    ])
+      .default("pending")
+      .notNull(),
+    transcript: text("transcript"),
+    transcriptSegments: json("transcriptSegments").$type<
+      { start: number; end: number; text: string }[] | null
+    >(),
+    transcribedAt: timestamp("transcribedAt"),
   },
   (table) => ({
     reelPerAccountUnique: uniqueIndex("featured_reels_account_shortcode_unique").on(
