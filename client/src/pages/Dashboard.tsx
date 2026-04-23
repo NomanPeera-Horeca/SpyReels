@@ -164,40 +164,17 @@ export default function Dashboard() {
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
   const utils = trpc.useUtils();
+  /** `isFeaturedView` is the Path B branch: read-only catalog dashboard
+   * served directly from `featured_*` tables. No scrape_job is created. */
+  const isFeaturedView = !!featuredAccountId && !jobId;
   const billingSubscriptionQuery = trpc.billing.subscription.useQuery(undefined, {
-    enabled: !!jobId,
+    enabled: !!jobId || isFeaturedView,
   });
-  const ensureDemoJob = trpc.featured.ensureDemoJob.useMutation();
-  const [featuredResolveError, setFeaturedResolveError] = useState<string | null>(null);
-  const [featuredResolveNotFound, setFeaturedResolveNotFound] = useState(false);
-  const [featuredResolveKey, setFeaturedResolveKey] = useState(0);
 
-  const resolveFeaturedJob = useCallback(async () => {
-    if (!featuredAccountId || jobId) return;
-    setFeaturedResolveError(null);
-    setFeaturedResolveNotFound(false);
-    try {
-      const resolved = await ensureDemoJob.mutateAsync({ featuredAccountId });
-      setLocation(`/dashboard?jobId=${resolved.jobId}`, { replace: true });
-    } catch (error: any) {
-      const code = error?.data?.code;
-      if (code === "NOT_FOUND") {
-        setFeaturedResolveNotFound(true);
-        setFeaturedResolveError(
-          error?.message || "That featured creator is no longer available."
-        );
-        return;
-      }
-      setFeaturedResolveError(
-        error?.message || "Could not load featured creator reels right now."
-      );
-    }
-  }, [ensureDemoJob, featuredAccountId, jobId, setLocation]);
-
-  useEffect(() => {
-    if (!featuredAccountId || jobId) return;
-    resolveFeaturedJob();
-  }, [featuredAccountId, jobId, featuredResolveKey, resolveFeaturedJob]);
+  const featuredDataQuery = trpc.featured.getDashboardData.useQuery(
+    { featuredAccountId: featuredAccountId! },
+    { enabled: isFeaturedView }
+  );
 
   // Usage gates for feature gating
   const transcribeGate = useUsageGate("transcribeCount");
@@ -239,34 +216,93 @@ export default function Dashboard() {
     prevHasCompletedFirstSpyRef.current = user?.hasCompletedFirstSpy ?? false;
   }, [jobQuery.data, user?.hasCompletedFirstSpy, posthog]);
 
-  const job = jobQuery.data;
+  const scrapeJobData = jobQuery.data;
+  const featuredData = featuredDataQuery.data;
+
+  /** Unified dashboard "job" view-model. In featured mode we shim the
+   * scrape-job fields we need from the featured account so all the
+   * existing `job?.*` reads just work. Pending-featured renders a
+   * minimal "completed" placeholder so the skeleton paths trigger. */
+  const job = useMemo(() => {
+    if (isFeaturedView) {
+      if (!featuredData) {
+        return {
+          id: 0,
+          handle: "",
+          status: "completed" as const,
+          isDemo: false,
+          classifiedNicheSlug: null as string | null,
+          classifiedConfidence: null as BadgeConfidence | null,
+          totalReels: 0,
+          timeframeDays: null as number | null,
+          followerCount: 0,
+          errorMessage: null as string | null,
+          profilePicUrl: null as string | null,
+          displayName: null as string | null,
+          avgEngagement: null as number | null,
+        };
+      }
+      return {
+        id: featuredData.account.id,
+        handle: featuredData.account.handle,
+        status: "completed" as const,
+        isDemo: false,
+        classifiedNicheSlug: featuredData.account.classifiedNicheSlug,
+        classifiedConfidence: null as BadgeConfidence | null,
+        totalReels: featuredData.reels.length,
+        timeframeDays: null as number | null,
+        followerCount: featuredData.followerCount,
+        errorMessage: null as string | null,
+        profilePicUrl: featuredData.account.profilePicUrl,
+        displayName: featuredData.account.displayName,
+        avgEngagement: featuredData.account.avgEngagement,
+      };
+    }
+    return scrapeJobData;
+  }, [isFeaturedView, featuredData, scrapeJobData]);
 
   const featuredHandleContext = trpc.featured.accountContextByHandle.useQuery(
-    { handle: job?.handle ?? "" },
-    { enabled: Boolean(jobId && job?.handle && job.status === "completed") }
+    { handle: scrapeJobData?.handle ?? "" },
+    {
+      enabled: Boolean(
+        jobId && scrapeJobData?.handle && scrapeJobData.status === "completed"
+      ),
+    }
   );
 
   const nicheSlugForSidebar = useMemo(() => {
-    if (!job || job.status !== "completed") return null;
-    if (job.classifiedNicheSlug) return job.classifiedNicheSlug;
-    if (job.isDemo && featuredHandleContext.data?.nicheSlug) {
+    if (isFeaturedView) {
+      return featuredData?.account.classifiedNicheSlug ?? null;
+    }
+    if (!scrapeJobData || scrapeJobData.status !== "completed") return null;
+    if (scrapeJobData.classifiedNicheSlug) return scrapeJobData.classifiedNicheSlug;
+    if (scrapeJobData.isDemo && featuredHandleContext.data?.nicheSlug) {
       return featuredHandleContext.data.nicheSlug;
     }
     return null;
-  }, [job, featuredHandleContext.data]);
+  }, [isFeaturedView, featuredData, scrapeJobData, featuredHandleContext.data]);
 
   const sidebarNicheLabel = useMemo(() => {
-    if (!job || job.status !== "completed") return "";
-    if (job.classifiedNicheSlug) return toReadableNiche(job.classifiedNicheSlug);
-    if (job.isDemo && featuredHandleContext.data?.nicheName) {
+    if (isFeaturedView) {
+      const slug = featuredData?.account.classifiedNicheSlug;
+      if (featuredData?.account.primaryNicheName) {
+        return featuredData.account.primaryNicheName;
+      }
+      return slug ? toReadableNiche(slug) : "";
+    }
+    if (!scrapeJobData || scrapeJobData.status !== "completed") return "";
+    if (scrapeJobData.classifiedNicheSlug) {
+      return toReadableNiche(scrapeJobData.classifiedNicheSlug);
+    }
+    if (scrapeJobData.isDemo && featuredHandleContext.data?.nicheName) {
       return featuredHandleContext.data.nicheName;
     }
     return "";
-  }, [job, featuredHandleContext.data]);
+  }, [isFeaturedView, featuredData, scrapeJobData, featuredHandleContext.data]);
 
   const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
   const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
-  const jobComplete = job?.status === "completed";
+  const jobComplete = isFeaturedView ? !!featuredData : job?.status === "completed";
 
   const reelsQuery = trpc.reels.list.useQuery(
     { jobId: jobId! },
@@ -284,8 +320,17 @@ export default function Dashboard() {
 
   const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<number>>(new Set());
 
-  const reelsData = reelsQuery.data?.reels || [];
-  const followerCount = reelsQuery.data?.followerCount || 0;
+  const reelsData = isFeaturedView
+    ? featuredData?.reels ?? []
+    : reelsQuery.data?.reels ?? [];
+  const followerCount = isFeaturedView
+    ? featuredData?.followerCount ?? 0
+    : reelsQuery.data?.followerCount ?? 0;
+  /** Generalized "reels are loading" signal that works for both paths —
+   * used by the skeleton/progress bar UI. */
+  const reelsLoading = isFeaturedView
+    ? featuredDataQuery.isPending
+    : reelsQuery.isLoading;
 
   /** Real IG handle for display; if job.handle is a bad placeholder, use first reel's owner. */
   const displayScrapeHandle = useMemo(() => {
@@ -323,17 +368,21 @@ export default function Dashboard() {
   const showRelatedFromPicks =
     onboardingPickHandles.length > 0 && (creatorsByHandlesQuery.data?.length ?? 0) > 0;
 
+  /** In featured view we already have the account id from the URL, so
+   * Tier 2 can skip the `featuredHandleContext` round-trip. */
   const canQueryRelatedTier2 =
     jobComplete &&
     tier1Decided &&
     !showRelatedFromPicks &&
     Boolean(nicheSlugForSidebar) &&
-    featuredHandleContext.isFetched;
+    (isFeaturedView || featuredHandleContext.isFetched);
 
   const relatedCreatorsQuery = trpc.featured.relatedCreators.useQuery(
     {
       nicheSlug: nicheSlugForSidebar!,
-      excludeAccountId: featuredHandleContext.data?.featuredAccountId ?? undefined,
+      excludeAccountId: isFeaturedView
+        ? featuredData?.account.id ?? undefined
+        : featuredHandleContext.data?.featuredAccountId ?? undefined,
       limit: 5,
     },
     { enabled: canQueryRelatedTier2 }
@@ -354,6 +403,7 @@ export default function Dashboard() {
     (tier1Decided &&
       !showRelatedFromPicks &&
       Boolean(nicheSlugForSidebar) &&
+      !isFeaturedView &&
       !featuredHandleContext.isFetched) ||
     (canQueryRelatedTier2 && relatedCreatorsQuery.isPending);
 
@@ -367,11 +417,24 @@ export default function Dashboard() {
     (goingViralQuery.isPending || (goingViralQuery.data?.length ?? 0) > 0);
 
   const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
+  /** `saved.checkBatch` keys by `reels.id` (user-scrape table); featured
+   * reel ids live in `featured_reels` so the check would be meaningless.
+   * Skip it in featured view until Commit 3b teaches it both IDs. */
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
     { reelIds },
-    { enabled: reelIds.length > 0 }
+    { enabled: reelIds.length > 0 && !isFeaturedView }
   );
   const savedMap = savedBatchQuery.data || {};
+
+  /** Commit-2 guard: featured reels don't exist in `reels` / `scrape_jobs`
+   * yet, so save/transcribe/recreate would hit FK errors. Keep the buttons
+   * visible but short-circuit the mutation with an info toast. Commit 3
+   * lifts this guard by teaching those endpoints `featuredReelId`. */
+  const featuredNotReadyToast = useCallback(() => {
+    toast.info(
+      "Featured creator actions are landing in the next update — coming in Commit 3."
+    );
+  }, []);
 
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
@@ -515,57 +578,35 @@ export default function Dashboard() {
   const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: showOverview });
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
 
-  if (!jobId && featuredAccountId) {
-    if (featuredResolveError) {
-      return (
-        <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
-          <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
-            <h2 className="text-lg font-semibold text-foreground">
-              {featuredResolveNotFound
-                ? "Featured creator unavailable"
-                : "Could not load creator reels"}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">{featuredResolveError}</p>
-            <div className="mt-5 flex items-center justify-center gap-2">
-              <Button
-                onClick={() => {
-                  setFeaturedResolveError(null);
-                  setFeaturedResolveNotFound(false);
-                  setFeaturedResolveKey((v) => v + 1);
-                }}
-              >
-                Retry
-              </Button>
-              <Button variant="outline" onClick={() => setLocation("/")}>
-                Back to Spy Viral Reels
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    // Resolving: keep this screen for the whole featured flow until we navigate with jobId
-    // or hit an error above (never fall through to the no-jobId overview).
+  /** Featured view NOT_FOUND / network error — short-circuit with a
+   * dedicated page. Loading is handled by the main dashboard layout
+   * below (skeletons render because the pseudo-job is `completed`). */
+  if (isFeaturedView && featuredDataQuery.error) {
+    const errorCode = (featuredDataQuery.error as any)?.data?.code;
+    const isNotFound = errorCode === "NOT_FOUND";
+    const message = isNotFound
+      ? featuredDataQuery.error.message || "This creator isn't available"
+      : featuredDataQuery.error.message ||
+        "Could not load creator reels right now.";
     return (
       <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
         <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-3">
-            <Loader2 className="h-5 w-5 text-primary animate-spin" />
-          </div>
           <h2 className="text-lg font-semibold text-foreground">
-            {ensureDemoJob.isPending ? "Loading creator reels..." : "Resolving creator…"}
+            {isNotFound ? "Featured creator unavailable" : "Could not load creator reels"}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {ensureDemoJob.isPending
-              ? "Preparing a dashboard view for this featured creator."
-              : "Starting…"}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{message}</p>
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <Button onClick={() => featuredDataQuery.refetch()}>Retry</Button>
+            <Button variant="outline" onClick={() => setLocation("/")}>
+              Back to Spy Viral Reels
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!jobId) {
+  if (!jobId && !featuredAccountId) {
     const jobs = jobsListQuery.data || [];
     const scripts = scriptsListQuery.data || [];
     const savedReels = savedListQuery.data || [];
@@ -876,7 +917,10 @@ export default function Dashboard() {
                 </Tooltip>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                    {job ? `@${displayScrapeHandle || stripAtHandle(job.handle)}` : "Loading..."}
+                    {(() => {
+                      const h = displayScrapeHandle || stripAtHandle(job?.handle);
+                      return h ? `@${h}` : "Loading...";
+                    })()}
                   </h1>
                   {canShowAiBadge && (
                     <AiBadge
@@ -901,7 +945,7 @@ export default function Dashboard() {
               </div>
               {job && (
                 <p className="text-sm text-muted-foreground ml-11">
-                  {job.status === "completed" && reelsQuery.isLoading && reelsData.length === 0 ? (
+                  {job.status === "completed" && reelsLoading && reelsData.length === 0 ? (
                     "Loading reels…"
                   ) : (
                     <>
@@ -910,9 +954,17 @@ export default function Dashboard() {
                       {dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
                     </>
                   )}
-                  {followerCount > 0 && job.status === "completed" && !(reelsQuery.isLoading && reelsData.length === 0) && (
+                  {followerCount > 0 && job.status === "completed" && !(reelsLoading && reelsData.length === 0) && (
                     <> &middot; {formatNumber(followerCount)} followers</>
                   )}
+                  {isFeaturedView &&
+                    featuredData &&
+                    featuredData.account.avgEngagement > 0 && (
+                      <>
+                        {" "}
+                        &middot; {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
+                      </>
+                    )}
                   {job.classifiedNicheSlug && (
                     <>
                       {" "}
@@ -989,51 +1041,57 @@ export default function Dashboard() {
                     </div>
                   </Tooltip>
 
-                  <Tooltip content="Download all reels data as a CSV file">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9"
-                      onClick={() => {
-                        if (!exportGate.allowed) {
-                          toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
-                            description: "Upgrade your plan for more exports.",
-                            action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                          });
-                          return;
-                        }
-                        exportCsv.mutate({ jobId: jobId! });
-                      }}
-                      disabled={exportCsv.isPending}
-                    >
-                      {exportCsv.isPending ? (
-                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5 sm:mr-2" />
-                      )}
-                      <span className="hidden sm:inline">Export CSV</span>
-                    </Button>
-                  </Tooltip>
+                  {/* Export requires a scrape_job row; hidden in featured
+                      view until the catalog is wired into export. */}
+                  {!isFeaturedView && (
+                    <>
+                      <Tooltip content="Download all reels data as a CSV file">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9"
+                          onClick={() => {
+                            if (!exportGate.allowed) {
+                              toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
+                                description: "Upgrade your plan for more exports.",
+                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                              });
+                              return;
+                            }
+                            exportCsv.mutate({ jobId: jobId! });
+                          }}
+                          disabled={exportCsv.isPending}
+                        >
+                          {exportCsv.isPending ? (
+                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5 sm:mr-2" />
+                          )}
+                          <span className="hidden sm:inline">Export CSV</span>
+                        </Button>
+                      </Tooltip>
 
-                  <Tooltip content="Live-sync this data to a Google Sheet">
-                    <Button
-                      size="sm"
-                      className="h-9"
-                      onClick={() => {
-                        if (sheetsAvailable.data?.available) {
-                          setShowSheetsDialog(true);
-                        } else {
-                          toast.info("Google Sheets not configured", {
-                            description:
-                              "Add your Google service account credentials in Settings to enable Google Sheets export.",
-                          });
-                        }
-                      }}
-                    >
-                      <Sheet className="h-3.5 w-3.5 sm:mr-2" />
-                      <span className="hidden sm:inline">Connect to Sheets</span>
-                    </Button>
-                  </Tooltip>
+                      <Tooltip content="Live-sync this data to a Google Sheet">
+                        <Button
+                          size="sm"
+                          className="h-9"
+                          onClick={() => {
+                            if (sheetsAvailable.data?.available) {
+                              setShowSheetsDialog(true);
+                            } else {
+                              toast.info("Google Sheets not configured", {
+                                description:
+                                  "Add your Google service account credentials in Settings to enable Google Sheets export.",
+                              });
+                            }
+                          }}
+                        >
+                          <Sheet className="h-3.5 w-3.5 sm:mr-2" />
+                          <span className="hidden sm:inline">Connect to Sheets</span>
+                        </Button>
+                      </Tooltip>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1068,7 +1126,7 @@ export default function Dashboard() {
           )}
 
           {/* Reels list loading: 95% until the list query finishes (then 100% = data rendered) */}
-          {job?.status === "completed" && reelsQuery.isLoading && (
+          {job?.status === "completed" && reelsLoading && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -1213,7 +1271,13 @@ export default function Dashboard() {
                           variant="ghost"
                           size="sm"
                           className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
-                          onClick={() => toggleSave.mutate({ reelId: reel.id, jobId: jobId! })}
+                          onClick={() => {
+                            if (isFeaturedView) {
+                              featuredNotReadyToast();
+                              return;
+                            }
+                            toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                          }}
                           disabled={toggleSave.isPending}
                           title={isSaved ? "Remove from saved" : "Save reel"}
                         >
@@ -1236,6 +1300,10 @@ export default function Dashboard() {
                             size="sm"
                             className="h-7 text-xs px-2"
                             onClick={() => {
+                              if (isFeaturedView) {
+                                featuredNotReadyToast();
+                                return;
+                              }
                               if (!transcribeGate.allowed) {
                                 toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
                                   description: "Upgrade your plan for more transcriptions.",
@@ -1296,20 +1364,35 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Expanded inline workflow panel */}
+                    {/* Expanded inline workflow panel. In featured view
+                        InlineWorkflow is stubbed until Commit 3 teaches
+                        its inner mutations about featuredReelId. */}
                     {isExpanded && (
-                      <InlineWorkflow
-                        reelId={reel.id}
-                        handle={displayScrapeHandle || job?.handle || ""}
-                        hasTranscription={hasTranscription}
-                        isProcessing={isProcessing}
-                        onTranscribe={() => {
-                          setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                          startTranscription.mutate({ reelId: reel.id });
-                        }}
-                        userTimezone={userTimezone}
-                        postedAt={reel.postedAt}
-                      />
+                      isFeaturedView ? (
+                        <div className="bg-card/50 border-t border-border/30 p-4 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground mb-1">
+                            Full workflow coming soon for featured creators
+                          </p>
+                          <p className="text-xs leading-relaxed">
+                            Transcripts, Make My Version scripts, and saving are landing for
+                            featured reels in the next update. For now, use the "Open on
+                            Instagram" link to watch this reel.
+                          </p>
+                        </div>
+                      ) : (
+                        <InlineWorkflow
+                          reelId={reel.id}
+                          handle={displayScrapeHandle || job?.handle || ""}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          onTranscribe={() => {
+                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                            startTranscription.mutate({ reelId: reel.id });
+                          }}
+                          userTimezone={userTimezone}
+                          postedAt={reel.postedAt}
+                        />
+                      )
                     )}
                   </div>
                 );
@@ -1360,12 +1443,13 @@ export default function Dashboard() {
           )}
 
           {/* Empty state - only show when reels have loaded but are empty */}
-          {job?.status === "completed" && !reelsQuery.isLoading && sortedReels.length === 0 && (
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && (
             <div className="border border-border/50 bg-card rounded-lg p-8">
               <div className="flex flex-col items-center justify-center gap-4">
                 <Film className="h-12 w-12 text-muted-foreground/30" />
                 <p className="text-muted-foreground">
-                  No reels found for @{(displayScrapeHandle || job.handle)} in the last {job.timeframeDays} days.
+                  No reels found for @{(displayScrapeHandle || job.handle)}
+                  {typeof job.timeframeDays === "number" ? ` in the last ${job.timeframeDays} days.` : "."}
                 </p>
               </div>
             </div>
@@ -1478,7 +1562,7 @@ export default function Dashboard() {
                       </div>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                      Also spying on <span className="text-foreground">@{(displayScrapeHandle || job.handle)}</span>? Here
+                      Also spying on <span className="text-foreground">@{(displayScrapeHandle || job?.handle || "")}</span>? Here
                       are more creators in the same niche.
                     </p>
                     <div className="mt-3 flex flex-col gap-2">
