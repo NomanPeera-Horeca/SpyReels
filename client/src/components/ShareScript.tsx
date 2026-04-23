@@ -21,7 +21,7 @@ import { Share2, Mail, MessageCircle, Send, Copy, Check, Link2 } from "lucide-re
 import { toast } from "sonner";
 
 const SPYREELS_URL = "https://spyreels.ai";
-const BRAND_LINE = `\n\n---\nCreated with SpyReels — Spy on Viral Reels & Generate Winning Scripts\n${SPYREELS_URL}`;
+const BRAND_LINE = `\n\n---\nCreated with SpyReels. Spy on Viral Reels & Generate Winning Scripts.\n${SPYREELS_URL}`;
 
 interface ShareScriptProps {
   title: string;
@@ -37,7 +37,7 @@ export function ShareScript({ title, content, variant = "icon", size = "sm" }: S
 
   const shareBody = `${title}\n\n${content}${BRAND_LINE}`;
   const shareBodyEncoded = encodeURIComponent(shareBody);
-  const shareTitleEncoded = encodeURIComponent(`Script: ${title} — via SpyReels`);
+  const shareTitleEncoded = encodeURIComponent(`Script: ${title} · via SpyReels`);
 
   const handleWhatsApp = () => {
     window.open(`https://wa.me/?text=${shareBodyEncoded}`, "_blank");

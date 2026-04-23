@@ -51,7 +51,7 @@ export function UpgradePrompt({
           <div>
             <p className="text-sm font-medium text-purple-300">{displayMessage}</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              {planName} starts at {planPrice} — cancel anytime
+              {planName} starts at {planPrice}. Cancel anytime.
             </p>
           </div>
         </div>

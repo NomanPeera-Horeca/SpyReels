@@ -16,7 +16,7 @@ export function InlineCTA({ variant = "default" }: { variant?: "default" | "spy"
     },
     spy: {
       icon: <Sparkles className="h-5 w-5" />,
-      headline: "See what your competitors are doing — in seconds.",
+      headline: "See what your competitors are doing, in seconds.",
       description: "Enter any Instagram handle and instantly get their Reels data, engagement metrics, and full transcripts.",
       cta: "Spy on Competitors Free",
     },

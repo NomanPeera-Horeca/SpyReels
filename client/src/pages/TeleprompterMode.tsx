@@ -811,7 +811,7 @@ export function TeleprompterMode({
       {hotSection >= 0 && (
         <div className="shrink-0 bg-orange-500/10 border-b border-orange-500/20 px-4 py-1.5 flex items-center justify-between">
           <p className="text-[11px] text-orange-400">
-            Section {hotSection + 1} has {takesPerSection[hotSection]} takes — auto-jumping there on retake
+            Section {hotSection + 1} has {takesPerSection[hotSection]} takes. Auto-jumping there on retake.
           </p>
           <Button
             variant="ghost"

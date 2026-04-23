@@ -225,7 +225,7 @@ export default function Billing() {
                 <div className="text-zinc-300">
                   {sub.currentPeriodEnd
                     ? new Date(sub.currentPeriodEnd).toLocaleDateString()
-                    : "—"
+                    : "-"
                   }
                 </div>
               </div>

@@ -292,7 +292,7 @@ export default function LandingPage() {
                 <button onClick={() => setAuthMode("login")} className="text-xs text-muted-foreground hover:text-foreground">Back to Login</button>
               </div>
             )}
-            <p className="text-xs text-muted-foreground text-center">Free to start — no credit card required</p>
+            <p className="text-xs text-muted-foreground text-center">Free to start. No credit card required.</p>
           </div>
         </DialogContent>
       </Dialog>
@@ -344,7 +344,7 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <Button size="lg" onClick={handleGetStarted} className="text-base px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                Start Free — No Credit Card
+                Start Free. No Credit Card.
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">

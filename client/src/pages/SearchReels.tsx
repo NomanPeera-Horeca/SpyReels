@@ -1065,7 +1065,7 @@ function ReelRow({
         {/* Duration */}
         <td className="py-2.5 px-3 text-right">
           <span className="text-xs text-muted-foreground">
-            {reel.duration > 0 ? formatDurationShort(reel.duration) : "—"}
+            {reel.duration > 0 ? formatDurationShort(reel.duration) : "-"}
           </span>
         </td>
 

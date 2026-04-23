@@ -23,7 +23,7 @@ const FEATURES = [
   {
     icon: Mic,
     title: "Transcribe Reels Instantly",
-    description: "One click to transcribe any Reel while browsing Instagram. Get the exact words, timestamps, and hooks — without leaving the page.",
+    description: "One click to transcribe any Reel while browsing Instagram. Get the exact words, timestamps, and hooks without leaving the page.",
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
   },
@@ -144,7 +144,7 @@ export default function Extension() {
 
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
             Sort any creator's feed by engagement, transcribe Reels in one click,
-            and save winning content to your dashboard — all from inside Instagram.
+            and save winning content to your dashboard, all from inside Instagram.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
@@ -162,7 +162,7 @@ export default function Extension() {
               ) : (
                 <>
                   <Chrome className="h-5 w-5" />
-                  Download for Chrome — Free
+                  Download for Chrome · Free
                 </>
               )}
             </Button>
@@ -307,7 +307,7 @@ export default function Extension() {
                 {row.free === true ? (
                   <Check className="h-4 w-4 text-emerald-400" />
                 ) : row.free === false ? (
-                  <span className="text-muted-foreground/40">—</span>
+                  <span className="text-muted-foreground/40">-</span>
                 ) : (
                   <span className="text-sm text-muted-foreground">{row.free}</span>
                 )}
@@ -379,7 +379,7 @@ export default function Extension() {
             </h2>
             <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
               Join thousands of creators using SpyReels to find viral content
-              and create winning scripts — directly from Instagram.
+              and create winning scripts, directly from Instagram.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button

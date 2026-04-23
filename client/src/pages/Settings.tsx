@@ -360,7 +360,7 @@ export default function Settings() {
               </h3>
               {serverCreatorHandles.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
-                  No creators picked yet — your sidebar will show
+                  No creators picked yet. Your sidebar will show
                   niche-based suggestions instead.
                 </p>
               ) : (

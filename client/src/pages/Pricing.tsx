@@ -429,7 +429,7 @@ const FAQ = [
   },
   {
     q: "Is there a free trial for paid plans?",
-    a: "The Free plan is your trial — use it as long as you want. When you're ready to go pro, upgrade and start creating immediately.",
+    a: "The Free plan is your trial. Use it as long as you want. When you're ready to go pro, upgrade and start creating immediately.",
   },
   {
     q: "Can I cancel anytime?",
@@ -437,7 +437,7 @@ const FAQ = [
   },
   {
     q: "Do you offer refunds?",
-    a: "We offer a 14-day money-back guarantee on all plans. If you're not satisfied, we'll refund you — no questions asked.",
+    a: "We offer a 14-day money-back guarantee on all plans. If you're not satisfied, we'll refund you. No questions asked.",
   },
   {
     q: "What payment methods do you accept?",
@@ -519,7 +519,7 @@ export default function Pricing() {
           className="mb-4 text-purple-400 border-purple-500/30 px-3 py-1"
         >
           <Gift className="h-3.5 w-3.5 mr-1.5" />
-          Launch Special — Save up to 42% on annual plans
+          Launch Special · Save up to 42% on annual plans
         </Badge>
         <h1 className="text-3xl md:text-4xl font-bold mb-3">
           Turn Viral Reels Into{" "}
@@ -757,7 +757,7 @@ export default function Pricing() {
             Complete Feature Comparison
           </h2>
           <p className="text-zinc-500 text-sm">
-            Every feature, every plan — side by side
+            Every feature, every plan, side by side
           </p>
         </div>
 

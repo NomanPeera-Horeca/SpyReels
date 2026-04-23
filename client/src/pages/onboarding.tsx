@@ -285,7 +285,7 @@ export default function OnboardingPage() {
                 What are you <span className="italic text-primary">into</span>?
               </h1>
               <p className="max-w-2xl text-muted-foreground">
-                Pick all niches you&apos;re interested in — what you create, admire, or want to
+                Pick all niches you&apos;re interested in: what you create, admire, or want to
                 learn from.{" "}
                 <span className="text-foreground">The more we know, the smarter our recommendations get.</span>
               </p>
@@ -309,7 +309,7 @@ export default function OnboardingPage() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                <span className="text-primary">Tip:</span> Pick up to 5 niches — the more we know, the
+                <span className="text-primary">Tip:</span> Pick up to 5 niches. The more we know, the
                 smarter our recommendations
               </p>
             </div>

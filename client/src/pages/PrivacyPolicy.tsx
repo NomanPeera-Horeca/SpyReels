@@ -97,9 +97,9 @@ export default function PrivacyPolicy() {
             <h2>6. Third-Party Services</h2>
             <p>We use the following third-party services that may process your data:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Stripe</strong> — Payment processing. Subject to <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">Stripe's Privacy Policy</a></li>
-              <li><strong>Manus OAuth</strong> — Authentication. Used for secure sign-in</li>
-              <li><strong>Analytics</strong> — Anonymous usage tracking to improve the Service</li>
+              <li><strong>Stripe</strong>: Payment processing. Subject to <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">Stripe's Privacy Policy</a></li>
+              <li><strong>Manus OAuth</strong>: Authentication. Used for secure sign-in</li>
+              <li><strong>Analytics</strong>: Anonymous usage tracking to improve the Service</li>
             </ul>
           </section>
 
@@ -112,12 +112,12 @@ export default function PrivacyPolicy() {
             <h2>8. Your Rights</h2>
             <p>Depending on your jurisdiction, you may have the following rights:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Access</strong> — Request a copy of the personal data we hold about you</li>
-              <li><strong>Correction</strong> — Request correction of inaccurate personal data</li>
-              <li><strong>Deletion</strong> — Request deletion of your personal data and account</li>
-              <li><strong>Export</strong> — Export your data in a machine-readable format (available via CSV/Google Sheets export)</li>
-              <li><strong>Objection</strong> — Object to processing of your personal data for certain purposes</li>
-              <li><strong>Restriction</strong> — Request restriction of processing in certain circumstances</li>
+              <li><strong>Access</strong>: Request a copy of the personal data we hold about you</li>
+              <li><strong>Correction</strong>: Request correction of inaccurate personal data</li>
+              <li><strong>Deletion</strong>: Request deletion of your personal data and account</li>
+              <li><strong>Export</strong>: Export your data in a machine-readable format (available via CSV/Google Sheets export)</li>
+              <li><strong>Objection</strong>: Object to processing of your personal data for certain purposes</li>
+              <li><strong>Restriction</strong>: Request restriction of processing in certain circumstances</li>
             </ul>
             <p className="mt-3">To exercise any of these rights, contact us through the in-app support channel. We will respond within 30 days.</p>
           </section>
@@ -136,11 +136,11 @@ export default function PrivacyPolicy() {
             <h2>11. Chrome Extension</h2>
             <p>The SpyReels Chrome Extension operates on instagram.com to provide feed sorting, transcription, and content saving features. The extension:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Reads public Instagram page content</strong> — to detect Reels, extract engagement metrics (views, likes, comments), and display sorting controls. No private or direct message content is accessed.</li>
-              <li><strong>Stores preferences locally</strong> — sort order, theme settings, and cached data are saved in your browser's local storage using the Chrome Storage API.</li>
-              <li><strong>Sends data to SpyReels servers</strong> — when you use Transcribe or AI Re-Create features, the Reel URL is sent to spyreels.ai for server-side processing. No personal data, browsing history, or Instagram credentials are transmitted.</li>
-              <li><strong>Does not execute remote code</strong> — the extension communicates with our API via JSON data responses only. No external JavaScript is loaded or executed.</li>
-              <li><strong>Does not track browsing activity</strong> — the extension only activates on instagram.com and does not monitor activity on other websites.</li>
+              <li><strong>Reads public Instagram page content</strong>: to detect Reels, extract engagement metrics (views, likes, comments), and display sorting controls. No private or direct message content is accessed.</li>
+              <li><strong>Stores preferences locally</strong>: sort order, theme settings, and cached data are saved in your browser's local storage using the Chrome Storage API.</li>
+              <li><strong>Sends data to SpyReels servers</strong>: when you use Transcribe or AI Re-Create features, the Reel URL is sent to spyreels.ai for server-side processing. No personal data, browsing history, or Instagram credentials are transmitted.</li>
+              <li><strong>Does not execute remote code</strong>: the extension communicates with our API via JSON data responses only. No external JavaScript is loaded or executed.</li>
+              <li><strong>Does not track browsing activity</strong>: the extension only activates on instagram.com and does not monitor activity on other websites.</li>
             </ul>
             <p className="mt-3">The extension requires the following permissions: <strong>activeTab</strong> (to read the current Instagram page), <strong>storage</strong> (to save preferences), <strong>sidePanel</strong> (to display the sorting panel), and <strong>host permissions for instagram.com</strong> (to inject overlay buttons and sorting controls).</p>
           </section>

@@ -345,7 +345,7 @@ export default function CollectedReels() {
             <Send className="h-3.5 w-3.5" />
             <span>
               Telegram connected
-              {botUsername ? ` — share Reel links to @${botUsername}` : ""}.
+              {botUsername ? `: share Reel links to @${botUsername}` : ""}.
               They'll appear here automatically.
             </span>
           </div>
@@ -415,7 +415,7 @@ export default function CollectedReels() {
               <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                 3
               </span>
-              <span>It appears here — transcribe and re-create!</span>
+              <span>It appears here. Transcribe and re-create.</span>
             </div>
           </div>
         </div>
