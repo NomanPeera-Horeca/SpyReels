@@ -144,12 +144,35 @@ export default function Dashboard() {
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  /**
+   * Grid is the default view as of Commit 7. The previous mode
+   * (list|grid) is remembered per-browser in localStorage so users
+   * who prefer List only have to toggle once. Lazy initializer
+   * reads localStorage on mount; SSR-safe guard because this file
+   * also builds server-side during the tRPC type pass.
+   */
+  const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "grid";
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (stored === "list" || stored === "grid") return stored;
+    } catch {
+      // localStorage can throw in private mode / sandboxed iframes —
+      // fall through to the default.
+    }
+    return "grid";
+  });
   const setViewModeTracked = useCallback(
     (next: ViewMode) => {
       setViewMode((prev) => {
         if (prev === next) return prev;
         posthog?.capture("view_toggled", { mode: next });
+        try {
+          window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, next);
+        } catch {
+          // ignore; persistence is best-effort.
+        }
         return next;
       });
     },
