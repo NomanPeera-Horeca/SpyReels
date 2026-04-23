@@ -222,25 +222,47 @@ export function ScriptWithCues({ text }: { text: string }) {
 // InlineWorkflow - tRPC-based (Dashboard & Saved Reels)
 // ══════════════════════════════════════════════════════════════
 
-export interface InlineWorkflowProps {
-  reelId: number;
+/**
+ * Discriminated on `reelSource`. In `"user_job"` mode the component talks
+ * to the scraped-reel tRPC inputs (`reelId`); in `"featured"` mode it
+ * talks to the catalog-backed inputs (`featuredReelId`). `displayReelId`
+ * is used purely for UI bookkeeping (SRT filename, React keys) and maps
+ * to whichever id is populated for the current source.
+ */
+export type InlineWorkflowProps = {
   handle: string;
   hasTranscription: boolean;
   isProcessing: boolean;
   onTranscribe: () => void;
   userTimezone: string;
   postedAt: Date | string;
-}
+} & (
+  | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
+  | { reelSource: "featured"; reelId?: never; featuredReelId: number }
+);
 
-export function InlineWorkflow({
-  reelId,
-  handle,
-  hasTranscription,
-  isProcessing,
-  onTranscribe,
-  userTimezone,
-  postedAt,
-}: InlineWorkflowProps) {
+export function InlineWorkflow(props: InlineWorkflowProps) {
+  const {
+    handle,
+    hasTranscription,
+    isProcessing,
+    onTranscribe,
+    userTimezone,
+    postedAt,
+  } = props;
+  const reelSource: "user_job" | "featured" =
+    props.reelSource === "featured" ? "featured" : "user_job";
+  const reelId = reelSource === "user_job" ? props.reelId : undefined;
+  const featuredReelId =
+    reelSource === "featured" ? props.featuredReelId : undefined;
+  const displayReelId: number = (reelId ?? featuredReelId ?? 0) as number;
+  // Input shapes the `transcribe` / `recreate` routers accept; both
+  // branches get enforced by Zod `refine` + runtime checks server-side.
+  const transcribeIdInput =
+    reelSource === "featured"
+      ? { featuredReelId: featuredReelId! }
+      : { reelId: reelId! };
+  const recreateIdInput = transcribeIdInput;
   const [activeScriptId, setActiveScriptId] = useState<number | null>(null);
   const [gradeLevel, setGradeLevel] = useState("auto");
   const [customTopic, setCustomTopic] = useState("");
@@ -264,7 +286,7 @@ export function InlineWorkflow({
   const tagsQuery = trpc.tags.list.useQuery();
 
   const transcriptionQuery = trpc.transcribe.status.useQuery(
-    { reelId },
+    transcribeIdInput,
     {
       enabled: hasTranscription,
       refetchInterval: (query) => {
@@ -305,7 +327,7 @@ export function InlineWorkflow({
     }
   );
 
-  const previousScriptsQuery = trpc.recreate.list.useQuery({ reelId });
+  const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput);
 
   const saveMutation = trpc.scripts.save.useMutation({
     onSuccess: (data) => {
@@ -359,7 +381,7 @@ export function InlineWorkflow({
 
   const handleGenerate = () => {
     generateMutation.mutate({
-      reelId,
+      ...recreateIdInput,
       topic: showCustomTopic ? customTopic : "",
       gradeLevel: gradeLevel as "auto" | "2" | "3" | "4" | "5" | "6",
     });
@@ -393,13 +415,13 @@ export function InlineWorkflow({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `transcript_${reelId}.srt`;
+    a.download = `transcript_${displayReelId}.srt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success("SRT file downloaded");
-  }, [segments, reelId]);
+  }, [segments, displayReelId]);
 
   const handleSave = () => {
     const content = editMode ? editedScript : generatedScript;
@@ -407,8 +429,11 @@ export function InlineWorkflow({
       toast.error("No script content to save");
       return;
     }
+    // `scripts.save` only indexes by user-scrape reelId today; featured
+    // saves simply omit it (the source handle + recreatedScriptId still
+    // give us enough provenance in the library).
     saveMutation.mutate({
-      reelId,
+      reelId: reelSource === "user_job" ? reelId : undefined,
       recreatedScriptId: activeScriptId || undefined,
       title: saveTitle.trim() || `Script from @${handle}`,
       content,

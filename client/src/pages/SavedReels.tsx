@@ -94,11 +94,14 @@ export default function SavedReels() {
     }
   }, [savedReels, sortBy]);
 
+  // Group by source + handle so a handle that exists in both a user's
+  // scrape jobs AND the featured catalog renders as two separate sections
+  // — they have different navigation targets and different id keyspaces.
   const groupedByHandle: Record<string, typeof sortedReels> = {};
   for (const item of sortedReels) {
-    const handle = item.job.handle;
-    if (!groupedByHandle[handle]) groupedByHandle[handle] = [];
-    groupedByHandle[handle].push(item);
+    const groupKey = `${item.source}:${item.job.handle}`;
+    if (!groupedByHandle[groupKey]) groupedByHandle[groupKey] = [];
+    groupedByHandle[groupKey].push(item);
   }
 
   const handleTranscribeAll = async () => {
@@ -111,11 +114,15 @@ export default function SavedReels() {
     let started = 0;
     for (const item of untranscribed) {
       try {
-        // Commit 3c will branch the "Transcribe All" action on `item.source`.
-        // For 3b we only kick off scraped rows to avoid breaking behavior.
-        if (item.reelId == null) continue;
-        await transcribeMutation.mutateAsync({ reelId: item.reelId });
-        started++;
+        // Route to the right transcribe input based on the saved row's
+        // source; `saved.list` guarantees exactly one of reelId / featuredReelId.
+        if (item.source === "featured" && item.featuredReelId != null) {
+          await transcribeMutation.mutateAsync({ featuredReelId: item.featuredReelId });
+          started++;
+        } else if (item.reelId != null) {
+          await transcribeMutation.mutateAsync({ reelId: item.reelId });
+          started++;
+        }
       } catch { /* continue */ }
     }
     setBatchTranscribing(false);
@@ -175,16 +182,35 @@ export default function SavedReels() {
         </div>
       )}
 
-      {Object.entries(groupedByHandle).map(([handle, items]) => (
-        <div key={handle} className="mb-8">
+      {Object.entries(groupedByHandle).map(([groupKey, items]) => {
+        const handle = groupKey.split(":").slice(1).join(":");
+        // Handle click target depends on the source: scraped rows jump to
+        // the scrape-job dashboard, featured rows to the instant Path-B
+        // dashboard. We pick the first item's source as representative;
+        // groups are already keyed on handle so they can't mix.
+        const headerHref =
+          items[0].source === "featured" && items[0].job.featuredAccountId != null
+            ? `/dashboard?featuredAccountId=${items[0].job.featuredAccountId}`
+            : items[0].jobId != null
+            ? `/dashboard?jobId=${items[0].jobId}`
+            : null;
+        return (
+        <div key={groupKey} className="mb-8">
           <div className="flex items-center gap-3 mb-3">
-            <button onClick={() => setLocation(`/dashboard?jobId=${items[0].jobId}`)} className="text-lg font-semibold text-foreground hover:text-primary transition-colors">
+            <button
+              onClick={() => headerHref && setLocation(headerHref)}
+              disabled={!headerHref}
+              className="text-lg font-semibold text-foreground hover:text-primary transition-colors disabled:opacity-60"
+            >
               @{handle}
             </button>
             <Badge variant="outline" className="text-xs">{items.length} saved</Badge>
-            {items[0].job.followerCount && (
-              <span className="text-xs text-muted-foreground">{formatNumber(items[0].job.followerCount)} followers</span>
+            {items[0].source === "featured" && (
+              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">Featured</Badge>
             )}
+            {items[0].job.followerCount ? (
+              <span className="text-xs text-muted-foreground">{formatNumber(items[0].job.followerCount)} followers</span>
+            ) : null}
           </div>
 
           <div className="space-y-1">
@@ -246,12 +272,16 @@ export default function SavedReels() {
                       <Button variant={hasTranscript ? "ghost" : "outline"} size="sm" className="h-7 text-xs" onClick={() => {
                         if (hasTranscript || isProcessing) {
                           setExpandedReel(rowKey);
+                        } else if (item.source === "featured" && item.featuredReelId != null) {
+                          transcribeMutation.mutate({ featuredReelId: item.featuredReelId });
+                          toast.info("Transcription started...");
+                          setExpandedReel(rowKey);
                         } else if (item.reelId != null) {
                           transcribeMutation.mutate({ reelId: item.reelId });
                           toast.info("Transcription started...");
                           setExpandedReel(rowKey);
                         }
-                      }} disabled={transcribeMutation.isPending || item.reelId == null}>
+                      }} disabled={transcribeMutation.isPending}>
                         <FileText className="h-3 w-3 sm:mr-1" />
                         <span className="hidden sm:inline">{hasTranscript ? "Transcript" : isProcessing ? "Transcribing..." : "Transcribe"}</span>
                       </Button>
@@ -291,9 +321,27 @@ export default function SavedReels() {
                     </div>
                   </div>
 
-                  {/* Expanded inline workflow (scraped rows only in 3b; 3c enables featured) */}
-                  {isExpanded && item.reelId != null && (
+                  {/* Expanded inline workflow — source-aware. */}
+                  {isExpanded && item.source === "featured" && item.featuredReelId != null && (
                     <InlineWorkflow
+                      reelSource="featured"
+                      featuredReelId={item.featuredReelId}
+                      handle={handle}
+                      hasTranscription={hasTranscript}
+                      isProcessing={!!isProcessing}
+                      onTranscribe={() => {
+                        if (item.featuredReelId != null) {
+                          transcribeMutation.mutate({ featuredReelId: item.featuredReelId });
+                          toast.info("Transcription started...");
+                        }
+                      }}
+                      userTimezone={userTimezone}
+                      postedAt={reel.postedAt}
+                    />
+                  )}
+                  {isExpanded && item.source === "scraped" && item.reelId != null && (
+                    <InlineWorkflow
+                      reelSource="user_job"
                       reelId={item.reelId}
                       handle={handle}
                       hasTranscription={hasTranscript}
@@ -313,7 +361,8 @@ export default function SavedReels() {
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

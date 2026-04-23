@@ -417,24 +417,17 @@ export default function Dashboard() {
     (goingViralQuery.isPending || (goingViralQuery.data?.length ?? 0) > 0);
 
   const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
-  /** `saved.checkBatch` keys by `reels.id` (user-scrape table); featured
-   * reel ids live in `featured_reels` so the check would be meaningless.
-   * Skip it in featured view until Commit 3b teaches it both IDs. */
+  /**
+   * `saved.checkBatch` accepts a strict XOR of `reelIds` vs `featuredReelIds`
+   * (see Commit 3b). We branch the input based on the current view so the
+   * returned map is keyed consistently with whatever id we'll feed into
+   * `saved.toggle` from the bookmark button.
+   */
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
-    { reelIds },
-    { enabled: reelIds.length > 0 && !isFeaturedView }
+    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
+    { enabled: reelIds.length > 0 }
   );
   const savedMap = savedBatchQuery.data || {};
-
-  /** Commit-2 guard: featured reels don't exist in `reels` / `scrape_jobs`
-   * yet, so save/transcribe/recreate would hit FK errors. Keep the buttons
-   * visible but short-circuit the mutation with an info toast. Commit 3
-   * lifts this guard by teaching those endpoints `featuredReelId`. */
-  const featuredNotReadyToast = useCallback(() => {
-    toast.info(
-      "Featured creator actions are landing in the next update — coming in Commit 3."
-    );
-  }, []);
 
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
@@ -1277,10 +1270,10 @@ export default function Dashboard() {
                           className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
                           onClick={() => {
                             if (isFeaturedView) {
-                              featuredNotReadyToast();
-                              return;
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                             }
-                            toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                           }}
                           disabled={toggleSave.isPending}
                           title={isSaved ? "Remove from saved" : "Save reel"}
@@ -1304,10 +1297,6 @@ export default function Dashboard() {
                             size="sm"
                             className="h-7 text-xs px-2"
                             onClick={() => {
-                              if (isFeaturedView) {
-                                featuredNotReadyToast();
-                                return;
-                              }
                               if (!transcribeGate.allowed) {
                                 toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
                                   description: "Upgrade your plan for more transcriptions.",
@@ -1316,7 +1305,11 @@ export default function Dashboard() {
                                 return;
                               }
                               setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                              startTranscription.mutate({ reelId: reel.id });
+                              if (isFeaturedView) {
+                                startTranscription.mutate({ featuredReelId: reel.id });
+                              } else {
+                                startTranscription.mutate({ reelId: reel.id });
+                              }
                             }}
                             disabled={isProcessing}
                           >
@@ -1368,23 +1361,27 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Expanded inline workflow panel. In featured view
-                        InlineWorkflow is stubbed until Commit 3 teaches
-                        its inner mutations about featuredReelId. */}
+                    {/* Expanded inline workflow panel — same component now
+                        serves both sources; Commit 3b teaches the inner
+                        tRPC mutations about `featuredReelId`. */}
                     {isExpanded && (
                       isFeaturedView ? (
-                        <div className="bg-card/50 border-t border-border/30 p-4 text-sm text-muted-foreground">
-                          <p className="font-medium text-foreground mb-1">
-                            Full workflow coming soon for featured creators
-                          </p>
-                          <p className="text-xs leading-relaxed">
-                            Transcripts, Make My Version scripts, and saving are landing for
-                            featured reels in the next update. For now, use the "Open on
-                            Instagram" link to watch this reel.
-                          </p>
-                        </div>
+                        <InlineWorkflow
+                          reelSource="featured"
+                          featuredReelId={reel.id}
+                          handle={displayScrapeHandle || job?.handle || ""}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          onTranscribe={() => {
+                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
+                            startTranscription.mutate({ featuredReelId: reel.id });
+                          }}
+                          userTimezone={userTimezone}
+                          postedAt={reel.postedAt}
+                        />
                       ) : (
                         <InlineWorkflow
+                          reelSource="user_job"
                           reelId={reel.id}
                           handle={displayScrapeHandle || job?.handle || ""}
                           hasTranscription={hasTranscription}
