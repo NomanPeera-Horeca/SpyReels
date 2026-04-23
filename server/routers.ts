@@ -89,6 +89,7 @@ import {
   markOnboardingSkipped,
   getFeaturedReelById,
   getTranscriptionByFeaturedReelId,
+  updateFeaturedReelTranscription,
   getRecreatedScriptsByFeaturedReelId,
   saveFeaturedReel,
   unsaveFeaturedReel,
@@ -1393,51 +1394,79 @@ Return JSON only:
           )
       )
       .mutation(async ({ ctx, input }) => {
-        // Resolve the source reel into a single view-model shape that
-        // `runTranscription` already understands (id, shortcode, videoUrl,
-        // caption, thumbnailUrl). The existing transcription lookup is
-        // likewise parametrised by source so we don't collide keyspaces
-        // across the `reelId` / `featuredReelId` columns.
         const source: "user" | "featured" =
           input.featuredReelId != null ? "featured" : "user";
-        let reelForRun: {
-          id: number;
-          shortcode: string;
-          videoUrl: string | null;
-          caption: string | null;
-          thumbnailUrl: string | null;
-        };
 
+        // ────────────────────────────────────────────────────────────
+        // Featured branch — cache-first (Commit 4b). The catalog owns
+        // a single shared transcript per reel in `featured_reels`, so:
+        //  1. If the cache is warm (completed / no_speech), return
+        //     immediately. No usage burn, no Deepgram call, no row
+        //     in `transcriptions`.
+        //  2. If another user is already transcribing (`processing`),
+        //     return the same key so the UI polls the same cache.
+        //  3. Otherwise, kick off Deepgram in the background and
+        //     mark the cache `processing`. Retry path clears a prior
+        //     `failed` before re-kicking.
+        // ────────────────────────────────────────────────────────────
         if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
           if (!fr) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
           }
-          reelForRun = {
+          if (
+            fr.transcriptionStatus === "completed" ||
+            fr.transcriptionStatus === "no_speech"
+          ) {
+            return { transcriptionId: fr.id, status: "completed" as const };
+          }
+          if (fr.transcriptionStatus === "processing") {
+            return { transcriptionId: fr.id, status: "processing" as const };
+          }
+
+          // pending | failed → charge usage + kick Deepgram.
+          const usageCheck = await checkUsageLimit(
+            ctx.user.id,
+            "transcribeCount",
+            ctx.user.openId
+          );
+          if (!usageCheck.allowed) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            });
+          }
+          await updateFeaturedReelTranscription(fr.id, {
+            transcriptionStatus: "processing",
+          });
+          await incrementUsage(ctx.user.id, "transcribeCount");
+          runFeaturedReelTranscription({
             id: fr.id,
             shortcode: fr.reelShortcode,
             videoUrl: fr.videoUrl,
-            caption: fr.caption,
-            thumbnailUrl: fr.thumbnailUrl,
-          };
-        } else {
-          const reel = await getReelById(input.reelId!);
-          if (!reel) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
-          }
-          reelForRun = {
-            id: reel.id,
-            shortcode: reel.shortcode,
-            videoUrl: reel.videoUrl,
-            caption: reel.caption,
-            thumbnailUrl: reel.thumbnailUrl,
-          };
+          }).catch((err) => {
+            console.error(`Featured transcription ${fr.id} failed:`, err);
+          });
+          return { transcriptionId: fr.id, status: "processing" as const };
         }
 
-        const existing =
-          source === "featured"
-            ? await getTranscriptionByFeaturedReelId(input.featuredReelId!)
-            : await getTranscriptionByReelId(input.reelId!);
+        // ────────────────────────────────────────────────────────────
+        // User-scrape branch — unchanged behavior. Each user owns
+        // their own row in `transcriptions`.
+        // ────────────────────────────────────────────────────────────
+        const reel = await getReelById(input.reelId!);
+        if (!reel) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+        }
+        const reelForRun = {
+          id: reel.id,
+          shortcode: reel.shortcode,
+          videoUrl: reel.videoUrl,
+          caption: reel.caption,
+          thumbnailUrl: reel.thumbnailUrl,
+        };
+
+        const existing = await getTranscriptionByReelId(input.reelId!);
         if (existing && existing.status === "completed") {
           return { transcriptionId: existing.id, status: "completed" as const };
         }
@@ -1445,7 +1474,6 @@ Return JSON only:
           return { transcriptionId: existing.id, status: "processing" as const };
         }
 
-        // Check usage limit before starting new transcription
         const usageCheck = await checkUsageLimit(ctx.user.id, "transcribeCount", ctx.user.openId);
         if (!usageCheck.allowed) {
           throw new TRPCError({
@@ -1453,7 +1481,6 @@ Return JSON only:
             message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
           });
         }
-        // If previously failed, delete and retry
         if (existing && existing.status === "failed") {
           const { getDb } = await import("./db");
           const db = await getDb();
@@ -1465,12 +1492,11 @@ Return JSON only:
         }
 
         const transcriptionId = await createTranscription({
-          reelId: source === "user" ? input.reelId! : null,
-          featuredReelId: source === "featured" ? input.featuredReelId! : null,
+          reelId: input.reelId!,
+          featuredReelId: null,
           status: "processing",
         });
 
-        // Track usage
         await incrementUsage(ctx.user.id, "transcribeCount");
 
         runTranscription(transcriptionId, reelForRun).catch((err) => {
@@ -4612,6 +4638,74 @@ async function runTranscription(
     await updateTranscription(transcriptionId, {
       status: "failed",
       errorMessage: message,
+    });
+  } finally {
+    activeTranscriptions--;
+  }
+}
+
+/**
+ * Featured-reel transcription runner (Commit 4b). Writes the result
+ * straight into `featured_reels` instead of `transcriptions` because the
+ * catalog owns a single shared transcript per reel — the same semaphore
+ * + fresh-URL logic as `runTranscription`, but no hook analysis and no
+ * per-user row. Also used by the backfill script.
+ */
+export async function runFeaturedReelTranscription(reel: {
+  id: number;
+  shortcode: string;
+  videoUrl: string | null;
+}): Promise<void> {
+  while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  activeTranscriptions++;
+  try {
+    // Instagram CDN URLs in the catalog can be stale; refetching guards
+    // against the "video unavailable" trap when the backfill runs weeks
+    // after the initial scrape.
+    const initialFresh = await fetchReelByShortcode(reel.shortcode);
+    if (!initialFresh?.videoUrl) {
+      throw new Error(
+        "Could not retrieve video URL for this reel. The video may no longer be available."
+      );
+    }
+    const videoUrl = initialFresh.videoUrl;
+
+    const { transcribeReel } = await import("./services/transcribeReel.js");
+    const result = await transcribeReel({ videoUrl, shortcode: reel.shortcode });
+
+    if (!result.success) {
+      if (result.errorCode === "NO_SPEECH_DETECTED") {
+        await updateFeaturedReelTranscription(reel.id, {
+          transcriptionStatus: "no_speech",
+          transcript: "",
+          transcriptSegments: [],
+          transcribedAt: new Date(),
+        });
+        return;
+      }
+      throw new Error(result.userMessage);
+    }
+
+    await updateFeaturedReelTranscription(reel.id, {
+      transcriptionStatus: "completed",
+      transcript: result.transcript,
+      transcriptSegments: result.segments as {
+        start: number;
+        end: number;
+        text: string;
+      }[],
+      transcribedAt: new Date(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[runFeaturedReelTranscription] ${message}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    await updateFeaturedReelTranscription(reel.id, {
+      transcriptionStatus: "failed",
     });
   } finally {
     activeTranscriptions--;

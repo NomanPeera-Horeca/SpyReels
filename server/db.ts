@@ -581,19 +581,91 @@ export async function getFeaturedReelById(id: number): Promise<FeaturedReel | un
   return rows[0];
 }
 
-/** Latest transcription for a featured reel, or undefined. */
+/**
+ * Returns a `Transcription`-shaped view of a featured reel's inline cache
+ * (see migration 0029). Featured reels don't get rows in the per-user
+ * `transcriptions` table — the catalog owns a single shared transcript
+ * per reel, and this helper adapts it to the shape the rest of the
+ * codebase already consumes.
+ *
+ * Status mapping: the catalog's `no_speech` terminal state collapses to
+ * `completed` with empty transcript + segments, which is the same signal
+ * the UI already uses to render the "all vibes no voice" empty state.
+ * `id` reuses the featured reel id — callers treat it as an opaque
+ * refetch key and never join against `transcriptions` on it.
+ */
 export async function getTranscriptionByFeaturedReelId(
   featuredReelId: number
 ): Promise<Transcription | undefined> {
+  const fr = await getFeaturedReelById(featuredReelId);
+  if (!fr) return undefined;
+  const uiStatus: Transcription["status"] =
+    fr.transcriptionStatus === "no_speech"
+      ? "completed"
+      : fr.transcriptionStatus === "pending"
+      ? "pending"
+      : fr.transcriptionStatus === "processing"
+      ? "processing"
+      : fr.transcriptionStatus === "failed"
+      ? "failed"
+      : "completed";
+  const transcript =
+    fr.transcriptionStatus === "no_speech" ? "" : fr.transcript;
+  const segments =
+    fr.transcriptionStatus === "no_speech"
+      ? []
+      : (fr.transcriptSegments ?? null);
+  return {
+    id: fr.id,
+    reelId: null,
+    featuredReelId: fr.id,
+    transcript,
+    segments: segments as Transcription["segments"],
+    hookAnalysis: null,
+    status: uiStatus,
+    errorMessage: null,
+    createdAt: fr.transcribedAt ?? fr.scrapedAt,
+    updatedAt: fr.transcribedAt ?? fr.scrapedAt,
+  };
+}
+
+/**
+ * Update a featured reel's inline transcription cache. Used by the
+ * backfill script + the lazy cache-fill path in `transcribe.start`.
+ * Writing a `completed` status without a transcript is a bug — callers
+ * must pass the transcript text (may be empty string for no_speech).
+ */
+export async function updateFeaturedReelTranscription(
+  featuredReelId: number,
+  data: {
+    transcriptionStatus:
+      | "pending"
+      | "processing"
+      | "completed"
+      | "failed"
+      | "no_speech";
+    transcript?: string | null;
+    transcriptSegments?:
+      | { start: number; end: number; text: string }[]
+      | null;
+    transcribedAt?: Date | null;
+  }
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const rows = await db
-    .select()
-    .from(transcriptions)
-    .where(eq(transcriptions.featuredReelId, featuredReelId))
-    .orderBy(desc(transcriptions.createdAt))
-    .limit(1);
-  return rows[0];
+  await db
+    .update(featuredReels)
+    .set({
+      transcriptionStatus: data.transcriptionStatus,
+      ...(data.transcript !== undefined ? { transcript: data.transcript } : {}),
+      ...(data.transcriptSegments !== undefined
+        ? { transcriptSegments: data.transcriptSegments }
+        : {}),
+      ...(data.transcribedAt !== undefined
+        ? { transcribedAt: data.transcribedAt }
+        : {}),
+    })
+    .where(eq(featuredReels.id, featuredReelId));
 }
 
 /** All recreated scripts attached to a featured reel (newest first). */
@@ -756,12 +828,10 @@ export async function getSavedFeaturedReelsWithDetails(
       .where(eq(featuredAccounts.id, fr.featuredAccountId))
       .limit(1);
     if (!acc) continue;
-    const [txn] = await db
-      .select()
-      .from(transcriptions)
-      .where(eq(transcriptions.featuredReelId, fr.id))
-      .orderBy(desc(transcriptions.createdAt))
-      .limit(1);
+    // Featured transcripts live on `featured_reels` itself (Commit 4b).
+    // The helper synthesizes a `Transcription`-shaped view so callers
+    // don't have to branch on source.
+    const txn = await getTranscriptionByFeaturedReelId(fr.id);
     out.push({
       ...s,
       reelId: null,
