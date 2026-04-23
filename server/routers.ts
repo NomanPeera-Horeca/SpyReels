@@ -1065,7 +1065,32 @@ Return JSON only:
           });
         }
 
-        const seededJobId = await seedDemoScrape(ctx.user.id, account.handle);
+        const ENSURE_DEMO_SEED_TIMEOUT_MS = 30_000;
+        let seededJobId: number | null;
+        try {
+          seededJobId = await Promise.race([
+            seedDemoScrape(ctx.user.id, account.handle),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => {
+                const err = new Error("ENSURE_DEMO_JOB_SEED_TIMEOUT");
+                err.name = "EnsureDemoJobTimeout";
+                reject(err);
+              }, ENSURE_DEMO_SEED_TIMEOUT_MS);
+            }),
+          ]);
+        } catch (raceErr: unknown) {
+          const e = raceErr as { name?: string; message?: string };
+          if (e?.name === "EnsureDemoJobTimeout" && e?.message === "ENSURE_DEMO_JOB_SEED_TIMEOUT") {
+            console.error(
+              `[ensureDemoJob] timeout after 30s for featuredAccountId=${input.featuredAccountId}, userId=${ctx.user.id}`
+            );
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Couldn't load this creator right now. Please try again.",
+            });
+          }
+          throw raceErr;
+        }
         if (seededJobId == null) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",

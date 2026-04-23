@@ -447,22 +447,6 @@ export default function Dashboard() {
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
 
   if (!jobId && featuredAccountId) {
-    if (ensureDemoJob.isPending) {
-      return (
-        <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
-          <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-3">
-              <Loader2 className="h-5 w-5 text-primary animate-spin" />
-            </div>
-            <h2 className="text-lg font-semibold text-foreground">Loading creator reels...</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Preparing a dashboard view for this featured creator.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
     if (featuredResolveError) {
       return (
         <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
@@ -491,6 +475,25 @@ export default function Dashboard() {
         </div>
       );
     }
+    // Resolving: keep this screen for the whole featured flow until we navigate with jobId
+    // or hit an error above (never fall through to the no-jobId overview).
+    return (
+      <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
+        <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-3">
+            <Loader2 className="h-5 w-5 text-primary animate-spin" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">
+            {ensureDemoJob.isPending ? "Loading creator reels..." : "Resolving creator…"}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {ensureDemoJob.isPending
+              ? "Preparing a dashboard view for this featured creator."
+              : "Starting…"}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!jobId) {

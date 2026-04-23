@@ -176,11 +176,19 @@ export async function seedDemoScrape(
   userId: number,
   preferredHandle?: string
 ): Promise<number | null> {
+  const t0 = Date.now();
+  const hLabel = preferredHandle ?? "—";
+  const ms = () => Date.now() - t0;
+  console.log(`[seedDemoScrape] start userId=${userId} handle=${hLabel}`);
+
   const db = await getDb();
   if (!db) {
-    console.warn("[seedDemoScrape] db unavailable, skipping seed for user", userId);
+    console.warn(
+      `[seedDemoScrape] db unavailable, skipping seed for userId=${userId} (+${ms()}ms) handle=${hLabel}`
+    );
     return null;
   }
+  console.log(`[seedDemoScrape] getDb ok (+${ms()}ms) userId=${userId}`);
 
   let jobId: number | null = null;
   try {
@@ -195,6 +203,9 @@ export async function seedDemoScrape(
 
     if (preferredHandle) {
       const normalized = preferredHandle.replace(/^@/, "").trim().toLowerCase();
+      console.log(
+        `[seedDemoScrape] account lookup by preferred handle (+${ms()}ms) normalized=${normalized}`
+      );
       const byHandle = await db
         .select({
           id: featuredAccounts.id,
@@ -215,11 +226,17 @@ export async function seedDemoScrape(
           featuredAccounts.profilePicUrl
         )
         .limit(1);
+      console.log(
+        `[seedDemoScrape] byHandle query done (+${ms()}ms) rows=${byHandle.length} reelCount=${
+          byHandle[0] ? Number(byHandle[0].reelCount) : "n/a"
+        }`
+      );
       if (byHandle.length > 0 && Number(byHandle[0].reelCount) > 0) {
         chosen = byHandle[0];
+        console.log(`[seedDemoScrape] using preferred account @${chosen.handle} id=${chosen.id} (+${ms()}ms)`);
       } else {
         console.warn(
-          `[seedDemoScrape] preferred handle "${preferredHandle}" not found or has 0 reels, falling back to richness winner`
+          `[seedDemoScrape] preferred handle "${preferredHandle}" not found or has 0 reels, falling back to richness winner (+${ms()}ms)`
         );
       }
     }
@@ -229,6 +246,7 @@ export async function seedDemoScrape(
       // accounts that actually have stored reels. Pure density metric;
       // the tradeoff (pet accounts often win over business accounts)
       // is accepted per §3 spec ("densest possible dashboard").
+      console.log(`[seedDemoScrape] richness winner query start (+${ms()}ms)`);
       const winner = await db
         .select({
           id: featuredAccounts.id,
@@ -249,29 +267,34 @@ export async function seedDemoScrape(
         )
         .orderBy(sql`COUNT(${featuredReels.id}) * ${featuredAccounts.avgEngagementRate} DESC`)
         .limit(1);
+      console.log(`[seedDemoScrape] richness winner done (+${ms()}ms) rows=${winner.length}`);
       if (winner.length === 0) {
         console.warn(
-          "[seedDemoScrape] no eligible featured accounts (empty pool?), skipping seed for user",
-          userId
+          `[seedDemoScrape] no eligible featured accounts (empty pool?), exit null userId=${userId} duration=${ms()}ms`
         );
         return null;
       }
       chosen = winner[0];
+      console.log(`[seedDemoScrape] chosen richness winner @${chosen.handle} id=${chosen.id} (+${ms()}ms)`);
     }
 
     // Replay the scrape-featured-accounts script's pre-ranked top reels
     // in rank order (1..30). `rank` is reserved in MySQL 8+; Drizzle
     // auto-escapes it via the schema mapping so the query builder is
     // safe here, unlike the hand-written SQL in the scrape script.
+    console.log(`[seedDemoScrape] sourceReels query start featuredAccountId=${chosen.id} (+${ms()}ms)`);
     const sourceReels = await db
       .select()
       .from(featuredReels)
       .where(eq(featuredReels.featuredAccountId, chosen.id))
       .orderBy(asc(featuredReels.rank));
+    console.log(
+      `[seedDemoScrape] sourceReels done (+${ms()}ms) count=${sourceReels.length} account=@${chosen.handle}`
+    );
 
     if (sourceReels.length === 0) {
       console.warn(
-        `[seedDemoScrape] chosen account @${chosen.handle} has 0 reels after re-check, skipping`
+        `[seedDemoScrape] chosen account @${chosen.handle} has 0 reels after re-check, exit null duration=${ms()}ms`
       );
       return null;
     }
@@ -280,6 +303,7 @@ export async function seedDemoScrape(
     // L3487-3495) field-for-field so the dashboard can't tell the
     // difference between a demo job and a real one — except via
     // isDemo, which is the only legitimate discriminator.
+    console.log(`[seedDemoScrape] createScrapeJob start totalReels=${sourceReels.length} (+${ms()}ms)`);
     jobId = await createScrapeJob({
       userId,
       handle: chosen.handle,
@@ -293,6 +317,7 @@ export async function seedDemoScrape(
       progressPercent: 100,
       isDemo: true,
     });
+    console.log(`[seedDemoScrape] createScrapeJob done jobId=${jobId} (+${ms()}ms)`);
 
     // Copy featured_reels → reels. reelUrl is synthesized from the
     // shortcode (canonical IG format). ownerUsername is set to the
@@ -300,34 +325,39 @@ export async function seedDemoScrape(
     // (engagementRate, rank, scrapedAt) are dropped — the dashboard
     // recomputes engagement rate on the fly from view/like/comment
     // counts, and rank is implicit in the insertion order.
-    await insertReels(
-      sourceReels.map((r) => ({
-        jobId: jobId!,
-        shortcode: r.reelShortcode,
-        caption: r.caption,
-        viewCount: r.viewCount,
-        likeCount: r.likeCount,
-        commentCount: r.commentCount,
-        thumbnailUrl: r.thumbnailUrl,
-        videoUrl: r.videoUrl,
-        reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
-        duration: r.duration,
-        postedAt: r.postedAt,
-        ownerUsername: chosen!.handle,
-      }))
-    );
-
+    const reelRows = sourceReels.map((r) => ({
+      jobId: jobId!,
+      shortcode: r.reelShortcode,
+      caption: r.caption,
+      viewCount: r.viewCount,
+      likeCount: r.likeCount,
+      commentCount: r.commentCount,
+      thumbnailUrl: r.thumbnailUrl,
+      videoUrl: r.videoUrl,
+      reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+      duration: r.duration,
+      postedAt: r.postedAt,
+      ownerUsername: chosen!.handle,
+    }));
+    console.log(`[seedDemoScrape] insertReels start rowCount=${reelRows.length} (+${ms()}ms)`);
+    await insertReels(reelRows);
+    const duration = Date.now() - t0;
     console.log(
-      `[seedDemoScrape] seeded demo for user ${userId}: job #${jobId}, @${chosen.handle}, ${sourceReels.length} reels`
+      `[seedDemoScrape] complete jobId=${jobId} userId=${userId} @${chosen.handle} reels=${sourceReels.length} duration=${duration}ms`
     );
     return jobId;
   } catch (error) {
-    console.error("[seedDemoScrape] failed for user", userId, ":", error);
+    const duration = Date.now() - t0;
+    console.error(
+      `[seedDemoScrape] catch userId=${userId} handle=${hLabel} duration=${duration}ms error=`,
+      error instanceof Error ? error.message : error
+    );
     if (jobId !== null) {
       try {
         await deleteScrapeJob(jobId);
+        console.log(`[seedDemoScrape] deleted partial jobId=${jobId} after error (+${Date.now() - t0}ms)`);
       } catch (cleanupError) {
-        console.error("[seedDemoScrape] cleanup of partial job", jobId, "failed:", cleanupError);
+        console.error(`[seedDemoScrape] cleanup of partial job ${jobId} failed:`, cleanupError);
       }
     }
     return null;
