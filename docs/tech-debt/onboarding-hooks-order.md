@@ -1,10 +1,15 @@
 # Rules of Hooks drift in `onboarding.tsx`
 
-**Status:** Non-blocking. Works today. Will break under React Strict Mode
-stricter checks and is a known hazard in future React minor/major
-upgrades.
+**Status:** **RESOLVED** (commit: `fix: react hooks order in onboarding + multi-select
+creators (1-5) + niche cap (max 5)`). `OnboardingPage` now declares every
+`useState` / `useMemo` / `useEffect` / `useQuery` / `useMutation` /
+`useCallback` at the top; early returns for loading, missing user,
+bypass, and completing only appear **after** the hook list; the featured
+`accountsByNicheSlugs` query is `enabled` only when a non-bypassed user
+on step 2 with ≥1 selected niche. Staging minified **React #300** was
+reproduced and cleared by this refactor.
 
-## Symptom
+## Historical: Symptom (pre-fix)
 
 `client/src/pages/onboarding.tsx` declares hooks **after** conditional
 early `return` statements. This violates the [Rules of
@@ -67,7 +72,7 @@ time of writing.
    deprecation path — it's not a question of *if* but *when* this has
    to be cleaned up.
 
-## Suggested fix (not in this change)
+## Historical: Suggested fix (now applied)
 
 Hoist **every** hook to the top of the component, unconditionally, and
 gate the *rendered output* (not the hook calls) with the early-return
@@ -131,11 +136,7 @@ Key points:
 - `selectedCreator`'s `useMemo` runs every render; that's fine — it's
   cheap and already memoized.
 
-## Non-blocking for current work
+## Historical: Non-blocking note (obsolete)
 
-- Section 3–8 work ships with this drift in place because it was
-  pre-existing and fixing it correctly touches the whole component.
-- Priority is **low-to-medium**: no user-facing bug today, but the blast
-  radius if it trips in production is a white-screen onboarding page.
-- Recommended pickup point: before the next real feature change in
-  `onboarding.tsx` (e.g. a step 3, a redesign, or a bypass-rule change).
+- Prior to the fix above, this was deferred during Section 3–8. The
+  staging #300 error forced the hoist earlier than planned.

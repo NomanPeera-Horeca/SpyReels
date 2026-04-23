@@ -32,6 +32,8 @@ export const users = mysqlTable("users", {
   // OnboardingGate component uses either being non-null as the signal
   // to bypass the /onboarding redirect.
   selectedNicheSlugs: json("selectedNicheSlugs").$type<string[]>(),
+  /** Up to 5 creator handles (Step 2 multi-select) for personalization; demo job seeds the first only. */
+  selectedCreatorHandles: json("selectedCreatorHandles").$type<string[] | null>(),
   onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
   onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
 });

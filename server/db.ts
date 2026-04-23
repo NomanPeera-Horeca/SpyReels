@@ -115,6 +115,7 @@ export async function getOnboardingState(userId: number) {
       hasDismissedDemoBanner: users.hasDismissedDemoBanner,
       demoSeededAt: users.demoSeededAt,
       selectedNicheSlugs: users.selectedNicheSlugs,
+      selectedCreatorHandles: users.selectedCreatorHandles,
       onboardingCompletedAt: users.onboardingCompletedAt,
       onboardingSkippedAt: users.onboardingSkippedAt,
     })
@@ -335,10 +336,11 @@ export async function seedDemoScrape(
 
 /**
  * Stamps the user as having completed onboarding. Writes the niche
- * selection (assumed already deduped by the caller), the completion
- * timestamp, and optionally `demoSeededAt` — only when the paired
- * demo-seed succeeded, so `user.demoSeededAt IS NOT NULL` remains a
- * reliable "real demo dashboard exists" signal.
+ * selection (assumed already deduped by the caller), optional multi-
+ * creator handle picks, the completion timestamp, and optionally
+ * `demoSeededAt` — only when the paired demo-seed succeeded, so
+ * `user.demoSeededAt IS NOT NULL` remains a reliable "real demo
+ * dashboard exists" signal.
  *
  * Idempotency lives at the tRPC boundary (the mutation guards on
  * `onboardingCompletedAt IS NOT NULL` before calling this). Repeated
@@ -347,14 +349,19 @@ export async function seedDemoScrape(
 export async function markOnboardingComplete(
   userId: number,
   nicheSlugs: string[],
+  selectedCreatorHandles: string[],
   demoSeededAt: Date | null
 ): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updates: Partial<
-    Pick<User, "selectedNicheSlugs" | "onboardingCompletedAt" | "demoSeededAt">
+    Pick<
+      User,
+      "selectedNicheSlugs" | "selectedCreatorHandles" | "onboardingCompletedAt" | "demoSeededAt"
+    >
   > = {
     selectedNicheSlugs: nicheSlugs,
+    selectedCreatorHandles: selectedCreatorHandles.length > 0 ? selectedCreatorHandles : null,
     onboardingCompletedAt: new Date(),
   };
   if (demoSeededAt) {

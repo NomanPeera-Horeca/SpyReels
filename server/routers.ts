@@ -2543,6 +2543,7 @@ The hook MUST be 7-10 words. Count them.`
         hasDismissedDemoBanner: state.hasDismissedDemoBanner,
         demoSeededAt: state.demoSeededAt,
         selectedNicheSlugs: state.selectedNicheSlugs ?? [],
+        selectedCreatorHandles: state.selectedCreatorHandles ?? null,
         onboardingCompletedAt: state.onboardingCompletedAt,
         onboardingSkippedAt: state.onboardingSkippedAt,
       };
@@ -2583,8 +2584,12 @@ The hook MUST be 7-10 words. Count them.`
     complete: protectedProcedure
       .input(
         z.object({
-          selectedNicheSlugs: z.array(z.string().trim().min(1)).min(1),
-          featuredAccountHandle: z.string().trim().min(1).optional(),
+          selectedNicheSlugs: z.array(z.string().trim().min(1)).min(1).max(5),
+          featuredAccountHandles: z
+            .array(z.string().trim().min(1))
+            .min(1)
+            .max(5)
+            .optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2603,20 +2608,31 @@ The hook MUST be 7-10 words. Count them.`
         // store a malformed JSON array on the user row.
         const dedupedSlugs = Array.from(new Set(input.selectedNicheSlugs));
 
-        // Detect the fallback case so we can surface the warning to
-        // the client without a second DB round-trip: if the user
-        // passed a handle AND that handle doesn't resolve, the seed
-        // falls back to the richness winner and we annotate the
-        // response.
+        const normalizeOnboardingHandle = (h: string) => h.replace(/^@/, "").trim().toLowerCase();
+        const dedupedCreatorHandles: string[] = (() => {
+          const list = input.featuredAccountHandles ?? [];
+          const seen = new Set<string>();
+          const out: string[] = [];
+          for (const raw of list) {
+            const n = normalizeOnboardingHandle(raw);
+            if (seen.has(n)) continue;
+            seen.add(n);
+            out.push(n);
+          }
+          return out;
+        })();
+
+        // Detect the fallback case: first preferred handle (demo seed) doesn't
+        // resolve to an active featured account; seed still falls back.
         let warning: "selected_creator_not_found" | undefined;
-        if (input.featuredAccountHandle) {
-          const normalized = input.featuredAccountHandle.replace(/^@/, "").trim().toLowerCase();
+        const firstPreferred = dedupedCreatorHandles[0];
+        if (firstPreferred) {
           const exists = await (await getDb())!
             .select({ id: featuredAccounts.id })
             .from(featuredAccounts)
             .where(
               and(
-                eq(featuredAccounts.handle, normalized),
+                eq(featuredAccounts.handle, firstPreferred),
                 eq(featuredAccounts.isActive, true)
               )
             )
@@ -2628,11 +2644,12 @@ The hook MUST be 7-10 words. Count them.`
 
         const demoJobId = await seedDemoScrape(
           ctx.user.id,
-          input.featuredAccountHandle
+          firstPreferred ?? undefined
         );
         await markOnboardingComplete(
           ctx.user.id,
           dedupedSlugs,
+          dedupedCreatorHandles,
           demoJobId !== null ? new Date() : null
         );
         let demoCreatorHandle: string | null = null;

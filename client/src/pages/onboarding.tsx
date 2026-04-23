@@ -1,11 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FEATURE_LAUNCH_DATE_ISO, ONBOARDING_NICHES, ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Search, ArrowRight, ArrowLeft, PencilLine, Sparkles } from "lucide-react";
-import { usePostHog } from "@posthog/react";
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
+import { usePostHog } from "@posthog/react";
+import { Loader2, Search, ArrowRight, ArrowLeft, PencilLine, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 
 type Creator = {
   id: number;
@@ -19,6 +19,8 @@ type Creator = {
 };
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
+const MAX_NICHES = 5;
+const MAX_CREATORS = 5;
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -34,13 +36,23 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+function shuffleInPlace<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
 export default function OnboardingPage() {
   const posthog = usePostHog();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<1 | 2>(1);
   const [search, setSearch] = useState("");
   const [selectedNiches, setSelectedNiches] = useState<string[]>([]);
-  const [selectedCreatorHandle, setSelectedCreatorHandle] = useState<string | null>(null);
+  const [selectedCreatorHandles, setSelectedCreatorHandles] = useState<string[]>([]);
+  /** True if the current step-2 selection came from "Pick for me" (not edited since). */
+  const [isPickForMeSelection, setIsPickForMeSelection] = useState(false);
   const [completionText, setCompletionText] = useState<string>("Setting up your dashboard...");
   const [isCompleting, setIsCompleting] = useState(false);
 
@@ -53,15 +65,6 @@ export default function OnboardingPage() {
 
   const completeMutation = trpc.onboarding.complete.useMutation();
   const skipMutation = trpc.onboarding.skip.useMutation();
-
-  const goToCreatorStep = () => {
-    if (selectedNiches.length === 0) return;
-    posthog?.capture("onboarding_niches_selected", {
-      niche_slugs: [...selectedNiches],
-      count: selectedNiches.length,
-    });
-    setStep(2);
-  };
 
   const shouldBypassOnboarding = useMemo(() => {
     if (!user) return false;
@@ -77,21 +80,17 @@ export default function OnboardingPage() {
   const creatorsByNicheQuery = trpc.featured.accountsByNicheSlugs.useQuery(
     { slugs: selectedNiches },
     {
-      enabled: selectedNiches.length > 0 && step === 2,
+      enabled:
+        Boolean(user) &&
+        !loading &&
+        !onboardingStateQuery.isLoading &&
+        !shouldBypassOnboarding &&
+        step === 2 &&
+        selectedNiches.length > 0,
       staleTime: 60_000,
       refetchOnWindowFocus: false,
     }
   );
-
-  if (loading || onboardingStateQuery.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-7 w-7 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) return null;
 
   useEffect(() => {
     if (shouldBypassOnboarding) {
@@ -99,66 +98,36 @@ export default function OnboardingPage() {
     }
   }, [setLocation, shouldBypassOnboarding]);
 
-  if (shouldBypassOnboarding) return null;
-
-  const filteredNiches = ONBOARDING_NICHES.filter((niche) =>
-    niche.name.toLowerCase().includes(search.trim().toLowerCase())
-  );
+  const goToCreatorStep = useCallback(() => {
+    if (selectedNiches.length === 0) return;
+    posthog?.capture("onboarding_niches_selected", {
+      niche_slugs: [...selectedNiches],
+      count: selectedNiches.length,
+    });
+    setStep(2);
+  }, [posthog, selectedNiches]);
 
   const groupedCreators = creatorsByNicheQuery.data?.groups ?? {};
-
-  const selectedCreator = useMemo(() => {
-    for (const slug of selectedNiches) {
-      const found = (groupedCreators[slug] ?? []).find(
-        (creator) => creator.handle === selectedCreatorHandle
-      );
-      if (found) return found as Creator;
-    }
-    return null;
-  }, [groupedCreators, selectedCreatorHandle, selectedNiches]);
-
-  const canContinueStep1 = selectedNiches.length > 0;
-  const canContinueStep2 = Boolean(selectedCreatorHandle);
   const hasAnyCreators = selectedNiches.some((slug) => (groupedCreators[slug] ?? []).length > 0);
 
-  const toggleNiche = (slug: string) => {
-    setSelectedCreatorHandle(null);
-    setSelectedNiches((prev) =>
-      prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
-    );
-  };
-
-  const pickForMeFromSelectedNiches = () => {
-    const allCreators = selectedNiches.flatMap((slug) => groupedCreators[slug] ?? []);
-    if (allCreators.length === 0) {
-      setSelectedCreatorHandle(null);
-      return;
-    }
-    const picked = [...allCreators].sort((a, b) => {
-      const scoreA = Number(a.avgEngagementRate) * Math.max(1, Number(a.reelsAvailable));
-      const scoreB = Number(b.avgEngagementRate) * Math.max(1, Number(b.reelsAvailable));
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      return Number(b.followerCount) - Number(a.followerCount);
-    })[0];
-    posthog?.capture("onboarding_creator_selected", {
-      creator_handle: normalizeAnalyticsHandle(picked.handle),
-      is_pick_for_me: true,
-    });
-    setSelectedCreatorHandle(picked.handle);
-  };
-
   const onComplete = async () => {
-    if (selectedNiches.length === 0) return;
+    if (selectedNiches.length === 0 || selectedCreatorHandles.length === 0) return;
     setIsCompleting(true);
     setCompletionText("Setting up your dashboard...");
     try {
       const result = await completeMutation.mutateAsync({
         selectedNicheSlugs: selectedNiches,
-        ...(selectedCreatorHandle ? { featuredAccountHandle: selectedCreatorHandle } : {}),
+        featuredAccountHandles: selectedCreatorHandles,
       });
       if (!result.alreadyComplete) {
+        posthog?.capture("onboarding_creator_selected", {
+          creator_handles: selectedCreatorHandles.map((h) => normalizeAnalyticsHandle(h)),
+          count: selectedCreatorHandles.length,
+          is_pick_for_me: isPickForMeSelection,
+        });
         posthog?.capture("onboarding_completed", {
           niches_selected: selectedNiches.length,
+          creators_selected: selectedCreatorHandles.length,
           demo_creator_handle: normalizeAnalyticsHandle(result.demoCreatorHandle ?? ""),
           demo_seeded: Boolean(result.demoJobId),
         });
@@ -181,6 +150,7 @@ export default function OnboardingPage() {
         posthog?.capture("onboarding_skipped");
         posthog?.capture("onboarding_completed", {
           niches_selected: 0,
+          creators_selected: 0,
           demo_creator_handle: normalizeAnalyticsHandle(result.demoCreatorHandle ?? ""),
           demo_seeded: Boolean(result.demoJobId),
         });
@@ -190,6 +160,58 @@ export default function OnboardingPage() {
       setIsCompleting(false);
     }
   };
+
+  if (loading || onboardingStateQuery.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+  if (shouldBypassOnboarding) return null;
+
+  const canContinueStep1 = selectedNiches.length > 0;
+  const canContinueStep2 =
+    selectedCreatorHandles.length >= 1 && selectedCreatorHandles.length <= MAX_CREATORS;
+
+  const toggleNiche = (slug: string) => {
+    setSelectedCreatorHandles([]);
+    setIsPickForMeSelection(false);
+    setSelectedNiches((prev) => {
+      if (prev.includes(slug)) return prev.filter((item) => item !== slug);
+      if (prev.length >= MAX_NICHES) return prev;
+      return [...prev, slug];
+    });
+  };
+
+  const toggleCreator = (handle: string) => {
+    setIsPickForMeSelection(false);
+    setSelectedCreatorHandles((prev) => {
+      if (prev.includes(handle)) return prev.filter((h) => h !== handle);
+      if (prev.length >= MAX_CREATORS) return prev;
+      return [...prev, handle];
+    });
+  };
+
+  const pickForMeFromSelectedNiches = () => {
+    const allCreators = selectedNiches.flatMap((slug) => groupedCreators[slug] ?? []);
+    if (allCreators.length === 0) {
+      setSelectedCreatorHandles([]);
+      setIsPickForMeSelection(false);
+      return;
+    }
+    const shuffled = shuffleInPlace([...allCreators]);
+    const n = Math.min(3, shuffled.length);
+    const picked = shuffled.slice(0, n);
+    setSelectedCreatorHandles(picked.map((c) => c.handle));
+    setIsPickForMeSelection(true);
+  };
+
+  const filteredNiches = ONBOARDING_NICHES.filter((niche) =>
+    niche.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   if (isCompleting || completeMutation.isPending || skipMutation.isPending) {
     return (
@@ -242,7 +264,8 @@ export default function OnboardingPage() {
               </h1>
               <p className="max-w-2xl text-muted-foreground">
                 Pick all niches you&apos;re interested in — what you create, admire, or want to
-                learn from. <span className="text-foreground">The more we know, the smarter our recommendations get.</span>
+                learn from.{" "}
+                <span className="text-foreground">The more we know, the smarter our recommendations get.</span>
               </p>
             </header>
 
@@ -262,13 +285,12 @@ export default function OnboardingPage() {
                 <span className="text-sm">
                   {selectedNiches.length === 0
                     ? "No niches selected"
-                    : selectedNiches.length === 1
-                    ? "1 niche selected"
-                    : `${selectedNiches.length} niches selected`}
+                    : `${selectedNiches.length} of ${MAX_NICHES} niches selected`}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                <span className="text-primary">Tip:</span> Pick 3+ for richer recommendations
+                <span className="text-primary">Tip:</span> Pick up to 5 niches — the more we know, the
+                smarter our recommendations
               </p>
             </div>
 
@@ -290,15 +312,19 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {filteredNiches.map((niche) => {
                   const selected = selectedNiches.includes(niche.slug);
+                  const atCap = !selected && selectedNiches.length >= MAX_NICHES;
                   return (
                     <button
                       key={niche.slug}
                       type="button"
-                      onClick={() => toggleNiche(niche.slug)}
+                      onClick={() => (atCap ? null : toggleNiche(niche.slug))}
+                      disabled={atCap}
                       className={`relative min-h-28 rounded-xl border p-4 text-center transition ${
-                        selected
-                          ? "border-primary bg-primary/8"
-                          : "border-border bg-card hover:border-primary/40 hover:bg-card/80"
+                        atCap
+                          ? "cursor-not-allowed border-border/60 bg-muted/30 text-muted-foreground opacity-50"
+                          : selected
+                            ? "border-primary bg-primary/8"
+                            : "border-border bg-card hover:border-primary/40 hover:bg-card/80"
                       }`}
                     >
                       {selected ? (
@@ -320,11 +346,12 @@ export default function OnboardingPage() {
           <section>
             <header className="mb-6 space-y-3">
               <h1 className="text-4xl tracking-tight">
-                Pick one creator to <span className="italic text-primary">spy on</span> first
+                Pick creators to <span className="italic text-primary">start with</span>
               </h1>
               <p className="max-w-2xl text-muted-foreground">
-                We&apos;ll pre-load their top viral reels on your dashboard so you can see how
-                SpyReels works <span className="text-foreground">instantly</span>.
+                We&apos;ll pre-load the first account&apos;s top viral reels on your dashboard so
+                you can see how SpyReels works <span className="text-foreground">instantly</span>.
+                You can add more creators later.
               </p>
             </header>
 
@@ -344,12 +371,28 @@ export default function OnboardingPage() {
               })}
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => {
+                  setStep(1);
+                  setSelectedCreatorHandles([]);
+                  setIsPickForMeSelection(false);
+                }}
                 className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground"
               >
                 <PencilLine className="h-3 w-3" />
                 Edit
               </button>
+            </div>
+
+            <div
+              className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+                selectedCreatorHandles.length > 0 ? "border-primary/30 bg-primary/5" : "border-border bg-card"
+              }`}
+            >
+              <span className="text-sm">
+                {selectedCreatorHandles.length === 0
+                  ? "No creators selected"
+                  : `${selectedCreatorHandles.length} of ${MAX_CREATORS} creators selected`}
+              </span>
             </div>
 
             {creatorsByNicheQuery.isLoading ? (
@@ -379,22 +422,20 @@ export default function OnboardingPage() {
                       ) : (
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                           {creators.map((creator) => {
-                            const selected = selectedCreatorHandle === creator.handle;
+                            const selected = selectedCreatorHandles.includes(creator.handle);
+                            const atCap = !selected && selectedCreatorHandles.length >= MAX_CREATORS;
                             return (
                               <button
                                 key={`${slug}-${creator.id}`}
                                 type="button"
-                                onClick={() => {
-                                  posthog?.capture("onboarding_creator_selected", {
-                                    creator_handle: normalizeAnalyticsHandle(creator.handle),
-                                    is_pick_for_me: false,
-                                  });
-                                  setSelectedCreatorHandle(creator.handle);
-                                }}
+                                onClick={() => (atCap ? null : toggleCreator(creator.handle))}
+                                disabled={atCap}
                                 className={`relative rounded-xl border p-4 text-left transition ${
-                                  selected
-                                    ? "border-primary bg-primary/8"
-                                    : "border-border bg-card hover:border-primary/35 hover:bg-card/80"
+                                  atCap
+                                    ? "cursor-not-allowed border-border/60 bg-muted/30 text-muted-foreground opacity-50"
+                                    : selected
+                                      ? "border-primary bg-primary/8"
+                                      : "border-border bg-card hover:border-primary/35 hover:bg-card/80"
                                 }`}
                               >
                                 {selected ? (
@@ -418,7 +459,9 @@ export default function OnboardingPage() {
                                     )}
                                   </div>
                                   <div>
-                                    <div className="text-sm font-semibold">{creator.displayName || `@${creator.handle}`}</div>
+                                    <div className="text-sm font-semibold">
+                                      {creator.displayName || `@${creator.handle}`}
+                                    </div>
                                     <div className="font-mono text-[11px] text-muted-foreground">@{creator.handle}</div>
                                   </div>
                                 </div>
@@ -430,7 +473,9 @@ export default function OnboardingPage() {
                                   </div>
                                   <div>
                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Avg ER</p>
-                                    <p className="font-mono text-xs text-emerald-400">{creator.avgEngagementRate.toFixed(2)}%</p>
+                                    <p className="font-mono text-xs text-emerald-400">
+                                      {creator.avgEngagementRate.toFixed(2)}%
+                                    </p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Reels</p>
@@ -460,7 +505,7 @@ export default function OnboardingPage() {
                 <span className="mb-0.5 block font-medium text-foreground">Pick for me</span>
                 {!hasAnyCreators
                   ? "No creators in these niches? We'll choose a strong global default."
-                  : "We’ll pick the highest-performing creator from your selected niches."}
+                  : "We’ll pick three featured creators at random from your selected niches."}
               </span>
             </button>
           </section>
@@ -472,7 +517,11 @@ export default function OnboardingPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setStep(1);
+                setSelectedCreatorHandles([]);
+                setIsPickForMeSelection(false);
+              }}
               className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -502,7 +551,12 @@ export default function OnboardingPage() {
               onClick={onComplete}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {selectedCreator ? `Spy on ${selectedCreator.displayName.split(" ")[0]}` : "Spy on them"}
+              Spy on them
+              {canContinueStep2 ? (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 py-0.5 font-mono text-[10px]">
+                  ({selectedCreatorHandles.length})
+                </span>
+              ) : null}
               <ArrowRight className="h-4 w-4" />
             </button>
           )}
