@@ -24,7 +24,6 @@ import {
   ArrowLeft,
   Film,
   Clock,
-  Sheet,
   TrendingUp,
   Wand2,
   Bookmark,
@@ -42,13 +41,6 @@ import {
   X,
   Sparkles,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   InlineWorkflow,
   formatNumber,
@@ -1254,6 +1246,8 @@ export default function Dashboard() {
                         </Button>
                       </Tooltip>
 
+                      {/*
+                      Connect to Sheets (UI disabled; re-enable when integration ships)
                       <Tooltip content="Live-sync this data to a Google Sheet">
                         <Button
                           size="sm"
@@ -1273,6 +1267,7 @@ export default function Dashboard() {
                           <span className="hidden sm:inline">Connect to Sheets</span>
                         </Button>
                       </Tooltip>
+                      */}
                     </>
                   )}
                 </>
@@ -2055,7 +2050,8 @@ export default function Dashboard() {
         </aside>
       </div>
 
-      {/* Google Sheets Dialog */}
+      {/*
+      Export to Google Sheets dialog (UI disabled; re-enable when integration ships)
       <Dialog open={showSheetsDialog} onOpenChange={setShowSheetsDialog}>
         <DialogContent className="bg-card text-card-foreground">
           <DialogHeader>
@@ -2094,6 +2090,7 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+      */}
     </div>
   );
 }
