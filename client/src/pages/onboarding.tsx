@@ -159,10 +159,10 @@ export default function OnboardingPage() {
         setCompletionText("Your pick wasn’t available, so we selected a great fallback creator.");
       }
       // OnboardingGate reads the same getState query; must refresh after the
-      // write before /dashboard or the gate bounces the user back to /onboarding.
+      // write before leaving /onboarding or the gate bounces the user back.
       await trpcUtils.onboarding.getState.invalidate();
       await trpcUtils.onboarding.getState.refetch();
-      setLocation("/dashboard");
+      setLocation("/research");
     } finally {
       setIsCompleting(false);
     }
@@ -184,7 +184,7 @@ export default function OnboardingPage() {
       }
       await trpcUtils.onboarding.getState.invalidate();
       await trpcUtils.onboarding.getState.refetch();
-      setLocation("/dashboard");
+      setLocation("/research");
     } finally {
       setIsCompleting(false);
     }
