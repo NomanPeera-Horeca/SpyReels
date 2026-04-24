@@ -507,26 +507,35 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     );
   };
 
-  // ── Not transcribed yet ──
-  if (!hasTranscription) {
+  // Not transcribed yet (idle only). If the parent already started a run
+  // from the row action strip, show the transcribing panel instead of the
+  // duplicate "Transcribe Now" gate. Same idea as SearchInlineWorkflow.
+  if (!hasTranscription && !isProcessing) {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
           <FileText className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Make My Version and workflow features</p>
-          <Button onClick={onTranscribe} disabled={isProcessing}>
-            {isProcessing ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</>
-            ) : (
-              <><FileText className="mr-2 h-4 w-4" /> Transcribe Now</>
-            )}
+          <Button onClick={onTranscribe}>
+            <FileText className="mr-2 h-4 w-4" /> Transcribe Now
           </Button>
         </div>
       </div>
     );
   }
 
-  // ── Main workflow panel ──
+  if (!hasTranscription && isProcessing) {
+    return (
+      <div className="bg-muted/20 border-t border-border/30 p-6">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Transcribing... This may take a moment.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main workflow panel
   return (
     <div className="bg-muted/20 border-t border-border/30">
       {/* Competitor posting info bar */}

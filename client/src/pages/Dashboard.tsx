@@ -1480,6 +1480,7 @@ export default function Dashboard() {
                               });
                               return;
                             }
+                            setExpandedReelId(reel.id);
                             setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
                             if (isFeaturedView) {
                               startTranscription.mutate({ featuredReelId: reel.id });
@@ -1720,6 +1721,7 @@ export default function Dashboard() {
                               });
                               return;
                             }
+                            setExpandedReelId(reel.id);
                             setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
                             if (isFeaturedView) {
                               startTranscription.mutate({ featuredReelId: reel.id });
