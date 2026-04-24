@@ -79,6 +79,7 @@ export default function OnboardingPage() {
   const [isCompleting, setIsCompleting] = useState(false);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
+  const trpcUtils = trpc.useUtils();
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     enabled: Boolean(user),
     staleTime: 60_000,
@@ -157,6 +158,10 @@ export default function OnboardingPage() {
       if ("warning" in result && result.warning === "selected_creator_not_found") {
         setCompletionText("Your pick wasn’t available, so we selected a great fallback creator.");
       }
+      // OnboardingGate reads the same getState query; must refresh after the
+      // write before /dashboard or the gate bounces the user back to /onboarding.
+      await trpcUtils.onboarding.getState.invalidate();
+      await trpcUtils.onboarding.getState.refetch();
       setLocation("/dashboard");
     } finally {
       setIsCompleting(false);
@@ -177,6 +182,8 @@ export default function OnboardingPage() {
           demo_seeded: Boolean(result.demoJobId),
         });
       }
+      await trpcUtils.onboarding.getState.invalidate();
+      await trpcUtils.onboarding.getState.refetch();
       setLocation("/dashboard");
     } finally {
       setIsCompleting(false);

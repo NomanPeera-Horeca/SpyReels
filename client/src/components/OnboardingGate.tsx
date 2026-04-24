@@ -25,10 +25,13 @@ export default function OnboardingGate({
   const isPostLaunchUser =
     Boolean(user) && Boolean(createdAt) && createdAt!.getTime() > FEATURE_LAUNCH_DATE.getTime();
 
+  // Gate runs on (almost) every authed app navigation: keep results fresh
+  // (staleTime: 0) so we never show /onboarding off a pre-completion cache.
+  // refetchOnWindowFocus: self-heal if another tab or rare drift updated state.
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     enabled: Boolean(user) && isPostLaunchUser,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const shouldRedirectToOnboarding = useMemo(() => {
