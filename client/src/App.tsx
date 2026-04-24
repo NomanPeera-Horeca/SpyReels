@@ -27,6 +27,7 @@ import CollectedReels from "./pages/CollectedReels";
 import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
+import Interests from "./pages/Interests";
 import AdminDashboard from "./pages/AdminDashboard";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -36,6 +37,7 @@ function DashboardRouter() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/research" component={Home} />
+        <Route path="/interests" component={Interests} />
         <Route path="/scraping" component={ScrapingProgress} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/saved" component={SavedReels} />
@@ -83,7 +85,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark" switchable={true}>
+      <ThemeProvider defaultTheme="system" switchable={true}>
         <TooltipProvider>
           <Toaster richColors />
           <Router />
