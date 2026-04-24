@@ -357,7 +357,7 @@ function TranscriptsView({ data, isLoading, onCopy, onPreview, formatDate, trunc
         </div>
         <h3 className="text-lg font-semibold mb-1">No transcripts yet</h3>
         <p className="text-muted-foreground text-sm max-w-sm">
-          Transcripts appear here when you scrape reels or collect them via the Chrome extension. Start by scraping an Instagram account.
+          Transcripts appear here when you scrape reels or collect them via the Telegram bot. Start by scraping an Instagram account.
         </p>
         <Button variant="outline" className="mt-4" onClick={() => window.location.href = "/dashboard"}>
           Go to Dashboard

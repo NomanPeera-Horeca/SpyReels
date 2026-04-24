@@ -132,6 +132,7 @@ export default function PrivacyPolicy() {
             <p>Your data may be processed in countries other than your own. We ensure appropriate safeguards are in place for international data transfers in compliance with applicable data protection laws.</p>
           </section>
 
+          {/*
           <section>
             <h2>11. Chrome Extension</h2>
             <p>The SpyReels Chrome Extension operates on instagram.com to provide feed sorting, transcription, and content saving features. The extension:</p>
@@ -144,14 +145,15 @@ export default function PrivacyPolicy() {
             </ul>
             <p className="mt-3">The extension requires the following permissions: <strong>activeTab</strong> (to read the current Instagram page), <strong>storage</strong> (to save preferences), <strong>sidePanel</strong> (to display the sorting panel), and <strong>host permissions for instagram.com</strong> (to inject overlay buttons and sorting controls).</p>
           </section>
+          */}
 
           <section>
-            <h2>12. Changes to This Policy</h2>
+            <h2>11. Changes to This Policy</h2>
             <p>We may update this Privacy Policy from time to time. We will notify you of significant changes via email or in-app notification. Your continued use of the Service after changes constitutes acceptance of the updated policy.</p>
           </section>
 
           <section>
-            <h2>13. Contact</h2>
+            <h2>12. Contact</h2>
             <p>If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us through the in-app support channel. We aim to respond to all privacy-related inquiries within 30 days.</p>
           </section>
         </div>

@@ -296,6 +296,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
       },
     ],
   },
+  /* Re-enable with /extension route
   {
     title: "Chrome Extension",
     rows: [
@@ -333,6 +334,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
       },
     ],
   },
+  */
   {
     title: "Team & Support",
     rows: [
@@ -391,7 +393,7 @@ const TESTIMONIALS = [
   {
     name: "Marcus T.",
     role: "Social Media Manager",
-    text: "Managing 8 client accounts is a breeze. The Chrome extension saves me 3 hours daily on content research.",
+    text: "Managing 8 client accounts is a breeze. The dashboard and script workflow keep every research pass in one place, and we have cut our weekly prep time in half before we even film.",
     avatar: "MT",
   },
   {
