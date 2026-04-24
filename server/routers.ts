@@ -1656,7 +1656,6 @@ Return JSON only:
             : 0;
           return {
             reelUrl: r.reelUrl,
-            shortcode: r.shortcode,
             caption: r.caption || "",
             viewCount: r.viewCount,
             likeCount: r.likeCount,
@@ -1664,7 +1663,6 @@ Return JSON only:
             engagementRate: Math.round(engagementRate * 100) / 100,
             duration: r.duration || 0,
             postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
-            thumbnailUrl: r.thumbnailUrl || "",
             transcript: t?.transcript || "",
             hookAnalysis: t?.hookAnalysis || "",
           };
@@ -4483,11 +4481,10 @@ async function fetchAndUpdateCollectedReelBg(reelId: number, shortcode: string):
   }
 }
 
-function escapeCsv(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
+/** RFC 4180: every field double-quoted; internal " escaped as "". */
+function formatCsvField(value: string | number | boolean | null | undefined): string {
+  const s = value === null || value === undefined ? "" : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 async function buildExportData(jobId: number) {
@@ -4501,7 +4498,6 @@ async function buildExportData(jobId: number) {
 
   const headers = [
     "Reel URL",
-    "Shortcode",
     "Caption",
     "Views",
     "Likes",
@@ -4509,34 +4505,33 @@ async function buildExportData(jobId: number) {
     "Engagement Rate (%)",
     "Duration (s)",
     "Posted At",
-    "Thumbnail URL",
     "Transcript",
     "Hook Analysis",
   ];
 
-  const rows = reelsList.map((r) => {
+  const headerLine = headers.map((h) => formatCsvField(h)).join(",");
+
+  const bodyLines = reelsList.map((r) => {
     const t = transcriptionMap.get(r.id);
     const engagementRate = followerCount > 0
       ? ((r.likeCount + r.commentCount) / followerCount) * 100
       : 0;
+    const er = Math.round(engagementRate * 100) / 100;
     return [
-      r.reelUrl,
-      r.shortcode,
-      escapeCsv(r.caption || ""),
-      r.viewCount.toString(),
-      r.likeCount.toString(),
-      r.commentCount.toString(),
-      (Math.round(engagementRate * 100) / 100).toString(),
-      (r.duration || 0).toString(),
-      r.postedAt ? new Date(r.postedAt).toISOString() : "",
-      r.thumbnailUrl || "",
-      escapeCsv(t?.transcript || ""),
-      escapeCsv(t?.hookAnalysis || ""),
-    ];
+      formatCsvField(r.reelUrl),
+      formatCsvField(r.caption || ""),
+      formatCsvField(r.viewCount),
+      formatCsvField(r.likeCount),
+      formatCsvField(r.commentCount),
+      formatCsvField(er),
+      formatCsvField(r.duration || 0),
+      formatCsvField(r.postedAt ? new Date(r.postedAt).toISOString() : ""),
+      formatCsvField(t?.transcript || ""),
+      formatCsvField(t?.hookAnalysis || ""),
+    ].join(",");
   });
 
-  const csvContent =
-    headers.join(",") + "\n" + rows.map((row) => row.join(",")).join("\n");
+  const csvContent = headerLine + (bodyLines.length ? "\n" + bodyLines.join("\n") : "");
 
   const filename = `reels_${job?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.csv`;
 

@@ -7,14 +7,13 @@ import { google } from "googleapis";
 
 interface ReelExportRow {
   reelUrl: string;
-  shortcode: string;
   caption: string;
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  engagementRate: number;
   duration: number;
   postedAt: string;
-  thumbnailUrl: string;
   transcript: string;
   hookAnalysis: string;
 }
@@ -79,31 +78,29 @@ export async function exportToGoogleSheets(
   const spreadsheetId = spreadsheet.data.spreadsheetId!;
   const spreadsheetUrl = spreadsheet.data.spreadsheetUrl!;
 
-  // Prepare header row and data rows
+  // Prepare header row and data rows (same 10 columns as CSV export)
   const headers = [
     "Reel URL",
-    "Shortcode",
     "Caption",
     "Views",
     "Likes",
     "Comments",
+    "Engagement Rate (%)",
     "Duration (s)",
     "Posted At",
-    "Thumbnail URL",
     "Transcript",
     "Hook Analysis",
   ];
 
   const dataRows = rows.map((r) => [
     r.reelUrl,
-    r.shortcode,
     r.caption,
     r.viewCount,
     r.likeCount,
     r.commentCount,
+    r.engagementRate,
     r.duration,
     r.postedAt,
-    r.thumbnailUrl,
     r.transcript,
     r.hookAnalysis,
   ]);
@@ -150,7 +147,7 @@ export async function exportToGoogleSheets(
               sheetId: 0,
               dimension: "COLUMNS",
               startIndex: 0,
-              endIndex: 9,
+              endIndex: 10,
             },
           },
         },
