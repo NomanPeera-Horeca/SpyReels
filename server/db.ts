@@ -529,17 +529,22 @@ export async function updateTranscription(
   await db.update(transcriptions).set(data).where(eq(transcriptions.id, id));
 }
 
+const TRANSCRIPTION_BATCH_BY_REEL_IDS = 200;
+
 export async function getTranscriptionsByJobId(jobId: number): Promise<Transcription[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const reelRows = await db.select({ id: reels.id }).from(reels).where(eq(reels.jobId, jobId));
   if (reelRows.length === 0) return [];
-  const reelIds = reelRows.map(r => r.id);
-  // Get all transcriptions for these reels
+  const reelIds = reelRows.map((r) => r.id);
   const allTranscriptions: Transcription[] = [];
-  for (const reelId of reelIds) {
-    const t = await db.select().from(transcriptions).where(eq(transcriptions.reelId, reelId));
-    allTranscriptions.push(...t);
+  for (let i = 0; i < reelIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = reelIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const rows = await db
+      .select()
+      .from(transcriptions)
+      .where(inArray(transcriptions.reelId, chunk));
+    allTranscriptions.push(...rows);
   }
   return allTranscriptions;
 }

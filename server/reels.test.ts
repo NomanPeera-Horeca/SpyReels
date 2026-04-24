@@ -742,6 +742,15 @@ describe("saved.check", () => {
 
 describe("saved.checkBatch", () => {
   it("returns a map of reel IDs to saved status", async () => {
+    const { getDb } = await import("./db");
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      select: () => ({
+        from: () => ({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 

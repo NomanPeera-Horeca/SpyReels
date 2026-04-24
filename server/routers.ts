@@ -108,7 +108,20 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
-import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels, niches, featuredAccounts, featuredAccountNiches, featuredReels, recreatedScripts } from "../drizzle/schema";
+import {
+  monthlyUsage,
+  users,
+  subscriptions,
+  savedScripts,
+  savedReels,
+  scrapeJobs,
+  collectedReels,
+  niches,
+  featuredAccounts,
+  featuredAccountNiches,
+  featuredReels,
+  recreatedScripts,
+} from "../drizzle/schema";
 import type { Transcription } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -116,6 +129,9 @@ import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
+
+/** Batched IN() for saved.checkBatch; keeps chunks under typical MySQL placeholder limits. */
+const SAVED_CHECK_BATCH = 200;
 
 // Transcription queue - cap concurrent transcriptions to prevent memory exhaustion
 // and to avoid cascading Instagram CDN rate-limits on batch kickoffs (e.g.
@@ -2049,16 +2065,52 @@ Return JSON only:
           )
       )
       .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const userId = ctx.user.id;
         const savedMap: Record<number, boolean> = {};
+
         if (input.featuredReelIds) {
-          for (const id of input.featuredReelIds) {
-            savedMap[id] = await isFeaturedReelSaved(ctx.user.id, id);
+          const ids = input.featuredReelIds;
+          for (const id of ids) savedMap[id] = false;
+          if (ids.length === 0) return savedMap;
+          const savedSet = new Set<number>();
+          for (let i = 0; i < ids.length; i += SAVED_CHECK_BATCH) {
+            const chunk = ids.slice(i, i + SAVED_CHECK_BATCH);
+            const rows = await db
+              .select({ featuredReelId: savedReels.featuredReelId })
+              .from(savedReels)
+              .where(
+                and(
+                  eq(savedReels.userId, userId),
+                  inArray(savedReels.featuredReelId, chunk)
+                )
+              );
+            for (const r of rows) {
+              if (r.featuredReelId != null) savedSet.add(r.featuredReelId);
+            }
           }
-        } else {
-          for (const id of input.reelIds!) {
-            savedMap[id] = await isReelSaved(ctx.user.id, id);
+          for (const id of ids) savedMap[id] = savedSet.has(id);
+          return savedMap;
+        }
+
+        const ids = input.reelIds!;
+        for (const id of ids) savedMap[id] = false;
+        if (ids.length === 0) return savedMap;
+        const savedSet = new Set<number>();
+        for (let i = 0; i < ids.length; i += SAVED_CHECK_BATCH) {
+          const chunk = ids.slice(i, i + SAVED_CHECK_BATCH);
+          const rows = await db
+            .select({ reelId: savedReels.reelId })
+            .from(savedReels)
+            .where(
+              and(eq(savedReels.userId, userId), inArray(savedReels.reelId, chunk))
+            );
+          for (const r of rows) {
+            if (r.reelId != null) savedSet.add(r.reelId);
           }
         }
+        for (const id of ids) savedMap[id] = savedSet.has(id);
         return savedMap;
       }),
 
