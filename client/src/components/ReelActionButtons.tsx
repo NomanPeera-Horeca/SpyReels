@@ -8,6 +8,7 @@ import {
   Wand2,
   ExternalLink,
 } from "lucide-react";
+import Tooltip from "@/components/Tooltip";
 
 /**
  * Discriminated source so a single callsite can't accidentally pass the
@@ -72,6 +73,9 @@ export interface ReelActionButtonsProps {
 
   /** True when the row is still waiting for a worker slot (Bug #24). */
   isQueued?: boolean;
+
+  /** No usable speech: completed run with empty transcript/segments. */
+  isNoSpeech?: boolean;
 }
 
 /**
@@ -98,6 +102,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     hideExternalLink,
     reelUrl,
     isQueued,
+    isNoSpeech,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -125,16 +130,35 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
       )}
 
       {hasTranscription ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs px-2"
-          onClick={onExpand}
-          title="View transcript"
-        >
-          <FileText className="h-3 w-3 sm:mr-1" />
-          <span className={labelClass}>Transcript</span>
-        </Button>
+        isNoSpeech ? (
+          <Tooltip content="No transcript available">
+            <span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2"
+                disabled
+                title="No transcript available"
+                aria-label="No transcript available"
+              >
+                <FileText className="h-3 w-3 sm:mr-1" />
+                <span className={labelClass}>Transcript</span>
+              </Button>
+            </span>
+          </Tooltip>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={onExpand}
+            title="View transcript"
+          >
+            <FileText className="h-3 w-3 sm:mr-1" />
+            <span className={labelClass}>Transcript</span>
+          </Button>
+        )
       ) : (
         <Button
           variant="outline"
@@ -169,7 +193,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         </Button>
       )}
 
-      {hasTranscription && (
+      {hasTranscription && !isNoSpeech && (
         <Button
           variant="outline"
           size="sm"

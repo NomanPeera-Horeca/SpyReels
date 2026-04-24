@@ -1501,7 +1501,11 @@ Return JSON only:
             return { transcriptionId: fr.id, status: "completed" as const };
           }
           if (fr.transcriptionStatus === "processing") {
-            return { transcriptionId: fr.id, status: "processing" as const };
+            return {
+              transcriptionId: fr.id,
+              status: "processing" as const,
+              queuePending: false,
+            };
           }
 
           // pending | failed → charge usage + kick Deepgram.
@@ -1516,6 +1520,7 @@ Return JSON only:
               message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
             });
           }
+          const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
           await updateFeaturedReelTranscription(fr.id, {
             transcriptionStatus: "processing",
           });
@@ -1527,7 +1532,11 @@ Return JSON only:
           }).catch((err) => {
             console.error(`Featured transcription ${fr.id} failed:`, err);
           });
-          return { transcriptionId: fr.id, status: "processing" as const };
+          return {
+            transcriptionId: fr.id,
+            status: "processing" as const,
+            queuePending,
+          };
         }
 
         // ────────────────────────────────────────────────────────────
@@ -1551,7 +1560,11 @@ Return JSON only:
           return { transcriptionId: existing.id, status: "completed" as const };
         }
         if (existing && existing.status === "processing") {
-          return { transcriptionId: existing.id, status: "processing" as const };
+          return {
+            transcriptionId: existing.id,
+            status: "processing" as const,
+            queuePending: false,
+          };
         }
 
         const usageCheck = await checkUsageLimit(ctx.user.id, "transcribeCount", ctx.user.openId);
@@ -1580,11 +1593,12 @@ Return JSON only:
 
         await incrementUsage(ctx.user.id, "transcribeCount");
 
+        const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
         runTranscription(transcriptionId, reelForRun).catch((err) => {
           console.error(`Transcription ${transcriptionId} failed:`, err);
         });
 
-        return { transcriptionId, status: "processing" as const };
+        return { transcriptionId, status: "processing" as const, queuePending };
       }),
 
     status: protectedProcedure

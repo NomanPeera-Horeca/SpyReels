@@ -98,6 +98,14 @@ export default function Home() {
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const normalizedHandleInput = useMemo(
+    () => normalizeInstagramHandle(handle),
+    [handle]
+  );
+  const handleInputInvalid =
+    handle.trim() !== "" &&
+    !isValidInstagramHandleNormalized(normalizedHandleInput);
+
   // Debounce handle input - only query after 800ms of no typing and min 2 chars
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -476,6 +484,12 @@ export default function Home() {
                       setHandle(e.target.value);
                       setHandleError(null);
                     }}
+                    onBlur={() => {
+                      const n = normalizeInstagramHandle(handle);
+                      if (handle.trim() && !isValidInstagramHandleNormalized(n)) {
+                        setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
+                      }
+                    }}
                     className="pl-10 h-11 bg-background"
                     aria-invalid={Boolean(handleError)}
                     aria-describedby={handleError ? "handle-error" : undefined}
@@ -692,6 +706,7 @@ export default function Home() {
                 disabled={
                   startScrape.isPending ||
                   !handle.trim() ||
+                  handleInputInvalid ||
                   (profile?.found === true && profile.isPrivate) ||
                   !scrapeGate.allowed
                 }

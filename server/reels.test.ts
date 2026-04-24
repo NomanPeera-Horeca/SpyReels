@@ -470,6 +470,7 @@ describe("transcribe.start", () => {
 
     expect(result).toHaveProperty("transcriptionId");
     expect(result).toHaveProperty("status", "processing");
+    expect(result).toHaveProperty("queuePending", expect.any(Boolean));
   });
 });
 

@@ -249,6 +249,11 @@ export type InlineWorkflowProps = {
    * `completed` so the YOUR SCRIPT / Completed block is mounted.
    */
   recreateEntrySignal?: { nonce: number; openScriptId?: number };
+  /**
+   * True when transcription completed with no usable speech (empty
+   * transcript and segments). Parent derives from `reel.transcription`.
+   */
+  isNoSpeech?: boolean;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -260,6 +265,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     hasTranscription,
     isProcessing,
     isTranscriptionQueued = false,
+    isNoSpeech = false,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -575,6 +581,27 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             {isTranscriptionQueued
               ? "In queue. We will start transcribing when a slot is free."
               : "Transcribing... This may take a moment."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasTranscription && isNoSpeech) {
+    return (
+      <div className="bg-muted/20 border-t border-border/30">
+        <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
+          <Clock className="h-3 w-3 text-amber-400" />
+          <span className="text-amber-400/80">
+            Competitor posted: <strong className="text-amber-300">{formatPostedTime(postedAt, userTimezone)}</strong>
+          </span>
+          <span className="text-muted-foreground ml-1">
+            (Timezone: {userTimezone.split("/").pop()?.replace("_", " ")})
+          </span>
+        </div>
+        <div className="p-6 flex flex-col items-center justify-center text-center">
+          <p className="text-sm text-muted-foreground max-w-md">
+            Looks like this one&apos;s all vibes, no voice. Try a reel with narration to unlock scripts and hooks.
           </p>
         </div>
       </div>

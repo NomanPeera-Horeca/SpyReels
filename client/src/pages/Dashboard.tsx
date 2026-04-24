@@ -91,6 +91,16 @@ function stripAtHandle(h: string | undefined | null) {
   return (h ?? "").replace(/^@/, "").trim();
 }
 
+/** Completed transcription with no usable speech (empty transcript and segments). */
+function transcriptionIsNoSpeech(
+  t: { status?: string; transcript?: string | null; segments?: unknown } | null | undefined
+): boolean {
+  if (!t || t.status !== "completed") return false;
+  const segs = t.segments;
+  const n = Array.isArray(segs) ? segs.length : 0;
+  return !String(t.transcript ?? "").trim() && n === 0;
+}
+
 /** Two-letter avatar fallback. Uses displayName first, then handle. No question marks. */
 function avatarInitialsFromAccount(
   displayName: string | null | undefined,
@@ -758,9 +768,19 @@ export default function Dashboard() {
         // processing: do not clear optimistic pending; onSuccess was wiping
         // the set before refetch, so the UI stayed "Transcribe" until
         // reels.list reflected processing (could be many seconds).
-        toast.info("Transcription started", {
-          description: "Processing audio... This may take up to a minute.",
-        });
+        if (
+          data.status === "processing" &&
+          "queuePending" in data &&
+          (data as { queuePending?: boolean }).queuePending
+        ) {
+          toast.info("Added to queue", {
+            description: "Will start when a slot is free.",
+          });
+        } else {
+          toast.info("Transcription started", {
+            description: "Processing audio... This may take up to a minute.",
+          });
+        }
       }
       reelsQuery.refetch();
     },
@@ -1633,6 +1653,7 @@ export default function Dashboard() {
               {sortedReels.map((reel, index) => {
                 const isExpanded = expandedReelId === reel.id;
                 const hasTranscription = reel.transcription?.status === "completed";
+                const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
                 const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
                 const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
                 const isSaved = !!savedMap[reel.id];
@@ -1688,8 +1709,11 @@ export default function Dashboard() {
                           <p className="text-sm text-foreground line-clamp-1 leading-snug">
                             {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
                           </p>
-                          {hasTranscription && (
+                          {hasTranscription && !isNoSpeech && (
                             <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
+                          )}
+                          {isNoSpeech && (
+                            <span className="shrink-0 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">No voice</span>
                           )}
                           {isProcessing && (
                             <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
@@ -1746,6 +1770,7 @@ export default function Dashboard() {
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -1794,6 +1819,7 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "featured", expand: false })
                           }
@@ -1816,6 +1842,7 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "user", expand: false })
                           }
@@ -1849,6 +1876,7 @@ export default function Dashboard() {
                 {sortedReels.map((reel, index) => {
                   const isExpanded = expandedReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
+                  const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
                   const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
                   const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
                   const isSaved = !!savedMap[reel.id];
@@ -1866,12 +1894,12 @@ export default function Dashboard() {
                     <div
                       key={reel.id}
                       ref={setReelRowRef(reel.id)}
-                      className={`group relative rounded-lg border overflow-hidden bg-card transition-colors ${
+                      className={`group relative rounded-lg border bg-card transition-colors ${
                         isExpanded ? "border-primary/40" : "border-border/40 hover:border-border/70"
                       }`}
                     >
                       <div
-                        className="relative aspect-[9/14] cursor-pointer"
+                        className="relative aspect-[9/14] cursor-pointer overflow-hidden"
                         onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
                       >
                         {reel.thumbnailUrl ? (
@@ -1940,9 +1968,14 @@ export default function Dashboard() {
                             {formatDuration(reel.duration)}
                           </span>
                         )}
-                        {hasTranscription && (
+                        {hasTranscription && !isNoSpeech && (
                           <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
                             Transcribed
+                          </span>
+                        )}
+                        {isNoSpeech && (
+                          <span className="absolute left-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                            No voice
                           </span>
                         )}
                         {isProcessing && (
@@ -1952,7 +1985,7 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      <div className="p-2.5 space-y-2">
+                      <div className="p-2.5 space-y-2 shrink-0">
                         <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
                           {reel.caption || (
                             <span className="text-muted-foreground italic">No caption</span>
@@ -1996,9 +2029,9 @@ export default function Dashboard() {
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
                           hideBookmark
                           hideExternalLink
-                          compact
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -2024,7 +2057,7 @@ export default function Dashboard() {
                       </div>
 
                       {isExpanded && (
-                        <div className="border-t border-border/40">
+                        <div className="border-t border-border/40 min-w-0">
                           {isFeaturedView ? (
                             <InlineWorkflow
                               reelSource="featured"
@@ -2033,6 +2066,7 @@ export default function Dashboard() {
                               hasTranscription={hasTranscription}
                               isProcessing={isProcessing}
                               isTranscriptionQueued={isTxQueued}
+                              isNoSpeech={isNoSpeech}
                               onTranscribe={() =>
                                 runTranscribeClick(reel.id, { mode: "featured", expand: false })
                               }
@@ -2055,6 +2089,7 @@ export default function Dashboard() {
                               hasTranscription={hasTranscription}
                               isProcessing={isProcessing}
                               isTranscriptionQueued={isTxQueued}
+                              isNoSpeech={isNoSpeech}
                               onTranscribe={() =>
                                 runTranscribeClick(reel.id, { mode: "user", expand: false })
                               }
