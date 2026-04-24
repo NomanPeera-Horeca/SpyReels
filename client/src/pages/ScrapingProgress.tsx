@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 import { LOADING_TIPS } from "@/data/loadingTips";
 import { toast } from "sonner";
+import {
+  normalizeInstagramHandle,
+  isValidInstagramHandleNormalized,
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+} from "@shared/instagramHandle";
 
 /**
  * Ordered pipeline stages shown in the multi-step list. Index matches the
@@ -156,8 +161,13 @@ export default function ScrapingProgress() {
 
   const handleRetry = () => {
     if (!data) return;
+    const n = normalizeInstagramHandle(data.handle);
+    if (!isValidInstagramHandleNormalized(n)) {
+      toast.error(INSTAGRAM_HANDLE_INVALID_MESSAGE);
+      return;
+    }
     retryMutation.mutate({
-      handle: data.handle,
+      handle: n,
       timeframeDays: data.timeframeDays,
     });
   };

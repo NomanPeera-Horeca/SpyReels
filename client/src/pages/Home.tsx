@@ -23,6 +23,11 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
+  normalizeInstagramHandle,
+  isValidInstagramHandleNormalized,
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+} from "@shared/instagramHandle";
+import {
   Film,
   Search,
   Clock,
@@ -87,6 +92,7 @@ export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
   const [handle, setHandle] = useState("");
+  const [handleError, setHandleError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState("30");
   const [, setLocation] = useLocation();
   const [debouncedHandle, setDebouncedHandle] = useState("");
@@ -330,6 +336,12 @@ export default function Home() {
       toast.error("Please enter an Instagram handle");
       return;
     }
+    const normalized = normalizeInstagramHandle(handle);
+    if (!isValidInstagramHandleNormalized(normalized)) {
+      setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
+      return;
+    }
+    setHandleError(null);
     if (profile?.found && profile.isPrivate) {
       toast.error("This account is private and cannot be scraped.");
       return;
@@ -345,11 +357,11 @@ export default function Home() {
       return;
     }
     posthog?.capture("research_started", {
-      handle: handle.replace(/^@/, "").trim(),
+      handle: normalized,
       timeframe_days: parseInt(timeframe),
     });
     startScrape.mutate({
-      handle: handle.trim(),
+      handle: normalized,
       timeframeDays: parseInt(timeframe),
     });
   };
@@ -455,8 +467,13 @@ export default function Home() {
                     id="handle"
                     placeholder="e.g. natgeo"
                     value={handle}
-                    onChange={e => setHandle(e.target.value)}
+                    onChange={e => {
+                      setHandle(e.target.value);
+                      setHandleError(null);
+                    }}
                     className="pl-10 h-11 bg-background"
+                    aria-invalid={Boolean(handleError)}
+                    aria-describedby={handleError ? "handle-error" : undefined}
                   />
                   {isLoadingProfile && (
                     <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -472,6 +489,11 @@ export default function Home() {
                   Enter the username without the @ symbol. The account must be
                   public.
                 </p>
+                {handleError ? (
+                  <p id="handle-error" className="text-sm text-destructive" role="alert">
+                    {handleError}
+                  </p>
+                ) : null}
               </div>
 
               {/* Profile Preview Card */}
