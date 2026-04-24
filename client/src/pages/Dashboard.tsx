@@ -636,6 +636,7 @@ export default function Dashboard() {
       toast.error("Google Sheets export failed", { description: error.message });
     },
   });
+  /* Demo banner removed from UI; re-enable by uncommenting this block.
   const dismissDemoBanner = trpc.onboarding.dismissDemoBanner.useMutation({
     onSuccess: () => {
       posthog?.capture("demo_banner_dismissed");
@@ -646,6 +647,7 @@ export default function Dashboard() {
       toast.error("Could not dismiss demo banner", { description: error.message });
     },
   });
+  */
 
   // Dashboard overview data (only fetched when no jobId)
   const showOverview = !jobId && !featuredAccountId;
@@ -939,7 +941,9 @@ export default function Dashboard() {
   }
 
   const isLoading = job?.status === "running" || job?.status === "pending";
+  /* Demo banner removed from UI; re-enable by uncommenting this block.
   const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
+  */
   const canShowAiBadge =
     !!job?.classifiedNicheSlug &&
     !!job?.classifiedConfidence &&
@@ -951,6 +955,7 @@ export default function Dashboard() {
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="min-w-0">
+          {/* Demo banner removed from UI; re-enable by uncommenting this block.
           {showDemoBanner && (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 p-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-amber-400/20 text-base">
@@ -987,6 +992,7 @@ export default function Dashboard() {
               </Tooltip>
             </div>
           )}
+          */}
           {/* Header. Featured view (Commit 6) renders a distinct profile
               card with a large avatar + follower / engagement / posting-
               time stats; the user-scrape flow keeps its condensed header.
