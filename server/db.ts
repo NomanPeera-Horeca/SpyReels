@@ -518,7 +518,12 @@ export async function getTranscriptionByReelId(reelId: number): Promise<Transcri
   return result[0];
 }
 
-export async function updateTranscription(id: number, data: Partial<Pick<Transcription, "transcript" | "segments" | "hookAnalysis" | "status" | "errorMessage">>): Promise<void> {
+export async function updateTranscription(
+  id: number,
+  data: Partial<
+    Pick<Transcription, "transcript" | "segments" | "hookAnalysis" | "status" | "errorMessage" | "queuedAt" | "startedAt">
+  >
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(transcriptions).set(data).where(eq(transcriptions.id, id));
@@ -616,6 +621,8 @@ export function transcriptionViewFromFeaturedReelRow(
     hookAnalysis: null,
     status: uiStatus,
     errorMessage: null,
+    queuedAt: null,
+    startedAt: null,
     createdAt: fr.transcribedAt ?? fr.scrapedAt,
     updatedAt: fr.transcribedAt ?? fr.scrapedAt,
   };

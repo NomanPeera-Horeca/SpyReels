@@ -733,7 +733,15 @@ export default function Dashboard() {
     setLocation,
   ]);
 
+  const transcribeInFlightRef = useRef(0);
+  const [, setTranscribeInFlightBumper] = useState(0);
+  const releaseTranscribeSlot = useCallback(() => {
+    transcribeInFlightRef.current = Math.max(0, transcribeInFlightRef.current - 1);
+    setTranscribeInFlightBumper((n) => n + 1);
+  }, []);
+
   const startTranscription = trpc.transcribe.start.useMutation({
+    onSettled: releaseTranscribeSlot,
     onSuccess: (data, variables) => {
       const targetId = variables.reelId ?? variables.featuredReelId;
       if (data.status === "completed") {
@@ -768,6 +776,39 @@ export default function Dashboard() {
       toast.error("Transcription failed", { description: error.message });
     },
   });
+
+  const runTranscribeClick = useCallback(
+    (reelId: number, opts: { mode: "featured" | "user"; expand: boolean }) => {
+      if (!transcribeGate.allowed) {
+        toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+          description: "Upgrade your plan for more transcriptions.",
+          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+        });
+        return;
+      }
+      if (transcribeInFlightRef.current >= 5) {
+        toast.info("Please wait for some transcriptions to complete before starting more.");
+        return;
+      }
+      transcribeInFlightRef.current += 1;
+      setTranscribeInFlightBumper((n) => n + 1);
+      if (opts.expand) setExpandedReelId(reelId);
+      setPendingTranscriptions((prev) => new Set(prev).add(reelId));
+      if (opts.mode === "featured") {
+        startTranscription.mutate({ featuredReelId: reelId });
+      } else {
+        startTranscription.mutate({ reelId });
+      }
+    },
+    [
+      transcribeGate.allowed,
+      transcribeGate.used,
+      transcribeGate.limit,
+      setLocation,
+      setExpandedReelId,
+      startTranscription,
+    ]
+  );
 
   const exportCsv = trpc.export.csv.useMutation({
     onSuccess: (data) => {
@@ -1595,6 +1636,11 @@ export default function Dashboard() {
                 const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
                 const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
                 const isSaved = !!savedMap[reel.id];
+                const isTxQueued =
+                  isProcessing &&
+                  !isFeaturedView &&
+                  (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+                const transcribeAtCap = transcribeInFlightRef.current >= 5;
 
                 return (
                   <div
@@ -1698,6 +1744,8 @@ export default function Dashboard() {
                             recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
                           )}
                           saveBusy={toggleSave.isPending}
+                          transcribeDisabled={transcribeAtCap}
+                          isQueued={isTxQueued}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -1705,22 +1753,12 @@ export default function Dashboard() {
                               toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                             }
                           }}
-                          onTranscribe={() => {
-                            if (!transcribeGate.allowed) {
-                              toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
-                                description: "Upgrade your plan for more transcriptions.",
-                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                              });
-                              return;
-                            }
-                            setExpandedReelId(reel.id);
-                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                            if (isFeaturedView) {
-                              startTranscription.mutate({ featuredReelId: reel.id });
-                            } else {
-                              startTranscription.mutate({ reelId: reel.id });
-                            }
-                          }}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, {
+                              mode: isFeaturedView ? "featured" : "user",
+                              expand: true,
+                            })
+                          }
                           onExpand={() => setExpandedReelId(reel.id)}
                           onMakeVersion={() => triggerRecreatePulse(reel.id)}
                           onOpenMyScript={() => {
@@ -1755,10 +1793,10 @@ export default function Dashboard() {
                           handle={displayScrapeHandle || job?.handle || ""}
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
-                          onTranscribe={() => {
-                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                            startTranscription.mutate({ featuredReelId: reel.id });
-                          }}
+                          isTranscriptionQueued={isTxQueued}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, { mode: "featured", expand: false })
+                          }
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
                           recreateEntrySignal={
@@ -1777,10 +1815,10 @@ export default function Dashboard() {
                           handle={displayScrapeHandle || job?.handle || ""}
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
-                          onTranscribe={() => {
-                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                            startTranscription.mutate({ reelId: reel.id });
-                          }}
+                          isTranscriptionQueued={isTxQueued}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, { mode: "user", expand: false })
+                          }
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
                           recreateEntrySignal={
@@ -1814,6 +1852,11 @@ export default function Dashboard() {
                   const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
                   const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
                   const isSaved = !!savedMap[reel.id];
+                  const isTxQueued =
+                    isProcessing &&
+                    !isFeaturedView &&
+                    (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+                  const transcribeAtCap = transcribeInFlightRef.current >= 5;
 
                   const source: ReelActionSource = isFeaturedView
                     ? { source: "featured", featuredReelId: reel.id }
@@ -1951,6 +1994,8 @@ export default function Dashboard() {
                             recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
                           )}
                           saveBusy={toggleSave.isPending}
+                          transcribeDisabled={transcribeAtCap}
+                          isQueued={isTxQueued}
                           hideBookmark
                           hideExternalLink
                           compact
@@ -1961,22 +2006,12 @@ export default function Dashboard() {
                               toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                             }
                           }}
-                          onTranscribe={() => {
-                            if (!transcribeGate.allowed) {
-                              toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
-                                description: "Upgrade your plan for more transcriptions.",
-                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                              });
-                              return;
-                            }
-                            setExpandedReelId(reel.id);
-                            setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                            if (isFeaturedView) {
-                              startTranscription.mutate({ featuredReelId: reel.id });
-                            } else {
-                              startTranscription.mutate({ reelId: reel.id });
-                            }
-                          }}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, {
+                              mode: isFeaturedView ? "featured" : "user",
+                              expand: true,
+                            })
+                          }
                           onExpand={() => setExpandedReelId(reel.id)}
                           onMakeVersion={() => triggerRecreatePulse(reel.id)}
                           onOpenMyScript={() => {
@@ -1997,10 +2032,10 @@ export default function Dashboard() {
                               handle={displayScrapeHandle || job?.handle || ""}
                               hasTranscription={hasTranscription}
                               isProcessing={isProcessing}
-                              onTranscribe={() => {
-                                setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                                startTranscription.mutate({ featuredReelId: reel.id });
-                              }}
+                              isTranscriptionQueued={isTxQueued}
+                              onTranscribe={() =>
+                                runTranscribeClick(reel.id, { mode: "featured", expand: false })
+                              }
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
                               recreateEntrySignal={
@@ -2019,10 +2054,10 @@ export default function Dashboard() {
                               handle={displayScrapeHandle || job?.handle || ""}
                               hasTranscription={hasTranscription}
                               isProcessing={isProcessing}
-                              onTranscribe={() => {
-                                setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                                startTranscription.mutate({ reelId: reel.id });
-                              }}
+                              isTranscriptionQueued={isTxQueued}
+                              onTranscribe={() =>
+                                runTranscribeClick(reel.id, { mode: "user", expand: false })
+                              }
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
                               recreateEntrySignal={

@@ -233,6 +233,11 @@ export type InlineWorkflowProps = {
   handle: string;
   hasTranscription: boolean;
   isProcessing: boolean;
+  /**
+   * User-scrape jobs: true while the row is in the wait queue (processing
+   * but worker has not set startedAt). Featured catalog omits this signal.
+   */
+  isTranscriptionQueued?: boolean;
   onTranscribe: () => void;
   userTimezone: string;
   postedAt: Date | string;
@@ -254,6 +259,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     handle,
     hasTranscription,
     isProcessing,
+    isTranscriptionQueued = false,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -560,8 +566,16 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Transcribing... This may take a moment.</p>
+          {isTranscriptionQueued ? (
+            <Clock className="h-8 w-8 text-amber-400" />
+          ) : (
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          )}
+          <p className="text-sm text-muted-foreground text-center">
+            {isTranscriptionQueued
+              ? "In queue. We will start transcribing when a slot is free."
+              : "Transcribing... This may take a moment."}
+          </p>
         </div>
       </div>
     );
@@ -585,8 +599,16 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
         {/* ── Section 1: Transcript ── */}
         {isTranscribing ? (
           <div className="flex flex-col items-center gap-3 py-8 mb-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Transcribing...</p>
+            {isTranscriptionQueued ? (
+              <Clock className="h-8 w-8 text-amber-400" />
+            ) : (
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            )}
+            <p className="text-sm text-muted-foreground text-center">
+              {isTranscriptionQueued
+                ? "In queue. We will start transcribing when a slot is free."
+                : "Transcribing..."}
+            </p>
           </div>
         ) : transcriptionStatus === "failed" ? (
           <div className="flex flex-col items-center gap-3 py-8 mb-4">

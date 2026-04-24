@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import {
   Bookmark,
   BookmarkCheck,
+  Clock,
   FileText,
   Loader2,
   Wand2,
@@ -68,6 +69,9 @@ export interface ReelActionButtonsProps {
 
   /** Grid moves the external link to a different corner. */
   hideExternalLink?: boolean;
+
+  /** True when the row is still waiting for a worker slot (Bug #24). */
+  isQueued?: boolean;
 }
 
 /**
@@ -93,6 +97,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     hideBookmark,
     hideExternalLink,
     reelUrl,
+    isQueued,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -139,10 +144,17 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
           disabled={isProcessing || !!transcribeDisabled}
         >
           {isProcessing ? (
-            <>
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-              <span className={labelClass}>Transcribing...</span>
-            </>
+            isQueued ? (
+              <>
+                <Clock className="mr-1 h-3 w-3 text-amber-400" />
+                <span className={labelClass}>Queued</span>
+              </>
+            ) : (
+              <>
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                <span className={labelClass}>Transcribing...</span>
+              </>
+            )
           ) : isFailed ? (
             <>
               <FileText className="h-3 w-3 sm:mr-1" />

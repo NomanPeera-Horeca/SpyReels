@@ -129,6 +129,9 @@ export const transcriptions = mysqlTable("transcriptions", {
   hookAnalysis: text("hookAnalysis"),
   status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
   errorMessage: text("errorMessage"),
+  /** Set when the user requested transcription. `startedAt` is set when the worker run begins (after the concurrency wait). */
+  queuedAt: timestamp("queuedAt"),
+  startedAt: timestamp("startedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

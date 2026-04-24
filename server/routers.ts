@@ -122,7 +122,7 @@ import crypto from "crypto";
 // "Transcribe All" from a single Render IP). Used by search.transcribe AND
 // runTranscription (which backs both transcribe.start and collectedReels.transcribe).
 let activeTranscriptions = 0;
-const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 3;
 
 /**
  * Parse a date string safely to avoid timezone shift.
@@ -1559,6 +1559,7 @@ Return JSON only:
           reelId: input.reelId!,
           featuredReelId: null,
           status: "processing",
+          queuedAt: new Date(),
         });
 
         await incrementUsage(ctx.user.id, "transcribeCount");
@@ -3937,6 +3938,7 @@ The hook MUST be 7-10 words. Count them.`
         const transcriptionId = await createTranscription({
           reelId,
           status: "processing",
+          queuedAt: new Date(),
         });
 
         // Run transcription in background (reuse existing logic)
@@ -4789,6 +4791,7 @@ async function runTranscription(
   }
   activeTranscriptions++;
   try {
+    await updateTranscription(transcriptionId, { startedAt: new Date() });
     // Always fetch fresh URL to avoid expired Instagram video URLs
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
     if (!initialFresh?.videoUrl) {
