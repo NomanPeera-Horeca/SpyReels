@@ -54,6 +54,14 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   followerCount: int("followerCount").default(0).notNull(),
   profilePicUrl: text("profilePicUrl"),
   errorMessage: text("errorMessage"),
+  // Set on terminal failure; cleared on success or when a retry starts.
+  failureReason: mysqlEnum("failureReason", [
+    "handle_not_found",
+    "account_private",
+    "instagram_rate_limited",
+    "account_too_large",
+    "unknown",
+  ]),
   // Fine-grained progress for the dedicated scraping UI. Values map to the
   // 5 stages of the pipeline: pending → connecting → fetching_profile →
   // pulling_reels → ranking → complete, with `failed` as a terminal error.

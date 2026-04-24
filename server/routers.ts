@@ -5,6 +5,12 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
+  normalizeInstagramHandle,
+  isValidInstagramHandleNormalized,
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+} from "@shared/instagramHandle";
+import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
+import {
   createCheckoutSession,
   createPortalSession,
   getUserSubscription,
@@ -253,14 +259,25 @@ export const appRouter = router({
   scrape: router({
     start: protectedProcedure
       .input(
-        z.object({
-          handle: z.string().min(1).max(128),
-          timeframeDays: z.number().refine((v) => [30, 90, 180].includes(v)),
-        })
+        z
+          .object({
+            handle: z.string().min(1).max(128),
+            timeframeDays: z.number().refine((v) => [30, 90, 180].includes(v)),
+          })
+          .superRefine((data, ctx) => {
+            const norm = normalizeInstagramHandle(data.handle);
+            if (!isValidInstagramHandleNormalized(norm)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: INSTAGRAM_HANDLE_INVALID_MESSAGE,
+                path: ["handle"],
+              });
+            }
+          })
       )
       .mutation(async ({ ctx, input }) => {
         // Check if handle already exists in monitoring
-        const normalizedHandle = input.handle.replace(/^@/, "").trim().toLowerCase();
+        const normalizedHandle = normalizeInstagramHandle(input.handle);
         const existingJobs = await getUserScrapeJobs(ctx.user.id);
         const existingJob = existingJobs.find(
           (j) => j.handle.toLowerCase() === normalizedHandle && (j.status === "completed" || j.status === "running")
@@ -307,7 +324,7 @@ export const appRouter = router({
 
         const jobId = await createScrapeJob({
           userId: ctx.user.id,
-          handle: input.handle.replace(/^@/, "").trim(),
+          handle: normalizedHandle,
           timeframeDays: input.timeframeDays,
           status: "running",
           currentStep: "connecting",
@@ -317,7 +334,7 @@ export const appRouter = router({
         await incrementUsage(ctx.user.id, "scrapeCount");
 
         // Run scraping in background
-        runScrapeJob(jobId, input.handle, input.timeframeDays).catch((err) => {
+        runScrapeJob(jobId, normalizedHandle, input.timeframeDays).catch((err) => {
           console.error(`Scrape job ${jobId} failed:`, err);
         });
 
@@ -350,6 +367,7 @@ export const appRouter = router({
           estimatedTotal: job.estimatedTotal,
           progressPercent: job.progressPercent,
           errorMessage: job.errorMessage,
+          failureReason: job.failureReason,
           handle: job.handle,
           timeframeDays: job.timeframeDays,
         };
@@ -385,7 +403,11 @@ export const appRouter = router({
         const daysSinceSync = Math.max(1, Math.ceil((now.getTime() - lastSyncDate.getTime()) / (1000 * 60 * 60 * 24)));
 
         // Mark as running
-        await updateScrapeJob(input.jobId, { status: "running" });
+        await updateScrapeJob(input.jobId, {
+          status: "running",
+          errorMessage: null,
+          failureReason: null,
+        });
 
         // Run resync in background
         runResyncJob(input.jobId, job.handle, daysSinceSync).catch((err) => {
@@ -4609,6 +4631,8 @@ async function runScrapeJob(
         profilePicUrl: proxiedPicUrl || undefined,
         currentStep: "complete",
         progressPercent: 100,
+        errorMessage: null,
+        failureReason: null,
       });
       await maybeMarkFirstSpyCompleted(jobId);
       return;
@@ -4639,6 +4663,8 @@ async function runScrapeJob(
       currentStep: "complete",
       reelsFound: reelData.length,
       progressPercent: 100,
+      errorMessage: null,
+      failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
   } catch (error) {
@@ -4649,6 +4675,7 @@ async function runScrapeJob(
       status: "failed",
       errorMessage: message,
       currentStep: "failed",
+      failureReason: classifyScrapeFailureMessage(message),
     });
   }
 }
@@ -4729,6 +4756,8 @@ async function runResyncJob(
       currentStep: "complete",
       reelsFound: totalReels,
       progressPercent: 100,
+      errorMessage: null,
+      failureReason: null,
     });
 
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
@@ -4738,6 +4767,7 @@ async function runResyncJob(
       status: "failed",
       errorMessage: message,
       currentStep: "failed",
+      failureReason: classifyScrapeFailureMessage(message),
     });
   }
 }

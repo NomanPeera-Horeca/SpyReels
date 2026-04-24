@@ -435,7 +435,7 @@ export async function getScrapeJob(id: number): Promise<ScrapeJob | undefined> {
   return result[0];
 }
 
-export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "profilePicUrl" | "currentStep" | "reelsFound" | "estimatedTotal" | "progressPercent" | "classifiedNicheSlug" | "classifiedConfidence" | "classifiedAt">>): Promise<void> {
+export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "failureReason" | "profilePicUrl" | "currentStep" | "reelsFound" | "estimatedTotal" | "progressPercent" | "classifiedNicheSlug" | "classifiedConfidence" | "classifiedAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(scrapeJobs).set(data).where(eq(scrapeJobs.id, id));
