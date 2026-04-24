@@ -89,6 +89,7 @@ import {
   markOnboardingSkipped,
   getFeaturedReelById,
   getTranscriptionByFeaturedReelId,
+  transcriptionViewFromFeaturedReelRow,
   updateFeaturedReelTranscription,
   getRecreatedScriptsByFeaturedReelId,
   saveFeaturedReel,
@@ -607,32 +608,29 @@ export const appRouter = router({
 
         const fc = acc.followerCount || 0;
 
-        const reels = await Promise.all(
-          reelRows.map(async (r) => {
-            const engagementRate =
-              fc > 0
-                ? ((r.likeCount + r.commentCount) / fc) * 100
-                : 0;
-            const txn = await getTranscriptionByFeaturedReelId(r.id);
-            return {
-              id: r.id,
-              featuredReelId: r.id,
-              shortcode: r.reelShortcode,
-              thumbnailUrl: r.thumbnailUrl ?? "",
-              videoUrl: r.videoUrl ?? "",
-              caption: r.caption ?? "",
-              viewCount: r.viewCount,
-              likeCount: r.likeCount,
-              commentCount: r.commentCount,
-              duration: r.duration,
-              postedAt: r.postedAt,
-              reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
-              ownerUsername: acc.handle,
-              engagementRate: Math.round(engagementRate * 100) / 100,
-              transcription: txn ?? null,
-            };
-          })
-        );
+        const reels = reelRows.map((r) => {
+          const engagementRate =
+            fc > 0
+              ? ((r.likeCount + r.commentCount) / fc) * 100
+              : 0;
+          return {
+            id: r.id,
+            featuredReelId: r.id,
+            shortcode: r.reelShortcode,
+            thumbnailUrl: r.thumbnailUrl ?? "",
+            videoUrl: r.videoUrl ?? "",
+            caption: r.caption ?? "",
+            viewCount: r.viewCount,
+            likeCount: r.likeCount,
+            commentCount: r.commentCount,
+            duration: r.duration,
+            postedAt: r.postedAt,
+            reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+            ownerUsername: acc.handle,
+            engagementRate: Math.round(engagementRate * 100) / 100,
+            transcription: transcriptionViewFromFeaturedReelRow(r),
+          };
+        });
 
         return {
           isFeaturedView: true as const,

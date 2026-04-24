@@ -582,23 +582,15 @@ export async function getFeaturedReelById(id: number): Promise<FeaturedReel | un
 }
 
 /**
- * Returns a `Transcription`-shaped view of a featured reel's inline cache
- * (see migration 0029). Featured reels don't get rows in the per-user
- * `transcriptions` table — the catalog owns a single shared transcript
- * per reel, and this helper adapts it to the shape the rest of the
- * codebase already consumes.
- *
- * Status mapping: the catalog's `no_speech` terminal state collapses to
- * `completed` with empty transcript + segments, which is the same signal
- * the UI already uses to render the "all vibes no voice" empty state.
- * `id` reuses the featured reel id — callers treat it as an opaque
- * refetch key and never join against `transcriptions` on it.
+ * In-memory `Transcription` view from a `featured_reels` row. Same mapping
+ * as `getTranscriptionByFeaturedReelId` (including `no_speech` as
+ * `completed` with empty transcript and segments for frontend hook/reuse).
+ * `getDashboardData` uses this with rows from its single list query to
+ * avoid N extra round trips; keep in sync with any change here.
  */
-export async function getTranscriptionByFeaturedReelId(
-  featuredReelId: number
-): Promise<Transcription | undefined> {
-  const fr = await getFeaturedReelById(featuredReelId);
-  if (!fr) return undefined;
+export function transcriptionViewFromFeaturedReelRow(
+  fr: FeaturedReel
+): Transcription {
   const uiStatus: Transcription["status"] =
     fr.transcriptionStatus === "no_speech"
       ? "completed"
@@ -627,6 +619,27 @@ export async function getTranscriptionByFeaturedReelId(
     createdAt: fr.transcribedAt ?? fr.scrapedAt,
     updatedAt: fr.transcribedAt ?? fr.scrapedAt,
   };
+}
+
+/**
+ * Returns a `Transcription`-shaped view of a featured reel's inline cache
+ * (see migration 0029). Featured reels don't get rows in the per-user
+ * `transcriptions` table — the catalog owns a single shared transcript
+ * per reel, and this helper adapts it to the shape the rest of the
+ * codebase already consumes.
+ *
+ * Status mapping: the catalog's `no_speech` terminal state collapses to
+ * `completed` with empty transcript + segments, which is the same signal
+ * the UI already uses to render the "all vibes no voice" empty state.
+ * `id` reuses the featured reel id — callers treat it as an opaque
+ * refetch key and never join against `transcriptions` on it.
+ */
+export async function getTranscriptionByFeaturedReelId(
+  featuredReelId: number
+): Promise<Transcription | undefined> {
+  const fr = await getFeaturedReelById(featuredReelId);
+  if (!fr) return undefined;
+  return transcriptionViewFromFeaturedReelRow(fr);
 }
 
 /**
