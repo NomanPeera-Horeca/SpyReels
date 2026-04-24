@@ -91,6 +91,20 @@ function stripAtHandle(h: string | undefined | null) {
   return (h ?? "").replace(/^@/, "").trim();
 }
 
+/** Two-letter avatar fallback. Uses displayName first, then handle. No question marks. */
+function avatarInitialsFromAccount(
+  displayName: string | null | undefined,
+  handle: string | null | undefined
+): string {
+  const d = (displayName || "").trim();
+  if (d.length >= 2) return d.slice(0, 2).toUpperCase();
+  if (d.length === 1) return (d + d).toUpperCase();
+  const h = stripAtHandle(handle || "");
+  if (h.length >= 2) return h.slice(0, 2).toUpperCase();
+  if (h.length === 1) return (h + h).toUpperCase();
+  return "··";
+}
+
 function AiBadge({
   nicheSlug,
   confidence,
@@ -402,6 +416,13 @@ export default function Dashboard() {
     if (fromReel) return fromReel;
     return fromJob;
   }, [job?.handle, reelsData]);
+
+  const isFeaturedHeaderPending = isFeaturedView && !featuredData;
+  const isUserJobH1Pending =
+    !isFeaturedView &&
+    !!jobId &&
+    !displayScrapeHandle &&
+    (jobQuery.isPending || !scrapeJobData || (reelsLoading && reelsData.length === 0));
 
   const onboardingPickHandles = useMemo(() => {
     const raw = user?.selectedCreatorHandles;
@@ -1015,32 +1036,52 @@ export default function Dashboard() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 </Tooltip>
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 flex items-center justify-center text-lg font-semibold text-white">
-                  {featuredData?.account.profilePicUrl ? (
-                    <img
-                      src={featuredData.account.profilePicUrl}
-                      alt={`@${featuredData.account.handle}`}
-                      className="h-full w-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    (
-                      featuredData?.account.displayName ||
-                      featuredData?.account.handle ||
-                      "?"
-                    )
-                      .slice(0, 2)
-                      .toUpperCase()
-                  )}
-                </div>
+                {isFeaturedHeaderPending ? (
+                  <div
+                    className="h-20 w-20 shrink-0 rounded-full bg-muted animate-pulse"
+                    aria-hidden
+                  />
+                ) : (
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 flex items-center justify-center text-lg font-semibold text-white">
+                    {featuredData?.account.profilePicUrl ? (
+                      <img
+                        src={featuredData.account.profilePicUrl}
+                        alt={`@${featuredData.account.handle}`}
+                        className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      avatarInitialsFromAccount(
+                        featuredData?.account.displayName,
+                        featuredData?.account.handle
+                      )
+                    )}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                      {(() => {
-                        const h = displayScrapeHandle || stripAtHandle(job?.handle);
-                        return h ? `@${h}` : "Loading...";
-                      })()}
-                    </h1>
+                    {isFeaturedHeaderPending ? (
+                      <div
+                        className="h-7 w-40 max-w-[min(100%,20rem)] rounded-md bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        {(() => {
+                          const h =
+                            displayScrapeHandle ||
+                            stripAtHandle(job?.handle) ||
+                            stripAtHandle(featuredData?.account.handle);
+                          return h ? (
+                            `@${h}`
+                          ) : (
+                            <span className="text-muted-foreground" aria-label="Handle loading">
+                              ··
+                            </span>
+                          );
+                        })()}
+                      </h1>
+                    )}
                     {canShowAiBadge && (
                       <AiBadge
                         nicheSlug={job.classifiedNicheSlug!}
@@ -1057,43 +1098,50 @@ export default function Dashboard() {
                       dot separators never collapse into "• •" when a
                       value is missing (e.g. backfill not yet run). */}
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {(() => {
-                      const segments: React.ReactNode[] = [];
-                      if (followerCount > 0) {
-                        segments.push(
-                          <span key="followers">
-                            {formatNumber(followerCount)} followers
-                          </span>
-                        );
-                      }
-                      if (featuredData && featuredData.account.avgEngagement > 0) {
-                        segments.push(
-                          <span key="engagement">
-                            {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
-                          </span>
-                        );
-                      }
-                      if (featuredData?.account.bestPostingTime) {
-                        segments.push(
-                          <span key="posting-time">
-                            {featuredData.account.bestPostingTime}
-                          </span>
-                        );
-                      }
-                      if (segments.length === 0) return null;
-                      const joined: React.ReactNode[] = [];
-                      segments.forEach((s, i) => {
-                        if (i > 0) {
-                          joined.push(
-                            <span key={`sep-${i}`} className="mx-1.5" aria-hidden>
-                              &middot;
+                    {isFeaturedHeaderPending ? (
+                      <span
+                        className="inline-block h-4 w-48 max-w-full rounded bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      (() => {
+                        const segments: React.ReactNode[] = [];
+                        if (followerCount > 0) {
+                          segments.push(
+                            <span key="followers">
+                              {formatNumber(followerCount)} followers
                             </span>
                           );
                         }
-                        joined.push(s);
-                      });
-                      return joined;
-                    })()}
+                        if (featuredData && featuredData.account.avgEngagement > 0) {
+                          segments.push(
+                            <span key="engagement">
+                              {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
+                            </span>
+                          );
+                        }
+                        if (featuredData?.account.bestPostingTime) {
+                          segments.push(
+                            <span key="posting-time">
+                              {featuredData.account.bestPostingTime}
+                            </span>
+                          );
+                        }
+                        if (segments.length === 0) return null;
+                        const joined: React.ReactNode[] = [];
+                        segments.forEach((s, i) => {
+                          if (i > 0) {
+                            joined.push(
+                              <span key={`sep-${i}`} className="mx-1.5" aria-hidden>
+                                &middot;
+                              </span>
+                            );
+                          }
+                          joined.push(s);
+                        });
+                        return joined;
+                      })()
+                    )}
                   </p>
                   {job && job.classifiedNicheSlug && (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -1123,12 +1171,25 @@ export default function Dashboard() {
                     </Button>
                   </Tooltip>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                      {(() => {
-                        const h = displayScrapeHandle || stripAtHandle(job?.handle);
-                        return h ? `@${h}` : "Loading...";
-                      })()}
-                    </h1>
+                    {isUserJobH1Pending ? (
+                      <div
+                        className="h-7 w-40 max-w-[min(100%,20rem)] rounded-md bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        {(() => {
+                          const h = displayScrapeHandle || stripAtHandle(job?.handle);
+                          return h ? (
+                            `@${h}`
+                          ) : (
+                            <span className="text-muted-foreground" aria-label="Handle loading">
+                              ··
+                            </span>
+                          );
+                        })()}
+                      </h1>
+                    )}
                     {canShowAiBadge && (
                       <AiBadge
                         nicheSlug={job.classifiedNicheSlug!}
