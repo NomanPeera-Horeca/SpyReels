@@ -560,11 +560,17 @@ export default function Dashboard() {
 
   const startTranscription = trpc.transcribe.start.useMutation({
     onSuccess: (data, variables) => {
+      const targetId = variables.reelId ?? variables.featuredReelId;
+      if (targetId != null) {
+        setPendingTranscriptions((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      }
       if (data.status === "completed") {
-        toast.success("Transcription already available!");
-        // `reelId` may be undefined when Commit 3c wires a featured call —
-        // the expand/pending-set keying only makes sense for scrape rows.
-        if (variables.reelId != null) setExpandedReelId(variables.reelId);
+        toast.success("Transcription ready");
+        if (targetId != null) setExpandedReelId(targetId);
       } else {
         toast.info("Transcription started", {
           description: "Processing audio... This may take up to a minute.",
@@ -573,10 +579,11 @@ export default function Dashboard() {
       reelsQuery.refetch();
     },
     onError: (error, variables) => {
-      if (variables.reelId != null) {
+      const targetId = variables.reelId ?? variables.featuredReelId;
+      if (targetId != null) {
         setPendingTranscriptions((prev) => {
           const next = new Set(prev);
-          next.delete(variables.reelId!);
+          next.delete(targetId);
           return next;
         });
       }

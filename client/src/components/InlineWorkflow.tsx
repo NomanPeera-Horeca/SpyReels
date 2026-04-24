@@ -333,7 +333,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const transcriptionQuery = trpc.transcribe.status.useQuery(
     transcribeIdInput,
     {
-      enabled: hasTranscription,
+      // Featured catalog reels now ship `reel.transcription` from
+      // `getDashboardData`, but we still need to poll `transcribe.status`
+      // while a run is in flight before the list row refreshes, and when
+      // the user requested a transcript before the parent has flipped
+      // `hasTranscription` to true.
+      enabled: hasTranscription || isProcessing,
       refetchInterval: (query) => {
         const data = query.state.data;
         return data?.status === "processing" ? 2000 : false;
