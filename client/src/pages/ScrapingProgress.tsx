@@ -155,7 +155,7 @@ export default function ScrapingProgress() {
       setLocation(`/scraping?jobId=${d.jobId}`);
     },
     onError: (err) => {
-      toast.error("Couldn't restart scrape", { description: err.message });
+      toast.error("Could not start again", { description: err.message });
     },
   });
 
@@ -177,7 +177,7 @@ export default function ScrapingProgress() {
   if (progressQuery.isError) {
     return (
       <ErrorState
-        title="We couldn't load this scrape job"
+        title="We could not load this job"
         message={progressQuery.error.message}
         onBack={handleBackToResearch}
       />
@@ -187,7 +187,7 @@ export default function ScrapingProgress() {
   if (status === "failed") {
     return (
       <ErrorState
-        title={`Scraping @${handle} failed`}
+        title={`Could not load @${handle}`}
         message={errorMessage || "Something went wrong while pulling this account's reels."}
         onBack={handleBackToResearch}
         onRetry={handleRetry}

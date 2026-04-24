@@ -121,7 +121,7 @@ const PRICING_PREVIEW = [
     description: "Try everything. No credit card.",
     icon: Zap,
     color: "text-zinc-400",
-    highlights: ["2 handle scrapes/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Core product features"],
+    highlights: ["2 account research sessions/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Core product features"],
   },
   {
     name: "Starter",
@@ -131,7 +131,7 @@ const PRICING_PREVIEW = [
     description: "For creators getting serious.",
     icon: Rocket,
     color: "text-blue-400",
-    highlights: ["10 scrapes/month", "30 transcriptions/month", "15 AI re-creations", "CSV & Google Sheets export"],
+    highlights: ["10 account research sessions/month", "30 transcriptions/month", "15 AI re-creations", "CSV & Google Sheets export"],
   },
   {
     name: "Pro",
@@ -142,7 +142,7 @@ const PRICING_PREVIEW = [
     icon: Crown,
     color: "text-purple-400",
     highlighted: true,
-    highlights: ["50 scrapes/month", "200 transcriptions/month", "100 AI re-creations", "Voice teleprompter & smart takes"],
+    highlights: ["50 account research sessions/month", "200 transcriptions/month", "100 AI re-creations", "Voice teleprompter & smart takes"],
   },
   {
     name: "Business",
@@ -152,7 +152,7 @@ const PRICING_PREVIEW = [
     description: "For teams and agencies.",
     icon: Building2,
     color: "text-amber-400",
-    highlights: ["200 scrapes/month", "1,000 transcriptions/month", "500 AI re-creations", "10 team members + API access"],
+    highlights: ["200 account research sessions/month", "1,000 transcriptions/month", "500 AI re-creations", "10 team members + API access"],
   },
 ];
 
@@ -379,7 +379,7 @@ export default function LandingPage() {
                 See how it works <ChevronDown className="h-4 w-4" />
               </a>
             </div>
-            <p className="text-xs text-muted-foreground/70">Free plan includes 2 scrapes, 3 transcriptions, and 5 saved scripts per month</p>
+            <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
           </div>
 
           {/* Social proof bar */}

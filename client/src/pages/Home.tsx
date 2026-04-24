@@ -337,7 +337,7 @@ export default function Home() {
       setLocation(`/scraping?jobId=${data.jobId}`);
     },
     onError: error => {
-      toast.error("Failed to start scraping", {
+      toast.error("Failed to start account research", {
         description: error.message,
       });
     },
@@ -356,14 +356,14 @@ export default function Home() {
     }
     setHandleError(null);
     if (profile?.found && profile.isPrivate) {
-      toast.error("This account is private and cannot be scraped.");
+      toast.error("This account is private and cannot be analyzed.");
       return;
     }
     if (!scrapeGate.allowed) {
       toast.error(
-        `Scrape limit reached (${scrapeGate.used}/${scrapeGate.limit})`,
+        `Account research limit reached (${scrapeGate.used}/${scrapeGate.limit})`,
         {
-          description: "Upgrade your plan for more scrapes.",
+          description: "Upgrade your plan for more account research.",
           action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
         }
       );
@@ -627,7 +627,7 @@ export default function Home() {
                       <p className="text-xs text-orange-400 flex items-center gap-1.5">
                         <Lock className="h-3 w-3" />
                         This account is private. Only public accounts can be
-                        scraped.
+                        analyzed.
                       </p>
                     </>
                   )}
@@ -689,7 +689,7 @@ export default function Home() {
                 scrapeGate.limit > 0 && (
                   <p className="text-xs text-muted-foreground text-center">
                     <span className="inline-flex items-center gap-1.5">
-                      {scrapeGate.used}/{scrapeGate.limit} scrapes used this month
+                      {scrapeGate.used}/{scrapeGate.limit} account research sessions this month
                       <Tooltip content="Your plan includes 50 spy credits per month. Resets on the 1st of every month.">
                         <span>
                           <TipDot />

@@ -60,7 +60,7 @@ function jobStatusLabel(job: { status: string; failureReason?: string | null }):
     case "instagram_rate_limited":
       return "Instagram rate-limited, try again soon";
     case "account_too_large":
-      return "Account too large to scrape";
+      return "Account too large to analyze";
     case "unknown":
     default:
       return "Failed";
@@ -107,8 +107,8 @@ export default function History() {
           utils.scrape.list.invalidate();
           void utils.scrape.status.invalidate({ jobId });
           void utils.reels.list.invalidate({ jobId });
-          toast.success("Re-syncing started", {
-            description: `Fetching reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
+          toast.success("Refresh started", {
+            description: `Loading reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
           });
         },
       }
@@ -125,7 +125,7 @@ export default function History() {
           void utils.scrape.status.invalidate({ jobId });
           void utils.reels.list.invalidate({ jobId });
           toast.success("Retry started", {
-            description: "The scrape is running again in the background.",
+            description: "Analysis is running again in the background.",
           });
         },
       }
@@ -144,7 +144,7 @@ export default function History() {
 
   const handleDelete = (e: React.MouseEvent, jobId: number, handle: string) => {
     e.stopPropagation();
-    if (confirm(`Remove @${handle} from monitoring? This will also delete all scraped reels for this job.`)) {
+    if (confirm(`Remove @${handle} from monitoring? This will also delete all collected reels for this job.`)) {
       deleteMutation.mutate({ jobId });
     }
   };
@@ -166,7 +166,7 @@ export default function History() {
           </div>
         </div>
         <Button onClick={() => setLocation("/")} size="sm">
-          New Scrape
+          Add account
         </Button>
       </div>
 
@@ -180,9 +180,9 @@ export default function History() {
         <Card className="border-border/50 bg-card">
           <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
             <Film className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-muted-foreground">No scrape jobs yet.</p>
+            <p className="text-muted-foreground">No tracked accounts yet.</p>
             <Button variant="outline" onClick={() => setLocation("/")}>
-              Start your first scrape
+              Start your first analysis
             </Button>
           </CardContent>
         </Card>
@@ -275,7 +275,7 @@ export default function History() {
                       disabled={resyncMutation.isPending}
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`} />
-                      Re-sync
+                      Refresh
                     </Button>
                   )}
                   <Button

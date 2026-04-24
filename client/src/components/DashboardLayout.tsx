@@ -55,10 +55,10 @@ const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
 /** Verbatim `data-tip` strings from docs/build-spec/spyreels-research-mockup-v2-2.html sidebar nav */
 const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
-  "/dashboard": "See past scrape results and saved reel data",
+  "/dashboard": "See past research results and saved reel data",
   "/research": "Spy on any public Instagram creator",
   "/collected": "Individual reels you've saved from past research",
-  "/history": "Track & re-sync previously scraped creators",
+  "/history": "Track and refresh previously analyzed accounts",
   "/scripts": "Your AI-generated scripts library",
   "/ideas": "Turn a rough idea into a viral-ready script",
   "/library": "Browse your hook library and templates",

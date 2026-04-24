@@ -85,6 +85,7 @@ export interface ReelActionButtonsProps {
  */
 export function ReelActionButtons(props: ReelActionButtonsProps) {
   const {
+    source,
     isSaved,
     hasTranscription,
     isProcessing,
@@ -179,7 +180,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                 <span className={labelClass}>Transcribing...</span>
               </>
             )
-          ) : isFailed ? (
+          ) : isFailed && source.source !== "featured" ? (
             <>
               <FileText className="h-3 w-3 sm:mr-1" />
               <span className={labelClass}>Retry</span>

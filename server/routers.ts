@@ -301,7 +301,7 @@ export const appRouter = router({
         if (existingJob) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: `@${normalizedHandle} is already in your Account Monitoring. Use Re-sync to refresh the data instead.`,
+            message: `@${normalizedHandle} is already in your Account Monitoring. Use Refresh in Account Monitoring to update the data instead.`,
           });
         }
 
@@ -334,7 +334,7 @@ export const appRouter = router({
         if (!usageCheck.allowed) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: `You've reached your monthly scrape limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            message: `You have reached your monthly account research limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
           });
         }
 
@@ -390,7 +390,8 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getUserScrapeJobs(ctx.user.id);
+      const jobs = await getUserScrapeJobs(ctx.user.id);
+      return jobs.filter((j) => j.status !== "failed");
     }),
 
     /** Delete a scrape job and its associated reels */

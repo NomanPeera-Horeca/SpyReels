@@ -88,10 +88,10 @@ interface FeatureRow {
 
 const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
   {
-    title: "Scraping & Search",
+    title: "Account research and search",
     rows: [
       {
-        label: "Handle scrapes/month",
+        label: "Account research sessions/month",
         free: 2,
         starter: 10,
         pro: 50,
@@ -99,7 +99,7 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         agency: "Unlimited",
       },
       {
-        label: "Reels per scrape",
+        label: "Reels per account (max pulled)",
         free: 10,
         starter: 50,
         pro: "Unlimited",

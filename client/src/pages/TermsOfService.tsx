@@ -34,7 +34,7 @@ export default function TermsOfService() {
 
           <section>
             <h2>2. Description of Service</h2>
-            <p>SpyReels is a software-as-a-service (SaaS) platform that provides tools for analyzing publicly available Instagram Reels content, including scraping public profile data, transcribing audio content, generating AI-powered scripts, and managing content workflows. The Service does not require or access your Instagram login credentials.</p>
+            <p>SpyReels is a software-as-a-service (SaaS) platform that provides tools for analyzing publicly available Instagram Reels content, including collecting and analyzing public profile data, transcribing audio content, generating AI-powered scripts, and managing content workflows. The Service does not require or access your Instagram login credentials.</p>
           </section>
 
           <section>
@@ -68,7 +68,7 @@ export default function TermsOfService() {
             <h3>5.3 Refund Eligibility</h3>
             <p>Refunds beyond the 14-day guarantee are issued solely at our discretion. Refunds will <strong>not</strong> be issued in the following circumstances:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>You have substantially used the Service during the billing period (including but not limited to: scraping profiles, transcribing reels, generating scripts, or exporting data)</li>
+              <li>You have substantially used the Service during the billing period (including but not limited to: researching profiles, transcribing reels, generating scripts, or exporting data)</li>
               <li>You violated these Terms of Service</li>
               <li>You are requesting a refund for a renewal charge after failing to cancel before the renewal date</li>
               <li>More than 14 days have passed since the charge</li>
@@ -110,7 +110,7 @@ export default function TermsOfService() {
             <p>You retain ownership of scripts, notes, and other content you create using the Service. However, you grant us a limited license to store and process your content as necessary to provide the Service.</p>
 
             <h3>7.3 Third-Party Content</h3>
-            <p>Content scraped or transcribed from Instagram belongs to the original creators. You are responsible for ensuring your use of such content complies with applicable copyright laws and Instagram's terms of service. We do not claim ownership of third-party content processed through the Service.</p>
+            <p>Content collected or transcribed from Instagram belongs to the original creators. You are responsible for ensuring your use of such content complies with applicable copyright laws and Instagram's terms of service. We do not claim ownership of third-party content processed through the Service.</p>
           </section>
 
           <section>

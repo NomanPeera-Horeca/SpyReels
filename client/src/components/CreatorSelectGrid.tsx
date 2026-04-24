@@ -156,28 +156,28 @@ export function CreatorSelectGrid({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <div className="min-w-0 space-y-2 border-t border-border pt-3">
+                        <div className="flex min-w-0 items-baseline justify-between gap-2">
+                          <p className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                             Followers
                           </p>
-                          <p className="font-mono text-xs">
+                          <p className="min-w-0 truncate text-right font-mono text-xs tabular-nums">
                             {formatCount(creator.followerCount)}
                           </p>
                         </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <div className="flex min-w-0 items-baseline justify-between gap-2">
+                          <p className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                             Avg ER
                           </p>
-                          <p className="font-mono text-xs text-emerald-400">
+                          <p className="min-w-0 truncate text-right font-mono text-xs tabular-nums text-emerald-400">
                             {creator.avgEngagementRate.toFixed(2)}%
                           </p>
                         </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <div className="flex min-w-0 items-baseline justify-between gap-2">
+                          <p className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
                             Reels
                           </p>
-                          <p className="font-mono text-xs">
+                          <p className="min-w-0 truncate text-right font-mono text-xs tabular-nums">
                             {creator.reelsAvailable}
                           </p>
                         </div>

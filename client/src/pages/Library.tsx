@@ -158,7 +158,7 @@ export default function Library() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Filter className="w-4 h-4" />
-                {transcriptSource ? (transcriptSource === "scraped" ? "Scraped" : "Collected") : "All Sources"}
+                {transcriptSource ? (transcriptSource === "scraped" ? "From research" : "Collected") : "All Sources"}
                 <ChevronDown className="w-3 h-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -167,7 +167,7 @@ export default function Library() {
                 <Globe className="w-4 h-4 mr-2" /> All Sources
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setTranscriptSource("scraped")}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Scraped
+                <RefreshCw className="w-4 h-4 mr-2" /> From research
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setTranscriptSource("collected")}>
                 <BookmarkCheck className="w-4 h-4 mr-2" /> Collected
@@ -357,7 +357,7 @@ function TranscriptsView({ data, isLoading, onCopy, onPreview, formatDate, trunc
         </div>
         <h3 className="text-lg font-semibold mb-1">No transcripts yet</h3>
         <p className="text-muted-foreground text-sm max-w-sm">
-          Transcripts appear here when you scrape reels or collect them via the Telegram bot. Start by scraping an Instagram account.
+          Transcripts appear here when you research reels or collect them via the Telegram bot. Start from the dashboard by analyzing a public account.
         </p>
         <Button variant="outline" className="mt-4" onClick={() => window.location.href = "/dashboard"}>
           Go to Dashboard

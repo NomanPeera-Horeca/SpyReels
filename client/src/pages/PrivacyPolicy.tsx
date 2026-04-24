@@ -40,7 +40,7 @@ export default function PrivacyPolicy() {
             <h3>2.2 Usage Data</h3>
             <p>We automatically collect information about how you use the Service, including:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Features used and frequency of use (scrapes, transcriptions, script generations)</li>
+              <li>Features used and frequency of use (account research, transcriptions, script generations)</li>
               <li>Pages visited and time spent on the Service</li>
               <li>Device information (browser type, operating system)</li>
               <li>IP address and approximate location (country/region level)</li>
@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
             <p>Payment processing is handled by Stripe. We do not store your full credit card number, CVV, or expiration date. We may store your Stripe customer ID and subscription status for billing management.</p>
 
             <h3>2.5 Third-Party Content</h3>
-            <p>When you use our scraping and transcription features, we temporarily process publicly available Instagram content. This content belongs to the original creators and is processed solely to provide you with the requested analysis.</p>
+            <p>When you use our research and transcription features, we temporarily process publicly available Instagram content. This content belongs to the original creators and is processed solely to provide you with the requested analysis.</p>
           </section>
 
           <section>

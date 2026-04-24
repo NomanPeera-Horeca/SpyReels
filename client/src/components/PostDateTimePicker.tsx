@@ -1,9 +1,16 @@
 import { Calendar as CalendarIcon } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TIME_OPTIONS } from "@/components/InlineWorkflow";
+
+function startOfTodayLocal(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 interface PostDateTimePickerProps {
   date: Date | undefined;
@@ -26,6 +33,7 @@ export function PostDateTimePicker({
   className = "",
 }: PostDateTimePickerProps) {
   const tzLabel = timezone?.split("/").pop()?.replace("_", " ") || "Local";
+  const fromDate = useMemo(() => startOfTodayLocal(), []);
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -54,7 +62,12 @@ export function PostDateTimePicker({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={date} onSelect={onDateChange} />
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={onDateChange}
+              disabled={{ before: fromDate }}
+            />
           </PopoverContent>
         </Popover>
       </div>

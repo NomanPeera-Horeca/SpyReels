@@ -1033,7 +1033,7 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Recent Scrape Jobs */}
+        {/* Recent research jobs */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">Recent Spy Sessions</h2>
@@ -1574,7 +1574,7 @@ export default function Dashboard() {
               <div className="flex flex-col items-center justify-center gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <div className="text-center">
-                  <p className="text-foreground font-medium">Scraping in progress...</p>
+                  <p className="text-foreground font-medium">Analyzing account...</p>
                   <p className="text-sm text-muted-foreground mt-1">{job?.totalReels || 0} reels found so far</p>
                 </div>
               </div>
@@ -1585,7 +1585,7 @@ export default function Dashboard() {
           {job?.status === "failed" && (
             <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-8">
               <div className="flex flex-col items-center justify-center gap-4">
-                <p className="text-destructive font-medium">Scraping failed</p>
+                <p className="text-destructive font-medium">Could not load account</p>
                 <p className="text-sm text-muted-foreground text-center max-w-md">
                   {job.errorMessage || "An unknown error occurred"}
                 </p>
