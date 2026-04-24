@@ -140,6 +140,25 @@ function reelRecreateState(
   return "failed";
 }
 
+/** Bug #20: scroll a reel card/row into view and pulse, matching InlineWorkflow + index.css. */
+function runReelRowScrollPulse(node: HTMLElement) {
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  node.scrollIntoView({
+    behavior: prefersReducedMotion ? "auto" : "smooth",
+    block: "center",
+  });
+  node.classList.remove("pulse-highlight");
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  void node.offsetWidth;
+  node.classList.add("pulse-highlight");
+  window.setTimeout(() => {
+    node.classList.remove("pulse-highlight");
+  }, 2100);
+}
+
 export default function Dashboard() {
   const posthog = usePostHog();
   const { user } = useAuth();
@@ -158,6 +177,13 @@ export default function Dashboard() {
   const fromPage = useMemo(() => {
     const params = new URLSearchParams(searchString);
     return params.get("from") || null;
+  }, [searchString]);
+  const urlFeaturedReelId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    const raw = params.get("featuredReelId");
+    if (raw == null || raw === "") return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
@@ -200,6 +226,9 @@ export default function Dashboard() {
   const prevHasCompletedFirstSpyRef = useRef<boolean | undefined>(undefined);
   /** Ensures `first_spy_completed` fires at most once per browser session (milestone, not per job). */
   const firstSpyMilestoneLoggedRef = useRef(false);
+  /** Bug #20: avoid double toast if React re-runs the widen branch before `dateFilter` updates. */
+  const widenForDeepLinkNotifiedRef = useRef<string | null>(null);
+  const reelRowElsRef = useRef(new Map<number, HTMLDivElement>());
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
   /**
    * Commit 9 — (reelId, nonce) pair that tells the corresponding
@@ -229,6 +258,10 @@ export default function Dashboard() {
       openScriptId,
       nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
     }));
+  }, []);
+  const setReelRowRef = useCallback((id: number) => (el: HTMLDivElement | null) => {
+    if (el) reelRowElsRef.current.set(id, el);
+    else reelRowElsRef.current.delete(id);
   }, []);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
@@ -589,6 +622,77 @@ export default function Dashboard() {
         return sorted;
     }
   }, [filteredReels, sortBy]);
+
+  useEffect(() => {
+    if (!isFeaturedView) {
+      const params = new URLSearchParams(searchString);
+      if (params.has("featuredReelId")) {
+        params.delete("featuredReelId");
+        const q = params.toString();
+        setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      }
+      return;
+    }
+    if (urlFeaturedReelId == null) {
+      const params = new URLSearchParams(searchString);
+      if (params.has("featuredReelId")) {
+        params.delete("featuredReelId");
+        const q = params.toString();
+        setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      }
+      widenForDeepLinkNotifiedRef.current = null;
+      return;
+    }
+    if (!featuredDataQuery.isSuccess) return;
+
+    const targetId = urlFeaturedReelId;
+    if (!reelsData.some((r) => r.id === targetId)) {
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      return;
+    }
+
+    const inSorted = sortedReels.some((r) => r.id === targetId);
+    if (!inSorted) {
+      if (dateFilter !== "all") {
+        if (widenForDeepLinkNotifiedRef.current !== searchString) {
+          widenForDeepLinkNotifiedRef.current = searchString;
+          setDateFilter("all");
+          toast.info("Filter widened to show this reel");
+        }
+        return;
+      }
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      return;
+    }
+
+    setExpandedReelId(targetId);
+    const timer = window.setTimeout(() => {
+      const el = reelRowElsRef.current.get(targetId);
+      if (el) {
+        runReelRowScrollPulse(el);
+      }
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [
+    isFeaturedView,
+    urlFeaturedReelId,
+    featuredDataQuery.isSuccess,
+    reelsData,
+    sortedReels,
+    dateFilter,
+    searchString,
+    setLocation,
+  ]);
 
   const startTranscription = trpc.transcribe.start.useMutation({
     onSuccess: (data, variables) => {
@@ -1451,7 +1555,11 @@ export default function Dashboard() {
                 const isSaved = !!savedMap[reel.id];
 
                 return (
-                  <div key={reel.id} className="rounded-lg border border-border/30 overflow-hidden">
+                  <div
+                    key={reel.id}
+                    ref={setReelRowRef(reel.id)}
+                    className="rounded-lg border border-border/30 overflow-hidden"
+                  >
                     {/* Reel Row */}
                     <div
                       className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
@@ -1672,6 +1780,7 @@ export default function Dashboard() {
                   return (
                     <div
                       key={reel.id}
+                      ref={setReelRowRef(reel.id)}
                       className={`group relative rounded-lg border overflow-hidden bg-card transition-colors ${
                         isExpanded ? "border-primary/40" : "border-border/40 hover:border-border/70"
                       }`}
@@ -2091,7 +2200,9 @@ export default function Dashboard() {
                           key={r.reelId}
                           type="button"
                           onClick={() =>
-                            setLocation(`/dashboard?featuredAccountId=${r.featuredAccountId}`)
+                            setLocation(
+                              `/dashboard?featuredAccountId=${r.featuredAccountId}&featuredReelId=${r.reelId}`
+                            )
                           }
                           className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
                         >
