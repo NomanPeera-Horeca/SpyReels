@@ -1840,11 +1840,10 @@ Return JSON only:
       }),
 
     /**
-     * Batch "has this reel been re-created by this user yet?" check. Used
-     * by dashboard cards (Commit 5 grid buttons) so every tile can show
-     * "Make My Version" vs "Open My Script ✓" without N per-reel network
-     * calls. Returns a map keyed by the input id; missing keys = no
-     * script. Exactly one of reelIds / featuredReelIds must be non-empty.
+     * Latest recreated script per reel (max row id) for the current user.
+     * Dashboard list/grid uses this to show Make My Version / Generating /
+     * Open My Script. Missing keys = no row yet. Exactly one of reelIds /
+     * featuredReelIds must be non-empty.
      */
     checkBatch: protectedProcedure
       .input(
@@ -1866,10 +1865,17 @@ Return JSON only:
       .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Database not available");
-        const map: Record<number, boolean> = {};
+        const map: Record<
+          number,
+          { latestScriptId: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+        > = {};
         if (input.featuredReelIds && input.featuredReelIds.length > 0) {
           const rows = await db
-            .select({ featuredReelId: recreatedScripts.featuredReelId })
+            .select({
+              featuredReelId: recreatedScripts.featuredReelId,
+              id: recreatedScripts.id,
+              status: recreatedScripts.status,
+            })
             .from(recreatedScripts)
             .where(
               and(
@@ -1880,11 +1886,28 @@ Return JSON only:
                 )
               )
             );
-          for (const r of rows) if (r.featuredReelId != null) map[r.featuredReelId] = true;
+          const best = new Map<
+            number,
+            { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+          >();
+          for (const r of rows) {
+            if (r.featuredReelId == null) continue;
+            const cur = best.get(r.featuredReelId);
+            if (!cur || r.id > cur.id) {
+              best.set(r.featuredReelId, { id: r.id, status: r.status });
+            }
+          }
+          for (const [fid, v] of best) {
+            map[fid] = { latestScriptId: v.id, status: v.status };
+          }
           return map;
         }
         const rows = await db
-          .select({ reelId: recreatedScripts.reelId })
+          .select({
+            reelId: recreatedScripts.reelId,
+            id: recreatedScripts.id,
+            status: recreatedScripts.status,
+          })
           .from(recreatedScripts)
           .where(
             and(
@@ -1892,7 +1915,20 @@ Return JSON only:
               inArray(recreatedScripts.reelId as any, input.reelIds!)
             )
           );
-        for (const r of rows) if (r.reelId != null) map[r.reelId] = true;
+        const best = new Map<
+          number,
+          { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+        >();
+        for (const r of rows) {
+          if (r.reelId == null) continue;
+          const cur = best.get(r.reelId);
+          if (!cur || r.id > cur.id) {
+            best.set(r.reelId, { id: r.id, status: r.status });
+          }
+        }
+        for (const [rid, v] of best) {
+          map[rid] = { latestScriptId: v.id, status: v.status };
+        }
         return map;
       }),
   }),

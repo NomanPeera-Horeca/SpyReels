@@ -30,7 +30,11 @@ export interface ReelActionButtonsProps {
   hasTranscription: boolean;
   isProcessing: boolean;
   isFailed: boolean;
-  hasScript: boolean;
+  /**
+   * None = no row yet, Generating = latest script still pending/processing,
+   * Ready = latest completed, Failed = latest row failed.
+   */
+  recreateState: "none" | "generating" | "ready" | "failed";
 
   /**
    * All three handlers take no args because the parent component already
@@ -49,6 +53,8 @@ export interface ReelActionButtonsProps {
    * clicking "View Transcript" doesn't pulse the recreate area.
    */
   onMakeVersion: () => void;
+  /** Fired when recreateState is ready (open completed script inline). */
+  onOpenMyScript: () => void;
 
   saveBusy?: boolean;
   transcribeDisabled?: boolean;
@@ -75,11 +81,12 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     hasTranscription,
     isProcessing,
     isFailed,
-    hasScript,
+    recreateState,
     onToggleSave,
     onTranscribe,
     onExpand,
     onMakeVersion,
+    onOpenMyScript,
     saveBusy,
     transcribeDisabled,
     compact,
@@ -155,20 +162,33 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
           variant="outline"
           size="sm"
           className={`h-7 text-xs px-2 ${
-            hasScript
+            recreateState === "ready"
               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
               : "border-primary/30 text-primary hover:bg-primary/10"
           }`}
-          onClick={onMakeVersion}
+          disabled={recreateState === "generating"}
+          onClick={() =>
+            recreateState === "ready" ? onOpenMyScript() : onMakeVersion()
+          }
           title={
-            hasScript
-              ? "Click to open your generated script"
-              : "Write your own viral script using this reel's hook and structure"
+            recreateState === "ready"
+              ? "Open your script in the panel below"
+              : recreateState === "generating"
+                ? "Script is still generating"
+                : "Write your own viral script using this reel's hook and structure"
           }
         >
-          <Wand2 className="h-3 w-3 sm:mr-1" />
+          {recreateState === "generating" ? (
+            <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+          ) : (
+            <Wand2 className="h-3 w-3 sm:mr-1" />
+          )}
           <span className={labelClass}>
-            {hasScript ? "Open My Script ✓" : "Make My Version"}
+            {recreateState === "ready"
+              ? "Open My Script ✓"
+              : recreateState === "generating"
+                ? "Generating..."
+                : "Make My Version"}
           </span>
         </Button>
       )}

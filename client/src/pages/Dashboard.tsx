@@ -115,6 +115,17 @@ function AiBadge({
   );
 }
 
+type RecreateBatchEntry = { latestScriptId: number; status: string };
+
+function reelRecreateState(
+  entry: RecreateBatchEntry | undefined
+): "none" | "generating" | "ready" | "failed" {
+  if (!entry) return "none";
+  if (entry.status === "pending" || entry.status === "processing") return "generating";
+  if (entry.status === "completed") return "ready";
+  return "failed";
+}
+
 export default function Dashboard() {
   const posthog = usePostHog();
   const { user } = useAuth();
@@ -188,11 +199,20 @@ export default function Dashboard() {
   const [recreatePulse, setRecreatePulse] = useState<{
     reelId: number;
     nonce: number;
+    openScriptId?: number;
   } | null>(null);
   const triggerRecreatePulse = useCallback((reelId: number) => {
     setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
     setRecreatePulse((prev) => ({
       reelId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+    }));
+  }, []);
+  const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
+    setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    setRecreatePulse((prev) => ({
+      reelId,
+      openScriptId,
       nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
     }));
   }, []);
@@ -471,10 +491,9 @@ export default function Dashboard() {
   const savedMap = savedBatchQuery.data || {};
 
   /**
-   * Tells each card whether the current user already has a recreated
-   * script for that reel. Used by the shared `ReelActionButtons` to
-   * swap "Make My Version" for "Open My Script ✓". Same XOR contract
-   * as saved.checkBatch.
+   * Latest recreated script id + status per reel (user). Drives the
+   * strip: Make My Version / Generating / Open My Script. Same XOR
+   * contract as saved.checkBatch.
    */
   const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
     isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
@@ -1458,7 +1477,9 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          hasScript={!!recreateMap[reel.id]}
+                          recreateState={reelRecreateState(
+                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                          )}
                           saveBusy={toggleSave.isPending}
                           onToggleSave={() => {
                             if (isFeaturedView) {
@@ -1485,6 +1506,12 @@ export default function Dashboard() {
                           }}
                           onExpand={() => setExpandedReelId(reel.id)}
                           onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                          onOpenMyScript={() => {
+                            const e = recreateMap[reel.id as keyof typeof recreateMap] as
+                              | RecreateBatchEntry
+                              | undefined;
+                            if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                          }}
                         />
                         <Button
                           variant="ghost"
@@ -1517,9 +1544,12 @@ export default function Dashboard() {
                           }}
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
-                          scrollPulseSignal={
+                          recreateEntrySignal={
                             recreatePulse?.reelId === reel.id
-                              ? recreatePulse.nonce
+                              ? {
+                                  nonce: recreatePulse.nonce,
+                                  openScriptId: recreatePulse.openScriptId,
+                                }
                               : undefined
                           }
                         />
@@ -1536,9 +1566,12 @@ export default function Dashboard() {
                           }}
                           userTimezone={userTimezone}
                           postedAt={reel.postedAt}
-                          scrollPulseSignal={
+                          recreateEntrySignal={
                             recreatePulse?.reelId === reel.id
-                              ? recreatePulse.nonce
+                              ? {
+                                  nonce: recreatePulse.nonce,
+                                  openScriptId: recreatePulse.openScriptId,
+                                }
                               : undefined
                           }
                         />
@@ -1696,7 +1729,9 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          hasScript={!!recreateMap[reel.id]}
+                          recreateState={reelRecreateState(
+                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                          )}
                           saveBusy={toggleSave.isPending}
                           hideBookmark
                           hideExternalLink
@@ -1726,6 +1761,12 @@ export default function Dashboard() {
                           }}
                           onExpand={() => setExpandedReelId(reel.id)}
                           onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                          onOpenMyScript={() => {
+                            const e = recreateMap[reel.id as keyof typeof recreateMap] as
+                              | RecreateBatchEntry
+                              | undefined;
+                            if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                          }}
                         />
                       </div>
 
@@ -1744,9 +1785,12 @@ export default function Dashboard() {
                               }}
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
-                              scrollPulseSignal={
+                              recreateEntrySignal={
                                 recreatePulse?.reelId === reel.id
-                                  ? recreatePulse.nonce
+                                  ? {
+                                      nonce: recreatePulse.nonce,
+                                      openScriptId: recreatePulse.openScriptId,
+                                    }
                                   : undefined
                               }
                             />
@@ -1763,9 +1807,12 @@ export default function Dashboard() {
                               }}
                               userTimezone={userTimezone}
                               postedAt={reel.postedAt}
-                              scrollPulseSignal={
+                              recreateEntrySignal={
                                 recreatePulse?.reelId === reel.id
-                                  ? recreatePulse.nonce
+                                  ? {
+                                      nonce: recreatePulse.nonce,
+                                      openScriptId: recreatePulse.openScriptId,
+                                    }
                                   : undefined
                               }
                             />

@@ -237,14 +237,13 @@ export type InlineWorkflowProps = {
   userTimezone: string;
   postedAt: Date | string;
   /**
-   * Commit 9 — monotonically-increasing nonce from the Dashboard's
-   * "Make My Version" click handler. When this changes, the Re-create
-   * section scrolls into view and plays a 2-second pulse. Passing
-   * `undefined` is a no-op. Using a nonce (vs a boolean) lets a user
-   * re-click the button on an already-expanded row and still get the
-   * visual cue — the signal fires every click, not just the first.
+   * Fired from the action strip: Make My Version (no `openScriptId`) or
+   * Open My Script (`openScriptId` = latest completed row). Nonce bumps
+   * every click so the scroll/pulse can replay. Open My Script sets
+   * `activeScriptId` first, then scroll runs after the script query shows
+   * `completed` so the YOUR SCRIPT / Completed block is mounted.
    */
-  scrollPulseSignal?: number;
+  recreateEntrySignal?: { nonce: number; openScriptId?: number };
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -293,40 +292,44 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [, navigate] = useLocation();
   const trpcUtils = trpc.useUtils();
 
-  // Commit 9 — ref for the Re-create section so the Dashboard's
-  // "Make My Version" click can scroll here + pulse. We respect
-  // prefers-reduced-motion both for scroll behavior and animation.
+  // Ref for the Re-create or Completed (YOUR SCRIPT) block: Dashboard
+  // action strip scrolls this into view + pulse; respects reduced motion.
   const recreateSectionRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (props.scrollPulseSignal == null) return;
-    // 50ms gives the parent's `setExpandedReelId` a frame to mount
-    // this component before we try to scroll to a ref that wouldn't
-    // exist yet on the first click of a collapsed row.
-    const timer = window.setTimeout(() => {
-      const node = recreateSectionRef.current;
-      if (!node) return;
-      const prefersReducedMotion =
-        typeof window !== "undefined" &&
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      node.scrollIntoView({
-        behavior: prefersReducedMotion ? "auto" : "smooth",
-        block: "center",
-      });
-      // Clear any stale pulse class before re-adding, so back-to-back
-      // clicks restart the animation instead of it finishing silently.
+  const pendingOpenScriptScrollRef = useRef(false);
+
+  const runRecreateScrollPulse = useCallback(() => {
+    const node = recreateSectionRef.current;
+    if (!node) return;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    node.classList.remove("pulse-highlight");
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    void node.offsetWidth;
+    node.classList.add("pulse-highlight");
+    window.setTimeout(() => {
       node.classList.remove("pulse-highlight");
-      // Force reflow so the re-added class restarts the animation.
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      void node.offsetWidth;
-      node.classList.add("pulse-highlight");
-      const removeTimer = window.setTimeout(() => {
-        node.classList.remove("pulse-highlight");
-      }, 2100);
-      return () => window.clearTimeout(removeTimer);
+    }, 2100);
+  }, []);
+
+  useEffect(() => {
+    const sig = props.recreateEntrySignal;
+    if (sig == null) return;
+    if (sig.openScriptId != null) {
+      setActiveScriptId(sig.openScriptId);
+      pendingOpenScriptScrollRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      runRecreateScrollPulse();
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [props.scrollPulseSignal]);
+  }, [props.recreateEntrySignal?.nonce, runRecreateScrollPulse]);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
@@ -363,6 +366,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     onSuccess: (data) => {
       setActiveScriptId(data.scriptId);
       setIsRewriting(false);
+      trpcUtils.recreate.checkBatch.invalidate();
     },
     onError: (error) => {
       toast.error("Rewrite failed", { description: error.message });
@@ -420,6 +424,34 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     average: { duration: wordCount / 3.0 },
     fast: { duration: wordCount / 3.5 },
   };
+
+  useEffect(() => {
+    if (!pendingOpenScriptScrollRef.current) return;
+    if (script?.status === "failed") {
+      pendingOpenScriptScrollRef.current = false;
+      return;
+    }
+    if (scriptQuery.data?.status !== "completed") return;
+    const node = recreateSectionRef.current;
+    if (!node) return;
+    pendingOpenScriptScrollRef.current = false;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    node.classList.remove("pulse-highlight");
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    void node.offsetWidth;
+    node.classList.add("pulse-highlight");
+    const removeTimer = window.setTimeout(() => {
+      node.classList.remove("pulse-highlight");
+    }, 2100);
+    return () => window.clearTimeout(removeTimer);
+  }, [scriptQuery.data?.status, scriptQuery.data?.id, script?.status]);
 
   useEffect(() => {
     if (generatedScript && !editedScript) {
@@ -1272,20 +1304,23 @@ function CompletedScriptSection({
 }) {
   return (
     <div ref={sectionRef}>
-      {/* Script header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Script</h4>
-          {readability && (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-semibold text-foreground">
+            This viral script is YOURS. Now go film it.
+          </h4>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            {readability && (
+              <Badge variant="outline" className="text-[10px] h-5">
+                Grade {readability.gradeLevel?.toFixed(1)}
+              </Badge>
+            )}
             <Badge variant="outline" className="text-[10px] h-5">
-              Grade {readability.gradeLevel?.toFixed(1)}
+              {wordCount} words
             </Badge>
-          )}
-          <Badge variant="outline" className="text-[10px] h-5">
-            {wordCount} words
-          </Badge>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 self-start">
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onReset}>
             &larr; New
           </Button>
