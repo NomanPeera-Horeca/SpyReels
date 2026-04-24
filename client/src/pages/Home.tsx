@@ -114,12 +114,14 @@ export default function Home() {
     };
   }, [handle]);
 
+  const RESEARCH_STALE_MS = 300_000;
+
   const profileQuery = trpc.scrape.profilePreview.useQuery(
     { handle: debouncedHandle },
     {
       enabled: debouncedHandle.length >= 2,
       retry: false,
-      staleTime: 60_000,
+      staleTime: RESEARCH_STALE_MS,
     }
   );
 
@@ -130,12 +132,12 @@ export default function Home() {
 
   const scrapeGate = useUsageGate("scrapeCount");
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
-    staleTime: 60_000,
+    staleTime: RESEARCH_STALE_MS,
     refetchOnWindowFocus: false,
   });
   const dismissHintCardMutation = trpc.onboarding.dismissHintCard.useMutation();
   const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
-    staleTime: 60_000,
+    staleTime: RESEARCH_STALE_MS,
     refetchOnWindowFocus: false,
   });
   const [selectedNicheSlug, setSelectedNicheSlug] = useState<string>("all");
@@ -159,7 +161,7 @@ export default function Home() {
     { nicheSlug: selectedNicheSlug },
     {
       enabled: selectedNicheSlug !== "all",
-      staleTime: 60_000,
+      staleTime: RESEARCH_STALE_MS,
       refetchOnWindowFocus: false,
     }
   );
@@ -182,6 +184,9 @@ export default function Home() {
   const [allCreatorsError, setAllCreatorsError] = useState<string | null>(null);
   const [allRetryNonce, setAllRetryNonce] = useState(0);
 
+  // Tech debt: "all niches" still uses a local ref cache + explicit fetch loop. Longer
+  // trpc query staleTime helps, but a dedicated useQuery (or session cache) for the
+  // merged list would make return visits to /research feel instant in all cases.
   useEffect(() => {
     if (selectedNicheSlug !== "all") return;
     if (allNiches.length === 0) return;

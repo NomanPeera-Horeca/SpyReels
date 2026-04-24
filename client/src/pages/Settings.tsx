@@ -244,7 +244,7 @@ export default function Settings() {
       </div>
 
       {/* Your Interests (Commit 8) */}
-      <div className="rounded-lg border border-border/50 bg-card p-6">
+      <div className="rounded-lg border border-border/50 bg-card p-5">
         <div className="mb-4 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold text-foreground">
@@ -271,30 +271,32 @@ export default function Settings() {
         </p>
 
         {isEditingInterests ? (
-          <div className="space-y-6">
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Niches ({draftNicheSlugs.length}/{MAX_NICHES})
-              </h3>
-              <NicheSelectGrid
-                selectedNicheSlugs={draftNicheSlugs}
-                onToggle={toggleDraftNiche}
-                heading={null}
-                hideCounter
-              />
-            </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Niches ({draftNicheSlugs.length}/{MAX_NICHES})
+                </h3>
+                <NicheSelectGrid
+                  selectedNicheSlugs={draftNicheSlugs}
+                  onToggle={toggleDraftNiche}
+                  heading={null}
+                  hideCounter
+                />
+              </div>
 
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Creators ({draftCreatorHandles.length}/{MAX_CREATORS})
-              </h3>
-              <CreatorSelectGrid
-                groupedCreators={creatorsQuery.data?.groups ?? {}}
-                nicheSlugs={draftNicheSlugs}
-                selectedCreatorHandles={draftCreatorHandles}
-                onToggle={toggleDraftCreator}
-                isLoading={creatorsQuery.isLoading}
-              />
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Creators ({draftCreatorHandles.length}/{MAX_CREATORS})
+                </h3>
+                <CreatorSelectGrid
+                  groupedCreators={creatorsQuery.data?.groups ?? {}}
+                  nicheSlugs={draftNicheSlugs}
+                  selectedCreatorHandles={draftCreatorHandles}
+                  onToggle={toggleDraftCreator}
+                  isLoading={creatorsQuery.isLoading}
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2 border-t border-border pt-4">

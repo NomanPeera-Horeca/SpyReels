@@ -1115,6 +1115,7 @@ export const appRouter = router({
           .select({
             reelId: featuredReels.id,
             shortcode: featuredReels.reelShortcode,
+            caption: featuredReels.caption,
             thumbnailUrl: featuredReels.thumbnailUrl,
             viewCount: featuredReels.viewCount,
             creatorHandle: featuredAccounts.handle,
@@ -1153,6 +1154,7 @@ export const appRouter = router({
         return rows.map((r) => ({
           reelId: String(r.reelId),
           shortcode: r.shortcode,
+          caption: r.caption ?? "",
           thumbnailUrl: r.thumbnailUrl ?? "",
           viewCount: r.viewCount,
           creatorHandle: r.creatorHandle,

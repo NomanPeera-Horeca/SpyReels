@@ -2084,7 +2084,9 @@ export default function Dashboard() {
                       High-view Reels in your niches (last 7 days)
                     </p>
                     <div className="mt-3 flex flex-col gap-2">
-                      {goingViralQuery.data?.map((r) => (
+                      {goingViralQuery.data?.map((r) => {
+                        const captionText = (r.caption || "").trim();
+                        return (
                         <button
                           key={r.reelId}
                           type="button"
@@ -2108,8 +2110,8 @@ export default function Dashboard() {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-foreground">
-                              {r.creatorName || `@${r.creatorHandle}`}
+                            <p className="line-clamp-2 text-xs font-medium text-foreground leading-snug">
+                              {captionText || `Viral Reel · @${r.creatorHandle}`}
                             </p>
                             <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                               @{r.creatorHandle} · {formatNumber(r.viewCount)} views
@@ -2117,7 +2119,8 @@ export default function Dashboard() {
                           </div>
                           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )

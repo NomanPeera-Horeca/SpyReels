@@ -6,6 +6,7 @@ import { usePostHog } from "@posthog/react";
 import { Loader2, Search, ArrowRight, ArrowLeft, PencilLine, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 
 type Creator = {
   id: number;
@@ -259,9 +260,7 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <div className="text-2xl tracking-tight">
-          Spy<span className="text-primary italic">Reels</span>
-        </div>
+        <SpyReelsWordmark size="lg" />
         <button
           onClick={onSkip}
           className="rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"

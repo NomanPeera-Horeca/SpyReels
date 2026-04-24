@@ -45,6 +45,7 @@ import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
+import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Sun, Moon } from "lucide-react";
@@ -213,18 +214,7 @@ function DashboardLayoutContent({
                   <PanelLeft className="h-4 w-4 text-muted-foreground" />
                 )}
               </button>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
-                    alt="SpyReels"
-                    className="h-7 w-7"
-                  />
-                  <span className="font-semibold tracking-tight truncate text-foreground">
-                    SpyReels
-                  </span>
-                </div>
-              ) : null}
+              {!isCollapsed ? <SpyReelsWordmark /> : null}
             </div>
           </SidebarHeader>
 
@@ -276,7 +266,9 @@ function DashboardLayoutContent({
                           </SidebarMenuButton>
                         );
                         return mockupTooltip ? (
-                          <Tooltip content={mockupTooltip}>{button}</Tooltip>
+                          <Tooltip content={mockupTooltip} side="right">
+                            {button}
+                          </Tooltip>
                         ) : (
                           button
                         );

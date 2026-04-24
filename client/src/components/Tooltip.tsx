@@ -16,16 +16,18 @@ import { createPortal } from "react-dom";
 type TooltipProps = {
   content: ReactNode;
   children: ReactNode;
+  /** "right" places the tip beside the trigger (e.g. sidebar). Omit for legacy top/bottom flip. */
+  side?: "right";
 };
 
-type Placement = "top" | "bottom";
+type Placement = "top" | "bottom" | "right";
 
 const HOVER_DELAY_MS = 250;
 const LONG_PRESS_DELAY_MS = 500;
 const TOOLTIP_GAP_PX = 10;
 const VIEWPORT_PADDING_PX = 8;
 
-export default function Tooltip({ content, children }: TooltipProps) {
+export default function Tooltip({ content, children, side }: TooltipProps) {
   const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const hoverTimeoutRef = useRef<number | null>(null);
@@ -101,6 +103,23 @@ export default function Tooltip({ content, children }: TooltipProps) {
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
+    if (side === "right") {
+      const leftPos = triggerRect.right + TOOLTIP_GAP_PX;
+      const verticalCenter =
+        triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
+      const clampedTop = Math.min(
+        Math.max(verticalCenter, VIEWPORT_PADDING_PX),
+        window.innerHeight - tooltipRect.height - VIEWPORT_PADDING_PX
+      );
+      const clampedLeft = Math.min(
+        Math.max(leftPos, VIEWPORT_PADDING_PX),
+        window.innerWidth - tooltipRect.width - VIEWPORT_PADDING_PX
+      );
+      setPlacement("right");
+      setPosition({ left: clampedLeft, top: clampedTop });
+      return;
+    }
+
     const centeredLeft = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
     const clampedLeft = Math.min(
       Math.max(centeredLeft, VIEWPORT_PADDING_PX),
@@ -124,7 +143,7 @@ export default function Tooltip({ content, children }: TooltipProps) {
       left: clampedLeft,
       top: topCandidate,
     });
-  }, [open, content]);
+  }, [open, content, side]);
 
   const triggerProps = {
     ref: (node: HTMLElement | null) => {
@@ -233,11 +252,17 @@ export default function Tooltip({ content, children }: TooltipProps) {
             >
               {content}
               <span
-                className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border border-border/80 bg-card"
+                className={
+                  placement === "right"
+                    ? "absolute top-1/2 -left-1 h-2 w-2 -translate-y-1/2 -translate-x-1/2 rotate-45 border border-border/80 bg-card border-r-0 border-t-0"
+                    : "absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border border-border/80 bg-card"
+                }
                 style={
-                  placement === "top"
-                    ? { bottom: -5, borderLeft: "none", borderTop: "none" }
-                    : { top: -5, borderRight: "none", borderBottom: "none" }
+                  placement === "right"
+                    ? undefined
+                    : placement === "top"
+                      ? { bottom: -5, borderLeft: "none", borderTop: "none" }
+                      : { top: -5, borderRight: "none", borderBottom: "none" }
                 }
                 aria-hidden="true"
               />
