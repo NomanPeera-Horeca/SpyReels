@@ -697,17 +697,20 @@ export default function Dashboard() {
   const startTranscription = trpc.transcribe.start.useMutation({
     onSuccess: (data, variables) => {
       const targetId = variables.reelId ?? variables.featuredReelId;
-      if (targetId != null) {
-        setPendingTranscriptions((prev) => {
-          const next = new Set(prev);
-          next.delete(targetId);
-          return next;
-        });
-      }
       if (data.status === "completed") {
+        if (targetId != null) {
+          setPendingTranscriptions((prev) => {
+            const next = new Set(prev);
+            next.delete(targetId);
+            return next;
+          });
+        }
         toast.success("Transcription ready");
         if (targetId != null) setExpandedReelId(targetId);
       } else {
+        // processing: do not clear optimistic pending; onSuccess was wiping
+        // the set before refetch, so the UI stayed "Transcribe" until
+        // reels.list reflected processing (could be many seconds).
         toast.info("Transcription started", {
           description: "Processing audio... This may take up to a minute.",
         });
