@@ -105,6 +105,8 @@ export default function History() {
       {
         onSuccess: (data) => {
           utils.scrape.list.invalidate();
+          void utils.scrape.status.invalidate({ jobId });
+          void utils.reels.list.invalidate({ jobId });
           toast.success("Re-syncing started", {
             description: `Fetching reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
           });
@@ -120,6 +122,8 @@ export default function History() {
       {
         onSuccess: () => {
           utils.scrape.list.invalidate();
+          void utils.scrape.status.invalidate({ jobId });
+          void utils.reels.list.invalidate({ jobId });
           toast.success("Retry started", {
             description: "The scrape is running again in the background.",
           });

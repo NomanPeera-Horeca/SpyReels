@@ -159,6 +159,12 @@ function runReelRowScrollPulse(node: HTMLElement) {
   }, 2100);
 }
 
+/** Bug #23: cache scrape snapshots and featured sidebar reads; avoid refetch on every /dashboard?jobId= navigation. */
+const DASHBOARD_SNAPSHOT_STALE_MS = 3_600_000;
+const DASHBOARD_SIDEBAR_STALE_MS = 300_000;
+const RECREATE_BATCH_STALE_MS = 300_000;
+const RECREATE_BATCH_POLL_MS = 5_000;
+
 export default function Dashboard() {
   const posthog = usePostHog();
   const { user } = useAuth();
@@ -270,6 +276,14 @@ export default function Dashboard() {
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
   const utils = trpc.useUtils();
+  const cachedJobForStale =
+    jobId != null ? utils.scrape.status.getData({ jobId }) : undefined;
+  const jobStaleTime =
+    cachedJobForStale == null
+      ? 0
+      : cachedJobForStale.status === "pending" || cachedJobForStale.status === "running"
+        ? 0
+        : DASHBOARD_SNAPSHOT_STALE_MS;
   /** `isFeaturedView` is the Path B branch: read-only catalog dashboard
    * served directly from `featured_*` tables. No scrape_job is created. */
   const isFeaturedView = !!featuredAccountId && !jobId;
@@ -290,6 +304,7 @@ export default function Dashboard() {
     { jobId: jobId! },
     {
       enabled: !!jobId,
+      staleTime: jobStaleTime,
       refetchInterval: (query) => {
         const data = query.state.data;
         return data?.status === "running" || data?.status === "pending" ? 2000 : false;
@@ -375,6 +390,7 @@ export default function Dashboard() {
       enabled: Boolean(
         jobId && scrapeJobData?.handle && scrapeJobData.status === "completed"
       ),
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
     }
   );
 
@@ -416,6 +432,7 @@ export default function Dashboard() {
     { jobId: jobId! },
     {
       enabled: !!jobId && jobQuery.data?.status === "completed",
+      staleTime: DASHBOARD_SNAPSHOT_STALE_MS,
       refetchInterval: (query) => {
         const data = query.state.data;
         if (data?.reels?.some((r: any) => r.transcription?.status === "processing")) {
@@ -476,7 +493,10 @@ export default function Dashboard() {
       excludeHandle: displayScrapeHandle || job?.handle,
       limit: 5,
     },
-    { enabled: jobComplete && onboardingPickHandles.length > 0 }
+    {
+      enabled: jobComplete && onboardingPickHandles.length > 0,
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
+    }
   );
 
   const tier1Decided = onboardingPickHandles.length === 0 || creatorsByHandlesQuery.isFetched;
@@ -500,7 +520,7 @@ export default function Dashboard() {
         : featuredHandleContext.data?.featuredAccountId ?? undefined,
       limit: 5,
     },
-    { enabled: canQueryRelatedTier2 }
+    { enabled: canQueryRelatedTier2, staleTime: DASHBOARD_SIDEBAR_STALE_MS }
   );
 
   const goingViralSlugs = useMemo(
@@ -510,7 +530,10 @@ export default function Dashboard() {
 
   const goingViralQuery = trpc.featured.goingViralByNiches.useQuery(
     { slugs: goingViralSlugs },
-    { enabled: jobComplete && goingViralSlugs.length > 0 }
+    {
+      enabled: jobComplete && goingViralSlugs.length > 0,
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
+    }
   );
 
   const relatedPanelLoading =
@@ -540,7 +563,7 @@ export default function Dashboard() {
    */
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
     isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
-    { enabled: reelIds.length > 0 }
+    { enabled: reelIds.length > 0, staleTime: DASHBOARD_SNAPSHOT_STALE_MS }
   );
   const savedMap = savedBatchQuery.data || {};
 
@@ -551,7 +574,23 @@ export default function Dashboard() {
    */
   const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
     isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
-    { enabled: reelIds.length > 0 }
+    {
+      enabled: reelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (
+            v &&
+            (v.status === "pending" || v.status === "processing")
+          ) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
   );
   const recreateMap = recreateBatchQuery.data || {};
 
