@@ -531,7 +531,13 @@ export const appRouter = router({
             eq(featuredAccounts.isActive, true)
           )
         )
-        .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .leftJoin(
+          featuredReels,
+          and(
+            eq(featuredReels.featuredAccountId, featuredAccounts.id),
+            ne(featuredReels.transcriptionStatus, "failed")
+          )
+        )
         .groupBy(
           niches.id,
           niches.slug,
@@ -642,7 +648,12 @@ export const appRouter = router({
         const reelRows = await db
           .select()
           .from(featuredReels)
-          .where(eq(featuredReels.featuredAccountId, acc.id))
+          .where(
+            and(
+              eq(featuredReels.featuredAccountId, acc.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
           .orderBy(desc(featuredReels.viewCount));
 
         const fc = acc.followerCount || 0;
@@ -734,7 +745,10 @@ export const appRouter = router({
           )
           .leftJoin(
             featuredReels,
-            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
           )
           .where(
             and(
@@ -829,7 +843,13 @@ export const appRouter = router({
               eq(featuredAccounts.isActive, true)
             )
           )
-          .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+          .leftJoin(
+            featuredReels,
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
           .where(inArray(niches.slug, dedupedSlugs))
           .groupBy(
             niches.slug,
@@ -872,7 +892,12 @@ export const appRouter = router({
         const rows = await db!
           .select()
           .from(featuredReels)
-          .where(eq(featuredReels.featuredAccountId, input.accountId))
+          .where(
+            and(
+              eq(featuredReels.featuredAccountId, input.accountId),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
           // `rank` is a MySQL 8 reserved word, but drizzle auto-backticks
           // identifiers on the query-builder path so this is safe.
           .orderBy(asc(featuredReels.rank))
@@ -1000,7 +1025,10 @@ export const appRouter = router({
           )
           .leftJoin(
             featuredReels,
-            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
           )
           .where(and(...whereClauses))
           .groupBy(
@@ -1083,7 +1111,10 @@ export const appRouter = router({
           .from(featuredAccounts)
           .leftJoin(
             featuredReels,
-            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
           )
           .where(and(...whereClauses))
           .groupBy(
@@ -1162,6 +1193,7 @@ export const appRouter = router({
           .where(
             and(
               eq(featuredAccounts.isActive, true),
+              ne(featuredReels.transcriptionStatus, "failed"),
               sql`${featuredReels.postedAt} >= DATE_SUB(NOW(), INTERVAL 7 DAY)`
             )
           )
