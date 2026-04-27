@@ -176,7 +176,7 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
 
         {isEditingInterests ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+            <div className="flex flex-col gap-4">
               <div>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Niches ({draftNicheSlugs.length}/{MAX_NICHES})
@@ -199,6 +199,7 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
                   selectedCreatorHandles={draftCreatorHandles}
                   onToggle={toggleDraftCreator}
                   isLoading={creatorsQuery.isLoading}
+                  stackLayout
                 />
               </div>
             </div>
@@ -270,16 +271,16 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
                   niche-based suggestions instead.
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex min-w-0 flex-col gap-2">
                   {serverCreatorHandles.map((handle) => {
                     const meta = viewModeCreatorMap.get(handle);
                     const initials = handle.slice(0, 2).toUpperCase();
                     return (
                       <div
                         key={handle}
-                        className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-1"
+                        className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5"
                       >
-                        <div className="h-6 w-6 overflow-hidden rounded-full border border-border bg-muted">
+                        <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
                           {meta?.profilePicUrl ? (
                             <img
                               src={meta.profilePicUrl}
@@ -294,7 +295,7 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
                             </div>
                           )}
                         </div>
-                        <span className="font-mono text-xs">@{handle}</span>
+                        <span className="min-w-0 truncate font-mono text-xs">@{handle}</span>
                       </div>
                     );
                   })}
@@ -310,7 +311,7 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
     <div
       className={
         variant === "settings"
-          ? "rounded-lg border border-border/50 bg-card p-5"
+          ? "max-h-[500px] overflow-y-auto rounded-lg border border-border/50 bg-card p-5"
           : "rounded-lg border border-border/50 bg-card p-5"
       }
     >

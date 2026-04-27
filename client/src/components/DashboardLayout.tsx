@@ -31,7 +31,6 @@ import {
   FileText,
   Settings,
   CreditCard,
-  Sparkles,
   PenSquare,
   Inbox,
   Lightbulb,
@@ -144,7 +143,6 @@ function DashboardLayoutContent({
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Search, label: "Spy Viral Reels", path: "/research" },
-    { icon: Sparkles, label: "Your Interests", path: "/interests" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
     { icon: Eye, label: "Account Monitoring", path: "/history" },
     { icon: FileText, label: "My Scripts", path: "/scripts" },

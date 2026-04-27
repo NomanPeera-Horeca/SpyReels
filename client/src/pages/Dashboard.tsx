@@ -47,6 +47,7 @@ import {
   formatDuration,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
+import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   ReelActionButtons,
   type ReelActionSource,
@@ -246,6 +247,10 @@ export default function Dashboard() {
   const widenForDeepLinkNotifiedRef = useRef<string | null>(null);
   const reelRowElsRef = useRef(new Map<number, HTMLDivElement>());
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
+  /** Grid view: full workflow in a dialog instead of inline under the card. */
+  const [gridModalReelId, setGridModalReelId] = useState<number | null>(null);
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
   /**
    * Commit 9 — (reelId, nonce) pair that tells the corresponding
    * InlineWorkflow instance to scroll to its Re-create section and
@@ -261,20 +266,28 @@ export default function Dashboard() {
     openScriptId?: number;
   } | null>(null);
   const triggerRecreatePulse = useCallback((reelId: number) => {
-    setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    if (viewMode === "grid") {
+      setGridModalReelId(reelId);
+    } else {
+      setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    }
     setRecreatePulse((prev) => ({
       reelId,
       nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
     }));
-  }, []);
+  }, [viewMode]);
   const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
-    setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    if (viewMode === "grid") {
+      setGridModalReelId(reelId);
+    } else {
+      setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    }
     setRecreatePulse((prev) => ({
       reelId,
       openScriptId,
       nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
     }));
-  }, []);
+  }, [viewMode]);
   const setReelRowRef = useCallback((id: number) => (el: HTMLDivElement | null) => {
     if (el) reelRowElsRef.current.set(id, el);
     else reelRowElsRef.current.delete(id);
@@ -672,6 +685,21 @@ export default function Dashboard() {
     }
   }, [filteredReels, sortBy]);
 
+  const gridModalReel = useMemo(
+    () =>
+      gridModalReelId == null
+        ? null
+        : (sortedReels.find((r) => r.id === gridModalReelId) ?? null),
+    [sortedReels, gridModalReelId]
+  );
+
+  useEffect(() => {
+    if (gridModalReelId == null) return;
+    if (!sortedReels.some((r) => r.id === gridModalReelId)) {
+      setGridModalReelId(null);
+    }
+  }, [gridModalReelId, sortedReels]);
+
   useEffect(() => {
     if (!isFeaturedView) {
       const params = new URLSearchParams(searchString);
@@ -720,7 +748,11 @@ export default function Dashboard() {
       return;
     }
 
-    setExpandedReelId(targetId);
+    if (viewMode === "grid") {
+      setGridModalReelId(targetId);
+    } else {
+      setExpandedReelId(targetId);
+    }
     const timer = window.setTimeout(() => {
       const el = reelRowElsRef.current.get(targetId);
       if (el) {
@@ -741,7 +773,12 @@ export default function Dashboard() {
     dateFilter,
     searchString,
     setLocation,
+    viewMode,
   ]);
+
+  useEffect(() => {
+    setGridModalReelId(null);
+  }, [viewMode]);
 
   const transcribeInFlightRef = useRef(0);
   const [, setTranscribeInFlightBumper] = useState(0);
@@ -763,7 +800,13 @@ export default function Dashboard() {
           });
         }
         toast.success("Transcription ready");
-        if (targetId != null) setExpandedReelId(targetId);
+        if (targetId != null) {
+          if (viewModeRef.current === "grid") {
+            setGridModalReelId(targetId);
+          } else {
+            setExpandedReelId(targetId);
+          }
+        }
       } else {
         // processing: do not clear optimistic pending; onSuccess was wiping
         // the set before refetch, so the UI stayed "Transcribe" until
@@ -812,7 +855,13 @@ export default function Dashboard() {
       }
       transcribeInFlightRef.current += 1;
       setTranscribeInFlightBumper((n) => n + 1);
-      if (opts.expand) setExpandedReelId(reelId);
+      if (opts.expand) {
+        if (viewMode === "grid") {
+          setGridModalReelId(reelId);
+        } else {
+          setExpandedReelId(reelId);
+        }
+      }
       setPendingTranscriptions((prev) => new Set(prev).add(reelId));
       if (opts.mode === "featured") {
         startTranscription.mutate({ featuredReelId: reelId });
@@ -825,7 +874,7 @@ export default function Dashboard() {
       transcribeGate.used,
       transcribeGate.limit,
       setLocation,
-      setExpandedReelId,
+      viewMode,
       startTranscription,
     ]
   );
@@ -1865,16 +1914,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Grid view — Commit 5 gives every card the same actions as List
-              (bookmark overlay, transcribe/recreate strip, stats bar, IG
-              link). Card click no longer jumps straight to IG; the tiny
-              link icon in the bottom-right does that instead. Click on
-              the card body expands the inline workflow, mirroring List. */}
+          {/* Grid view — same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {sortedReels.map((reel, index) => {
-                  const isExpanded = expandedReelId === reel.id;
+                  const isModalOpen = gridModalReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
                   const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
                   const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
@@ -1895,12 +1940,12 @@ export default function Dashboard() {
                       key={reel.id}
                       ref={setReelRowRef(reel.id)}
                       className={`group relative rounded-lg border bg-card transition-colors ${
-                        isExpanded ? "border-primary/40" : "border-border/40 hover:border-border/70"
+                        isModalOpen ? "border-primary/40" : "border-border/40 hover:border-border/70"
                       }`}
                     >
                       <div
                         className="relative aspect-[9/14] cursor-pointer overflow-hidden"
-                        onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
+                        onClick={() => setGridModalReelId(reel.id)}
                       >
                         {reel.thumbnailUrl ? (
                           <img
@@ -1986,35 +2031,35 @@ export default function Dashboard() {
                       </div>
 
                       <div className="p-2.5 space-y-2 shrink-0">
-                        <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
-                          {reel.caption || (
-                            <span className="text-muted-foreground italic">No caption</span>
-                          )}
-                        </p>
-                        {/* Stats bar (spec #3) — parity with List view. */}
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                          <span>{formatNumber(reel.viewCount)} views</span>
-                          <span aria-hidden>·</span>
-                          <span>{formatNumber(reel.likeCount)} likes</span>
-                          <span aria-hidden>·</span>
-                          <span>{formatNumber(reel.commentCount)} comments</span>
-                          {reel.engagementRate > 0 && (
-                            <>
-                              <span aria-hidden>·</span>
-                              <span className="text-emerald-400 font-medium">
-                                {reel.engagementRate.toFixed(2)}%
-                              </span>
-                            </>
-                          )}
-                          <span aria-hidden>·</span>
-                          <span className="text-amber-400/80">
-                            {formatPostedTime(reel.postedAt, userTimezone)}
-                          </span>
+                        <div
+                          className="cursor-pointer space-y-2"
+                          onClick={() => setGridModalReelId(reel.id)}
+                        >
+                          <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
+                            {reel.caption || (
+                              <span className="text-muted-foreground italic">No caption</span>
+                            )}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                            <span>{formatNumber(reel.viewCount)} views</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.likeCount)} likes</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.commentCount)} comments</span>
+                            {reel.engagementRate > 0 && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="text-emerald-400 font-medium">
+                                  {reel.engagementRate.toFixed(2)}%
+                                </span>
+                              </>
+                            )}
+                            <span aria-hidden>·</span>
+                            <span className="text-amber-400/80">
+                              {formatPostedTime(reel.postedAt, userTimezone)}
+                            </span>
+                          </div>
                         </div>
-                        {/* Quick-action strip (spec #2). Bookmark + IG
-                            link are already on the thumbnail, so the
-                            strip carries Transcribe + Make My Version
-                            only. */}
                         <ReelActionButtons
                           source={source}
                           reelId={reel.id}
@@ -2045,7 +2090,7 @@ export default function Dashboard() {
                               expand: true,
                             })
                           }
-                          onExpand={() => setExpandedReelId(reel.id)}
+                          onExpand={() => setGridModalReelId(reel.id)}
                           onMakeVersion={() => triggerRecreatePulse(reel.id)}
                           onOpenMyScript={() => {
                             const e = recreateMap[reel.id as keyof typeof recreateMap] as
@@ -2055,58 +2100,6 @@ export default function Dashboard() {
                           }}
                         />
                       </div>
-
-                      {isExpanded && (
-                        <div className="border-t border-border/40 min-w-0">
-                          {isFeaturedView ? (
-                            <InlineWorkflow
-                              reelSource="featured"
-                              featuredReelId={reel.id}
-                              handle={displayScrapeHandle || job?.handle || ""}
-                              hasTranscription={hasTranscription}
-                              isProcessing={isProcessing}
-                              isTranscriptionQueued={isTxQueued}
-                              isNoSpeech={isNoSpeech}
-                              onTranscribe={() =>
-                                runTranscribeClick(reel.id, { mode: "featured", expand: false })
-                              }
-                              userTimezone={userTimezone}
-                              postedAt={reel.postedAt}
-                              recreateEntrySignal={
-                                recreatePulse?.reelId === reel.id
-                                  ? {
-                                      nonce: recreatePulse.nonce,
-                                      openScriptId: recreatePulse.openScriptId,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          ) : (
-                            <InlineWorkflow
-                              reelSource="user_job"
-                              reelId={reel.id}
-                              handle={displayScrapeHandle || job?.handle || ""}
-                              hasTranscription={hasTranscription}
-                              isProcessing={isProcessing}
-                              isTranscriptionQueued={isTxQueued}
-                              isNoSpeech={isNoSpeech}
-                              onTranscribe={() =>
-                                runTranscribeClick(reel.id, { mode: "user", expand: false })
-                              }
-                              userTimezone={userTimezone}
-                              postedAt={reel.postedAt}
-                              recreateEntrySignal={
-                                recreatePulse?.reelId === reel.id
-                                  ? {
-                                      nonce: recreatePulse.nonce,
-                                      openScriptId: recreatePulse.openScriptId,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          )}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -2389,6 +2382,90 @@ export default function Dashboard() {
           )}
         </aside>
       </div>
+
+      <GridReelWorkflowDialog
+        open={gridModalReel != null}
+        onOpenChange={(open) => {
+          if (!open) setGridModalReelId(null);
+        }}
+        reel={
+          gridModalReel
+            ? {
+                id: gridModalReel.id,
+                caption: gridModalReel.caption,
+                thumbnailUrl: gridModalReel.thumbnailUrl,
+                viewCount: gridModalReel.viewCount,
+                likeCount: gridModalReel.likeCount,
+                commentCount: gridModalReel.commentCount,
+                engagementRate: gridModalReel.engagementRate,
+                postedAt: gridModalReel.postedAt,
+                duration: gridModalReel.duration,
+              }
+            : null
+        }
+        userTimezone={userTimezone}
+      >
+        {gridModalReel
+          ? (() => {
+              const reel = gridModalReel;
+              const hasTranscription = reel.transcription?.status === "completed";
+              const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
+              const isProcessing =
+                reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+              const isTxQueued =
+                isProcessing &&
+                !isFeaturedView &&
+                (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+              return isFeaturedView ? (
+                <InlineWorkflow
+                  reelSource="featured"
+                  featuredReelId={reel.id}
+                  handle={displayScrapeHandle || job?.handle || ""}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  onTranscribe={() =>
+                    runTranscribeClick(reel.id, { mode: "featured", expand: false })
+                  }
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? {
+                          nonce: recreatePulse.nonce,
+                          openScriptId: recreatePulse.openScriptId,
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <InlineWorkflow
+                  reelSource="user_job"
+                  reelId={reel.id}
+                  handle={displayScrapeHandle || job?.handle || ""}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  onTranscribe={() =>
+                    runTranscribeClick(reel.id, { mode: "user", expand: false })
+                  }
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? {
+                          nonce: recreatePulse.nonce,
+                          openScriptId: recreatePulse.openScriptId,
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })()
+          : null}
+      </GridReelWorkflowDialog>
 
       {/*
       Export to Google Sheets dialog (UI disabled; re-enable when integration ships)

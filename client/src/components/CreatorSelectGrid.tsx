@@ -63,6 +63,8 @@ export interface CreatorSelectGridProps {
   selectedCreatorHandles: string[];
   onToggle: (handle: string) => void;
   isLoading?: boolean;
+  /** Single column stack (Settings interests) instead of multi-column grid. */
+  stackLayout?: boolean;
 }
 
 /**
@@ -76,6 +78,7 @@ export function CreatorSelectGrid({
   selectedCreatorHandles,
   onToggle,
   isLoading,
+  stackLayout,
 }: CreatorSelectGridProps) {
   if (isLoading) {
     return (
@@ -114,7 +117,13 @@ export function CreatorSelectGrid({
                 No featured creators available in this niche yet.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div
+                className={
+                  stackLayout
+                    ? "flex flex-col gap-3"
+                    : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+                }
+              >
                 {creators.map((creator) => {
                   const selected = selectedCreatorHandles.includes(creator.handle);
                   const atCap =
@@ -125,7 +134,7 @@ export function CreatorSelectGrid({
                       type="button"
                       onClick={() => (atCap ? null : onToggle(creator.handle))}
                       disabled={atCap}
-                      className={`relative rounded-xl border p-4 text-left transition ${
+                      className={`relative min-w-0 rounded-xl border p-4 text-left transition ${
                         atCap
                           ? "cursor-not-allowed border-border/60 bg-muted/30 text-muted-foreground opacity-50"
                           : selected
@@ -139,18 +148,18 @@ export function CreatorSelectGrid({
                         </span>
                       ) : null}
 
-                      <div className="mb-3 flex items-center gap-3">
-                        <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
+                      <div className="mb-3 flex min-w-0 items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
                           <CreatorProfilePic
                             profilePicUrl={creator.profilePicUrl}
                             handle={creator.handle}
                           />
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">
                             {creator.displayName || `@${creator.handle}`}
                           </div>
-                          <div className="font-mono text-[11px] text-muted-foreground">
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
                             @{creator.handle}
                           </div>
                         </div>
