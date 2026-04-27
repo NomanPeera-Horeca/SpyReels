@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -222,25 +222,67 @@ export function ScriptWithCues({ text }: { text: string }) {
 // InlineWorkflow - tRPC-based (Dashboard & Saved Reels)
 // ══════════════════════════════════════════════════════════════
 
-export interface InlineWorkflowProps {
-  reelId: number;
+/**
+ * Discriminated on `reelSource`. In `"user_job"` mode the component talks
+ * to the scraped-reel tRPC inputs (`reelId`); in `"featured"` mode it
+ * talks to the catalog-backed inputs (`featuredReelId`). `displayReelId`
+ * is used purely for UI bookkeeping (SRT filename, React keys) and maps
+ * to whichever id is populated for the current source.
+ */
+export type InlineWorkflowProps = {
   handle: string;
   hasTranscription: boolean;
   isProcessing: boolean;
+  /**
+   * User-scrape jobs: true while the row is in the wait queue (processing
+   * but worker has not set startedAt). Featured catalog omits this signal.
+   */
+  isTranscriptionQueued?: boolean;
   onTranscribe: () => void;
   userTimezone: string;
   postedAt: Date | string;
-}
+  /**
+   * Fired from the action strip: Make My Version (no `openScriptId`) or
+   * Open My Script (`openScriptId` = latest completed row). Nonce bumps
+   * every click so the scroll/pulse can replay. Open My Script sets
+   * `activeScriptId` first, then scroll runs after the script query shows
+   * `completed` so the YOUR SCRIPT / Completed block is mounted.
+   */
+  recreateEntrySignal?: { nonce: number; openScriptId?: number };
+  /**
+   * True when transcription completed with no usable speech (empty
+   * transcript and segments). Parent derives from `reel.transcription`.
+   */
+  isNoSpeech?: boolean;
+} & (
+  | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
+  | { reelSource: "featured"; reelId?: never; featuredReelId: number }
+);
 
-export function InlineWorkflow({
-  reelId,
-  handle,
-  hasTranscription,
-  isProcessing,
-  onTranscribe,
-  userTimezone,
-  postedAt,
-}: InlineWorkflowProps) {
+export function InlineWorkflow(props: InlineWorkflowProps) {
+  const {
+    handle,
+    hasTranscription,
+    isProcessing,
+    isTranscriptionQueued = false,
+    isNoSpeech = false,
+    onTranscribe,
+    userTimezone,
+    postedAt,
+  } = props;
+  const reelSource: "user_job" | "featured" =
+    props.reelSource === "featured" ? "featured" : "user_job";
+  const reelId = reelSource === "user_job" ? props.reelId : undefined;
+  const featuredReelId =
+    reelSource === "featured" ? props.featuredReelId : undefined;
+  const displayReelId: number = (reelId ?? featuredReelId ?? 0) as number;
+  // Input shapes the `transcribe` / `recreate` routers accept; both
+  // branches get enforced by Zod `refine` + runtime checks server-side.
+  const transcribeIdInput =
+    reelSource === "featured"
+      ? { featuredReelId: featuredReelId! }
+      : { reelId: reelId! };
+  const recreateIdInput = transcribeIdInput;
   const [activeScriptId, setActiveScriptId] = useState<number | null>(null);
   const [gradeLevel, setGradeLevel] = useState("auto");
   const [customTopic, setCustomTopic] = useState("");
@@ -260,13 +302,58 @@ export function InlineWorkflow({
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [saveStatus, setSaveStatus] = useState<"draft" | "approved">("draft");
   const [, navigate] = useLocation();
+  const trpcUtils = trpc.useUtils();
+
+  // Ref for the Re-create or Completed (YOUR SCRIPT) block: Dashboard
+  // action strip scrolls this into view + pulse; respects reduced motion.
+  const recreateSectionRef = useRef<HTMLDivElement | null>(null);
+  const pendingOpenScriptScrollRef = useRef(false);
+
+  const runRecreateScrollPulse = useCallback(() => {
+    const node = recreateSectionRef.current;
+    if (!node) return;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    node.classList.remove("pulse-highlight");
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    void node.offsetWidth;
+    node.classList.add("pulse-highlight");
+    window.setTimeout(() => {
+      node.classList.remove("pulse-highlight");
+    }, 2100);
+  }, []);
+
+  useEffect(() => {
+    const sig = props.recreateEntrySignal;
+    if (sig == null) return;
+    if (sig.openScriptId != null) {
+      setActiveScriptId(sig.openScriptId);
+      pendingOpenScriptScrollRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      runRecreateScrollPulse();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [props.recreateEntrySignal?.nonce, runRecreateScrollPulse]);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
   const transcriptionQuery = trpc.transcribe.status.useQuery(
-    { reelId },
+    transcribeIdInput,
     {
-      enabled: hasTranscription,
+      // Featured catalog reels now ship `reel.transcription` from
+      // `getDashboardData`, but we still need to poll `transcribe.status`
+      // while a run is in flight before the list row refreshes, and when
+      // the user requested a transcript before the parent has flipped
+      // `hasTranscription` to true.
+      enabled: hasTranscription || isProcessing,
       refetchInterval: (query) => {
         const data = query.state.data;
         return data?.status === "processing" ? 2000 : false;
@@ -277,6 +364,10 @@ export function InlineWorkflow({
   const generateMutation = trpc.recreate.generate.useMutation({
     onSuccess: (data) => {
       setActiveScriptId(data.scriptId);
+      // Let Dashboard's `recreate.checkBatch` pick up the new script so
+      // the grid/list action button flips to "Open My Script ✓" without
+      // the user having to refresh.
+      trpcUtils.recreate.checkBatch.invalidate();
     },
     onError: (error) => {
       toast.error("Script generation failed", { description: error.message });
@@ -287,6 +378,7 @@ export function InlineWorkflow({
     onSuccess: (data) => {
       setActiveScriptId(data.scriptId);
       setIsRewriting(false);
+      trpcUtils.recreate.checkBatch.invalidate();
     },
     onError: (error) => {
       toast.error("Rewrite failed", { description: error.message });
@@ -305,7 +397,7 @@ export function InlineWorkflow({
     }
   );
 
-  const previousScriptsQuery = trpc.recreate.list.useQuery({ reelId });
+  const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput);
 
   const saveMutation = trpc.scripts.save.useMutation({
     onSuccess: (data) => {
@@ -346,6 +438,34 @@ export function InlineWorkflow({
   };
 
   useEffect(() => {
+    if (!pendingOpenScriptScrollRef.current) return;
+    if (script?.status === "failed") {
+      pendingOpenScriptScrollRef.current = false;
+      return;
+    }
+    if (scriptQuery.data?.status !== "completed") return;
+    const node = recreateSectionRef.current;
+    if (!node) return;
+    pendingOpenScriptScrollRef.current = false;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    node.classList.remove("pulse-highlight");
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    void node.offsetWidth;
+    node.classList.add("pulse-highlight");
+    const removeTimer = window.setTimeout(() => {
+      node.classList.remove("pulse-highlight");
+    }, 2100);
+    return () => window.clearTimeout(removeTimer);
+  }, [scriptQuery.data?.status, scriptQuery.data?.id, script?.status]);
+
+  useEffect(() => {
     if (generatedScript && !editedScript) {
       setEditedScript(generatedScript);
     }
@@ -359,7 +479,7 @@ export function InlineWorkflow({
 
   const handleGenerate = () => {
     generateMutation.mutate({
-      reelId,
+      ...recreateIdInput,
       topic: showCustomTopic ? customTopic : "",
       gradeLevel: gradeLevel as "auto" | "2" | "3" | "4" | "5" | "6",
     });
@@ -393,13 +513,13 @@ export function InlineWorkflow({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `transcript_${reelId}.srt`;
+    a.download = `transcript_${displayReelId}.srt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success("SRT file downloaded");
-  }, [segments, reelId]);
+  }, [segments, displayReelId]);
 
   const handleSave = () => {
     const content = editMode ? editedScript : generatedScript;
@@ -407,8 +527,11 @@ export function InlineWorkflow({
       toast.error("No script content to save");
       return;
     }
+    // `scripts.save` only indexes by user-scrape reelId today; featured
+    // saves simply omit it (the source handle + recreatedScriptId still
+    // give us enough provenance in the library).
     saveMutation.mutate({
-      reelId,
+      reelId: reelSource === "user_job" ? reelId : undefined,
       recreatedScriptId: activeScriptId || undefined,
       title: saveTitle.trim() || `Script from @${handle}`,
       content,
@@ -428,26 +551,64 @@ export function InlineWorkflow({
     );
   };
 
-  // ── Not transcribed yet ──
-  if (!hasTranscription) {
+  // Not transcribed yet (idle only). If the parent already started a run
+  // from the row action strip, show the transcribing panel instead of the
+  // duplicate "Transcribe Now" gate. Same idea as SearchInlineWorkflow.
+  if (!hasTranscription && !isProcessing) {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
           <FileText className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Re-Create and workflow features</p>
-          <Button onClick={onTranscribe} disabled={isProcessing}>
-            {isProcessing ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</>
-            ) : (
-              <><FileText className="mr-2 h-4 w-4" /> Transcribe Now</>
-            )}
+          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Make My Version and workflow features</p>
+          <Button onClick={onTranscribe}>
+            <FileText className="mr-2 h-4 w-4" /> Transcribe Now
           </Button>
         </div>
       </div>
     );
   }
 
-  // ── Main workflow panel ──
+  if (!hasTranscription && isProcessing) {
+    return (
+      <div className="bg-muted/20 border-t border-border/30 p-6">
+        <div className="flex flex-col items-center gap-3">
+          {isTranscriptionQueued ? (
+            <Clock className="h-8 w-8 text-amber-400" />
+          ) : (
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          )}
+          <p className="text-sm text-muted-foreground text-center">
+            {isTranscriptionQueued
+              ? "In queue. We will start transcribing when a slot is free."
+              : "Transcribing... This may take a moment."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasTranscription && isNoSpeech) {
+    return (
+      <div className="bg-muted/20 border-t border-border/30">
+        <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
+          <Clock className="h-3 w-3 text-amber-400" />
+          <span className="text-amber-400/80">
+            Competitor posted: <strong className="text-amber-300">{formatPostedTime(postedAt, userTimezone)}</strong>
+          </span>
+          <span className="text-muted-foreground ml-1">
+            (Timezone: {userTimezone.split("/").pop()?.replace("_", " ")})
+          </span>
+        </div>
+        <div className="p-6 flex flex-col items-center justify-center text-center">
+          <p className="text-sm text-muted-foreground max-w-md">
+            Looks like this one&apos;s all vibes, no voice. Try a reel with narration to unlock scripts and hooks.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main workflow panel
   return (
     <div className="bg-muted/20 border-t border-border/30">
       {/* Competitor posting info bar */}
@@ -465,8 +626,16 @@ export function InlineWorkflow({
         {/* ── Section 1: Transcript ── */}
         {isTranscribing ? (
           <div className="flex flex-col items-center gap-3 py-8 mb-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Transcribing...</p>
+            {isTranscriptionQueued ? (
+              <Clock className="h-8 w-8 text-amber-400" />
+            ) : (
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            )}
+            <p className="text-sm text-muted-foreground text-center">
+              {isTranscriptionQueued
+                ? "In queue. We will start transcribing when a slot is free."
+                : "Transcribing..."}
+            </p>
           </div>
         ) : transcriptionStatus === "failed" ? (
           <div className="flex flex-col items-center gap-3 py-8 mb-4">
@@ -493,6 +662,7 @@ export function InlineWorkflow({
         {/* ── Section 2: Re-Create ── */}
         {!activeScriptId || !script || script.status !== "completed" ? (
           <RecreateSection
+            sectionRef={recreateSectionRef}
             activeScriptId={activeScriptId}
             scriptStatus={script?.status}
             errorMessage={script?.errorMessage ?? undefined}
@@ -511,6 +681,7 @@ export function InlineWorkflow({
         ) : (
           /* ── Section 3: Completed script - Edit, Save, Approve ── */
           <CompletedScriptSection
+            sectionRef={recreateSectionRef}
             displayScript={displayScript}
             generatedScript={generatedScript}
             editMode={editMode}
@@ -773,7 +944,7 @@ export function SearchInlineWorkflow({
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
           <FileText className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Re-Create and workflow features</p>
+          <p className="text-sm text-muted-foreground">Transcribe this reel to unlock Make My Version and workflow features</p>
           <Button onClick={onTranscribe}>
             <FileText className="mr-2 h-4 w-4" /> Transcribe Now
           </Button>
@@ -950,6 +1121,7 @@ function TranscriptSection({
 }
 
 function RecreateSection({
+  sectionRef,
   activeScriptId,
   scriptStatus,
   errorMessage,
@@ -965,6 +1137,7 @@ function RecreateSection({
   previousScripts,
   onSelectScript,
 }: {
+  sectionRef?: React.Ref<HTMLDivElement>;
   activeScriptId: number | null;
   scriptStatus?: string;
   errorMessage?: string;
@@ -981,8 +1154,15 @@ function RecreateSection({
   onSelectScript: (id: number) => void;
 }) {
   return (
-    <div>
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Re-Create Script</h4>
+    <div ref={sectionRef}>
+      <div className="mb-3">
+        <h4 className="text-sm font-semibold text-foreground">
+          Make this viral hit YOURS
+        </h4>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Generate a new script in your voice, inspired by this reel's viral hook and structure.
+        </p>
+      </div>
 
       {/* Processing state */}
       {((activeScriptId && scriptStatus === "processing") || isGenerating) && (
@@ -1050,11 +1230,12 @@ function RecreateSection({
             className="h-9 shrink-0"
             onClick={onGenerate}
             disabled={isGenerating}
+            title="Write your own viral script using this reel's hook and structure"
           >
             {isGenerating ? (
               <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating...</>
             ) : (
-              <><Wand2 className="mr-1.5 h-3.5 w-3.5" /> Generate Script</>
+              <><Wand2 className="mr-1.5 h-3.5 w-3.5" /> Make My Version</>
             )}
           </Button>
         </div>
@@ -1089,6 +1270,7 @@ function RecreateSection({
 }
 
 function CompletedScriptSection({
+  sectionRef,
   displayScript,
   generatedScript,
   editMode,
@@ -1167,23 +1349,27 @@ function CompletedScriptSection({
   onSave: () => void;
   isSaving: boolean;
   userTimezone: string;
+  sectionRef?: React.Ref<HTMLDivElement>;
 }) {
   return (
-    <div>
-      {/* Script header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Script</h4>
-          {readability && (
+    <div ref={sectionRef}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-semibold text-foreground">
+            This viral script is YOURS. Now go film it.
+          </h4>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            {readability && (
+              <Badge variant="outline" className="text-[10px] h-5">
+                Grade {readability.gradeLevel?.toFixed(1)}
+              </Badge>
+            )}
             <Badge variant="outline" className="text-[10px] h-5">
-              Grade {readability.gradeLevel?.toFixed(1)}
+              {wordCount} words
             </Badge>
-          )}
-          <Badge variant="outline" className="text-[10px] h-5">
-            {wordCount} words
-          </Badge>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 self-start">
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onReset}>
             &larr; New
           </Button>

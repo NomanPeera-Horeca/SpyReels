@@ -164,7 +164,7 @@ function UserDetailDialog({ userId, open, onClose }: { userId: number | null; op
                     <thead>
                       <tr className="border-b border-border">
                         <th className="text-left py-2 text-muted-foreground font-medium">Month</th>
-                        <th className="text-right py-2 text-muted-foreground font-medium">Scrapes</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Research</th>
                         <th className="text-right py-2 text-muted-foreground font-medium">Transcribe</th>
                         <th className="text-right py-2 text-muted-foreground font-medium">Recreate</th>
                         <th className="text-right py-2 text-muted-foreground font-medium">Rewrite</th>
@@ -206,7 +206,7 @@ function UserDetailDialog({ userId, open, onClose }: { userId: number | null; op
               </div>
             )}
 
-            {/* Recent Scrape Jobs */}
+            {/* Recent research jobs */}
             {data.recentJobs && data.recentJobs.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Recent Research Jobs</h3>
@@ -334,7 +334,7 @@ export default function AdminDashboard() {
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Plan</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                 <th className="text-right py-3 px-4 font-medium text-muted-foreground">Scripts</th>
-                <th className="text-right py-3 px-4 font-medium text-muted-foreground">Scrapes</th>
+                <th className="text-right py-3 px-4 font-medium text-muted-foreground">Research</th>
                 <th className="text-right py-3 px-4 font-medium text-muted-foreground">Collected</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Last Active</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Signed Up</th>

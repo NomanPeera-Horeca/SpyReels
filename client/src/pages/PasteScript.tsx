@@ -92,7 +92,7 @@ export default function PasteScript() {
             )}
           </div>
           <Textarea
-            placeholder="Paste your script here...&#10;&#10;You can paste any script — from ChatGPT, Google Docs, Notes, or anywhere else. Once saved, you'll be able to edit it with AI tools, set a post date, add tags, and use the teleprompter."
+            placeholder="Paste your script here...&#10;&#10;You can paste any script from ChatGPT, Google Docs, Notes, or anywhere else. Once saved, you'll be able to edit it with AI tools, set a post date, add tags, and use the teleprompter."
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="bg-card min-h-[300px] text-sm leading-relaxed"

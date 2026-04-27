@@ -455,7 +455,7 @@ export default function IdeaToScript() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Your Script Factory is Empty</h3>
               <p className="text-muted-foreground max-w-md">
-                Drop your first idea above — type it or speak it. AI will review it, then generate a ready-to-film script once you approve.
+                Drop your first idea above. Type it or speak it. AI will review it, then generate a ready-to-film script once you approve.
               </p>
             </CardContent>
           </Card>

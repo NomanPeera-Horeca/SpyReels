@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { createExtensionRouter } from "../extensionApi";
 import { handleTelegramUpdate, setupTelegramWebhook } from "../telegramBot";
+import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -140,6 +141,8 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    startTranscriptionZombieSweeper();
 
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {

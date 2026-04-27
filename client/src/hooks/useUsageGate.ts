@@ -111,7 +111,7 @@ export const PLAN_PRICES: Record<string, string> = {
  * Action display labels
  */
 export const ACTION_LABELS: Record<UsageAction, string> = {
-  scrapeCount: "handle scrapes",
+  scrapeCount: "account analyses",
   searchCount: "keyword searches",
   transcribeCount: "transcriptions",
   recreateCount: "AI re-creations",

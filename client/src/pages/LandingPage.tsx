@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Film, Search, FileText, Mic, Calendar, Chrome,
+  Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
   Sparkles, Eye, EyeOff, BarChart3, Download, Bot, Layers,
   Check, X, Crown, Rocket, Building2, Star
@@ -52,15 +52,43 @@ const FEATURES = [
     color: "text-pink-400",
     bg: "bg-pink-500/10",
   },
-  {
-    icon: Chrome,
-    title: "Sort any creator's feed by engagement on Instagram",
-    description: "The SpyReels Chrome extension lets you sort any creator's feed by engagement rate, save Reels, and transcribe without leaving Instagram.",
-    color: "text-cyan-400",
-    bg: "bg-cyan-500/10",
-    link: "/extension",
-  },
+  // Re-enable with App route: import Chrome from lucide-react and uncomment:
+  // { icon: Chrome, title: "Sort any creator's feed...", link: "/extension" },
 ];
+
+type FeatureItem = (typeof FEATURES)[number] & { link?: string };
+
+function FeatureCard({ feature }: { feature: FeatureItem }) {
+  const Icon = feature.icon;
+  const card = (
+    <Card
+      className={`bg-card/50 border-border/50 hover:border-primary/20 transition-all duration-300 group ${feature.link ? "cursor-pointer" : ""}`}
+    >
+      <CardContent className="p-6">
+        <div
+          className={`h-11 w-11 rounded-xl ${feature.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+        >
+          <Icon className={`h-5 w-5 ${feature.color}`} />
+        </div>
+        <h3 className="font-semibold text-lg mb-2 text-foreground">{feature.title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+        {feature.link && (
+          <span className="text-xs text-primary mt-3 inline-flex items-center gap-1">
+            Learn more <ArrowRight className="h-3 w-3" />
+          </span>
+        )}
+      </CardContent>
+    </Card>
+  );
+  if (feature.link) {
+    return (
+      <a href={feature.link} className="block">
+        {card}
+      </a>
+    );
+  }
+  return card;
+}
 
 // ─── How it works ──────────────────────────────────────────────
 const STEPS = [
@@ -93,7 +121,7 @@ const PRICING_PREVIEW = [
     description: "Try everything. No credit card.",
     icon: Zap,
     color: "text-zinc-400",
-    highlights: ["2 handle scrapes/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Chrome extension basics"],
+    highlights: ["2 account research sessions/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Core product features"],
   },
   {
     name: "Starter",
@@ -103,7 +131,7 @@ const PRICING_PREVIEW = [
     description: "For creators getting serious.",
     icon: Rocket,
     color: "text-blue-400",
-    highlights: ["10 scrapes/month", "30 transcriptions/month", "15 AI re-creations", "CSV & Google Sheets export"],
+    highlights: ["10 account research sessions/month", "30 transcriptions/month", "15 AI re-creations", "CSV & Google Sheets export"],
   },
   {
     name: "Pro",
@@ -114,7 +142,7 @@ const PRICING_PREVIEW = [
     icon: Crown,
     color: "text-purple-400",
     highlighted: true,
-    highlights: ["50 scrapes/month", "200 transcriptions/month", "100 AI re-creations", "Voice teleprompter & smart takes"],
+    highlights: ["50 account research sessions/month", "200 transcriptions/month", "100 AI re-creations", "Voice teleprompter & smart takes"],
   },
   {
     name: "Business",
@@ -124,7 +152,7 @@ const PRICING_PREVIEW = [
     description: "For teams and agencies.",
     icon: Building2,
     color: "text-amber-400",
-    highlights: ["200 scrapes/month", "1,000 transcriptions/month", "500 AI re-creations", "10 team members + API access"],
+    highlights: ["200 account research sessions/month", "1,000 transcriptions/month", "500 AI re-creations", "10 team members + API access"],
   },
 ];
 
@@ -292,7 +320,7 @@ export default function LandingPage() {
                 <button onClick={() => setAuthMode("login")} className="text-xs text-muted-foreground hover:text-foreground">Back to Login</button>
               </div>
             )}
-            <p className="text-xs text-muted-foreground text-center">Free to start — no credit card required</p>
+            <p className="text-xs text-muted-foreground text-center">Free to start. No credit card required.</p>
           </div>
         </DialogContent>
       </Dialog>
@@ -344,14 +372,14 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <Button size="lg" onClick={handleGetStarted} className="text-base px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                Start Free — No Credit Card
+                Start Free. No Credit Card.
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
                 See how it works <ChevronDown className="h-4 w-4" />
               </a>
             </div>
-            <p className="text-xs text-muted-foreground/70">Free plan includes 2 scrapes, 3 transcriptions, and 5 saved scripts per month</p>
+            <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
           </div>
 
           {/* Social proof bar */}
@@ -513,27 +541,19 @@ export default function LandingPage() {
               Every feature is built around one goal: getting you from zero ideas to ready-to-film script as fast as possible.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map((feature) => {
-              const cardContent = (
-                <Card key={feature.title} className={`bg-card/50 border-border/50 hover:border-primary/20 transition-all duration-300 group ${'link' in feature ? 'cursor-pointer' : ''}`}>
-                  <CardContent className="p-6">
-                    <div className={`h-11 w-11 rounded-xl ${feature.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                      <feature.icon className={`h-5 w-5 ${feature.color}`} />
-                    </div>
-                    <h3 className="font-semibold text-lg mb-2 text-foreground">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-                    {'link' in feature && (
-                      <span className="text-xs text-primary mt-3 inline-flex items-center gap-1">Learn more <ArrowRight className="h-3 w-3" /></span>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-              if ('link' in feature && feature.link) {
-                return <a key={feature.title} href={feature.link}>{cardContent}</a>;
-              }
-              return cardContent;
-            })}
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {FEATURES.slice(0, 3).map((feature) => (
+                <FeatureCard key={feature.title} feature={feature} />
+              ))}
+            </div>
+            <div className="flex w-full justify-center">
+              <div className="grid w-full max-w-4xl grid-cols-1 sm:grid-cols-2 gap-6">
+                {FEATURES.slice(3, 5).map((feature) => (
+                  <FeatureCard key={feature.title} feature={feature} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -734,7 +754,7 @@ export default function LandingPage() {
               <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
               <a href="/blog" className="hover:text-foreground transition-colors">Blog</a>
-              <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a>
+              {/* <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a> */}
               <a href="https://spy-reels.getrewardful.com/signup" className="hover:text-foreground transition-colors" target="_blank" rel="noopener noreferrer">Affiliates</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>

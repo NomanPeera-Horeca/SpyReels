@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { getReelsByJobId } from "./db";
 
 // Mock stripe-service to allow all usage
 vi.mock("./stripe/stripe-service", () => ({
@@ -131,6 +132,7 @@ vi.mock("./db", () => ({
   unsaveReel: vi.fn().mockResolvedValue(undefined),
   isReelSaved: vi.fn().mockResolvedValue(false),
   getSavedReelsWithDetails: vi.fn().mockResolvedValue([]),
+  getSavedFeaturedReelsWithDetails: vi.fn().mockResolvedValue([]),
   upsertUser: vi.fn(),
   getUserByOpenId: vi.fn(),
   getDb: vi.fn(),
@@ -311,6 +313,8 @@ vi.mock("./storage", () => ({
     key: "test-key",
     url: "https://storage.example.com/test.mp4",
   }),
+  storageHead: vi.fn().mockResolvedValue(true),
+  r2ObjectPublicUrl: (key: string) => `https://storage.example.com/bucket/${key}`,
 }));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -466,6 +470,7 @@ describe("transcribe.start", () => {
 
     expect(result).toHaveProperty("transcriptionId");
     expect(result).toHaveProperty("status", "processing");
+    expect(result).toHaveProperty("queuePending", expect.any(Boolean));
   });
 });
 
@@ -481,7 +486,7 @@ describe("transcribe.status", () => {
 });
 
 describe("export.csv", () => {
-  it("generates CSV data for a job with engagement rate", async () => {
+  it("generates RFC 4180 CSV with 10 columns including engagement rate", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
@@ -489,13 +494,49 @@ describe("export.csv", () => {
 
     expect(result).toHaveProperty("csv");
     expect(result).toHaveProperty("filename");
-    expect(result.csv).toContain("Reel URL");
-    expect(result.csv).toContain("Views");
-    expect(result.csv).toContain("Likes");
+    const lines = result.csv.trim().split("\n");
+    expect(lines[0]).toBe(
+      '"Reel URL","Caption","Views","Likes","Comments","Engagement Rate (%)","Duration (s)","Posted At","Transcript","Hook Analysis"'
+    );
+    expect(lines.length).toBe(3);
     expect(result.csv).toContain("Engagement Rate (%)");
     expect(result.csv).toContain("ABC123");
     expect(result.csv).toContain("DEF456");
+    expect(result.csv).not.toContain("Shortcode");
+    expect(result.csv).not.toContain("Thumbnail URL");
     expect(result.filename).toContain("reels_testuser");
+  });
+
+  it("quotes reel URL and caption when they contain commas (no extra columns)", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(getReelsByJobId).mockResolvedValueOnce([
+      {
+        id: 1,
+        jobId: 1,
+        shortcode: "XY",
+        caption: "Eat, pray, love, scale",
+        viewCount: 1,
+        likeCount: 1,
+        commentCount: 1,
+        thumbnailUrl: "https://cdn.example.com/t.jpg?w=1,h=2",
+        videoUrl: "https://example.com/v.mp4",
+        reelUrl: "https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test",
+        duration: 10,
+        postedAt: new Date("2025-01-01"),
+        ownerUsername: "u",
+        createdAt: new Date(),
+      },
+    ]);
+
+    const result = await caller.export.csv({ jobId: 1 });
+    const lines = result.csv.trim().split("\n");
+    expect(lines.length).toBe(2);
+    expect(lines[1]).toContain('"Eat, pray, love, scale"');
+    expect(lines[1]).toContain('"https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test"');
+    // Commas inside quoted fields must not create extra split columns
+    const fields = lines[1].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+    expect(fields).toHaveLength(10);
   });
 });
 
@@ -702,6 +743,15 @@ describe("saved.check", () => {
 
 describe("saved.checkBatch", () => {
   it("returns a map of reel IDs to saved status", async () => {
+    const { getDb } = await import("./db");
+    (getDb as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      select: () => ({
+        from: () => ({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 

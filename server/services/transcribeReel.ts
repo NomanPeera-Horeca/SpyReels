@@ -38,6 +38,8 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
 
 const MAX_RAW_VIDEO_BYTES = 200 * 1024 * 1024;
 const MAX_REEL_SECONDS = 10 * 60;
+/** Hard cap for Deepgram so hung requests cannot hold the server semaphore forever (Bug #24). */
+const DEEPGRAM_TRANSCRIBE_TIMEOUT_MS = 120_000;
 
 function fail(
   errorCode: ErrorCode,
@@ -242,7 +244,7 @@ async function attemptTranscription(input: {
     const dgStart = Date.now();
     let response;
     try {
-      response = await client.listen.v1.media.transcribeFile(audioBuffer, {
+      const dgPromise = client.listen.v1.media.transcribeFile(audioBuffer, {
         model: "nova-3",
         smart_format: true,
         punctuate: true,
@@ -250,7 +252,19 @@ async function attemptTranscription(input: {
         utterances: true,
         language: "en",
       });
+      response = await Promise.race([
+        dgPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("DEEPGRAM_REQUEST_TIMEOUT")),
+            DEEPGRAM_TRANSCRIBE_TIMEOUT_MS
+          )
+        ),
+      ]);
     } catch (err) {
+      if (err instanceof Error && err.message === "DEEPGRAM_REQUEST_TIMEOUT") {
+        return fail("TIMEOUT", shortcode, "Deepgram request exceeded 2 minutes");
+      }
       if (err instanceof DeepgramError) {
         const code = err.statusCode;
         if (code === 429) {

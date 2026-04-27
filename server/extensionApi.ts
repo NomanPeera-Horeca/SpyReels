@@ -308,7 +308,7 @@ export function createExtensionRouter(): Router {
         postedAt: r.postedAt,
         engagementRate: followerCount > 0
           ? ((r.likeCount + r.commentCount) / followerCount * 100).toFixed(2) + "%"
-          : "—",
+          : "-",
         engagementValue: followerCount > 0
           ? (r.likeCount + r.commentCount) / followerCount
           : 0,

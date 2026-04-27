@@ -50,6 +50,23 @@ function isSyncedWithin24h(d: Date | string): boolean {
   return now.getTime() - date.getTime() < 24 * 60 * 60 * 1000;
 }
 
+function jobStatusLabel(job: { status: string; failureReason?: string | null }): string {
+  if (job.status !== "failed") return job.status;
+  switch (job.failureReason) {
+    case "handle_not_found":
+      return "Handle not found";
+    case "account_private":
+      return "Account is private";
+    case "instagram_rate_limited":
+      return "Instagram rate-limited, try again soon";
+    case "account_too_large":
+      return "Account too large to analyze";
+    case "unknown":
+    default:
+      return "Failed";
+  }
+}
+
 export default function History() {
   const [, setLocation] = useLocation();
   const jobsQuery = trpc.scrape.list.useQuery();
@@ -76,12 +93,6 @@ export default function History() {
   }, [jobsQuery.data]);
 
   const resyncMutation = trpc.scrape.resync.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Re-syncing started`, {
-        description: `Fetching reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
-      });
-      utils.scrape.list.invalidate();
-    },
     onError: (error) => {
       toast.error("Re-sync failed", { description: error.message });
     },
@@ -89,7 +100,36 @@ export default function History() {
 
   const handleResync = (e: React.MouseEvent, jobId: number) => {
     e.stopPropagation();
-    resyncMutation.mutate({ jobId });
+    resyncMutation.mutate(
+      { jobId },
+      {
+        onSuccess: (data) => {
+          utils.scrape.list.invalidate();
+          void utils.scrape.status.invalidate({ jobId });
+          void utils.reels.list.invalidate({ jobId });
+          toast.success("Refresh started", {
+            description: `Loading reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
+          });
+        },
+      }
+    );
+  };
+
+  const handleFailedRetry = (e: React.MouseEvent, jobId: number) => {
+    e.stopPropagation();
+    resyncMutation.mutate(
+      { jobId },
+      {
+        onSuccess: () => {
+          utils.scrape.list.invalidate();
+          void utils.scrape.status.invalidate({ jobId });
+          void utils.reels.list.invalidate({ jobId });
+          toast.success("Retry started", {
+            description: "Analysis is running again in the background.",
+          });
+        },
+      }
+    );
   };
 
   const deleteMutation = trpc.scrape.delete.useMutation({
@@ -104,7 +144,7 @@ export default function History() {
 
   const handleDelete = (e: React.MouseEvent, jobId: number, handle: string) => {
     e.stopPropagation();
-    if (confirm(`Remove @${handle} from monitoring? This will also delete all scraped reels for this job.`)) {
+    if (confirm(`Remove @${handle} from monitoring? This will also delete all collected reels for this job.`)) {
       deleteMutation.mutate({ jobId });
     }
   };
@@ -126,7 +166,7 @@ export default function History() {
           </div>
         </div>
         <Button onClick={() => setLocation("/")} size="sm">
-          New Scrape
+          Add account
         </Button>
       </div>
 
@@ -140,9 +180,9 @@ export default function History() {
         <Card className="border-border/50 bg-card">
           <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
             <Film className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-muted-foreground">No scrape jobs yet.</p>
+            <p className="text-muted-foreground">No tracked accounts yet.</p>
             <Button variant="outline" onClick={() => setLocation("/")}>
-              Start your first scrape
+              Start your first analysis
             </Button>
           </CardContent>
         </Card>
@@ -214,6 +254,18 @@ export default function History() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {job.status === "failed" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={(e) => handleFailedRetry(e, job.id)}
+                      disabled={resyncMutation.isPending}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`} />
+                      Retry
+                    </Button>
+                  )}
                   {job.status === "completed" && !syncedRecently && (
                     <Button
                       variant="outline"
@@ -223,7 +275,7 @@ export default function History() {
                       disabled={resyncMutation.isPending}
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`} />
-                      Re-sync
+                      Refresh
                     </Button>
                   )}
                   <Button

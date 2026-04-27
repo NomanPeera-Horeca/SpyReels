@@ -11,12 +11,12 @@ export function InlineCTA({ variant = "default" }: { variant?: "default" | "spy"
     default: {
       icon: <Zap className="h-5 w-5" />,
       headline: "Stop guessing. Start spying.",
-      description: "Scrape any public Instagram account's Reels, get transcripts, and generate viral scripts with AI.",
+      description: "Analyze any public Instagram account's Reels, get transcripts, and generate viral scripts with AI.",
       cta: "Try SpyReels Free",
     },
     spy: {
       icon: <Sparkles className="h-5 w-5" />,
-      headline: "See what your competitors are doing — in seconds.",
+      headline: "See what your competitors are doing, in seconds.",
       description: "Enter any Instagram handle and instantly get their Reels data, engagement metrics, and full transcripts.",
       cta: "Spy on Competitors Free",
     },

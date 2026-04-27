@@ -13,6 +13,8 @@ function requireApiKey(): string {
   return key;
 }
 
+const SCRAPECREATORS_FETCH_MS = 30_000;
+
 async function scGet(
   path: string,
   query: Record<string, string | undefined>
@@ -23,9 +25,22 @@ async function scGet(
       url.searchParams.set(k, v);
     }
   }
-  const res = await fetch(url.toString(), {
-    headers: { "x-api-key": requireApiKey() },
-  });
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), SCRAPECREATORS_FETCH_MS);
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { "x-api-key": requireApiKey() },
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      return { status: 408, data: { error: "scrapecreators_request_timeout" } };
+    }
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
   let data: any = null;
   const text = await res.text();
   if (text?.trim()) {
@@ -391,7 +406,7 @@ export async function fetchReelByShortcode(shortcode: string): Promise<ReelFullD
   const reelUrl = `https://www.instagram.com/reel/${code}/`;
   const { status, data } = await scGet("/v1/instagram/post", { url: reelUrl });
 
-  if (status !== 200 || !data?.data?.xdt_shortcode_media) {
+  if (status === 408 || status !== 200 || !data?.data?.xdt_shortcode_media) {
     return null;
   }
 

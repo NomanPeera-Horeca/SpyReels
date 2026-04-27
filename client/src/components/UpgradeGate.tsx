@@ -285,7 +285,7 @@ export function UpgradeModal({
           <div className="flex items-center gap-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
             <Crown className="h-5 w-5 text-purple-400" />
             <div>
-              <p className="text-sm font-medium">Pro Plan — $29/mo</p>
+              <p className="text-sm font-medium">Pro Plan · $29/mo</p>
               <p className="text-xs text-zinc-500">200 transcriptions, 100 AI re-creations, and more</p>
             </div>
             <Badge className="bg-purple-600 text-white text-[10px] ml-auto">Popular</Badge>

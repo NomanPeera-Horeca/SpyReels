@@ -37,6 +37,8 @@ vi.mock("./_core/llm", () => ({
 // Mock storage
 vi.mock("./storage", () => ({
   storagePut: vi.fn(),
+  storageHead: vi.fn().mockResolvedValue(false),
+  r2ObjectPublicUrl: (key: string) => `https://r2.test/${key}`,
 }));
 
 // Mock SDK

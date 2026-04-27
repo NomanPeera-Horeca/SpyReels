@@ -5,6 +5,12 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
+  normalizeInstagramHandle,
+  isValidInstagramHandleNormalized,
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+} from "@shared/instagramHandle";
+import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
+import {
   createCheckoutSession,
   createPortalSession,
   getUserSubscription,
@@ -82,25 +88,57 @@ import {
   getExistingShortcodes,
   updateScrapeJobResync,
   deleteScrapeJob,
+  getOnboardingState,
+  updateOnboardingState,
+  seedDemoScrape,
+  markOnboardingComplete,
+  markOnboardingSkipped,
+  getFeaturedReelById,
+  getTranscriptionByFeaturedReelId,
+  transcriptionViewFromFeaturedReelRow,
+  updateFeaturedReelTranscription,
+  getRecreatedScriptsByFeaturedReelId,
+  saveFeaturedReel,
+  unsaveFeaturedReel,
+  isFeaturedReelSaved,
+  getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
-import { monthlyUsage, users, subscriptions, savedScripts, scrapeJobs, collectedReels } from "../drizzle/schema";
-import { eq, desc, asc, sql } from "drizzle-orm";
+import { ensureProfilePicOnR2 } from "./profilePicR2";
+import {
+  monthlyUsage,
+  users,
+  subscriptions,
+  savedScripts,
+  savedReels,
+  scrapeJobs,
+  collectedReels,
+  niches,
+  featuredAccounts,
+  featuredAccountNiches,
+  featuredReels,
+  recreatedScripts,
+} from "../drizzle/schema";
+import type { Transcription } from "../drizzle/schema";
+import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
 
+/** Batched IN() for saved.checkBatch; keeps chunks under typical MySQL placeholder limits. */
+const SAVED_CHECK_BATCH = 200;
+
 // Transcription queue - cap concurrent transcriptions to prevent memory exhaustion
 // and to avoid cascading Instagram CDN rate-limits on batch kickoffs (e.g.
 // "Transcribe All" from a single Render IP). Used by search.transcribe AND
 // runTranscription (which backs both transcribe.start and collectedReels.transcribe).
 let activeTranscriptions = 0;
-const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
+const MAX_CONCURRENT_TRANSCRIPTIONS = 3;
 
 /**
  * Parse a date string safely to avoid timezone shift.
@@ -113,6 +151,34 @@ function parseDateSafe(dateStr: string): Date {
   if (dateStr.includes("T")) return new Date(dateStr);
   // Date-only string: append noon to avoid timezone day-shift
   return new Date(dateStr + "T12:00:00");
+}
+
+/**
+ * Formats the precomputed best posting day+hour into a human-readable
+ * phrase for the featured dashboard header (Commit 6). Returns null
+ * when either input is missing so the header hides the segment cleanly
+ * instead of saying "Posts null around null o'clock".
+ *
+ * Hour is stored in UTC (matches featured_reels.postedAt) but formatting
+ * uses UTC here — per-user timezone conversion is a Commit 6+ follow-up;
+ * spec copy ("weekdays around 2 PM") is rough enough that UTC is fine.
+ */
+function formatBestPostingTime(
+  day: string | null,
+  hour: number | null
+): string | null {
+  if (day == null || hour == null) return null;
+  const weekendDays = new Set(["saturday", "sunday"]);
+  const dayLower = day.toLowerCase();
+  const is12h = ((hour + 11) % 12) + 1;
+  const ampm = hour < 12 ? "AM" : "PM";
+  const timeStr = `${is12h} ${ampm}`;
+  // "Posts weekdays around 2 PM" vs "Posts Sundays around 10 AM".
+  if (weekendDays.has(dayLower)) {
+    const capitalized = dayLower.charAt(0).toUpperCase() + dayLower.slice(1);
+    return `Posts ${capitalized}s around ${timeStr}`;
+  }
+  return `Posts weekdays around ${timeStr}`;
 }
 
 export const appRouter = router({
@@ -209,14 +275,25 @@ export const appRouter = router({
   scrape: router({
     start: protectedProcedure
       .input(
-        z.object({
-          handle: z.string().min(1).max(128),
-          timeframeDays: z.number().refine((v) => [30, 90, 180].includes(v)),
-        })
+        z
+          .object({
+            handle: z.string().min(1).max(128),
+            timeframeDays: z.number().refine((v) => [30, 90, 180].includes(v)),
+          })
+          .superRefine((data, ctx) => {
+            const norm = normalizeInstagramHandle(data.handle);
+            if (!isValidInstagramHandleNormalized(norm)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: INSTAGRAM_HANDLE_INVALID_MESSAGE,
+                path: ["handle"],
+              });
+            }
+          })
       )
       .mutation(async ({ ctx, input }) => {
         // Check if handle already exists in monitoring
-        const normalizedHandle = input.handle.replace(/^@/, "").trim().toLowerCase();
+        const normalizedHandle = normalizeInstagramHandle(input.handle);
         const existingJobs = await getUserScrapeJobs(ctx.user.id);
         const existingJob = existingJobs.find(
           (j) => j.handle.toLowerCase() === normalizedHandle && (j.status === "completed" || j.status === "running")
@@ -224,8 +301,32 @@ export const appRouter = router({
         if (existingJob) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: `@${normalizedHandle} is already in your Account Monitoring. Use Re-sync to refresh the data instead.`,
+            message: `@${normalizedHandle} is already in your Account Monitoring. Use Refresh in Account Monitoring to update the data instead.`,
           });
+        }
+
+        // Search-to-featured shortcut: if the requested handle is already
+        // a featured creator we show the instant Path-B dashboard instead
+        // of burning a scrape quota on a duplicate pull. Case-insensitive,
+        // @ already stripped via `normalizedHandle`.
+        const db = await getDb();
+        if (db) {
+          const featuredMatch = await db
+            .select({ id: featuredAccounts.id })
+            .from(featuredAccounts)
+            .where(
+              and(
+                sql`LOWER(${featuredAccounts.handle}) = ${normalizedHandle}`,
+                eq(featuredAccounts.isActive, true)
+              )
+            )
+            .limit(1);
+          if (featuredMatch.length > 0) {
+            return {
+              redirect: "featured" as const,
+              featuredAccountId: featuredMatch[0].id,
+            };
+          }
         }
 
         // Check usage limit before starting
@@ -233,22 +334,23 @@ export const appRouter = router({
         if (!usageCheck.allowed) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: `You've reached your monthly scrape limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            message: `You have reached your monthly account research limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
           });
         }
 
         const jobId = await createScrapeJob({
           userId: ctx.user.id,
-          handle: input.handle.replace(/^@/, "").trim(),
+          handle: normalizedHandle,
           timeframeDays: input.timeframeDays,
           status: "running",
+          currentStep: "connecting",
         });
 
         // Track usage
         await incrementUsage(ctx.user.id, "scrapeCount");
 
         // Run scraping in background
-        runScrapeJob(jobId, input.handle, input.timeframeDays).catch((err) => {
+        runScrapeJob(jobId, normalizedHandle, input.timeframeDays).catch((err) => {
           console.error(`Scrape job ${jobId} failed:`, err);
         });
 
@@ -263,8 +365,33 @@ export const appRouter = router({
         return job;
       }),
 
+    /**
+     * Lightweight progress poll used by the dedicated scraping UI. Returns
+     * just the fields needed for the multi-step view so we can hit this on
+     * a 1.5s interval without shipping the full job row every time.
+     */
+    progress: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return {
+          status: job.status,
+          currentStep: job.currentStep,
+          reelsFound: job.reelsFound,
+          estimatedTotal: job.estimatedTotal,
+          progressPercent: job.progressPercent,
+          errorMessage: job.errorMessage,
+          failureReason: job.failureReason,
+          handle: job.handle,
+          timeframeDays: job.timeframeDays,
+        };
+      }),
+
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getUserScrapeJobs(ctx.user.id);
+      const jobs = await getUserScrapeJobs(ctx.user.id);
+      return jobs.filter((j) => j.status !== "failed");
     }),
 
     /** Delete a scrape job and its associated reels */
@@ -293,7 +420,11 @@ export const appRouter = router({
         const daysSinceSync = Math.max(1, Math.ceil((now.getTime() - lastSyncDate.getTime()) / (1000 * 60 * 60 * 24)));
 
         // Mark as running
-        await updateScrapeJob(input.jobId, { status: "running" });
+        await updateScrapeJob(input.jobId, {
+          status: "running",
+          errorMessage: null,
+          failureReason: null,
+        });
 
         // Run resync in background
         runResyncJob(input.jobId, job.handle, daysSinceSync).catch((err) => {
@@ -309,27 +440,11 @@ export const appRouter = router({
       .query(async ({ input }) => {
         try {
           const profile = await fetchProfile(input.handle);
-          // Proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
-          let proxiedPicUrl = "";
-          if (profile.profilePicUrl) {
-            try {
-              const { gotScraping } = await import("got-scraping");
-              const picRes = await gotScraping({
-                url: profile.profilePicUrl,
-                responseType: "buffer",
-                timeout: { request: 10000 },
-                retry: { limit: 0 },
-              });
-              if (picRes.statusCode === 200 && picRes.rawBody) {
-                const suffix = Math.random().toString(36).slice(2, 8);
-                const key = `profile-pics/${profile.username}-${suffix}.jpg`;
-                const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-                proxiedPicUrl = url;
-              }
-            } catch {
-              // If proxy fails, leave empty - UI shows fallback icon
-            }
-          }
+          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.profilePicUrl
+          );
           return {
             found: true as const,
             username: profile.username,
@@ -383,25 +498,1108 @@ export const appRouter = router({
       }),
   }),
 
+  // ── Featured Accounts (pre-scraped catalog browsed by niche) ──
+  featured: router({
+    /**
+     * All niches grouped by `groupName`, with a per-niche count of active
+     * accounts that have at least one reel stored. Used by the initial
+     * "browse by niche" UI — the 5 group cards and their niche subcards.
+     * Niches with zero usable accounts are filtered out (they look broken).
+     */
+    nicheGroups: protectedProcedure.query(async () => {
+      const db = await getDb();
+      const rows = await db!
+        .select({
+          id: niches.id,
+          slug: niches.slug,
+          name: niches.name,
+          iconName: niches.iconName,
+          description: niches.description,
+          groupName: niches.groupName,
+          sortOrder: niches.sortOrder,
+          // Count distinct active accounts with at least one reel. The
+          // LEFT JOIN chain keeps niches with zero matches visible in the
+          // raw rows; we filter those out in JS below.
+          accountCount: sql<number>`COUNT(DISTINCT ${featuredReels.featuredAccountId})`,
+        })
+        .from(niches)
+        .leftJoin(featuredAccountNiches, eq(featuredAccountNiches.nicheId, niches.id))
+        .leftJoin(
+          featuredAccounts,
+          and(
+            eq(featuredAccounts.id, featuredAccountNiches.accountId),
+            eq(featuredAccounts.isActive, true)
+          )
+        )
+        .leftJoin(
+          featuredReels,
+          and(
+            eq(featuredReels.featuredAccountId, featuredAccounts.id),
+            ne(featuredReels.transcriptionStatus, "failed")
+          )
+        )
+        .groupBy(
+          niches.id,
+          niches.slug,
+          niches.name,
+          niches.iconName,
+          niches.description,
+          niches.groupName,
+          niches.sortOrder
+        )
+        .orderBy(asc(niches.groupName), asc(niches.sortOrder));
+
+      // Drop empty niches and group by groupName in a single pass.
+      const groupMap = new Map<
+        string,
+        {
+          id: number;
+          slug: string;
+          name: string;
+          iconName: string;
+          description: string;
+          accountCount: number;
+        }[]
+      >();
+      for (const row of rows) {
+        const accountCount = Number(row.accountCount);
+        if (accountCount <= 0) continue;
+        const bucket = groupMap.get(row.groupName) ?? [];
+        bucket.push({
+          id: row.id,
+          slug: row.slug,
+          name: row.name,
+          iconName: row.iconName,
+          description: row.description ?? "",
+          accountCount,
+        });
+        groupMap.set(row.groupName, bucket);
+      }
+
+      return {
+        groups: Array.from(groupMap, ([groupName, nichesInGroup]) => ({
+          groupName,
+          niches: nichesInGroup,
+        })),
+      };
+    }),
+
+    /**
+     * Read-only featured catalog dashboard: account + reels from
+     * `featured_*` tables (no per-user scrape_jobs copy). Transcription
+     * join via `transcriptions.featuredReelId` is stubbed empty until
+     * migration 0028 / Commit 3a.
+     */
+    getDashboardData: protectedProcedure
+      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+
+        const accountRows = await db
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            bestPostingHour: featuredAccounts.bestPostingHour,
+            bestPostingDay: featuredAccounts.bestPostingDay,
+          })
+          .from(featuredAccounts)
+          .where(
+            and(
+              eq(featuredAccounts.id, input.featuredAccountId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (accountRows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This creator isn't available",
+          });
+        }
+
+        const acc = accountRows[0];
+
+        const nicheRows = await db
+          .select({ slug: niches.slug, name: niches.name })
+          .from(featuredAccountNiches)
+          .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
+          .where(
+            and(
+              eq(featuredAccountNiches.accountId, acc.id),
+              eq(featuredAccountNiches.isPrimary, true)
+            )
+          )
+          .limit(1);
+
+        const classifiedNicheSlug = nicheRows[0]?.slug ?? null;
+        const primaryNicheName = nicheRows[0]?.name ?? "";
+
+        const reelRows = await db
+          .select()
+          .from(featuredReels)
+          .where(
+            and(
+              eq(featuredReels.featuredAccountId, acc.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          .orderBy(desc(featuredReels.viewCount));
+
+        const fc = acc.followerCount || 0;
+
+        const reels = reelRows.map((r) => {
+          const engagementRate =
+            fc > 0
+              ? ((r.likeCount + r.commentCount) / fc) * 100
+              : 0;
+          return {
+            id: r.id,
+            featuredReelId: r.id,
+            shortcode: r.reelShortcode,
+            thumbnailUrl: r.thumbnailUrl ?? "",
+            videoUrl: r.videoUrl ?? "",
+            caption: r.caption ?? "",
+            viewCount: r.viewCount,
+            likeCount: r.likeCount,
+            commentCount: r.commentCount,
+            duration: r.duration,
+            postedAt: r.postedAt,
+            reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+            ownerUsername: acc.handle,
+            engagementRate: Math.round(engagementRate * 100) / 100,
+            transcription: transcriptionViewFromFeaturedReelRow(r),
+          };
+        });
+
+        return {
+          isFeaturedView: true as const,
+          account: {
+            id: acc.id,
+            handle: acc.handle,
+            displayName: acc.displayName ?? "",
+            profilePicUrl: acc.profilePicUrl ?? "",
+            followerCount: acc.followerCount,
+            avgEngagement: Number(acc.avgEngagementRate),
+            classifiedNicheSlug,
+            primaryNicheName,
+            // Commit 6 — formatted best posting window for the dashboard
+            // header. Null when either column is null (backfill hasn't
+            // run or the account has zero reels). Formatting lives on the
+            // server so mobile + desktop + any future surface render
+            // identically.
+            bestPostingTime: formatBestPostingTime(
+              acc.bestPostingDay,
+              acc.bestPostingHour
+            ),
+          },
+          followerCount: fc,
+          reels,
+        };
+      }),
+
+    /**
+     * All active featured accounts tagged with `nicheSlug`, sorted by
+     * follower count desc. Accounts with zero stored reels are omitted —
+     * clicking them would show an empty state, which isn't the goal.
+     */
+    accountsByNiche: protectedProcedure
+      .input(z.object({ nicheSlug: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const nicheMatch = await db!
+          .select({ id: niches.id })
+          .from(niches)
+          .where(eq(niches.slug, input.nicheSlug))
+          .limit(1);
+        if (nicheMatch.length === 0) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Niche not found" });
+        }
+        const nicheId = nicheMatch[0].id;
+
+        const rows = await db!
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            totalReelsEver: featuredAccounts.totalReelsEver,
+            reelsAvailable: sql<number>`COUNT(${featuredReels.id})`,
+          })
+          .from(featuredAccounts)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.accountId, featuredAccounts.id)
+          )
+          .leftJoin(
+            featuredReels,
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          .where(
+            and(
+              eq(featuredAccountNiches.nicheId, nicheId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            featuredAccounts.totalReelsEver
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount));
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          // decimal(5,2) comes back from mysql2 as a string — coerce at boundary.
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          totalReelsEver: r.totalReelsEver,
+          reelsAvailable: Number(r.reelsAvailable),
+        }));
+      }),
+
+    /**
+     * Batch version of `accountsByNiche` for the /onboarding Step 2 UI
+     * (spec §3). Takes N slugs, returns a map of slug → accounts using
+     * the exact same creator shape and filter rules as the single-slug
+     * endpoint. Keeps the onboarding page to one round-trip regardless
+     * of how many niches the user picked.
+     *
+     * Slugs are deduped up front. Unknown slugs resolve to an empty
+     * array rather than throwing — the UI shows an empty state for
+     * empty sections, which is the same behavior it needs for niches
+     * with zero active creators anyway (edge case #3).
+     */
+    accountsByNicheSlugs: protectedProcedure
+      .input(z.object({ slugs: z.array(z.string().trim().min(1)).min(1).max(30) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const dedupedSlugs = Array.from(new Set(input.slugs));
+
+        // Seed the output map so every requested slug has an entry
+        // (empty array for unknowns / no-creator niches). Downstream
+        // code can rely on `result[slug]` existing without a defined
+        // check.
+        const grouped: Record<
+          string,
+          {
+            id: number;
+            handle: string;
+            displayName: string;
+            followerCount: number;
+            avgEngagementRate: number;
+            profilePicUrl: string;
+            totalReelsEver: number;
+            reelsAvailable: number;
+          }[]
+        > = {};
+        for (const slug of dedupedSlugs) grouped[slug] = [];
+
+        // Single join covers all slugs; we partition by slug client-
+        // side (cheaper than N queries). Filter rules match
+        // `accountsByNiche` exactly: active accounts with ≥1 stored
+        // reel, sorted by follower count desc within each niche.
+        const rows = await db!
+          .select({
+            slug: niches.slug,
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            totalReelsEver: featuredAccounts.totalReelsEver,
+            reelsAvailable: sql<number>`COUNT(${featuredReels.id})`,
+          })
+          .from(niches)
+          .innerJoin(featuredAccountNiches, eq(featuredAccountNiches.nicheId, niches.id))
+          .innerJoin(
+            featuredAccounts,
+            and(
+              eq(featuredAccounts.id, featuredAccountNiches.accountId),
+              eq(featuredAccounts.isActive, true)
+            )
+          )
+          .leftJoin(
+            featuredReels,
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          .where(inArray(niches.slug, dedupedSlugs))
+          .groupBy(
+            niches.slug,
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            featuredAccounts.totalReelsEver
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(asc(niches.slug), desc(featuredAccounts.followerCount));
+
+        for (const r of rows) {
+          grouped[r.slug].push({
+            id: r.id,
+            handle: r.handle,
+            displayName: r.displayName ?? "",
+            followerCount: r.followerCount,
+            avgEngagementRate: Number(r.avgEngagementRate),
+            profilePicUrl: r.profilePicUrl ?? "",
+            totalReelsEver: r.totalReelsEver,
+            reelsAvailable: Number(r.reelsAvailable),
+          });
+        }
+
+        return { groups: grouped };
+      }),
+
+    /**
+     * Pre-ranked top 30 reels for a featured account. `rank` was computed
+     * at scrape time (1 = highest engagement rate), so we just read it
+     * back in order. This is the "magic moment" — zero-latency reels.
+     */
+    topReels: protectedProcedure
+      .input(z.object({ accountId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const rows = await db!
+          .select()
+          .from(featuredReels)
+          .where(
+            and(
+              eq(featuredReels.featuredAccountId, input.accountId),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          // `rank` is a MySQL 8 reserved word, but drizzle auto-backticks
+          // identifiers on the query-builder path so this is safe.
+          .orderBy(asc(featuredReels.rank))
+          .limit(30);
+
+        return rows.map((r) => ({
+          id: r.id,
+          reelShortcode: r.reelShortcode,
+          caption: r.caption,
+          viewCount: r.viewCount,
+          likeCount: r.likeCount,
+          commentCount: r.commentCount,
+          // decimal(5,2) → string; null possible on older rows.
+          engagementRate: r.engagementRate == null ? 0 : Number(r.engagementRate),
+          thumbnailUrl: r.thumbnailUrl ?? "",
+          videoUrl: r.videoUrl ?? "",
+          duration: r.duration ?? 0,
+          postedAt: r.postedAt,
+          rank: r.rank ?? 0,
+        }));
+      }),
+
+    /**
+     * Resolve a catalog featured account by Instagram handle: stable id
+     * plus primary niche (or first niche by `sortOrder` when no primary
+     * flag). Used by the job dashboard sidebar to (a) exclude the current
+     * creator from `relatedCreators` and (b) derive niche for demo jobs
+     * when `classifiedNicheSlug` is unset.
+     */
+    accountContextByHandle: protectedProcedure
+      .input(z.object({ handle: z.string().trim().min(1).max(128) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const normalized = input.handle.replace(/^@/, "").trim().toLowerCase();
+
+        const rows = await db!
+          .select({
+            featuredAccountId: featuredAccounts.id,
+            nicheSlug: niches.slug,
+            nicheName: niches.name,
+            isPrimary: featuredAccountNiches.isPrimary,
+          })
+          .from(featuredAccounts)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.accountId, featuredAccounts.id)
+          )
+          .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
+          .where(
+            and(eq(featuredAccounts.handle, normalized), eq(featuredAccounts.isActive, true))
+          )
+          .orderBy(desc(featuredAccountNiches.isPrimary), asc(niches.sortOrder))
+          .limit(1);
+
+        if (rows.length === 0) {
+          return {
+            featuredAccountId: null as number | null,
+            nicheSlug: null as string | null,
+            nicheName: null as string | null,
+          };
+        }
+
+        return {
+          featuredAccountId: rows[0].featuredAccountId,
+          nicheSlug: rows[0].nicheSlug,
+          nicheName: rows[0].nicheName,
+        };
+      }),
+
+    /**
+     * Related creators for the dashboard right sidebar ("Top creators in
+     * this niche"). Returns other active featured accounts tagged with
+     * `nicheSlug`, ordered by follower count desc, optionally excluding
+     * the account currently being viewed (so we don't show @garyvee as
+     * "related" on @garyvee's own dashboard).
+     *
+     * Uses INNER JOINs — an account only shows up if it actually has the
+     * niche tag. The `nicheName` field comes from `niches.name` for the
+     * matched row, which is convenient for the sidebar eyebrow copy.
+     *
+     * Mirrors `accountsByNiche`'s LEFT JOIN + HAVING guard so we never
+     * surface a creator with zero stored reels — clicking them would
+     * land on an empty dashboard. `isActive=true` is not a strong enough
+     * invariant on its own (a future row could be active without a
+     * successful scrape yet).
+     */
+    relatedCreators: protectedProcedure
+      .input(
+        z.object({
+          nicheSlug: z.string(),
+          excludeAccountId: z.number().int().positive().optional(),
+          // Cap at 50 so a misconfigured caller can't pull the whole catalog.
+          limit: z.number().int().positive().max(50).default(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+
+        const whereClauses = [
+          eq(niches.slug, input.nicheSlug),
+          eq(featuredAccounts.isActive, true),
+        ];
+        if (input.excludeAccountId !== undefined) {
+          whereClauses.push(ne(featuredAccounts.id, input.excludeAccountId));
+        }
+
+        const rows = await db!
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            nicheName: niches.name,
+          })
+          .from(niches)
+          .innerJoin(
+            featuredAccountNiches,
+            eq(featuredAccountNiches.nicheId, niches.id)
+          )
+          .innerJoin(
+            featuredAccounts,
+            eq(featuredAccounts.id, featuredAccountNiches.accountId)
+          )
+          .leftJoin(
+            featuredReels,
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          .where(and(...whereClauses))
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl,
+            niches.name
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount))
+          .limit(input.limit);
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          nicheName: r.nicheName,
+        }));
+      }),
+
+    /**
+     * Featured accounts matching onboarding “picked” handles. Same
+     * anti-empty guard as `relatedCreators` (at least one stored reel),
+     * ordered by followers desc.
+     */
+    creatorsByHandles: protectedProcedure
+      .input(
+        z.object({
+          handles: z.array(z.string().trim().min(1)).min(1).max(5),
+          excludeHandle: z.string().trim().optional(),
+          limit: z.number().int().positive().max(20).default(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) {
+          return [] as {
+            id: number;
+            handle: string;
+            displayName: string;
+            followerCount: number;
+            avgEngagementRate: number;
+            profilePicUrl: string;
+            nicheName: string;
+          }[];
+        }
+        const exclude = input.excludeHandle
+          ?.replace(/^@/, "")
+          .trim()
+          .toLowerCase();
+        const unique = new Set(
+          input.handles
+            .map((h) => h.replace(/^@/, "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        if (exclude) unique.delete(exclude);
+        const list = Array.from(unique).slice(0, 5);
+        if (list.length === 0) return [];
+
+        const whereClauses = [
+          inArray(featuredAccounts.handle, list),
+          eq(featuredAccounts.isActive, true),
+        ];
+
+        const rows = await db
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            displayName: featuredAccounts.displayName,
+            followerCount: featuredAccounts.followerCount,
+            avgEngagementRate: featuredAccounts.avgEngagementRate,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+          })
+          .from(featuredAccounts)
+          .leftJoin(
+            featuredReels,
+            and(
+              eq(featuredReels.featuredAccountId, featuredAccounts.id),
+              ne(featuredReels.transcriptionStatus, "failed")
+            )
+          )
+          .where(and(...whereClauses))
+          .groupBy(
+            featuredAccounts.id,
+            featuredAccounts.handle,
+            featuredAccounts.displayName,
+            featuredAccounts.followerCount,
+            featuredAccounts.avgEngagementRate,
+            featuredAccounts.profilePicUrl
+          )
+          .having(sql`COUNT(${featuredReels.id}) > 0`)
+          .orderBy(desc(featuredAccounts.followerCount))
+          .limit(input.limit);
+
+        return rows.map((r) => ({
+          id: r.id,
+          handle: r.handle,
+          displayName: r.displayName ?? "",
+          followerCount: r.followerCount,
+          avgEngagementRate: Number(r.avgEngagementRate),
+          profilePicUrl: r.profilePicUrl ?? "",
+          nicheName: "",
+        }));
+      }),
+
+    /**
+     * Top recent reels in the user’s onboarding niches (by primary niche tag),
+     * posted in the last 7 days, for the “Going viral” sidebar.
+     */
+    goingViralByNiches: protectedProcedure
+      .input(
+        z.object({
+          slugs: z.array(z.string().trim().min(1)).max(5),
+        })
+      )
+      .query(async ({ input }) => {
+        const slugs = Array.from(
+          new Set(input.slugs.map((s) => s.trim().toLowerCase()).filter(Boolean))
+        ).slice(0, 5);
+        if (slugs.length === 0) return [];
+
+        const db = await getDb();
+        if (!db) return [];
+
+        const rows = await db
+          .select({
+            reelId: featuredReels.id,
+            shortcode: featuredReels.reelShortcode,
+            caption: featuredReels.caption,
+            thumbnailUrl: featuredReels.thumbnailUrl,
+            viewCount: featuredReels.viewCount,
+            creatorHandle: featuredAccounts.handle,
+            creatorName: featuredAccounts.displayName,
+            profilePicUrl: featuredAccounts.profilePicUrl,
+            featuredAccountId: featuredAccounts.id,
+          })
+          .from(featuredReels)
+          .innerJoin(
+            featuredAccounts,
+            eq(featuredReels.featuredAccountId, featuredAccounts.id)
+          )
+          .innerJoin(
+            featuredAccountNiches,
+            and(
+              eq(featuredAccountNiches.accountId, featuredAccounts.id),
+              eq(featuredAccountNiches.isPrimary, true)
+            )
+          )
+          .innerJoin(
+            niches,
+            and(
+              eq(niches.id, featuredAccountNiches.nicheId),
+              inArray(niches.slug, slugs)
+            )
+          )
+          .where(
+            and(
+              eq(featuredAccounts.isActive, true),
+              ne(featuredReels.transcriptionStatus, "failed"),
+              sql`${featuredReels.postedAt} >= DATE_SUB(NOW(), INTERVAL 7 DAY)`
+            )
+          )
+          .orderBy(desc(featuredReels.viewCount))
+          .limit(5);
+
+        return rows.map((r) => ({
+          reelId: String(r.reelId),
+          shortcode: r.shortcode,
+          caption: r.caption ?? "",
+          thumbnailUrl: r.thumbnailUrl ?? "",
+          viewCount: r.viewCount,
+          creatorHandle: r.creatorHandle,
+          creatorName: r.creatorName ?? "",
+          profilePicUrl: r.profilePicUrl ?? "",
+          featuredAccountId: String(r.featuredAccountId),
+        }));
+      }),
+
+    /**
+     * Classify an arbitrary Instagram handle into one of the 30 niches
+     * using Claude Sonnet. Only called for handles outside the featured
+     * catalog — the "AI ✦" niche badge on the dashboard flags this
+     * classified-on-the-fly path.
+     *
+     * Caching design:
+     *   - When `scrapeJobId` is provided AND the job belongs to the
+     *     caller, we read-through / write-through the cache columns on
+     *     the `scrape_jobs` row so the dashboard can re-read without
+     *     spending another LLM call on every page load.
+     *   - Without a job id we just classify and return — useful for
+     *     ad-hoc callers (admin tools, batch scripts).
+     *
+     * Note on input shape: the spec (§1.2) lists only `{handle, bio,
+     * captions}`. Adding the optional `scrapeJobId` is the cleanest way
+     * to satisfy the "cache on the job row" directive from the same
+     * section without introducing a second mutation. Clients that don't
+     * need caching can simply omit it.
+     *
+     * Mutation (not query) because (a) it writes cache state and (b)
+     * the LLM call has real billing side effects — tRPC conventionally
+     * treats queries as idempotent/cacheable, which this isn't.
+     */
+    classifyHandle: protectedProcedure
+      .input(
+        z.object({
+          handle: z.string().trim().min(1),
+          bio: z.string().optional(),
+          // Cap at 5 captions per spec; the helper below also trims
+          // each one so a pathological caller can't blow the prompt.
+          captions: z.array(z.string()).max(5).optional(),
+          scrapeJobId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+
+        // 1) If caller provided a job id, authorize and check the cache.
+        type ScrapeJobRow = typeof scrapeJobs.$inferSelect;
+        let cacheableJob: ScrapeJobRow | undefined;
+        if (input.scrapeJobId !== undefined) {
+          const found = await db!
+            .select()
+            .from(scrapeJobs)
+            .where(
+              and(
+                eq(scrapeJobs.id, input.scrapeJobId),
+                eq(scrapeJobs.userId, ctx.user.id)
+              )
+            )
+            .limit(1);
+          if (found.length === 0) {
+            // NOT_FOUND (not FORBIDDEN) to avoid leaking existence of
+            // other users' jobs.
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Scrape job not found",
+            });
+          }
+          cacheableJob = found[0];
+
+          // Cache hit — skip the LLM call entirely.
+          if (
+            cacheableJob.classifiedNicheSlug &&
+            cacheableJob.classifiedConfidence
+          ) {
+            const nicheRow = await db!
+              .select({ name: niches.name })
+              .from(niches)
+              .where(eq(niches.slug, cacheableJob.classifiedNicheSlug))
+              .limit(1);
+            if (nicheRow.length > 0) {
+              return {
+                nicheSlug: cacheableJob.classifiedNicheSlug,
+                nicheName: nicheRow[0].name,
+                confidence: cacheableJob.classifiedConfidence,
+              };
+            }
+            // Cache has a stale slug (niche renamed/deleted). Fall
+            // through and re-classify rather than 500.
+          }
+        }
+
+        // 2) Pull the full niche list for both prompt and validation.
+        const allNiches = await db!
+          .select({ slug: niches.slug, name: niches.name })
+          .from(niches)
+          .orderBy(asc(niches.sortOrder));
+        if (allNiches.length === 0) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "No niches configured",
+          });
+        }
+
+        // 3) Build the prompt. Caption text is flattened + length-capped
+        //    to bound the prompt and keep the model on-task.
+        const nicheList = allNiches
+          .map((n) => `- ${n.slug}: ${n.name}`)
+          .join("\n");
+        const captionLines = (input.captions ?? [])
+          .slice(0, 5)
+          .map((c) => `- ${c.replace(/\s+/g, " ").slice(0, 400)}`)
+          .join("\n");
+
+        const prompt = `You are classifying an Instagram creator into one of 30 niches for a content analytics tool.
+
+Creator handle: @${input.handle}
+Bio: ${input.bio?.trim() ? input.bio.trim() : "(none)"}
+Recent reel captions:
+${captionLines || "(none)"}
+
+Available niches (slug: name):
+${nicheList}
+
+Return JSON only:
+{
+  "nicheSlug": "<one slug from the list>",
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "<one sentence>"
+}`;
+
+        // 4) Call Claude Sonnet via the existing invokeLLM wrapper.
+        //    json_object mode (not json_schema) keeps things simple;
+        //    we validate the slug against the DB below anyway.
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You classify Instagram creators into niches. Respond with valid JSON only — no prose, no markdown, no code fences.",
+            },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const raw = String(
+          response.choices[0]?.message?.content ?? ""
+        ).trim();
+        let parsed: { nicheSlug?: unknown; confidence?: unknown };
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Classifier returned non-JSON output",
+          });
+        }
+
+        // 5) Validate slug — the model can hallucinate niches that
+        //    aren't in our list. Also coerce confidence to the enum.
+        const nicheMatch = allNiches.find(
+          (n) => typeof parsed.nicheSlug === "string" && n.slug === parsed.nicheSlug
+        );
+        if (!nicheMatch) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Classifier returned unknown niche slug: ${String(parsed.nicheSlug)}`,
+          });
+        }
+        const confidence: "high" | "medium" | "low" =
+          parsed.confidence === "high" ||
+          parsed.confidence === "medium" ||
+          parsed.confidence === "low"
+            ? parsed.confidence
+            : "low";
+
+        // 6) Write-through the cache if we authorized a job row.
+        if (cacheableJob) {
+          await updateScrapeJob(cacheableJob.id, {
+            classifiedNicheSlug: nicheMatch.slug,
+            classifiedConfidence: confidence,
+            classifiedAt: new Date(),
+          });
+        }
+
+        return {
+          nicheSlug: nicheMatch.slug,
+          nicheName: nicheMatch.name,
+          confidence,
+        };
+      }),
+
+    /**
+     * Resolve a user-scoped demo scrape job for a featured account id.
+     * Used by /dashboard?featuredAccountId=<id> deep-links from /research:
+     *
+     * - If this user already has a demo job for the creator handle, reuse it.
+     * - Otherwise seed one on demand via seedDemoScrape.
+     *
+     * Mutation (not query) because it may write a new scrape_jobs row.
+     */
+    ensureDemoJob: protectedProcedure
+      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+
+        const accountRows = await db!
+          .select({
+            handle: featuredAccounts.handle,
+            isActive: featuredAccounts.isActive,
+          })
+          .from(featuredAccounts)
+          .where(eq(featuredAccounts.id, input.featuredAccountId))
+          .limit(1);
+
+        if (accountRows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Featured creator not found",
+          });
+        }
+
+        const account = accountRows[0];
+        const existingDemo = await db!
+          .select({ id: scrapeJobs.id })
+          .from(scrapeJobs)
+          .where(
+            and(
+              eq(scrapeJobs.userId, ctx.user.id),
+              eq(scrapeJobs.handle, account.handle),
+              eq(scrapeJobs.isDemo, true),
+              eq(scrapeJobs.status, "completed")
+            )
+          )
+          .orderBy(desc(scrapeJobs.createdAt))
+          .limit(1);
+
+        // If the creator was deactivated after this user already got a demo
+        // copy, keep serving the existing job.
+        if (existingDemo.length > 0) {
+          return { jobId: existingDemo[0].id };
+        }
+
+        if (!account.isActive) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Featured creator is unavailable",
+          });
+        }
+
+        const ENSURE_DEMO_SEED_TIMEOUT_MS = 30_000;
+        let seededJobId: number | null;
+        try {
+          seededJobId = await Promise.race([
+            seedDemoScrape(ctx.user.id, account.handle),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => {
+                const err = new Error("ENSURE_DEMO_JOB_SEED_TIMEOUT");
+                err.name = "EnsureDemoJobTimeout";
+                reject(err);
+              }, ENSURE_DEMO_SEED_TIMEOUT_MS);
+            }),
+          ]);
+        } catch (raceErr: unknown) {
+          const e = raceErr as { name?: string; message?: string };
+          if (e?.name === "EnsureDemoJobTimeout" && e?.message === "ENSURE_DEMO_JOB_SEED_TIMEOUT") {
+            console.error(
+              `[ensureDemoJob] timeout after 30s for featuredAccountId=${input.featuredAccountId}, userId=${ctx.user.id}`
+            );
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Couldn't load this creator right now. Please try again.",
+            });
+          }
+          throw raceErr;
+        }
+        if (seededJobId == null) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not prepare creator reels right now",
+          });
+        }
+        return { jobId: seededJobId };
+      }),
+  }),
+
   // ── Transcription ──
   transcribe: router({
     start: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .mutation(async ({ ctx, input }) => {
-        const reel = await getReelById(input.reelId);
+        const source: "user" | "featured" =
+          input.featuredReelId != null ? "featured" : "user";
+
+        // ────────────────────────────────────────────────────────────
+        // Featured branch — cache-first (Commit 4b). The catalog owns
+        // a single shared transcript per reel in `featured_reels`, so:
+        //  1. If the cache is warm (completed / no_speech), return
+        //     immediately. No usage burn, no Deepgram call, no row
+        //     in `transcriptions`.
+        //  2. If another user is already transcribing (`processing`),
+        //     return the same key so the UI polls the same cache.
+        //  3. Otherwise, kick off Deepgram in the background and
+        //     mark the cache `processing`. Retry path clears a prior
+        //     `failed` before re-kicking.
+        // ────────────────────────────────────────────────────────────
+        if (source === "featured") {
+          const fr = await getFeaturedReelById(input.featuredReelId!);
+          if (!fr) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
+          }
+          if (
+            fr.transcriptionStatus === "completed" ||
+            fr.transcriptionStatus === "no_speech"
+          ) {
+            return { transcriptionId: fr.id, status: "completed" as const };
+          }
+          if (fr.transcriptionStatus === "processing") {
+            return {
+              transcriptionId: fr.id,
+              status: "processing" as const,
+              queuePending: false,
+            };
+          }
+
+          // pending | failed → charge usage + kick Deepgram.
+          const usageCheck = await checkUsageLimit(
+            ctx.user.id,
+            "transcribeCount",
+            ctx.user.openId
+          );
+          if (!usageCheck.allowed) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            });
+          }
+          const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
+          await updateFeaturedReelTranscription(fr.id, {
+            transcriptionStatus: "processing",
+          });
+          await incrementUsage(ctx.user.id, "transcribeCount");
+          runFeaturedReelTranscription({
+            id: fr.id,
+            shortcode: fr.reelShortcode,
+            videoUrl: fr.videoUrl,
+          }).catch((err) => {
+            console.error(`Featured transcription ${fr.id} failed:`, err);
+          });
+          return {
+            transcriptionId: fr.id,
+            status: "processing" as const,
+            queuePending,
+          };
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // User-scrape branch — unchanged behavior. Each user owns
+        // their own row in `transcriptions`.
+        // ────────────────────────────────────────────────────────────
+        const reel = await getReelById(input.reelId!);
         if (!reel) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
         }
+        const reelForRun = {
+          id: reel.id,
+          shortcode: reel.shortcode,
+          videoUrl: reel.videoUrl,
+          caption: reel.caption,
+          thumbnailUrl: reel.thumbnailUrl,
+        };
 
-        const existing = await getTranscriptionByReelId(input.reelId);
+        const existing = await getTranscriptionByReelId(input.reelId!);
         if (existing && existing.status === "completed") {
           return { transcriptionId: existing.id, status: "completed" as const };
         }
         if (existing && existing.status === "processing") {
-          return { transcriptionId: existing.id, status: "processing" as const };
+          return {
+            transcriptionId: existing.id,
+            status: "processing" as const,
+            queuePending: false,
+          };
         }
 
-        // Check usage limit before starting new transcription
         const usageCheck = await checkUsageLimit(ctx.user.id, "transcribeCount", ctx.user.openId);
         if (!usageCheck.allowed) {
           throw new TRPCError({
@@ -409,7 +1607,6 @@ export const appRouter = router({
             message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
           });
         }
-        // If previously failed, delete and retry
         if (existing && existing.status === "failed") {
           const { getDb } = await import("./db");
           const db = await getDb();
@@ -421,24 +1618,39 @@ export const appRouter = router({
         }
 
         const transcriptionId = await createTranscription({
-          reelId: input.reelId,
+          reelId: input.reelId!,
+          featuredReelId: null,
           status: "processing",
+          queuedAt: new Date(),
         });
 
-        // Track usage
         await incrementUsage(ctx.user.id, "transcribeCount");
 
-        runTranscription(transcriptionId, reel).catch((err) => {
+        const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
+        runTranscription(transcriptionId, reelForRun).catch((err) => {
           console.error(`Transcription ${transcriptionId} failed:`, err);
         });
 
-        return { transcriptionId, status: "processing" as const };
+        return { transcriptionId, status: "processing" as const, queuePending };
       }),
 
     status: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .query(async ({ input }) => {
-        const transcription = await getTranscriptionByReelId(input.reelId);
+        const transcription =
+          input.featuredReelId != null
+            ? await getTranscriptionByFeaturedReelId(input.featuredReelId)
+            : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
   }),
@@ -510,7 +1722,6 @@ export const appRouter = router({
             : 0;
           return {
             reelUrl: r.reelUrl,
-            shortcode: r.shortcode,
             caption: r.caption || "",
             viewCount: r.viewCount,
             likeCount: r.likeCount,
@@ -518,7 +1729,6 @@ export const appRouter = router({
             engagementRate: Math.round(engagementRate * 100) / 100,
             duration: r.duration || 0,
             postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
-            thumbnailUrl: r.thumbnailUrl || "",
             transcript: t?.transcript || "",
             hookAnalysis: t?.hookAnalysis || "",
           };
@@ -540,19 +1750,40 @@ export const appRouter = router({
     /** Start script re-creation: analyze viral structure + generate new script */
     generate: protectedProcedure
       .input(
-        z.object({
-          reelId: z.number(),
-          topic: z.string().max(2000).optional().default(""),
-          gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
-        })
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+            topic: z.string().max(2000).optional().default(""),
+            gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
       )
       .mutation(async ({ ctx, input }) => {
-        const reel = await getReelById(input.reelId);
-        if (!reel) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+        const source: "user" | "featured" =
+          input.featuredReelId != null ? "featured" : "user";
+        let caption = "";
+        let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
+
+        if (source === "featured") {
+          const fr = await getFeaturedReelById(input.featuredReelId!);
+          if (!fr) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
+          }
+          caption = fr.caption ?? "";
+          transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
+        } else {
+          const reel = await getReelById(input.reelId!);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          caption = reel.caption ?? "";
+          transcription = await getTranscriptionByReelId(input.reelId!);
         }
 
-        const transcription = await getTranscriptionByReelId(input.reelId);
         if (!transcription || transcription.status !== "completed" || !transcription.transcript) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -576,7 +1807,8 @@ export const appRouter = router({
         await incrementUsage(ctx.user.id, "recreateCount");
 
         const scriptId = await createRecreatedScript({
-          reelId: input.reelId,
+          reelId: source === "user" ? input.reelId! : null,
+          featuredReelId: source === "featured" ? input.featuredReelId! : null,
           userId: ctx.user.id,
           topic: effectiveTopic,
           gradeLevel: input.gradeLevel,
@@ -584,7 +1816,7 @@ export const appRouter = router({
         });
 
         // Run generation in background
-        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, reel.caption || "", effectiveTopic, input.gradeLevel).catch((err: unknown) => {
+        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
 
@@ -620,13 +1852,27 @@ export const appRouter = router({
         }
         await incrementUsage(ctx.user.id, "rewriteCount");
 
-        // Get the original reel for context
-        const reel = existingScript.reelId ? await getReelById(existingScript.reelId) : null;
-        const transcription = existingScript.reelId ? await getTranscriptionByReelId(existingScript.reelId) : null;
+        // Get the original source (user-scrape reel OR featured reel) for
+        // caption + transcript context. The new rewrite row inherits whichever
+        // id the previous row carried so the "exactly one" invariant holds.
+        let reelCaption = "";
+        let reelTranscript = "";
+        if (existingScript.featuredReelId != null) {
+          const fr = await getFeaturedReelById(existingScript.featuredReelId);
+          reelCaption = fr?.caption ?? "";
+          const t = await getTranscriptionByFeaturedReelId(existingScript.featuredReelId);
+          reelTranscript = t?.transcript ?? "";
+        } else if (existingScript.reelId != null) {
+          const reel = await getReelById(existingScript.reelId);
+          reelCaption = reel?.caption ?? "";
+          const t = await getTranscriptionByReelId(existingScript.reelId);
+          reelTranscript = t?.transcript ?? "";
+        }
 
         // Create a new script entry for the rewrite
         const newScriptId = await createRecreatedScript({
-          reelId: existingScript.reelId!,
+          reelId: existingScript.reelId,
+          featuredReelId: existingScript.featuredReelId,
           userId: ctx.user.id,
           topic: existingScript.topic || "SAME_TOPIC",
           gradeLevel: input.gradeLevel,
@@ -638,8 +1884,8 @@ export const appRouter = router({
           newScriptId,
           existingScript.generatedScript,
           existingScript.viralStructure as Record<string, unknown> | null,
-          transcription?.transcript || "",
-          reel?.caption || "",
+          reelTranscript,
+          reelCaption,
           input.gradeLevel,
           input.targetDuration,
           input.addCues
@@ -659,52 +1905,368 @@ export const appRouter = router({
         return script;
       }),
 
-    /** List all recreated scripts for a reel */
+    /** List all recreated scripts for a reel (either source). */
     list: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
       .query(async ({ input }) => {
-        return getRecreatedScriptsByReelId(input.reelId);
+        if (input.featuredReelId != null) {
+          return getRecreatedScriptsByFeaturedReelId(input.featuredReelId);
+        }
+        return getRecreatedScriptsByReelId(input.reelId!);
+      }),
+
+    /**
+     * Latest recreated script per reel (max row id) for the current user.
+     * Dashboard list/grid uses this to show Make My Version / Generating /
+     * Open My Script. Missing keys = no row yet. Exactly one of reelIds /
+     * featuredReelIds must be non-empty.
+     */
+    checkBatch: protectedProcedure
+      .input(
+        z
+          .object({
+            reelIds: z.array(z.number()).optional(),
+            featuredReelIds: z.array(z.number()).optional(),
+          })
+          .refine(
+            (d) =>
+              (d.reelIds && d.reelIds.length > 0) !==
+              (d.featuredReelIds && d.featuredReelIds.length > 0),
+            {
+              message:
+                "Provide exactly one of reelIds or featuredReelIds (non-empty)",
+            }
+          )
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const map: Record<
+          number,
+          { latestScriptId: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+        > = {};
+        if (input.featuredReelIds && input.featuredReelIds.length > 0) {
+          const rows = await db
+            .select({
+              featuredReelId: recreatedScripts.featuredReelId,
+              id: recreatedScripts.id,
+              status: recreatedScripts.status,
+            })
+            .from(recreatedScripts)
+            .where(
+              and(
+                eq(recreatedScripts.userId, ctx.user.id),
+                inArray(
+                  recreatedScripts.featuredReelId as any,
+                  input.featuredReelIds
+                )
+              )
+            );
+          const best = new Map<
+            number,
+            { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+          >();
+          for (const r of rows) {
+            if (r.featuredReelId == null) continue;
+            const cur = best.get(r.featuredReelId);
+            if (!cur || r.id > cur.id) {
+              best.set(r.featuredReelId, { id: r.id, status: r.status });
+            }
+          }
+          for (const [fid, v] of best) {
+            map[fid] = { latestScriptId: v.id, status: v.status };
+          }
+          return map;
+        }
+        const rows = await db
+          .select({
+            reelId: recreatedScripts.reelId,
+            id: recreatedScripts.id,
+            status: recreatedScripts.status,
+          })
+          .from(recreatedScripts)
+          .where(
+            and(
+              eq(recreatedScripts.userId, ctx.user.id),
+              inArray(recreatedScripts.reelId as any, input.reelIds!)
+            )
+          );
+        const best = new Map<
+          number,
+          { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+        >();
+        for (const r of rows) {
+          if (r.reelId == null) continue;
+          const cur = best.get(r.reelId);
+          if (!cur || r.id > cur.id) {
+            best.set(r.reelId, { id: r.id, status: r.status });
+          }
+        }
+        for (const [rid, v] of best) {
+          map[rid] = { latestScriptId: v.id, status: v.status };
+        }
+        return map;
       }),
   }),
 
   // ── Saved Reels ──
   saved: router({
-    /** Toggle save/unsave a reel */
+    /**
+     * Toggle save/unsave a reel. Accepts either the user-scrape pair
+     * (`reelId` + `jobId`) or a featured-catalog id (`featuredReelId`);
+     * exactly one must be provided. The db helpers keep the two keyspaces
+     * separate so the "exactly-one-column-populated" invariant holds.
+     */
     toggle: protectedProcedure
-      .input(z.object({ reelId: z.number(), jobId: z.number() }))
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            jobId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => {
+              const userPair = d.reelId != null && d.jobId != null;
+              const userPartial =
+                (d.reelId != null) !== (d.jobId != null); // one but not both
+              const featured = d.featuredReelId != null;
+              if (userPartial) return false;
+              return userPair !== featured;
+            },
+            {
+              message:
+                "Provide exactly one of (reelId + jobId) OR featuredReelId",
+            }
+          )
+      )
       .mutation(async ({ ctx, input }) => {
-        const alreadySaved = await isReelSaved(ctx.user.id, input.reelId);
-        if (alreadySaved) {
-          await unsaveReel(ctx.user.id, input.reelId);
-          return { saved: false } as const;
-        } else {
-          await saveReel({ userId: ctx.user.id, reelId: input.reelId, jobId: input.jobId });
+        if (input.featuredReelId != null) {
+          const alreadySaved = await isFeaturedReelSaved(ctx.user.id, input.featuredReelId);
+          if (alreadySaved) {
+            await unsaveFeaturedReel(ctx.user.id, input.featuredReelId);
+            return { saved: false } as const;
+          }
+          await saveFeaturedReel(ctx.user.id, input.featuredReelId);
           return { saved: true } as const;
         }
-      }),
-
-    /** Check if a reel is saved */
-    check: protectedProcedure
-      .input(z.object({ reelId: z.number() }))
-      .query(async ({ ctx, input }) => {
-        const saved = await isReelSaved(ctx.user.id, input.reelId);
-        return { saved };
-      }),
-
-    /** Check which reels from a list are saved */
-    checkBatch: protectedProcedure
-      .input(z.object({ reelIds: z.array(z.number()) }))
-      .query(async ({ ctx, input }) => {
-        const savedMap: Record<number, boolean> = {};
-        for (const reelId of input.reelIds) {
-          savedMap[reelId] = await isReelSaved(ctx.user.id, reelId);
+        const alreadySaved = await isReelSaved(ctx.user.id, input.reelId!);
+        if (alreadySaved) {
+          await unsaveReel(ctx.user.id, input.reelId!);
+          return { saved: false } as const;
         }
+        await saveReel({ userId: ctx.user.id, reelId: input.reelId!, jobId: input.jobId! });
+        return { saved: true } as const;
+      }),
+
+    /** Check if a reel is saved (either source). */
+    check: protectedProcedure
+      .input(
+        z
+          .object({
+            reelId: z.number().optional(),
+            featuredReelId: z.number().optional(),
+          })
+          .refine(
+            (d) => (d.reelId != null) !== (d.featuredReelId != null),
+            { message: "Provide exactly one of reelId or featuredReelId" }
+          )
+      )
+      .query(async ({ ctx, input }) => {
+        if (input.featuredReelId != null) {
+          return { saved: await isFeaturedReelSaved(ctx.user.id, input.featuredReelId) };
+        }
+        return { saved: await isReelSaved(ctx.user.id, input.reelId!) };
+      }),
+
+    /**
+     * Check which reels from a list are saved. Callers pass EITHER
+     * `reelIds` (job view) OR `featuredReelIds` (featured view). Returned
+     * map is keyed by whichever id type was supplied.
+     */
+    checkBatch: protectedProcedure
+      .input(
+        z
+          .object({
+            reelIds: z.array(z.number()).optional(),
+            featuredReelIds: z.array(z.number()).optional(),
+          })
+          .refine(
+            (d) =>
+              (d.reelIds != null && d.featuredReelIds == null) ||
+              (d.reelIds == null && d.featuredReelIds != null),
+            {
+              message:
+                "Provide exactly one of reelIds or featuredReelIds",
+            }
+          )
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const userId = ctx.user.id;
+        const savedMap: Record<number, boolean> = {};
+
+        if (input.featuredReelIds) {
+          const ids = input.featuredReelIds;
+          for (const id of ids) savedMap[id] = false;
+          if (ids.length === 0) return savedMap;
+          const savedSet = new Set<number>();
+          for (let i = 0; i < ids.length; i += SAVED_CHECK_BATCH) {
+            const chunk = ids.slice(i, i + SAVED_CHECK_BATCH);
+            const rows = await db
+              .select({ featuredReelId: savedReels.featuredReelId })
+              .from(savedReels)
+              .where(
+                and(
+                  eq(savedReels.userId, userId),
+                  inArray(savedReels.featuredReelId, chunk)
+                )
+              );
+            for (const r of rows) {
+              if (r.featuredReelId != null) savedSet.add(r.featuredReelId);
+            }
+          }
+          for (const id of ids) savedMap[id] = savedSet.has(id);
+          return savedMap;
+        }
+
+        const ids = input.reelIds!;
+        for (const id of ids) savedMap[id] = false;
+        if (ids.length === 0) return savedMap;
+        const savedSet = new Set<number>();
+        for (let i = 0; i < ids.length; i += SAVED_CHECK_BATCH) {
+          const chunk = ids.slice(i, i + SAVED_CHECK_BATCH);
+          const rows = await db
+            .select({ reelId: savedReels.reelId })
+            .from(savedReels)
+            .where(
+              and(eq(savedReels.userId, userId), inArray(savedReels.reelId, chunk))
+            );
+          for (const r of rows) {
+            if (r.reelId != null) savedSet.add(r.reelId);
+          }
+        }
+        for (const id of ids) savedMap[id] = savedSet.has(id);
         return savedMap;
       }),
 
-    /** List all saved reels with full details */
+    /**
+     * List all saved reels with full details. Merges the two sources
+     * behind a single normalized shape — each item exposes `source`
+     * ("scraped" | "featured") so the frontend can route clicks to the
+     * correct dashboard URL. Shape keeps the `reel` + `job` fields the
+     * existing UI already consumes for scraped rows; featured rows synth
+     * the same keys from `featured_reels` / `featured_accounts`.
+     */
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getSavedReelsWithDetails(ctx.user.id);
+      const scraped = await getSavedReelsWithDetails(ctx.user.id);
+      const featured = await getSavedFeaturedReelsWithDetails(ctx.user.id);
+
+      type ListedSaved = {
+        id: number;
+        createdAt: Date;
+        source: "scraped" | "featured";
+        reelId: number | null;
+        jobId: number | null;
+        featuredReelId: number | null;
+        reel: {
+          id: number;
+          shortcode: string;
+          thumbnailUrl: string | null;
+          videoUrl: string | null;
+          caption: string | null;
+          viewCount: number;
+          likeCount: number;
+          commentCount: number;
+          duration: number | null;
+          postedAt: Date;
+          reelUrl: string;
+          ownerUsername: string | null;
+        };
+        job: {
+          id: number;
+          handle: string;
+          followerCount: number;
+          featuredAccountId: number | null;
+        };
+        transcription?: Transcription;
+      };
+
+      const scrapedItems: ListedSaved[] = scraped.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        source: "scraped" as const,
+        reelId: s.reelId,
+        jobId: s.jobId,
+        featuredReelId: null,
+        reel: {
+          id: s.reel.id,
+          shortcode: s.reel.shortcode,
+          thumbnailUrl: s.reel.thumbnailUrl,
+          videoUrl: s.reel.videoUrl,
+          caption: s.reel.caption,
+          viewCount: s.reel.viewCount ?? 0,
+          likeCount: s.reel.likeCount ?? 0,
+          commentCount: s.reel.commentCount ?? 0,
+          duration: s.reel.duration,
+          postedAt: s.reel.postedAt,
+          reelUrl: s.reel.reelUrl,
+          ownerUsername: s.reel.ownerUsername,
+        },
+        job: {
+          id: s.job.id,
+          handle: s.job.handle,
+          followerCount: s.job.followerCount ?? 0,
+          featuredAccountId: null,
+        },
+        transcription: s.transcription,
+      }));
+
+      const featuredItems: ListedSaved[] = featured.map((f) => ({
+        id: f.id,
+        createdAt: f.createdAt,
+        source: "featured" as const,
+        reelId: null,
+        jobId: null,
+        featuredReelId: f.featuredReelId,
+        reel: {
+          id: f.featuredReel.id,
+          shortcode: f.featuredReel.reelShortcode,
+          thumbnailUrl: f.featuredReel.thumbnailUrl,
+          videoUrl: f.featuredReel.videoUrl,
+          caption: f.featuredReel.caption,
+          viewCount: f.featuredReel.viewCount ?? 0,
+          likeCount: f.featuredReel.likeCount ?? 0,
+          commentCount: f.featuredReel.commentCount ?? 0,
+          duration: f.featuredReel.duration,
+          postedAt: f.featuredReel.postedAt,
+          reelUrl: `https://www.instagram.com/reel/${f.featuredReel.reelShortcode}/`,
+          ownerUsername: f.featuredAccount.handle,
+        },
+        job: {
+          id: f.featuredAccount.id,
+          handle: f.featuredAccount.handle,
+          followerCount: f.featuredAccount.followerCount ?? 0,
+          featuredAccountId: f.featuredAccount.id,
+        },
+        transcription: f.transcription,
+      }));
+
+      const combined = [...scrapedItems, ...featuredItems].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      );
+      return combined;
     }),
   }),
 
@@ -1677,24 +3239,11 @@ The hook MUST be 7-10 words. Count them.`
       .query(async ({ input }) => {
         try {
           const profile = await fetchProfile(input.handle);
-          let proxiedPicUrl = "";
-          if (profile.profilePicUrl) {
-            try {
-              const { gotScraping: gs } = await import("got-scraping");
-              const picRes = await gs({
-                url: profile.profilePicUrl,
-                responseType: "buffer",
-                timeout: { request: 10000 },
-                retry: { limit: 0 },
-              });
-              if (picRes.statusCode === 200 && picRes.rawBody) {
-                const suffix = Math.random().toString(36).slice(2, 8);
-                const key = `profile-pics/${profile.username}-${suffix}.jpg`;
-                const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-                proxiedPicUrl = url;
-              }
-            } catch {}
-          }
+          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.profilePicUrl
+          );
           return {
             found: true as const,
             username: profile.username,
@@ -1822,6 +3371,239 @@ The hook MUST be 7-10 words. Count them.`
         await upsertUserPreferences(ctx.user.id, { timezone: input.timezone });
         return { success: true };
       }),
+  }),
+
+  // ── Onboarding state (first-run experience flags + flow) ──
+  onboarding: router({
+    /**
+     * Returns all 8 onboarding fields in one call. The dashboard demo
+     * banner (spec §7.4) keys off `demoSeededAt`, the OnboardingGate
+     * keys off the `onboarding{Completed,Skipped}At` timestamps, and
+     * the Step 1 niche grid pre-hydrates off `selectedNicheSlugs` —
+     * all bundled here so the client only pays one round-trip.
+     */
+    getState: protectedProcedure.query(async ({ ctx }) => {
+      const state = await getOnboardingState(ctx.user.id);
+      if (!state) {
+        // ctx.user is set by `requireUser`, so the row must exist. If
+        // it doesn't, something upstream is very wrong.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+      return {
+        hasSeenWelcome: state.hasSeenWelcome,
+        hasDismissedHintCard: state.hasDismissedHintCard,
+        hasCompletedFirstSpy: state.hasCompletedFirstSpy,
+        hasDismissedDemoBanner: state.hasDismissedDemoBanner,
+        demoSeededAt: state.demoSeededAt,
+        selectedNicheSlugs: state.selectedNicheSlugs ?? [],
+        selectedCreatorHandles: state.selectedCreatorHandles ?? null,
+        onboardingCompletedAt: state.onboardingCompletedAt,
+        onboardingSkippedAt: state.onboardingSkippedAt,
+      };
+    }),
+
+    /** Fires on any welcome-modal action (close, tour, demo, overlay). */
+    dismissWelcome: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasSeenWelcome: true });
+      return { success: true };
+    }),
+
+    /** 3-step hint card on /research dismissed via its X button. */
+    dismissHintCard: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasDismissedHintCard: true });
+      return { success: true };
+    }),
+
+    /** Dashboard demo banner X button (spec §7.4). */
+    dismissDemoBanner: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateOnboardingState(ctx.user.id, { hasDismissedDemoBanner: true });
+      return { success: true };
+    }),
+
+    /**
+     * Finalizes /onboarding: records the user's niche picks, optionally
+     * seeds a demo scrape for the creator they chose, and stamps the
+     * completion timestamp. Robust to every failure mode — per the
+     * "demo seed failure must not block onboarding" rule, a seed
+     * failure still returns `success: true` with `demoJobId: null`.
+     *
+     * Response variants:
+     *   - Happy path:        { success, demoJobId: <id>, alreadyComplete: false }
+     *   - Handle not found:  { success, demoJobId: <id>, alreadyComplete: false,
+     *                          warning: "selected_creator_not_found" }
+     *   - Seed failed:       { success, demoJobId: null, alreadyComplete: false }
+     *   - Already complete:  { success, demoJobId: null, alreadyComplete: true }
+     */
+    complete: protectedProcedure
+      .input(
+        z.object({
+          selectedNicheSlugs: z.array(z.string().trim().min(1)).min(1).max(5),
+          featuredAccountHandles: z
+            .array(z.string().trim().min(1))
+            .min(1)
+            .max(5)
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const state = await getOnboardingState(ctx.user.id);
+        if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
+          return {
+            success: true as const,
+            demoJobId: null,
+            alreadyComplete: true as const,
+            demoCreatorHandle: null as string | null,
+          };
+        }
+
+        // Dedupe slugs defensively — the client shouldn't send dupes,
+        // but if a race or bug slips one through, we don't want to
+        // store a malformed JSON array on the user row.
+        const dedupedSlugs = Array.from(new Set(input.selectedNicheSlugs));
+
+        const normalizeOnboardingHandle = (h: string) => h.replace(/^@/, "").trim().toLowerCase();
+        const dedupedCreatorHandles: string[] = (() => {
+          const list = input.featuredAccountHandles ?? [];
+          const seen = new Set<string>();
+          const out: string[] = [];
+          for (const raw of list) {
+            const n = normalizeOnboardingHandle(raw);
+            if (seen.has(n)) continue;
+            seen.add(n);
+            out.push(n);
+          }
+          return out;
+        })();
+
+        // Detect the fallback case: first preferred handle (demo seed) doesn't
+        // resolve to an active featured account; seed still falls back.
+        let warning: "selected_creator_not_found" | undefined;
+        const firstPreferred = dedupedCreatorHandles[0];
+        if (firstPreferred) {
+          const exists = await (await getDb())!
+            .select({ id: featuredAccounts.id })
+            .from(featuredAccounts)
+            .where(
+              and(
+                eq(featuredAccounts.handle, firstPreferred),
+                eq(featuredAccounts.isActive, true)
+              )
+            )
+            .limit(1);
+          if (exists.length === 0) {
+            warning = "selected_creator_not_found";
+          }
+        }
+
+        const demoJobId = await seedDemoScrape(
+          ctx.user.id,
+          firstPreferred ?? undefined
+        );
+        await markOnboardingComplete(
+          ctx.user.id,
+          dedupedSlugs,
+          dedupedCreatorHandles,
+          demoJobId !== null ? new Date() : null
+        );
+        let demoCreatorHandle: string | null = null;
+        if (demoJobId) {
+          const seededJob = await getScrapeJob(demoJobId);
+          demoCreatorHandle = seededJob?.handle ?? null;
+        }
+        return {
+          success: true as const,
+          demoJobId,
+          alreadyComplete: false as const,
+          demoCreatorHandle,
+          ...(warning ? { warning } : {}),
+        };
+      }),
+
+    /**
+     * User hit "Skip setup". No niche prefs captured, but we still seed
+     * a demo (using the richness winner) so their dashboard isn't
+     * empty on arrival. Idempotent — re-calling after completion or
+     * a prior skip is a no-op.
+     */
+    /**
+     * Settings → "Your Interests" save (Commit 8). Lets a user change
+     * their onboarding-era picks after the fact. Intentionally does NOT
+     * re-seed a demo scrape or flip any onboarding timestamps — that's
+     * the one-time first-run ceremony owned by `complete` / `skip`.
+     *
+     * Creators are optional because users who went through "Pick for
+     * me" in onboarding don't own a curated list; passing an empty
+     * array clears the field.
+     */
+    updatePreferences: protectedProcedure
+      .input(
+        z.object({
+          selectedNicheSlugs: z.array(z.string().trim().min(1)).max(5),
+          selectedCreatorHandles: z
+            .array(z.string().trim().min(1))
+            .max(5)
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+        // `null` vs `[]`: we store empty arrays as null so the sidebar
+        // "Your Interests" panel's `data != null` check cleanly
+        // distinguishes "user opted out" from "user picked zero".
+        const niches = input.selectedNicheSlugs.length > 0
+          ? input.selectedNicheSlugs
+          : null;
+        const creators =
+          input.selectedCreatorHandles == null ||
+          input.selectedCreatorHandles.length === 0
+            ? null
+            : input.selectedCreatorHandles;
+        await db
+          .update(users)
+          .set({
+            selectedNicheSlugs: niches,
+            selectedCreatorHandles: creators,
+          })
+          .where(eq(users.id, ctx.user.id));
+        return { success: true as const };
+      }),
+
+    skip: protectedProcedure.mutation(async ({ ctx }) => {
+      const state = await getOnboardingState(ctx.user.id);
+      if (state?.onboardingCompletedAt || state?.onboardingSkippedAt) {
+        return {
+          success: true as const,
+          alreadyDone: true as const,
+          demoJobId: null as null,
+          demoCreatorHandle: null as string | null,
+        };
+      }
+      const demoJobId = await seedDemoScrape(ctx.user.id);
+      await markOnboardingSkipped(
+        ctx.user.id,
+        demoJobId !== null ? new Date() : null
+      );
+      let demoCreatorHandle: string | null = null;
+      if (demoJobId) {
+        const seededJob = await getScrapeJob(demoJobId);
+        demoCreatorHandle = seededJob?.handle ?? null;
+      }
+      return {
+        success: true as const,
+        alreadyDone: false as const,
+        demoJobId,
+        demoCreatorHandle,
+      };
+    }),
   }),
 
   // ── Blog ──
@@ -2022,8 +3804,9 @@ The hook MUST be 7-10 words. Count them.`
         const txns = await db
           .select({ reelId: transcriptions.reelId, status: transcriptions.status })
           .from(transcriptions)
-          .where(inArray(transcriptions.reelId, transcriptionReelIds));
+          .where(inArray(transcriptions.reelId as any, transcriptionReelIds));
         for (const t of txns) {
+          if (t.reelId == null) continue;
           txnStatusByReelId.set(t.reelId, t.status);
         }
       }
@@ -2254,6 +4037,7 @@ The hook MUST be 7-10 words. Count them.`
         const transcriptionId = await createTranscription({
           reelId,
           status: "processing",
+          queuedAt: new Date(),
         });
 
         // Run transcription in background (reuse existing logic)
@@ -2800,11 +4584,10 @@ async function fetchAndUpdateCollectedReelBg(reelId: number, shortcode: string):
   }
 }
 
-function escapeCsv(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
+/** RFC 4180: every field double-quoted; internal " escaped as "". */
+function formatCsvField(value: string | number | boolean | null | undefined): string {
+  const s = value === null || value === undefined ? "" : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 async function buildExportData(jobId: number) {
@@ -2818,7 +4601,6 @@ async function buildExportData(jobId: number) {
 
   const headers = [
     "Reel URL",
-    "Shortcode",
     "Caption",
     "Views",
     "Likes",
@@ -2826,38 +4608,66 @@ async function buildExportData(jobId: number) {
     "Engagement Rate (%)",
     "Duration (s)",
     "Posted At",
-    "Thumbnail URL",
     "Transcript",
     "Hook Analysis",
   ];
 
-  const rows = reelsList.map((r) => {
+  const headerLine = headers.map((h) => formatCsvField(h)).join(",");
+
+  const bodyLines = reelsList.map((r) => {
     const t = transcriptionMap.get(r.id);
     const engagementRate = followerCount > 0
       ? ((r.likeCount + r.commentCount) / followerCount) * 100
       : 0;
+    const er = Math.round(engagementRate * 100) / 100;
     return [
-      r.reelUrl,
-      r.shortcode,
-      escapeCsv(r.caption || ""),
-      r.viewCount.toString(),
-      r.likeCount.toString(),
-      r.commentCount.toString(),
-      (Math.round(engagementRate * 100) / 100).toString(),
-      (r.duration || 0).toString(),
-      r.postedAt ? new Date(r.postedAt).toISOString() : "",
-      r.thumbnailUrl || "",
-      escapeCsv(t?.transcript || ""),
-      escapeCsv(t?.hookAnalysis || ""),
-    ];
+      formatCsvField(r.reelUrl),
+      formatCsvField(r.caption || ""),
+      formatCsvField(r.viewCount),
+      formatCsvField(r.likeCount),
+      formatCsvField(r.commentCount),
+      formatCsvField(er),
+      formatCsvField(r.duration || 0),
+      formatCsvField(r.postedAt ? new Date(r.postedAt).toISOString() : ""),
+      formatCsvField(t?.transcript || ""),
+      formatCsvField(t?.hookAnalysis || ""),
+    ].join(",");
   });
 
-  const csvContent =
-    headers.join(",") + "\n" + rows.map((row) => row.join(",")).join("\n");
+  const csvContent = headerLine + (bodyLines.length ? "\n" + bodyLines.join("\n") : "");
 
   const filename = `reels_${job?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.csv`;
 
   return { csvContent, filename };
+}
+
+/**
+ * Flip `hasCompletedFirstSpy` exactly once for a user's first successful
+ * non-demo scrape completion. Guard rails:
+ *  - Demo-seeded jobs never count as first spies (`scrapeJob.isDemo`).
+ *  - If the flag is already true, skip the write.
+ *  - Missing job/user rows are treated as no-ops (defensive).
+ *
+ * This helper intentionally only runs from runScrapeJob completion paths.
+ * Resync and failed jobs must not mutate this onboarding flag.
+ */
+async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
+  try {
+    const job = await getScrapeJob(jobId);
+    if (!job) return;
+    if (job.isDemo) return;
+
+    const onboardingState = await getOnboardingState(job.userId);
+    if (!onboardingState) return;
+    if (onboardingState.hasCompletedFirstSpy) return;
+
+    await updateOnboardingState(job.userId, { hasCompletedFirstSpy: true });
+  } catch (error) {
+    console.warn(
+      `[maybeMarkFirstSpyCompleted] Non-fatal error for job ${jobId}:`,
+      error
+    );
+  }
 }
 
 /** Background scrape job runner */
@@ -2867,32 +4677,49 @@ async function runScrapeJob(
   timeframeDays: number
 ): Promise<void> {
   try {
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(handle, timeframeDays, (count) => {
-      updateScrapeJob(jobId, { totalReels: count }).catch(() => {});
-    }, { maxReels: 500, timeoutMs: 5 * 60 * 1000 });
+    // Stage 1: connecting → about to call Instagram for the profile.
+    await updateScrapeJob(jobId, {
+      status: "running",
+      currentStep: "connecting",
+      progressPercent: 5,
+    });
 
-    // Proxy profile pic through S3 to avoid Instagram CORS/hotlink blocking
-    let proxiedPicUrl = "";
-    if (profilePicUrl) {
-      try {
-        const { gotScraping: gs } = await import("got-scraping");
-        const picRes = await gs({
-          url: profilePicUrl,
-          responseType: "buffer",
-          timeout: { request: 10000 },
-          retry: { limit: 0 },
-        });
-        if (picRes.statusCode === 200 && picRes.rawBody) {
-          const suffix = Math.random().toString(36).slice(2, 8);
-          const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
-          const key = `profile-pics/${cleanHandle}-${suffix}.jpg`;
-          const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-          proxiedPicUrl = url;
-        }
-      } catch {
-        // If proxy fails, leave empty - UI shows fallback avatar
-      }
-    }
+    // Stage 2: fetching_profile → scrapeReels will call fetchProfile as its
+    // first step; we can't peek inside the function, so we mark the stage at
+    // the boundary.
+    await updateScrapeJob(jobId, {
+      currentStep: "fetching_profile",
+      progressPercent: 15,
+    });
+
+    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
+      handle,
+      timeframeDays,
+      (count) => {
+        // Stage 3: pulling_reels → scales 20→80 against a visual baseline
+        // of 30 reels; caps at 80 so we always leave headroom for ranking.
+        updateScrapeJob(jobId, {
+          currentStep: "pulling_reels",
+          totalReels: count,
+          reelsFound: count,
+          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+        }).catch(() => {});
+      },
+      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+    );
+
+    // Stage 4: ranking → insert + finalize. Set before pic proxy so the UI
+    // has a visible "analyzing" beat even when the proxy work is quick.
+    await updateScrapeJob(jobId, {
+      currentStep: "ranking",
+      progressPercent: 85,
+    });
+
+    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
+    const proxiedPicUrl = await ensureProfilePicOnR2(
+      cleanHandle,
+      profilePicUrl
+    );
 
     if (reelData.length === 0) {
       await updateScrapeJob(jobId, {
@@ -2900,7 +4727,12 @@ async function runScrapeJob(
         totalReels: 0,
         followerCount,
         profilePicUrl: proxiedPicUrl || undefined,
+        currentStep: "complete",
+        progressPercent: 100,
+        errorMessage: null,
+        failureReason: null,
       });
+      await maybeMarkFirstSpyCompleted(jobId);
       return;
     }
 
@@ -2926,12 +4758,22 @@ async function runScrapeJob(
       totalReels: reelData.length,
       followerCount,
       profilePicUrl: proxiedPicUrl || undefined,
+      currentStep: "complete",
+      reelsFound: reelData.length,
+      progressPercent: 100,
+      errorMessage: null,
+      failureReason: null,
     });
+    await maybeMarkFirstSpyCompleted(jobId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    // Failure preserves the last progressPercent the UI saw — just flip the
+    // terminal flags so the client can show the error state.
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
+      currentStep: "failed",
+      failureReason: classifyScrapeFailureMessage(message),
     });
   }
 }
@@ -2943,32 +4785,39 @@ async function runResyncJob(
   daysSinceSync: number
 ): Promise<void> {
   try {
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(handle, daysSinceSync, (count) => {
-      updateScrapeJob(jobId, { totalReels: count }).catch(() => {});
-    }, { maxReels: 500, timeoutMs: 5 * 60 * 1000 });
+    await updateScrapeJob(jobId, {
+      currentStep: "connecting",
+      progressPercent: 5,
+    });
+    await updateScrapeJob(jobId, {
+      currentStep: "fetching_profile",
+      progressPercent: 15,
+    });
 
-    // Proxy profile pic through S3 (refresh on each resync for freshness)
-    let proxiedPicUrl = "";
-    if (profilePicUrl) {
-      try {
-        const { gotScraping: gs } = await import("got-scraping");
-        const picRes = await gs({
-          url: profilePicUrl,
-          responseType: "buffer",
-          timeout: { request: 10000 },
-          retry: { limit: 0 },
-        });
-        if (picRes.statusCode === 200 && picRes.rawBody) {
-          const suffix = Math.random().toString(36).slice(2, 8);
-          const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
-          const key = `profile-pics/${cleanHandle}-${suffix}.jpg`;
-          const { url } = await storagePut(key, picRes.rawBody, "image/jpeg");
-          proxiedPicUrl = url;
-        }
-      } catch {
-        // If proxy fails, keep existing pic
-      }
-    }
+    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
+      handle,
+      daysSinceSync,
+      (count) => {
+        updateScrapeJob(jobId, {
+          currentStep: "pulling_reels",
+          totalReels: count,
+          reelsFound: count,
+          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+        }).catch(() => {});
+      },
+      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+    );
+
+    await updateScrapeJob(jobId, {
+      currentStep: "ranking",
+      progressPercent: 85,
+    });
+
+    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
+    const proxiedPicUrl = await ensureProfilePicOnR2(
+      cleanHandle,
+      profilePicUrl
+    );
 
     // Get existing shortcodes to deduplicate
     const existingShortcodes = new Set(await getExistingShortcodes(jobId));
@@ -3001,6 +4850,13 @@ async function runResyncJob(
       status: "completed",
       profilePicUrl: proxiedPicUrl || undefined,
     });
+    await updateScrapeJob(jobId, {
+      currentStep: "complete",
+      reelsFound: totalReels,
+      progressPercent: 100,
+      errorMessage: null,
+      failureReason: null,
+    });
 
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
   } catch (error) {
@@ -3008,6 +4864,8 @@ async function runResyncJob(
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
+      currentStep: "failed",
+      failureReason: classifyScrapeFailureMessage(message),
     });
   }
 }
@@ -3032,6 +4890,7 @@ async function runTranscription(
   }
   activeTranscriptions++;
   try {
+    await updateTranscription(transcriptionId, { startedAt: new Date() });
     // Always fetch fresh URL to avoid expired Instagram video URLs
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
     if (!initialFresh?.videoUrl) {
@@ -3090,6 +4949,74 @@ async function runTranscription(
     await updateTranscription(transcriptionId, {
       status: "failed",
       errorMessage: message,
+    });
+  } finally {
+    activeTranscriptions--;
+  }
+}
+
+/**
+ * Featured-reel transcription runner (Commit 4b). Writes the result
+ * straight into `featured_reels` instead of `transcriptions` because the
+ * catalog owns a single shared transcript per reel — the same semaphore
+ * + fresh-URL logic as `runTranscription`, but no hook analysis and no
+ * per-user row. Also used by the backfill script.
+ */
+export async function runFeaturedReelTranscription(reel: {
+  id: number;
+  shortcode: string;
+  videoUrl: string | null;
+}): Promise<void> {
+  while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  activeTranscriptions++;
+  try {
+    // Instagram CDN URLs in the catalog can be stale; refetching guards
+    // against the "video unavailable" trap when the backfill runs weeks
+    // after the initial scrape.
+    const initialFresh = await fetchReelByShortcode(reel.shortcode);
+    if (!initialFresh?.videoUrl) {
+      throw new Error(
+        "Could not retrieve video URL for this reel. The video may no longer be available."
+      );
+    }
+    const videoUrl = initialFresh.videoUrl;
+
+    const { transcribeReel } = await import("./services/transcribeReel.js");
+    const result = await transcribeReel({ videoUrl, shortcode: reel.shortcode });
+
+    if (!result.success) {
+      if (result.errorCode === "NO_SPEECH_DETECTED") {
+        await updateFeaturedReelTranscription(reel.id, {
+          transcriptionStatus: "no_speech",
+          transcript: "",
+          transcriptSegments: [],
+          transcribedAt: new Date(),
+        });
+        return;
+      }
+      throw new Error(result.userMessage);
+    }
+
+    await updateFeaturedReelTranscription(reel.id, {
+      transcriptionStatus: "completed",
+      transcript: result.transcript,
+      transcriptSegments: result.segments as {
+        start: number;
+        end: number;
+        text: string;
+      }[],
+      transcribedAt: new Date(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[runFeaturedReelTranscription] ${message}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    await updateFeaturedReelTranscription(reel.id, {
+      transcriptionStatus: "failed",
     });
   } finally {
     activeTranscriptions--;

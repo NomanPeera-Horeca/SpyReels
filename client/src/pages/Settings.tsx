@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
+import { InterestsEditorSection } from "@/components/InterestsEditorSection";
 import {
   Select,
   SelectContent,
@@ -21,6 +24,9 @@ import {
   ExternalLink,
   CheckCircle,
   Clock,
+  Monitor,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 const TIMEZONES = [
@@ -45,6 +51,7 @@ const TIMEZONES = [
 
 export default function Settings() {
   const posthog = usePostHog();
+  const { themePreference, setThemePreference } = useTheme();
   const prefsQuery = trpc.preferences.get.useQuery();
   const telegramQuery = trpc.telegram.status.useQuery();
   const updatePrefs = trpc.preferences.update.useMutation({
@@ -112,6 +119,68 @@ export default function Settings() {
           Settings
         </h1>
       </div>
+
+      <div className="rounded-lg border border-border/50 bg-card p-5">
+        <h2 className="mb-1 text-sm font-semibold text-foreground">
+          Appearance
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Choose how SpyReels looks. You can also use the quick theme control
+          in the sidebar.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setThemePreference("system")}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              themePreference === "system"
+                ? "border-primary bg-primary/5"
+                : "border-border/50 bg-background hover:bg-muted/50"
+            )}
+          >
+            <Monitor className="mb-2 h-4 w-4 text-primary" aria-hidden />
+            <div className="text-sm font-medium">System</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Match your device theme
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setThemePreference("light")}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              themePreference === "light"
+                ? "border-primary bg-primary/5"
+                : "border-border/50 bg-background hover:bg-muted/50"
+            )}
+          >
+            <Sun className="mb-2 h-4 w-4 text-primary" aria-hidden />
+            <div className="text-sm font-medium">Light</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Always use light (beta)
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setThemePreference("dark")}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              themePreference === "dark"
+                ? "border-primary bg-primary/5"
+                : "border-border/50 bg-background hover:bg-muted/50"
+            )}
+          >
+            <Moon className="mb-2 h-4 w-4 text-primary" aria-hidden />
+            <div className="text-sm font-medium">Dark</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Always use dark
+            </p>
+          </button>
+        </div>
+      </div>
+
+      <InterestsEditorSection variant="settings" />
 
       {/* Telegram Connection Section */}
       <div className="rounded-lg border border-border/50 bg-card p-6">

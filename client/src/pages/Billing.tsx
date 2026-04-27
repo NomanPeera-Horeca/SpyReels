@@ -113,7 +113,7 @@ export default function Billing() {
         },
         {
           icon: FileText,
-          label: "Handle Scrapes",
+          label: "Account research",
           used: rawUsage.usage.scrapeCount ?? 0,
           limit: rawUsage.limits.scrapesPerMonth ?? 2,
           color: "bg-amber-500",
@@ -225,7 +225,7 @@ export default function Billing() {
                 <div className="text-zinc-300">
                   {sub.currentPeriodEnd
                     ? new Date(sub.currentPeriodEnd).toLocaleDateString()
-                    : "—"
+                    : "-"
                   }
                 </div>
               </div>

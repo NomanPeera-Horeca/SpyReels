@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -95,6 +95,330 @@ export async function getUserByEmail(email: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+// ── Onboarding state ──
+
+/**
+ * All 8 onboarding fields in one call: the 5 first-run flags/timestamps
+ * (4 booleans + `demoSeededAt`) plus the Section 3 onboarding-flow
+ * fields (`selectedNicheSlugs`, `onboardingCompletedAt`, `onboardingSkippedAt`).
+ * Bundled so the OnboardingGate + dashboard demo banner can decide
+ * visibility in a single network round-trip.
+ */
+export async function getOnboardingState(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select({
+      hasSeenWelcome: users.hasSeenWelcome,
+      hasDismissedHintCard: users.hasDismissedHintCard,
+      hasCompletedFirstSpy: users.hasCompletedFirstSpy,
+      hasDismissedDemoBanner: users.hasDismissedDemoBanner,
+      demoSeededAt: users.demoSeededAt,
+      selectedNicheSlugs: users.selectedNicheSlugs,
+      selectedCreatorHandles: users.selectedCreatorHandles,
+      onboardingCompletedAt: users.onboardingCompletedAt,
+      onboardingSkippedAt: users.onboardingSkippedAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return result[0];
+}
+
+/**
+ * Partial update for any subset of the onboarding fields. Mirrors the
+ * `updateScrapeJob` pattern — the `Partial<Pick<...>>` keeps callers
+ * from accidentally mutating fields outside this surface.
+ */
+export async function updateOnboardingState(
+  userId: number,
+  data: Partial<
+    Pick<
+      User,
+      | "hasSeenWelcome"
+      | "hasDismissedHintCard"
+      | "hasCompletedFirstSpy"
+      | "hasDismissedDemoBanner"
+      | "demoSeededAt"
+    >
+  >
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set(data).where(eq(users.id, userId));
+}
+
+// ── Onboarding completion + demo seed (Section 3) ──
+
+/**
+ * Seeds a demo scrape for a freshly-onboarded user by cloning a
+ * featured account's stored top reels into the normal reels pipeline
+ * (spec §3). The resulting scrape_jobs row is marked `status="completed"`
+ * with the same field shape as runScrapeJob's normal completion path,
+ * plus `isDemo=true` so the dashboard banner visibility check and the
+ * hasCompletedFirstSpy auto-flip can tell it apart from a real scrape.
+ *
+ * Account selection:
+ *   - If `preferredHandle` resolves to an active featured account with
+ *     ≥1 stored reel, use it.
+ *   - Otherwise fall back to the "richness winner" — the active
+ *     featured account with the highest (reelCount × avgEngagementRate).
+ *     Same ordering powers the onboarding "Pick for me" card and the
+ *     onboarding-skipped path.
+ *
+ * Resilience: every failure path is swallowed and surfaced as a `null`
+ * return so callers never need try/catch around the seed — `null`
+ * simply means "no demo dashboard for this user, proceed anyway".
+ * Partial failures (job row inserted but reel batch blew up) clean up
+ * the orphan job so the user doesn't see an empty dashboard.
+ */
+export async function seedDemoScrape(
+  userId: number,
+  preferredHandle?: string
+): Promise<number | null> {
+  const t0 = Date.now();
+  const hLabel = preferredHandle ?? "—";
+  const ms = () => Date.now() - t0;
+  console.log(`[seedDemoScrape] start userId=${userId} handle=${hLabel}`);
+
+  const db = await getDb();
+  if (!db) {
+    console.warn(
+      `[seedDemoScrape] db unavailable, skipping seed for userId=${userId} (+${ms()}ms) handle=${hLabel}`
+    );
+    return null;
+  }
+  console.log(`[seedDemoScrape] getDb ok (+${ms()}ms) userId=${userId}`);
+
+  let jobId: number | null = null;
+  try {
+    type Candidate = {
+      id: number;
+      handle: string;
+      displayName: string | null;
+      followerCount: number;
+      profilePicUrl: string | null;
+    };
+    let chosen: Candidate | undefined;
+
+    if (preferredHandle) {
+      const normalized = preferredHandle.replace(/^@/, "").trim().toLowerCase();
+      console.log(
+        `[seedDemoScrape] account lookup by preferred handle (+${ms()}ms) normalized=${normalized}`
+      );
+      const byHandle = await db
+        .select({
+          id: featuredAccounts.id,
+          handle: featuredAccounts.handle,
+          displayName: featuredAccounts.displayName,
+          followerCount: featuredAccounts.followerCount,
+          profilePicUrl: featuredAccounts.profilePicUrl,
+          reelCount: sql<number>`COUNT(${featuredReels.id})`,
+        })
+        .from(featuredAccounts)
+        .leftJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .where(and(eq(featuredAccounts.handle, normalized), eq(featuredAccounts.isActive, true)))
+        .groupBy(
+          featuredAccounts.id,
+          featuredAccounts.handle,
+          featuredAccounts.displayName,
+          featuredAccounts.followerCount,
+          featuredAccounts.profilePicUrl
+        )
+        .limit(1);
+      console.log(
+        `[seedDemoScrape] byHandle query done (+${ms()}ms) rows=${byHandle.length} reelCount=${
+          byHandle[0] ? Number(byHandle[0].reelCount) : "n/a"
+        }`
+      );
+      if (byHandle.length > 0 && Number(byHandle[0].reelCount) > 0) {
+        chosen = byHandle[0];
+        console.log(`[seedDemoScrape] using preferred account @${chosen.handle} id=${chosen.id} (+${ms()}ms)`);
+      } else {
+        console.warn(
+          `[seedDemoScrape] preferred handle "${preferredHandle}" not found or has 0 reels, falling back to richness winner (+${ms()}ms)`
+        );
+      }
+    }
+
+    if (!chosen) {
+      // Richness = reelCount × avgEngagementRate, scoped to active
+      // accounts that actually have stored reels. Pure density metric;
+      // the tradeoff (pet accounts often win over business accounts)
+      // is accepted per §3 spec ("densest possible dashboard").
+      console.log(`[seedDemoScrape] richness winner query start (+${ms()}ms)`);
+      const winner = await db
+        .select({
+          id: featuredAccounts.id,
+          handle: featuredAccounts.handle,
+          displayName: featuredAccounts.displayName,
+          followerCount: featuredAccounts.followerCount,
+          profilePicUrl: featuredAccounts.profilePicUrl,
+        })
+        .from(featuredAccounts)
+        .innerJoin(featuredReels, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+        .where(eq(featuredAccounts.isActive, true))
+        .groupBy(
+          featuredAccounts.id,
+          featuredAccounts.handle,
+          featuredAccounts.displayName,
+          featuredAccounts.followerCount,
+          featuredAccounts.profilePicUrl
+        )
+        .orderBy(sql`COUNT(${featuredReels.id}) * ${featuredAccounts.avgEngagementRate} DESC`)
+        .limit(1);
+      console.log(`[seedDemoScrape] richness winner done (+${ms()}ms) rows=${winner.length}`);
+      if (winner.length === 0) {
+        console.warn(
+          `[seedDemoScrape] no eligible featured accounts (empty pool?), exit null userId=${userId} duration=${ms()}ms`
+        );
+        return null;
+      }
+      chosen = winner[0];
+      console.log(`[seedDemoScrape] chosen richness winner @${chosen.handle} id=${chosen.id} (+${ms()}ms)`);
+    }
+
+    // Replay the scrape-featured-accounts script's pre-ranked top reels
+    // in rank order (1..30). `rank` is reserved in MySQL 8+; Drizzle
+    // auto-escapes it via the schema mapping so the query builder is
+    // safe here, unlike the hand-written SQL in the scrape script.
+    console.log(`[seedDemoScrape] sourceReels query start featuredAccountId=${chosen.id} (+${ms()}ms)`);
+    const sourceReels = await db
+      .select()
+      .from(featuredReels)
+      .where(eq(featuredReels.featuredAccountId, chosen.id))
+      .orderBy(asc(featuredReels.rank));
+    console.log(
+      `[seedDemoScrape] sourceReels done (+${ms()}ms) count=${sourceReels.length} account=@${chosen.handle}`
+    );
+
+    if (sourceReels.length === 0) {
+      console.warn(
+        `[seedDemoScrape] chosen account @${chosen.handle} has 0 reels after re-check, exit null duration=${ms()}ms`
+      );
+      return null;
+    }
+
+    // Mirror runScrapeJob's normal completion shape (server/routers.ts
+    // L3487-3495) field-for-field so the dashboard can't tell the
+    // difference between a demo job and a real one — except via
+    // isDemo, which is the only legitimate discriminator.
+    console.log(`[seedDemoScrape] createScrapeJob start totalReels=${sourceReels.length} (+${ms()}ms)`);
+    jobId = await createScrapeJob({
+      userId,
+      handle: chosen.handle,
+      timeframeDays: 365,
+      status: "completed",
+      totalReels: sourceReels.length,
+      followerCount: chosen.followerCount,
+      profilePicUrl: chosen.profilePicUrl ?? undefined,
+      currentStep: "complete",
+      reelsFound: sourceReels.length,
+      progressPercent: 100,
+      isDemo: true,
+    });
+    console.log(`[seedDemoScrape] createScrapeJob done jobId=${jobId} (+${ms()}ms)`);
+
+    // Copy featured_reels → reels. reelUrl is synthesized from the
+    // shortcode (canonical IG format). ownerUsername is set to the
+    // featured account handle. featured_reels-only fields
+    // (engagementRate, rank, scrapedAt) are dropped — the dashboard
+    // recomputes engagement rate on the fly from view/like/comment
+    // counts, and rank is implicit in the insertion order.
+    const reelRows = sourceReels.map((r) => ({
+      jobId: jobId!,
+      shortcode: r.reelShortcode,
+      caption: r.caption,
+      viewCount: r.viewCount,
+      likeCount: r.likeCount,
+      commentCount: r.commentCount,
+      thumbnailUrl: r.thumbnailUrl,
+      videoUrl: r.videoUrl,
+      reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+      duration: r.duration,
+      postedAt: r.postedAt,
+      ownerUsername: chosen!.handle,
+    }));
+    console.log(`[seedDemoScrape] insertReels start rowCount=${reelRows.length} (+${ms()}ms)`);
+    await insertReels(reelRows);
+    const duration = Date.now() - t0;
+    console.log(
+      `[seedDemoScrape] complete jobId=${jobId} userId=${userId} @${chosen.handle} reels=${sourceReels.length} duration=${duration}ms`
+    );
+    return jobId;
+  } catch (error) {
+    const duration = Date.now() - t0;
+    console.error(
+      `[seedDemoScrape] catch userId=${userId} handle=${hLabel} duration=${duration}ms error=`,
+      error instanceof Error ? error.message : error
+    );
+    if (jobId !== null) {
+      try {
+        await deleteScrapeJob(jobId);
+        console.log(`[seedDemoScrape] deleted partial jobId=${jobId} after error (+${Date.now() - t0}ms)`);
+      } catch (cleanupError) {
+        console.error(`[seedDemoScrape] cleanup of partial job ${jobId} failed:`, cleanupError);
+      }
+    }
+    return null;
+  }
+}
+
+/**
+ * Stamps the user as having completed onboarding. Writes the niche
+ * selection (assumed already deduped by the caller), optional multi-
+ * creator handle picks, the completion timestamp, and optionally
+ * `demoSeededAt` — only when the paired demo-seed succeeded, so
+ * `user.demoSeededAt IS NOT NULL` remains a reliable "real demo
+ * dashboard exists" signal.
+ *
+ * Idempotency lives at the tRPC boundary (the mutation guards on
+ * `onboardingCompletedAt IS NOT NULL` before calling this). Repeated
+ * calls here are harmless — they just rewrite the same columns.
+ */
+export async function markOnboardingComplete(
+  userId: number,
+  nicheSlugs: string[],
+  selectedCreatorHandles: string[],
+  demoSeededAt: Date | null
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates: Partial<
+    Pick<
+      User,
+      "selectedNicheSlugs" | "selectedCreatorHandles" | "onboardingCompletedAt" | "demoSeededAt"
+    >
+  > = {
+    selectedNicheSlugs: nicheSlugs,
+    selectedCreatorHandles: selectedCreatorHandles.length > 0 ? selectedCreatorHandles : null,
+    onboardingCompletedAt: new Date(),
+  };
+  if (demoSeededAt) {
+    updates.demoSeededAt = demoSeededAt;
+  }
+  await db.update(users).set(updates).where(eq(users.id, userId));
+}
+
+/**
+ * Marks onboarding as skipped. `demoSeededAt` follows the same "only
+ * stamp on success" rule as markOnboardingComplete.
+ */
+export async function markOnboardingSkipped(
+  userId: number,
+  demoSeededAt: Date | null
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updates: Partial<Pick<User, "onboardingSkippedAt" | "demoSeededAt">> = {
+    onboardingSkippedAt: new Date(),
+  };
+  if (demoSeededAt) {
+    updates.demoSeededAt = demoSeededAt;
+  }
+  await db.update(users).set(updates).where(eq(users.id, userId));
+}
+
 // ── Scrape Jobs ──
 
 export async function createScrapeJob(data: InsertScrapeJob): Promise<number> {
@@ -111,7 +435,7 @@ export async function getScrapeJob(id: number): Promise<ScrapeJob | undefined> {
   return result[0];
 }
 
-export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "profilePicUrl">>): Promise<void> {
+export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "failureReason" | "profilePicUrl" | "currentStep" | "reelsFound" | "estimatedTotal" | "progressPercent" | "classifiedNicheSlug" | "classifiedConfidence" | "classifiedAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(scrapeJobs).set(data).where(eq(scrapeJobs.id, id));
@@ -194,23 +518,33 @@ export async function getTranscriptionByReelId(reelId: number): Promise<Transcri
   return result[0];
 }
 
-export async function updateTranscription(id: number, data: Partial<Pick<Transcription, "transcript" | "segments" | "hookAnalysis" | "status" | "errorMessage">>): Promise<void> {
+export async function updateTranscription(
+  id: number,
+  data: Partial<
+    Pick<Transcription, "transcript" | "segments" | "hookAnalysis" | "status" | "errorMessage" | "queuedAt" | "startedAt">
+  >
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(transcriptions).set(data).where(eq(transcriptions.id, id));
 }
+
+const TRANSCRIPTION_BATCH_BY_REEL_IDS = 200;
 
 export async function getTranscriptionsByJobId(jobId: number): Promise<Transcription[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const reelRows = await db.select({ id: reels.id }).from(reels).where(eq(reels.jobId, jobId));
   if (reelRows.length === 0) return [];
-  const reelIds = reelRows.map(r => r.id);
-  // Get all transcriptions for these reels
+  const reelIds = reelRows.map((r) => r.id);
   const allTranscriptions: Transcription[] = [];
-  for (const reelId of reelIds) {
-    const t = await db.select().from(transcriptions).where(eq(transcriptions.reelId, reelId));
-    allTranscriptions.push(...t);
+  for (let i = 0; i < reelIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = reelIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const rows = await db
+      .select()
+      .from(transcriptions)
+      .where(inArray(transcriptions.reelId, chunk));
+    allTranscriptions.push(...rows);
   }
   return allTranscriptions;
 }
@@ -243,6 +577,135 @@ export async function getRecreatedScriptsByReelId(reelId: number): Promise<Recre
   return db.select().from(recreatedScripts).where(eq(recreatedScripts.reelId, reelId)).orderBy(desc(recreatedScripts.createdAt));
 }
 
+// ── Featured Reel helpers (Path B: catalog-backed transcribe/recreate/save) ──
+
+/** Fetch a featured_reels row by id (returns undefined if missing). */
+export async function getFeaturedReelById(id: number): Promise<FeaturedReel | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(featuredReels)
+    .where(eq(featuredReels.id, id))
+    .limit(1);
+  return rows[0];
+}
+
+/**
+ * In-memory `Transcription` view from a `featured_reels` row. Same mapping
+ * as `getTranscriptionByFeaturedReelId` (including `no_speech` as
+ * `completed` with empty transcript and segments for frontend hook/reuse).
+ * `getDashboardData` uses this with rows from its single list query to
+ * avoid N extra round trips; keep in sync with any change here.
+ */
+export function transcriptionViewFromFeaturedReelRow(
+  fr: FeaturedReel
+): Transcription {
+  const uiStatus: Transcription["status"] =
+    fr.transcriptionStatus === "no_speech"
+      ? "completed"
+      : fr.transcriptionStatus === "pending"
+      ? "pending"
+      : fr.transcriptionStatus === "processing"
+      ? "processing"
+      : fr.transcriptionStatus === "failed"
+      ? "failed"
+      : "completed";
+  const transcript =
+    fr.transcriptionStatus === "no_speech" ? "" : fr.transcript;
+  const segments =
+    fr.transcriptionStatus === "no_speech"
+      ? []
+      : (fr.transcriptSegments ?? null);
+  return {
+    id: fr.id,
+    reelId: null,
+    featuredReelId: fr.id,
+    transcript,
+    segments: segments as Transcription["segments"],
+    hookAnalysis: null,
+    status: uiStatus,
+    errorMessage: null,
+    queuedAt: null,
+    startedAt: null,
+    createdAt: fr.transcribedAt ?? fr.scrapedAt,
+    updatedAt: fr.transcribedAt ?? fr.scrapedAt,
+  };
+}
+
+/**
+ * Returns a `Transcription`-shaped view of a featured reel's inline cache
+ * (see migration 0029). Featured reels don't get rows in the per-user
+ * `transcriptions` table — the catalog owns a single shared transcript
+ * per reel, and this helper adapts it to the shape the rest of the
+ * codebase already consumes.
+ *
+ * Status mapping: the catalog's `no_speech` terminal state collapses to
+ * `completed` with empty transcript + segments, which is the same signal
+ * the UI already uses to render the "all vibes no voice" empty state.
+ * `id` reuses the featured reel id — callers treat it as an opaque
+ * refetch key and never join against `transcriptions` on it.
+ */
+export async function getTranscriptionByFeaturedReelId(
+  featuredReelId: number
+): Promise<Transcription | undefined> {
+  const fr = await getFeaturedReelById(featuredReelId);
+  if (!fr) return undefined;
+  return transcriptionViewFromFeaturedReelRow(fr);
+}
+
+/**
+ * Update a featured reel's inline transcription cache. Used by the
+ * backfill script + the lazy cache-fill path in `transcribe.start`.
+ * Writing a `completed` status without a transcript is a bug — callers
+ * must pass the transcript text (may be empty string for no_speech).
+ */
+export async function updateFeaturedReelTranscription(
+  featuredReelId: number,
+  data: {
+    transcriptionStatus:
+      | "pending"
+      | "processing"
+      | "completed"
+      | "failed"
+      | "no_speech";
+    transcript?: string | null;
+    transcriptSegments?:
+      | { start: number; end: number; text: string }[]
+      | null;
+    transcribedAt?: Date | null;
+  }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(featuredReels)
+    .set({
+      transcriptionStatus: data.transcriptionStatus,
+      ...(data.transcript !== undefined ? { transcript: data.transcript } : {}),
+      ...(data.transcriptSegments !== undefined
+        ? { transcriptSegments: data.transcriptSegments }
+        : {}),
+      ...(data.transcribedAt !== undefined
+        ? { transcribedAt: data.transcribedAt }
+        : {}),
+    })
+    .where(eq(featuredReels.id, featuredReelId));
+}
+
+/** All recreated scripts attached to a featured reel (newest first). */
+export async function getRecreatedScriptsByFeaturedReelId(
+  featuredReelId: number
+): Promise<RecreatedScript[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .select()
+    .from(recreatedScripts)
+    .where(eq(recreatedScripts.featuredReelId, featuredReelId))
+    .orderBy(desc(recreatedScripts.createdAt));
+}
+
 // ── Saved Reels ──
 
 export async function saveReel(data: InsertSavedReel): Promise<number> {
@@ -271,17 +734,178 @@ export async function isReelSaved(userId: number, reelId: number): Promise<boole
   return result.length > 0;
 }
 
-export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReel & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
+// ── Saved Reels (featured variant) ──
+
+/** Save a featured-catalog reel. Returns the saved_reels row id. */
+export async function saveFeaturedReel(userId: number, featuredReelId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedReels).values({
+    userId,
+    reelId: null,
+    jobId: null,
+    featuredReelId,
+  });
+  return result[0].insertId;
+}
+
+export async function unsaveFeaturedReel(userId: number, featuredReelId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(savedReels)
+    .where(
+      and(
+        eq(savedReels.userId, userId),
+        eq(savedReels.featuredReelId, featuredReelId)
+      )
+    );
+}
+
+export async function isFeaturedReelSaved(
+  userId: number,
+  featuredReelId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: savedReels.id })
+    .from(savedReels)
+    .where(
+      and(
+        eq(savedReels.userId, userId),
+        eq(savedReels.featuredReelId, featuredReelId)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Saved featured-reel rows joined with their featured_reels + featured_accounts
+ * and any existing transcription. Shape mirrors `getSavedReelsWithDetails`
+ * closely so the frontend can render both with minimal branching — the
+ * `source: "featured"` discriminator tells the UI which navigation path to
+ * use (clicking the handle should open /dashboard?featuredAccountId=…).
+ */
+type SavedReelFeatured = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> & {
+  reelId: null;
+  jobId: null;
+  featuredReelId: number;
+};
+
+export async function getSavedFeaturedReelsWithDetails(
+  userId: number
+): Promise<
+  Array<
+    SavedReelFeatured & {
+      featuredReel: FeaturedReel;
+      featuredAccount: {
+        id: number;
+        handle: string;
+        displayName: string | null;
+        followerCount: number;
+        profilePicUrl: string | null;
+      };
+      transcription?: Transcription;
+    }
+  >
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const saved = await db
+    .select()
+    .from(savedReels)
+    .where(eq(savedReels.userId, userId))
+    .orderBy(desc(savedReels.createdAt));
+
+  const out: Array<
+    SavedReelFeatured & {
+      featuredReel: FeaturedReel;
+      featuredAccount: {
+        id: number;
+        handle: string;
+        displayName: string | null;
+        followerCount: number;
+        profilePicUrl: string | null;
+      };
+      transcription?: Transcription;
+    }
+  > = [];
+
+  for (const s of saved) {
+    if (s.featuredReelId == null) continue;
+    const [fr] = await db
+      .select()
+      .from(featuredReels)
+      .where(eq(featuredReels.id, s.featuredReelId))
+      .limit(1);
+    if (!fr) continue;
+    const [acc] = await db
+      .select({
+        id: featuredAccounts.id,
+        handle: featuredAccounts.handle,
+        displayName: featuredAccounts.displayName,
+        followerCount: featuredAccounts.followerCount,
+        profilePicUrl: featuredAccounts.profilePicUrl,
+      })
+      .from(featuredAccounts)
+      .where(eq(featuredAccounts.id, fr.featuredAccountId))
+      .limit(1);
+    if (!acc) continue;
+    // Featured transcripts live on `featured_reels` itself (Commit 4b).
+    // The helper synthesizes a `Transcription`-shaped view so callers
+    // don't have to branch on source.
+    const txn = await getTranscriptionByFeaturedReelId(fr.id);
+    out.push({
+      ...s,
+      reelId: null,
+      jobId: null,
+      featuredReelId: s.featuredReelId,
+      featuredReel: fr,
+      featuredAccount: acc,
+      transcription: txn,
+    });
+  }
+  return out;
+}
+
+/**
+ * Saved scraped-reel rows joined with their reel + scrape_job. Featured-
+ * catalog saves (identified by a populated `featuredReelId`) are filtered
+ * out here and surfaced via a sibling helper added in Commit 3b; the
+ * narrow return type (reelId / jobId guaranteed non-null) lets existing
+ * frontend callers keep working without null checks.
+ */
+type SavedReelScraped = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> & {
+  reelId: number;
+  jobId: number;
+  featuredReelId: null;
+};
+
+export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const saved = await db.select().from(savedReels).where(eq(savedReels.userId, userId)).orderBy(desc(savedReels.createdAt));
-  const results: Array<SavedReel & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> = [];
+  const results: Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> = [];
   for (const s of saved) {
+    // Featured-catalog saves (featuredReelId populated) are surfaced via
+    // a separate helper added in Commit 3b; skip them here so this one
+    // keeps its "user scrape jobs only" contract and its return shape.
+    if (s.reelId == null || s.jobId == null) continue;
     const reelRows = await db.select().from(reels).where(eq(reels.id, s.reelId)).limit(1);
     const jobRows = await db.select().from(scrapeJobs).where(eq(scrapeJobs.id, s.jobId)).limit(1);
     if (reelRows[0] && jobRows[0]) {
       const tRows = await db.select().from(transcriptions).where(eq(transcriptions.reelId, s.reelId)).limit(1);
-      results.push({ ...s, reel: reelRows[0], job: jobRows[0], transcription: tRows[0] });
+      results.push({
+        ...s,
+        reelId: s.reelId,
+        jobId: s.jobId,
+        featuredReelId: null,
+        reel: reelRows[0],
+        job: jobRows[0],
+        transcription: tRows[0],
+      });
     }
   }
   return results;
@@ -726,11 +1350,15 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
     if (reelIds.length > 0) {
       let tRows = await db.select().from(transcriptions).where(
         and(
-          inArray(transcriptions.reelId, reelIds),
+          // `reelId` is nullable post-migration 0028; narrow via cast
+          // since we only want scraped-reel rows here (featuredReelId-
+          // driven rows never land in reelMap anyway).
+          inArray(transcriptions.reelId as any, reelIds),
           eq(transcriptions.status, "completed")
         )
       );
       for (const t of tRows) {
+        if (t.reelId == null) continue;
         const reel = reelMap[t.reelId];
         if (!reel) continue;
         scrapedTranscripts.push({
@@ -758,7 +1386,7 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
         const t = await db.select().from(transcriptions).where(
           and(eq(transcriptions.reelId, matchingReels[0].id), eq(transcriptions.status, "completed"))
         ).limit(1);
-        if (t.length > 0) {
+        if (t.length > 0 && t[0].reelId != null) {
           collectedTranscripts.push({
             id: t[0].id, reelId: t[0].reelId, transcript: t[0].transcript, hookAnalysis: t[0].hookAnalysis,
             status: t[0].status, createdAt: t[0].createdAt, source: "collected",
@@ -835,6 +1463,10 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
 
     for (const r of recreated) {
       if (savedRecreatedIds.has(r.id)) continue; // Already in saved scripts
+      // Featured-reel-backed recreated scripts (reelId null) are surfaced
+      // via a dedicated library path added in Commit 3b; skip them here
+      // so the scraped-reel lookup below stays type-safe.
+      if (r.reelId == null) continue;
       const reel = await db.select().from(reels).where(eq(reels.id, r.reelId)).limit(1);
       // Generate a better title for recreated scripts
       let title = r.topic || "Untitled Script";

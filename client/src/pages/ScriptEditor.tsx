@@ -508,7 +508,7 @@ export default function ScriptEditor() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Simplify language — make it conversational
+                    Simplify language: make it conversational
                   </TooltipContent>
                 </Tooltip>
 

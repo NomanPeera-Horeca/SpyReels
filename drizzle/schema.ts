@@ -1,4 +1,4 @@
-import { bigint, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, datetime, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -14,6 +14,28 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }),
+  // Onboarding state — first-run experience flags (welcome modal,
+  // 3-step hint card, completed first spy, demo banner). `demoSeededAt`
+  // is set once on signup if we pre-populate a demo scrape job so the
+  // dashboard isn't empty on arrival (spec §3). `hasCompletedFirstSpy`
+  // is flipped server-side when a scrape job completes (deferred to
+  // Section 3 — not pre-wired here).
+  hasSeenWelcome: boolean("hasSeenWelcome").default(false).notNull(),
+  hasDismissedHintCard: boolean("hasDismissedHintCard").default(false).notNull(),
+  hasCompletedFirstSpy: boolean("hasCompletedFirstSpy").default(false).notNull(),
+  hasDismissedDemoBanner: boolean("hasDismissedDemoBanner").default(false).notNull(),
+  demoSeededAt: datetime("demoSeededAt", { mode: "date" }),
+  // Onboarding flow state (Section 3). `selectedNicheSlugs` stores the
+  // niches picked on /onboarding Step 1 as a JSON array of slugs; it
+  // feeds future recommendation surfaces. `onboardingCompletedAt` and
+  // `onboardingSkippedAt` are mutually exclusive in practice — the
+  // OnboardingGate component uses either being non-null as the signal
+  // to bypass the /onboarding redirect.
+  selectedNicheSlugs: json("selectedNicheSlugs").$type<string[]>(),
+  /** Up to 5 creator handles (Step 2 multi-select) for personalization; demo job seeds the first only. */
+  selectedCreatorHandles: json("selectedCreatorHandles").$type<string[] | null>(),
+  onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
+  onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -32,6 +54,33 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   followerCount: int("followerCount").default(0).notNull(),
   profilePicUrl: text("profilePicUrl"),
   errorMessage: text("errorMessage"),
+  // Set on terminal failure; cleared on success or when a retry starts.
+  failureReason: mysqlEnum("failureReason", [
+    "handle_not_found",
+    "account_private",
+    "instagram_rate_limited",
+    "account_too_large",
+    "unknown",
+  ]),
+  // Fine-grained progress for the dedicated scraping UI. Values map to the
+  // 5 stages of the pipeline: pending → connecting → fetching_profile →
+  // pulling_reels → ranking → complete, with `failed` as a terminal error.
+  currentStep: varchar("currentStep", { length: 32 }).default("pending").notNull(),
+  reelsFound: int("reelsFound").default(0).notNull(),
+  estimatedTotal: int("estimatedTotal").default(30).notNull(),
+  progressPercent: int("progressPercent").default(0).notNull(),
+  // Classification cache — populated by featured.classifyHandle for
+  // arbitrary (non-featured) handles so the dashboard can show the
+  // "AI ✦" niche badge and pull related creators without re-spending
+  // an LLM call on every page load. All three are NULL until the
+  // classification runs for this job.
+  classifiedNicheSlug: varchar("classifiedNicheSlug", { length: 64 }),
+  classifiedConfidence: mysqlEnum("classifiedConfidence", ["high", "medium", "low"]),
+  classifiedAt: datetime("classifiedAt", { mode: "date" }),
+  // True when this scrape_jobs row was created by the signup demo-seed
+  // path (Section 3). Used by the dashboard's demo banner visibility
+  // check (spec §7.4) and the hasCompletedFirstSpy auto-flip guard.
+  isDemo: boolean("isDemo").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -64,15 +113,25 @@ export type InsertReel = typeof reels.$inferInsert;
 
 /**
  * Transcriptions generated on-demand for individual reels.
+ *
+ * Exactly one of (`reelId`, `featuredReelId`) must be non-null. This is
+ * enforced at the application layer (see `transcribe.*` handlers) since
+ * MySQL can't express a cheap "xor" CHECK on nullable columns without
+ * function dependencies. `reelId` points at `reels.id` (user-scraped),
+ * `featuredReelId` at `featured_reels.id` (catalog).
  */
 export const transcriptions = mysqlTable("transcriptions", {
   id: int("id").autoincrement().primaryKey(),
-  reelId: int("reelId").notNull(),
+  reelId: int("reelId"),
+  featuredReelId: int("featuredReelId"),
   transcript: text("transcript"),
   segments: json("segments"),
   hookAnalysis: text("hookAnalysis"),
   status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
   errorMessage: text("errorMessage"),
+  /** Set when the user requested transcription. `startedAt` is set when the worker run begins (after the concurrency wait). */
+  queuedAt: timestamp("queuedAt"),
+  startedAt: timestamp("startedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -82,10 +141,14 @@ export type InsertTranscription = typeof transcriptions.$inferInsert;
 
 /**
  * Re-created scripts generated from viral reel structures.
+ *
+ * Exactly one of (`reelId`, `featuredReelId`) must be non-null —
+ * enforced in the `recreate.*` handlers.
  */
 export const recreatedScripts = mysqlTable("recreated_scripts", {
   id: int("id").autoincrement().primaryKey(),
-  reelId: int("reelId").notNull(),
+  reelId: int("reelId"),
+  featuredReelId: int("featuredReelId"),
   userId: int("userId").notNull(),
   topic: text("topic").notNull(),
   gradeLevel: varchar("gradeLevel", { length: 16 }).notNull(), // "auto", "2", "3", "4", "5", "6"
@@ -103,12 +166,18 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
 
 /**
  * Saved/bookmarked reels for quick access.
+ *
+ * Exactly one of the two ID sources must be populated:
+ *   - user-scraped: (`reelId` + `jobId`) both non-null, `featuredReelId` null.
+ *   - featured catalog: `featuredReelId` non-null, `reelId` and `jobId` null.
+ * Enforced in the `saved.toggle` handler.
  */
 export const savedReels = mysqlTable("saved_reels", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  reelId: int("reelId").notNull(),
-  jobId: int("jobId").notNull(),
+  reelId: int("reelId"),
+  jobId: int("jobId"),
+  featuredReelId: int("featuredReelId"),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -382,3 +451,156 @@ export const scriptIdeas = mysqlTable("script_ideas", {
 
 export type ScriptIdea = typeof scriptIdeas.$inferSelect;
 export type InsertScriptIdea = typeof scriptIdeas.$inferInsert;
+
+/* ────────────────────────────────────────────────────────────────────
+ * Featured Accounts
+ *
+ * A curated catalog of Instagram creators grouped by niche. Unlike the
+ * user-driven `scrape_jobs` flow, these accounts are scraped centrally
+ * and served read-only to every user. Tables:
+ *
+ *   niches                    ← top-level catalog, grouped into
+ *                                broader buckets (groupName)
+ *   featured_accounts         ← the creator accounts themselves
+ *   featured_account_niches   ← N:N junction (an account can sit in
+ *                                multiple niches, one marked primary)
+ *   featured_reels            ← top-N reels per account (rank 1-30)
+ * ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * Niche catalog — structured taxonomy used to browse featured accounts.
+ * `groupName` buckets niches into the 5 top-level tabs in the UI
+ * (business-money, creator-economy, lifestyle, personal-family,
+ * entertainment-culture). `iconName` is a lucide-react icon name.
+ */
+export const niches = mysqlTable("niches", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  groupName: varchar("groupName", { length: 32 }).notNull(),
+  iconName: varchar("iconName", { length: 32 }).notNull(),
+  description: text("description"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Niche = typeof niches.$inferSelect;
+export type InsertNiche = typeof niches.$inferInsert;
+
+/**
+ * Featured creator accounts. Scraped on two cadences:
+ *   - lastIncrementalScrape: cheap diff-style refresh
+ *   - lastFullScrape:         periodic deep rebuild of the top reels
+ */
+export const featuredAccounts = mysqlTable("featured_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  handle: varchar("handle", { length: 128 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 256 }),
+  followerCount: int("followerCount").default(0).notNull(),
+  avgEngagementRate: decimal("avgEngagementRate", { precision: 5, scale: 2 }).default("0.00").notNull(),
+  profilePicUrl: text("profilePicUrl"),
+  bio: text("bio"),
+  totalReelsEver: int("totalReelsEver").default(0).notNull(),
+  lastIncrementalScrape: timestamp("lastIncrementalScrape"),
+  lastFullScrape: timestamp("lastFullScrape"),
+  /**
+   * Precomputed best posting window (Commit 6 / migration 0030).
+   * Populated by `scripts/backfill-best-posting-time.ts` which tallies
+   * the day-of-week + hour-of-day of every `featured_reels.postedAt`.
+   * UTC; the dashboard header formats to the user's timezone. Null
+   * means "not enough data yet" — the header hides the segment.
+   */
+  bestPostingHour: int("bestPostingHour"),
+  bestPostingDay: varchar("bestPostingDay", { length: 10 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FeaturedAccount = typeof featuredAccounts.$inferSelect;
+export type InsertFeaturedAccount = typeof featuredAccounts.$inferInsert;
+
+/**
+ * N:N join between featured_accounts and niches. `isPrimary` marks the
+ * canonical niche for the account (used for single-niche UI contexts).
+ * Composite PK on (accountId, nicheId) guarantees an account cannot be
+ * tagged with the same niche twice.
+ */
+export const featuredAccountNiches = mysqlTable(
+  "featured_account_niches",
+  {
+    accountId: int("accountId")
+      .notNull()
+      .references(() => featuredAccounts.id, { onDelete: "cascade" }),
+    nicheId: int("nicheId")
+      .notNull()
+      .references(() => niches.id, { onDelete: "cascade" }),
+    isPrimary: boolean("isPrimary").default(false).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.accountId, table.nicheId] }),
+  })
+);
+
+export type FeaturedAccountNiche = typeof featuredAccountNiches.$inferSelect;
+export type InsertFeaturedAccountNiche = typeof featuredAccountNiches.$inferInsert;
+
+/**
+ * Top-N reels per featured account. `rank` is 1..30 within an account's
+ * scrape window. Unique (featuredAccountId, reelShortcode) prevents a
+ * reel from appearing twice under the same account.
+ */
+export const featuredReels = mysqlTable(
+  "featured_reels",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    featuredAccountId: int("featuredAccountId")
+      .notNull()
+      .references(() => featuredAccounts.id, { onDelete: "cascade" }),
+    reelShortcode: varchar("reelShortcode", { length: 64 }).notNull(),
+    caption: text("caption"),
+    viewCount: int("viewCount").default(0).notNull(),
+    likeCount: int("likeCount").default(0).notNull(),
+    commentCount: int("commentCount").default(0).notNull(),
+    engagementRate: decimal("engagementRate", { precision: 5, scale: 2 }),
+    thumbnailUrl: text("thumbnailUrl"),
+    videoUrl: text("videoUrl"),
+    duration: int("duration"),
+    postedAt: timestamp("postedAt").notNull(),
+    rank: int("rank"),
+    scrapedAt: timestamp("scrapedAt").defaultNow().notNull(),
+    /**
+     * Cached transcription for Path B (featured catalog). Populated by
+     * the backfill script + lazy fallback in `transcribe.start`. Because
+     * featured reels are a shared catalog, the transcript is computed
+     * once and fanned out to all users who click "Transcribe" — no per-
+     * user row in `transcriptions` for featured reels.
+     *
+     * `no_speech` is a valid terminal state (music/visual-only reel)
+     * distinct from `failed` so the UI can show the right empty state.
+     */
+    transcriptionStatus: mysqlEnum("transcriptionStatus", [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+      "no_speech",
+    ])
+      .default("pending")
+      .notNull(),
+    transcript: text("transcript"),
+    transcriptSegments: json("transcriptSegments").$type<
+      { start: number; end: number; text: string }[] | null
+    >(),
+    transcribedAt: timestamp("transcribedAt"),
+  },
+  (table) => ({
+    reelPerAccountUnique: uniqueIndex("featured_reels_account_shortcode_unique").on(
+      table.featuredAccountId,
+      table.reelShortcode
+    ),
+  })
+);
+
+export type FeaturedReel = typeof featuredReels.$inferSelect;
+export type InsertFeaturedReel = typeof featuredReels.$inferInsert;

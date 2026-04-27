@@ -42,7 +42,7 @@ export default function BlogList() {
                 Spy on any Instagram account's Reels
               </h2>
               <p className="text-muted-foreground max-w-lg">
-                Scrape competitor Reels, get full transcripts, analyze engagement metrics, and generate your own viral scripts with AI. Free to start.
+                Analyze competitor Reels, get full transcripts, review engagement metrics, and generate your own viral scripts with AI. Free to start.
               </p>
             </div>
             <a

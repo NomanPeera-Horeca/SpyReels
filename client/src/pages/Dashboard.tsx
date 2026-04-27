@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,35 +24,39 @@ import {
   ArrowLeft,
   Film,
   Clock,
-  Sheet,
   TrendingUp,
   Wand2,
   Bookmark,
   BookmarkCheck,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Search,
   Inbox,
   PenLine,
   ArrowRight,
   Users,
+  Grid3X3,
+  List,
+  X,
+  Sparkles,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   InlineWorkflow,
   formatNumber,
   formatDuration,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
+import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
+import {
+  ReelActionButtons,
+  type ReelActionSource,
+} from "@/components/ReelActionButtons";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { normalizeAnalyticsHandle } from "@/lib/utils";
+import Tooltip from "@/components/Tooltip";
 
 type SortOption =
   | "views_desc"
@@ -60,6 +65,8 @@ type SortOption =
   | "engagement_desc"
   | "date_desc"
   | "date_asc";
+
+type ViewMode = "list" | "grid";
 
 const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
   { value: "views_desc", label: "Highest Views", icon: <Eye className="h-3.5 w-3.5" /> },
@@ -70,7 +77,107 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[
   { value: "date_asc", label: "Date (Oldest)", icon: <CalendarIcon className="h-3.5 w-3.5" /> },
 ];
 
+type BadgeConfidence = "high" | "medium" | "low";
+
+function toReadableNiche(slug: string | null | undefined): string {
+  if (!slug) return "Unknown niche";
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Strip @ for display; avoid placeholder "owner" if scraper left bad job.handle — fall back to first reel. */
+function stripAtHandle(h: string | undefined | null) {
+  return (h ?? "").replace(/^@/, "").trim();
+}
+
+/** Completed transcription with no usable speech (empty transcript and segments). */
+function transcriptionIsNoSpeech(
+  t: { status?: string; transcript?: string | null; segments?: unknown } | null | undefined
+): boolean {
+  if (!t || t.status !== "completed") return false;
+  const segs = t.segments;
+  const n = Array.isArray(segs) ? segs.length : 0;
+  return !String(t.transcript ?? "").trim() && n === 0;
+}
+
+/** Two-letter avatar fallback. Uses displayName first, then handle. No question marks. */
+function avatarInitialsFromAccount(
+  displayName: string | null | undefined,
+  handle: string | null | undefined
+): string {
+  const d = (displayName || "").trim();
+  if (d.length >= 2) return d.slice(0, 2).toUpperCase();
+  if (d.length === 1) return (d + d).toUpperCase();
+  const h = stripAtHandle(handle || "");
+  if (h.length >= 2) return h.slice(0, 2).toUpperCase();
+  if (h.length === 1) return (h + h).toUpperCase();
+  return "··";
+}
+
+function AiBadge({
+  nicheSlug,
+  confidence,
+}: {
+  nicheSlug: string;
+  confidence: BadgeConfidence;
+}) {
+  const confidenceStyles: Record<BadgeConfidence, string> = {
+    high: "border-emerald-400/40 bg-emerald-500/15 text-emerald-300",
+    medium: "border-amber-400/40 bg-amber-500/15 text-amber-300",
+    low: "border-zinc-400/40 bg-zinc-500/15 text-zinc-300",
+  };
+  return (
+    <Tooltip content={`AI-classified niche with ${confidence} confidence`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${confidenceStyles[confidence]}`}
+      >
+        <Sparkles className="h-3 w-3" />
+        AI: {toReadableNiche(nicheSlug)} ({confidence})
+      </span>
+    </Tooltip>
+  );
+}
+
+type RecreateBatchEntry = { latestScriptId: number; status: string };
+
+function reelRecreateState(
+  entry: RecreateBatchEntry | undefined
+): "none" | "generating" | "ready" | "failed" {
+  if (!entry) return "none";
+  if (entry.status === "pending" || entry.status === "processing") return "generating";
+  if (entry.status === "completed") return "ready";
+  return "failed";
+}
+
+/** Bug #20: scroll a reel card/row into view and pulse, matching InlineWorkflow + index.css. */
+function runReelRowScrollPulse(node: HTMLElement) {
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  node.scrollIntoView({
+    behavior: prefersReducedMotion ? "auto" : "smooth",
+    block: "center",
+  });
+  node.classList.remove("pulse-highlight");
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  void node.offsetWidth;
+  node.classList.add("pulse-highlight");
+  window.setTimeout(() => {
+    node.classList.remove("pulse-highlight");
+  }, 2100);
+}
+
+/** Bug #23: cache scrape snapshots and featured sidebar reads; avoid refetch on every /dashboard?jobId= navigation. */
+const DASHBOARD_SNAPSHOT_STALE_MS = 3_600_000;
+const DASHBOARD_SIDEBAR_STALE_MS = 300_000;
+const RECREATE_BATCH_STALE_MS = 300_000;
+const RECREATE_BATCH_POLL_MS = 5_000;
+
 export default function Dashboard() {
+  const posthog = usePostHog();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const searchString = useSearch();
@@ -79,13 +186,112 @@ export default function Dashboard() {
     const id = params.get("jobId");
     return id ? parseInt(id, 10) : null;
   }, [searchString]);
+  const featuredAccountId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    const id = params.get("featuredAccountId");
+    return id ? parseInt(id, 10) : null;
+  }, [searchString]);
   const fromPage = useMemo(() => {
     const params = new URLSearchParams(searchString);
     return params.get("from") || null;
   }, [searchString]);
+  const urlFeaturedReelId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    const raw = params.get("featuredReelId");
+    if (raw == null || raw === "") return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  /**
+   * Grid is the default view as of Commit 7. The previous mode
+   * (list|grid) is remembered per-browser in localStorage so users
+   * who prefer List only have to toggle once. Lazy initializer
+   * reads localStorage on mount; SSR-safe guard because this file
+   * also builds server-side during the tRPC type pass.
+   */
+  const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "grid";
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (stored === "list" || stored === "grid") return stored;
+    } catch {
+      // localStorage can throw in private mode / sandboxed iframes —
+      // fall through to the default.
+    }
+    return "grid";
+  });
+  const setViewModeTracked = useCallback(
+    (next: ViewMode) => {
+      setViewMode((prev) => {
+        if (prev === next) return prev;
+        posthog?.capture("view_toggled", { mode: next });
+        try {
+          window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, next);
+        } catch {
+          // ignore; persistence is best-effort.
+        }
+        return next;
+      });
+    },
+    [posthog]
+  );
+
+  const prevJobStatusRef = useRef<string | undefined>(undefined);
+  const prevHasCompletedFirstSpyRef = useRef<boolean | undefined>(undefined);
+  /** Ensures `first_spy_completed` fires at most once per browser session (milestone, not per job). */
+  const firstSpyMilestoneLoggedRef = useRef(false);
+  /** Bug #20: avoid double toast if React re-runs the widen branch before `dateFilter` updates. */
+  const widenForDeepLinkNotifiedRef = useRef<string | null>(null);
+  const reelRowElsRef = useRef(new Map<number, HTMLDivElement>());
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
+  /** Grid view: full workflow in a dialog instead of inline under the card. */
+  const [gridModalReelId, setGridModalReelId] = useState<number | null>(null);
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+  /**
+   * Commit 9 — (reelId, nonce) pair that tells the corresponding
+   * InlineWorkflow instance to scroll to its Re-create section and
+   * pulse. We bump `nonce` on every "Make My Version" click so
+   * repeated clicks on the already-expanded row still fire the cue —
+   * this is the fix for "users click Re-Create and nothing appears
+   * to happen". Nulling this out isn't required; stale values are
+   * ignored once their reelId no longer matches.
+   */
+  const [recreatePulse, setRecreatePulse] = useState<{
+    reelId: number;
+    nonce: number;
+    openScriptId?: number;
+  } | null>(null);
+  const triggerRecreatePulse = useCallback((reelId: number) => {
+    if (viewMode === "grid") {
+      setGridModalReelId(reelId);
+    } else {
+      setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    }
+    setRecreatePulse((prev) => ({
+      reelId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+    }));
+  }, [viewMode]);
+  const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
+    if (viewMode === "grid") {
+      setGridModalReelId(reelId);
+    } else {
+      setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
+    }
+    setRecreatePulse((prev) => ({
+      reelId,
+      openScriptId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+    }));
+  }, [viewMode]);
+  const setReelRowRef = useCallback((id: number) => (el: HTMLDivElement | null) => {
+    if (el) reelRowElsRef.current.set(id, el);
+    else reelRowElsRef.current.delete(id);
+  }, []);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
 
@@ -93,6 +299,25 @@ export default function Dashboard() {
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
   const utils = trpc.useUtils();
+  const cachedJobForStale =
+    jobId != null ? utils.scrape.status.getData({ jobId }) : undefined;
+  const jobStaleTime =
+    cachedJobForStale == null
+      ? 0
+      : cachedJobForStale.status === "pending" || cachedJobForStale.status === "running"
+        ? 0
+        : DASHBOARD_SNAPSHOT_STALE_MS;
+  /** `isFeaturedView` is the Path B branch: read-only catalog dashboard
+   * served directly from `featured_*` tables. No scrape_job is created. */
+  const isFeaturedView = !!featuredAccountId && !jobId;
+  const billingSubscriptionQuery = trpc.billing.subscription.useQuery(undefined, {
+    enabled: !!jobId || isFeaturedView,
+  });
+
+  const featuredDataQuery = trpc.featured.getDashboardData.useQuery(
+    { featuredAccountId: featuredAccountId! },
+    { enabled: isFeaturedView }
+  );
 
   // Usage gates for feature gating
   const transcribeGate = useUsageGate("transcribeCount");
@@ -102,6 +327,7 @@ export default function Dashboard() {
     { jobId: jobId! },
     {
       enabled: !!jobId,
+      staleTime: jobStaleTime,
       refetchInterval: (query) => {
         const data = query.state.data;
         return data?.status === "running" || data?.status === "pending" ? 2000 : false;
@@ -109,10 +335,127 @@ export default function Dashboard() {
     }
   );
 
+  useEffect(() => {
+    const j = jobQuery.data;
+    const status = j?.status;
+    const prevStatus = prevJobStatusRef.current;
+    const transitionedToCompleted =
+      status === "completed" &&
+      prevStatus !== undefined &&
+      prevStatus !== "completed";
+
+    if (transitionedToCompleted && j && !j.isDemo) {
+      const hadPriorFirstSpyComplete = prevHasCompletedFirstSpyRef.current === true;
+      if (!hadPriorFirstSpyComplete && !firstSpyMilestoneLoggedRef.current) {
+        posthog?.capture("first_spy_completed", {
+          handle: normalizeAnalyticsHandle(j.handle),
+          niche_slug: j.classifiedNicheSlug ?? null,
+          job_id: j.id,
+        });
+        firstSpyMilestoneLoggedRef.current = true;
+      }
+    }
+
+    prevJobStatusRef.current = status;
+    prevHasCompletedFirstSpyRef.current = user?.hasCompletedFirstSpy ?? false;
+  }, [jobQuery.data, user?.hasCompletedFirstSpy, posthog]);
+
+  const scrapeJobData = jobQuery.data;
+  const featuredData = featuredDataQuery.data;
+
+  /** Unified dashboard "job" view-model. In featured mode we shim the
+   * scrape-job fields we need from the featured account so all the
+   * existing `job?.*` reads just work. Pending-featured renders a
+   * minimal "completed" placeholder so the skeleton paths trigger. */
+  const job = useMemo(() => {
+    if (isFeaturedView) {
+      if (!featuredData) {
+        return {
+          id: 0,
+          handle: "",
+          status: "completed" as const,
+          isDemo: false,
+          classifiedNicheSlug: null as string | null,
+          classifiedConfidence: null as BadgeConfidence | null,
+          totalReels: 0,
+          timeframeDays: null as number | null,
+          followerCount: 0,
+          errorMessage: null as string | null,
+          profilePicUrl: null as string | null,
+          displayName: null as string | null,
+          avgEngagement: null as number | null,
+          bestPostingTime: null as string | null,
+        };
+      }
+      return {
+        id: featuredData.account.id,
+        handle: featuredData.account.handle,
+        status: "completed" as const,
+        isDemo: false,
+        classifiedNicheSlug: featuredData.account.classifiedNicheSlug,
+        classifiedConfidence: null as BadgeConfidence | null,
+        totalReels: featuredData.reels.length,
+        timeframeDays: null as number | null,
+        followerCount: featuredData.followerCount,
+        errorMessage: null as string | null,
+        profilePicUrl: featuredData.account.profilePicUrl,
+        displayName: featuredData.account.displayName,
+        avgEngagement: featuredData.account.avgEngagement,
+        bestPostingTime: featuredData.account.bestPostingTime,
+      };
+    }
+    return scrapeJobData;
+  }, [isFeaturedView, featuredData, scrapeJobData]);
+
+  const featuredHandleContext = trpc.featured.accountContextByHandle.useQuery(
+    { handle: scrapeJobData?.handle ?? "" },
+    {
+      enabled: Boolean(
+        jobId && scrapeJobData?.handle && scrapeJobData.status === "completed"
+      ),
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
+    }
+  );
+
+  const nicheSlugForSidebar = useMemo(() => {
+    if (isFeaturedView) {
+      return featuredData?.account.classifiedNicheSlug ?? null;
+    }
+    if (!scrapeJobData || scrapeJobData.status !== "completed") return null;
+    if (scrapeJobData.classifiedNicheSlug) return scrapeJobData.classifiedNicheSlug;
+    if (scrapeJobData.isDemo && featuredHandleContext.data?.nicheSlug) {
+      return featuredHandleContext.data.nicheSlug;
+    }
+    return null;
+  }, [isFeaturedView, featuredData, scrapeJobData, featuredHandleContext.data]);
+
+  const sidebarNicheLabel = useMemo(() => {
+    if (isFeaturedView) {
+      const slug = featuredData?.account.classifiedNicheSlug;
+      if (featuredData?.account.primaryNicheName) {
+        return featuredData.account.primaryNicheName;
+      }
+      return slug ? toReadableNiche(slug) : "";
+    }
+    if (!scrapeJobData || scrapeJobData.status !== "completed") return "";
+    if (scrapeJobData.classifiedNicheSlug) {
+      return toReadableNiche(scrapeJobData.classifiedNicheSlug);
+    }
+    if (scrapeJobData.isDemo && featuredHandleContext.data?.nicheName) {
+      return featuredHandleContext.data.nicheName;
+    }
+    return "";
+  }, [isFeaturedView, featuredData, scrapeJobData, featuredHandleContext.data]);
+
+  const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
+  const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
+  const jobComplete = isFeaturedView ? !!featuredData : job?.status === "completed";
+
   const reelsQuery = trpc.reels.list.useQuery(
     { jobId: jobId! },
     {
       enabled: !!jobId && jobQuery.data?.status === "completed",
+      staleTime: DASHBOARD_SNAPSHOT_STALE_MS,
       refetchInterval: (query) => {
         const data = query.state.data;
         if (data?.reels?.some((r: any) => r.transcription?.status === "processing")) {
@@ -125,21 +468,160 @@ export default function Dashboard() {
 
   const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<number>>(new Set());
 
-  const reelsData = reelsQuery.data?.reels || [];
-  const followerCount = reelsQuery.data?.followerCount || 0;
+  const reelsData = isFeaturedView
+    ? featuredData?.reels ?? []
+    : reelsQuery.data?.reels ?? [];
+  const followerCount = isFeaturedView
+    ? featuredData?.followerCount ?? 0
+    : reelsQuery.data?.followerCount ?? 0;
+  /** Generalized "reels are loading" signal that works for both paths —
+   * used by the skeleton/progress bar UI. */
+  const reelsLoading = isFeaturedView
+    ? featuredDataQuery.isPending
+    : reelsQuery.isLoading;
+
+  /** Real IG handle for display; if job.handle is a bad placeholder, use first reel's owner. */
+  const displayScrapeHandle = useMemo(() => {
+    const fromJob = stripAtHandle(job?.handle);
+    if (fromJob && fromJob.toLowerCase() !== "owner") return fromJob;
+    const first = reelsData[0] as { ownerUsername?: string } | undefined;
+    const fromReel = stripAtHandle(first?.ownerUsername);
+    if (fromReel) return fromReel;
+    return fromJob;
+  }, [job?.handle, reelsData]);
+
+  const isFeaturedHeaderPending = isFeaturedView && !featuredData;
+  const isUserJobH1Pending =
+    !isFeaturedView &&
+    !!jobId &&
+    !displayScrapeHandle &&
+    (jobQuery.isPending || !scrapeJobData || (reelsLoading && reelsData.length === 0));
+
+  const onboardingPickHandles = useMemo(() => {
+    const raw = user?.selectedCreatorHandles;
+    if (!raw || !Array.isArray(raw) || raw.length === 0) return [] as string[];
+    const current = stripAtHandle(displayScrapeHandle || job?.handle || "").toLowerCase();
+    return [
+      ...new Set(
+        raw
+          .map((h) => stripAtHandle(h).toLowerCase())
+          .filter((h) => h.length > 0 && h !== current)
+      ),
+    ].slice(0, 5);
+  }, [user?.selectedCreatorHandles, displayScrapeHandle, job?.handle]);
+
+  const creatorsByHandlesQuery = trpc.featured.creatorsByHandles.useQuery(
+    {
+      handles: onboardingPickHandles,
+      excludeHandle: displayScrapeHandle || job?.handle,
+      limit: 5,
+    },
+    {
+      enabled: jobComplete && onboardingPickHandles.length > 0,
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
+    }
+  );
+
+  const tier1Decided = onboardingPickHandles.length === 0 || creatorsByHandlesQuery.isFetched;
+  const showRelatedFromPicks =
+    onboardingPickHandles.length > 0 && (creatorsByHandlesQuery.data?.length ?? 0) > 0;
+
+  /** In featured view we already have the account id from the URL, so
+   * Tier 2 can skip the `featuredHandleContext` round-trip. */
+  const canQueryRelatedTier2 =
+    jobComplete &&
+    tier1Decided &&
+    !showRelatedFromPicks &&
+    Boolean(nicheSlugForSidebar) &&
+    (isFeaturedView || featuredHandleContext.isFetched);
+
+  const relatedCreatorsQuery = trpc.featured.relatedCreators.useQuery(
+    {
+      nicheSlug: nicheSlugForSidebar!,
+      excludeAccountId: isFeaturedView
+        ? featuredData?.account.id ?? undefined
+        : featuredHandleContext.data?.featuredAccountId ?? undefined,
+      limit: 5,
+    },
+    { enabled: canQueryRelatedTier2, staleTime: DASHBOARD_SIDEBAR_STALE_MS }
+  );
+
+  const goingViralSlugs = useMemo(
+    () => [...new Set((user?.selectedNicheSlugs ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean))].slice(0, 5),
+    [user?.selectedNicheSlugs]
+  );
+
+  const goingViralQuery = trpc.featured.goingViralByNiches.useQuery(
+    { slugs: goingViralSlugs },
+    {
+      enabled: jobComplete && goingViralSlugs.length > 0,
+      staleTime: DASHBOARD_SIDEBAR_STALE_MS,
+    }
+  );
+
+  const relatedPanelLoading =
+    (onboardingPickHandles.length > 0 && !creatorsByHandlesQuery.isFetched) ||
+    (tier1Decided &&
+      !showRelatedFromPicks &&
+      Boolean(nicheSlugForSidebar) &&
+      !isFeaturedView &&
+      !featuredHandleContext.isFetched) ||
+    (canQueryRelatedTier2 && relatedCreatorsQuery.isPending);
+
+  const showRelatedPanel =
+    showRelatedFromPicks ||
+    relatedPanelLoading ||
+    (canQueryRelatedTier2 && (relatedCreatorsQuery.data?.length ?? 0) > 0);
+
+  const showGoingViralPanel =
+    goingViralSlugs.length > 0 &&
+    (goingViralQuery.isPending || (goingViralQuery.data?.length ?? 0) > 0);
 
   const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
+  /**
+   * `saved.checkBatch` accepts a strict XOR of `reelIds` vs `featuredReelIds`
+   * (see Commit 3b). We branch the input based on the current view so the
+   * returned map is keyed consistently with whatever id we'll feed into
+   * `saved.toggle` from the bookmark button.
+   */
   const savedBatchQuery = trpc.saved.checkBatch.useQuery(
-    { reelIds },
-    { enabled: reelIds.length > 0 }
+    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
+    { enabled: reelIds.length > 0, staleTime: DASHBOARD_SNAPSHOT_STALE_MS }
   );
   const savedMap = savedBatchQuery.data || {};
+
+  /**
+   * Latest recreated script id + status per reel (user). Drives the
+   * strip: Make My Version / Generating / Open My Script. Same XOR
+   * contract as saved.checkBatch.
+   */
+  const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
+    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
+    {
+      enabled: reelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (
+            v &&
+            (v.status === "pending" || v.status === "processing")
+          ) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+  const recreateMap = recreateBatchQuery.data || {};
 
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
       utils.saved.checkBatch.invalidate();
       utils.saved.list.invalidate();
-      toast.success(data.saved ? "Reel saved" : "Reel removed from saved");
+      toast.success(data.saved ? "Saved" : "Removed from saved");
     },
   });
 
@@ -203,27 +685,199 @@ export default function Dashboard() {
     }
   }, [filteredReels, sortBy]);
 
+  const gridModalReel = useMemo(
+    () =>
+      gridModalReelId == null
+        ? null
+        : (sortedReels.find((r) => r.id === gridModalReelId) ?? null),
+    [sortedReels, gridModalReelId]
+  );
+
+  useEffect(() => {
+    if (gridModalReelId == null) return;
+    if (!sortedReels.some((r) => r.id === gridModalReelId)) {
+      setGridModalReelId(null);
+    }
+  }, [gridModalReelId, sortedReels]);
+
+  useEffect(() => {
+    if (!isFeaturedView) {
+      const params = new URLSearchParams(searchString);
+      if (params.has("featuredReelId")) {
+        params.delete("featuredReelId");
+        const q = params.toString();
+        setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      }
+      return;
+    }
+    if (urlFeaturedReelId == null) {
+      const params = new URLSearchParams(searchString);
+      if (params.has("featuredReelId")) {
+        params.delete("featuredReelId");
+        const q = params.toString();
+        setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      }
+      widenForDeepLinkNotifiedRef.current = null;
+      return;
+    }
+    if (!featuredDataQuery.isSuccess) return;
+
+    const targetId = urlFeaturedReelId;
+    if (!reelsData.some((r) => r.id === targetId)) {
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      return;
+    }
+
+    const inSorted = sortedReels.some((r) => r.id === targetId);
+    if (!inSorted) {
+      if (dateFilter !== "all") {
+        if (widenForDeepLinkNotifiedRef.current !== searchString) {
+          widenForDeepLinkNotifiedRef.current = searchString;
+          setDateFilter("all");
+          toast.info("Filter widened to show this reel");
+        }
+        return;
+      }
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+      return;
+    }
+
+    if (viewMode === "grid") {
+      setGridModalReelId(targetId);
+    } else {
+      setExpandedReelId(targetId);
+    }
+    const timer = window.setTimeout(() => {
+      const el = reelRowElsRef.current.get(targetId);
+      if (el) {
+        runReelRowScrollPulse(el);
+      }
+      const params = new URLSearchParams(searchString);
+      params.delete("featuredReelId");
+      const q = params.toString();
+      setLocation(q ? `/dashboard?${q}` : "/dashboard", { replace: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [
+    isFeaturedView,
+    urlFeaturedReelId,
+    featuredDataQuery.isSuccess,
+    reelsData,
+    sortedReels,
+    dateFilter,
+    searchString,
+    setLocation,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    setGridModalReelId(null);
+  }, [viewMode]);
+
+  const transcribeInFlightRef = useRef(0);
+  const [, setTranscribeInFlightBumper] = useState(0);
+  const releaseTranscribeSlot = useCallback(() => {
+    transcribeInFlightRef.current = Math.max(0, transcribeInFlightRef.current - 1);
+    setTranscribeInFlightBumper((n) => n + 1);
+  }, []);
+
   const startTranscription = trpc.transcribe.start.useMutation({
+    onSettled: releaseTranscribeSlot,
     onSuccess: (data, variables) => {
+      const targetId = variables.reelId ?? variables.featuredReelId;
       if (data.status === "completed") {
-        toast.success("Transcription already available!");
-        setExpandedReelId(variables.reelId);
+        if (targetId != null) {
+          setPendingTranscriptions((prev) => {
+            const next = new Set(prev);
+            next.delete(targetId);
+            return next;
+          });
+        }
+        toast.success("Transcription ready");
+        if (targetId != null) {
+          if (viewModeRef.current === "grid") {
+            setGridModalReelId(targetId);
+          } else {
+            setExpandedReelId(targetId);
+          }
+        }
       } else {
-        toast.info("Transcription started", {
-          description: "Processing audio... This may take up to a minute.",
-        });
+        // processing: do not clear optimistic pending; onSuccess was wiping
+        // the set before refetch, so the UI stayed "Transcribe" until
+        // reels.list reflected processing (could be many seconds).
+        if (
+          data.status === "processing" &&
+          "queuePending" in data &&
+          (data as { queuePending?: boolean }).queuePending
+        ) {
+          toast.info("Added to queue", {
+            description: "Will start when a slot is free.",
+          });
+        } else {
+          toast.info("Transcription started", {
+            description: "Processing audio... This may take up to a minute.",
+          });
+        }
       }
       reelsQuery.refetch();
     },
     onError: (error, variables) => {
-      setPendingTranscriptions((prev) => {
-        const next = new Set(prev);
-        next.delete(variables.reelId);
-        return next;
-      });
+      const targetId = variables.reelId ?? variables.featuredReelId;
+      if (targetId != null) {
+        setPendingTranscriptions((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      }
       toast.error("Transcription failed", { description: error.message });
     },
   });
+
+  const runTranscribeClick = useCallback(
+    (reelId: number, opts: { mode: "featured" | "user"; expand: boolean }) => {
+      if (!transcribeGate.allowed) {
+        toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+          description: "Upgrade your plan for more transcriptions.",
+          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+        });
+        return;
+      }
+      if (transcribeInFlightRef.current >= 5) {
+        toast.info("Please wait for some transcriptions to complete before starting more.");
+        return;
+      }
+      transcribeInFlightRef.current += 1;
+      setTranscribeInFlightBumper((n) => n + 1);
+      if (opts.expand) {
+        if (viewMode === "grid") {
+          setGridModalReelId(reelId);
+        } else {
+          setExpandedReelId(reelId);
+        }
+      }
+      setPendingTranscriptions((prev) => new Set(prev).add(reelId));
+      if (opts.mode === "featured") {
+        startTranscription.mutate({ featuredReelId: reelId });
+      } else {
+        startTranscription.mutate({ reelId });
+      }
+    },
+    [
+      transcribeGate.allowed,
+      transcribeGate.used,
+      transcribeGate.limit,
+      setLocation,
+      viewMode,
+      startTranscription,
+    ]
+  );
 
   const exportCsv = trpc.export.csv.useMutation({
     onSuccess: (data) => {
@@ -259,18 +913,68 @@ export default function Dashboard() {
       toast.error("Google Sheets export failed", { description: error.message });
     },
   });
+  /* Demo banner removed from UI; re-enable by uncommenting this block.
+  const dismissDemoBanner = trpc.onboarding.dismissDemoBanner.useMutation({
+    onSuccess: () => {
+      posthog?.capture("demo_banner_dismissed");
+      utils.onboarding.getState.invalidate();
+      toast.success("Demo banner dismissed");
+    },
+    onError: (error) => {
+      toast.error("Could not dismiss demo banner", { description: error.message });
+    },
+  });
+  */
 
   // Dashboard overview data (only fetched when no jobId)
-  const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: !jobId });
-  const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: !jobId });
-  const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: !jobId });
-  const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: !jobId });
+  const showOverview = !jobId && !featuredAccountId;
+  const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: showOverview });
+  const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: showOverview });
+  const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: showOverview });
+  const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
 
-  if (!jobId) {
-    const jobs = jobsListQuery.data || [];
+  /** Featured view NOT_FOUND / network error — short-circuit with a
+   * dedicated page. Loading is handled by the main dashboard layout
+   * below (skeletons render because the pseudo-job is `completed`). */
+  if (isFeaturedView && featuredDataQuery.error) {
+    const errorCode = (featuredDataQuery.error as any)?.data?.code;
+    const isNotFound = errorCode === "NOT_FOUND";
+    const message = isNotFound
+      ? featuredDataQuery.error.message || "This creator isn't available"
+      : featuredDataQuery.error.message ||
+        "Could not load creator reels right now.";
+    return (
+      <div className="max-w-3xl mx-auto px-2 sm:px-0 py-14">
+        <div className="rounded-xl border border-border/60 bg-card p-8 text-center">
+          <h2 className="text-lg font-semibold text-foreground">
+            {isNotFound ? "Featured creator unavailable" : "Could not load creator reels"}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">{message}</p>
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <Button onClick={() => featuredDataQuery.refetch()}>Retry</Button>
+            <Button variant="outline" onClick={() => setLocation("/")}>
+              Back to Spy Viral Reels
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!jobId && !featuredAccountId) {
+    const allJobs = jobsListQuery.data || [];
     const scripts = scriptsListQuery.data || [];
     const savedReels = savedListQuery.data || [];
     const collectedReels = collectedListQuery.data || [];
+    /**
+     * Blocker 1 fix: overview stats and Recent Spy Sessions must reflect
+     * ONLY user-initiated research. `seedDemoScrape()` writes a
+     * `scrape_jobs` row with `isDemo: true` during onboarding, which
+     * previously inflated "Reels Researched" / "hours saved" and
+     * populated Recent Spy Sessions with a fake session. Filter here
+     * so new users see honest zeros and a proper empty state.
+     */
+    const jobs = allJobs.filter(j => !j.isDemo);
     const completedJobs = jobs.filter(j => j.status === "completed");
     const totalReelsScraped = completedJobs.reduce((sum, j) => sum + (j.totalReels || 0), 0);
     const hour = new Date().getHours();
@@ -346,8 +1050,8 @@ export default function Dashboard() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground text-sm">Research Reels</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Analyze any Instagram account</p>
+                <p className="font-medium text-foreground text-sm">Spy Viral Reels</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Spy on any public Instagram creator</p>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
@@ -378,10 +1082,10 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Recent Scrape Jobs */}
+        {/* Recent research jobs */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Recent Research Jobs</h2>
+            <h2 className="text-sm font-semibold text-foreground">Recent Spy Sessions</h2>
             {jobs.length > 5 && (
               <Button variant="link" size="sm" className="text-xs" onClick={() => setLocation("/history")}>
                 View all
@@ -400,7 +1104,7 @@ export default function Dashboard() {
                   <div className="flex items-start gap-3">
                     <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center shrink-0 text-xs font-bold text-white">1</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Research a competitor</p>
+                      <p className="text-sm font-medium text-foreground">Start a spy session</p>
                       <p className="text-xs text-muted-foreground">Enter any Instagram handle to spy on their viral Reels</p>
                     </div>
                   </div>
@@ -414,15 +1118,21 @@ export default function Dashboard() {
                   <div className="flex items-start gap-3">
                     <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-bold text-white">3</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Hit Re-Create and get your script</p>
+                      <p className="text-sm font-medium text-foreground">Click Make My Version to generate your script</p>
                       <p className="text-xs text-muted-foreground">AI writes a script based on what made it go viral</p>
                     </div>
                   </div>
                 </div>
-                <Button size="sm" onClick={() => setLocation("/")}>
-                  <Search className="mr-2 h-3.5 w-3.5" />
-                  Start Your First Research
-                </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <Button size="sm" onClick={() => setLocation("/research")}>
+                    <Search className="mr-2 h-3.5 w-3.5" />
+                    Start Your First Spy Session
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setLocation("/research")}>
+                    Browse featured creators
+                    <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -507,408 +1217,1258 @@ export default function Dashboard() {
     );
   }
 
-  const job = jobQuery.data;
   const isLoading = job?.status === "running" || job?.status === "pending";
+  /* Demo banner removed from UI; re-enable by uncommenting this block.
+  const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
+  */
+  const canShowAiBadge =
+    !!job?.classifiedNicheSlug &&
+    !!job?.classifiedConfidence &&
+    (job.classifiedConfidence === "high" ||
+      job.classifiedConfidence === "medium" ||
+      job.classifiedConfidence === "low");
 
   return (
-    <div className="max-w-6xl mx-auto px-2 sm:px-0">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
-              if (fromPage === "history") {
-                setLocation("/history");
-              } else if (fromPage === "research") {
-                setLocation("/");
-              } else if (fromPage === "dashboard") {
-                setLocation("/dashboard");
-              } else {
-                setLocation("/history");
-              }
-            }}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {job ? `@${job.handle}` : "Loading..."}
-            </h1>
-            {job && (
-              <Badge
-                variant={
-                  job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
-                }
-                className="text-xs"
-              >
-                {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                {job.status}
-              </Badge>
-            )}
-          </div>
-          {job && (
-            <p className="text-sm text-muted-foreground ml-11">
-              {sortedReels.length}{dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels{dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
-              {followerCount > 0 && <> &middot; {formatNumber(followerCount)} followers</>}
-            </p>
-          )}
-        </div>
-
-                <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
-          {job?.status === "completed" && reelsData.length > 0 && (
-            <>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
-                  <SelectValue placeholder="Date range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="7">Last 7 Days</SelectItem>
-                  <SelectItem value="14">Last 14 Days</SelectItem>
-                  <SelectItem value="30">Last 30 Days</SelectItem>
-                  <SelectItem value="60">Last 60 Days</SelectItem>
-                  <SelectItem value="90">Last 90 Days</SelectItem>
-                  <SelectItem value="180">Last 180 Days</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="w-[160px] sm:w-[200px] h-9 bg-card text-sm">
-                  <SelectValue placeholder="Sort by..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className="flex items-center gap-2">
-                        {opt.icon}
-                        {opt.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9"
-                onClick={() => {
-                  if (!exportGate.allowed) {
-                    toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
-                      description: "Upgrade your plan for more exports.",
-                      action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                    });
-                    return;
-                  }
-                  exportCsv.mutate({ jobId: jobId! });
-                }}
-                disabled={exportCsv.isPending}
-              >
-                {exportCsv.isPending ? (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5 sm:mr-2" />
-                )}
-                <span className="hidden sm:inline">Export CSV</span>
-              </Button>
-
+    <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
+        <div className="min-w-0">
+          {/* Demo banner removed from UI; re-enable by uncommenting this block.
+          {showDemoBanner && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 p-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-amber-400/20 text-base">
+                📺
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-300">This is a demo dashboard preloaded for you.</p>
+                <p className="text-xs text-muted-foreground">Ready to spy on a real creator?</p>
+              </div>
               <Button
                 size="sm"
-                className="h-9"
+                className="shrink-0"
                 onClick={() => {
-                  if (sheetsAvailable.data?.available) {
-                    setShowSheetsDialog(true);
-                  } else {
-                    toast.info("Google Sheets not configured", {
-                      description:
-                        "Add your Google service account credentials in Settings to enable Google Sheets export.",
-                    });
-                  }
+                  posthog?.capture("demo_banner_cta_clicked");
+                  setLocation("/research");
                 }}
               >
-                <Sheet className="h-3.5 w-3.5 sm:mr-2" />
-                <span className="hidden sm:inline">Connect to Sheets</span>
+                Start a new spy session
               </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Loading state */}
-      {isLoading && (
-        <div className="border border-border/50 bg-card rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="text-center">
-              <p className="text-foreground font-medium">Scraping in progress...</p>
-              <p className="text-sm text-muted-foreground mt-1">{job?.totalReels || 0} reels found so far</p>
+              <Tooltip content="Hide this banner">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 shrink-0"
+                  onClick={() => dismissDemoBanner.mutate()}
+                  disabled={dismissDemoBanner.isPending}
+                >
+                  {dismissDemoBanner.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                </Button>
+              </Tooltip>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Failed state */}
-      {job?.status === "failed" && (
-        <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <p className="text-destructive font-medium">Scraping failed</p>
-            <p className="text-sm text-muted-foreground text-center max-w-md">
-              {job.errorMessage || "An unknown error occurred"}
-            </p>
-            <Button variant="outline" onClick={() => setLocation("/")}>
-              Try again
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading skeleton while reels are being fetched */}
-      {job?.status === "completed" && reelsQuery.isLoading && (
-        <div className="space-y-1">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse">
-              <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
-              <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="h-4 bg-muted rounded w-3/4" />
-                <div className="flex gap-3">
-                  <div className="h-3 bg-muted rounded w-16" />
-                  <div className="h-3 bg-muted rounded w-12" />
-                  <div className="h-3 bg-muted rounded w-14" />
+          )}
+          */}
+          {/* Header. Featured view (Commit 6) renders a distinct profile
+              card with a large avatar + follower / engagement / posting-
+              time stats; the user-scrape flow keeps its condensed header.
+              The sort/filter/view-toggle cluster on the right is shared. */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+            {isFeaturedView ? (
+              <div className="flex items-start gap-3 min-w-0">
+                <Tooltip content="Back">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 mt-1 shrink-0"
+                    onClick={() => {
+                      if (fromPage === "history") setLocation("/history");
+                      else if (fromPage === "research") setLocation("/");
+                      else if (fromPage === "dashboard") setLocation("/dashboard");
+                      else setLocation("/history");
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                {isFeaturedHeaderPending ? (
+                  <div
+                    className="h-20 w-20 shrink-0 rounded-full bg-muted animate-pulse"
+                    aria-hidden
+                  />
+                ) : (
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 flex items-center justify-center text-lg font-semibold text-white">
+                    {featuredData?.account.profilePicUrl ? (
+                      <img
+                        src={featuredData.account.profilePicUrl}
+                        alt={`@${featuredData.account.handle}`}
+                        className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      avatarInitialsFromAccount(
+                        featuredData?.account.displayName,
+                        featuredData?.account.handle
+                      )
+                    )}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isFeaturedHeaderPending ? (
+                      <div
+                        className="h-7 w-40 max-w-[min(100%,20rem)] rounded-md bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        {(() => {
+                          const h =
+                            displayScrapeHandle ||
+                            stripAtHandle(job?.handle) ||
+                            stripAtHandle(featuredData?.account.handle);
+                          return h ? (
+                            `@${h}`
+                          ) : (
+                            <span className="text-muted-foreground" aria-label="Handle loading">
+                              ··
+                            </span>
+                          );
+                        })()}
+                      </h1>
+                    )}
+                    {canShowAiBadge && (
+                      <AiBadge
+                        nicheSlug={job.classifiedNicheSlug!}
+                        confidence={job.classifiedConfidence as BadgeConfidence}
+                      />
+                    )}
+                  </div>
+                  {featuredData?.account.displayName && (
+                    <p className="text-sm text-muted-foreground">
+                      {featuredData.account.displayName}
+                    </p>
+                  )}
+                  {/* Line 2: stats bar. Each segment is conditional so the
+                      dot separators never collapse into "• •" when a
+                      value is missing (e.g. backfill not yet run). */}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {isFeaturedHeaderPending ? (
+                      <span
+                        className="inline-block h-4 w-48 max-w-full rounded bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      (() => {
+                        const segments: React.ReactNode[] = [];
+                        if (followerCount > 0) {
+                          segments.push(
+                            <span key="followers">
+                              {formatNumber(followerCount)} followers
+                            </span>
+                          );
+                        }
+                        if (featuredData && featuredData.account.avgEngagement > 0) {
+                          segments.push(
+                            <span key="engagement">
+                              {featuredData.account.avgEngagement.toFixed(2)}% avg engagement
+                            </span>
+                          );
+                        }
+                        if (featuredData?.account.bestPostingTime) {
+                          segments.push(
+                            <span key="posting-time">
+                              {featuredData.account.bestPostingTime}
+                            </span>
+                          );
+                        }
+                        if (segments.length === 0) return null;
+                        const joined: React.ReactNode[] = [];
+                        segments.forEach((s, i) => {
+                          if (i > 0) {
+                            joined.push(
+                              <span key={`sep-${i}`} className="mx-1.5" aria-hidden>
+                                &middot;
+                              </span>
+                            );
+                          }
+                          joined.push(s);
+                        });
+                        return joined;
+                      })()
+                    )}
+                  </p>
+                  {job && job.classifiedNicheSlug && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="text-primary">
+                        {toReadableNiche(job.classifiedNicheSlug)}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="flex gap-1 shrink-0">
-                <div className="h-8 w-8 bg-muted rounded" />
-                <div className="h-8 w-8 bg-muted rounded" />
+            ) : (
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <Tooltip content="Back to Spy Viral Reels">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
+                      if (fromPage === "history") {
+                        setLocation("/history");
+                      } else if (fromPage === "research") {
+                        setLocation("/");
+                      } else if (fromPage === "dashboard") {
+                        setLocation("/dashboard");
+                      } else {
+                        setLocation("/history");
+                      }
+                    }}>
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isUserJobH1Pending ? (
+                      <div
+                        className="h-7 w-40 max-w-[min(100%,20rem)] rounded-md bg-muted animate-pulse"
+                        aria-hidden
+                      />
+                    ) : (
+                      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        {(() => {
+                          const h = displayScrapeHandle || stripAtHandle(job?.handle);
+                          return h ? (
+                            `@${h}`
+                          ) : (
+                            <span className="text-muted-foreground" aria-label="Handle loading">
+                              ··
+                            </span>
+                          );
+                        })()}
+                      </h1>
+                    )}
+                    {canShowAiBadge && (
+                      <AiBadge
+                        nicheSlug={job.classifiedNicheSlug!}
+                        confidence={job.classifiedConfidence as BadgeConfidence}
+                      />
+                    )}
+                    {job && (
+                      <Tooltip content="All reels successfully collected. Use Account Monitoring to re-sync.">
+                        <Badge
+                          variant={
+                            job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          {job.status}
+                        </Badge>
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+                {job && (
+                  <p className="text-sm text-muted-foreground ml-11">
+                    {job.status === "completed" && reelsLoading && reelsData.length === 0 ? (
+                      "Loading reels…"
+                    ) : (
+                      <>
+                        {sortedReels.length}
+                        {dateFilter !== "all" ? ` of ${reelsData.length}` : ""} reels
+                        {dateFilter !== "all" ? ` (last ${dateFilter} days)` : " collected"}
+                      </>
+                    )}
+                    {followerCount > 0 && job.status === "completed" && !(reelsLoading && reelsData.length === 0) && (
+                      <> &middot; {formatNumber(followerCount)} followers</>
+                    )}
+                    {job.classifiedNicheSlug && (
+                      <>
+                        {" "}
+                        &middot;{" "}
+                        <span className="text-primary">{toReadableNiche(job.classifiedNicheSlug)}</span>
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
+              {job?.status === "completed" && reelsData.length > 0 && (
+                <>
+                  <Tooltip content="Filter reels by date posted">
+                    <div>
+                      <Select value={dateFilter} onValueChange={setDateFilter}>
+                        <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
+                          <SelectValue placeholder="Date range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="7">Last 7 Days</SelectItem>
+                          <SelectItem value="14">Last 14 Days</SelectItem>
+                          <SelectItem value="30">Last 30 Days</SelectItem>
+                          <SelectItem value="60">Last 60 Days</SelectItem>
+                          <SelectItem value="90">Last 90 Days</SelectItem>
+                          <SelectItem value="180">Last 180 Days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Tooltip>
+
+                  <Tooltip content="Change how reels are sorted">
+                    <div>
+                      <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                        <SelectTrigger className="h-9 w-[min(100%,20rem)] min-w-[16rem] max-w-none bg-card text-sm">
+                          <SelectValue placeholder="Sort by..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span className="flex items-center gap-2">
+                                {opt.icon}
+                                {opt.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Tooltip>
+
+                  <Tooltip content="Switch between detailed list and visual grid view">
+                    <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
+                      <Button
+                        variant={viewMode === "list" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setViewModeTracked("list")}
+                      >
+                        <List className="h-3.5 w-3.5 mr-1" />
+                        List
+                      </Button>
+                      <Button
+                        variant={viewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setViewModeTracked("grid")}
+                      >
+                        <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                        Grid
+                      </Button>
+                    </div>
+                  </Tooltip>
+
+                  {/* Export requires a scrape_job row; hidden in featured
+                      view until the catalog is wired into export. */}
+                  {!isFeaturedView && (
+                    <>
+                      <Tooltip content="Download all reels data as a CSV file">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9"
+                          onClick={() => {
+                            if (!exportGate.allowed) {
+                              toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
+                                description: "Upgrade your plan for more exports.",
+                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+                              });
+                              return;
+                            }
+                            exportCsv.mutate({ jobId: jobId! });
+                          }}
+                          disabled={exportCsv.isPending}
+                        >
+                          {exportCsv.isPending ? (
+                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5 sm:mr-2" />
+                          )}
+                          <span className="hidden sm:inline">Export CSV</span>
+                        </Button>
+                      </Tooltip>
+
+                      {/*
+                      Connect to Sheets (UI disabled; re-enable when integration ships)
+                      <Tooltip content="Live-sync this data to a Google Sheet">
+                        <Button
+                          size="sm"
+                          className="h-9"
+                          onClick={() => {
+                            if (sheetsAvailable.data?.available) {
+                              setShowSheetsDialog(true);
+                            } else {
+                              toast.info("Google Sheets not configured", {
+                                description:
+                                  "Add your Google service account credentials in Settings to enable Google Sheets export.",
+                              });
+                            }
+                          }}
+                        >
+                          <Sheet className="h-3.5 w-3.5 sm:mr-2" />
+                          <span className="hidden sm:inline">Connect to Sheets</span>
+                        </Button>
+                      </Tooltip>
+                      */}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Loading state */}
+          {isLoading && (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-foreground font-medium">Analyzing account...</p>
+                  <p className="text-sm text-muted-foreground mt-1">{job?.totalReels || 0} reels found so far</p>
+                </div>
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Failed state */}
+          {job?.status === "failed" && (
+            <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <p className="text-destructive font-medium">Could not load account</p>
+                <p className="text-sm text-muted-foreground text-center max-w-md">
+                  {job.errorMessage || "An unknown error occurred"}
+                </p>
+                <Button variant="outline" onClick={() => setLocation("/")}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Reels list loading: 95% until the list query finishes (then 100% = data rendered) */}
+          {job?.status === "completed" && reelsLoading && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+                    style={{ width: "95%" }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Almost there...</p>
+              </div>
+              <div className="space-y-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse"
+                  >
+                    <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
+                    <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="h-4 bg-muted rounded w-3/4" />
+                      <div className="flex gap-3">
+                        <div className="h-3 bg-muted rounded w-16" />
+                        <div className="h-3 bg-muted rounded w-12" />
+                        <div className="h-3 bg-muted rounded w-14" />
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <div className="h-8 w-8 bg-muted rounded" />
+                      <div className="h-8 w-8 bg-muted rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Usage limit banner */}
+          {!transcribeGate.isLoading && !transcribeGate.allowed && (
+            <div className="mb-4">
+              <UpgradePrompt
+                action="transcribeCount"
+                used={transcribeGate.used}
+                limit={transcribeGate.limit}
+                planRequired={transcribeGate.planRequired}
+                variant="banner"
+              />
+            </div>
+          )}
+
+          {/* Reels list */}
+          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "list" && (
+            <div className="space-y-1">
+              {sortedReels.map((reel, index) => {
+                const isExpanded = expandedReelId === reel.id;
+                const hasTranscription = reel.transcription?.status === "completed";
+                const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
+                const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+                const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
+                const isSaved = !!savedMap[reel.id];
+                const isTxQueued =
+                  isProcessing &&
+                  !isFeaturedView &&
+                  (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+                const transcribeAtCap = transcribeInFlightRef.current >= 5;
+
+                return (
+                  <div
+                    key={reel.id}
+                    ref={setReelRowRef(reel.id)}
+                    className="rounded-lg border border-border/30 overflow-hidden"
+                  >
+                    {/* Reel Row */}
+                    <div
+                      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
+                        isExpanded ? "bg-card border-b border-border/30" : ""
+                      }`}
+                      onClick={() => {
+                        if (isExpanded) {
+                          setExpandedReelId(null);
+                        } else {
+                          setExpandedReelId(reel.id);
+                        }
+                      }}
+                    >
+                      {/* Rank */}
+                      <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
+                        {index + 1}
+                      </span>
+
+                      {/* Thumbnail */}
+                      <div className="relative shrink-0 w-14 h-18 rounded-md overflow-hidden bg-muted">
+                        {reel.thumbnailUrl ? (
+                          <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Film className="h-4 w-4 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        {reel.duration && (
+                          <span className="absolute bottom-0.5 right-0.5 text-[9px] font-mono bg-black/70 text-white px-1 rounded">
+                            {Math.floor(reel.duration / 60)}:{(reel.duration % 60).toString().padStart(2, "0")}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm text-foreground line-clamp-1 leading-snug">
+                            {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
+                          </p>
+                          {hasTranscription && !isNoSpeech && (
+                            <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
+                          )}
+                          {isNoSpeech && (
+                            <span className="shrink-0 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">No voice</span>
+                          )}
+                          {isProcessing && (
+                            <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
+                          )}
+                          {isFailed && (
+                            <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {formatNumber(reel.viewCount)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Heart className="h-3 w-3" />
+                            {formatNumber(reel.likeCount)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MessageCircle className="h-3 w-3" />
+                            {formatNumber(reel.commentCount)}
+                          </span>
+                          {reel.engagementRate > 0 && (
+                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                              <TrendingUp className="h-3 w-3" />
+                              {reel.engagementRate.toFixed(2)}%
+                            </span>
+                          )}
+                          {/* Competitor posting day & time in user timezone */}
+                          <span className="flex items-center gap-1 text-amber-400/80">
+                            <Clock className="h-3 w-3" />
+                            {formatPostedTime(reel.postedAt, userTimezone)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions — delegated to the shared ReelActionButtons
+                          (Commit 5) so List + Grid call identical mutations. */}
+                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end">
+                        <ReelActionButtons
+                          source={
+                            isFeaturedView
+                              ? { source: "featured", featuredReelId: reel.id }
+                              : { source: "user_job", reelId: reel.id, jobId: jobId! }
+                          }
+                          reelId={reel.id}
+                          reelUrl={reel.reelUrl}
+                          isSaved={isSaved}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isFailed={isFailed}
+                          recreateState={reelRecreateState(
+                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                          )}
+                          saveBusy={toggleSave.isPending}
+                          transcribeDisabled={transcribeAtCap}
+                          isQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
+                          onToggleSave={() => {
+                            if (isFeaturedView) {
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                            }
+                          }}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, {
+                              mode: isFeaturedView ? "featured" : "user",
+                              expand: true,
+                            })
+                          }
+                          onExpand={() => setExpandedReelId(reel.id)}
+                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                          onOpenMyScript={() => {
+                            const e = recreateMap[reel.id as keyof typeof recreateMap] as
+                              | RecreateBatchEntry
+                              | undefined;
+                            if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedReelId(isExpanded ? null : reel.id);
+                          }}
+                        >
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Expanded inline workflow panel — same component now
+                        serves both sources; Commit 3b teaches the inner
+                        tRPC mutations about `featuredReelId`. */}
+                    {isExpanded && (
+                      isFeaturedView ? (
+                        <InlineWorkflow
+                          reelSource="featured"
+                          featuredReelId={reel.id}
+                          handle={displayScrapeHandle || job?.handle || ""}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isTranscriptionQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, { mode: "featured", expand: false })
+                          }
+                          userTimezone={userTimezone}
+                          postedAt={reel.postedAt}
+                          recreateEntrySignal={
+                            recreatePulse?.reelId === reel.id
+                              ? {
+                                  nonce: recreatePulse.nonce,
+                                  openScriptId: recreatePulse.openScriptId,
+                                }
+                              : undefined
+                          }
+                        />
+                      ) : (
+                        <InlineWorkflow
+                          reelSource="user_job"
+                          reelId={reel.id}
+                          handle={displayScrapeHandle || job?.handle || ""}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isTranscriptionQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, { mode: "user", expand: false })
+                          }
+                          userTimezone={userTimezone}
+                          postedAt={reel.postedAt}
+                          recreateEntrySignal={
+                            recreatePulse?.reelId === reel.id
+                              ? {
+                                  nonce: recreatePulse.nonce,
+                                  openScriptId: recreatePulse.openScriptId,
+                                }
+                              : undefined
+                          }
+                        />
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Grid view — same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
+          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {sortedReels.map((reel, index) => {
+                  const isModalOpen = gridModalReelId === reel.id;
+                  const hasTranscription = reel.transcription?.status === "completed";
+                  const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
+                  const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+                  const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
+                  const isSaved = !!savedMap[reel.id];
+                  const isTxQueued =
+                    isProcessing &&
+                    !isFeaturedView &&
+                    (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+                  const transcribeAtCap = transcribeInFlightRef.current >= 5;
+
+                  const source: ReelActionSource = isFeaturedView
+                    ? { source: "featured", featuredReelId: reel.id }
+                    : { source: "user_job", reelId: reel.id, jobId: jobId! };
+
+                  return (
+                    <div
+                      key={reel.id}
+                      ref={setReelRowRef(reel.id)}
+                      className={`group relative rounded-lg border bg-card transition-colors ${
+                        isModalOpen ? "border-primary/40" : "border-border/40 hover:border-border/70"
+                      }`}
+                    >
+                      <div
+                        className="relative aspect-[9/14] cursor-pointer overflow-hidden"
+                        onClick={() => setGridModalReelId(reel.id)}
+                      >
+                        {reel.thumbnailUrl ? (
+                          <img
+                            src={reel.thumbnailUrl}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-muted/40 flex items-center justify-center">
+                            <Film className="h-5 w-5 text-muted-foreground/60" />
+                          </div>
+                        )}
+                        <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
+                          #{index + 1}
+                        </div>
+                        {reel.engagementRate > 0 && (
+                          <div className="absolute left-2 bottom-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                            {reel.engagementRate.toFixed(2)}%
+                          </div>
+                        )}
+                        {/* Bookmark overlay (spec #1) — always visible so
+                            state is discoverable without hover. */}
+                        <button
+                          type="button"
+                          className={`absolute right-2 top-2 rounded-full p-1.5 backdrop-blur transition-colors ${
+                            isSaved
+                              ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                              : "bg-black/55 text-white/90 hover:bg-black/75"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isFeaturedView) {
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                            }
+                          }}
+                          disabled={toggleSave.isPending}
+                          title={isSaved ? "Remove from saved" : "Save reel"}
+                          aria-label={isSaved ? "Remove from saved" : "Save reel"}
+                        >
+                          {isSaved ? (
+                            <BookmarkCheck className="h-3.5 w-3.5" />
+                          ) : (
+                            <Bookmark className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        {/* External IG link (spec #4) — smaller icon, no
+                            label, moved to bottom-right so it doesn't
+                            compete with the bookmark above. */}
+                        <a
+                          href={reel.reelUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-2 bottom-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
+                          title="Open on Instagram"
+                          aria-label="Open on Instagram"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        {reel.duration && (
+                          <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
+                            {formatDuration(reel.duration)}
+                          </span>
+                        )}
+                        {hasTranscription && !isNoSpeech && (
+                          <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                            Transcribed
+                          </span>
+                        )}
+                        {isNoSpeech && (
+                          <span className="absolute left-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                            No voice
+                          </span>
+                        )}
+                        {isProcessing && (
+                          <span className="absolute left-2 top-10 rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950 animate-pulse">
+                            Processing
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-2.5 space-y-2 shrink-0">
+                        <div
+                          className="cursor-pointer space-y-2"
+                          onClick={() => setGridModalReelId(reel.id)}
+                        >
+                          <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
+                            {reel.caption || (
+                              <span className="text-muted-foreground italic">No caption</span>
+                            )}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                            <span>{formatNumber(reel.viewCount)} views</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.likeCount)} likes</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.commentCount)} comments</span>
+                            {reel.engagementRate > 0 && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="text-emerald-400 font-medium">
+                                  {reel.engagementRate.toFixed(2)}%
+                                </span>
+                              </>
+                            )}
+                            <span aria-hidden>·</span>
+                            <span className="text-amber-400/80">
+                              {formatPostedTime(reel.postedAt, userTimezone)}
+                            </span>
+                          </div>
+                        </div>
+                        <ReelActionButtons
+                          source={source}
+                          reelId={reel.id}
+                          reelUrl={reel.reelUrl}
+                          isSaved={isSaved}
+                          hasTranscription={hasTranscription}
+                          isProcessing={isProcessing}
+                          isFailed={isFailed}
+                          recreateState={reelRecreateState(
+                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                          )}
+                          saveBusy={toggleSave.isPending}
+                          transcribeDisabled={transcribeAtCap}
+                          isQueued={isTxQueued}
+                          isNoSpeech={isNoSpeech}
+                          hideBookmark
+                          hideExternalLink
+                          onToggleSave={() => {
+                            if (isFeaturedView) {
+                              toggleSave.mutate({ featuredReelId: reel.id });
+                            } else {
+                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                            }
+                          }}
+                          onTranscribe={() =>
+                            runTranscribeClick(reel.id, {
+                              mode: isFeaturedView ? "featured" : "user",
+                              expand: true,
+                            })
+                          }
+                          onExpand={() => setGridModalReelId(reel.id)}
+                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                          onOpenMyScript={() => {
+                            const e = recreateMap[reel.id as keyof typeof recreateMap] as
+                              | RecreateBatchEntry
+                              | undefined;
+                            if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state - only show when reels have loaded but are empty */}
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Film className="h-12 w-12 text-muted-foreground/30" />
+                <p className="text-muted-foreground">
+                  No reels found for @{(displayScrapeHandle || job.handle)}
+                  {typeof job.timeframeDays === "number" ? ` in the last ${job.timeframeDays} days.` : "."}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Usage limit banner */}
-      {!transcribeGate.isLoading && !transcribeGate.allowed && (
-        <div className="mb-4">
-          <UpgradePrompt
-            action="transcribeCount"
-            used={transcribeGate.used}
-            limit={transcribeGate.limit}
-            planRequired={transcribeGate.planRequired}
-            variant="banner"
-          />
-        </div>
-      )}
-
-      {/* Reels list */}
-      {job?.status === "completed" && sortedReels.length > 0 && (
-        <div className="space-y-1">
-          {sortedReels.map((reel, index) => {
-            const isExpanded = expandedReelId === reel.id;
-            const hasTranscription = reel.transcription?.status === "completed";
-            const isProcessing = reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
-            const isFailed = reel.transcription?.status === "failed" && !pendingTranscriptions.has(reel.id);
-            const isSaved = !!savedMap[reel.id];
-
-            return (
-              <div key={reel.id} className="rounded-lg border border-border/30 overflow-hidden">
-                {/* Reel Row */}
-                <div
-                  className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
-                    isExpanded ? "bg-card border-b border-border/30" : ""
-                  }`}
-                  onClick={() => {
-                    if (isExpanded) {
-                      setExpandedReelId(null);
-                    } else {
-                      setExpandedReelId(reel.id);
-                    }
-                  }}
-                >
-                  {/* Rank */}
-                  <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
-                    {index + 1}
-                  </span>
-
-                  {/* Thumbnail */}
-                  <div className="relative shrink-0 w-14 h-18 rounded-md overflow-hidden bg-muted">
-                    {reel.thumbnailUrl ? (
-                      <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Film className="h-4 w-4 text-muted-foreground/50" />
+        <aside className="min-w-0 w-full space-y-4 border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+          {!jobComplete ? (
+            <>
+              <div className="rounded-xl border border-border/40 bg-card p-4">
+                <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-24 bg-muted/80 rounded mt-2 animate-pulse" />
+                <div className="space-y-2 mt-4">
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/40 bg-card p-4">
+                <div className="h-4 w-36 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-52 bg-muted/80 rounded mt-2 animate-pulse" />
+                <div className="space-y-2 mt-4">
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="h-4 w-44 bg-primary/20 rounded animate-pulse" />
+                <div className="h-3 w-full bg-primary/15 rounded mt-3 animate-pulse" />
+                <div className="h-9 w-full bg-primary/25 rounded mt-4 animate-pulse" />
+              </div>
+            </>
+          ) : (
+            <>
+              {showRelatedPanel && (
+                relatedPanelLoading ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <div className="h-5 w-48 bg-muted rounded animate-pulse" />
+                    <div className="h-3 w-28 bg-muted/80 rounded mt-2 animate-pulse" />
+                    <div className="space-y-2 mt-4">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="h-12 rounded-lg bg-muted/60 animate-pulse" />
+                      ))}
+                    </div>
+                  </div>
+                ) : showRelatedFromPicks ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Related <em className="text-primary not-italic">creators</em>
+                    </h3>
+                    <p className="mt-1 text-[11px] text-muted-foreground">From your picks</p>
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      Creators you chose during onboarding. Open their featured dashboards to compare.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {creatorsByHandlesQuery.data?.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            posthog?.capture("related_creator_clicked", {
+                              panel: "onboarding_picks",
+                              from_creator_handle: normalizeAnalyticsHandle(
+                                displayScrapeHandle || job?.handle || ""
+                              ),
+                              to_creator_handle: normalizeAnalyticsHandle(c.handle),
+                              from_niche: nicheSlugForSidebar ?? null,
+                            });
+                            setLocation(`/dashboard?featuredAccountId=${c.id}`);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
+                            {c.profilePicUrl ? (
+                              <img
+                                src={c.profilePicUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (c.displayName || c.handle).slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {c.displayName || `@${c.handle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{c.handle} · {formatNumber(c.followerCount)} ·{" "}
+                              <span className="font-mono text-emerald-400">
+                                {c.avgEngagementRate.toFixed(2)}%
+                              </span>
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Related <em className="text-primary not-italic">creators</em>
+                    </h3>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Top creators in this niche</p>
+                    {sidebarNicheLabel && (
+                      <div className="mt-1 inline-block rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                        {sidebarNicheLabel}
                       </div>
                     )}
-                    {reel.duration && (
-                      <span className="absolute bottom-0.5 right-0.5 text-[9px] font-mono bg-black/70 text-white px-1 rounded">
-                        {Math.floor(reel.duration / 60)}:{(reel.duration % 60).toString().padStart(2, "0")}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm text-foreground line-clamp-1 leading-snug">
-                        {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
-                      </p>
-                      {hasTranscription && (
-                        <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
-                      )}
-                      {isProcessing && (
-                        <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
-                      )}
-                      {isFailed && (
-                        <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
-                      )}
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      Also spying on <span className="text-foreground">@{(displayScrapeHandle || job?.handle || "")}</span>? Here
+                      are more creators in the same niche.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {relatedCreatorsQuery.data?.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            if (job?.handle && nicheSlugForSidebar) {
+                              posthog?.capture("related_creator_clicked", {
+                                panel: "niche_fallback",
+                                from_creator_handle: normalizeAnalyticsHandle(job.handle),
+                                to_creator_handle: normalizeAnalyticsHandle(c.handle),
+                                from_niche: nicheSlugForSidebar,
+                              });
+                            }
+                            setLocation(`/dashboard?featuredAccountId=${c.id}`);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
+                            {c.profilePicUrl ? (
+                              <img
+                                src={c.profilePicUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (c.displayName || c.handle).slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {c.displayName || `@${c.handle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{c.handle} · {formatNumber(c.followerCount)} ·{" "}
+                              <span className="font-mono text-emerald-400">
+                                {c.avgEngagementRate.toFixed(2)}%
+                              </span>
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Eye className="h-3 w-3" />
-                        {formatNumber(reel.viewCount)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Heart className="h-3 w-3" />
-                        {formatNumber(reel.likeCount)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {formatNumber(reel.commentCount)}
-                      </span>
-                      {reel.engagementRate > 0 && (
-                        <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                          <TrendingUp className="h-3 w-3" />
-                          {reel.engagementRate.toFixed(2)}%
-                        </span>
-                      )}
-                      {/* Competitor posting day & time in user timezone */}
-                      <span className="flex items-center gap-1 text-amber-400/80">
-                        <Clock className="h-3 w-3" />
-                        {formatPostedTime(reel.postedAt, userTimezone)}
-                      </span>
+                  </div>
+                )
+              )}
+
+              {showGoingViralPanel && (
+                goingViralQuery.isPending ? (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <div className="h-5 w-44 bg-muted rounded animate-pulse" />
+                    <div className="mt-3 space-y-2">
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <div key={idx} className="h-16 rounded-lg bg-muted/60 animate-pulse" />
+                      ))}
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`h-8 w-8 p-0 ${isSaved ? "text-primary" : "text-muted-foreground"}`}
-                      onClick={() => toggleSave.mutate({ reelId: reel.id, jobId: jobId! })}
-                      disabled={toggleSave.isPending}
-                      title={isSaved ? "Remove from saved" : "Save reel"}
-                    >
-                      {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-                    </Button>
-
-                    {hasTranscription ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => setExpandedReelId(reel.id)}
-                      >
-                        <FileText className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Transcript</span>
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => {
-                          if (!transcribeGate.allowed) {
-                            toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
-                              description: "Upgrade your plan for more transcriptions.",
-                              action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                            });
-                            return;
+                ) : (
+                  <div className="rounded-xl border border-border/40 bg-card p-4">
+                    <h3 className="font-serif text-lg font-normal tracking-tight text-foreground">
+                      Going <em className="text-primary not-italic">viral</em> now
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      High-view Reels in your niches (last 7 days)
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {goingViralQuery.data?.map((r) => {
+                        const captionText = (r.caption || "").trim();
+                        return (
+                        <button
+                          key={r.reelId}
+                          type="button"
+                          onClick={() =>
+                            setLocation(
+                              `/dashboard?featuredAccountId=${r.featuredAccountId}&featuredReelId=${r.reelId}`
+                            )
                           }
-                          setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                          startTranscription.mutate({ reelId: reel.id });
-                        }}
-                        disabled={isProcessing}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                            <span className="hidden sm:inline">Transcribing...</span>
-                          </>
-                        ) : isFailed ? (
-                          <>
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Retry</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Transcribe</span>
-                          </>
-                        )}
-                      </Button>
-                    )}
-
-                    {hasTranscription && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                        onClick={() => setExpandedReelId(reel.id)}
-                      >
-                        <Wand2 className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Re-Create</span>
-                      </Button>
-                    )}
-
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                      <a href={reel.reelUrl} target="_blank" rel="noopener noreferrer" title="Open on Instagram">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-muted-foreground"
-                      onClick={() => setExpandedReelId(isExpanded ? null : reel.id)}
-                    >
-                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+                        >
+                          <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
+                            {r.thumbnailUrl ? (
+                              <img
+                                src={r.thumbnailUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Film className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-xs font-medium text-foreground leading-snug">
+                              {captionText || `Viral Reel · @${r.creatorHandle}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                              @{r.creatorHandle} · {formatNumber(r.viewCount)} views
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                )
+              )}
+
+              {/* Upgrade */}
+              {!hideUpgradeSidebarPanel && (
+                <div className="rounded-xl border border-primary/25 bg-gradient-to-br from-primary/15 via-fuchsia-500/10 to-transparent p-4 text-center">
+                  {billingPlan === "pro" ? (
+                    <>
+                      <h3 className="font-serif text-base font-normal text-foreground">Thanks for being on Pro</h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        You have full access to deep creator research and script workflows.
+                      </p>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Need team seats and higher limits?{" "}
+                        <button
+                          type="button"
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                          onClick={() => setLocation("/billing")}
+                        >
+                          Go Business
+                        </button>
+                      </p>
+                      <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
+                        Manage billing
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-serif text-base font-normal text-foreground">Unlock unlimited spying</h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        Upgrade for unlimited creator research and more script generations each month.
+                      </p>
+                      <Button size="sm" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
+                        View plans & billing
+                      </Button>
+                    </>
+                  )}
                 </div>
+              )}
+            </>
+          )}
+        </aside>
+      </div>
 
-                {/* Expanded inline workflow panel */}
-                {isExpanded && (
-                  <InlineWorkflow
-                    reelId={reel.id}
-                    handle={job?.handle || ""}
-                    hasTranscription={hasTranscription}
-                    isProcessing={isProcessing}
-                    onTranscribe={() => {
-                      setPendingTranscriptions((prev) => new Set(prev).add(reel.id));
-                      startTranscription.mutate({ reelId: reel.id });
-                    }}
-                    userTimezone={userTimezone}
-                    postedAt={reel.postedAt}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <GridReelWorkflowDialog
+        open={gridModalReel != null}
+        onOpenChange={(open) => {
+          if (!open) setGridModalReelId(null);
+        }}
+        reel={
+          gridModalReel
+            ? {
+                id: gridModalReel.id,
+                caption: gridModalReel.caption,
+                thumbnailUrl: gridModalReel.thumbnailUrl,
+                viewCount: gridModalReel.viewCount,
+                likeCount: gridModalReel.likeCount,
+                commentCount: gridModalReel.commentCount,
+                engagementRate: gridModalReel.engagementRate,
+                postedAt: gridModalReel.postedAt,
+                duration: gridModalReel.duration,
+              }
+            : null
+        }
+        userTimezone={userTimezone}
+      >
+        {gridModalReel
+          ? (() => {
+              const reel = gridModalReel;
+              const hasTranscription = reel.transcription?.status === "completed";
+              const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
+              const isProcessing =
+                reel.transcription?.status === "processing" || pendingTranscriptions.has(reel.id);
+              const isTxQueued =
+                isProcessing &&
+                !isFeaturedView &&
+                (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+              return isFeaturedView ? (
+                <InlineWorkflow
+                  reelSource="featured"
+                  featuredReelId={reel.id}
+                  handle={displayScrapeHandle || job?.handle || ""}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  onTranscribe={() =>
+                    runTranscribeClick(reel.id, { mode: "featured", expand: false })
+                  }
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? {
+                          nonce: recreatePulse.nonce,
+                          openScriptId: recreatePulse.openScriptId,
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <InlineWorkflow
+                  reelSource="user_job"
+                  reelId={reel.id}
+                  handle={displayScrapeHandle || job?.handle || ""}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  onTranscribe={() =>
+                    runTranscribeClick(reel.id, { mode: "user", expand: false })
+                  }
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? {
+                          nonce: recreatePulse.nonce,
+                          openScriptId: recreatePulse.openScriptId,
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })()
+          : null}
+      </GridReelWorkflowDialog>
 
-      {/* Empty state - only show when reels have loaded but are empty */}
-      {job?.status === "completed" && !reelsQuery.isLoading && sortedReels.length === 0 && (
-        <div className="border border-border/50 bg-card rounded-lg p-8">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <Film className="h-12 w-12 text-muted-foreground/30" />
-            <p className="text-muted-foreground">
-              No reels found for @{job.handle} in the last {job.timeframeDays} days.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Google Sheets Dialog */}
+      {/*
+      Export to Google Sheets dialog (UI disabled; re-enable when integration ships)
       <Dialog open={showSheetsDialog} onOpenChange={setShowSheetsDialog}>
         <DialogContent className="bg-card text-card-foreground">
           <DialogHeader>
@@ -947,6 +2507,7 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+      */}
     </div>
   );
 }

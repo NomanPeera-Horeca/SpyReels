@@ -108,3 +108,9 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+.spec-scratch/
+
+# One-off DB scripts (hardcoded Railway URLs — do not commit)
+scripts/check-staging-migrations.mjs
+scripts/apply-0027-staging.mjs
+scripts/backfill-profile-pics-r2.ts

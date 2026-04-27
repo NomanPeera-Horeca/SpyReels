@@ -31,7 +31,6 @@ import {
   FileText,
   Settings,
   CreditCard,
-  Sparkles,
   PenSquare,
   Inbox,
   Lightbulb,
@@ -44,11 +43,30 @@ import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import Tooltip from "@/components/Tooltip";
+import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Sun, Moon } from "lucide-react";
+import { LightModeBanner } from "@/components/LightModeBanner";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
+
+/** Verbatim `data-tip` strings from docs/build-spec/spyreels-research-mockup-v2-2.html sidebar nav */
+const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
+  "/dashboard": "See past research results and saved reel data",
+  "/research": "Spy on any public Instagram creator",
+  "/collected": "Individual reels you've saved from past research",
+  "/history": "Track and refresh previously analyzed accounts",
+  "/scripts": "Your AI-generated scripts library",
+  "/ideas": "Turn a rough idea into a viral-ready script",
+  "/library": "Browse your hook library and templates",
+  "/saved": "Reels you bookmarked for later",
+  "/interests":
+    "Niches and creators for sidebar recommendations and the /research feed",
+  __theme__:
+    "Click to cycle: System, Light, Dark, then back. The label is the look you see now; light is beta.",
+};
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -110,7 +128,9 @@ function DashboardLayoutContent({
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const { theme, toggleTheme } = useTheme();
+  const { resolvedTheme, cycleThemePreference } = useTheme();
+  const themeMenuIcon = resolvedTheme === "dark" ? Sun : Moon;
+  const themeMenuLabel = resolvedTheme === "light" ? "Light (beta)" : "Dark";
 
   useEffect(() => {
     if (user) {
@@ -122,7 +142,7 @@ function DashboardLayoutContent({
   }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    { icon: Search, label: "Research Viral Reels", path: "/research" },
+    { icon: Search, label: "Spy Viral Reels", path: "/research" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
     { icon: Eye, label: "Account Monitoring", path: "/history" },
     { icon: FileText, label: "My Scripts", path: "/scripts" },
@@ -131,8 +151,8 @@ function DashboardLayoutContent({
     { icon: Bookmark, label: "Saved Reels", path: "/saved" },
     { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
     {
-      icon: theme === "dark" ? Sun : Moon,
-      label: theme === "dark" ? "Light mode (beta)" : "Dark mode",
+      icon: themeMenuIcon,
+      label: themeMenuLabel,
       path: "__theme__",
     },
     { icon: Settings, label: "Settings", path: "/settings" },
@@ -200,18 +220,7 @@ function DashboardLayoutContent({
                   <PanelLeft className="h-4 w-4 text-muted-foreground" />
                 )}
               </button>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
-                    alt="SpyReels"
-                    className="h-7 w-7"
-                  />
-                  <span className="font-semibold tracking-tight truncate text-foreground">
-                    SpyReels
-                  </span>
-                </div>
-              ) : null}
+              {!isCollapsed ? <SpyReelsWordmark /> : null}
             </div>
           </SidebarHeader>
 
@@ -227,7 +236,7 @@ function DashboardLayoutContent({
                         Overview
                       </div>
                     )}
-                    {item.label === "Research" && (
+                    {item.path === "/research" && (
                       <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Discover
                       </div>
@@ -243,21 +252,33 @@ function DashboardLayoutContent({
                       </div>
                     )}
                     <SidebarMenuItem>
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() =>
-                          item.path === "__theme__"
-                            ? toggleTheme?.()
-                            : setLocation(item.path)
-                        }
-                        tooltip={item.label}
-                        className="h-10 transition-all font-normal"
-                      >
-                        <item.icon
-                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                        />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
+                      {(() => {
+                        const mockupTooltip = SIDEBAR_NAV_TOOLTIPS[item.path];
+                        const button = (
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() =>
+                              item.path === "__theme__"
+                                ? cycleThemePreference()
+                                : setLocation(item.path)
+                            }
+                            tooltip={mockupTooltip ? undefined : item.label}
+                            className="h-10 transition-all font-normal"
+                          >
+                            <item.icon
+                              className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                            />
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        );
+                        return mockupTooltip ? (
+                          <Tooltip content={mockupTooltip} side="right">
+                            {button}
+                          </Tooltip>
+                        ) : (
+                          button
+                        );
+                      })()}
                     </SidebarMenuItem>
                   </Fragment>
                 );
@@ -344,6 +365,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
+        <LightModeBanner />
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>

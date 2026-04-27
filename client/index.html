@@ -1,7 +1,30 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 
   <head>
+    <script>
+      (function () {
+        var k = "theme";
+        var s = null;
+        try {
+          s = localStorage.getItem(k);
+        } catch (e) {}
+        if (s !== "light" && s !== "dark" && s !== "system") s = "system";
+        var dark = false;
+        if (s === "dark") dark = true;
+        else if (s === "light") dark = false;
+        else {
+          try {
+            dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } catch (e) {
+            dark = true;
+          }
+        }
+        var r = document.documentElement;
+        if (dark) r.classList.add("dark");
+        else r.classList.remove("dark");
+      })();
+    </script>
     <script>(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');</script>
     <script async src="https://r.wdfl.co/rw.js" data-rewardful="1d46dd"></script>
     <meta charset="UTF-8" />
