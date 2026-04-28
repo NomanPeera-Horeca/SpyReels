@@ -693,6 +693,54 @@ export async function updateFeaturedReelTranscription(
     .where(eq(featuredReels.id, featuredReelId));
 }
 
+/** Bug #57 Tier 2: persist AI transcript classification on `featured_reels`. */
+export async function updateFeaturedReelClassification(
+  id: number,
+  data: {
+    contentType: string;
+    remakeabilityScore: number;
+    suggestedAction: string;
+    classificationReason: string;
+  }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(featuredReels)
+    .set({
+      contentType: data.contentType as FeaturedReel["contentType"],
+      remakeabilityScore: data.remakeabilityScore,
+      suggestedAction: data.suggestedAction as FeaturedReel["suggestedAction"],
+      classificationReason: data.classificationReason,
+      classifiedAt: new Date(),
+    })
+    .where(eq(featuredReels.id, id));
+}
+
+/** Bug #57 Tier 2: persist AI transcript classification on scraped `reels`. */
+export async function updateReelClassification(
+  id: number,
+  data: {
+    contentType: string;
+    remakeabilityScore: number;
+    suggestedAction: string;
+    classificationReason: string;
+  }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(reels)
+    .set({
+      contentType: data.contentType as Reel["contentType"],
+      remakeabilityScore: data.remakeabilityScore,
+      suggestedAction: data.suggestedAction as Reel["suggestedAction"],
+      classificationReason: data.classificationReason,
+      classifiedAt: new Date(),
+    })
+    .where(eq(reels.id, id));
+}
+
 /** All recreated scripts attached to a featured reel (newest first). */
 export async function getRecreatedScriptsByFeaturedReelId(
   featuredReelId: number

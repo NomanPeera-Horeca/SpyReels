@@ -57,6 +57,7 @@ import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
+import { mergeRemakeability } from "@/lib/remakeability";
 
 type SortOption =
   | "views_desc"
@@ -617,6 +618,21 @@ export default function Dashboard() {
   );
   const recreateMap = recreateBatchQuery.data || {};
 
+  const invalidateTranscriptionFollowUp = useCallback(
+    (variables: { reelId?: number; featuredReelId?: number } | undefined) => {
+      void reelsQuery.refetch();
+      if (isFeaturedView && featuredAccountId != null) {
+        void utils.featured.getDashboardData.invalidate({ featuredAccountId });
+      }
+      if (variables?.featuredReelId != null) {
+        void utils.transcribe.status.invalidate({ featuredReelId: variables.featuredReelId });
+      } else if (variables?.reelId != null) {
+        void utils.transcribe.status.invalidate({ reelId: variables.reelId });
+      }
+    },
+    [utils, reelsQuery, isFeaturedView, featuredAccountId]
+  );
+
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
       utils.saved.checkBatch.invalidate();
@@ -637,13 +653,31 @@ export default function Dashboard() {
       }
     }
     if (completedOrFailed.size > 0) {
+      for (const id of completedOrFailed) {
+        if (isFeaturedView) {
+          void utils.transcribe.status.invalidate({ featuredReelId: id });
+        } else {
+          void utils.transcribe.status.invalidate({ reelId: id });
+        }
+      }
+      void reelsQuery.refetch();
+      if (isFeaturedView && featuredAccountId != null) {
+        void utils.featured.getDashboardData.invalidate({ featuredAccountId });
+      }
       setPendingTranscriptions((prev) => {
         const next = new Set(prev);
         completedOrFailed.forEach((id) => next.delete(id));
         return next;
       });
     }
-  }, [reelsData, pendingTranscriptions]);
+  }, [
+    reelsData,
+    pendingTranscriptions,
+    utils,
+    isFeaturedView,
+    featuredAccountId,
+    reelsQuery,
+  ]);
 
   // Filter reels by date range
   const filteredReels = useMemo(() => {
@@ -788,7 +822,10 @@ export default function Dashboard() {
   }, []);
 
   const startTranscription = trpc.transcribe.start.useMutation({
-    onSettled: releaseTranscribeSlot,
+    onSettled: (_data, _err, variables) => {
+      releaseTranscribeSlot();
+      invalidateTranscriptionFollowUp(variables);
+    },
     onSuccess: (data, variables) => {
       const targetId = variables.reelId ?? variables.featuredReelId;
       if (data.status === "completed") {
@@ -800,12 +837,8 @@ export default function Dashboard() {
           });
         }
         toast.success("Transcription ready");
-        if (targetId != null) {
-          if (viewModeRef.current === "grid") {
-            setGridModalReelId(targetId);
-          } else {
-            setExpandedReelId(targetId);
-          }
+        if (targetId != null && viewModeRef.current !== "grid") {
+          setExpandedReelId(targetId);
         }
       } else {
         // processing: do not clear optimistic pending; onSuccess was wiping
@@ -825,7 +858,6 @@ export default function Dashboard() {
           });
         }
       }
-      reelsQuery.refetch();
     },
     onError: (error, variables) => {
       const targetId = variables.reelId ?? variables.featuredReelId;
@@ -839,6 +871,26 @@ export default function Dashboard() {
       toast.error("Transcription failed", { description: error.message });
     },
   });
+
+  const gridRecreateGenerate = trpc.recreate.generate.useMutation({
+    onSuccess: () => {
+      utils.recreate.checkBatch.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Script generation failed", { description: error.message });
+    },
+  });
+
+  const runGridMakeVersion = useCallback(
+    (reelId: number, mode: "featured" | "user") => {
+      gridRecreateGenerate.mutate(
+        mode === "featured"
+          ? { featuredReelId: reelId, topic: "", gradeLevel: "auto" }
+          : { reelId, topic: "", gradeLevel: "auto" }
+      );
+    },
+    [gridRecreateGenerate]
+  );
 
   const runTranscribeClick = useCallback(
     (reelId: number, opts: { mode: "featured" | "user"; expand: boolean }) => {
@@ -1711,6 +1763,14 @@ export default function Dashboard() {
                   !isFeaturedView &&
                   (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
                 const transcribeAtCap = transcribeInFlightRef.current >= 5;
+                const recreateSt = reelRecreateState(
+                  recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                );
+                const idleNotRemakeable =
+                  mergeRemakeability(reel.transcription, reel).notRemakeable &&
+                  hasTranscription &&
+                  !isNoSpeech &&
+                  recreateSt === "none";
 
                 return (
                   <div
@@ -1813,13 +1873,13 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          recreateState={reelRecreateState(
-                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
-                          )}
+                          recreateState={recreateSt}
+                          idleNotRemakeable={idleNotRemakeable}
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          classificationReason={reel.classificationReason ?? undefined}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -1869,6 +1929,14 @@ export default function Dashboard() {
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          inspirationPanelVariant="dashboard"
+                          listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                          reelClassification={reel}
+                          onSaveForInspiration={() =>
+                            toggleSave.mutate({ featuredReelId: reel.id })
+                          }
+                          saveForInspirationBusy={toggleSave.isPending}
+                          inspirationReelIsSaved={isSaved}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "featured", expand: false })
                           }
@@ -1892,6 +1960,14 @@ export default function Dashboard() {
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          inspirationPanelVariant="dashboard"
+                          listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                          reelClassification={reel}
+                          onSaveForInspiration={() =>
+                            toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                          }
+                          saveForInspirationBusy={toggleSave.isPending}
+                          inspirationReelIsSaved={isSaved}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "user", expand: false })
                           }
@@ -1930,6 +2006,15 @@ export default function Dashboard() {
                     !isFeaturedView &&
                     (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
                   const transcribeAtCap = transcribeInFlightRef.current >= 5;
+
+                  const recreateSt = reelRecreateState(
+                    recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                  );
+                  const idleNotRemakeable =
+                    mergeRemakeability(reel.transcription, reel).notRemakeable &&
+                    hasTranscription &&
+                    !isNoSpeech &&
+                    recreateSt === "none";
 
                   const source: ReelActionSource = isFeaturedView
                     ? { source: "featured", featuredReelId: reel.id }
@@ -2068,13 +2153,13 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          recreateState={reelRecreateState(
-                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
-                          )}
+                          recreateState={recreateSt}
+                          idleNotRemakeable={idleNotRemakeable}
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          classificationReason={reel.classificationReason ?? undefined}
                           hideBookmark
                           hideExternalLink
                           onToggleSave={() => {
@@ -2087,11 +2172,13 @@ export default function Dashboard() {
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, {
                               mode: isFeaturedView ? "featured" : "user",
-                              expand: true,
+                              expand: false,
                             })
                           }
                           onExpand={() => setGridModalReelId(reel.id)}
-                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                          onMakeVersion={() =>
+                            runGridMakeVersion(reel.id, isFeaturedView ? "featured" : "user")
+                          }
                           onOpenMyScript={() => {
                             const e = recreateMap[reel.id as keyof typeof recreateMap] as
                               | RecreateBatchEntry
@@ -2416,6 +2503,7 @@ export default function Dashboard() {
                 isProcessing &&
                 !isFeaturedView &&
                 (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+              const isSaved = !!savedMap[reel.id];
               return isFeaturedView ? (
                 <InlineWorkflow
                   reelSource="featured"
@@ -2425,6 +2513,14 @@ export default function Dashboard() {
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="dashboard"
+                  listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                  reelClassification={reel}
+                  onSaveForInspiration={() =>
+                    toggleSave.mutate({ featuredReelId: reel.id })
+                  }
+                  saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved={isSaved}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "featured", expand: false })
                   }
@@ -2448,6 +2544,14 @@ export default function Dashboard() {
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="dashboard"
+                  listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                  reelClassification={reel}
+                  onSaveForInspiration={() =>
+                    toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                  }
+                  saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved={isSaved}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "user", expand: false })
                   }

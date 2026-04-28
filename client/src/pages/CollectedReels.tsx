@@ -33,14 +33,75 @@ import {
   Link2,
   Calendar,
   ArrowUpDown,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
+import Tooltip from "@/components/Tooltip";
 import {
   InlineWorkflow,
   formatNumber,
   formatPostedTime,
   formatDuration,
 } from "@/components/InlineWorkflow";
+
+function CollectedReCreateOrLabel({
+  mappedReelId,
+  hasTranscription,
+  onOpenPanel,
+  reelClassification,
+}: {
+  mappedReelId: number;
+  hasTranscription: boolean;
+  onOpenPanel: () => void;
+  reelClassification?: ReelClassificationLike;
+}) {
+  const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
+    { reelId: mappedReelId },
+    { enabled: hasTranscription && mappedReelId > 0 }
+  );
+  const raw = transcriptionQuery.data;
+  const remake = mergeRemakeability(
+    raw ? { status: raw.status, transcript: raw.transcript, segments: raw.segments } : null,
+    reelClassification
+  );
+
+  if (transcriptionQuery.isFetching && !raw) {
+    return (
+      <div className="h-7 px-1 flex items-center justify-center">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (remake.notRemakeable) {
+    const hint = reelClassification?.classificationReason?.trim();
+    return (
+      <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-[9rem] flex items-center justify-end gap-1 self-center">
+        <span>Saved as inspiration</span>
+        {hint ? (
+          <Tooltip content={hint}>
+            <span className="inline-flex cursor-help shrink-0">
+              <Info className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+            </span>
+          </Tooltip>
+        ) : null}
+      </p>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
+      onClick={onOpenPanel}
+    >
+      <Wand2 className="h-3 w-3 sm:mr-1" />{" "}
+      <span className="hidden sm:inline">Re-Create</span>
+    </Button>
+  );
+}
 
 function formatDurationShort(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -654,16 +715,13 @@ export default function CollectedReels() {
                         </Button>
                       )}
 
-                      {hasTranscription && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
-                          onClick={() => setExpandedReel(reel.id)}
-                        >
-                          <Wand2 className="h-3 w-3 sm:mr-1" />{" "}
-                          <span className="hidden sm:inline">Re-Create</span>
-                        </Button>
+                      {hasTranscription && mappedReelId && (
+                        <CollectedReCreateOrLabel
+                          mappedReelId={mappedReelId}
+                          hasTranscription={hasTranscription}
+                          onOpenPanel={() => setExpandedReel(reel.id)}
+                          reelClassification={reel}
+                        />
                       )}
                     </>
                   )}
@@ -718,6 +776,7 @@ export default function CollectedReels() {
                   handle={reel.ownerUsername || "unknown"}
                   userTimezone={userTimezone}
                   postedAt={reel.postedAt || new Date()}
+                  reelClassification={reel}
                 />
               )}
 
@@ -769,12 +828,14 @@ function CollectedReelWorkflow({
   handle,
   userTimezone,
   postedAt,
+  reelClassification,
 }: {
   collectedReelId: number;
   reelId: number;
   handle: string;
   userTimezone: string;
   postedAt: Date | string;
+  reelClassification?: ReelClassificationLike;
 }) {
   const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
     { reelId },
@@ -790,6 +851,16 @@ function CollectedReelWorkflow({
   const transcription = transcriptionQuery.data;
   const hasTranscription = transcription?.status === "completed";
   const isProcessing = transcription?.status === "processing";
+  const listRemakeHint = mergeRemakeability(
+    transcription
+      ? {
+          status: transcription.status,
+          transcript: transcription.transcript,
+          segments: transcription.segments,
+        }
+      : null,
+    reelClassification
+  );
 
   const transcribeMutation = trpc.collected.transcribe.useMutation();
 
@@ -799,6 +870,9 @@ function CollectedReelWorkflow({
       handle={handle}
       hasTranscription={hasTranscription}
       isProcessing={!!isProcessing}
+      inspirationPanelVariant="saved-collected"
+      listRemakeHint={listRemakeHint}
+      reelClassification={reelClassification}
       onTranscribe={() => {
         transcribeMutation.mutate({ collectedReelId });
         toast.info("Transcription started...");

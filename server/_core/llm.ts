@@ -61,8 +61,13 @@ export type InvokeParams = {
   tools?: Tool[];
   toolChoice?: ToolChoice;
   tool_choice?: ToolChoice;
+  /** Defaults to 8192 when omitted (existing behavior). */
   maxTokens?: number;
   max_tokens?: number;
+  /** Overrides default model (`claude-sonnet-4-6`). */
+  model?: string;
+  /** When omitted, Anthropic applies its default. */
+  temperature?: number;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
@@ -270,6 +275,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     responseFormat,
     response_format,
+    model,
+    temperature,
+    maxTokens: maxTokensParam,
+    max_tokens: max_tokensParam,
   } = params;
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -299,9 +308,13 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     ? `${systemPrompt}\n\nRespond with valid JSON only. No markdown, no explanation.`
     : systemPrompt;
 
+  const maxTokensResolved = maxTokensParam ?? max_tokensParam ?? 8192;
+  const modelResolved = model ?? "claude-sonnet-4-6";
+
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8192,
+    model: modelResolved,
+    max_tokens: maxTokensResolved,
+    ...(typeof temperature === "number" ? { temperature } : {}),
     ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
     messages: normalizedMessages,
   });

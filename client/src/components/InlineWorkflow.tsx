@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, type Ref } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,9 @@ import {
   Download,
   Wand2,
   MonitorPlay,
+  Bookmark,
+  BookmarkCheck,
+  Link2,
   Check,
   Save,
   Tag,
@@ -35,9 +38,19 @@ import {
   Timer,
   Mic,
   Calendar as CalendarIcon,
+  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import {
+  inspirationPanelCopy,
+  mergeRemakeability,
+  remakeabilityFromClassification,
+  transcriptionIsNotRemakeable,
+  type NotRemakeableReason,
+  type NotRemakeableResult,
+  type ReelClassificationLike,
+} from "@/lib/remakeability";
 
 // ── Shared Types ──
 
@@ -254,6 +267,17 @@ export type InlineWorkflowProps = {
    * transcript and segments). Parent derives from `reel.transcription`.
    */
   isNoSpeech?: boolean;
+  /** Bug #57 Tier 1: inspires-only panel vs full RecreateSection */
+  inspirationPanelVariant?: "dashboard" | "saved-collected";
+  /** Row snapshot while `transcribe.status` query is still loading after expand */
+  listRemakeHint?: NotRemakeableResult;
+  /** Tier 2 classification from reels / featured_reels (nullable until classified). */
+  reelClassification?: ReelClassificationLike;
+  /** Dashboard only: fires `saved.toggle`, same mutation as bookmark */
+  onSaveForInspiration?: () => void;
+  saveForInspirationBusy?: boolean;
+  /** Dashboard only: mirrors `saved.checkBatch` for Save for Inspiration UI */
+  inspirationReelIsSaved?: boolean;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -266,6 +290,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     isProcessing,
     isTranscriptionQueued = false,
     isNoSpeech = false,
+    inspirationPanelVariant,
+    listRemakeHint,
+    reelClassification,
+    onSaveForInspiration,
+    saveForInspirationBusy = false,
+    inspirationReelIsSaved = false,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -408,6 +438,35 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   });
 
   const t = transcriptionQuery.data;
+  const segLenEffective = Array.isArray(t?.segments) ? t.segments.length : 0;
+  const effectiveHasTranscription =
+    hasTranscription || t?.status === "completed";
+  const effectiveIsProcessing =
+    isProcessing &&
+    t?.status !== "completed" &&
+    t?.status !== "failed";
+  const effectiveIsNoSpeech =
+    isNoSpeech ||
+    (t?.status === "completed" &&
+      !String(t?.transcript ?? "").trim() &&
+      segLenEffective === 0);
+
+  const mergedRemake = useMemo((): NotRemakeableResult => {
+    const transcriptionLike = t
+      ? {
+          status: t.status,
+          transcript: t.transcript,
+          segments: t.segments,
+        }
+      : null;
+    const merged = mergeRemakeability(transcriptionLike, reelClassification ?? null);
+    if (t) return merged;
+    if (remakeabilityFromClassification(reelClassification ?? null) != null) {
+      return merged;
+    }
+    return listRemakeHint ?? { notRemakeable: false };
+  }, [t, listRemakeHint, reelClassification]);
+
   const segments: Segment[] = (t?.segments as any) || [];
   const transcript = t?.transcript || "";
   const transcriptionStatus = t?.status;
@@ -436,6 +495,22 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     average: { duration: wordCount / 3.0 },
     fast: { duration: wordCount / 3.5 },
   };
+
+  const blockingRecreate =
+    generateMutation.isPending ||
+    (activeScriptId != null &&
+      script != null &&
+      (script.status === "processing" || script.status === "failed"));
+
+  const showCompletedRewrite =
+    activeScriptId != null && script?.status === "completed";
+
+  const showInspirePanel =
+    inspirationPanelVariant != null &&
+    mergedRemake.notRemakeable &&
+    !blockingRecreate &&
+    !showCompletedRewrite &&
+    !effectiveIsNoSpeech;
 
   useEffect(() => {
     if (!pendingOpenScriptScrollRef.current) return;
@@ -554,7 +629,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   // Not transcribed yet (idle only). If the parent already started a run
   // from the row action strip, show the transcribing panel instead of the
   // duplicate "Transcribe Now" gate. Same idea as SearchInlineWorkflow.
-  if (!hasTranscription && !isProcessing) {
+  if (!effectiveHasTranscription && !effectiveIsProcessing && t?.status !== "failed") {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
@@ -568,7 +643,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     );
   }
 
-  if (!hasTranscription && isProcessing) {
+  if (!effectiveHasTranscription && effectiveIsProcessing) {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
@@ -587,7 +662,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     );
   }
 
-  if (hasTranscription && isNoSpeech) {
+  if (effectiveHasTranscription && effectiveIsNoSpeech) {
     return (
       <div className="bg-muted/20 border-t border-border/30">
         <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
@@ -660,25 +735,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
         <Separator className="my-4" />
 
         {/* ── Section 2: Re-Create ── */}
-        {!activeScriptId || !script || script.status !== "completed" ? (
-          <RecreateSection
-            sectionRef={recreateSectionRef}
-            activeScriptId={activeScriptId}
-            scriptStatus={script?.status}
-            errorMessage={script?.errorMessage ?? undefined}
-            gradeLevel={gradeLevel}
-            setGradeLevel={setGradeLevel}
-            showCustomTopic={showCustomTopic}
-            setShowCustomTopic={setShowCustomTopic}
-            customTopic={customTopic}
-            setCustomTopic={setCustomTopic}
-            onGenerate={handleGenerate}
-            isGenerating={generateMutation.isPending}
-            onReset={() => setActiveScriptId(null)}
-            previousScripts={previousScriptsQuery.data}
-            onSelectScript={setActiveScriptId}
-          />
-        ) : (
+        {showCompletedRewrite ? (
           /* ── Section 3: Completed script - Edit, Save, Approve ── */
           <CompletedScriptSection
             sectionRef={recreateSectionRef}
@@ -731,6 +788,36 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             isSaving={saveMutation.isPending}
             userTimezone={userTimezone}
           />
+        ) : showInspirePanel ? (
+          <InspirationOnlyPanel
+            sectionRef={recreateSectionRef}
+            variant={inspirationPanelVariant!}
+            reason={mergedRemake.reason}
+            classificationReason={reelClassification?.classificationReason ?? null}
+            onSaveForInspiration={onSaveForInspiration}
+            saveForInspirationBusy={saveForInspirationBusy}
+            inspirationReelIsSaved={inspirationReelIsSaved}
+            previousScripts={previousScriptsQuery.data}
+            onSelectScript={setActiveScriptId}
+          />
+        ) : (
+          <RecreateSection
+            sectionRef={recreateSectionRef}
+            activeScriptId={activeScriptId}
+            scriptStatus={script?.status}
+            errorMessage={script?.errorMessage ?? undefined}
+            gradeLevel={gradeLevel}
+            setGradeLevel={setGradeLevel}
+            showCustomTopic={showCustomTopic}
+            setShowCustomTopic={setShowCustomTopic}
+            customTopic={customTopic}
+            setCustomTopic={setCustomTopic}
+            onGenerate={handleGenerate}
+            isGenerating={generateMutation.isPending}
+            onReset={() => setActiveScriptId(null)}
+            previousScripts={previousScriptsQuery.data}
+            onSelectScript={setActiveScriptId}
+          />
         )}
       </div>
 
@@ -746,12 +833,52 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
 // SearchInlineWorkflow - For Search Reels (no reelId, local state)
 // ══════════════════════════════════════════════════════════════
 
+function SearchInspirationPanel({
+  reelUrl,
+  reason,
+}: {
+  reelUrl: string;
+  reason?: NotRemakeableReason;
+}) {
+  const { body } = inspirationPanelCopy(reason);
+  return (
+    <div>
+      <div className="mb-3">
+        <h4 className="text-sm font-semibold text-foreground">
+          Make this viral hit YOURS
+        </h4>
+        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-9 border-primary/30 text-primary hover:bg-primary/10"
+        title="Copy Link"
+        onClick={() => {
+          navigator.clipboard.writeText(reelUrl).then(() => {
+            toast.success("Link copied for inspiration");
+          });
+        }}
+      >
+        <Link2 className="mr-1.5 h-3.5 w-3.5" />
+        Copy Link
+      </Button>
+    </div>
+  );
+}
+
 export interface SearchInlineWorkflowProps {
   reel: {
     shortcode: string;
     caption: string;
     postedAt: string;
     ownerUsername: string;
+    reelUrl: string;
+    contentType?: string | null;
+    remakeabilityScore?: number | null;
+    suggestedAction?: string | null;
+    classificationReason?: string | null;
   };
   hasTranscript: boolean;
   isTranscribing: boolean;
@@ -808,6 +935,20 @@ export function SearchInlineWorkflow({
 
   const segments: Segment[] = transcript?.segments || [];
   const transcriptText = transcript?.text || "";
+
+  const searchRemake = useMemo(
+    () =>
+      transcriptionIsNotRemakeable(
+        hasTranscript && transcript
+          ? {
+              status: "completed",
+              transcript: transcript.text,
+              segments: transcript.segments,
+            }
+          : null
+      ),
+    [hasTranscript, transcript]
+  );
 
   const displayScript = editMode ? editedScript : generatedScript;
   const wordCount = displayScript.split(/\s+/).filter(Boolean).length;
@@ -993,22 +1134,26 @@ export function SearchInlineWorkflow({
 
         {/* ── Section 2: Re-Create ── */}
         {!generatedScript ? (
-          <RecreateSection
-            activeScriptId={null}
-            scriptStatus={isGenerating ? "processing" : undefined}
-            errorMessage={undefined}
-            gradeLevel={gradeLevel}
-            setGradeLevel={setGradeLevel}
-            showCustomTopic={showCustomTopic}
-            setShowCustomTopic={setShowCustomTopic}
-            customTopic={customTopic}
-            setCustomTopic={setCustomTopic}
-            onGenerate={handleGenerate}
-            isGenerating={isGenerating}
-            onReset={() => {}}
-            previousScripts={undefined}
-            onSelectScript={() => {}}
-          />
+          searchRemake.notRemakeable && !isGenerating ? (
+            <SearchInspirationPanel reelUrl={reel.reelUrl} reason={searchRemake.reason} />
+          ) : (
+            <RecreateSection
+              activeScriptId={null}
+              scriptStatus={isGenerating ? "processing" : undefined}
+              errorMessage={undefined}
+              gradeLevel={gradeLevel}
+              setGradeLevel={setGradeLevel}
+              showCustomTopic={showCustomTopic}
+              setShowCustomTopic={setShowCustomTopic}
+              customTopic={customTopic}
+              setCustomTopic={setCustomTopic}
+              onGenerate={handleGenerate}
+              isGenerating={isGenerating}
+              onReset={() => {}}
+              previousScripts={undefined}
+              onSelectScript={() => {}}
+            />
+          )
         ) : (
           /* ── Section 3: Completed script - Edit, Save, Approve ── */
           <CompletedScriptSection
@@ -1066,6 +1211,107 @@ export function SearchInlineWorkflow({
 // ══════════════════════════════════════════════════════════════
 // Shared Sub-Sections (used by both InlineWorkflow variants)
 // ══════════════════════════════════════════════════════════════
+
+function InspirationOnlyPanel({
+  sectionRef,
+  variant,
+  reason,
+  classificationReason,
+  onSaveForInspiration,
+  saveForInspirationBusy,
+  inspirationReelIsSaved,
+  previousScripts,
+  onSelectScript,
+}: {
+  sectionRef?: Ref<HTMLDivElement>;
+  variant: "dashboard" | "saved-collected";
+  reason?: NotRemakeableReason;
+  classificationReason?: string | null;
+  onSaveForInspiration?: () => void;
+  saveForInspirationBusy?: boolean;
+  inspirationReelIsSaved?: boolean;
+  previousScripts?: { id: number; topic: string; status: string }[];
+  onSelectScript: (id: number) => void;
+}) {
+  const { body } = inspirationPanelCopy(reason);
+  const coachText = classificationReason?.trim();
+  return (
+    <div ref={sectionRef}>
+      <div className="mb-3">
+        <h4 className="text-sm font-semibold text-foreground">Make this viral hit YOURS</h4>
+        {variant === "dashboard" && coachText ? (
+          <div className="mt-3 rounded-lg border border-border/50 bg-muted/50 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
+              <span className="text-xs font-semibold text-foreground">Your Brand Coach</span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed italic">{coachText}</p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+        )}
+        {variant === "saved-collected" && (
+          <p className="text-xs italic text-muted-foreground mt-2">
+            Already saved as inspiration
+          </p>
+        )}
+      </div>
+      {variant === "dashboard" && onSaveForInspiration ? (
+        inspirationReelIsSaved ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-9"
+            onClick={onSaveForInspiration}
+            disabled={saveForInspirationBusy}
+            title="Remove from saved"
+          >
+            <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
+            Saved
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 border-primary/30 text-primary hover:bg-primary/10"
+            onClick={onSaveForInspiration}
+            disabled={saveForInspirationBusy}
+            title="Save for Inspiration"
+          >
+            <Bookmark className="mr-1.5 h-3.5 w-3.5" />
+            Save for Inspiration
+          </Button>
+        )
+      ) : null}
+
+      {previousScripts && previousScripts.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-xs text-muted-foreground mb-2">Previous scripts:</p>
+          <div className="flex flex-wrap gap-2">
+            {previousScripts.map((prev) => (
+              <Button
+                key={prev.id}
+                variant="outline"
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => onSelectScript(prev.id)}
+              >
+                {prev.topic === "SAME_TOPIC" ? "Same topic" : (typeof prev.topic === "string" ? prev.topic.slice(0, 30) : "Script")}
+                {prev.status === "completed" ? (
+                  <Badge variant="outline" className="ml-1 text-[10px] h-4 border-emerald-500/50 text-emerald-400">
+                    Done
+                  </Badge>
+                ) : null}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function TranscriptSection({
   segments,
