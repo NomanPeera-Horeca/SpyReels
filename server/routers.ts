@@ -104,6 +104,7 @@ import {
   getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
+import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
@@ -4940,6 +4941,19 @@ async function runTranscription(
       hookAnalysis,
       status: "completed",
     });
+
+    void Promise.resolve()
+      .then(async () => {
+        const row = await getReelById(reel.id);
+        if (row?.classifiedAt) return;
+        if (!transcript.trim()) return;
+        await classifyTranscript({
+          transcript,
+          reelId: reel.id,
+          table: "reels",
+        });
+      })
+      .catch((err) => console.error("Classification failed:", err));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[runTranscription] ${message}`);
@@ -5009,6 +5023,19 @@ export async function runFeaturedReelTranscription(reel: {
       }[],
       transcribedAt: new Date(),
     });
+
+    void Promise.resolve()
+      .then(async () => {
+        const row = await getFeaturedReelById(reel.id);
+        if (row?.classifiedAt) return;
+        if (!result.transcript.trim()) return;
+        await classifyTranscript({
+          transcript: result.transcript,
+          reelId: reel.id,
+          table: "featured_reels",
+        });
+      })
+      .catch((err) => console.error("Classification failed:", err));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[runFeaturedReelTranscription] ${message}`);
