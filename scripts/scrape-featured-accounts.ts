@@ -22,6 +22,7 @@ import "dotenv/config";
 import mysql from "mysql2/promise";
 import { fetchProfile, scrapeReels, type ReelData } from "../server/instagram";
 import { ensureProfilePicOnR2 } from "../server/profilePicR2";
+import { storageHead, storagePut, r2ObjectPublicUrl } from "../server/storage";
 
 const TIMEFRAME_DAYS = 365;
 const TOP_N = 30;
@@ -94,6 +95,56 @@ async function profilePicR2OrRaw(handle: string, rawUrl: string): Promise<string
   const onR2 = await ensureProfilePicOnR2(clean, rawUrl);
   if (onR2) return onR2;
   return rawUrl;
+}
+
+async function uploadReelThumbnailToR2(shortcode: string, sourceUrl: string): Promise<string> {
+  if (!sourceUrl || sourceUrl.trim() === "") {
+    return "";
+  }
+
+  const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+  if (publicBase && sourceUrl.startsWith(publicBase)) {
+    return sourceUrl;
+  }
+
+  const safeShortcode = shortcode.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (safeShortcode === "") {
+    return sourceUrl;
+  }
+
+  const key = `featured-reel-thumbs/${safeShortcode}.jpg`;
+
+  try {
+    if (await storageHead(key)) {
+      return r2ObjectPublicUrl(key);
+    }
+
+    const { gotScraping } = await import("got-scraping");
+    const res = await gotScraping({
+      url: sourceUrl,
+      responseType: "buffer",
+      timeout: { request: 15_000 },
+      retry: { limit: 0 },
+      followRedirect: true,
+      maxRedirects: 5,
+    } as Parameters<typeof gotScraping>[0]);
+
+    const statusCode = res.statusCode ?? 0;
+    if (statusCode !== 200) {
+      return sourceUrl;
+    }
+
+    const raw = res.rawBody;
+    if (!raw || raw.length === 0) {
+      return sourceUrl;
+    }
+
+    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    const result = await storagePut(key, buf, "image/jpeg");
+    return result.url;
+  } catch {
+    return sourceUrl;
+  }
 }
 
 async function scrapeOneAccount(
@@ -176,9 +227,19 @@ async function scrapeOneAccount(
   const proxiedPic = await profilePicR2OrRaw(handle, profilePicUrl);
 
   // --- 4. Upsert reels, then delete stale ones ----------------------------
+  const thumbPublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+  let thumbR2Ok = 0;
+  let thumbR2Fallback = 0;
+
   for (let i = 0; i < topN.length; i++) {
     const { reel, er } = topN[i];
     const rank = i + 1;
+    const thumbUrl = await uploadReelThumbnailToR2(reel.shortcode, reel.thumbnailUrl ?? "");
+    if (thumbPublicBase && thumbUrl.startsWith(thumbPublicBase)) {
+      thumbR2Ok++;
+    } else {
+      thumbR2Fallback++;
+    }
     await conn.execute(
       `INSERT INTO featured_reels
          (featuredAccountId, reelShortcode, caption, viewCount, likeCount,
@@ -205,7 +266,7 @@ async function scrapeOneAccount(
         reel.likeCount,
         reel.commentCount,
         er.toFixed(2),
-        reel.thumbnailUrl,
+        thumbUrl,
         reel.videoUrl,
         reel.duration,
         reel.postedAt,
@@ -213,6 +274,8 @@ async function scrapeOneAccount(
       ]
     );
   }
+
+  console.log(`  thumbnails: r2=${thumbR2Ok} fallback=${thumbR2Fallback}`);
 
   // Delete any previously-stored reels for this account that dropped out
   // of the new top N.
