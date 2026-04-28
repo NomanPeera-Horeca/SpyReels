@@ -206,22 +206,41 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         recreateState !== "ready" &&
         recreateState !== "generating" &&
         recreateState !== "failed" ? (
-          <Tooltip content="Save for Inspiration">
-            <span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                onClick={onToggleSave}
-                disabled={!!saveBusy}
-                title="Save for Inspiration"
-              >
-                <Bookmark className="h-3 w-3 sm:mr-1" />
-                <span className={labelClass}>Save for Inspiration</span>
-              </Button>
-            </span>
-          </Tooltip>
+          isSaved ? (
+            <Tooltip content="Remove from saved">
+              <span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={onToggleSave}
+                  disabled={!!saveBusy}
+                  title="Remove from saved"
+                >
+                  <BookmarkCheck className="h-3 w-3 sm:mr-1" />
+                  <span className={labelClass}>Saved</span>
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Save for Inspiration">
+              <span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={onToggleSave}
+                  disabled={!!saveBusy}
+                  title="Save for Inspiration"
+                >
+                  <Bookmark className="h-3 w-3 sm:mr-1" />
+                  <span className={labelClass}>Save for Inspiration</span>
+                </Button>
+              </span>
+            </Tooltip>
+          )
         ) : (
           <Button
             variant="outline"

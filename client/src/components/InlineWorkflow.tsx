@@ -28,6 +28,7 @@ import {
   Wand2,
   MonitorPlay,
   Bookmark,
+  BookmarkCheck,
   Link2,
   Check,
   Save,
@@ -269,6 +270,8 @@ export type InlineWorkflowProps = {
   /** Dashboard only: fires `saved.toggle`, same mutation as bookmark */
   onSaveForInspiration?: () => void;
   saveForInspirationBusy?: boolean;
+  /** Dashboard only: mirrors `saved.checkBatch` for Save for Inspiration UI */
+  inspirationReelIsSaved?: boolean;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -285,6 +288,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     listRemakeHint,
     onSaveForInspiration,
     saveForInspirationBusy = false,
+    inspirationReelIsSaved = false,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -779,6 +783,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             reason={mergedRemake.reason}
             onSaveForInspiration={onSaveForInspiration}
             saveForInspirationBusy={saveForInspirationBusy}
+            inspirationReelIsSaved={inspirationReelIsSaved}
             previousScripts={previousScriptsQuery.data}
             onSelectScript={setActiveScriptId}
           />
@@ -1196,6 +1201,7 @@ function InspirationOnlyPanel({
   reason,
   onSaveForInspiration,
   saveForInspirationBusy,
+  inspirationReelIsSaved,
   previousScripts,
   onSelectScript,
 }: {
@@ -1204,6 +1210,7 @@ function InspirationOnlyPanel({
   reason?: NotRemakeableReason;
   onSaveForInspiration?: () => void;
   saveForInspirationBusy?: boolean;
+  inspirationReelIsSaved?: boolean;
   previousScripts?: { id: number; topic: string; status: string }[];
   onSelectScript: (id: number) => void;
 }) {
@@ -1220,18 +1227,33 @@ function InspirationOnlyPanel({
         )}
       </div>
       {variant === "dashboard" && onSaveForInspiration ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-9 border-primary/30 text-primary hover:bg-primary/10"
-          onClick={onSaveForInspiration}
-          disabled={saveForInspirationBusy}
-          title="Save for Inspiration"
-        >
-          <Bookmark className="mr-1.5 h-3.5 w-3.5" />
-          Save for Inspiration
-        </Button>
+        inspirationReelIsSaved ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-9"
+            onClick={onSaveForInspiration}
+            disabled={saveForInspirationBusy}
+            title="Remove from saved"
+          >
+            <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
+            Saved
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 border-primary/30 text-primary hover:bg-primary/10"
+            onClick={onSaveForInspiration}
+            disabled={saveForInspirationBusy}
+            title="Save for Inspiration"
+          >
+            <Bookmark className="mr-1.5 h-3.5 w-3.5" />
+            Save for Inspiration
+          </Button>
+        )
       ) : null}
 
       {previousScripts && previousScripts.length > 0 ? (

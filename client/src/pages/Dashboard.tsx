@@ -1934,6 +1934,7 @@ export default function Dashboard() {
                             toggleSave.mutate({ featuredReelId: reel.id })
                           }
                           saveForInspirationBusy={toggleSave.isPending}
+                          inspirationReelIsSaved={isSaved}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "featured", expand: false })
                           }
@@ -1963,6 +1964,7 @@ export default function Dashboard() {
                             toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
                           }
                           saveForInspirationBusy={toggleSave.isPending}
+                          inspirationReelIsSaved={isSaved}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "user", expand: false })
                           }
@@ -2497,6 +2499,7 @@ export default function Dashboard() {
                 isProcessing &&
                 !isFeaturedView &&
                 (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
+              const isSaved = !!savedMap[reel.id];
               return isFeaturedView ? (
                 <InlineWorkflow
                   reelSource="featured"
@@ -2512,6 +2515,7 @@ export default function Dashboard() {
                     toggleSave.mutate({ featuredReelId: reel.id })
                   }
                   saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved={isSaved}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "featured", expand: false })
                   }
@@ -2541,6 +2545,7 @@ export default function Dashboard() {
                     toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
                   }
                   saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved={isSaved}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "user", expand: false })
                   }
