@@ -1,4 +1,4 @@
-import { bigint, boolean, datetime, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, datetime, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -106,6 +106,21 @@ export const reels = mysqlTable("reels", {
   postedAt: timestamp("postedAt").notNull(),
   ownerUsername: varchar("ownerUsername", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** Bug #57 Tier 2: AI classification cache (nullable until classifier runs). */
+  contentType: mysqlEnum("contentType", [
+    "educational",
+    "story",
+    "opinion",
+    "personal",
+    "reaction",
+    "skit",
+    "music",
+    "other",
+  ]),
+  remakeabilityScore: tinyint("remakeabilityScore"),
+  suggestedAction: mysqlEnum("suggestedAction", ["make_version", "save_inspiration", "view_only"]),
+  classificationReason: varchar("classificationReason", { length: 255 }),
+  classifiedAt: timestamp("classifiedAt"),
 });
 
 export type Reel = typeof reels.$inferSelect;
@@ -593,6 +608,21 @@ export const featuredReels = mysqlTable(
       { start: number; end: number; text: string }[] | null
     >(),
     transcribedAt: timestamp("transcribedAt"),
+    /** Bug #57 Tier 2: AI classification cache (nullable until classifier runs). */
+    contentType: mysqlEnum("contentType", [
+      "educational",
+      "story",
+      "opinion",
+      "personal",
+      "reaction",
+      "skit",
+      "music",
+      "other",
+    ]),
+    remakeabilityScore: tinyint("remakeabilityScore"),
+    suggestedAction: mysqlEnum("suggestedAction", ["make_version", "save_inspiration", "view_only"]),
+    classificationReason: varchar("classificationReason", { length: 255 }),
+    classifiedAt: timestamp("classifiedAt"),
   },
   (table) => ({
     reelPerAccountUnique: uniqueIndex("featured_reels_account_shortcode_unique").on(
