@@ -408,6 +408,19 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   });
 
   const t = transcriptionQuery.data;
+  const segLenEffective = Array.isArray(t?.segments) ? t.segments.length : 0;
+  const effectiveHasTranscription =
+    hasTranscription || t?.status === "completed";
+  const effectiveIsProcessing =
+    isProcessing &&
+    t?.status !== "completed" &&
+    t?.status !== "failed";
+  const effectiveIsNoSpeech =
+    isNoSpeech ||
+    (t?.status === "completed" &&
+      !String(t?.transcript ?? "").trim() &&
+      segLenEffective === 0);
+
   const segments: Segment[] = (t?.segments as any) || [];
   const transcript = t?.transcript || "";
   const transcriptionStatus = t?.status;
@@ -554,7 +567,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   // Not transcribed yet (idle only). If the parent already started a run
   // from the row action strip, show the transcribing panel instead of the
   // duplicate "Transcribe Now" gate. Same idea as SearchInlineWorkflow.
-  if (!hasTranscription && !isProcessing) {
+  if (!effectiveHasTranscription && !effectiveIsProcessing && t?.status !== "failed") {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
@@ -568,7 +581,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     );
   }
 
-  if (!hasTranscription && isProcessing) {
+  if (!effectiveHasTranscription && effectiveIsProcessing) {
     return (
       <div className="bg-muted/20 border-t border-border/30 p-6">
         <div className="flex flex-col items-center gap-3">
@@ -587,7 +600,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     );
   }
 
-  if (hasTranscription && isNoSpeech) {
+  if (effectiveHasTranscription && effectiveIsNoSpeech) {
     return (
       <div className="bg-muted/20 border-t border-border/30">
         <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
