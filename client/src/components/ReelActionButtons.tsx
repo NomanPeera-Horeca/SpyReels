@@ -76,6 +76,12 @@ export interface ReelActionButtonsProps {
 
   /** No usable speech: completed run with empty transcript/segments. */
   isNoSpeech?: boolean;
+
+  /**
+   * Bug #57: Tier-1 remakeability. When true, replaces idle "Make My Version"
+   * with Save for Inspiration (same `saved.toggle` as bookmark).
+   */
+  idleNotRemakeable?: boolean;
 }
 
 /**
@@ -104,6 +110,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     reelUrl,
     isQueued,
     isNoSpeech,
+    idleNotRemakeable = false,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -195,39 +202,61 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
       )}
 
       {hasTranscription && !isNoSpeech && (
-        <Button
-          variant="outline"
-          size="sm"
-          className={`h-7 text-xs px-2 ${
-            recreateState === "ready"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
-              : "border-primary/30 text-primary hover:bg-primary/10"
-          }`}
-          disabled={recreateState === "generating"}
-          onClick={() =>
-            recreateState === "ready" ? onOpenMyScript() : onMakeVersion()
-          }
-          title={
-            recreateState === "ready"
-              ? "Open your script in the panel below"
-              : recreateState === "generating"
-                ? "Script is still generating"
-                : "Write your own viral script using this reel's hook and structure"
-          }
-        >
-          {recreateState === "generating" ? (
-            <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-          ) : (
-            <Wand2 className="h-3 w-3 sm:mr-1" />
-          )}
-          <span className={labelClass}>
-            {recreateState === "ready"
-              ? "Open My Script ✓"
-              : recreateState === "generating"
-                ? "Generating..."
-                : "Make My Version"}
-          </span>
-        </Button>
+        idleNotRemakeable &&
+        recreateState !== "ready" &&
+        recreateState !== "generating" &&
+        recreateState !== "failed" ? (
+          <Tooltip content="Save for Inspiration">
+            <span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={onToggleSave}
+                disabled={!!saveBusy}
+                title="Save for Inspiration"
+              >
+                <Bookmark className="h-3 w-3 sm:mr-1" />
+                <span className={labelClass}>Save for Inspiration</span>
+              </Button>
+            </span>
+          </Tooltip>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className={`h-7 text-xs px-2 ${
+              recreateState === "ready"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+                : "border-primary/30 text-primary hover:bg-primary/10"
+            }`}
+            disabled={recreateState === "generating"}
+            onClick={() =>
+              recreateState === "ready" ? onOpenMyScript() : onMakeVersion()
+            }
+            title={
+              recreateState === "ready"
+                ? "Open your script in the panel below"
+                : recreateState === "generating"
+                  ? "Script is still generating"
+                  : "Write your own viral script using this reel's hook and structure"
+            }
+          >
+            {recreateState === "generating" ? (
+              <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+            ) : (
+              <Wand2 className="h-3 w-3 sm:mr-1" />
+            )}
+            <span className={labelClass}>
+              {recreateState === "ready"
+                ? "Open My Script ✓"
+                : recreateState === "generating"
+                  ? "Generating..."
+                  : "Make My Version"}
+            </span>
+          </Button>
+        )
       )}
 
       {!hideExternalLink && (

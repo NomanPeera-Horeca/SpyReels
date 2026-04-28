@@ -35,12 +35,60 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { transcriptionIsNotRemakeable } from "@/lib/remakeability";
 import {
   InlineWorkflow,
   formatNumber,
   formatPostedTime,
   formatDuration,
 } from "@/components/InlineWorkflow";
+
+function CollectedReCreateOrLabel({
+  mappedReelId,
+  hasTranscription,
+  onOpenPanel,
+}: {
+  mappedReelId: number;
+  hasTranscription: boolean;
+  onOpenPanel: () => void;
+}) {
+  const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
+    { reelId: mappedReelId },
+    { enabled: hasTranscription && mappedReelId > 0 }
+  );
+  const raw = transcriptionQuery.data;
+  const remake = transcriptionIsNotRemakeable(
+    raw ? { status: raw.status, transcript: raw.transcript, segments: raw.segments } : null
+  );
+
+  if (transcriptionQuery.isFetching && !raw) {
+    return (
+      <div className="h-7 px-1 flex items-center justify-center">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (remake.notRemakeable) {
+    return (
+      <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-[9rem]">
+        Saved as inspiration
+      </p>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
+      onClick={onOpenPanel}
+    >
+      <Wand2 className="h-3 w-3 sm:mr-1" />{" "}
+      <span className="hidden sm:inline">Re-Create</span>
+    </Button>
+  );
+}
 
 function formatDurationShort(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -654,16 +702,12 @@ export default function CollectedReels() {
                         </Button>
                       )}
 
-                      {hasTranscription && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
-                          onClick={() => setExpandedReel(reel.id)}
-                        >
-                          <Wand2 className="h-3 w-3 sm:mr-1" />{" "}
-                          <span className="hidden sm:inline">Re-Create</span>
-                        </Button>
+                      {hasTranscription && mappedReelId && (
+                        <CollectedReCreateOrLabel
+                          mappedReelId={mappedReelId}
+                          hasTranscription={hasTranscription}
+                          onOpenPanel={() => setExpandedReel(reel.id)}
+                        />
                       )}
                     </>
                   )}
@@ -790,6 +834,15 @@ function CollectedReelWorkflow({
   const transcription = transcriptionQuery.data;
   const hasTranscription = transcription?.status === "completed";
   const isProcessing = transcription?.status === "processing";
+  const listRemakeHint = transcriptionIsNotRemakeable(
+    transcription
+      ? {
+          status: transcription.status,
+          transcript: transcription.transcript,
+          segments: transcription.segments,
+        }
+      : null
+  );
 
   const transcribeMutation = trpc.collected.transcribe.useMutation();
 
@@ -799,6 +852,8 @@ function CollectedReelWorkflow({
       handle={handle}
       hasTranscription={hasTranscription}
       isProcessing={!!isProcessing}
+      inspirationPanelVariant="saved-collected"
+      listRemakeHint={listRemakeHint}
       onTranscribe={() => {
         transcribeMutation.mutate({ collectedReelId });
         toast.info("Transcription started...");

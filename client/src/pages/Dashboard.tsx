@@ -57,6 +57,7 @@ import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
+import { transcriptionIsNotRemakeable } from "@/lib/remakeability";
 
 type SortOption =
   | "views_desc"
@@ -1762,6 +1763,14 @@ export default function Dashboard() {
                   !isFeaturedView &&
                   (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
                 const transcribeAtCap = transcribeInFlightRef.current >= 5;
+                const recreateSt = reelRecreateState(
+                  recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                );
+                const idleNotRemakeable =
+                  transcriptionIsNotRemakeable(reel.transcription).notRemakeable &&
+                  hasTranscription &&
+                  !isNoSpeech &&
+                  recreateSt === "none";
 
                 return (
                   <div
@@ -1864,9 +1873,8 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          recreateState={reelRecreateState(
-                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
-                          )}
+                          recreateState={recreateSt}
+                          idleNotRemakeable={idleNotRemakeable}
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
@@ -1920,6 +1928,12 @@ export default function Dashboard() {
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          inspirationPanelVariant="dashboard"
+                          listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                          onSaveForInspiration={() =>
+                            toggleSave.mutate({ featuredReelId: reel.id })
+                          }
+                          saveForInspirationBusy={toggleSave.isPending}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "featured", expand: false })
                           }
@@ -1943,6 +1957,12 @@ export default function Dashboard() {
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          inspirationPanelVariant="dashboard"
+                          listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                          onSaveForInspiration={() =>
+                            toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                          }
+                          saveForInspirationBusy={toggleSave.isPending}
                           onTranscribe={() =>
                             runTranscribeClick(reel.id, { mode: "user", expand: false })
                           }
@@ -1981,6 +2001,15 @@ export default function Dashboard() {
                     !isFeaturedView &&
                     (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
                   const transcribeAtCap = transcribeInFlightRef.current >= 5;
+
+                  const recreateSt = reelRecreateState(
+                    recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
+                  );
+                  const idleNotRemakeable =
+                    transcriptionIsNotRemakeable(reel.transcription).notRemakeable &&
+                    hasTranscription &&
+                    !isNoSpeech &&
+                    recreateSt === "none";
 
                   const source: ReelActionSource = isFeaturedView
                     ? { source: "featured", featuredReelId: reel.id }
@@ -2119,9 +2148,8 @@ export default function Dashboard() {
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isFailed={isFailed}
-                          recreateState={reelRecreateState(
-                            recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
-                          )}
+                          recreateState={recreateSt}
+                          idleNotRemakeable={idleNotRemakeable}
                           saveBusy={toggleSave.isPending}
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
@@ -2478,6 +2506,12 @@ export default function Dashboard() {
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="dashboard"
+                  listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                  onSaveForInspiration={() =>
+                    toggleSave.mutate({ featuredReelId: reel.id })
+                  }
+                  saveForInspirationBusy={toggleSave.isPending}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "featured", expand: false })
                   }
@@ -2501,6 +2535,12 @@ export default function Dashboard() {
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="dashboard"
+                  listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                  onSaveForInspiration={() =>
+                    toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                  }
+                  saveForInspirationBusy={toggleSave.isPending}
                   onTranscribe={() =>
                     runTranscribeClick(reel.id, { mode: "user", expand: false })
                   }
