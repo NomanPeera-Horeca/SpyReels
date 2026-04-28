@@ -81,6 +81,10 @@ interface SearchResult {
   ownerProfilePicUrl: string;
   ownerFollowerCount: number;
   engagementRate: number;
+  contentType?: string | null;
+  remakeabilityScore?: number | null;
+  suggestedAction?: string | null;
+  classificationReason?: string | null;
 }
 
 function formatDurationShort(seconds: number): string {

@@ -122,9 +122,11 @@ import {
   featuredAccountNiches,
   featuredReels,
   recreatedScripts,
+  reels as reelsTable,
+  transcriptions,
 } from "../drizzle/schema";
 import type { Transcription } from "../drizzle/schema";
-import { eq, ne, desc, asc, sql, and, inArray } from "drizzle-orm";
+import { eq, ne, desc, asc, sql, and, inArray, getTableColumns } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
@@ -680,6 +682,11 @@ export const appRouter = router({
             ownerUsername: acc.handle,
             engagementRate: Math.round(engagementRate * 100) / 100,
             transcription: transcriptionViewFromFeaturedReelRow(r),
+            contentType: r.contentType ?? null,
+            remakeabilityScore: r.remakeabilityScore ?? null,
+            suggestedAction: r.suggestedAction ?? null,
+            classificationReason: r.classificationReason ?? null,
+            classifiedAt: r.classifiedAt ?? null,
           };
         });
 
@@ -2194,6 +2201,11 @@ Return JSON only:
           postedAt: Date;
           reelUrl: string;
           ownerUsername: string | null;
+          contentType: string | null;
+          remakeabilityScore: number | null;
+          suggestedAction: string | null;
+          classificationReason: string | null;
+          classifiedAt: Date | null;
         };
         job: {
           id: number;
@@ -2224,6 +2236,11 @@ Return JSON only:
           postedAt: s.reel.postedAt,
           reelUrl: s.reel.reelUrl,
           ownerUsername: s.reel.ownerUsername,
+          contentType: s.reel.contentType ?? null,
+          remakeabilityScore: s.reel.remakeabilityScore ?? null,
+          suggestedAction: s.reel.suggestedAction ?? null,
+          classificationReason: s.reel.classificationReason ?? null,
+          classifiedAt: s.reel.classifiedAt ?? null,
         },
         job: {
           id: s.job.id,
@@ -2254,6 +2271,11 @@ Return JSON only:
           postedAt: f.featuredReel.postedAt,
           reelUrl: `https://www.instagram.com/reel/${f.featuredReel.reelShortcode}/`,
           ownerUsername: f.featuredAccount.handle,
+          contentType: f.featuredReel.contentType ?? null,
+          remakeabilityScore: f.featuredReel.remakeabilityScore ?? null,
+          suggestedAction: f.featuredReel.suggestedAction ?? null,
+          classificationReason: f.featuredReel.classificationReason ?? null,
+          classifiedAt: f.featuredReel.classifiedAt ?? null,
         },
         job: {
           id: f.featuredAccount.id,
@@ -3779,20 +3801,56 @@ The hook MUST be 7-10 words. Count them.`
   collected: router({
     /** List all collected reels for the user, including transcription status */
     list: protectedProcedure.query(async ({ ctx }) => {
-      const reels = await getCollectedReelsByUser(ctx.user.id);
-      
-      const { getDb } = await import("./db");
-      const { reels: reelsTable, transcriptions, scrapeJobs } = await import("../drizzle/schema");
-      const { inArray } = await import("drizzle-orm");
       const db = await getDb();
-      if (!db) return reels.map(r => ({
-        ...r,
-        transcriptionReelId: r.transcriptionReelId ?? null,
-        transcriptionStatus: null as string | null,
-        monitoredViewCount: null as number | null,
-        monitoredFollowerCount: null as number | null,
-      }));
-      
+      if (!db) {
+        const bare = await getCollectedReelsByUser(ctx.user.id);
+        return bare.map((r) => ({
+          ...r,
+          transcriptionReelId: r.transcriptionReelId ?? null,
+          transcriptionStatus: null as string | null,
+          monitoredViewCount: null as number | null,
+          monitoredFollowerCount: null as number | null,
+          contentType: null as string | null,
+          remakeabilityScore: null as number | null,
+          suggestedAction: null as string | null,
+          classificationReason: null as string | null,
+          classifiedAt: null as Date | null,
+        }));
+      }
+
+      const joined = await db
+        .select({
+          ...getTableColumns(collectedReels),
+          clsContentType: reelsTable.contentType,
+          clsRemakeabilityScore: reelsTable.remakeabilityScore,
+          clsSuggestedAction: reelsTable.suggestedAction,
+          clsClassificationReason: reelsTable.classificationReason,
+          clsClassifiedAt: reelsTable.classifiedAt,
+        })
+        .from(collectedReels)
+        .leftJoin(reelsTable, eq(collectedReels.transcriptionReelId, reelsTable.id))
+        .where(eq(collectedReels.userId, ctx.user.id))
+        .orderBy(desc(collectedReels.createdAt));
+
+      const reels = joined.map((row) => {
+        const {
+          clsContentType,
+          clsRemakeabilityScore,
+          clsSuggestedAction,
+          clsClassificationReason,
+          clsClassifiedAt,
+          ...collected
+        } = row;
+        return {
+          ...collected,
+          contentType: clsContentType ?? null,
+          remakeabilityScore: clsRemakeabilityScore ?? null,
+          suggestedAction: clsSuggestedAction ?? null,
+          classificationReason: clsClassificationReason ?? null,
+          classifiedAt: clsClassifiedAt ?? null,
+        };
+      });
+
       const transcriptionReelIds = Array.from(
         new Set(
           reels
@@ -3812,36 +3870,35 @@ The hook MUST be 7-10 words. Count them.`
         }
       }
 
-      const readyReels = reels.filter(r => r.status === "ready");
-      const shortcodes = readyReels.map(r => r.shortcode);
-      
-      // Map for cross-referenced view counts from Account Monitoring scrapes
+      const readyReels = reels.filter((r) => r.status === "ready");
+      const shortcodes = readyReels.map((r) => r.shortcode);
+
       let monitoredDataMap = new Map<string, { viewCount: number; followerCount: number }>();
-      
+
       if (shortcodes.length > 0) {
-        // Cross-reference with Account Monitoring: find matching reels from real scrape jobs (jobId > 0)
-        // This gives us view counts that Instagram doesn't expose via page scraping
-        const monitoredReels = await db.select({
-          shortcode: reelsTable.shortcode,
-          viewCount: reelsTable.viewCount,
-          jobId: reelsTable.jobId,
-        })
+        const monitoredReels = await db
+          .select({
+            shortcode: reelsTable.shortcode,
+            viewCount: reelsTable.viewCount,
+            jobId: reelsTable.jobId,
+          })
           .from(reelsTable)
           .where(inArray(reelsTable.shortcode, shortcodes));
-        
-        // Get follower counts from scrape jobs for engagement rate calculation
-        const jobIds = Array.from(new Set(monitoredReels.filter(r => r.jobId > 0).map(r => r.jobId)));
+
+        const jobIds = Array.from(
+          new Set(monitoredReels.filter((r) => r.jobId > 0).map((r) => r.jobId))
+        );
         let jobFollowerMap = new Map<number, number>();
         if (jobIds.length > 0) {
-          const jobs = await db.select({ id: scrapeJobs.id, followerCount: scrapeJobs.followerCount })
+          const jobs = await db
+            .select({ id: scrapeJobs.id, followerCount: scrapeJobs.followerCount })
             .from(scrapeJobs)
             .where(inArray(scrapeJobs.id, jobIds));
-          jobFollowerMap = new Map(jobs.map(j => [j.id, j.followerCount]));
+          jobFollowerMap = new Map(jobs.map((j) => [j.id, j.followerCount]));
         }
-        
-        // For each shortcode, pick the best view count (highest from any scrape job)
+
         for (const mr of monitoredReels) {
-          if (mr.jobId === 0) continue; // Skip collected-reel transcription entries
+          if (mr.jobId === 0) continue;
           const existing = monitoredDataMap.get(mr.shortcode);
           const followerCount = jobFollowerMap.get(mr.jobId) || 0;
           if (!existing || mr.viewCount > existing.viewCount) {
@@ -3852,8 +3909,8 @@ The hook MUST be 7-10 words. Count them.`
           }
         }
       }
-      
-      return reels.map(r => {
+
+      return reels.map((r) => {
         const monitored = monitoredDataMap.get(r.shortcode);
         return {
           ...r,
@@ -3862,7 +3919,6 @@ The hook MUST be 7-10 words. Count them.`
             r.transcriptionReelId != null
               ? txnStatusByReelId.get(r.transcriptionReelId) ?? null
               : null,
-          // Cross-referenced data from Account Monitoring
           monitoredViewCount: monitored?.viewCount ?? null,
           monitoredFollowerCount: monitored?.followerCount ?? null,
         };

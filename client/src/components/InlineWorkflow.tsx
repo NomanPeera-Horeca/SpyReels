@@ -38,14 +38,18 @@ import {
   Timer,
   Mic,
   Calendar as CalendarIcon,
+  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
 import {
   inspirationPanelCopy,
+  mergeRemakeability,
+  remakeabilityFromClassification,
   transcriptionIsNotRemakeable,
   type NotRemakeableReason,
   type NotRemakeableResult,
+  type ReelClassificationLike,
 } from "@/lib/remakeability";
 
 // ── Shared Types ──
@@ -267,6 +271,8 @@ export type InlineWorkflowProps = {
   inspirationPanelVariant?: "dashboard" | "saved-collected";
   /** Row snapshot while `transcribe.status` query is still loading after expand */
   listRemakeHint?: NotRemakeableResult;
+  /** Tier 2 classification from reels / featured_reels (nullable until classified). */
+  reelClassification?: ReelClassificationLike;
   /** Dashboard only: fires `saved.toggle`, same mutation as bookmark */
   onSaveForInspiration?: () => void;
   saveForInspirationBusy?: boolean;
@@ -286,6 +292,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     isNoSpeech = false,
     inspirationPanelVariant,
     listRemakeHint,
+    reelClassification,
     onSaveForInspiration,
     saveForInspirationBusy = false,
     inspirationReelIsSaved = false,
@@ -445,15 +452,20 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       segLenEffective === 0);
 
   const mergedRemake = useMemo((): NotRemakeableResult => {
-    if (t) {
-      return transcriptionIsNotRemakeable({
-        status: t.status,
-        transcript: t.transcript,
-        segments: t.segments,
-      });
+    const transcriptionLike = t
+      ? {
+          status: t.status,
+          transcript: t.transcript,
+          segments: t.segments,
+        }
+      : null;
+    const merged = mergeRemakeability(transcriptionLike, reelClassification ?? null);
+    if (t) return merged;
+    if (remakeabilityFromClassification(reelClassification ?? null) != null) {
+      return merged;
     }
     return listRemakeHint ?? { notRemakeable: false };
-  }, [t, listRemakeHint]);
+  }, [t, listRemakeHint, reelClassification]);
 
   const segments: Segment[] = (t?.segments as any) || [];
   const transcript = t?.transcript || "";
@@ -781,6 +793,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             sectionRef={recreateSectionRef}
             variant={inspirationPanelVariant!}
             reason={mergedRemake.reason}
+            classificationReason={reelClassification?.classificationReason ?? null}
             onSaveForInspiration={onSaveForInspiration}
             saveForInspirationBusy={saveForInspirationBusy}
             inspirationReelIsSaved={inspirationReelIsSaved}
@@ -862,6 +875,10 @@ export interface SearchInlineWorkflowProps {
     postedAt: string;
     ownerUsername: string;
     reelUrl: string;
+    contentType?: string | null;
+    remakeabilityScore?: number | null;
+    suggestedAction?: string | null;
+    classificationReason?: string | null;
   };
   hasTranscript: boolean;
   isTranscribing: boolean;
@@ -1199,6 +1216,7 @@ function InspirationOnlyPanel({
   sectionRef,
   variant,
   reason,
+  classificationReason,
   onSaveForInspiration,
   saveForInspirationBusy,
   inspirationReelIsSaved,
@@ -1208,6 +1226,7 @@ function InspirationOnlyPanel({
   sectionRef?: Ref<HTMLDivElement>;
   variant: "dashboard" | "saved-collected";
   reason?: NotRemakeableReason;
+  classificationReason?: string | null;
   onSaveForInspiration?: () => void;
   saveForInspirationBusy?: boolean;
   inspirationReelIsSaved?: boolean;
@@ -1215,11 +1234,22 @@ function InspirationOnlyPanel({
   onSelectScript: (id: number) => void;
 }) {
   const { body } = inspirationPanelCopy(reason);
+  const coachText = classificationReason?.trim();
   return (
     <div ref={sectionRef}>
       <div className="mb-3">
         <h4 className="text-sm font-semibold text-foreground">Make this viral hit YOURS</h4>
-        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+        {variant === "dashboard" && coachText ? (
+          <div className="mt-3 rounded-lg border border-border/50 bg-muted/50 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
+              <span className="text-xs font-semibold text-foreground">Your Brand Coach</span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed italic">{coachText}</p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+        )}
         {variant === "saved-collected" && (
           <p className="text-xs italic text-muted-foreground mt-2">
             Already saved as inspiration

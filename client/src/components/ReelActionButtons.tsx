@@ -82,6 +82,8 @@ export interface ReelActionButtonsProps {
    * with Save for Inspiration (same `saved.toggle` as bookmark).
    */
   idleNotRemakeable?: boolean;
+  /** Bug #57 Tier 2 coach text for Save for Inspiration tooltip when idle. */
+  classificationReason?: string | null;
 }
 
 /**
@@ -111,6 +113,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     isQueued,
     isNoSpeech,
     idleNotRemakeable = false,
+    classificationReason,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -224,7 +227,13 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
               </span>
             </Tooltip>
           ) : (
-            <Tooltip content="Save for Inspiration">
+            <Tooltip
+              content={
+                idleNotRemakeable && classificationReason?.trim()
+                  ? classificationReason.trim()
+                  : "Save for Inspiration"
+              }
+            >
               <span>
                 <Button
                   type="button"
@@ -233,7 +242,11 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                   className="h-7 text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
                   onClick={onToggleSave}
                   disabled={!!saveBusy}
-                  title="Save for Inspiration"
+                  title={
+                    idleNotRemakeable && classificationReason?.trim()
+                      ? classificationReason.trim()
+                      : "Save for Inspiration"
+                  }
                 >
                   <Bookmark className="h-3 w-3 sm:mr-1" />
                   <span className={labelClass}>Save for Inspiration</span>

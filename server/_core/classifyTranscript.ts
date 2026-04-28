@@ -22,20 +22,20 @@ const SUGGESTED_ACTIONS = [
 ] as const;
 
 function buildPrompt(transcript: string): string {
-  return `You are classifying Instagram Reels transcripts to determine if they're worth remaking.
+  return `You are a friendly personal brand manager helping an Instagram creator decide which reels are worth remaking. Analyze the transcript below and return JSON.
 
 Transcript:
 """
 ${transcript}
 """
 
-Classify and return JSON:
+Return ONLY this JSON. No preamble, no code fences:
 
 {
   "contentType": "educational|story|opinion|personal|reaction|skit|music|other",
   "remakeabilityScore": <integer 0 to 10>,
   "suggestedAction": "make_version|save_inspiration|view_only",
-  "reason": "<max 200 chars>"
+  "reason": "<friendly 1st-person coach voice, max 200 chars>"
 }
 
 Definitions:
@@ -52,6 +52,18 @@ Scoring:
 - 8 to 10: Highly remakeable (educational, opinion, transferable story) -> make_version
 - 4 to 7: Possibly remakeable but weak -> save_inspiration
 - 0 to 3: Not remakeable (personal, skit, music) -> view_only
+
+Reason guidelines:
+- Write in friendly coach voice. Use 'I' for yourself, 'you' for the creator.
+- Be direct and warm, like a brand manager giving real advice.
+- Explain WHY in plain language. No jargon.
+- Max 200 characters.
+
+Good examples (tone reference, do NOT copy verbatim):
+- 'I'd save this one for inspiration only. It's a personal moment that won't translate to your audience without the original context.'
+- 'This is a reaction to something specific. There's no transferable structure to remake. Save it for vibes, not a script.'
+- 'Solid story arc here. Swap in your own example and this format will work for your niche. Worth remaking.'
+- 'Clear teaching structure you can absolutely remake in your niche. Hit Make My Version.'
 `;
 }
 

@@ -25,10 +25,12 @@ import {
   ChevronUp,
   Loader2,
   Zap,
+  Info,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { transcriptionIsNotRemakeable } from "@/lib/remakeability";
+import { mergeRemakeability } from "@/lib/remakeability";
+import Tooltip from "@/components/Tooltip";
 import {
   InlineWorkflow,
   formatNumber,
@@ -227,7 +229,10 @@ export default function SavedReels() {
               const isExpanded = expandedReel === rowKey;
               const hasTranscript = !!item.transcription && item.transcription.status === "completed";
               const isProcessing = item.transcription?.status === "processing";
-              const rowNotRemakeable = transcriptionIsNotRemakeable(item.transcription).notRemakeable;
+              const rowNotRemakeable = mergeRemakeability(
+                item.transcription,
+                item.reel
+              ).notRemakeable;
 
               return (
                 <div key={item.id} className="rounded-lg border border-border bg-card overflow-hidden">
@@ -290,8 +295,15 @@ export default function SavedReels() {
 
                       {hasTranscript && (
                         rowNotRemakeable ? (
-                          <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-none self-center">
-                            Saved as inspiration
+                          <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-none self-center flex items-center justify-end gap-1">
+                            <span>Saved as inspiration</span>
+                            {reel.classificationReason?.trim() ? (
+                              <Tooltip content={reel.classificationReason.trim()}>
+                                <span className="inline-flex cursor-help shrink-0">
+                                  <Info className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+                                </span>
+                              </Tooltip>
+                            ) : null}
                           </p>
                         ) : (
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setExpandedReel(rowKey)}>
@@ -338,7 +350,8 @@ export default function SavedReels() {
                       hasTranscription={hasTranscript}
                       isProcessing={!!isProcessing}
                       inspirationPanelVariant="saved-collected"
-                      listRemakeHint={transcriptionIsNotRemakeable(item.transcription)}
+                      listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                      reelClassification={item.reel}
                       onTranscribe={() => {
                         if (item.featuredReelId != null) {
                           transcribeMutation.mutate({ featuredReelId: item.featuredReelId });
@@ -357,7 +370,8 @@ export default function SavedReels() {
                       hasTranscription={hasTranscript}
                       isProcessing={!!isProcessing}
                       inspirationPanelVariant="saved-collected"
-                      listRemakeHint={transcriptionIsNotRemakeable(item.transcription)}
+                      listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                      reelClassification={item.reel}
                       onTranscribe={() => {
                         if (item.reelId != null) {
                           transcribeMutation.mutate({ reelId: item.reelId });

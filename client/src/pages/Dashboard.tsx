@@ -57,7 +57,7 @@ import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
-import { transcriptionIsNotRemakeable } from "@/lib/remakeability";
+import { mergeRemakeability } from "@/lib/remakeability";
 
 type SortOption =
   | "views_desc"
@@ -1767,7 +1767,7 @@ export default function Dashboard() {
                   recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
                 );
                 const idleNotRemakeable =
-                  transcriptionIsNotRemakeable(reel.transcription).notRemakeable &&
+                  mergeRemakeability(reel.transcription, reel).notRemakeable &&
                   hasTranscription &&
                   !isNoSpeech &&
                   recreateSt === "none";
@@ -1879,6 +1879,7 @@ export default function Dashboard() {
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          classificationReason={reel.classificationReason ?? undefined}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -1929,7 +1930,8 @@ export default function Dashboard() {
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
                           inspirationPanelVariant="dashboard"
-                          listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                          listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                          reelClassification={reel}
                           onSaveForInspiration={() =>
                             toggleSave.mutate({ featuredReelId: reel.id })
                           }
@@ -1959,7 +1961,8 @@ export default function Dashboard() {
                           isTranscriptionQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
                           inspirationPanelVariant="dashboard"
-                          listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                          listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                          reelClassification={reel}
                           onSaveForInspiration={() =>
                             toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
                           }
@@ -2008,7 +2011,7 @@ export default function Dashboard() {
                     recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
                   );
                   const idleNotRemakeable =
-                    transcriptionIsNotRemakeable(reel.transcription).notRemakeable &&
+                    mergeRemakeability(reel.transcription, reel).notRemakeable &&
                     hasTranscription &&
                     !isNoSpeech &&
                     recreateSt === "none";
@@ -2156,6 +2159,7 @@ export default function Dashboard() {
                           transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
+                          classificationReason={reel.classificationReason ?? undefined}
                           hideBookmark
                           hideExternalLink
                           onToggleSave={() => {
@@ -2510,7 +2514,8 @@ export default function Dashboard() {
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
                   inspirationPanelVariant="dashboard"
-                  listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                  listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                  reelClassification={reel}
                   onSaveForInspiration={() =>
                     toggleSave.mutate({ featuredReelId: reel.id })
                   }
@@ -2540,7 +2545,8 @@ export default function Dashboard() {
                   isTranscriptionQueued={isTxQueued}
                   isNoSpeech={isNoSpeech}
                   inspirationPanelVariant="dashboard"
-                  listRemakeHint={transcriptionIsNotRemakeable(reel.transcription)}
+                  listRemakeHint={mergeRemakeability(reel.transcription, reel)}
+                  reelClassification={reel}
                   onSaveForInspiration={() =>
                     toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
                   }

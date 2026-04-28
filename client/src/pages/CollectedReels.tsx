@@ -33,9 +33,11 @@ import {
   Link2,
   Calendar,
   ArrowUpDown,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
-import { transcriptionIsNotRemakeable } from "@/lib/remakeability";
+import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
+import Tooltip from "@/components/Tooltip";
 import {
   InlineWorkflow,
   formatNumber,
@@ -47,18 +49,21 @@ function CollectedReCreateOrLabel({
   mappedReelId,
   hasTranscription,
   onOpenPanel,
+  reelClassification,
 }: {
   mappedReelId: number;
   hasTranscription: boolean;
   onOpenPanel: () => void;
+  reelClassification?: ReelClassificationLike;
 }) {
   const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
     { reelId: mappedReelId },
     { enabled: hasTranscription && mappedReelId > 0 }
   );
   const raw = transcriptionQuery.data;
-  const remake = transcriptionIsNotRemakeable(
-    raw ? { status: raw.status, transcript: raw.transcript, segments: raw.segments } : null
+  const remake = mergeRemakeability(
+    raw ? { status: raw.status, transcript: raw.transcript, segments: raw.segments } : null,
+    reelClassification
   );
 
   if (transcriptionQuery.isFetching && !raw) {
@@ -70,9 +75,17 @@ function CollectedReCreateOrLabel({
   }
 
   if (remake.notRemakeable) {
+    const hint = reelClassification?.classificationReason?.trim();
     return (
-      <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-[9rem]">
-        Saved as inspiration
+      <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-[9rem] flex items-center justify-end gap-1 self-center">
+        <span>Saved as inspiration</span>
+        {hint ? (
+          <Tooltip content={hint}>
+            <span className="inline-flex cursor-help shrink-0">
+              <Info className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+            </span>
+          </Tooltip>
+        ) : null}
       </p>
     );
   }
@@ -707,6 +720,7 @@ export default function CollectedReels() {
                           mappedReelId={mappedReelId}
                           hasTranscription={hasTranscription}
                           onOpenPanel={() => setExpandedReel(reel.id)}
+                          reelClassification={reel}
                         />
                       )}
                     </>
@@ -762,6 +776,7 @@ export default function CollectedReels() {
                   handle={reel.ownerUsername || "unknown"}
                   userTimezone={userTimezone}
                   postedAt={reel.postedAt || new Date()}
+                  reelClassification={reel}
                 />
               )}
 
@@ -813,12 +828,14 @@ function CollectedReelWorkflow({
   handle,
   userTimezone,
   postedAt,
+  reelClassification,
 }: {
   collectedReelId: number;
   reelId: number;
   handle: string;
   userTimezone: string;
   postedAt: Date | string;
+  reelClassification?: ReelClassificationLike;
 }) {
   const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
     { reelId },
@@ -834,14 +851,15 @@ function CollectedReelWorkflow({
   const transcription = transcriptionQuery.data;
   const hasTranscription = transcription?.status === "completed";
   const isProcessing = transcription?.status === "processing";
-  const listRemakeHint = transcriptionIsNotRemakeable(
+  const listRemakeHint = mergeRemakeability(
     transcription
       ? {
           status: transcription.status,
           transcript: transcription.transcript,
           segments: transcription.segments,
         }
-      : null
+      : null,
+    reelClassification
   );
 
   const transcribeMutation = trpc.collected.transcribe.useMutation();
@@ -854,6 +872,7 @@ function CollectedReelWorkflow({
       isProcessing={!!isProcessing}
       inspirationPanelVariant="saved-collected"
       listRemakeHint={listRemakeHint}
+      reelClassification={reelClassification}
       onTranscribe={() => {
         transcribeMutation.mutate({ collectedReelId });
         toast.info("Transcription started...");
