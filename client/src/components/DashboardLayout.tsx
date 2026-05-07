@@ -60,7 +60,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/history": "Track and refresh previously analyzed accounts",
   "/scripts": "Your AI-generated scripts library",
   "/ideas": "Turn a rough idea into a viral-ready script",
-  "/library": "Browse your hook library and templates",
+  "/library":
+    "Saved reel transcripts and scripts (from research, collects, and the script tools)",
   "/saved": "Reels you bookmarked for later",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
@@ -147,7 +148,7 @@ function DashboardLayoutContent({
     { icon: Eye, label: "Account Monitoring", path: "/history" },
     { icon: FileText, label: "My Scripts", path: "/scripts" },
     { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-    { icon: Library, label: "My Library", path: "/library" },
+    { icon: Library, label: "Transcripts & Scripts", path: "/library" },
     { icon: Bookmark, label: "Saved Reels", path: "/saved" },
     { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
     {
