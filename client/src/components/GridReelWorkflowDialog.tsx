@@ -16,6 +16,8 @@ export type GridReelWorkflowPreview = {
   id: number;
   caption: string | null;
   thumbnailUrl: string | null;
+  /** Direct MP4 URL when available (R2 or CDN). */
+  videoUrl?: string | null;
   viewCount: number;
   likeCount: number;
   commentCount: number;
@@ -56,7 +58,17 @@ export function GridReelWorkflowDialog({
           <>
             <div className="flex shrink-0 gap-3 border-b border-border/40 p-4 sm:gap-4">
               <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:h-44 sm:w-28">
-                {reel.thumbnailUrl ? (
+                {reel.videoUrl?.trim() ? (
+                  <video
+                    key={reel.id}
+                    src={reel.videoUrl.trim()}
+                    poster={reel.thumbnailUrl ?? undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                  />
+                ) : reel.thumbnailUrl ? (
                   <img
                     src={reel.thumbnailUrl}
                     alt=""
@@ -69,7 +81,7 @@ export function GridReelWorkflowDialog({
                   </div>
                 )}
                 {reel.duration != null && reel.duration > 0 && (
-                  <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-white">
+                  <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-white">
                     {formatDuration(reel.duration)}
                   </span>
                 )}

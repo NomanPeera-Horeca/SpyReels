@@ -40,6 +40,7 @@ import {
   List,
   X,
   Sparkles,
+  Play,
 } from "lucide-react";
 import {
   InlineWorkflow,
@@ -55,7 +56,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { normalizeAnalyticsHandle } from "@/lib/utils";
+import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
 
@@ -169,6 +170,91 @@ function runReelRowScrollPulse(node: HTMLElement) {
   window.setTimeout(() => {
     node.classList.remove("pulse-highlight");
   }, 2100);
+}
+
+/** Grid tile: thumbnail + optional inline playback when `videoUrl` exists (R2 or Instagram CDN). */
+function DashboardReelGridMedia({
+  thumbnailUrl,
+  videoUrl,
+  className,
+}: {
+  thumbnailUrl: string | null | undefined;
+  videoUrl: string | null | undefined;
+  className?: string;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const src = (videoUrl ?? "").trim();
+  const hasVideo = src.length > 0;
+  const thumb = (thumbnailUrl ?? "").trim();
+
+  useEffect(() => {
+    if (!playing) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    void p.catch(() => {});
+  }, [playing]);
+
+  return (
+    <div className={cn(className)}>
+      {playing && hasVideo ? (
+        <div
+          className="relative h-full w-full bg-black"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <video
+            ref={videoRef}
+            src={src}
+            poster={thumb || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+          <button
+            type="button"
+            className="absolute right-2 top-12 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90"
+            aria-label="Close video"
+            title="Close video"
+            onClick={() => setPlaying(false)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          {thumb ? (
+            <img
+              src={thumb}
+              alt=""
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-muted/40">
+              <Film className="h-5 w-5 text-muted-foreground/60" />
+            </div>
+          )}
+          {hasVideo ? (
+            <button
+              type="button"
+              className="absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80"
+              aria-label="Play video"
+              title="Play video"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlaying(true);
+              }}
+            >
+              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+            </button>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Bug #23: cache scrape snapshots and featured sidebar reads; avoid refetch on every /dashboard?jobId= navigation. */
@@ -2032,18 +2118,11 @@ export default function Dashboard() {
                         className="relative aspect-[9/14] cursor-pointer overflow-hidden"
                         onClick={() => setGridModalReelId(reel.id)}
                       >
-                        {reel.thumbnailUrl ? (
-                          <img
-                            src={reel.thumbnailUrl}
-                            alt=""
-                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="h-full w-full bg-muted/40 flex items-center justify-center">
-                            <Film className="h-5 w-5 text-muted-foreground/60" />
-                          </div>
-                        )}
+                        <DashboardReelGridMedia
+                          className="relative h-full w-full"
+                          thumbnailUrl={reel.thumbnailUrl}
+                          videoUrl={reel.videoUrl}
+                        />
                         <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
                           #{index + 1}
                         </div>
@@ -2481,6 +2560,7 @@ export default function Dashboard() {
                 id: gridModalReel.id,
                 caption: gridModalReel.caption,
                 thumbnailUrl: gridModalReel.thumbnailUrl,
+                videoUrl: gridModalReel.videoUrl ?? "",
                 viewCount: gridModalReel.viewCount,
                 likeCount: gridModalReel.likeCount,
                 commentCount: gridModalReel.commentCount,
