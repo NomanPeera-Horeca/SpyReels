@@ -176,11 +176,55 @@ async function fetchUserReelsPage(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Timestamp normalization (clips + post payloads)                   */
+/* ------------------------------------------------------------------ */
+
+/** Instagram timestamps are usually unix seconds; APIs sometimes emit strings ("1736294201"),
+ * which `new Date(...)` parses as Invalid Date and then fail every `postedAt >= cutoff` check.
+ */
+export function coerceInstagramTakenAtRaw(raw: unknown): Date | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const ms = raw < 1e12 ? raw * 1000 : raw;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const n = Number(trimmed);
+      const ms = n < 1e12 ? n * 1000 : n;
+      const d = new Date(ms);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function postedAtFromClipMedia(media: any): Date {
+  const d =
+    coerceInstagramTakenAtRaw(media?.taken_at) ??
+    coerceInstagramTakenAtRaw(media?.taken_at_timestamp);
+  if (d) return d;
+  return new Date();
+}
+
+/** Extract reels `media` object from `/v1/instagram/user/reels` rows (handles minor shape drift). */
+function extractClipMedia(item: any): any | null {
+  if (!item) return null;
+  if (item.media && typeof item.media === "object") return item.media;
+  if (typeof item.code === "string" && item.code.length > 0) return item;
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Parse a clips item into ReelData                                   */
 /* ------------------------------------------------------------------ */
 
 function parseClipItem(item: any, ownerUsername: string): ReelData | null {
-  const media = item?.media;
+  const media = extractClipMedia(item);
   if (!media) return null;
 
   const shortcode = media.code || "";
@@ -197,12 +241,7 @@ function parseClipItem(item: any, ownerUsername: string): ReelData | null {
     "";
   const videoUrl = media.video_versions?.[0]?.url || media.video_url || "";
   const duration = Math.round(Number(media.video_duration) || 0);
-  const takenAt = media.taken_at;
-  const postedAt = takenAt
-    ? new Date(
-        typeof takenAt === "number" && takenAt < 1e12 ? takenAt * 1000 : takenAt
-      )
-    : new Date();
+  const postedAt = postedAtFromClipMedia(media);
 
   const reelUrl =
     typeof media.url === "string" && media.url
@@ -264,6 +303,9 @@ export async function scrapeReels(
   const maxPages = 100;
   let consecutiveEmptyPages = 0;
   let stoppedReason = "";
+  /** API returned rows we could not map to ReelData (shape drift / new fields). */
+  let pagesWithItemsButNoParses = 0;
+  let warnedUnparseablePage = false;
 
   while (hasMore && pageCount < maxPages) {
     if (Date.now() - startTime > timeoutMs) {
@@ -297,13 +339,17 @@ export async function scrapeReels(
     }
 
     let foundInRangeThisPage = false;
+    let parsedThisPage = 0;
 
     for (const item of page.items) {
       const reel = parseClipItem(item, profile.username);
       if (!reel) continue;
+      parsedThisPage++;
 
       if (seenShortcodes.has(reel.shortcode)) continue;
       seenShortcodes.add(reel.shortcode);
+
+      if (Number.isNaN(reel.postedAt.getTime())) continue;
 
       if (reel.postedAt >= cutoffDate) {
         allReels.push(reel);
@@ -313,10 +359,25 @@ export async function scrapeReels(
       }
     }
 
-    if (!foundInRangeThisPage) {
-      consecutiveEmptyPages++;
-    } else {
+    if (parsedThisPage === 0) {
+      // Rows we couldn't parse: don't interpret as "past the date window".
+      if (page.items.length > 0) {
+        pagesWithItemsButNoParses++;
+        if (!warnedUnparseablePage) {
+          warnedUnparseablePage = true;
+          const keys =
+            page.items[0] && typeof page.items[0] === "object"
+              ? Object.keys(page.items[0] as object).slice(0, 12).join(",")
+              : "";
+          console.warn(
+            `[Instagram] @${profile.username} page ${pageCount}: ${page.items.length} items, 0 parseable (top-level keys: ${keys || "n/a"}) — possible ScrapeCreators payload change`
+          );
+        }
+      }
+    } else if (foundInRangeThisPage) {
       consecutiveEmptyPages = 0;
+    } else {
+      consecutiveEmptyPages++;
     }
 
     if (onProgress) {
@@ -331,8 +392,12 @@ export async function scrapeReels(
   }
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const shapeWarning =
+    pagesWithItemsButNoParses > 0
+      ? `, unparseable_pages=${pagesWithItemsButNoParses}`
+      : "";
   console.log(
-    `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
+    `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
   );
 
   return { reels: allReels, followerCount: profile.followerCount, profilePicUrl: profile.profilePicUrl };
@@ -368,10 +433,10 @@ function mapPostMediaToReelFull(item: any): ReelFullData | null {
   if (!item) return null;
 
   const owner = item.user || item.owner || {};
-  const takenAt = item.taken_at_timestamp ?? item.taken_at;
-  const postedAt = takenAt
-    ? new Date(typeof takenAt === "number" && takenAt < 1e12 ? takenAt * 1000 : takenAt)
-    : new Date();
+  const postedAt =
+    coerceInstagramTakenAtRaw(item.taken_at_timestamp) ??
+    coerceInstagramTakenAtRaw(item.taken_at) ??
+    new Date();
 
   const captionEdge = item.edge_media_to_caption?.edges?.[0]?.node?.text;
   const caption =
@@ -449,10 +514,10 @@ function parseSearchReelApiItem(r: any): SearchReelData | null {
   const engagementRate =
     ownerFollowerCount > 0 ? ((likeCount + commentCount) / ownerFollowerCount) * 100 : 0;
 
-  let postedAt = new Date();
-  if (r.taken_at) {
-    postedAt = new Date(r.taken_at);
-  }
+  let postedAt =
+    coerceInstagramTakenAtRaw(r.taken_at_timestamp) ??
+    coerceInstagramTakenAtRaw(r.taken_at) ??
+    new Date();
 
   return {
     shortcode,
