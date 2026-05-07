@@ -62,6 +62,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
+import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 
 type SortOption =
   | "views_desc"
@@ -90,6 +91,89 @@ function toReadableNiche(slug: string | null | undefined): string {
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function nicheLabelFromSlug(slug: string): string {
+  return ONBOARDING_NICHES_BY_SLUG.get(slug)?.name ?? toReadableNiche(slug);
+}
+
+/** Weight niches by how much the user has spied in each (status + recency); falls back to settings slugs. */
+function resolveDashboardHeroNicheLabels(
+  jobs: Array<{
+    isDemo: boolean;
+    classifiedNicheSlug: string | null;
+    status: string;
+    updatedAt: Date | string;
+  }>,
+  settingsSlugs: string[] | null | undefined
+): string[] {
+  const scores = new Map<string, number>();
+  for (const j of jobs) {
+    if (j.isDemo) continue;
+    const slug = j.classifiedNicheSlug;
+    if (!slug) continue;
+    const t = new Date(j.updatedAt).getTime();
+    const recency = Number.isFinite(t) ? t / 1e15 : 0;
+    let w = 1;
+    if (j.status === "completed") w = 4;
+    else if (j.status === "running" || j.status === "pending") w = 2.5;
+    else if (j.status === "failed") w = 0.5;
+    scores.set(slug, (scores.get(slug) ?? 0) + w + recency);
+  }
+  const orderedSlugs = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([s]) => s);
+  const pickSlugs =
+    orderedSlugs.length > 0
+      ? orderedSlugs
+      : (settingsSlugs ?? []).filter((s): s is string => Boolean(s?.trim()));
+
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const s of pickSlugs) {
+    const key = s.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(key);
+    if (unique.length >= 3) break;
+  }
+  return unique.map(nicheLabelFromSlug);
+}
+
+function DashboardHeroNicheLine({
+  nicheLabels,
+  className,
+}: {
+  nicheLabels: string[];
+  /** Muted baseline; emphasized spans pick up foreground. */
+  className?: string;
+}) {
+  const Em = ({ children }: { children: React.ReactNode }) => (
+    <span className="font-medium text-foreground/95">{children}</span>
+  );
+  let inner: React.ReactNode;
+  if (nicheLabels.length === 0) {
+    inner = <>what is working in your niche</>;
+  } else if (nicheLabels.length === 1) {
+    inner = (
+      <>
+        what is working in <Em>{nicheLabels[0]}</Em>
+      </>
+    );
+  } else if (nicheLabels.length === 2) {
+    inner = (
+      <>
+        what is working in <Em>{nicheLabels[0]}</Em> and <Em>{nicheLabels[1]}</Em>
+      </>
+    );
+  } else {
+    inner = (
+      <>
+        what is working in <Em>{nicheLabels[0]}</Em>, <Em>{nicheLabels[1]}</Em>, and related niches
+      </>
+    );
+  }
+  return <span className={className}>{inner}</span>;
 }
 
 /** Strip @ for display; avoid placeholder "owner" if scraper left bad job.handle  -  fall back to first reel. */
@@ -992,7 +1076,14 @@ export default function Dashboard() {
     gcTime: 5 * 60_000,
   });
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
+  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, { enabled: showOverview });
 
+  const dashboardHeroNicheLabels = useMemo(() => {
+    if (!showOverview) return [];
+    const rows = jobsListQuery.data ?? [];
+    const settingsSlugs = onboardingStateQuery.data?.selectedNicheSlugs ?? undefined;
+    return resolveDashboardHeroNicheLabels(rows, settingsSlugs);
+  }, [showOverview, jobsListQuery.data, onboardingStateQuery.data?.selectedNicheSlugs]);
   /** Featured view NOT_FOUND / network error  -  short-circuit with a
    * dedicated page. Loading is handled by the main dashboard layout
    * below (skeletons render because the pseudo-job is `completed`). */
@@ -1071,8 +1162,9 @@ export default function Dashboard() {
                 {greeting}, {firstName} 👋
               </h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Start a spy session to see what is working in your niche, or open Creator Radar to revisit creators you
-                already track.
+                Start a spy session to see{" "}
+                <DashboardHeroNicheLine nicheLabels={dashboardHeroNicheLabels} />, or open Creator Radar to revisit
+                creators you already track.
               </p>
             </div>
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center shrink-0">
