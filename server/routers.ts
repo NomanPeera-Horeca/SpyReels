@@ -111,6 +111,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import { ensureReelVideoOnR2 } from "./reelVideoR2";
 import {
   monthlyUsage,
   users,
@@ -4760,6 +4761,34 @@ async function uploadReelThumbnailsBounded(
   return out;
 }
 
+/**
+ * Same pattern as thumbnails, but capped at 2 concurrent downloads because
+ * each payload is orders of magnitude larger (full reel MP4 in memory).
+ */
+async function uploadReelVideosBounded(
+  items: Array<{ shortcode: string; videoUrl: string }>,
+  concurrency = 2
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (items.length === 0) return out;
+
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        const item = items[i]!;
+        const stable = await ensureReelVideoOnR2(
+          item.shortcode,
+          item.videoUrl ?? ""
+        );
+        out.set(item.shortcode, stable);
+      }
+    })
+  );
+  return out;
+}
+
 /** Background scrape job runner */
 async function runScrapeJob(
   jobId: number,
@@ -4835,6 +4864,12 @@ async function runScrapeJob(
     const stableThumbs = await uploadReelThumbnailsBounded(
       reelData.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
     );
+    const stableVideos = await uploadReelVideosBounded(
+      reelData.map((r) => ({
+        shortcode: r.shortcode,
+        videoUrl: r.videoUrl ?? "",
+      }))
+    );
 
     await insertReels(
       reelData.map((r) => ({
@@ -4845,7 +4880,7 @@ async function runScrapeJob(
         likeCount: r.likeCount,
         commentCount: r.commentCount,
         thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
-        videoUrl: r.videoUrl,
+        videoUrl: stableVideos.get(r.shortcode) ?? r.videoUrl,
         reelUrl: r.reelUrl,
         duration: r.duration,
         postedAt: r.postedAt,
@@ -4927,6 +4962,12 @@ async function runResyncJob(
       const stableThumbs = await uploadReelThumbnailsBounded(
         newReels.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
       );
+      const stableVideos = await uploadReelVideosBounded(
+        newReels.map((r) => ({
+          shortcode: r.shortcode,
+          videoUrl: r.videoUrl ?? "",
+        }))
+      );
 
       await insertReels(
         newReels.map((r) => ({
@@ -4937,7 +4978,7 @@ async function runResyncJob(
           likeCount: r.likeCount,
           commentCount: r.commentCount,
           thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
-          videoUrl: r.videoUrl,
+          videoUrl: stableVideos.get(r.shortcode) ?? r.videoUrl,
           reelUrl: r.reelUrl,
           duration: r.duration,
           postedAt: r.postedAt,

@@ -23,6 +23,7 @@ import mysql from "mysql2/promise";
 import { fetchProfile, scrapeReels, type ReelData } from "../server/instagram";
 import { ensureProfilePicOnR2 } from "../server/profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../server/reelThumbnailR2";
+import { ensureReelVideoOnR2 } from "../server/reelVideoR2";
 
 const TIMEFRAME_DAYS = 365;
 const TOP_N = 30;
@@ -180,15 +181,23 @@ async function scrapeOneAccount(
   const thumbPublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
   let thumbR2Ok = 0;
   let thumbR2Fallback = 0;
+  let videoR2Ok = 0;
+  let videoR2Fallback = 0;
 
   for (let i = 0; i < topN.length; i++) {
     const { reel, er } = topN[i];
     const rank = i + 1;
     const thumbUrl = await ensureReelThumbnailOnR2(reel.shortcode, reel.thumbnailUrl ?? "");
+    const videoUrlStable = await ensureReelVideoOnR2(reel.shortcode, reel.videoUrl ?? "");
     if (thumbPublicBase && thumbUrl.startsWith(thumbPublicBase)) {
       thumbR2Ok++;
     } else {
       thumbR2Fallback++;
+    }
+    if (thumbPublicBase && videoUrlStable.startsWith(thumbPublicBase)) {
+      videoR2Ok++;
+    } else {
+      videoR2Fallback++;
     }
     await conn.execute(
       `INSERT INTO featured_reels
@@ -217,7 +226,7 @@ async function scrapeOneAccount(
         reel.commentCount,
         er.toFixed(2),
         thumbUrl,
-        reel.videoUrl,
+        videoUrlStable,
         reel.duration,
         reel.postedAt,
         rank,
@@ -226,6 +235,7 @@ async function scrapeOneAccount(
   }
 
   console.log(`  thumbnails: r2=${thumbR2Ok} fallback=${thumbR2Fallback}`);
+  console.log(`  videos:     r2=${videoR2Ok} fallback=${videoR2Fallback}`);
 
   // Delete any previously-stored reels for this account that dropped out
   // of the new top N.

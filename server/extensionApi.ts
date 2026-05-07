@@ -23,6 +23,7 @@ import { fetchReelByShortcode, fetchProfile, searchReelsByHandle } from "./insta
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
+import { ensureReelVideoOnR2 } from "./reelVideoR2";
 import { sdk } from "./_core/sdk";
 
 const FREE_TRANSCRIBE_LIMIT = 3;
@@ -176,6 +177,8 @@ export function createExtensionRouter(): Router {
         status: "completed",
       });
 
+      const mirroredVideoUrl = await ensureReelVideoOnR2(shortcode, videoUrl || "");
+
       // Insert the reel
       await insertReels([{
         jobId,
@@ -185,7 +188,7 @@ export function createExtensionRouter(): Router {
         likeCount: likeCount || 0,
         commentCount: commentCount || 0,
         thumbnailUrl: thumbnailUrl || "",
-        videoUrl: videoUrl || "",
+        videoUrl: mirroredVideoUrl || videoUrl || "",
         reelUrl,
         duration: duration || 0,
         postedAt: postedAt ? new Date(postedAt) : new Date(),
