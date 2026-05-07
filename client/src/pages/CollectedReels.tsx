@@ -995,7 +995,7 @@ export default function CollectedReels() {
                   <div className="flex items-center justify-between gap-2">
                     <span>#{index + 1}</span>
                     <span className="line-clamp-2 text-right">
-                      {isPending ? "Fetching…" : isFailed ? reel.errorMessage || "Failed" : "—"}
+                      {isPending ? "Fetching…" : isFailed ? reel.errorMessage || "Failed" : "-"}
                     </span>
                   </div>
                   <div className="flex flex-wrap justify-end gap-1" onClick={(e) => e.stopPropagation()}>

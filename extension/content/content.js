@@ -309,7 +309,7 @@
         <span class="rd-stat-item"><span class="rd-stat-icon">👁</span> ${formatNum(reelInfo.views || 0)}</span>
         <span class="rd-stat-item"><span class="rd-stat-icon">❤</span> ${formatNum(reelInfo.likes || 0)}</span>
         <span class="rd-stat-item"><span class="rd-stat-icon">💬</span> ${formatNum(reelInfo.comments || 0)}</span>
-        <span class="rd-stat-item"><span class="rd-stat-icon">📈</span> ${reelInfo.engagementRate || "—"}</span>
+        <span class="rd-stat-item"><span class="rd-stat-icon">📈</span> ${reelInfo.engagementRate || "-"}</span>
       `;
       container.appendChild(overlay);
     });

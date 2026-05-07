@@ -1,6 +1,6 @@
 /**
  * Instagram data via ScrapeCreators API (https://api.scrapecreators.com).
- * Uses global fetch with x-api-key — no direct Instagram mobile API calls.
+ * Uses global fetch with x-api-key (no direct Instagram mobile API calls).
  */
 
 const API_BASE = "https://api.scrapecreators.com";
@@ -370,7 +370,7 @@ export async function scrapeReels(
               ? Object.keys(page.items[0] as object).slice(0, 12).join(",")
               : "";
           console.warn(
-            `[Instagram] @${profile.username} page ${pageCount}: ${page.items.length} items, 0 parseable (top-level keys: ${keys || "n/a"}) — possible ScrapeCreators payload change`
+            `[Instagram] @${profile.username} page ${pageCount}: ${page.items.length} items, 0 parseable (top-level keys: ${keys || "n/a"}). Possible ScrapeCreators payload change.`
           );
         }
       }
@@ -608,7 +608,7 @@ export async function searchReelsByKeyword(
 }
 
 /**
- * Search for reels by handle — paginates user reels via ScrapeCreators.
+ * Search for reels by handle via ScrapeCreators (paginates user reels).
  */
 export async function searchReelsByHandle(
   handle: string,

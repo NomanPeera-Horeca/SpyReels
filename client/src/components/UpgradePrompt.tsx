@@ -22,7 +22,7 @@ interface UpgradePromptProps {
 
 /**
  * Soft upgrade prompt shown when users hit their plan limits.
- * Non-blocking — users can dismiss and continue browsing.
+ * Non-blocking  -  users can dismiss and continue browsing.
  */
 export function UpgradePrompt({
   action,

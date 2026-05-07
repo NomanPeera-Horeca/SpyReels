@@ -141,7 +141,7 @@ export default function Library() {
         </div>
         <h2 className="text-2xl font-bold tracking-tight">Transcripts &amp; scripts</h2>
         <p className="text-muted-foreground text-center max-w-md leading-relaxed">
-          Reel transcripts you&apos;ve run and scripts you&apos;ve saved — in one place.
+          Reel transcripts you&apos;ve run and scripts you&apos;ve saved, in one place.
           Sign in to see yours.
         </p>
         <Button asChild>
@@ -480,7 +480,7 @@ function TranscriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm font-medium text-foreground">
           {data.total} transcript{data.total !== 1 ? "s" : ""}{" "}
-          <span className="font-normal text-muted-foreground">— tap a row for full text</span>
+          <span className="font-normal text-muted-foreground">Tap a row for full text</span>
         </p>
       </div>
       <div className="flex flex-col gap-3">
@@ -577,7 +577,7 @@ function ScriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
         </div>
         <h3 className="text-lg font-semibold mb-1 text-foreground">No scripts yet</h3>
         <p className="text-muted-foreground text-sm max-w-md leading-relaxed">
-          Save from the reel workflow, use Re-create, or Idea to Script — everything you keep
+          Save from the reel workflow, use Re-create, or Idea to Script. Everything you keep
           lands in the Scripts tab here.
         </p>
         <div className="flex flex-wrap gap-2 justify-center mt-6">
@@ -615,7 +615,7 @@ function ScriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm font-medium text-foreground">
           {data.total} script{data.total !== 1 ? "s" : ""}{" "}
-          <span className="font-normal text-muted-foreground">— tap a row to preview</span>
+          <span className="font-normal text-muted-foreground">Tap a row to preview</span>
         </p>
       </div>
       <div className="flex flex-col gap-3">

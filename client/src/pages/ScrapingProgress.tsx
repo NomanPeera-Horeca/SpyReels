@@ -34,7 +34,7 @@ const STEPS = [
 
 type StepId = (typeof STEPS)[number]["id"];
 
-/** Fisher–Yates shuffle — pure, doesn't mutate the source array. */
+/** Fisher–Yates shuffle  -  pure, doesn't mutate the source array. */
 function shuffle<T>(arr: readonly T[]): T[] {
   const out = arr.slice();
   for (let i = out.length - 1; i > 0; i--) {
@@ -113,7 +113,7 @@ export default function ScrapingProgress() {
     return () => clearInterval(interval);
   }, [status]);
 
-  // Rotating tips — shuffled once on mount, advanced every 7s with a fade.
+  // Rotating tips  -  shuffled once on mount, advanced every 7s with a fade.
   const tips = useMemo(() => shuffle(LOADING_TIPS), []);
   const [tipIndex, setTipIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);

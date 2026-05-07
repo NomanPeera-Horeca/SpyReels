@@ -15,7 +15,7 @@ import Tooltip from "@/components/Tooltip";
 /**
  * Discriminated source so a single callsite can't accidentally pass the
  * wrong id. Commit 5 extracted this so List view and Grid view share the
- * exact same mutation inputs + analytics payload — visual shell differs,
+ * exact same mutation inputs + analytics payload  -  visual shell differs,
  * behavior does not.
  */
 export type ReelActionSource =
@@ -50,7 +50,7 @@ export interface ReelActionButtonsProps {
   onTranscribe: () => void;
   onExpand: () => void;
   /**
-   * Commit 9 — fired by the "Make My Version" / "Open My Script ✓"
+   * Commit 9  -  fired by the "Make My Version" / "Open My Script ✓"
    * button. Parents use this to expand the row (if collapsed) AND
    * trigger a scroll-to + pulse on the Re-create section. Separate
    * from `onExpand` (which is fired by the Transcript button) so

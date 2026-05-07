@@ -168,7 +168,7 @@ export default function History() {
           void utils.scrape.status.invalidate({ jobId });
           void utils.reels.list.invalidate({ jobId });
           toast.success("Pulling fresh reels", {
-            description: `Fetching posts since your last sync (last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}). New data only—not a historical backfill.`,
+            description: `Fetching posts since your last sync (last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}). New data only (not a full historical backfill).`,
           });
         },
       }
@@ -238,16 +238,15 @@ export default function History() {
               A watchlist built from your SpyReels sessions. Each tile shows follower reach, reels in your scan window,
               and rollup engagement from Instagram.{" "}
               <span className="text-foreground/90 font-medium">
-                Refresh pulls only new posts since your last sync
+                Refresh pulls only new posts since your last sync.
               </span>
-              —we don&apos;t backfill ancient history.
             </p>
           </div>
           <Button
             onClick={() => setLocation("/research")}
             className="relative shrink-0 bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-900/20 hover:opacity-95"
           >
-            Track a creator
+            Spy A Creator
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
@@ -279,7 +278,7 @@ export default function History() {
                 Views (rollup)
               </p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                {summary.views > 0 ? formatNumber(summary.views) : "—"}
+                {summary.views > 0 ? formatNumber(summary.views) : "-"}
               </p>
             </div>
           </div>
@@ -467,7 +466,7 @@ export default function History() {
                         <Eye className="h-3 w-3" /> Views
                       </div>
                       <p className="mt-1 font-semibold tabular-nums text-foreground">
-                        {stats?.totalViews != null && stats.totalViews > 0 ? formatNumber(stats.totalViews) : "—"}
+                        {stats?.totalViews != null && stats.totalViews > 0 ? formatNumber(stats.totalViews) : "-"}
                       </p>
                     </div>
                   </Tooltip>
@@ -477,7 +476,7 @@ export default function History() {
                         <Heart className="h-3 w-3" /> Likes
                       </div>
                       <p className="mt-1 font-semibold tabular-nums text-foreground">
-                        {stats?.totalLikes != null && stats.totalLikes > 0 ? formatNumber(stats.totalLikes) : "—"}
+                        {stats?.totalLikes != null && stats.totalLikes > 0 ? formatNumber(stats.totalLikes) : "-"}
                       </p>
                     </div>
                   </Tooltip>
@@ -489,7 +488,7 @@ export default function History() {
                       <p className="mt-1 font-semibold tabular-nums text-foreground">
                         {stats?.totalComments != null && stats.totalComments > 0
                           ? formatNumber(stats.totalComments)
-                          : "—"}
+                          : "-"}
                       </p>
                     </div>
                   </Tooltip>
@@ -499,7 +498,7 @@ export default function History() {
                         <TrendingUp className="h-3 w-3" /> Avg ER
                       </div>
                       <p className="mt-1 font-semibold tabular-nums text-emerald-400">
-                        {stats?.avgEngagementPct != null ? `${stats.avgEngagementPct.toFixed(2)}%` : "—"}
+                        {stats?.avgEngagementPct != null ? `${stats.avgEngagementPct.toFixed(2)}%` : "-"}
                       </p>
                     </div>
                   </Tooltip>

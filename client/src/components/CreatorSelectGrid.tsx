@@ -53,7 +53,7 @@ function CreatorProfilePic({
 }
 
 export interface CreatorSelectGridProps {
-  /** `{ [nicheSlug]: Creator[] }` — identical shape to
+  /** `{ [nicheSlug]: Creator[] }`  -  identical shape to
    *  `featured.accountsByNicheSlugs`'s `groups`. */
   groupedCreators: Record<string, CreatorOption[]>;
   /** Slugs that correspond to keys we should render a section for.

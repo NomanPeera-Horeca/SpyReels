@@ -81,7 +81,7 @@ function ScriptJudgeBadge(props: {
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color}`}
       title={
         flagged
-          ? "Script judge kept the final pass after retries — review manually if needed."
+          ? "Script judge kept the final pass after retries. Review manually if needed."
           : "Automated QC score on the drafted script."
       }
     >
@@ -338,7 +338,7 @@ export default function IdeaToScript() {
         </div>
         <p className="text-muted-foreground">
           Type or speak a rough idea. We score the idea, refine it with you, draft a script tuned to your goal (calendar
-          posts, personal brand, teaching, or viral reach), then run an automatic quality check—low scores kick off a smarter
+          posts, personal brand, teaching, or viral reach), then run an automatic quality check. Low scores kick off a smarter
           rewrite before you save.
         </p>
       </div>
@@ -451,7 +451,7 @@ export default function IdeaToScript() {
                     {CREATOR_GOALS.map((g) => (
                       <SelectItem key={g.value} value={g.value}>
                         <span className="font-medium">{g.label}</span>
-                        <span className="text-muted-foreground text-xs"> — {g.hint}</span>
+                        <span className="text-muted-foreground text-xs">: {g.hint}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>

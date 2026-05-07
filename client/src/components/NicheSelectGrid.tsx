@@ -19,7 +19,7 @@ export interface NicheSelectGridProps {
 
 /**
  * Shared niche selection grid. Ported from `pages/onboarding.tsx` so
- * Settings ("Your Interests" — Commit 8) can reuse the exact visual
+ * Settings ("Your Interests"  -  Commit 8) can reuse the exact visual
  * language without cloning the markup. Keeping it controlled (parent
  * owns state) means onboarding can drive it with its multi-step state
  * machine and Settings can drive it with a simple local diff.

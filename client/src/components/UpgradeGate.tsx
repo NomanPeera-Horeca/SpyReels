@@ -1,10 +1,10 @@
 /**
- * UpgradeGate — Shared component for feature gating across all pages.
+ * UpgradeGate  -  Shared component for feature gating across all pages.
  * 
  * Usage patterns:
- * 1. <UpgradeGate feature="recreate" /> — Shows inline upgrade prompt
- * 2. <UpgradeGate feature="transcribe" usage={used} limit={max} /> — Shows usage-aware prompt
- * 3. useUpgradeCheck("transcribe") — Hook for programmatic checks
+ * 1. <UpgradeGate feature="recreate" />  -  Shows inline upgrade prompt
+ * 2. <UpgradeGate feature="transcribe" usage={used} limit={max} />  -  Shows usage-aware prompt
+ * 3. useUpgradeCheck("transcribe")  -  Hook for programmatic checks
  */
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

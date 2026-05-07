@@ -3,7 +3,7 @@ import { getLoginUrl } from "@/const";
 import { useState, useEffect } from "react";
 
 /**
- * Inline CTA Banner — inserted mid-article to capture attention
+ * Inline CTA Banner  -  inserted mid-article to capture attention
  * Variant A: Gradient with bold text
  */
 export function InlineCTA({ variant = "default" }: { variant?: "default" | "spy" | "script" }) {
@@ -57,7 +57,7 @@ export function InlineCTA({ variant = "default" }: { variant?: "default" | "spy"
 }
 
 /**
- * Lead Magnet Section — appears near the end of articles
+ * Lead Magnet Section  -  appears near the end of articles
  * Offers a free downloadable resource in exchange for signing up
  */
 export function LeadMagnet({ type = "template" }: { type?: "template" | "checklist" | "guide" }) {
@@ -136,7 +136,7 @@ export function LeadMagnet({ type = "template" }: { type?: "template" | "checkli
 }
 
 /**
- * Sticky Bottom CTA Bar — appears after scrolling past the fold
+ * Sticky Bottom CTA Bar  -  appears after scrolling past the fold
  * Dismissible, non-intrusive conversion prompt
  */
 export function StickySignupBar() {
@@ -197,7 +197,7 @@ export function StickySignupBar() {
 }
 
 /**
- * Social Proof Banner — shows user count and trust signals
+ * Social Proof Banner  -  shows user count and trust signals
  */
 export function SocialProofBanner() {
   return (

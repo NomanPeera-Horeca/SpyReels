@@ -286,7 +286,7 @@ export default function Home() {
       !onboardingState.hasCompletedFirstSpy
   );
 
-  // PostHog `welcome_modal_action` — event name reserved for a future Supademo / tour (no modal yet).
+  // PostHog `welcome_modal_action`  -  event name reserved for a future Supademo / tour (no modal yet).
 
   const dismissHint = async () => {
     setHintDismissedLocally(true);

@@ -89,7 +89,7 @@ function toReadableNiche(slug: string | null | undefined): string {
     .join(" ");
 }
 
-/** Strip @ for display; avoid placeholder "owner" if scraper left bad job.handle — fall back to first reel. */
+/** Strip @ for display; avoid placeholder "owner" if scraper left bad job.handle  -  fall back to first reel. */
 function stripAtHandle(h: string | undefined | null) {
   return (h ?? "").replace(/^@/, "").trim();
 }
@@ -220,7 +220,7 @@ export default function Dashboard() {
       const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
       if (stored === "list" || stored === "grid") return stored;
     } catch {
-      // localStorage can throw in private mode / sandboxed iframes —
+      // localStorage can throw in private mode / sandboxed iframes  - 
       // fall through to the default.
     }
     return "grid";
@@ -254,10 +254,10 @@ export default function Dashboard() {
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
   /**
-   * Commit 9 — (reelId, nonce) pair that tells the corresponding
+   * Commit 9  -  (reelId, nonce) pair that tells the corresponding
    * InlineWorkflow instance to scroll to its Re-create section and
    * pulse. We bump `nonce` on every "Make My Version" click so
-   * repeated clicks on the already-expanded row still fire the cue —
+   * repeated clicks on the already-expanded row still fire the cue  - 
    * this is the fix for "users click Re-Create and nothing appears
    * to happen". Nulling this out isn't required; stale values are
    * ignored once their reelId no longer matches.
@@ -476,7 +476,7 @@ export default function Dashboard() {
   const followerCount = isFeaturedView
     ? featuredData?.followerCount ?? 0
     : reelsQuery.data?.followerCount ?? 0;
-  /** Generalized "reels are loading" signal that works for both paths —
+  /** Generalized "reels are loading" signal that works for both paths  - 
    * used by the skeleton/progress bar UI. */
   const reelsLoading = isFeaturedView
     ? featuredDataQuery.isPending
@@ -990,7 +990,7 @@ export default function Dashboard() {
   });
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
 
-  /** Featured view NOT_FOUND / network error — short-circuit with a
+  /** Featured view NOT_FOUND / network error  -  short-circuit with a
    * dedicated page. Loading is handled by the main dashboard layout
    * below (skeletons render because the pseudo-job is `completed`). */
   if (isFeaturedView && featuredDataQuery.error) {
@@ -1863,7 +1863,7 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Actions — delegated to the shared ReelActionButtons
+                      {/* Actions  -  delegated to the shared ReelActionButtons
                           (Commit 5) so List + Grid call identical mutations. */}
                       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end">
                         <ReelActionButtons
@@ -1921,7 +1921,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Expanded inline workflow panel — same component now
+                    {/* Expanded inline workflow panel  -  same component now
                         serves both sources; Commit 3b teaches the inner
                         tRPC mutations about `featuredReelId`. */}
                     {isExpanded && (
@@ -1995,7 +1995,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Grid view — same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
+          {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -2050,7 +2050,7 @@ export default function Dashboard() {
                             {reel.engagementRate.toFixed(2)}%
                           </div>
                         )}
-                        {/* Bookmark overlay (spec #1) — always visible so
+                        {/* Bookmark overlay (spec #1)  -  always visible so
                             state is discoverable without hover. */}
                         <button
                           type="button"
@@ -2077,7 +2077,7 @@ export default function Dashboard() {
                             <Bookmark className="h-3.5 w-3.5" />
                           )}
                         </button>
-                        {/* External IG link (spec #4) — smaller icon, no
+                        {/* External IG link (spec #4)  -  smaller icon, no
                             label, moved to bottom-right so it doesn't
                             compete with the bookmark above. */}
                         <a

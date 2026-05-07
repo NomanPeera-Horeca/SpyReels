@@ -66,7 +66,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/research": "Spy on any public Instagram creator",
   "/collected": "Individual reels you've saved from past research",
   "/history":
-    "Creator Radar: live reel stats from each spy session—refresh pulls new posts since last sync (fresh window, not a full backfill).",
+    "Creator Radar: live reel stats from each spy session. Refresh pulls new posts since last sync (fresh window, not a full backfill).",
   "/scripts": "Your AI-generated scripts library",
   "/ideas": "Turn a rough idea into a viral-ready script",
   "/library":

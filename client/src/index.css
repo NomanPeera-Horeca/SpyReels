@@ -164,7 +164,7 @@
   }
 
   /*
-   * Commit 9 — Re-create flow pulse.
+   * Commit 9  -  Re-create flow pulse.
    * Applied to the "Make this viral hit YOURS" section ~50ms after a
    * user clicks the Make My Version action; JS removes the class
    * after 2s. Two fades keeps the cue visible without reading as
