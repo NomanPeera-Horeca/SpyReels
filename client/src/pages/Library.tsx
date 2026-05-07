@@ -3,9 +3,12 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Search, BookOpen, FileText, Copy, ExternalLink, Filter,
-  ChevronDown, Clock, User, Sparkles, Lightbulb, Globe,
+  ChevronDown, Sparkles, Lightbulb, Globe,
   BookmarkCheck, RefreshCw, ArrowRight, Library as LibraryIcon,
 } from "lucide-react";
 import { ShareScript } from "@/components/ShareScript";
@@ -22,11 +25,73 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
 type Tab = "transcripts" | "scripts";
+
+/** Split on blank lines; preserve single newlines inside each block */
+function ParagraphizePlainText({ text }: { text: string }) {
+  const trimmed = text.replace(/\r\n/g, "\n").trim();
+  if (!trimmed) {
+    return (
+      <p className="text-sm text-muted-foreground italic">No content</p>
+    );
+  }
+  let blocks = trimmed.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  if (blocks.length <= 1 && trimmed.includes("\n")) {
+    blocks = trimmed.split(/\n/).map((b) => b.trim()).filter(Boolean);
+  }
+  const paragraphs = blocks.length > 0 ? blocks : [trimmed];
+  return (
+    <div className="space-y-4">
+      {paragraphs.map((block, i) => (
+        <p
+          key={i}
+          className="text-[15px] sm:text-base leading-relaxed text-foreground/95 whitespace-pre-wrap break-words"
+        >
+          {block}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function previewScriptSourceLabel(source: string) {
+  switch (source) {
+    case "saved":
+      return "My Scripts";
+    case "recreated":
+      return "Re-created";
+    case "idea":
+      return "From idea";
+    default:
+      return source;
+  }
+}
+
+function HookAnalysisMarkdown({ markdown }: { markdown: string }) {
+  return (
+    <div
+      className={cn(
+        "prose prose-sm max-w-none rounded-xl border border-amber-500/25 bg-amber-500/[0.09] px-4 py-4",
+        "dark:prose-invert",
+        "[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
+        "[&_strong]:font-semibold [&_strong]:text-amber-950 dark:[&_strong]:text-amber-50",
+        "[&_ul]:my-2 [&_ol]:my-2 [&_li]:my-1",
+        "[&_li]:marker:text-amber-700 dark:[&_li]:marker:text-amber-400",
+        "[&_code]:rounded-md [&_code]:border [&_code]:border-amber-500/20 [&_code]:bg-background/80 [&_code]:px-1.5 [&_code]:py-px [&_code]:text-[0.85em]",
+        "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:mt-4 [&_h2]:mb-2 first:[&_h2]:mt-0",
+        "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1.5"
+      )}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown.trim()}</ReactMarkdown>
+    </div>
+  );
+}
 
 export default function Library() {
   const { user } = useAuth();
@@ -238,105 +303,133 @@ export default function Library() {
       )}
 
       {/* Preview Dialog */}
-      <Dialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {previewType === "transcript" ? (
-                <>
-                  <BookOpen className="w-5 h-5 text-blue-500" />
-                  Transcript
-                </>
-              ) : (
-                <>
-                  <FileText className="w-5 h-5 text-purple-500" />
-                  {previewItem?.title || "Script"}
-                </>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {previewItem && (
-            <div className="space-y-4">
-              {/* Meta info */}
-              <div className="flex flex-wrap gap-2">
-                {previewItem.sourceHandle && (
-                  <Badge variant="outline" className="gap-1">
-                    <User className="w-3 h-3" /> @{previewItem.sourceHandle}
-                  </Badge>
-                )}
-                <Badge variant="outline" className="gap-1">
-                  <Clock className="w-3 h-3" /> {formatDate(previewItem.createdAt)}
-                </Badge>
-                <Badge variant="secondary">
-                  {previewItem.source}
-                </Badge>
+      <Dialog open={!!previewItem} onOpenChange={(open) => !open && setPreviewItem(null)}>
+        <DialogContent
+          showCloseButton
+          className="flex max-h-[min(88vh,900px)] w-[min(56rem,calc(100vw-1.25rem))] max-w-none flex-col gap-0 overflow-hidden rounded-xl border-border/80 p-0 shadow-xl sm:rounded-xl"
+        >
+          {previewItem ? (
+            <>
+              <DialogHeader className="shrink-0 space-y-1.5 border-b border-border/60 px-5 py-4 pr-14 text-left sm:px-6">
+                <DialogTitle className="flex flex-wrap items-center gap-2.5 text-left text-xl font-semibold leading-tight tracking-tight">
+                  {previewType === "transcript" ? (
+                    <>
+                      <BookOpen className="h-5 w-5 shrink-0 text-blue-500" aria-hidden />
+                      Transcript preview
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-5 w-5 shrink-0 text-violet-500" aria-hidden />
+                      <span className="break-words">
+                        {previewItem.title || "Script preview"}
+                      </span>
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="text-left text-sm leading-relaxed">
+                  <span className="text-foreground">
+                    {previewItem.sourceHandle ? `@${previewItem.sourceHandle}` : ""}
+                    {previewItem.sourceHandle ? " · " : ""}
+                  </span>
+                  <span>{formatDate(previewItem.createdAt)}</span>
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {previewType === "transcript"
+                      ? transcriptKindLabel(String(previewItem.source))
+                      : previewScriptSourceLabel(String(previewItem.source))}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+                <div className="space-y-6">
+                  {previewType === "transcript" && previewItem.caption ? (
+                    <section className="space-y-2">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Instagram caption
+                      </h3>
+                      <div className="rounded-xl border border-border/60 bg-muted/35 px-4 py-3.5">
+                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                          {previewItem.caption}
+                        </p>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <section className="space-y-2">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {previewType === "transcript" ? "Full transcript" : "Script body"}
+                    </h3>
+                    <div className="rounded-xl border border-border/70 bg-card px-4 py-4 shadow-sm">
+                      {previewType === "transcript" ? (
+                        <ParagraphizePlainText text={String(previewItem.transcript ?? "")} />
+                      ) : (
+                        <ParagraphizePlainText text={String(previewItem.content ?? "")} />
+                      )}
+                    </div>
+                  </section>
+
+                  {previewType === "transcript" && previewItem.hookAnalysis ? (
+                    <section className="space-y-2">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-200/95">
+                        Hook analysis
+                      </h3>
+                      <HookAnalysisMarkdown markdown={String(previewItem.hookAnalysis)} />
+                    </section>
+                  ) : null}
+                </div>
               </div>
 
-              {/* Caption (transcripts) */}
-              {previewType === "transcript" && previewItem.caption && (
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1 font-medium">Caption</p>
-                  <p className="text-sm">{previewItem.caption}</p>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="p-4 bg-muted/30 rounded-lg border">
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
-                  {previewType === "transcript" ? previewItem.transcript : previewItem.content}
-                </pre>
-              </div>
-
-              {/* Hook Analysis (transcripts) */}
-              {previewType === "transcript" && previewItem.hookAnalysis && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-1 font-medium">Hook Analysis</p>
-                  <p className="text-sm">{previewItem.hookAnalysis}</p>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
+              <DialogFooter className="shrink-0 gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-2 sm:px-6">
                 <Button
                   size="sm"
                   onClick={() => {
-                    copyToClipboard(previewType === "transcript" ? previewItem.transcript : previewItem.content);
+                    copyToClipboard(
+                      previewType === "transcript"
+                        ? String(previewItem.transcript ?? "")
+                        : String(previewItem.content ?? "")
+                    );
                   }}
                   className="gap-2"
                 >
-                  <Copy className="w-4 h-4" /> Copy Full Text
+                  <Copy className="h-4 w-4" />
+                  Copy {previewType === "transcript" ? "transcript" : "script"}
                 </Button>
-                {previewItem.reelUrl && (
+                {previewItem.reelUrl ? (
                   <Button
                     size="sm"
                     variant="outline"
+                    className="gap-2 border-border/80"
                     onClick={() => window.open(previewItem.reelUrl, "_blank")}
-                    className="gap-2"
                   >
-                    <ExternalLink className="w-4 h-4" /> View Reel
+                    <ExternalLink className="h-4 w-4" /> View on Instagram
                   </Button>
-                )}
-                {previewType === "script" && previewItem.source === "saved" && (
+                ) : null}
+                {previewType === "script" && previewItem.source === "saved" ? (
                   <Button
                     size="sm"
                     variant="outline"
+                    className="gap-2 border-border/80"
                     onClick={() => {
                       window.location.href = `/scripts/${previewItem.id}`;
                     }}
-                    className="gap-2"
                   >
-                    <ArrowRight className="w-4 h-4" /> Open in Editor
+                    <ArrowRight className="h-4 w-4" /> Open in editor
                   </Button>
-                )}
+                ) : null}
                 <ShareScript
                   title={previewItem.title || previewItem.handle || "Script"}
-                  content={previewType === "transcript" ? previewItem.transcript : previewItem.content}
+                  content={
+                    previewType === "transcript"
+                      ? String(previewItem.transcript ?? "")
+                      : String(previewItem.content ?? "")
+                  }
                   variant="button"
                   size="sm"
                 />
-              </div>
-            </div>
-          )}
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
