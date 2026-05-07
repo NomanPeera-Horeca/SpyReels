@@ -1,4 +1,4 @@
-import { and, desc, asc, eq, gte, inArray, like, or, sql } from "drizzle-orm";
+import { and, desc, asc, eq, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -861,61 +861,38 @@ export async function getSavedFeaturedReelsWithDetails(
 > {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const saved = await db
-    .select()
+
+  const rows = await db
+    .select({
+      saved: savedReels,
+      featuredReel: featuredReels,
+      accId: featuredAccounts.id,
+      accHandle: featuredAccounts.handle,
+      accDisplay: featuredAccounts.displayName,
+      accFollowers: featuredAccounts.followerCount,
+      accPic: featuredAccounts.profilePicUrl,
+    })
     .from(savedReels)
-    .where(eq(savedReels.userId, userId))
+    .innerJoin(featuredReels, eq(savedReels.featuredReelId, featuredReels.id))
+    .innerJoin(featuredAccounts, eq(featuredReels.featuredAccountId, featuredAccounts.id))
+    .where(and(eq(savedReels.userId, userId), isNotNull(savedReels.featuredReelId)))
     .orderBy(desc(savedReels.createdAt));
 
-  const out: Array<
-    SavedReelFeatured & {
-      featuredReel: FeaturedReel;
-      featuredAccount: {
-        id: number;
-        handle: string;
-        displayName: string | null;
-        followerCount: number;
-        profilePicUrl: string | null;
-      };
-      transcription?: Transcription;
-    }
-  > = [];
-
-  for (const s of saved) {
-    if (s.featuredReelId == null) continue;
-    const [fr] = await db
-      .select()
-      .from(featuredReels)
-      .where(eq(featuredReels.id, s.featuredReelId))
-      .limit(1);
-    if (!fr) continue;
-    const [acc] = await db
-      .select({
-        id: featuredAccounts.id,
-        handle: featuredAccounts.handle,
-        displayName: featuredAccounts.displayName,
-        followerCount: featuredAccounts.followerCount,
-        profilePicUrl: featuredAccounts.profilePicUrl,
-      })
-      .from(featuredAccounts)
-      .where(eq(featuredAccounts.id, fr.featuredAccountId))
-      .limit(1);
-    if (!acc) continue;
-    // Featured transcripts live on `featured_reels` itself (Commit 4b).
-    // The helper synthesizes a `Transcription`-shaped view so callers
-    // don't have to branch on source.
-    const txn = await getTranscriptionByFeaturedReelId(fr.id);
-    out.push({
-      ...s,
-      reelId: null,
-      jobId: null,
-      featuredReelId: s.featuredReelId,
-      featuredReel: fr,
-      featuredAccount: acc,
-      transcription: txn,
-    });
-  }
-  return out;
+  return rows.map(({ saved, featuredReel: fr, accId, accHandle, accDisplay, accFollowers, accPic }) => ({
+    ...saved,
+    reelId: null,
+    jobId: null,
+    featuredReelId: saved.featuredReelId as number,
+    featuredReel: fr,
+    featuredAccount: {
+      id: accId,
+      handle: accHandle,
+      displayName: accDisplay,
+      followerCount: accFollowers,
+      profilePicUrl: accPic,
+    },
+    transcription: transcriptionViewFromFeaturedReelRow(fr),
+  }));
 }
 
 /**
@@ -934,28 +911,50 @@ type SavedReelScraped = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> &
 export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const saved = await db.select().from(savedReels).where(eq(savedReels.userId, userId)).orderBy(desc(savedReels.createdAt));
-  const results: Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> = [];
-  for (const s of saved) {
-    // Featured-catalog saves (featuredReelId populated) are surfaced via
-    // a separate helper added in Commit 3b; skip them here so this one
-    // keeps its "user scrape jobs only" contract and its return shape.
-    if (s.reelId == null || s.jobId == null) continue;
-    const reelRows = await db.select().from(reels).where(eq(reels.id, s.reelId)).limit(1);
-    const jobRows = await db.select().from(scrapeJobs).where(eq(scrapeJobs.id, s.jobId)).limit(1);
-    if (reelRows[0] && jobRows[0]) {
-      const tRows = await db.select().from(transcriptions).where(eq(transcriptions.reelId, s.reelId)).limit(1);
-      results.push({
-        ...s,
-        reelId: s.reelId,
-        jobId: s.jobId,
-        featuredReelId: null,
-        reel: reelRows[0],
-        job: jobRows[0],
-        transcription: tRows[0],
-      });
+
+  const joined = await db
+    .select({
+      saved: savedReels,
+      reel: reels,
+      job: scrapeJobs,
+    })
+    .from(savedReels)
+    .innerJoin(reels, eq(savedReels.reelId, reels.id))
+    .innerJoin(scrapeJobs, eq(savedReels.jobId, scrapeJobs.id))
+    .where(
+      and(eq(savedReels.userId, userId), isNotNull(savedReels.reelId), isNotNull(savedReels.jobId))
+    )
+    .orderBy(desc(savedReels.createdAt));
+
+  if (joined.length === 0) return [];
+
+  const reelIds = [...new Set(joined.map((row) => row.reel.id))];
+  const txByReelId = new Map<number, Transcription>();
+  for (let i = 0; i < reelIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = reelIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const txs = await db.select().from(transcriptions).where(inArray(transcriptions.reelId, chunk));
+    for (const t of txs) {
+      if (t.reelId == null) continue;
+      const prev = txByReelId.get(t.reelId);
+      if (!prev || t.id > prev.id) txByReelId.set(t.reelId, t);
     }
   }
+
+  const results: Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }> =
+    [];
+
+  for (const { saved: s, reel, job } of joined) {
+    results.push({
+      ...s,
+      reelId: s.reelId as number,
+      jobId: s.jobId as number,
+      featuredReelId: null,
+      reel,
+      job,
+      transcription: txByReelId.get(reel.id),
+    });
+  }
+
   return results;
 }
 

@@ -111,7 +111,11 @@ export default function SavedReels() {
   const utils = trpc.useUtils();
   const transcribeGate = useUsageGate("transcribeCount");
 
-  const savedQuery = trpc.saved.list.useQuery();
+  const savedQuery = trpc.saved.list.useQuery(undefined, {
+    /** Avoid refetch churn when switching sidebar tabs; invalidations still refresh after save/transcribe. */
+    staleTime: 45_000,
+    gcTime: 5 * 60_000,
+  });
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
 
@@ -498,8 +502,14 @@ export default function SavedReels() {
             Saved Reels
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {savedReels.length} reel{savedReels.length !== 1 ? "s" : ""} saved across{" "}
-            {Object.keys(groupedByHandle).length} account{Object.keys(groupedByHandle).length !== 1 ? "s" : ""}
+            {savedQuery.isLoading ? (
+              "Loading your saved reels…"
+            ) : (
+              <>
+                {savedReels.length} reel{savedReels.length !== 1 ? "s" : ""} saved across{" "}
+                {Object.keys(groupedByHandle).length} account{Object.keys(groupedByHandle).length !== 1 ? "s" : ""}
+              </>
+            )}
           </p>
         </div>
 

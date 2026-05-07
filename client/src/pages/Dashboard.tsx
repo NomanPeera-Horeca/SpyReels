@@ -983,7 +983,11 @@ export default function Dashboard() {
   const showOverview = !jobId && !featuredAccountId;
   const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: showOverview });
   const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: showOverview });
-  const savedListQuery = trpc.saved.list.useQuery(undefined, { enabled: showOverview });
+  const savedListQuery = trpc.saved.list.useQuery(undefined, {
+    enabled: showOverview,
+    staleTime: 45_000,
+    gcTime: 5 * 60_000,
+  });
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
 
   /** Featured view NOT_FOUND / network error — short-circuit with a
