@@ -4231,6 +4231,10 @@ The hook MUST be 7-10 words. Count them.`
         idea: z.string().min(3).max(2000),
         niche: z.string().max(128).optional(),
         tone: z.enum(["casual", "professional", "humorous", "educational", "engaging"]).optional().default("engaging"),
+        creatorGoal: z
+          .enum(["balanced", "growth_virality", "personal_brand", "education_authority", "warm_promo"])
+          .optional()
+          .default("balanced"),
         gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6"]).optional().default("auto"),
         inputMethod: z.enum(["text", "voice", "video"]).optional().default("text"),
         audioUrl: z.string().optional(),
@@ -4241,6 +4245,7 @@ The hook MUST be 7-10 words. Count them.`
           idea: input.idea,
           niche: input.niche || null,
           tone: input.tone,
+          creatorGoal: input.creatorGoal,
           gradeLevel: input.gradeLevel,
           inputMethod: input.inputMethod,
           audioUrl: input.audioUrl || null,
@@ -4366,6 +4371,10 @@ The hook MUST be 7-10 words. Count them.`
           niche: z.string().max(128).optional(),
         })).min(1).max(20),
         tone: z.enum(["casual", "professional", "humorous", "educational", "engaging"]).optional().default("engaging"),
+        creatorGoal: z
+          .enum(["balanced", "growth_virality", "personal_brand", "education_authority", "warm_promo"])
+          .optional()
+          .default("balanced"),
         gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6"]).optional().default("auto"),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4387,6 +4396,7 @@ The hook MUST be 7-10 words. Count them.`
             idea: item.idea,
             niche: item.niche || null,
             tone: input.tone,
+            creatorGoal: input.creatorGoal,
             gradeLevel: input.gradeLevel,
           });
           results.push({ id: ideaId, idea: item.idea });
@@ -5830,6 +5840,160 @@ Return ONLY valid JSON.`;
 }
 
 
+/** Passing score (1–10) keeps the drafted script without another LLM regeneration pass. */
+const IDEA_SCRIPT_JUDGE_PASS_SCORE = 7;
+/** Attempts after the first draft when the judge score is below {@link IDEA_SCRIPT_JUDGE_PASS_SCORE}. */
+const IDEA_SCRIPT_JUDGE_MAX_EXTRA_DRAFTS = 2;
+
+function ideaCreatorGoalDirectives(goal: string | null | undefined): string {
+  const g = (goal || "balanced").trim();
+  switch (g) {
+    case "growth_virality":
+      return `Creator goal — MAXIMUM DISCOVERY / REPLAY: Prioritize curiosity gaps, punchy openings, tighter pacing, novelty or a sharp (honest) contrarian angle. Hooks may be bold if not misleading.`;
+    case "personal_brand":
+      return `Creator goal — PERSONAL BRAND & CONTENT CALENDAR: One consistent human voice in first person. Favor specific lived details, credibility, and repeatable “pillar” angles people can expect from this creator week to week. Trust and authenticity beat empty shock; never sound like a generic AI hype template.`;
+    case "education_authority":
+      return `Creator goal — TEACH & BUILD AUTHORITY: Clear arc (promise → simple framework → 1–3 concrete steps → memorable takeaway). Still needs a scroll-stopping hook in the first 3 seconds. Plain language; minimal jargon; invite saves or screenshots when natural.`;
+    case "warm_promo":
+      return `Creator goal — SOFT PROMOTION: Teach-first — deliver real value before any ask. Weave offer, booking, or list sign-up as a natural escalation, not an infomercial pile-on.`;
+    default:
+      return `Creator goal — BALANCED REEL: Strong hook in the first 3 seconds, ONE memorable payoff, conversational contractions, rhythmic pacing with micro-beats every ~10–14 seconds, CTA matched to the topic. No fake stats or filler “bro science.”`;
+  }
+}
+
+async function invokeIdeaScriptJudge(opts: {
+  ideaText: string;
+  nicheContext: string;
+  creatorGoalBrief: string;
+  toneContext: string;
+  scriptDraft: string;
+  viralStructure: Record<string, unknown>;
+}): Promise<{
+  overallScore: number;
+  hookEffectiveness: number;
+  pacingRetention: number;
+  goalAlignment: number;
+  verdictPass: boolean;
+  criticalIssues: string[];
+  rewriteDirectives: string;
+}> {
+  const safeFallback = () => ({
+    overallScore: 8,
+    hookEffectiveness: 8,
+    pacingRetention: 8,
+    goalAlignment: 8,
+    verdictPass: true,
+    criticalIssues: [] as string[],
+    rewriteDirectives: "",
+  });
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `You are a ruthless but fair Instagram Reels script judge. You evaluate SPOKEN drafts (not essays) for mobile viewing.
+
+Score each dimension 1–10 using short-form best practices:
+- Hook: pattern interrupt or curiosity gap in the first sentence; no sleepy setup.
+- Pacing / retention: idea density every ~12s of speech; avoids monologue walls; payoff stays on-theme.
+- Goal fit: aligns with the stated creator objective (growth vs trust vs teaching vs gentle promo).
+
+Overall score = holistic blend (not pure average).
+
+Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS_SCORE} AND the draft is legitimately worthy of filming without another rewrite.`,
+        },
+        {
+          role: "user",
+          content: `CREATOR INTENT:\n${opts.creatorGoalBrief}\n\nTone: ${opts.toneContext}\nTopic niche context: ${opts.nicheContext || "(none)"}\n\nSOURCE IDEA:\n"${opts.ideaText}"\n\nPLANNED STRUCTURE (JSON):\n${JSON.stringify(opts.viralStructure, null, 2)}\n\nDRAFT SCRIPT:\n<<<${opts.scriptDraft}>>>\n`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "idea_script_judge",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              overallScore: { type: "number", description: "1-10 holistic quality" },
+              hookEffectiveness: { type: "number", description: "1-10" },
+              pacingRetention: { type: "number", description: "1-10" },
+              goalAlignment: { type: "number", description: "1-10" },
+              verdict: {
+                type: "string",
+                enum: ["pass", "revise"],
+                description: "pass only if filming-ready without rewrite",
+              },
+              criticalIssues: {
+                type: "array",
+                items: { type: "string" },
+                description: "up to 5 concrete problems",
+              },
+              rewriteDirectives: {
+                type: "string",
+                description: "Single tight paragraph ordering the rewriter what to fix",
+              },
+            },
+            required: [
+              "overallScore",
+              "hookEffectiveness",
+              "pacingRetention",
+              "goalAlignment",
+              "verdict",
+              "criticalIssues",
+              "rewriteDirectives",
+            ],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const raw = response.choices?.[0]?.message?.content;
+    if (!raw) return safeFallback();
+    const cleaned = String(raw).replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned) as {
+      overallScore: number;
+      hookEffectiveness?: number;
+      pacingRetention?: number;
+      goalAlignment?: number;
+      verdict?: string;
+      criticalIssues?: string[];
+      rewriteDirectives?: string;
+    };
+
+    const overallScore = Math.min(10, Math.max(1, Math.round(Number(parsed.overallScore) || 5)));
+    const hookEffectiveness = Math.min(
+      10,
+      Math.max(1, Math.round(Number(parsed.hookEffectiveness) || overallScore))
+    );
+    const pacingRetention = Math.min(
+      10,
+      Math.max(1, Math.round(Number(parsed.pacingRetention) || overallScore))
+    );
+    const goalAlignment = Math.min(
+      10,
+      Math.max(1, Math.round(Number(parsed.goalAlignment) || overallScore))
+    );
+
+    const verdictPass = overallScore >= IDEA_SCRIPT_JUDGE_PASS_SCORE;
+
+    return {
+      overallScore,
+      hookEffectiveness,
+      pacingRetention,
+      goalAlignment,
+      verdictPass,
+      criticalIssues: (parsed.criticalIssues || []).slice(0, 5),
+      rewriteDirectives: (parsed.rewriteDirectives || "").trim(),
+    };
+  } catch (e) {
+    console.warn("[Ideas] Script judge parse/LLM issue — accepting draft:", e);
+    return safeFallback();
+  }
+}
+
 /**
  * Background processor for Idea-to-Script.
  * Generates a full reel script from a user's topic idea using AI.
@@ -5845,24 +6009,37 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       return;
     }
 
-    const nicheContext = idea.niche ? ` in the ${idea.niche} niche` : "";
-    const toneContext = idea.tone || "engaging";
-    const gradeLevelInstruction = idea.gradeLevel === "auto"
+    const scriptIdea = idea;
+
+    const nicheContext = scriptIdea.niche ? ` in the ${scriptIdea.niche} niche` : "";
+    const toneContext = scriptIdea.tone || "engaging";
+    const goalBrief = ideaCreatorGoalDirectives(scriptIdea.creatorGoal);
+    const gradeLevelInstruction = scriptIdea.gradeLevel === "auto"
       ? "Choose the most appropriate reading level for the audience."
-      : `Write at a Grade ${idea.gradeLevel} reading level.`;
+      : `Write at a Grade ${scriptIdea.gradeLevel} reading level.`;
+
+    const writerRules = `Follow Instagram Reels script rules:
+- Spoken monologue only — short paragraphs (1–2 sentences) for breath pauses.
+- No labels, bullets, scene directions, or “[music]” unless the creator would literally say it.
+- Start with the hook line immediately (no “Hey guys” meta intro).
+- 150–300 spoken words (roughly 30–60s). One clear takeaway.
+- ${goalBrief}`;
 
     // Step 1: Generate a viral structure for the idea
     const structureResponse = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: "You are a viral Instagram Reels content strategist. Always respond with valid JSON only.",
+          content:
+            "You are a senior short-form script architect. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew.",
         },
         {
           role: "user",
-          content: `Create a viral Reel structure for this topic${nicheContext}: "${idea.idea}"
+          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"
 
 The tone should be ${toneContext}.
+
+${goalBrief}
 
 Return JSON with:
 - hook: { type (question/statistic/bold_claim/story/controversy), text (the actual hook line), technique (why it works) }
@@ -5938,36 +6115,82 @@ Return JSON with:
       viralStructure = { error: "Failed to parse structure" };
     }
 
-    const suggestedTitle = viralStructure.suggestedTitle || `Script: ${idea.idea.substring(0, 60)}`;
+    const suggestedTitle = viralStructure.suggestedTitle || `Script: ${scriptIdea.idea.substring(0, 60)}`;
 
-    // Step 2: Generate the full script based on the structure
-    const scriptResponse = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert Instagram Reels scriptwriter who creates viral, engaging scripts. Write scripts as spoken text — short paragraphs for natural pauses. No labels, no headers, no stage directions. Just the words the creator will say on camera.`,
-        },
-        {
-          role: "user",
-          content: `Write a complete Instagram Reel script for this topic${nicheContext}: "${idea.idea}"
+    const goalLine = goalBrief;
 
-Use this viral structure:
-${JSON.stringify(viralStructure, null, 2)}
+    async function draftScript(refinementBrief: string | null): Promise<string> {
+      const refineBlock = refinementBrief
+        ? `\n\nREVISION BRIEF (you previously missed the mark):\n${refinementBrief}\nRewrite from scratch — new wording, tighter hook, sharper pacing.\n`
+        : "";
 
-Requirements:
-- Tone: ${toneContext}
-- ${gradeLevelInstruction}
-- Start with the hook immediately — no intro
-- Keep it between 150-300 words (30-60 second reel)
-- Use short paragraphs (1-2 sentences each) for natural speaking pauses
-- End with a strong CTA
-- Write as spoken text only — no labels, headers, or stage directions
-- Make it feel natural and conversational, not scripted`,
-        },
-      ],
-    });
+      const scriptResponse = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content:
+              `You are an elite Instagram Reels scriptwriter focused on filmed talking-head delivery.\n\n${writerRules}`,
+          },
+          {
+            role: "user",
+            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150–300 spoken words.${refineBlock}\n\n${goalLine}`,
+          },
+        ],
+      });
+      return String(scriptResponse.choices[0]?.message?.content || "").trim();
+    }
 
-    const generatedScript = String(scriptResponse.choices[0].message.content || "");
+    let generatedScript = await draftScript(null);
+
+    const judgeAttempts: Record<string, unknown>[] = [];
+
+    const judgeOnce = async (draft: string, label: string) => {
+      const verdict = await invokeIdeaScriptJudge({
+        ideaText: scriptIdea.idea,
+        nicheContext: scriptIdea.niche || "",
+        creatorGoalBrief: goalBrief,
+        toneContext,
+        scriptDraft: draft,
+        viralStructure,
+      });
+      judgeAttempts.push({
+        phase: label,
+        overallScore: verdict.overallScore,
+        hookEffectiveness: verdict.hookEffectiveness,
+        pacingRetention: verdict.pacingRetention,
+        goalAlignment: verdict.goalAlignment,
+        verdictPass: verdict.verdictPass,
+        criticalIssues: verdict.criticalIssues,
+      });
+      return verdict;
+    };
+
+    let verdict = await judgeOnce(generatedScript, "initial");
+
+    let pass = verdict.verdictPass;
+    let regenCount = 0;
+    while (!pass && regenCount < IDEA_SCRIPT_JUDGE_MAX_EXTRA_DRAFTS) {
+      const issuesBullets =
+        verdict.criticalIssues.length > 0
+          ? verdict.criticalIssues.map((line, idx) => `${idx + 1}. ${line}`).join("\n")
+          : "(none listed)";
+      const refinement = `${verdict.rewriteDirectives.trim()}\n\nConcrete issues detected:\n${issuesBullets}`.trim();
+
+      generatedScript = await draftScript(refinement || verdict.rewriteDirectives);
+      verdict = await judgeOnce(generatedScript, `rewrite_${regenCount + 1}`);
+      pass = verdict.verdictPass;
+      regenCount += 1;
+    }
+
+    if (!generatedScript.trim()) {
+      throw new Error("Generated script empty after refinement");
+    }
+
+    viralStructure.ideaScriptJudge = {
+      attempts: judgeAttempts,
+      finalOverallScore: verdict.overallScore,
+      finalDecision: pass ? "pass" : "accepted_after_max_attempts",
+    };
 
     // Update the idea with the generated content
     await updateScriptIdea(ideaId, {
@@ -5977,7 +6200,9 @@ Requirements:
       status: "completed",
     } as any);
 
-    console.log(`[Ideas] Successfully generated script for idea ${ideaId}: "${suggestedTitle}"`);
+    console.log(
+      `[Ideas] Successfully generated script for idea ${ideaId}: "${suggestedTitle}" (judge final ${verdict.overallScore}/10, pass=${pass}, regens=${regenCount})`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[Ideas] Failed to process idea ${ideaId}:`, message);
@@ -6000,31 +6225,31 @@ async function validateIdeaInBackground(ideaId: number) {
     const idea = await getScriptIdeaById(ideaId);
     if (!idea) throw new Error("Idea not found");
 
+    const goalBrief = ideaCreatorGoalDirectives(idea.creatorGoal);
+
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: `You are a viral Instagram Reels content strategist. Your job is to evaluate content ideas and suggest improvements to maximize viral potential.
+          content: `You are a senior Instagram Reels producer. You review raw ideas BEFORE scripting.
 
-Evaluate the idea on these criteria:
-1. Clarity - Is the idea specific enough to create a script from?
-2. Hook potential - Can this grab attention in the first 1-2 seconds?
-3. Relatability - Will the target audience connect with this?
-4. Shareability - Would people share this with friends?
-5. Trend alignment - Does it align with current social media trends?
+${goalBrief}
 
-Provide:
-- A viral score from 1-10
-- A brief reasoning (2-3 sentences) explaining the score
-- An improved/refined version of the idea that would perform better
-- Keep the improved version concise (1-2 sentences max)
+Score the IDEA (not a script yet) on:
+1. Clarity — specific audience + promise; enough detail to write a teleprompter-ready monologue.
+2. Hook potential — can the first spoken line create a curiosity gap or tension?
+3. Emotional pull — relatability, stakes, or aspiration (pick what fits the creator goal).
+4. Payoff — is there one obvious insight, story turn, or takeaway?
+5. Shelf life / calendar fit — can this become repeat-friendly content (series, pillar) when the goal is branding or education?
 
-If the idea is already great (8+), the suggestion can be similar to the original with minor tweaks.`
+Return a 1–10 "viralScore" that reflects potential IF executed well (not a promise of views). Suggest a tighter improvedIdea (max 2 sentences) the user can approve.
+
+If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.`,
         },
         {
           role: "user",
-          content: `Evaluate this Instagram Reel idea:\n\n"${idea.idea}"${idea.niche ? `\n\nNiche/Category: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone: ${idea.tone}` : ""}`
-        }
+          content: `Reel idea draft:\n"${idea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}`,
+        },
       ],
       response_format: {
         type: "json_schema",

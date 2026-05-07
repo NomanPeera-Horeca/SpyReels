@@ -445,6 +445,8 @@ export const scriptIdeas = mysqlTable("script_ideas", {
   idea: text("idea").notNull(), // The topic/idea text submitted by the user
   niche: varchar("niche", { length: 128 }), // Optional niche/category hint
   tone: varchar("tone", { length: 64 }).default("engaging"), // casual, professional, humorous, educational, engaging
+  /** Idea-to-Script: balanced | growth | personal_brand | education_authority | warm_promo */
+  creatorGoal: varchar("creatorGoal", { length: 32 }),
   gradeLevel: varchar("gradeLevel", { length: 16 }).default("auto"), // reading level
   generatedScript: text("generatedScript"), // The AI-generated script
   generatedTitle: varchar("generatedTitle", { length: 256 }), // AI-generated title for the script

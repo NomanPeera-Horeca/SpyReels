@@ -6,7 +6,7 @@ import {
   Lightbulb, Send, Loader2, CheckCircle2, XCircle, Clock,
   Trash2, RotateCcw, FileText, Plus, ChevronDown, Zap,
   Mic, MicOff, Square, Sparkles, ThumbsUp, ThumbsDown, Pencil,
-  AlertTriangle, Star
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +33,14 @@ const GRADE_OPTIONS = [
   { value: "6", label: "Grade 6 (Complex)" },
 ];
 
+const CREATOR_GOALS = [
+  { value: "balanced", label: "Balanced", hint: "Hook + trust mix" },
+  { value: "growth_virality", label: "Max reach", hint: "Discovery-first" },
+  { value: "personal_brand", label: "Personal brand", hint: "Calendar & voice" },
+  { value: "education_authority", label: "Teach / authority", hint: "Saves & clarity" },
+  { value: "warm_promo", label: "Soft promo", hint: "Value then offer" },
+] as const;
+
 type IdeaStatus = "queued" | "validating" | "awaiting_approval" | "processing" | "completed" | "failed";
 
 const STATUS_CONFIG: Record<IdeaStatus, { icon: typeof Clock; color: string; label: string; bg: string }> = {
@@ -44,15 +52,62 @@ const STATUS_CONFIG: Record<IdeaStatus, { icon: typeof Clock; color: string; lab
   failed: { icon: XCircle, color: "text-red-400", label: "Failed", bg: "bg-red-400/10" },
 };
 
-function ViralScoreBadge({ score }: { score: number }) {
-  const color = score >= 8 ? "text-green-400 border-green-400/30 bg-green-400/10"
-    : score >= 5 ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
-    : "text-red-400 border-red-400/30 bg-red-400/10";
+function IdeaScoreBadge({ score }: { score: number }) {
+  const color =
+    score >= 8 ? "text-sky-300 border-sky-400/30 bg-sky-400/10"
+      : score >= 5 ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
+      : "text-red-400 border-red-400/30 bg-red-400/10";
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${color}`}>
-      <Star className="h-3 w-3 fill-current" /> {score}/10
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color}`} title="AI score for your raw idea (before scripting)">
+      Idea {score}/10
     </span>
   );
+}
+
+function ScriptJudgeBadge(props: {
+  score: number;
+  decision?: string | null;
+  attempts?: number;
+}) {
+  const { score, decision, attempts } = props;
+  const color =
+    score >= 8 ? "text-emerald-300 border-emerald-400/30 bg-emerald-400/10"
+      : score >= 7 ? "text-green-400/90 border-green-400/25 bg-green-400/10"
+      : score >= 5 ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
+      : "text-orange-300 border-orange-400/35 bg-orange-400/10";
+  const flagged = decision === "accepted_after_max_attempts";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color}`}
+      title={
+        flagged
+          ? "Script judge kept the final pass after retries — review manually if needed."
+          : "Automated QC score on the drafted script."
+      }
+    >
+      Script {score}/10{attempts && attempts > 1 ? ` · ${attempts} passes` : ""}{flagged ? " · review" : ""}
+    </span>
+  );
+}
+
+function viralStructureJudge(idea: { viralStructure?: unknown }): {
+  finalScore: number | null;
+  attempts: number;
+  decision?: string | null;
+} {
+  const vs = idea.viralStructure as Record<string, unknown> | null | undefined;
+  const jq = vs?.ideaScriptJudge as Record<string, unknown> | undefined;
+  if (!jq) return { finalScore: null, attempts: 0 };
+  const att = jq.attempts;
+  const n = Array.isArray(att) ? att.length : 0;
+  const raw = jq.finalOverallScore;
+  const finalScore =
+    typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseFloat(raw) : null;
+  return {
+    finalScore: Number.isFinite(finalScore) ? finalScore : null,
+    attempts: n || 1,
+    decision: typeof jq.finalDecision === "string" ? jq.finalDecision : null,
+  };
 }
 
 export default function IdeaToScript() {
@@ -61,6 +116,7 @@ export default function IdeaToScript() {
 
   const [ideaText, setIdeaText] = useState("");
   const [niche, setNiche] = useState("");
+  const [creatorGoal, setCreatorGoal] = useState<string>("balanced");
   const [tone, setTone] = useState("engaging");
   const [gradeLevel, setGradeLevel] = useState("auto");
   const [showSettings, setShowSettings] = useState(false);
@@ -229,6 +285,7 @@ export default function IdeaToScript() {
       idea: ideaText.trim(),
       niche: niche.trim() || undefined,
       tone: tone as any,
+      creatorGoal: creatorGoal as any,
       gradeLevel: gradeLevel as any,
       inputMethod: "text",
     });
@@ -271,7 +328,9 @@ export default function IdeaToScript() {
           <h1 className="text-2xl font-bold">Idea to Script</h1>
         </div>
         <p className="text-muted-foreground">
-          Type or speak your ideas. AI validates them first, then generates scripts once you approve.
+          Type or speak a rough idea. We score the idea, refine it with you, draft a script tuned to your goal (calendar
+          posts, personal brand, teaching, or viral reach), then run an automatic quality check—low scores kick off a smarter
+          rewrite before you save.
         </p>
       </div>
 
@@ -364,7 +423,7 @@ export default function IdeaToScript() {
 
           {/* Collapsible Settings */}
           {showSettings && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-border/30">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-border/30">
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground font-medium">Niche (optional)</label>
                 <input
@@ -374,6 +433,20 @@ export default function IdeaToScript() {
                   placeholder="e.g., Fitness, Tech, Finance"
                   className="w-full px-3 py-2 text-sm rounded-md border border-border/50 bg-background/50 focus:outline-none focus:border-violet-500/50"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground font-medium">Creator goal</label>
+                <Select value={creatorGoal} onValueChange={setCreatorGoal}>
+                  <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CREATOR_GOALS.map((g) => (
+                      <SelectItem key={g.value} value={g.value}>
+                        <span className="font-medium">{g.label}</span>
+                        <span className="text-muted-foreground text-xs"> — {g.hint}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground font-medium">Tone</label>
@@ -455,7 +528,8 @@ export default function IdeaToScript() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Your Script Factory is Empty</h3>
               <p className="text-muted-foreground max-w-md">
-                Drop your first idea above. Type it or speak it. AI will review it, then generate a ready-to-film script once you approve.
+                Drop your first idea above. We score the concept, help you tighten it, draft for your chosen creator goal,
+                and auto-rewrite weak scripts before they land here.
               </p>
             </CardContent>
           </Card>
@@ -495,9 +569,26 @@ export default function IdeaToScript() {
                             {idea.idea}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {(idea as any).viralScore && (
-                            <ViralScoreBadge score={(idea as any).viralScore} />
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                          {(idea as any).viralScore != null && idea.status !== "completed" && (
+                            <IdeaScoreBadge score={Number((idea as any).viralScore)} />
+                          )}
+                          {idea.status === "completed" && (
+                            <>
+                              {(idea as any).viralScore != null && (
+                                <IdeaScoreBadge score={Number((idea as any).viralScore)} />
+                              )}
+                              {(() => {
+                                const jq = viralStructureJudge(idea as any);
+                                return jq.finalScore != null ? (
+                                  <ScriptJudgeBadge
+                                    score={jq.finalScore}
+                                    decision={jq.decision}
+                                    attempts={jq.attempts}
+                                  />
+                                ) : null;
+                              })()}
+                            </>
                           )}
                           <Badge variant="outline" className={`text-[10px] ${statusConfig.color} border-current/20`}>
                             {statusConfig.label}
@@ -512,6 +603,15 @@ export default function IdeaToScript() {
                             <Mic className="h-2.5 w-2.5" /> Voice
                           </Badge>
                         )}
+                        {(() => {
+                          const g = (idea as any).creatorGoal as string | undefined;
+                          const gl = g ? CREATOR_GOALS.find((x) => x.value === g) : null;
+                          return gl && g !== "balanced" ? (
+                            <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-200">
+                              Goal: {gl.label}
+                            </Badge>
+                          ) : null;
+                        })()}
                         {idea.niche && <Badge variant="secondary" className="text-[10px]">{idea.niche}</Badge>}
                         {idea.tone && idea.tone !== "engaging" && (
                           <Badge variant="secondary" className="text-[10px]">
