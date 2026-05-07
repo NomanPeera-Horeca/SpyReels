@@ -40,6 +40,9 @@ import {
   List,
   X,
   Sparkles,
+  Radar,
+  BookOpen,
+  Lightbulb,
 } from "lucide-react";
 import {
   InlineWorkflow,
@@ -56,7 +59,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { normalizeAnalyticsHandle } from "@/lib/utils";
+import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
 
@@ -1032,6 +1035,19 @@ export default function Dashboard() {
      * so new users see honest zeros and a proper empty state.
      */
     const jobs = allJobs.filter(j => !j.isDemo);
+    const isLoading = jobsListQuery.isLoading;
+    /** Most recently touched session: prefer in-progress scrape, then last completed or failed work. */
+    let lastInteractiveJob: (typeof jobs)[number] | null = null;
+    if (jobs.length > 0 && !isLoading) {
+      const byUpdated = [...jobs].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      lastInteractiveJob =
+        byUpdated.find((j) => j.status === "running") ??
+        byUpdated.find((j) => j.status === "completed") ??
+        byUpdated.find((j) => j.status === "failed") ??
+        null;
+    }
     const completedJobs = jobs.filter(j => j.status === "completed");
     const totalReelsScraped = completedJobs.reduce((sum, j) => sum + (j.totalReels || 0), 0);
     const hour = new Date().getHours();
@@ -1039,236 +1055,493 @@ export default function Dashboard() {
     const firstName = user?.name?.split(" ")[0] || "there";
     const timeSavedMinutes = totalReelsScraped * 5;
     const timeSavedHours = (timeSavedMinutes / 60).toFixed(1);
-    const isLoading = jobsListQuery.isLoading;
-
     return (
-      <div className="max-w-5xl mx-auto px-2 sm:px-0">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{greeting}, {firstName} 👋</h1>
-          <p className="text-sm text-muted-foreground mt-1">Here is what SpyReels has done for you so far.</p>
-        </div>
+      <div className="max-w-5xl mx-auto space-y-8 px-2 sm:px-0 pb-10">
+        {/* Hero: orientation + primary actions (reduces "what now?" churn) */}
+        <section className="relative overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-violet-950/40 via-card to-cyan-950/20 p-6 sm:p-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-28 -left-20 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-3 max-w-xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-400" aria-hidden />
+                Your workspace
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                {greeting}, {firstName} 👋
+              </h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Start a spy session to see what is working in your niche, or open Creator Radar to revisit creators you
+                already track.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center shrink-0">
+              <Button
+                size="lg"
+                className="gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-900/20 hover:opacity-95"
+                onClick={() => {
+                  posthog?.capture("dashboard_hero_cta", { action: "spy_creator" });
+                  setLocation("/research");
+                }}
+              >
+                <Search className="h-4 w-4" aria-hidden />
+                Spy a creator
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="gap-2 border-border/60 bg-background/50 backdrop-blur-sm"
+                onClick={() => {
+                  posthog?.capture("dashboard_hero_cta", { action: "creator_radar" });
+                  setLocation("/history");
+                }}
+              >
+                <Radar className="h-4 w-4" aria-hidden />
+                Creator Radar
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative mt-6 border-t border-white/10 pt-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                {isLoading ? (
+                  <div className="h-14 max-w-md animate-pulse rounded-xl bg-black/15" />
+                ) : lastInteractiveJob ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {lastInteractiveJob.status === "running"
+                          ? "Scrape in progress"
+                          : lastInteractiveJob.status === "failed"
+                            ? "Last session needs attention"
+                            : "Resume your last session"}
+                      </p>
+                      <p className="mt-1 font-medium text-foreground">
+                        @{lastInteractiveJob.handle}
+                        {lastInteractiveJob.status === "completed" ? (
+                          <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">
+                            · {lastInteractiveJob.totalReels ?? 0} reels
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="shrink-0 gap-2 border border-border/60 bg-background/80 shadow-sm backdrop-blur-sm"
+                      onClick={() => {
+                        posthog?.capture("dashboard_resume_session", {
+                          jobId: lastInteractiveJob.id,
+                          status: lastInteractiveJob.status,
+                        });
+                        if (lastInteractiveJob.status === "running") {
+                          setLocation(`/scraping?jobId=${lastInteractiveJob.id}`);
+                        } else {
+                          setLocation(`/dashboard?jobId=${lastInteractiveJob.id}&from=dashboard`);
+                        }
+                      }}
+                    >
+                      {lastInteractiveJob.status === "running" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          Continue scraping
+                        </>
+                      ) : lastInteractiveJob.status === "failed" ? (
+                        <>View & retry</>
+                      ) : (
+                        <>Open reels</>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+                    Transcripts and scripts you create show up in{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() => {
+                        posthog?.capture("dashboard_empty_state_library_link");
+                        setLocation("/library");
+                      }}
+                    >
+                      Library
+                    </button>
+                    . Start with Spy a creator when you are ready.
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2 border-t border-white/5 pt-4 sm:justify-start lg:border-0 lg:pt-0 lg:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-border/50 bg-background/40"
+                  onClick={() => {
+                    posthog?.capture("dashboard_hero_shortcut", { to: "library" });
+                    setLocation("/library");
+                  }}
+                >
+                  <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                  Library
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-border/50 bg-background/40"
+                  onClick={() => {
+                    posthog?.capture("dashboard_hero_shortcut", { to: "ideas" });
+                    setLocation("/ideas");
+                  }}
+                >
+                  <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+                  Idea to Script
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {totalReelsScraped > 0 && (
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-6 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-              <Clock className="h-5 w-5 text-primary" />
+          <div className="flex items-start gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+              <Clock className="h-5 w-5" aria-hidden />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">You have saved approximately {timeSavedHours} hours of manual research</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Based on {totalReelsScraped} reels researched at 5 mins per reel manually</p>
+            <div className="min-w-0 pt-0.5">
+              <p className="text-sm font-semibold text-foreground">
+                You have saved about{" "}
+                <span className="tabular-nums text-emerald-600 dark:text-emerald-400">{timeSavedHours}</span> hours of
+                manual research
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Based on{" "}
+                <span className="font-medium text-foreground tabular-nums">{formatNumber(totalReelsScraped)}</span> reels
+                researched (about 5 minutes per reel if you did it by hand).
+              </p>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="bg-card border border-border/40 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
-                <Film className="h-4 w-4 text-primary" />
+        <section aria-labelledby="dash-stats-heading">
+          <h2 id="dash-stats-heading" className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            At a glance
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setLocation("/history")}
+              className={cn(
+                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "hover:border-primary/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              )}
+            >
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/12">
+                <Film className="h-4 w-4 text-primary" aria-hidden />
               </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{isLoading ? "..." : totalReelsScraped}</p>
-            <p className="text-xs text-muted-foreground">Reels Researched</p>
-          </div>
-          <div className="bg-card border border-border/40 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-8 w-8 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                <PenLine className="h-4 w-4 text-emerald-500" />
+              {isLoading ? (
+                <div className="mb-2 h-8 w-16 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{formatNumber(totalReelsScraped)}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Reels researched</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation("/scripts")}
+              className={cn(
+                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "hover:border-emerald-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+              )}
+            >
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/12">
+                <PenLine className="h-4 w-4 text-emerald-500" aria-hidden />
               </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{isLoading ? "..." : scripts.length}</p>
-            <p className="text-xs text-muted-foreground">Scripts Created</p>
-          </div>
-          <div className="bg-card border border-border/40 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-8 w-8 rounded-md bg-amber-500/10 flex items-center justify-center">
-                <Bookmark className="h-4 w-4 text-amber-500" />
+              {jobsListQuery.isLoading || scriptsListQuery.isLoading ? (
+                <div className="mb-2 h-8 w-12 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{scripts.length}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Scripts created</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation("/saved")}
+              className={cn(
+                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "hover:border-amber-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
+              )}
+            >
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/12">
+                <Bookmark className="h-4 w-4 text-amber-500" aria-hidden />
               </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{isLoading ? "..." : savedReels.length}</p>
-            <p className="text-xs text-muted-foreground">Saved Reels</p>
-          </div>
-          <div className="bg-card border border-border/40 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-8 w-8 rounded-md bg-violet-500/10 flex items-center justify-center">
-                <Inbox className="h-4 w-4 text-violet-500" />
+              {jobsListQuery.isLoading || savedListQuery.isLoading ? (
+                <div className="mb-2 h-8 w-10 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{savedReels.length}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Saved reels</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation("/collected")}
+              className={cn(
+                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "hover:border-violet-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
+              )}
+            >
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/12">
+                <Inbox className="h-4 w-4 text-violet-500" aria-hidden />
               </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{isLoading ? "..." : collectedReels.length}</p>
-            <p className="text-xs text-muted-foreground">Collected Reels</p>
+              {jobsListQuery.isLoading || collectedListQuery.isLoading ? (
+                <div className="mb-2 h-8 w-8 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{collectedReels.length}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Collected reels</p>
+            </button>
           </div>
-        </div>
+        </section>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <button
-            onClick={() => setLocation("/")}
-            className="bg-card border border-border/40 rounded-lg p-4 text-left hover:bg-accent/50 transition-colors group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground text-sm">Spy Viral Reels</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Spy on any public Instagram creator</p>
+        <section aria-labelledby="dash-shortcuts-heading">
+          <h2 id="dash-shortcuts-heading" className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Shortcuts
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => {
+                posthog?.capture("dashboard_shortcut_tile", { to: "research" });
+                setLocation("/research");
+              }}
+              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-accent/25 hover:shadow-md hover:shadow-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-500/15">
+                  <Search className="h-5 w-5 text-violet-400" aria-hidden />
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-          </button>
-          <button
-            onClick={() => setLocation("/search")}
-            className="bg-card border border-border/40 rounded-lg p-4 text-left hover:bg-accent/50 transition-colors group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground text-sm">Search Reels</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Find viral reels by keyword or URL</p>
+              <p className="mt-3 font-semibold text-foreground">Spy Viral Reels</p>
+              <p className="mt-1 text-sm text-muted-foreground">Paste a handle and pull ranked reels for any public account.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                posthog?.capture("dashboard_shortcut_tile", { to: "collected" });
+                setLocation("/collected");
+              }}
+              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-violet-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
+                  <Inbox className="h-5 w-5 text-violet-400" aria-hidden />
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-          </button>
-          <button
-            onClick={() => setLocation("/collected")}
-            className="bg-card border border-border/40 rounded-lg p-4 text-left hover:bg-accent/50 transition-colors group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground text-sm">Collected Reels</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Reels shared via Telegram bot</p>
+              <p className="mt-3 font-semibold text-foreground">Collected Reels</p>
+              <p className="mt-1 text-sm text-muted-foreground">From Telegram, ready to transcribe and turn into scripts.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                posthog?.capture("dashboard_shortcut_tile", { to: "library" });
+                setLocation("/library");
+              }}
+              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-cyan-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/25"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/12">
+                  <BookOpen className="h-5 w-5 text-cyan-500" aria-hidden />
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-          </button>
-        </div>
+              <p className="mt-3 font-semibold text-foreground">Library</p>
+              <p className="mt-1 text-sm text-muted-foreground">All transcripts and scripts in one scrollable place.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                posthog?.capture("dashboard_shortcut_tile", { to: "ideas" });
+                setLocation("/ideas");
+              }}
+              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-amber-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/25"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/12">
+                  <Lightbulb className="h-5 w-5 text-amber-500" aria-hidden />
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+              </div>
+              <p className="mt-3 font-semibold text-foreground">Idea to Script</p>
+              <p className="mt-1 text-sm text-muted-foreground">Turn a rough idea into a full reel script with AI polish.</p>
+            </button>
+          </div>
+        </section>
 
-        {/* Recent research jobs */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Recent Spy Sessions</h2>
-            {jobs.length > 5 && (
-              <Button variant="link" size="sm" className="text-xs" onClick={() => setLocation("/history")}>
-                View all
+        {/* Recent spy sessions */}
+        <section className="rounded-2xl border border-border/40 bg-card/40 p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Recent spy sessions</h2>
+              <p className="text-xs text-muted-foreground">Click a row to open that session</p>
+            </div>
+            {jobs.length > 5 ? (
+              <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={() => setLocation("/history")}>
+                View all in Creator Radar
               </Button>
-            )}
+            ) : jobs.length > 0 ? (
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setLocation("/history")}>
+                Open Creator Radar
+              </Button>
+            ) : null}
           </div>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-col gap-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />
+              ))}
             </div>
           ) : jobs.length === 0 ? (
-            <div className="bg-card border border-border/40 rounded-lg p-8 text-center">
-              <div className="max-w-sm mx-auto">
-                <p className="text-sm font-semibold text-foreground mb-4">Get started in 3 steps</p>
-                <div className="space-y-3 text-left mb-6">
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center shrink-0 text-xs font-bold text-white">1</div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Start a spy session</p>
-                      <p className="text-xs text-muted-foreground">Enter any Instagram handle to spy on their viral Reels</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/40 flex items-center justify-center shrink-0 text-xs font-bold text-white">2</div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Pick a viral Reel and transcribe it</p>
-                      <p className="text-xs text-muted-foreground">See exactly what they said and why it worked</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-bold text-white">3</div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Click Make My Version to generate your script</p>
-                      <p className="text-xs text-muted-foreground">AI writes a script based on what made it go viral</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                  <Button size="sm" onClick={() => setLocation("/research")}>
-                    <Search className="mr-2 h-3.5 w-3.5" />
-                    Start Your First Spy Session
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setLocation("/research")}>
-                    Browse featured creators
-                    <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                  </Button>
-                </div>
+            <div className="rounded-xl border border-dashed border-border/60 bg-muted/15 px-4 py-10 text-center">
+              <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/12">
+                <Film className="h-6 w-6 text-primary" aria-hidden />
+              </div>
+              <p className="text-sm font-semibold text-foreground">Get started in three steps</p>
+              <ol className="mx-auto mt-4 max-w-sm space-y-3 text-left text-sm">
+                <li className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    1
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground">Spy a creator</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Ranked reels so you see what performed, not a random grid.
+                    </span>
+                  </span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/65 text-xs font-bold text-primary-foreground">
+                    2
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground">Transcribe a winner</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">See the hook and pacing in plain text.</span>
+                  </span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/35 text-xs font-bold text-primary-foreground">
+                    3
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground">Make your version</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">Turn the structure into your script and niche.</span>
+                  </span>
+                </li>
+              </ol>
+              <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                <Button onClick={() => setLocation("/research")}>
+                  <Search className="mr-2 h-3.5 w-3.5" aria-hidden />
+                  Start first spy session
+                </Button>
+                <Button variant="outline" onClick={() => setLocation("/research")}>
+                  Browse featured creators
+                  <ArrowRight className="ml-2 h-3.5 w-3.5" aria-hidden />
+                </Button>
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-2">
               {jobs.slice(0, 5).map((job) => (
                 <button
                   key={job.id}
+                  type="button"
                   onClick={() => setLocation(`/dashboard?jobId=${job.id}&from=dashboard`)}
-                  className="w-full bg-card border border-border/30 rounded-lg p-3 text-left hover:bg-accent/30 transition-colors flex items-center gap-3"
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border border-border/30 bg-background/60 p-3 text-left transition-colors",
+                    "hover:border-primary/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                  )}
                 >
-                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border/40">
                     {job.profilePicUrl ? (
                       <img
                         src={job.profilePicUrl}
-                        alt={job.handle}
+                        alt=""
                         className="h-full w-full object-cover"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).parentElement!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+                          const el = e.target as HTMLImageElement;
+                          el.style.display = "none";
+                          const parent = el.parentElement;
+                          if (parent && !parent.querySelector("svg")) {
+                            parent.innerHTML =
+                              '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-muted-foreground mx-auto"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+                          }
                         }}
                       />
                     ) : (
-                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <Users className="h-4 w-4 text-muted-foreground" aria-hidden />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">@{job.handle}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-medium text-foreground">@{job.handle}</span>
                       <Badge
-                        variant={job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"}
+                        variant={
+                          job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"
+                        }
                         className="text-[10px] px-1.5 py-0"
                       >
                         {job.status}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {job.totalReels} reels &middot; Last {job.timeframeDays} days &middot; {new Date(job.createdAt).toLocaleDateString()}
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {job.totalReels} reels · {job.timeframeDays}-day window ·{" "}
+                      <span className="tabular-nums">{new Date(job.createdAt).toLocaleDateString()}</span>
                     </p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Recent Scripts */}
         {scripts.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-foreground">Recent Scripts</h2>
-              <Button variant="link" size="sm" className="text-xs" onClick={() => setLocation("/scripts")}>
+          <section aria-labelledby="dash-scripts-heading">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 id="dash-scripts-heading" className="text-sm font-semibold text-foreground">
+                Recent scripts
+              </h2>
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setLocation("/scripts")}>
                 View all
               </Button>
             </div>
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-2">
               {scripts.slice(0, 3).map((script) => (
                 <button
                   key={script.id}
+                  type="button"
                   onClick={() => setLocation(`/scripts/${script.id}`)}
-                  className="w-full bg-card border border-border/30 rounded-lg p-3 text-left hover:bg-accent/30 transition-colors flex items-center gap-3"
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border border-border/30 bg-card p-3 text-left transition-colors",
+                    "hover:border-primary/25 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                  )}
                 >
-                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <PenLine className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <PenLine className="h-4 w-4 text-muted-foreground" aria-hidden />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{script.title}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{script.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {script.wordCount} words &middot; {script.status === "approved" ? "Approved" : "Draft"}
-                      {script.sourceHandle && <> &middot; from @{script.sourceHandle}</>}
+                      {script.wordCount} words · {script.status === "approved" ? "Approved" : "Draft"}
+                      {script.sourceHandle ? <> · @{script.sourceHandle}</> : null}
                     </p>
                   </div>
-                  <Badge variant={script.status === "approved" ? "default" : "secondary"} className="text-[10px] shrink-0">
+                  <Badge variant={script.status === "approved" ? "default" : "secondary"} className="shrink-0 text-[10px]">
                     {script.status}
                   </Badge>
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
       </div>
     );

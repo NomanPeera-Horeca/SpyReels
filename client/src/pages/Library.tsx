@@ -113,13 +113,31 @@ export default function Library() {
   };
 
   const transcriptsQuery = trpc.library.transcripts.useQuery(
-    { search: debouncedSearch || undefined, source: transcriptSource as any, limit: 100, offset: 0 },
-    { enabled: !!user && activeTab === "transcripts" }
+    {
+      search: activeTab === "transcripts" ? (debouncedSearch || undefined) : undefined,
+      source: activeTab === "transcripts" ? (transcriptSource as "scraped" | "collected" | undefined) : undefined,
+      limit: 100,
+      offset: 0,
+    },
+    {
+      enabled: !!user,
+      staleTime: 60_000,
+      placeholderData: (prev) => prev,
+    }
   );
 
   const scriptsQuery = trpc.library.scripts.useQuery(
-    { search: debouncedSearch || undefined, source: scriptSource as any, limit: 100, offset: 0 },
-    { enabled: !!user && activeTab === "scripts" }
+    {
+      search: activeTab === "scripts" ? (debouncedSearch || undefined) : undefined,
+      source: activeTab === "scripts" ? (scriptSource as "saved" | "recreated" | "idea" | undefined) : undefined,
+      limit: 100,
+      offset: 0,
+    },
+    {
+      enabled: !!user,
+      staleTime: 60_000,
+      placeholderData: (prev) => prev,
+    }
   );
 
   const copyToClipboard = (text: string) => {
@@ -285,7 +303,10 @@ export default function Library() {
       {activeTab === "transcripts" && (
         <TranscriptsView
           data={transcriptsQuery.data}
-          isLoading={transcriptsQuery.isLoading}
+          isLoading={transcriptsQuery.isLoading && !transcriptsQuery.data}
+          isError={transcriptsQuery.isError}
+          errorMessage={transcriptsQuery.error?.message}
+          onRetry={() => transcriptsQuery.refetch()}
           onCopy={copyToClipboard}
           onPreview={(item) => { setPreviewItem(item); setPreviewType("transcript"); }}
           formatDate={formatDate}
@@ -295,7 +316,10 @@ export default function Library() {
       {activeTab === "scripts" && (
         <ScriptsView
           data={scriptsQuery.data}
-          isLoading={scriptsQuery.isLoading}
+          isLoading={scriptsQuery.isLoading && !scriptsQuery.data}
+          isError={scriptsQuery.isError}
+          errorMessage={scriptsQuery.error?.message}
+          onRetry={() => scriptsQuery.refetch()}
           onCopy={copyToClipboard}
           onPreview={(item) => { setPreviewItem(item); setPreviewType("script"); }}
           formatDate={formatDate}
@@ -443,10 +467,30 @@ function transcriptKindLabel(source: string) {
   return source;
 }
 
-function TranscriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
-  data: any; isLoading: boolean; onCopy: (t: string) => void;
-  onPreview: (item: any) => void; formatDate: (d: any) => string;
+function TranscriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, onPreview, formatDate }: {
+  data: any;
+  isLoading: boolean;
+  isError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
+  onCopy: (t: string) => void;
+  onPreview: (item: any) => void;
+  formatDate: (d: any) => string;
 }) {
+  if (isError && onRetry) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+        <p className="font-medium text-foreground">Couldn&apos;t load transcripts</p>
+        {errorMessage ? (
+          <p className="mt-2 text-sm text-muted-foreground break-words max-w-lg mx-auto">{errorMessage}</p>
+        ) : null}
+        <Button variant="outline" className="mt-4 border-border/80" onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="grid gap-3">
@@ -555,10 +599,30 @@ function TranscriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
 }
 
 // ── Scripts View ──
-function ScriptsView({ data, isLoading, onCopy, onPreview, formatDate }: {
-  data: any; isLoading: boolean; onCopy: (t: string) => void;
-  onPreview: (item: any) => void; formatDate: (d: any) => string;
+function ScriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, onPreview, formatDate }: {
+  data: any;
+  isLoading: boolean;
+  isError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
+  onCopy: (t: string) => void;
+  onPreview: (item: any) => void;
+  formatDate: (d: any) => string;
 }) {
+  if (isError && onRetry) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+        <p className="font-medium text-foreground">Couldn&apos;t load scripts</p>
+        {errorMessage ? (
+          <p className="mt-2 text-sm text-muted-foreground break-words max-w-lg mx-auto">{errorMessage}</p>
+        ) : null}
+        <Button variant="outline" className="mt-4 border-border/80" onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="grid gap-3">

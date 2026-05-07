@@ -1418,28 +1418,43 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
     }
   }
 
-  // 2. Transcripts from collected reels (these have their own transcription via reelId link)
+  // 2. Transcripts from collected reels (via reels.shortcode → transcriptions.reelId)
   let collectedTranscripts: typeof scrapedTranscripts = [];
   if (!source || source === "collected") {
     const collected = await db.select().from(collectedReels).where(eq(collectedReels.userId, userId));
-    // Collected reels may have transcriptions linked via a separate mechanism
-    // Check if any collected reel shortcodes match reels in the reels table
-    for (const cr of collected) {
-      // Look for transcriptions that reference this collected reel
-      // Collected reels don't have a direct reelId in transcriptions table
-      // They are transcribed inline - check if there's a matching reel
-      const matchingReels = await db.select().from(reels).where(eq(reels.shortcode, cr.shortcode)).limit(1);
-      if (matchingReels.length > 0) {
-        const t = await db.select().from(transcriptions).where(
-          and(eq(transcriptions.reelId, matchingReels[0].id), eq(transcriptions.status, "completed"))
-        ).limit(1);
-        if (t.length > 0 && t[0].reelId != null) {
-          collectedTranscripts.push({
-            id: t[0].id, reelId: t[0].reelId, transcript: t[0].transcript, hookAnalysis: t[0].hookAnalysis,
-            status: t[0].status, createdAt: t[0].createdAt, source: "collected",
-            sourceHandle: cr.ownerUsername || null,
-            reelUrl: cr.reelUrl, thumbnailUrl: cr.thumbnailUrl, caption: cr.caption,
-          });
+    if (collected.length > 0) {
+      const shortcodes = [...new Set(collected.map((c) => c.shortcode).filter(Boolean))] as string[];
+      if (shortcodes.length > 0) {
+        const reelsMatching = await db.select().from(reels).where(inArray(reels.shortcode, shortcodes));
+        const reelByShortcode = new Map(reelsMatching.map((r) => [r.shortcode, r]));
+        const reelIds = reelsMatching.map((r) => r.id);
+        if (reelIds.length > 0) {
+          const tRows = await db
+            .select()
+            .from(transcriptions)
+            .where(and(inArray(transcriptions.reelId as any, reelIds), eq(transcriptions.status, "completed")));
+          const tByReelId = new Map(
+            tRows.filter((t) => t.reelId != null).map((t) => [t.reelId as number, t])
+          );
+          for (const cr of collected) {
+            const reel = reelByShortcode.get(cr.shortcode);
+            if (!reel) continue;
+            const t = tByReelId.get(reel.id);
+            if (!t || t.reelId == null) continue;
+            collectedTranscripts.push({
+              id: t.id,
+              reelId: t.reelId,
+              transcript: t.transcript,
+              hookAnalysis: t.hookAnalysis,
+              status: t.status,
+              createdAt: t.createdAt,
+              source: "collected",
+              sourceHandle: cr.ownerUsername || null,
+              reelUrl: cr.reelUrl,
+              thumbnailUrl: cr.thumbnailUrl,
+              caption: cr.caption,
+            });
+          }
         }
       }
     }
@@ -1508,26 +1523,36 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
     const savedWithRecreated = await db.select({ recreatedScriptId: savedScripts.recreatedScriptId }).from(savedScripts).where(eq(savedScripts.userId, userId));
     const savedRecreatedIds = new Set(savedWithRecreated.map(s => s.recreatedScriptId).filter(Boolean));
 
+    const recreatedNeedingReel = recreated.filter(
+      (r) => !savedRecreatedIds.has(r.id) && r.reelId != null
+    );
+    const reelIdsNeeded = [...new Set(recreatedNeedingReel.map((r) => r.reelId as number))];
+    const reelsRows =
+      reelIdsNeeded.length > 0
+        ? await db.select().from(reels).where(inArray(reels.id, reelIdsNeeded))
+        : [];
+    const reelById = Object.fromEntries(reelsRows.map((row) => [row.id, row]));
+
     for (const r of recreated) {
-      if (savedRecreatedIds.has(r.id)) continue; // Already in saved scripts
-      // Featured-reel-backed recreated scripts (reelId null) are surfaced
-      // via a dedicated library path added in Commit 3b; skip them here
-      // so the scraped-reel lookup below stays type-safe.
+      if (savedRecreatedIds.has(r.id)) continue;
       if (r.reelId == null) continue;
-      const reel = await db.select().from(reels).where(eq(reels.id, r.reelId)).limit(1);
-      // Generate a better title for recreated scripts
+      const reelRow = reelById[r.reelId];
       let title = r.topic || "Untitled Script";
-      // If topic is a generic instruction like "SAME_TOPIC", "make similar", etc., extract first line of script
       if (/^(SAME_TOPIC|make\s+(it\s+)?simil|rewrite|recreate)/i.test(title) && r.generatedScript) {
-        // Use first sentence or first 60 chars of the generated script as title
         const firstLine = r.generatedScript.split(/[.!?\n]/)[0]?.trim();
         title = firstLine ? (firstLine.length > 60 ? firstLine.slice(0, 57) + "..." : firstLine) : "Re-Created Script";
       }
       scripts.push({
-        id: r.id, title, content: r.generatedScript || "",
-        sourceHandle: reel[0]?.ownerUsername || null,
-        status: "draft", source: "recreated", wordCount: (r.generatedScript || "").split(/\s+/).length,
-        gradeLevel: r.gradeLevel, createdAt: r.createdAt, updatedAt: r.updatedAt,
+        id: r.id,
+        title,
+        content: r.generatedScript || "",
+        sourceHandle: reelRow?.ownerUsername || null,
+        status: "draft",
+        source: "recreated",
+        wordCount: (r.generatedScript || "").split(/\s+/).length,
+        gradeLevel: r.gradeLevel,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       });
     }
   }
