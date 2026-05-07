@@ -90,6 +90,15 @@ function ScriptJudgeBadge(props: {
   );
 }
 
+function creatorGoalSlugFromListedIdea(idea: { viralStructure?: unknown }): string | undefined {
+  const vs = idea.viralStructure;
+  if (!vs || typeof vs !== "object") return undefined;
+  const m = (vs as Record<string, unknown>).ideaMeta;
+  if (!m || typeof m !== "object") return undefined;
+  const slug = (m as Record<string, unknown>).creatorGoal;
+  return typeof slug === "string" ? slug : undefined;
+}
+
 function viralStructureJudge(idea: { viralStructure?: unknown }): {
   finalScore: number | null;
   attempts: number;
@@ -604,7 +613,7 @@ export default function IdeaToScript() {
                           </Badge>
                         )}
                         {(() => {
-                          const g = (idea as any).creatorGoal as string | undefined;
+                          const g = creatorGoalSlugFromListedIdea(idea);
                           const gl = g ? CREATOR_GOALS.find((x) => x.value === g) : null;
                           return gl && g !== "balanced" ? (
                             <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-200">

@@ -4245,7 +4245,7 @@ The hook MUST be 7-10 words. Count them.`
           idea: input.idea,
           niche: input.niche || null,
           tone: input.tone,
-          creatorGoal: input.creatorGoal,
+          viralStructure: { ideaMeta: { creatorGoal: input.creatorGoal } },
           gradeLevel: input.gradeLevel,
           inputMethod: input.inputMethod,
           audioUrl: input.audioUrl || null,
@@ -4396,7 +4396,7 @@ The hook MUST be 7-10 words. Count them.`
             idea: item.idea,
             niche: item.niche || null,
             tone: input.tone,
-            creatorGoal: input.creatorGoal,
+            viralStructure: { ideaMeta: { creatorGoal: input.creatorGoal } },
             gradeLevel: input.gradeLevel,
           });
           results.push({ id: ideaId, idea: item.idea });
@@ -5861,6 +5861,27 @@ function ideaCreatorGoalDirectives(goal: string | null | undefined): string {
   }
 }
 
+const IDEA_CREATOR_GOAL_SLUGS = [
+  "balanced",
+  "growth_virality",
+  "personal_brand",
+  "education_authority",
+  "warm_promo",
+] as const;
+type IdeaCreatorGoalSlug = (typeof IDEA_CREATOR_GOAL_SLUGS)[number];
+
+function readScriptIdeaCreatorSlug(idea: { viralStructure?: unknown }): IdeaCreatorGoalSlug {
+  const vs = idea.viralStructure;
+  if (!vs || typeof vs !== "object" || vs === null) return "balanced";
+  const meta = (vs as Record<string, unknown>).ideaMeta;
+  if (!meta || typeof meta !== "object") return "balanced";
+  const slug = (meta as Record<string, unknown>).creatorGoal;
+  if (typeof slug !== "string") return "balanced";
+  return (IDEA_CREATOR_GOAL_SLUGS as readonly string[]).includes(slug)
+    ? (slug as IdeaCreatorGoalSlug)
+    : "balanced";
+}
+
 async function invokeIdeaScriptJudge(opts: {
   ideaText: string;
   nicheContext: string;
@@ -6013,7 +6034,7 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
 
     const nicheContext = scriptIdea.niche ? ` in the ${scriptIdea.niche} niche` : "";
     const toneContext = scriptIdea.tone || "engaging";
-    const goalBrief = ideaCreatorGoalDirectives(scriptIdea.creatorGoal);
+    const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(scriptIdea));
     const gradeLevelInstruction = scriptIdea.gradeLevel === "auto"
       ? "Choose the most appropriate reading level for the audience."
       : `Write at a Grade ${scriptIdea.gradeLevel} reading level.`;
@@ -6191,6 +6212,7 @@ Return JSON with:
       finalOverallScore: verdict.overallScore,
       finalDecision: pass ? "pass" : "accepted_after_max_attempts",
     };
+    viralStructure.ideaMeta = { creatorGoal: readScriptIdeaCreatorSlug(scriptIdea) };
 
     // Update the idea with the generated content
     await updateScriptIdea(ideaId, {
@@ -6225,7 +6247,7 @@ async function validateIdeaInBackground(ideaId: number) {
     const idea = await getScriptIdeaById(ideaId);
     if (!idea) throw new Error("Idea not found");
 
-    const goalBrief = ideaCreatorGoalDirectives(idea.creatorGoal);
+    const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(idea));
 
     const response = await invokeLLM({
       messages: [
