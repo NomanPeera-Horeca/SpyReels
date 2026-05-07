@@ -326,8 +326,11 @@ export async function scrapeReels(
 
     pageCount++;
 
+    // Gentle pacing between ScrapeCreators pages (429 retry still applies).
+    // 1–2s per page stacks to many minutes on wide windows; a shorter jitter
+    // keeps rate-limit headroom without dominating wall time.
     if (pageCount > 1) {
-      const delay = 1000 + Math.random() * 1000;
+      const delay = 350 + Math.random() * 400;
       await sleep(delay);
     }
 
@@ -635,7 +638,7 @@ export async function searchReelsByHandle(
     pageCount++;
 
     if (pageCount > 1) {
-      await sleep(1000 + Math.random() * 1000);
+      await sleep(350 + Math.random() * 400);
     }
 
     const page = await fetchUserReelsPage(profile.username, maxId);
