@@ -7,6 +7,8 @@ import {
   Loader2,
   Wand2,
   ExternalLink,
+  Trash2,
+  Info,
 } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
 
@@ -84,6 +86,14 @@ export interface ReelActionButtonsProps {
   idleNotRemakeable?: boolean;
   /** Bug #57 Tier 2 coach text for Save for Inspiration tooltip when idle. */
   classificationReason?: string | null;
+
+  /**
+   * Collected Reels / inbox: hides bookmark UI; optionally shows remove-from-collection trash.
+   * Idle remakeability coaching uses italic text instead of Save for Inspiration.
+   */
+  collectionMode?: boolean;
+  onRemoveFromCollection?: () => void;
+  removeFromCollectionBusy?: boolean;
 }
 
 /**
@@ -114,6 +124,9 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     isNoSpeech,
     idleNotRemakeable = false,
     classificationReason,
+    collectionMode = false,
+    onRemoveFromCollection,
+    removeFromCollectionBusy,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -123,7 +136,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
       className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end"
       onClick={(e) => e.stopPropagation()}
     >
-      {!hideBookmark && (
+      {!hideBookmark && !collectionMode && (
         <Button
           variant="ghost"
           size="sm"
@@ -209,7 +222,20 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         recreateState !== "ready" &&
         recreateState !== "generating" &&
         recreateState !== "failed" ? (
-          isSaved ? (
+          collectionMode ? (
+            <p
+              className={`text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-[9rem] flex items-center justify-end gap-1 self-center ${compact ? "max-w-[4.5rem]" : ""}`}
+            >
+              <span>Saved as inspiration</span>
+              {classificationReason?.trim() ? (
+                <Tooltip content={classificationReason.trim()}>
+                  <span className="inline-flex cursor-help shrink-0">
+                    <Info className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+                  </span>
+                </Tooltip>
+              ) : null}
+            </p>
+          ) : isSaved ? (
             <Tooltip content="Remove from saved">
               <span>
                 <Button
@@ -307,6 +333,20 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
+        </Button>
+      )}
+
+      {collectionMode && onRemoveFromCollection && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+          onClick={onRemoveFromCollection}
+          disabled={!!removeFromCollectionBusy}
+          title="Remove from collection"
+          aria-label="Remove from collection"
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       )}
     </div>

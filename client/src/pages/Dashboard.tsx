@@ -40,7 +40,6 @@ import {
   List,
   X,
   Sparkles,
-  Play,
 } from "lucide-react";
 import {
   InlineWorkflow,
@@ -48,6 +47,7 @@ import {
   formatDuration,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   ReelActionButtons,
@@ -56,7 +56,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
+import { normalizeAnalyticsHandle } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
 
@@ -170,91 +170,6 @@ function runReelRowScrollPulse(node: HTMLElement) {
   window.setTimeout(() => {
     node.classList.remove("pulse-highlight");
   }, 2100);
-}
-
-/** Grid tile: thumbnail + optional inline playback when `videoUrl` exists (R2 or Instagram CDN). */
-function DashboardReelGridMedia({
-  thumbnailUrl,
-  videoUrl,
-  className,
-}: {
-  thumbnailUrl: string | null | undefined;
-  videoUrl: string | null | undefined;
-  className?: string;
-}) {
-  const [playing, setPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const src = (videoUrl ?? "").trim();
-  const hasVideo = src.length > 0;
-  const thumb = (thumbnailUrl ?? "").trim();
-
-  useEffect(() => {
-    if (!playing) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const p = v.play();
-    void p.catch(() => {});
-  }, [playing]);
-
-  return (
-    <div className={cn(className)}>
-      {playing && hasVideo ? (
-        <div
-          className="relative h-full w-full bg-black"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <video
-            ref={videoRef}
-            src={src}
-            poster={thumb || undefined}
-            controls
-            playsInline
-            preload="metadata"
-            className="h-full w-full object-cover"
-          />
-          <button
-            type="button"
-            className="absolute right-2 top-12 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90"
-            aria-label="Close video"
-            title="Close video"
-            onClick={() => setPlaying(false)}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ) : (
-        <>
-          {thumb ? (
-            <img
-              src={thumb}
-              alt=""
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-muted/40">
-              <Film className="h-5 w-5 text-muted-foreground/60" />
-            </div>
-          )}
-          {hasVideo ? (
-            <button
-              type="button"
-              className="absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80"
-              aria-label="Play video"
-              title="Play video"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlaying(true);
-              }}
-            >
-              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
-            </button>
-          ) : null}
-        </>
-      )}
-    </div>
-  );
 }
 
 /** Bug #23: cache scrape snapshots and featured sidebar reads; avoid refetch on every /dashboard?jobId= navigation. */
@@ -1591,7 +1506,7 @@ export default function Dashboard() {
                       />
                     )}
                     {job && (
-                      <Tooltip content="All reels successfully collected. Use Account Monitoring to re-sync.">
+                      <Tooltip content="All reels collected. Open Creator Radar and refresh the creator to pull new reels.">
                         <Badge
                           variant={
                             job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"

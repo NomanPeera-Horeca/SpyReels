@@ -15,6 +15,8 @@ import {
   updateCollectedReel,
 } from "./db";
 import { fetchReelByShortcode } from "./instagram";
+import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import { ensureReelVideoOnR2 } from "./reelVideoR2";
 
 const TELEGRAM_API = "https://api.telegram.org/bot";
 
@@ -268,13 +270,20 @@ async function fetchAndUpdateCollectedReel(reelId: number, shortcode: string): P
       return;
     }
 
+    const thumbCand = (data.thumbnailUrl || "").trim();
+    const vidCand = (data.videoUrl || "").trim();
+    const [stableThumb, stableVid] = await Promise.all([
+      ensureReelThumbnailOnR2(shortcode, thumbCand || null),
+      ensureReelVideoOnR2(shortcode, vidCand || null),
+    ]);
+
     await updateCollectedReel(reelId, {
       caption: data.caption || null,
       viewCount: data.viewCount || 0,
       likeCount: data.likeCount || 0,
       commentCount: data.commentCount || 0,
-      thumbnailUrl: data.thumbnailUrl || null,
-      videoUrl: data.videoUrl || null,
+      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
+      videoUrl: stableVid.trim() ? stableVid : null,
       duration: data.duration || null,
       postedAt: data.postedAt || null,
       ownerUsername: data.ownerUsername || null,

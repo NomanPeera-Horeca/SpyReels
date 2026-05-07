@@ -1,4 +1,11 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  type CSSProperties,
+} from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import {
@@ -44,6 +51,42 @@ type ViewMode = "grid" | "kanban" | "calendar";
 
 // Default stage tag names that serve as Kanban columns
 const KANBAN_STAGES = ["Scripting", "Rehearsing", "Filming", "Editing", "Posting"];
+
+/** Append 2-digit hex alpha to a 6-digit #RRGGBB color (drops existing alpha if present). */
+function hexWithAlpha(hex: string, aa: string): string {
+  const raw = hex.trim().replace(/^#/, "");
+  const rgb = raw.length === 8 ? raw.slice(0, 6) : raw.length === 6 ? raw : "";
+  if (rgb.length !== 6 || !/^[0-9a-fA-F]+$/.test(rgb)) return hex;
+  return `#${rgb}${aa}`;
+}
+
+/**
+ * Prefer a pipeline stage tag (Kanban order), then fall back to the first tag.
+ * Keeps grid color aligned with workflow stage when possible.
+ */
+function accentColorFromScriptTags(
+  tags: { id: number; color: string }[] | undefined,
+  stageTagIdsOrdered: number[]
+): string | null {
+  if (!tags?.length) return null;
+  for (const id of stageTagIdsOrdered) {
+    const t = tags.find((x) => x.id === id);
+    if (t) return t.color;
+  }
+  return tags[0].color;
+}
+
+function scriptTagAccentStyles(color: string, compact?: boolean): CSSProperties {
+  const soft = hexWithAlpha(color, compact ? "12" : "16");
+  const edge = hexWithAlpha(color, compact ? "2a" : "33");
+  return {
+    borderLeftWidth: compact ? 3 : 4,
+    borderLeftStyle: "solid",
+    borderLeftColor: color,
+    backgroundImage: `linear-gradient(165deg, ${soft}, transparent min(52%, 9rem))`,
+    boxShadow: `inset 0 1px 0 0 ${edge}`,
+  };
+}
 
 export default function MyScripts() {
   const [, navigate] = useLocation();
@@ -406,6 +449,7 @@ export default function MyScripts() {
             <ScriptCard
               key={script.id}
               script={script}
+              stageTagIdsOrdered={stageTags.map((t) => t.id)}
               navigate={navigate}
               updateScriptMutation={updateScriptMutation}
               deleteScriptMutation={deleteScriptMutation}
@@ -447,12 +491,15 @@ export default function MyScripts() {
 
               {/* Column Cards */}
               <div className="p-2 space-y-2 min-h-[100px]">
-                {kanbanColumns.columns[tag.id]?.map((script) => (
+                {kanbanColumns.columns[tag.id]?.map((script) => {
+                  const miniAccent = scriptTagAccentStyles(tag.color, true);
+                  return (
                   <div
                     key={script.id}
                     draggable
                     onDragStart={() => handleDragStart(script.id)}
-                    className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors group"
+                    className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors group overflow-hidden"
+                    style={{ ...miniAccent, backgroundColor: "hsl(var(--card))" }}
                     onClick={() => navigate(`/scripts/${script.id}`)}
                   >
                     <div className="flex items-start justify-between gap-1">
@@ -488,7 +535,8 @@ export default function MyScripts() {
                         ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {(kanbanColumns.columns[tag.id]?.length || 0) === 0 && (
                   <div className="text-center py-6 text-[10px] text-muted-foreground/50">
                     Drop scripts here
@@ -509,12 +557,16 @@ export default function MyScripts() {
                 </Badge>
               </div>
               <div className="p-2 space-y-2">
-                {kanbanColumns.unassigned.map((script) => (
+                {kanbanColumns.unassigned.map((script) => {
+                  const ua = accentColorFromScriptTags(script.tags, stageTags.map((t) => t.id));
+                  const uaStyle = ua ? { ...scriptTagAccentStyles(ua, true), backgroundColor: "hsl(var(--card))" } : undefined;
+                  return (
                   <div
                     key={script.id}
                     draggable
                     onDragStart={() => handleDragStart(script.id)}
-                    className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors"
+                    className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
+                    style={uaStyle}
                     onClick={() => navigate(`/scripts/${script.id}`)}
                   >
                     <h4 className="text-xs font-medium truncate">{script.title}</h4>
@@ -532,7 +584,8 @@ export default function MyScripts() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -546,6 +599,7 @@ export default function MyScripts() {
           navigate={navigate}
           updateScriptMutation={updateScriptMutation}
           filteredScripts={filteredScripts}
+          stageTagIdsOrdered={stageTags.map((t) => t.id)}
         />
       )}
 
@@ -597,20 +651,29 @@ export default function MyScripts() {
 
 function ScriptCard({
   script,
+  stageTagIdsOrdered,
   navigate,
   updateScriptMutation,
   deleteScriptMutation,
   formatDate,
 }: {
   script: any;
+  stageTagIdsOrdered: number[];
   navigate: (path: string) => void;
   updateScriptMutation: any;
   deleteScriptMutation: any;
   formatDate: (date: Date | string | null) => string;
 }) {
+  const accent = accentColorFromScriptTags(script.tags, stageTagIdsOrdered);
+  const accentStyles = accent ? scriptTagAccentStyles(accent, false) : undefined;
+
   return (
     <div
-      className="bg-card rounded-lg border hover:border-primary/50 transition-colors cursor-pointer group"
+      className="rounded-lg border border-border/70 hover:border-primary/45 transition-colors cursor-pointer group overflow-hidden"
+      style={{
+        ...(accentStyles ?? {}),
+        backgroundColor: "hsl(var(--card))",
+      }}
       onClick={() => navigate(`/scripts/${script.id}`)}
     >
       <div className="p-4">
@@ -740,6 +803,7 @@ function CalendarView({
   navigate,
   updateScriptMutation,
   filteredScripts,
+  stageTagIdsOrdered,
 }: {
   calendarData: any;
   calendarMonth: { year: number; month: number };
@@ -747,6 +811,7 @@ function CalendarView({
   navigate: (path: string) => void;
   updateScriptMutation: any;
   filteredScripts: any[];
+  stageTagIdsOrdered: number[];
 }) {
   const { startDayOfWeek, daysInMonth, dateMap, unscheduled, year, month } = calendarData;
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -873,20 +938,35 @@ function CalendarView({
                       {day}
                     </div>
                     <div className="space-y-0.5">
-                      {scripts.slice(0, 3).map((script: any) => (
-                        <div
-                          key={script.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", script.id.toString());
-                          }}
-                          onClick={() => navigate(`/scripts/${script.id}`)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary truncate cursor-pointer hover:bg-primary/20 transition-colors"
-                          title={script.title}
-                        >
-                          {script.title}
-                        </div>
-                      ))}
+                      {scripts.slice(0, 3).map((script: any) => {
+                        const stripe = accentColorFromScriptTags(script.tags, stageTagIdsOrdered);
+                        return (
+                          <div
+                            key={script.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", script.id.toString());
+                            }}
+                            onClick={() => navigate(`/scripts/${script.id}`)}
+                            className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer transition-colors ${
+                              stripe
+                                ? "text-foreground"
+                                : "bg-primary/10 text-primary hover:bg-primary/20"
+                            }`}
+                            style={
+                              stripe
+                                ? {
+                                    borderLeft: `3px solid ${stripe}`,
+                                    backgroundColor: hexWithAlpha(stripe, "24"),
+                                  }
+                                : undefined
+                            }
+                            title={script.title}
+                          >
+                            {script.title}
+                          </div>
+                        );
+                      })}
                       {scripts.length > 3 && (
                         <div className="text-[9px] text-muted-foreground pl-1.5">
                           +{scripts.length - 3} more
@@ -912,19 +992,30 @@ function CalendarView({
             </span>
           </h3>
           <div className="flex flex-wrap gap-2">
-            {unscheduled.map((script: any) => (
-              <div
-                key={script.id}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", script.id.toString());
-                }}
-                onClick={() => navigate(`/scripts/${script.id}`)}
-                className="px-3 py-1.5 rounded-md bg-card border border-border/30 text-xs cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors"
-              >
-                {script.title}
-              </div>
-            ))}
+            {unscheduled.map((script: any) => {
+              const stripe = accentColorFromScriptTags(script.tags, stageTagIdsOrdered);
+              return (
+                <div
+                  key={script.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", script.id.toString());
+                  }}
+                  onClick={() => navigate(`/scripts/${script.id}`)}
+                  className="px-3 py-1.5 rounded-md bg-card border border-border/30 text-xs cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
+                  style={
+                    stripe
+                      ? {
+                          ...scriptTagAccentStyles(stripe, true),
+                          backgroundColor: "hsl(var(--card))",
+                        }
+                      : undefined
+                  }
+                >
+                  {script.title}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

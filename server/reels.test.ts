@@ -1026,7 +1026,7 @@ describe("scrape.start - duplicate prevention", () => {
         handle: "testuser",
         timeframeDays: 30,
       })
-    ).rejects.toThrow(/already in your Account Monitoring/);
+    ).rejects.toThrow(/already in your Creator Radar/);
   });
 
   it("blocks duplicate research case-insensitively", async () => {
@@ -1039,7 +1039,7 @@ describe("scrape.start - duplicate prevention", () => {
         handle: "TESTUSER",
         timeframeDays: 30,
       })
-    ).rejects.toThrow(/already in your Account Monitoring/);
+    ).rejects.toThrow(/already in your Creator Radar/);
   });
 });
 

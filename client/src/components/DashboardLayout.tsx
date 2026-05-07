@@ -5,6 +5,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -24,20 +30,20 @@ import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard,
-  Eye,
   LogOut,
   PanelLeft,
   Bookmark,
   FileText,
   Settings,
   CreditCard,
-  PenSquare,
   Inbox,
   Lightbulb,
   Library,
   Search,
   ClipboardPaste,
   Shield,
+  Radar,
+  Sun,
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
@@ -46,8 +52,10 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { Button } from "./ui/button";
-import { useTheme } from "@/contexts/ThemeContext";
-import { Sun, Moon } from "lucide-react";
+import {
+  type ThemePreference,
+  useTheme,
+} from "@/contexts/ThemeContext";
 import { LightModeBanner } from "@/components/LightModeBanner";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
@@ -57,7 +65,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/dashboard": "See past research results and saved reel data",
   "/research": "Spy on any public Instagram creator",
   "/collected": "Individual reels you've saved from past research",
-  "/history": "Track and refresh previously analyzed accounts",
+  "/history":
+    "Creator Radar: live reel stats from each spy session—refresh pulls new posts since last sync (fresh window, not a full backfill).",
   "/scripts": "Your AI-generated scripts library",
   "/ideas": "Turn a rough idea into a viral-ready script",
   "/library":
@@ -65,8 +74,6 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/saved": "Reels you bookmarked for later",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
-  __theme__:
-    "Click to cycle: System, Light, Dark, then back. The label is the look you see now; light is beta.",
 };
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -129,9 +136,7 @@ function DashboardLayoutContent({
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const { resolvedTheme, cycleThemePreference } = useTheme();
-  const themeMenuIcon = resolvedTheme === "dark" ? Sun : Moon;
-  const themeMenuLabel = resolvedTheme === "light" ? "Light (beta)" : "Dark";
+  const { themePreference, setThemePreference, switchable } = useTheme();
 
   useEffect(() => {
     if (user) {
@@ -145,17 +150,12 @@ function DashboardLayoutContent({
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Search, label: "Spy Viral Reels", path: "/research" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
-    { icon: Eye, label: "Account Monitoring", path: "/history" },
+    { icon: Radar, label: "Creator Radar", path: "/history" },
     { icon: FileText, label: "My Scripts", path: "/scripts" },
     { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
     { icon: Library, label: "Transcripts & Scripts", path: "/library" },
     { icon: Bookmark, label: "Saved Reels", path: "/saved" },
     { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
-    {
-      icon: themeMenuIcon,
-      label: themeMenuLabel,
-      path: "__theme__",
-    },
     { icon: Settings, label: "Settings", path: "/settings" },
     { icon: CreditCard, label: "Billing", path: "/billing" },
   ];
@@ -228,8 +228,7 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
-                const isActive =
-                  location === item.path && item.path !== "__theme__";
+                const isActive = location === item.path;
                 return (
                   <Fragment key={item.path}>
                     {item.label === "Dashboard" && (
@@ -258,11 +257,7 @@ function DashboardLayoutContent({
                         const button = (
                           <SidebarMenuButton
                             isActive={isActive}
-                            onClick={() =>
-                              item.path === "__theme__"
-                                ? cycleThemePreference()
-                                : setLocation(item.path)
-                            }
+                            onClick={() => setLocation(item.path)}
                             tooltip={mockupTooltip ? undefined : item.label}
                             className="h-10 transition-all font-normal"
                           >
@@ -325,7 +320,32 @@ function DashboardLayoutContent({
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
+                {switchable ? (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Sun className="mr-2 h-4 w-4" />
+                      Appearance
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-44">
+                      <DropdownMenuRadioGroup
+                        value={themePreference}
+                        onValueChange={(v: string) =>
+                          setThemePreference(v as ThemePreference)
+                        }
+                      >
+                        <DropdownMenuRadioItem value="system">
+                          Use system setting
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="light">Light (beta)</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="dark">
+                          Dark
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
+                {switchable ? <DropdownMenuSeparator /> : null}
                 <DropdownMenuItem
                   onClick={() => {
                     posthog?.capture("user_signed_out");

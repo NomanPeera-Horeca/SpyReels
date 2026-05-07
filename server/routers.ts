@@ -307,7 +307,7 @@ export const appRouter = router({
         if (existingJob) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: `@${normalizedHandle} is already in your Account Monitoring. Use Refresh in Account Monitoring to update the data instead.`,
+            message: `@${normalizedHandle} is already in your Creator Radar. Open Creator Radar and tap Refresh to pull new reels (fresh window from your last sync, not a full archive backfill).`,
           });
         }
 
@@ -397,7 +397,61 @@ export const appRouter = router({
 
     list: protectedProcedure.query(async ({ ctx }) => {
       const jobs = await getUserScrapeJobs(ctx.user.id);
-      return jobs.filter((j) => j.status !== "failed");
+      const db = await getDb();
+      const jobIds = jobs.map((j) => j.id);
+
+      type Rollup = {
+        reelCountRollup: number;
+        totalViews: number;
+        totalLikes: number;
+        totalComments: number;
+        avgEngagementPct: number | null;
+      };
+      const rollupMap = new Map<number, Rollup>();
+
+      if (db && jobIds.length > 0) {
+        const rollupRows = await db
+          .select({
+            jobId: reelsTable.jobId,
+            reelCount: sql<number>`cast(count(*) as signed)`.mapWith(Number),
+            totalViews: sql<number>`coalesce(sum(cast(${reelsTable.viewCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            totalLikes: sql<number>`coalesce(sum(cast(${reelsTable.likeCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            totalComments: sql<number>`coalesce(sum(cast(${reelsTable.commentCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            avgEngagementPct: sql<number | null>`avg(
+              (cast(${reelsTable.likeCount} as signed) + cast(${reelsTable.commentCount} as signed))
+              / nullif(cast(${scrapeJobs.followerCount} as signed), 0) * 100
+            )`,
+          })
+          .from(reelsTable)
+          .innerJoin(scrapeJobs, eq(reelsTable.jobId, scrapeJobs.id))
+          .where(and(inArray(reelsTable.jobId, jobIds), eq(scrapeJobs.userId, ctx.user.id)))
+          .groupBy(reelsTable.jobId);
+
+        for (const row of rollupRows) {
+          if (row.jobId == null) continue;
+          const raw = row.avgEngagementPct;
+          const n =
+            raw == null ? null : typeof raw === "number" ? raw : Number.parseFloat(String(raw));
+          rollupMap.set(row.jobId, {
+            reelCountRollup: row.reelCount,
+            totalViews: row.totalViews,
+            totalLikes: row.totalLikes,
+            totalComments: row.totalComments,
+            avgEngagementPct: n != null && Number.isFinite(n) ? n : null,
+          });
+        }
+      }
+
+      return jobs.map((j) => ({
+        ...j,
+        reelStats: rollupMap.get(j.id) ?? null,
+      }));
     }),
 
     /** Delete a scrape job and its associated reels */
@@ -3809,6 +3863,8 @@ The hook MUST be 7-10 words. Count them.`
           ...r,
           transcriptionReelId: r.transcriptionReelId ?? null,
           transcriptionStatus: null as string | null,
+          transcriptionStartedAt: null as Date | null,
+          transcriptionIsNoSpeech: false,
           monitoredViewCount: null as number | null,
           monitoredFollowerCount: null as number | null,
           contentType: null as string | null,
@@ -3827,6 +3883,8 @@ The hook MUST be 7-10 words. Count them.`
           clsSuggestedAction: reelsTable.suggestedAction,
           clsClassificationReason: reelsTable.classificationReason,
           clsClassifiedAt: reelsTable.classifiedAt,
+          clsTxnReelThumbnailUrl: reelsTable.thumbnailUrl,
+          clsTxnReelVideoUrl: reelsTable.videoUrl,
         })
         .from(collectedReels)
         .leftJoin(reelsTable, eq(collectedReels.transcriptionReelId, reelsTable.id))
@@ -3840,10 +3898,27 @@ The hook MUST be 7-10 words. Count them.`
           clsSuggestedAction,
           clsClassificationReason,
           clsClassifiedAt,
-          ...collected
+          clsTxnReelThumbnailUrl,
+          clsTxnReelVideoUrl,
+          thumbnailUrl: collectedThumbRaw,
+          videoUrl: collectedVideoRaw,
+          ...collectedRest
         } = row;
+
+        const preferTxnMedia = (
+          fromTxnReel: string | null | undefined,
+          fromCollected: string | null | undefined
+        ): string | null => {
+          const a = (fromTxnReel ?? "").trim();
+          if (a) return fromTxnReel ?? null;
+          const b = (fromCollected ?? "").trim();
+          return b ? fromCollected ?? null : null;
+        };
+
         return {
-          ...collected,
+          ...collectedRest,
+          thumbnailUrl: preferTxnMedia(clsTxnReelThumbnailUrl, collectedThumbRaw),
+          videoUrl: preferTxnMedia(clsTxnReelVideoUrl, collectedVideoRaw),
           contentType: clsContentType ?? null,
           remakeabilityScore: clsRemakeabilityScore ?? null,
           suggestedAction: clsSuggestedAction ?? null,
@@ -3859,15 +3934,36 @@ The hook MUST be 7-10 words. Count them.`
             .filter((id): id is number => id != null && id > 0)
         )
       );
-      const txnStatusByReelId = new Map<number, string>();
+      type TxnBrief = {
+        status: string;
+        startedAt: Date | null;
+        transcriptionIsNoSpeech: boolean;
+      };
+      const txnByReelId = new Map<number, TxnBrief>();
       if (transcriptionReelIds.length > 0) {
         const txns = await db
-          .select({ reelId: transcriptions.reelId, status: transcriptions.status })
+          .select({
+            reelId: transcriptions.reelId,
+            status: transcriptions.status,
+            transcript: transcriptions.transcript,
+            segments: transcriptions.segments,
+            startedAt: transcriptions.startedAt,
+          })
           .from(transcriptions)
           .where(inArray(transcriptions.reelId as any, transcriptionReelIds));
         for (const t of txns) {
           if (t.reelId == null) continue;
-          txnStatusByReelId.set(t.reelId, t.status);
+          const segs = t.segments;
+          const nSeg = Array.isArray(segs) ? segs.length : 0;
+          const transcriptionIsNoSpeech =
+            t.status === "completed" &&
+            !String(t.transcript ?? "").trim() &&
+            nSeg === 0;
+          txnByReelId.set(t.reelId, {
+            status: t.status,
+            startedAt: t.startedAt ?? null,
+            transcriptionIsNoSpeech,
+          });
         }
       }
 
@@ -3913,13 +4009,18 @@ The hook MUST be 7-10 words. Count them.`
 
       return reels.map((r) => {
         const monitored = monitoredDataMap.get(r.shortcode);
+        const txn =
+          r.transcriptionReelId != null ? txnByReelId.get(r.transcriptionReelId) : undefined;
+
         return {
           ...r,
           transcriptionReelId: r.transcriptionReelId ?? null,
           transcriptionStatus:
-            r.transcriptionReelId != null
-              ? txnStatusByReelId.get(r.transcriptionReelId) ?? null
-              : null,
+            r.transcriptionReelId != null ? txn?.status ?? null : null,
+          transcriptionStartedAt:
+            r.transcriptionReelId != null ? txn?.startedAt ?? null : null,
+          transcriptionIsNoSpeech:
+            r.transcriptionReelId != null ? txn?.transcriptionIsNoSpeech ?? false : false,
           monitoredViewCount: monitored?.viewCount ?? null,
           monitoredFollowerCount: monitored?.followerCount ?? null,
         };
@@ -4617,14 +4718,29 @@ async function fetchAndUpdateCollectedReelBg(reelId: number, shortcode: string):
     // restricts play_count for unauthenticated requests)
     const existing = await getCollectedReelById(reelId);
 
+    const thumbCand = (
+      data.thumbnailUrl ||
+      existing?.thumbnailUrl ||
+      ""
+    ).trim();
+    const vidCand = (
+      data.videoUrl ||
+      existing?.videoUrl ||
+      ""
+    ).trim();
+    const [stableThumb, stableVid] = await Promise.all([
+      ensureReelThumbnailOnR2(shortcode, thumbCand || null),
+      ensureReelVideoOnR2(shortcode, vidCand || null),
+    ]);
+
     await updateCollectedReel(reelId, {
       caption: data.caption || existing?.caption || null,
       // Preserve existing view count if the new fetch returns 0 (Instagram restriction)
       viewCount: data.viewCount > 0 ? data.viewCount : (existing?.viewCount || 0),
       likeCount: data.likeCount > 0 ? data.likeCount : (existing?.likeCount || 0),
       commentCount: data.commentCount > 0 ? data.commentCount : (existing?.commentCount || 0),
-      thumbnailUrl: data.thumbnailUrl || existing?.thumbnailUrl || null,
-      videoUrl: data.videoUrl || existing?.videoUrl || null,
+      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
+      videoUrl: stableVid.trim() ? stableVid : null,
       duration: data.duration || existing?.duration || null,
       postedAt: data.postedAt || existing?.postedAt || null,
       ownerUsername: data.ownerUsername || existing?.ownerUsername || null,

@@ -1,5 +1,10 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { usePostHog } from "@posthog/react";
+import type { inferRouterOutputs } from "@trpc/server";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import type { AppRouter } from "../../../server/routers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,72 +16,397 @@ import {
 } from "@/components/ui/select";
 import {
   Bookmark,
-  BookmarkX,
+  BookmarkCheck,
   ExternalLink,
   Eye,
   Heart,
   MessageCircle,
   TrendingUp,
   Clock,
-  Film,
-  FileText,
-  Wand2,
   ChevronDown,
   ChevronUp,
   Loader2,
   Zap,
-  Info,
+  Grid3X3,
+  List,
 } from "lucide-react";
-import { useLocation } from "wouter";
-import { toast } from "sonner";
 import { mergeRemakeability } from "@/lib/remakeability";
-import Tooltip from "@/components/Tooltip";
+import { useUsageGate } from "@/hooks/useUsageGate";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   InlineWorkflow,
   formatNumber,
   formatPostedTime,
   formatDuration,
 } from "@/components/InlineWorkflow";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
+import {
+  ReelActionButtons,
+  type ReelActionSource,
+} from "@/components/ReelActionButtons";
 
-// SavedReels uses formatDuration for mm:ss display (different from shared)
-function formatDurationShort(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+type SavedItem = inferRouterOutputs<AppRouter>["saved"]["list"][number];
+
+type ViewMode = "list" | "grid";
+
+type RecreateBatchEntry = { latestScriptId: number; status: string };
+
+function reelRecreateState(
+  entry: RecreateBatchEntry | undefined
+): "none" | "generating" | "ready" | "failed" {
+  if (!entry) return "none";
+  if (entry.status === "pending" || entry.status === "processing") return "generating";
+  if (entry.status === "completed") return "ready";
+  return "failed";
 }
 
-// InlineWorkflow is imported from @/components/InlineWorkflow
-// Removed: local InlineWorkflow, StructureBlock, ScriptWithCues, GRADE_OPTIONS, DURATION_OPTIONS, TIME_OPTIONS,
-//          formatTimestamp, segmentsToSRT, formatTimingDuration, formatPostedTime, formatNumber
+function transcriptionIsNoSpeech(
+  t: { status?: string; transcript?: string | null; segments?: unknown } | null | undefined
+): boolean {
+  if (!t || t.status !== "completed") return false;
+  const segs = t.segments;
+  const n = Array.isArray(segs) ? segs.length : 0;
+  return !String(t.transcript ?? "").trim() && n === 0;
+}
 
-// ── Main Component ──
+function engagementPercent(item: SavedItem): number {
+  const fc = item.job.followerCount;
+  if (!fc) return 0;
+  return ((item.reel.likeCount || 0) + (item.reel.commentCount || 0)) / fc * 100;
+}
 
+/** Avoid id collisions between featured_reels.id and reels.id in mixed saved lists. */
+function txPendingKey(item: SavedItem): string | null {
+  if (item.source === "featured" && item.featuredReelId != null) return `f:${item.featuredReelId}`;
+  if (item.reelId != null) return `s:${item.reelId}`;
+  return null;
+}
+
+function transcribePendingKeyFromVariables(variables: {
+  reelId?: number;
+  featuredReelId?: number;
+}): string | null {
+  if (variables.featuredReelId != null) return `f:${variables.featuredReelId}`;
+  if (variables.reelId != null) return `s:${variables.reelId}`;
+  return null;
+}
+
+function recreateEntryForItem(
+  item: SavedItem,
+  scrapedMap: Record<number, RecreateBatchEntry>,
+  featuredMap: Record<number, RecreateBatchEntry>
+): RecreateBatchEntry | undefined {
+  if (item.source === "featured") return featuredMap[item.reel.id];
+  return scrapedMap[item.reel.id];
+}
+
+const RECREATE_BATCH_STALE_MS = 300_000;
+const RECREATE_BATCH_POLL_MS = 5_000;
+const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
 
 export default function SavedReels() {
+  const posthog = usePostHog();
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const transcribeGate = useUsageGate("transcribeCount");
+
   const savedQuery = trpc.saved.list.useQuery();
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
-  const utils = trpc.useUtils();
-
-  const [expandedReel, setExpandedReel] = useState<number | null>(null);
-  const [batchTranscribing, setBatchTranscribing] = useState(false);
-  const [sortBy, setSortBy] = useState("date");
-
-  const unsaveMutation = trpc.saved.toggle.useMutation({
-    onSuccess: () => {
-      utils.saved.list.invalidate();
-      toast.success("Reel removed from saved");
-    },
-  });
-
-  const transcribeMutation = trpc.transcribe.start.useMutation({
-    onSuccess: () => {
-      utils.saved.list.invalidate();
-    },
-  });
 
   const savedReels = savedQuery.data || [];
+  const savedReelsRef = useRef(savedReels);
+  savedReelsRef.current = savedReels;
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "grid";
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (stored === "list" || stored === "grid") return stored;
+    } catch {
+      /* ignore */
+    }
+    return "grid";
+  });
+
+  const setViewModeTracked = useCallback(
+    (next: ViewMode) => {
+      setViewMode((prev) => {
+        if (prev === next) return prev;
+        posthog?.capture("view_toggled", { mode: next, page: "saved_reels" });
+        try {
+          window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, next);
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [posthog]
+  );
+
+  const [expandedSavedId, setExpandedSavedId] = useState<number | null>(null);
+  const [gridModalSavedId, setGridModalSavedId] = useState<number | null>(null);
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+
+  const [recreatePulse, setRecreatePulse] = useState<{
+    reelId: number;
+    nonce: number;
+    openScriptId?: number;
+  } | null>(null);
+
+  const triggerRecreatePulse = useCallback((reelId: number) => {
+    const list = savedReelsRef.current;
+    const item = list.find((s) => s.reel.id === reelId);
+    if (viewModeRef.current === "grid") {
+      if (item) setGridModalSavedId(item.id);
+    } else {
+      if (item) setExpandedSavedId(item.id);
+    }
+    setRecreatePulse((prev) => ({
+      reelId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+    }));
+  }, []);
+
+  const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
+    const list = savedReelsRef.current;
+    const item = list.find((s) => s.reel.id === reelId);
+    if (viewModeRef.current === "grid") {
+      if (item) setGridModalSavedId(item.id);
+    } else {
+      if (item) setExpandedSavedId(item.id);
+    }
+    setRecreatePulse((prev) => ({
+      reelId,
+      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+      openScriptId,
+    }));
+  }, []);
+
+  const [sortBy, setSortBy] = useState("date");
+  const [batchTranscribing, setBatchTranscribing] = useState(false);
+  const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<string>>(() => new Set());
+
+  const transcribeInFlightRef = useRef(0);
+  const [, setTranscribeInFlightBumper] = useState(0);
+  const releaseTranscribeSlot = useCallback(() => {
+    transcribeInFlightRef.current = Math.max(0, transcribeInFlightRef.current - 1);
+    setTranscribeInFlightBumper((n) => n + 1);
+  }, []);
+
+  const scrapedReelIds = useMemo(
+    () =>
+      [...new Set(savedReels.filter((i) => i.source === "scraped" && i.reelId != null).map((i) => i.reelId!))],
+    [savedReels]
+  );
+  const featuredReelIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          savedReels
+            .filter((i) => i.source === "featured" && i.featuredReelId != null)
+            .map((i) => i.featuredReelId!)
+        ),
+      ],
+    [savedReels]
+  );
+
+  const recreateScrapedQuery = trpc.recreate.checkBatch.useQuery(
+    { reelIds: scrapedReelIds },
+    {
+      enabled: scrapedReelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (v && (v.status === "pending" || v.status === "processing")) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+  const recreateFeaturedQuery = trpc.recreate.checkBatch.useQuery(
+    { featuredReelIds },
+    {
+      enabled: featuredReelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (v && (v.status === "pending" || v.status === "processing")) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+
+  const scrapedRecreateMap = recreateScrapedQuery.data || {};
+  const featuredRecreateMap = recreateFeaturedQuery.data || {};
+
+  const invalidateTranscriptionFollowUp = useCallback(
+    (variables: { reelId?: number; featuredReelId?: number } | undefined) => {
+      void utils.saved.list.invalidate();
+      if (variables?.featuredReelId != null) {
+        void utils.transcribe.status.invalidate({ featuredReelId: variables.featuredReelId });
+      } else if (variables?.reelId != null) {
+        void utils.transcribe.status.invalidate({ reelId: variables.reelId });
+      }
+    },
+    [utils]
+  );
+
+  const startTranscription = trpc.transcribe.start.useMutation({
+    onSettled: (_data, _err, variables) => {
+      releaseTranscribeSlot();
+      invalidateTranscriptionFollowUp(variables);
+    },
+    onSuccess: (data, variables) => {
+      const k = transcribePendingKeyFromVariables(variables);
+      if (data.status === "completed") {
+        if (k != null) {
+          setPendingTranscriptions((prev) => {
+            const next = new Set(prev);
+            next.delete(k);
+            return next;
+          });
+        }
+        toast.success("Transcription ready");
+      } else {
+        if (
+          data.status === "processing" &&
+          "queuePending" in data &&
+          (data as { queuePending?: boolean }).queuePending
+        ) {
+          toast.info("Added to queue", {
+            description: "Will start when a slot is free.",
+          });
+        } else {
+          toast.info("Transcription started", {
+            description: "Processing audio... This may take up to a minute.",
+          });
+        }
+      }
+    },
+    onError: (error, variables) => {
+      const k = transcribePendingKeyFromVariables(variables);
+      if (k != null) {
+        setPendingTranscriptions((prev) => {
+          const next = new Set(prev);
+          next.delete(k);
+          return next;
+        });
+      }
+      toast.error("Transcription failed", { description: error.message });
+    },
+  });
+
+  const gridRecreateGenerate = trpc.recreate.generate.useMutation({
+    onSuccess: () => {
+      void utils.recreate.checkBatch.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Script generation failed", { description: error.message });
+    },
+  });
+
+  const runGridMakeVersion = useCallback(
+    (item: SavedItem) => {
+      if (item.source === "featured" && item.featuredReelId != null) {
+        gridRecreateGenerate.mutate({
+          featuredReelId: item.featuredReelId,
+          topic: "",
+          gradeLevel: "auto",
+        });
+      } else if (item.reelId != null) {
+        gridRecreateGenerate.mutate({ reelId: item.reelId, topic: "", gradeLevel: "auto" });
+      }
+    },
+    [gridRecreateGenerate]
+  );
+
+  const runTranscribeClick = useCallback(
+    (item: SavedItem, opts: { expand: boolean }) => {
+      if (!transcribeGate.allowed) {
+        toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+          description: "Upgrade your plan for more transcriptions.",
+          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+        });
+        return;
+      }
+      const pKey = txPendingKey(item);
+      if (pKey == null) return;
+      if (transcribeInFlightRef.current >= 5) {
+        toast.info("Please wait for some transcriptions to complete before starting more.");
+        return;
+      }
+      transcribeInFlightRef.current += 1;
+      setTranscribeInFlightBumper((n) => n + 1);
+      if (opts.expand) {
+        if (viewMode === "grid") {
+          setGridModalSavedId(item.id);
+        } else {
+          setExpandedSavedId(item.id);
+        }
+      }
+      setPendingTranscriptions((prev) => new Set(prev).add(pKey));
+
+      if (item.source === "featured" && item.featuredReelId != null) {
+        startTranscription.mutate({ featuredReelId: item.featuredReelId });
+      } else if (item.reelId != null) {
+        startTranscription.mutate({ reelId: item.reelId });
+      }
+    },
+    [
+      transcribeGate.allowed,
+      transcribeGate.used,
+      transcribeGate.limit,
+      viewMode,
+      startTranscription,
+      setLocation,
+    ]
+  );
+
+  useEffect(() => {
+    setGridModalSavedId(null);
+  }, [viewMode]);
+
+  /** Clear optimistic pending rows when saved.list refetches to completed/failed (same idea as Dashboard). */
+  useEffect(() => {
+    const data = savedQuery.data;
+    if (!data?.length) return;
+    setPendingTranscriptions((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      let changed = false;
+      for (const item of data) {
+        const k = txPendingKey(item);
+        if (!k || !prev.has(k)) continue;
+        const st = item.transcription?.status;
+        if (st === "completed" || st === "failed") {
+          next.delete(k);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [savedQuery.data]);
+
+  const toggleSave = trpc.saved.toggle.useMutation({
+    onSuccess: (data) => {
+      utils.saved.checkBatch.invalidate();
+      utils.saved.list.invalidate();
+      toast.success(data.saved ? "Saved" : "Removed from saved");
+    },
+  });
 
   const sortedReels = useMemo(() => {
     const all = [...savedReels];
@@ -86,72 +416,121 @@ export default function SavedReels() {
       case "likes":
         return all.sort((a, b) => (b.reel.likeCount || 0) - (a.reel.likeCount || 0));
       case "engagement":
-        const getEng = (item: typeof all[0]) =>
-          item.job.followerCount
-            ? ((item.reel.likeCount || 0) + (item.reel.commentCount || 0)) / item.job.followerCount * 100
-            : 0;
-        return all.sort((a, b) => getEng(b) - getEng(a));
+        return all.sort((a, b) => engagementPercent(b) - engagementPercent(a));
       case "date":
       default:
         return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   }, [savedReels, sortBy]);
 
-  // Group by source + handle so a handle that exists in both a user's
-  // scrape jobs AND the featured catalog renders as two separate sections
-  // — they have different navigation targets and different id keyspaces.
-  const groupedByHandle: Record<string, typeof sortedReels> = {};
+  const groupedByHandle: Record<string, SavedItem[]> = {};
   for (const item of sortedReels) {
     const groupKey = `${item.source}:${item.job.handle}`;
     if (!groupedByHandle[groupKey]) groupedByHandle[groupKey] = [];
     groupedByHandle[groupKey].push(item);
   }
 
+  const gridModalItem = useMemo(
+    () => (gridModalSavedId == null ? null : sortedReels.find((i) => i.id === gridModalSavedId) ?? null),
+    [gridModalSavedId, sortedReels]
+  );
+
   const handleTranscribeAll = async () => {
-    const untranscribed = savedReels.filter((item) => !item.transcription || item.transcription.status !== "completed");
+    if (!transcribeGate.allowed) {
+      toast.error(`Transcription limit reached (${transcribeGate.used}/${transcribeGate.limit})`, {
+        description: "Upgrade your plan for more transcriptions.",
+        action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+      });
+      return;
+    }
+    const untranscribed = savedReels.filter(
+      (item) => !item.transcription || item.transcription.status !== "completed"
+    );
     if (untranscribed.length === 0) {
       toast.info("All saved reels are already transcribed!");
       return;
     }
     setBatchTranscribing(true);
     let started = 0;
-    for (const item of untranscribed) {
-      try {
-        // Route to the right transcribe input based on the saved row's
-        // source; `saved.list` guarantees exactly one of reelId / featuredReelId.
-        if (item.source === "featured" && item.featuredReelId != null) {
-          await transcribeMutation.mutateAsync({ featuredReelId: item.featuredReelId });
-          started++;
-        } else if (item.reelId != null) {
-          await transcribeMutation.mutateAsync({ reelId: item.reelId });
-          started++;
+    try {
+      for (const item of untranscribed) {
+        try {
+          if (item.source === "featured" && item.featuredReelId != null) {
+            await startTranscription.mutateAsync({ featuredReelId: item.featuredReelId });
+            started++;
+          } else if (item.reelId != null) {
+            await startTranscription.mutateAsync({ reelId: item.reelId });
+            started++;
+          }
+        } catch {
+          /* continue */
         }
-      } catch { /* continue */ }
+      }
+    } finally {
+      setBatchTranscribing(false);
     }
-    setBatchTranscribing(false);
     toast.success(`Started transcription for ${started} reel${started !== 1 ? "s" : ""}`);
-    utils.saved.list.invalidate();
   };
 
-  const untranscribedCount = savedReels.filter((item) => !item.transcription || item.transcription.status !== "completed").length;
+  const untranscribedCount = savedReels.filter(
+    (item) => !item.transcription || item.transcription.status !== "completed"
+  ).length;
+
+  const reelActionSource = (item: SavedItem): ReelActionSource =>
+    item.source === "featured" && item.featuredReelId != null
+      ? { source: "featured", featuredReelId: item.featuredReelId }
+      : { source: "user_job", reelId: item.reelId!, jobId: item.jobId! };
+
+  const onToggleSave = (item: SavedItem) => {
+    if (item.source === "featured" && item.featuredReelId != null) {
+      toggleSave.mutate({ featuredReelId: item.featuredReelId });
+    } else if (item.reelId != null && item.jobId != null) {
+      toggleSave.mutate({ reelId: item.reelId, jobId: item.jobId });
+    }
+  };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-7xl px-1 sm:px-0">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
             <Bookmark className="h-6 w-6 text-primary" />
             Saved Reels
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {savedReels.length} reel{savedReels.length !== 1 ? "s" : ""} saved across {Object.keys(groupedByHandle).length} account{Object.keys(groupedByHandle).length !== 1 ? "s" : ""}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {savedReels.length} reel{savedReels.length !== 1 ? "s" : ""} saved across{" "}
+            {Object.keys(groupedByHandle).length} account{Object.keys(groupedByHandle).length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "list" ? "default" : "ghost"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setViewModeTracked("list")}
+            >
+              <List className="mr-1 h-3.5 w-3.5" />
+              List
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setViewModeTracked("grid")}
+            >
+              <Grid3X3 className="mr-1 h-3.5 w-3.5" />
+              Grid
+            </Button>
+          </div>
+
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="Sort by..." />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="date">Recently Saved</SelectItem>
               <SelectItem value="views">Most Views</SelectItem>
@@ -161,235 +540,542 @@ export default function SavedReels() {
           </Select>
 
           {savedReels.length > 0 && (
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleTranscribeAll} disabled={batchTranscribing || untranscribedCount === 0}>
-              {batchTranscribing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Zap className="mr-1.5 h-3.5 w-3.5" />}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => void handleTranscribeAll()}
+              disabled={batchTranscribing || untranscribedCount === 0}
+            >
+              {batchTranscribing ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Zap className="mr-1.5 h-3.5 w-3.5" />
+              )}
               {untranscribedCount > 0 ? `Transcribe All (${untranscribedCount})` : "All Transcribed"}
             </Button>
           )}
         </div>
       </div>
 
+      {!transcribeGate.isLoading && !transcribeGate.allowed && (
+        <div className="mb-4">
+          <UpgradePrompt
+            action="transcribeCount"
+            used={transcribeGate.used}
+            limit={transcribeGate.limit}
+            planRequired={transcribeGate.planRequired}
+            variant="banner"
+          />
+        </div>
+      )}
+
       {savedQuery.isLoading && (
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       )}
 
       {!savedQuery.isLoading && savedReels.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Bookmark className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h2 className="text-lg font-medium text-foreground mb-2">No saved reels yet</h2>
-          <p className="text-sm text-muted-foreground max-w-sm">
+          <Bookmark className="mb-4 h-12 w-12 text-muted-foreground/30" />
+          <h2 className="mb-2 text-lg font-medium text-foreground">No saved reels yet</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
             Save reels from the Dashboard by clicking the bookmark icon. Saved reels appear here for quick access.
           </p>
         </div>
       )}
 
-      {Object.entries(groupedByHandle).map(([groupKey, items]) => {
-        const handle = groupKey.split(":").slice(1).join(":");
-        // Handle click target depends on the source: scraped rows jump to
-        // the scrape-job dashboard, featured rows to the instant Path-B
-        // dashboard. We pick the first item's source as representative;
-        // groups are already keyed on handle so they can't mix.
-        const headerHref =
-          items[0].source === "featured" && items[0].job.featuredAccountId != null
-            ? `/dashboard?featuredAccountId=${items[0].job.featuredAccountId}`
-            : items[0].jobId != null
-            ? `/dashboard?jobId=${items[0].jobId}`
-            : null;
-        return (
-        <div key={groupKey} className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={() => headerHref && setLocation(headerHref)}
-              disabled={!headerHref}
-              className="text-lg font-semibold text-foreground hover:text-primary transition-colors disabled:opacity-60"
-            >
-              @{handle}
-            </button>
-            <Badge variant="outline" className="text-xs">{items.length} saved</Badge>
-            {items[0].source === "featured" && (
-              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">Featured</Badge>
-            )}
-            {items[0].job.followerCount ? (
-              <span className="text-xs text-muted-foreground">{formatNumber(items[0].job.followerCount)} followers</span>
-            ) : null}
-          </div>
-
-          <div className="space-y-1">
-            {items.map((item) => {
-              const reel = item.reel;
-              const engagementRate = item.job.followerCount
-                ? (((reel.likeCount || 0) + (reel.commentCount || 0)) / item.job.followerCount) * 100
+      {savedReels.length > 0 &&
+        Object.entries(groupedByHandle).map(([groupKey, items]) => {
+          const handle = groupKey.split(":").slice(1).join(":");
+          const headerHref =
+            items[0].source === "featured" && items[0].job.featuredAccountId != null
+              ? `/dashboard?featuredAccountId=${items[0].job.featuredAccountId}`
+              : items[0].jobId != null
+                ? `/dashboard?jobId=${items[0].jobId}`
                 : null;
-              // `rowKey` discriminates expanded state between scraped and
-              // featured rows (they can share a numeric id across tables).
-              // For 3b we fall back to reelId; 3c makes this source-aware.
-              const rowKey = item.reelId ?? item.featuredReelId ?? 0;
-              const isExpanded = expandedReel === rowKey;
-              const hasTranscript = !!item.transcription && item.transcription.status === "completed";
-              const isProcessing = item.transcription?.status === "processing";
-              const rowNotRemakeable = mergeRemakeability(
-                item.transcription,
-                item.reel
-              ).notRemakeable;
 
-              return (
-                <div key={item.id} className="rounded-lg border border-border bg-card overflow-hidden">
-                  <div
-                    className={`flex items-center gap-2 sm:gap-4 p-2 sm:p-3 hover:bg-accent/30 transition-colors cursor-pointer ${isExpanded ? "bg-accent/20" : ""}`}
-                    onClick={() => setExpandedReel(isExpanded ? null : rowKey)}
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative w-16 h-20 rounded-md overflow-hidden bg-muted shrink-0">
-                      {reel.thumbnailUrl ? (
-                        <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Film className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      {reel.duration && (
-                        <span className="absolute bottom-1 left-1 text-[10px] bg-black/70 text-white px-1 rounded">
-                          {formatDurationShort(reel.duration)}
-                        </span>
-                      )}
-                    </div>
+          return (
+            <div key={groupKey} className="mb-8">
+              <div className="mb-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => headerHref && setLocation(headerHref)}
+                  disabled={!headerHref}
+                  className="text-lg font-semibold text-foreground transition-colors hover:text-primary disabled:opacity-60"
+                >
+                  @{handle}
+                </button>
+                <Badge variant="outline" className="text-xs">
+                  {items.length} saved
+                </Badge>
+                {items[0].source === "featured" && (
+                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                    Featured
+                  </Badge>
+                )}
+                {items[0].job.followerCount ? (
+                  <span className="text-xs text-muted-foreground">
+                    {formatNumber(items[0].job.followerCount)} followers
+                  </span>
+                ) : null}
+              </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground line-clamp-2 leading-snug">{reel.caption || "No caption"}</p>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
-                        <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {formatNumber(reel.viewCount || 0)}</span>
-                        <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {formatNumber(reel.likeCount || 0)}</span>
-                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {formatNumber(reel.commentCount || 0)}</span>
-                        {engagementRate !== null && (
-                          <span className="flex items-center gap-1 text-emerald-400"><TrendingUp className="h-3 w-3" /> {engagementRate.toFixed(2)}%</span>
-                        )}
-                        {reel.postedAt && (
-                          <span className="flex items-center gap-1 text-amber-400/80">
-                            <Clock className="h-3 w-3" /> {formatPostedTime(reel.postedAt, userTimezone)}
+              {viewMode === "list" && (
+                <div className="space-y-1">
+                  {items.map((item, index) => {
+                    const reel = item.reel;
+                    const engagementRate = engagementPercent(item);
+                    const isExpanded = expandedSavedId === item.id;
+                    const pKey = txPendingKey(item);
+                    const hasTranscription = !!item.transcription && item.transcription.status === "completed";
+                    const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
+                    const isProcessing =
+                      item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
+                    const isFailed =
+                      item.transcription?.status === "failed" && !(pKey && pendingTranscriptions.has(pKey));
+                    const isTxQueued =
+                      isProcessing &&
+                      item.source === "scraped" &&
+                      (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
+                    const transcribeAtCap = transcribeInFlightRef.current >= 5;
+                    const recreateSt = reelRecreateState(
+                      recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
+                    );
+                    const idleNotRemakeable =
+                      mergeRemakeability(item.transcription, item.reel).notRemakeable &&
+                      hasTranscription &&
+                      !isNoSpeech &&
+                      recreateSt === "none";
+
+                    return (
+                      <div key={item.id} className="overflow-hidden rounded-lg border border-border/30">
+                        <div
+                          className={`flex cursor-pointer items-center gap-2 bg-card/50 p-2 transition-colors hover:bg-card sm:gap-3 sm:p-3 ${
+                            isExpanded ? "border-b border-border/30 bg-card" : ""
+                          }`}
+                          onClick={() => setExpandedSavedId(isExpanded ? null : item.id)}
+                        >
+                          <span className="hidden w-5 shrink-0 text-right font-mono text-sm text-muted-foreground sm:block sm:w-6">
+                            {index + 1}
                           </span>
+
+                          <div className="relative h-18 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+                            <DashboardReelGridMedia
+                              size="compact"
+                              className="relative h-full w-full"
+                              thumbnailUrl={reel.thumbnailUrl}
+                              videoUrl={reel.videoUrl}
+                            />
+                            {reel.duration ? (
+                              <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[9px] font-mono text-white">
+                                {Math.floor(reel.duration / 60)}:
+                                {(Math.floor(reel.duration % 60)).toString().padStart(2, "0")}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-0.5 flex items-center gap-2">
+                              <p className="line-clamp-1 text-sm leading-snug text-foreground">
+                                {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
+                              </p>
+                              {hasTranscription && !isNoSpeech && (
+                                <span className="shrink-0 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-400">
+                                  Transcribed
+                                </span>
+                              )}
+                              {isNoSpeech && (
+                                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                                  No voice
+                                </span>
+                              )}
+                              {isProcessing && (
+                                <span className="shrink-0 animate-pulse rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                                  Processing
+                                </span>
+                              )}
+                              {isFailed && (
+                                <span className="shrink-0 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[9px] font-medium text-red-400">
+                                  Failed
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Eye className="h-3 w-3" />
+                                {formatNumber(reel.viewCount)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Heart className="h-3 w-3" />
+                                {formatNumber(reel.likeCount)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" />
+                                {formatNumber(reel.commentCount)}
+                              </span>
+                              {engagementRate > 0 && (
+                                <span className="flex items-center gap-1 font-medium text-emerald-400">
+                                  <TrendingUp className="h-3 w-3" />
+                                  {engagementRate.toFixed(2)}%
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1 text-amber-400/80">
+                                <Clock className="h-3 w-3" />
+                                {formatPostedTime(reel.postedAt, userTimezone)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-0.5 sm:gap-1">
+                            <ReelActionButtons
+                              source={reelActionSource(item)}
+                              reelId={reel.id}
+                              reelUrl={reel.reelUrl}
+                              isSaved
+                              hasTranscription={hasTranscription}
+                              isProcessing={isProcessing}
+                              isFailed={isFailed}
+                              recreateState={recreateSt}
+                              idleNotRemakeable={idleNotRemakeable}
+                              saveBusy={toggleSave.isPending}
+                              transcribeDisabled={transcribeAtCap}
+                              isQueued={isTxQueued}
+                              isNoSpeech={isNoSpeech}
+                              classificationReason={reel.classificationReason ?? undefined}
+                              onToggleSave={() => onToggleSave(item)}
+                              onTranscribe={() => runTranscribeClick(item, { expand: true })}
+                              onExpand={() => setExpandedSavedId(item.id)}
+                              onMakeVersion={() => triggerRecreatePulse(reel.id)}
+                              onOpenMyScript={() => {
+                                const e = recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap);
+                                if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                              }}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedSavedId(isExpanded ? null : item.id);
+                              }}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isExpanded && item.source === "featured" && item.featuredReelId != null && (
+                          <InlineWorkflow
+                            reelSource="featured"
+                            featuredReelId={item.featuredReelId}
+                            handle={handle}
+                            hasTranscription={hasTranscription}
+                            isProcessing={isProcessing}
+                            isTranscriptionQueued={isTxQueued}
+                            isNoSpeech={isNoSpeech}
+                            inspirationPanelVariant="saved-collected"
+                            listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                            reelClassification={item.reel}
+                            onSaveForInspiration={() => onToggleSave(item)}
+                            saveForInspirationBusy={toggleSave.isPending}
+                            inspirationReelIsSaved
+                            onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                            userTimezone={userTimezone}
+                            postedAt={reel.postedAt}
+                            recreateEntrySignal={
+                              recreatePulse?.reelId === reel.id
+                                ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                                : undefined
+                            }
+                          />
+                        )}
+                        {isExpanded && item.source === "scraped" && item.reelId != null && (
+                          <InlineWorkflow
+                            reelSource="user_job"
+                            reelId={item.reelId}
+                            handle={handle}
+                            hasTranscription={hasTranscription}
+                            isProcessing={isProcessing}
+                            isTranscriptionQueued={isTxQueued}
+                            isNoSpeech={isNoSpeech}
+                            inspirationPanelVariant="saved-collected"
+                            listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                            reelClassification={item.reel}
+                            onSaveForInspiration={() => onToggleSave(item)}
+                            saveForInspirationBusy={toggleSave.isPending}
+                            inspirationReelIsSaved
+                            onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                            userTimezone={userTimezone}
+                            postedAt={reel.postedAt}
+                            recreateEntrySignal={
+                              recreatePulse?.reelId === reel.id
+                                ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                                : undefined
+                            }
+                          />
                         )}
                       </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
-                      <Button variant={hasTranscript ? "ghost" : "outline"} size="sm" className="h-7 text-xs" onClick={() => {
-                        if (hasTranscript || isProcessing) {
-                          setExpandedReel(rowKey);
-                        } else if (item.source === "featured" && item.featuredReelId != null) {
-                          transcribeMutation.mutate({ featuredReelId: item.featuredReelId });
-                          toast.info("Transcription started...");
-                          setExpandedReel(rowKey);
-                        } else if (item.reelId != null) {
-                          transcribeMutation.mutate({ reelId: item.reelId });
-                          toast.info("Transcription started...");
-                          setExpandedReel(rowKey);
-                        }
-                      }} disabled={transcribeMutation.isPending}>
-                        <FileText className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">{hasTranscript ? "Transcript" : isProcessing ? "Transcribing..." : "Transcribe"}</span>
-                      </Button>
-
-                      {hasTranscript && (
-                        rowNotRemakeable ? (
-                          <p className="text-[10px] sm:text-xs italic text-muted-foreground text-right leading-tight max-w-[5.5rem] sm:max-w-none self-center flex items-center justify-end gap-1">
-                            <span>Saved as inspiration</span>
-                            {reel.classificationReason?.trim() ? (
-                              <Tooltip content={reel.classificationReason.trim()}>
-                                <span className="inline-flex cursor-help shrink-0">
-                                  <Info className="h-3 w-3 text-muted-foreground/70" aria-hidden />
-                                </span>
-                              </Tooltip>
-                            ) : null}
-                          </p>
-                        ) : (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setExpandedReel(rowKey)}>
-                            <Wand2 className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Re-Create</span>
-                          </Button>
-                        )
-                      )}
-
-                      {reel.reelUrl && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => window.open(reel.reelUrl, "_blank")} title="Open on Instagram">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpandedReel(isExpanded ? null : rowKey)}>
-                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                        onClick={() => {
-                          if (item.source === "featured" && item.featuredReelId != null) {
-                            unsaveMutation.mutate({ featuredReelId: item.featuredReelId });
-                          } else if (item.reelId != null && item.jobId != null) {
-                            unsaveMutation.mutate({ reelId: item.reelId, jobId: item.jobId });
-                          }
-                        }}
-                        disabled={unsaveMutation.isPending}
-                        title="Remove from saved"
-                      >
-                        <BookmarkX className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Expanded inline workflow — source-aware. */}
-                  {isExpanded && item.source === "featured" && item.featuredReelId != null && (
-                    <InlineWorkflow
-                      reelSource="featured"
-                      featuredReelId={item.featuredReelId}
-                      handle={handle}
-                      hasTranscription={hasTranscript}
-                      isProcessing={!!isProcessing}
-                      inspirationPanelVariant="saved-collected"
-                      listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
-                      reelClassification={item.reel}
-                      onTranscribe={() => {
-                        if (item.featuredReelId != null) {
-                          transcribeMutation.mutate({ featuredReelId: item.featuredReelId });
-                          toast.info("Transcription started...");
-                        }
-                      }}
-                      userTimezone={userTimezone}
-                      postedAt={reel.postedAt}
-                    />
-                  )}
-                  {isExpanded && item.source === "scraped" && item.reelId != null && (
-                    <InlineWorkflow
-                      reelSource="user_job"
-                      reelId={item.reelId}
-                      handle={handle}
-                      hasTranscription={hasTranscript}
-                      isProcessing={!!isProcessing}
-                      inspirationPanelVariant="saved-collected"
-                      listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
-                      reelClassification={item.reel}
-                      onTranscribe={() => {
-                        if (item.reelId != null) {
-                          transcribeMutation.mutate({ reelId: item.reelId });
-                          toast.info("Transcription started...");
-                        }
-                      }}
-                      userTimezone={userTimezone}
-                      postedAt={reel.postedAt}
-                    />
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-        );
-      })}
+              )}
+
+              {viewMode === "grid" && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {items.map((item, index) => {
+                    const reel = item.reel;
+                    const engagementRate = engagementPercent(item);
+                    const isModalOpen = gridModalSavedId === item.id;
+                    const pKey = txPendingKey(item);
+                    const hasTranscription = !!item.transcription && item.transcription.status === "completed";
+                    const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
+                    const isProcessing =
+                      item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
+                    const isFailed =
+                      item.transcription?.status === "failed" && !(pKey && pendingTranscriptions.has(pKey));
+                    const isTxQueued =
+                      isProcessing &&
+                      item.source === "scraped" &&
+                      (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
+                    const transcribeAtCap = transcribeInFlightRef.current >= 5;
+                    const recreateSt = reelRecreateState(
+                      recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
+                    );
+                    const idleNotRemakeable =
+                      mergeRemakeability(item.transcription, item.reel).notRemakeable &&
+                      hasTranscription &&
+                      !isNoSpeech &&
+                      recreateSt === "none";
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`group relative rounded-lg border bg-card transition-colors ${
+                          isModalOpen ? "border-primary/40" : "border-border/40 hover:border-border/70"
+                        }`}
+                      >
+                        <div
+                          className="relative aspect-[9/14] cursor-pointer overflow-hidden"
+                          onClick={() => setGridModalSavedId(item.id)}
+                        >
+                          <DashboardReelGridMedia
+                            className="relative h-full w-full"
+                            thumbnailUrl={reel.thumbnailUrl}
+                            videoUrl={reel.videoUrl}
+                          />
+                          <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+                            #{index + 1}
+                          </div>
+                          {engagementRate > 0 && (
+                            <div className="absolute bottom-2 left-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                              {engagementRate.toFixed(2)}%
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="absolute right-2 top-2 rounded-full p-1.5 backdrop-blur transition-colors bg-emerald-500/90 text-white hover:bg-emerald-500"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleSave(item);
+                            }}
+                            disabled={toggleSave.isPending}
+                            title="Remove from saved"
+                            aria-label="Remove from saved"
+                          >
+                            <BookmarkCheck className="h-3.5 w-3.5" />
+                          </button>
+                          <a
+                            href={reel.reelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute bottom-2 right-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
+                            title="Open on Instagram"
+                            aria-label="Open on Instagram"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                          {reel.duration ? (
+                            <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+                              {formatDuration(reel.duration)}
+                            </span>
+                          ) : null}
+                          {hasTranscription && !isNoSpeech && (
+                            <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                              Transcribed
+                            </span>
+                          )}
+                          {isNoSpeech && (
+                            <span className="absolute left-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                              No voice
+                            </span>
+                          )}
+                          {isProcessing && (
+                            <span className="absolute left-2 top-10 animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                              Processing
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="shrink-0 space-y-2 p-2.5">
+                          <div className="cursor-pointer space-y-2" onClick={() => setGridModalSavedId(item.id)}>
+                            <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+                              {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                              <span>{formatNumber(reel.viewCount)} views</span>
+                              <span aria-hidden>·</span>
+                              <span>{formatNumber(reel.likeCount)} likes</span>
+                              <span aria-hidden>·</span>
+                              <span>{formatNumber(reel.commentCount)} comments</span>
+                              {engagementRate > 0 && (
+                                <>
+                                  <span aria-hidden>·</span>
+                                  <span className="font-medium text-emerald-400">
+                                    {engagementRate.toFixed(2)}%
+                                  </span>
+                                </>
+                              )}
+                              <span aria-hidden>·</span>
+                              <span className="text-amber-400/80">
+                                {formatPostedTime(reel.postedAt, userTimezone)}
+                              </span>
+                            </div>
+                          </div>
+                          <ReelActionButtons
+                            source={reelActionSource(item)}
+                            reelId={reel.id}
+                            reelUrl={reel.reelUrl}
+                            isSaved
+                            hasTranscription={hasTranscription}
+                            isProcessing={isProcessing}
+                            isFailed={isFailed}
+                            recreateState={recreateSt}
+                            idleNotRemakeable={idleNotRemakeable}
+                            saveBusy={toggleSave.isPending}
+                            transcribeDisabled={transcribeAtCap}
+                            isQueued={isTxQueued}
+                            isNoSpeech={isNoSpeech}
+                            classificationReason={reel.classificationReason ?? undefined}
+                            compact
+                            hideBookmark
+                            hideExternalLink
+                            onToggleSave={() => onToggleSave(item)}
+                            onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                            onExpand={() => setGridModalSavedId(item.id)}
+                            onMakeVersion={() => runGridMakeVersion(item)}
+                            onOpenMyScript={() => {
+                              const e = recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap);
+                              if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+      <GridReelWorkflowDialog
+        open={gridModalItem != null}
+        onOpenChange={(open) => {
+          if (!open) setGridModalSavedId(null);
+        }}
+        reel={
+          gridModalItem
+            ? {
+                id: gridModalItem.reel.id,
+                caption: gridModalItem.reel.caption,
+                thumbnailUrl: gridModalItem.reel.thumbnailUrl,
+                videoUrl: gridModalItem.reel.videoUrl ?? "",
+                viewCount: gridModalItem.reel.viewCount,
+                likeCount: gridModalItem.reel.likeCount,
+                commentCount: gridModalItem.reel.commentCount,
+                engagementRate: engagementPercent(gridModalItem),
+                postedAt: gridModalItem.reel.postedAt,
+                duration: gridModalItem.reel.duration,
+              }
+            : null
+        }
+        userTimezone={userTimezone}
+      >
+        {gridModalItem
+          ? (() => {
+              const item = gridModalItem;
+              const reel = item.reel;
+              const handle = item.job.handle;
+              const hasTranscription = !!item.transcription && item.transcription.status === "completed";
+              const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
+              const pKey = txPendingKey(item);
+              const isProcessing =
+                item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
+              const isTxQueued =
+                isProcessing &&
+                item.source === "scraped" &&
+                (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
+
+              return item.source === "featured" && item.featuredReelId != null ? (
+                <InlineWorkflow
+                  reelSource="featured"
+                  featuredReelId={item.featuredReelId}
+                  handle={handle}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="saved-collected"
+                  listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                  reelClassification={item.reel}
+                  onSaveForInspiration={() => onToggleSave(item)}
+                  saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved
+                  onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                      : undefined
+                  }
+                />
+              ) : item.reelId != null ? (
+                <InlineWorkflow
+                  reelSource="user_job"
+                  reelId={item.reelId}
+                  handle={handle}
+                  hasTranscription={hasTranscription}
+                  isProcessing={isProcessing}
+                  isTranscriptionQueued={isTxQueued}
+                  isNoSpeech={isNoSpeech}
+                  inspirationPanelVariant="saved-collected"
+                  listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                  reelClassification={item.reel}
+                  onSaveForInspiration={() => onToggleSave(item)}
+                  saveForInspirationBusy={toggleSave.isPending}
+                  inspirationReelIsSaved
+                  onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                  userTimezone={userTimezone}
+                  postedAt={reel.postedAt}
+                  recreateEntrySignal={
+                    recreatePulse?.reelId === reel.id
+                      ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                      : undefined
+                  }
+                />
+              ) : null;
+            })()
+          : null}
+      </GridReelWorkflowDialog>
     </div>
   );
 }
-

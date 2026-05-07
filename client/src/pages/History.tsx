@@ -1,13 +1,23 @@
+import { useMemo, useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/trpc";
+import type { AppRouter } from "../../../server/routers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLocation } from "wouter";
 import {
-  History as HistoryIcon,
+  Radar,
   Film,
   ArrowRight,
   Loader2,
@@ -15,9 +25,20 @@ import {
   Calendar,
   RefreshCw,
   Trash2,
+  Users,
+  Eye,
+  Heart,
+  MessageCircle,
+  TrendingUp,
+  LayoutGrid,
+  List,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMemo } from "react";
+import { formatNumber } from "@/components/InlineWorkflow";
+import Tooltip from "@/components/Tooltip";
+
+type ScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
 
 function formatDate(d: Date | string): string {
   const date = new Date(d);
@@ -67,34 +88,73 @@ function jobStatusLabel(job: { status: string; failureReason?: string | null }):
   }
 }
 
+function readableNiche(slug: string | null | undefined): string | null {
+  if (!slug?.trim()) return null;
+  return slug
+    .split("-")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+type SortKey = "updated" | "reels" | "followers" | "engagement";
+type LayoutMode = "gallery" | "rows";
+
 export default function History() {
   const [, setLocation] = useLocation();
   const jobsQuery = trpc.scrape.list.useQuery();
   const utils = trpc.useUtils();
 
-  // Deduplicate: group by handle (case-insensitive), keep the latest (most reels or most recent) per handle
+  const [sortBy, setSortBy] = useState<SortKey>("updated");
+  const [layout, setLayout] = useState<LayoutMode>("gallery");
+
   const deduplicatedJobs = useMemo(() => {
     if (!jobsQuery.data) return [];
-    const handleMap = new Map<string, typeof jobsQuery.data[number]>();
-    // Jobs are already sorted by createdAt desc, so first occurrence is latest
+    const handleMap = new Map<string, ScrapeJobRow>();
     for (const job of jobsQuery.data) {
       const key = job.handle.toLowerCase();
       const existing = handleMap.get(key);
       if (!existing) {
         handleMap.set(key, job);
-      } else {
-        // Keep the one with more reels, or the more recent one
-        if (job.totalReels > existing.totalReels) {
-          handleMap.set(key, job);
-        }
+      } else if (job.totalReels > existing.totalReels) {
+        handleMap.set(key, job);
       }
     }
     return Array.from(handleMap.values());
   }, [jobsQuery.data]);
 
+  const sortedJobs = useMemo(() => {
+    const list = [...deduplicatedJobs];
+    const engagement = (j: ScrapeJobRow) => j.reelStats?.avgEngagementPct ?? 0;
+    switch (sortBy) {
+      case "reels":
+        return list.sort((a, b) => b.totalReels - a.totalReels);
+      case "followers":
+        return list.sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0));
+      case "engagement":
+        return list.sort((a, b) => engagement(b) - engagement(a));
+      case "updated":
+      default:
+        return list.sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+    }
+  }, [deduplicatedJobs, sortBy]);
+
+  const summary = useMemo(() => {
+    let reels = 0;
+    let followers = 0;
+    let views = 0;
+    for (const j of sortedJobs) {
+      reels += j.totalReels || 0;
+      followers += j.followerCount || 0;
+      views += j.reelStats?.totalViews ?? 0;
+    }
+    return { accounts: sortedJobs.length, reels, followers, views };
+  }, [sortedJobs]);
+
   const resyncMutation = trpc.scrape.resync.useMutation({
     onError: (error) => {
-      toast.error("Re-sync failed", { description: error.message });
+      toast.error("Refresh failed", { description: error.message });
     },
   });
 
@@ -107,8 +167,8 @@ export default function History() {
           utils.scrape.list.invalidate();
           void utils.scrape.status.invalidate({ jobId });
           void utils.reels.list.invalidate({ jobId });
-          toast.success("Refresh started", {
-            description: `Loading reels from the last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}...`,
+          toast.success("Pulling fresh reels", {
+            description: `Fetching posts since your last sync (last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}). New data only—not a historical backfill.`,
           });
         },
       }
@@ -125,7 +185,7 @@ export default function History() {
           void utils.scrape.status.invalidate({ jobId });
           void utils.reels.list.invalidate({ jobId });
           toast.success("Retry started", {
-            description: "Analysis is running again in the background.",
+            description: "We’re reconnecting and running the pipeline again.",
           });
         },
       }
@@ -134,126 +194,434 @@ export default function History() {
 
   const deleteMutation = trpc.scrape.delete.useMutation({
     onSuccess: () => {
-      toast.success("Removed from monitoring");
+      toast.success("Removed from Creator Radar");
       utils.scrape.list.invalidate();
     },
     onError: (error) => {
-      toast.error("Failed to remove", { description: error.message });
+      toast.error("Couldn’t remove", { description: error.message });
     },
   });
 
   const handleDelete = (e: React.MouseEvent, jobId: number, handle: string) => {
     e.stopPropagation();
-    if (confirm(`Remove @${handle} from monitoring? This will also delete all collected reels for this job.`)) {
+    if (
+      confirm(
+        `Remove @${handle} from Creator Radar? This deletes the reels we stored for that spy session and any collected reels tied to it.`
+      )
+    ) {
       deleteMutation.mutate({ jobId });
     }
   };
 
+  const openJob = (job: ScrapeJobRow) => {
+    if (job.status === "completed" || job.status === "running") {
+      setLocation(`/dashboard?jobId=${job.id}&from=history`);
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto pt-4">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <HistoryIcon className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              Account Monitoring
+    <div className="mx-auto max-w-7xl px-1 pb-10 pt-2 sm:px-0">
+      {/* Hero */}
+      <div className="relative mb-8 overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-violet-950/40 via-card to-cyan-950/20 p-6 sm:p-8">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur">
+              <Radar className="h-3.5 w-3.5 text-violet-400" />
+              Live session data
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              Creator Radar
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Track your research jobs and monitor competitor accounts.
+            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+              A watchlist built from your SpyReels sessions. Each tile shows follower reach, reels in your scan window,
+              and rollup engagement from Instagram.{" "}
+              <span className="text-foreground/90 font-medium">
+                Refresh pulls only new posts since your last sync
+              </span>
+              —we don&apos;t backfill ancient history.
             </p>
           </div>
+          <Button
+            onClick={() => setLocation("/research")}
+            className="relative shrink-0 bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-900/20 hover:opacity-95"
+          >
+            Track a creator
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         </div>
-        <Button onClick={() => setLocation("/")} size="sm">
-          Add account
-        </Button>
+
+        {sortedJobs.length > 0 && (
+          <div className="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Tracked</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{summary.accounts}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Reels in sessions
+              </p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+                {formatNumber(summary.reels)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Audience (sum)
+              </p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+                {formatNumber(summary.followers)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Views (rollup)
+              </p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+                {summary.views > 0 ? formatNumber(summary.views) : "—"}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sort</span>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+            <SelectTrigger className="h-9 w-[200px] border-border/60 bg-card text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Recently updated</SelectItem>
+              <SelectItem value="reels">Most reels in session</SelectItem>
+              <SelectItem value="followers">Largest audience</SelectItem>
+              <SelectItem value="engagement">Highest avg reel engagement</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex rounded-lg border border-border/60 bg-muted/20 p-0.5">
+          <Button
+            type="button"
+            variant={layout === "gallery" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-3 text-xs"
+            onClick={() => setLayout("gallery")}
+          >
+            <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
+            Cards
+          </Button>
+          <Button
+            type="button"
+            variant={layout === "rows" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-3 text-xs"
+            onClick={() => setLayout("rows")}
+          >
+            <List className="mr-1.5 h-3.5 w-3.5" />
+            Rows
+          </Button>
+        </div>
       </div>
 
       {jobsQuery.isLoading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" />
         </div>
       )}
 
       {jobsQuery.data && jobsQuery.data.length === 0 && (
         <Card className="border-border/50 bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-            <Film className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-muted-foreground">No tracked accounts yet.</p>
-            <Button variant="outline" onClick={() => setLocation("/")}>
-              Start your first analysis
+          <CardContent className="flex flex-col items-center justify-center gap-5 py-16">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
+              <Radar className="h-7 w-7 text-violet-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-base font-medium text-foreground">No creators tracked yet</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Start from Spy Viral Reels. Each completed session lands here as a radar tile with Instagram metrics from
+                that scrape window.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => setLocation("/research")}>
+              Open Spy Viral Reels
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {deduplicatedJobs.length > 0 && (
-        <div className="space-y-2">
-          {deduplicatedJobs.map((job) => {
+      {sortedJobs.length > 0 && layout === "gallery" && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {sortedJobs.map((job) => {
             const syncedRecently = isSyncedWithin24h(job.updatedAt);
+            const stats = job.reelStats;
+            const niche = readableNiche(job.classifiedNicheSlug);
+            const canOpenRadar = job.status === "completed" || job.status === "running";
             return (
               <div
                 key={job.id}
-                className="flex items-center gap-4 rounded-lg border border-border/50 bg-card p-4 hover:border-border transition-colors cursor-pointer group"
+                role={canOpenRadar ? "button" : undefined}
+                tabIndex={canOpenRadar ? 0 : undefined}
                 onClick={() => {
-                  if (job.status === "completed" || job.status === "running") {
-                    setLocation(`/dashboard?jobId=${job.id}&from=history`);
-                  }
+                  if (canOpenRadar) openJob(job);
+                }}
+                onKeyDown={(e) => {
+                  if (canOpenRadar && e.key === "Enter") openJob(job);
+                }}
+                className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left transition-all hover:border-primary/35 hover:shadow-lg hover:shadow-primary/5 ${
+                  job.status === "failed"
+                    ? "border-destructive/30 opacity-95"
+                    : "border-border/50"
+                } ${canOpenRadar ? "cursor-pointer" : "cursor-default"}`}
+              >
+                <div className="flex items-start gap-4 border-b border-border/40 bg-muted/15 p-4">
+                  <div className="relative shrink-0">
+                    <div
+                      className={`h-14 w-14 rounded-2xl bg-muted overflow-hidden ring-2 ring-offset-2 ring-offset-background ${
+                        syncedRecently && job.status === "completed" ? "ring-emerald-500/50" : "ring-border/50"
+                      }`}
+                    >
+                      <img
+                        src={
+                          job.profilePicUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6366f1&color=fff&size=112&bold=true&format=svg`
+                        }
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6366f1&color=fff&size=112&bold=true&format=svg`;
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-base font-semibold text-foreground">@{job.handle}</span>
+                      <Badge
+                        variant={
+                          job.status === "completed"
+                            ? "secondary"
+                            : job.status === "failed"
+                              ? "destructive"
+                              : "outline"
+                        }
+                        className="text-[10px]"
+                      >
+                        {job.status === "running" && (
+                          <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
+                        )}
+                        {job.status === "failed" ? jobStatusLabel(job) : job.status}
+                      </Badge>
+                      {syncedRecently && job.status === "completed" ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
+                          Fresh
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> Sync {timeAgo(job.updatedAt)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" /> {formatDate(job.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                  {canOpenRadar ? (
+                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-70" />
+                  ) : null}
+                </div>
+
+                {niche && (
+                  <div className="flex items-center gap-1 border-b border-border/30 px-4 py-2 text-[11px] text-muted-foreground">
+                    <Sparkles className="h-3 w-3 text-violet-400" />
+                    <span>{niche}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
+                  <Tooltip content="Followers captured on last profile fetch">
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <Users className="h-3 w-3" /> Followers
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">
+                        {formatNumber(job.followerCount || 0)}
+                      </p>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content={`Reels in your ${job.timeframeDays}-day scan window at scrape time`}>
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <Film className="h-3 w-3" /> Reels
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">{job.totalReels}</p>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content="Instagram view counts summed for reels in this session (when available).">
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <Eye className="h-3 w-3" /> Views
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">
+                        {stats?.totalViews != null && stats.totalViews > 0 ? formatNumber(stats.totalViews) : "—"}
+                      </p>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content="Totals across reels in this session">
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <Heart className="h-3 w-3" /> Likes
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">
+                        {stats?.totalLikes != null && stats.totalLikes > 0 ? formatNumber(stats.totalLikes) : "—"}
+                      </p>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content="Totals across reels in this session">
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <MessageCircle className="h-3 w-3" /> Comments
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">
+                        {stats?.totalComments != null && stats.totalComments > 0
+                          ? formatNumber(stats.totalComments)
+                          : "—"}
+                      </p>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content="Mean of per-reel (likes + comments) ÷ followers at session time">
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-emerald-300/90">
+                        <TrendingUp className="h-3 w-3" /> Avg ER
+                      </div>
+                      <p className="mt-1 font-semibold tabular-nums text-emerald-400">
+                        {stats?.avgEngagementPct != null ? `${stats.avgEngagementPct.toFixed(2)}%` : "—"}
+                      </p>
+                    </div>
+                  </Tooltip>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 border-t border-border/40 px-4 py-3">
+                  <p className="text-[10px] text-muted-foreground">
+                    Scan window · <span className="text-foreground/80">{job.timeframeDays}d window</span>
+                  </p>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {job.status === "failed" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-xs"
+                        onClick={(e) => handleFailedRetry(e, job.id)}
+                        disabled={resyncMutation.isPending}
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`}
+                        />
+                        Retry
+                      </Button>
+                    )}
+                    {job.status === "completed" && !syncedRecently && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-xs"
+                        onClick={(e) => handleResync(e, job.id)}
+                        disabled={resyncMutation.isPending}
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`}
+                        />
+                        Refresh
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => handleDelete(e, job.id, job.handle)}
+                      disabled={deleteMutation.isPending}
+                      title="Remove from Creator Radar"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {sortedJobs.length > 0 && layout === "rows" && (
+        <div className="space-y-2">
+          {sortedJobs.map((job) => {
+            const syncedRecently = isSyncedWithin24h(job.updatedAt);
+            const stats = job.reelStats;
+            const niche = readableNiche(job.classifiedNicheSlug);
+            const canOpenRadar = job.status === "completed" || job.status === "running";
+            return (
+              <div
+                key={job.id}
+                className={`flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 transition-colors hover:border-border sm:flex-row sm:items-center ${
+                  canOpenRadar ? "cursor-pointer hover:bg-accent/20" : ""
+                }`}
+                onClick={() => {
+                  if (canOpenRadar) openJob(job);
                 }}
               >
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                  <img
-                    src={job.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6d28d9&color=fff&size=80&bold=true&format=svg`}
-                    alt={job.handle}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6d28d9&color=fff&size=80&bold=true&format=svg`;
-                    }}
-                  />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-foreground">
-                      @{job.handle}
-                    </span>
-                    <Badge
-                      variant={
-                        job.status === "completed"
-                          ? "default"
-                          : job.status === "failed"
-                          ? "destructive"
-                          : "secondary"
+                <div className="flex shrink-0 items-center gap-3">
+                  <div className="h-11 w-11 overflow-hidden rounded-xl bg-muted">
+                    <img
+                      src={
+                        job.profilePicUrl ||
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6366f1&color=fff&size=88&bold=true&format=svg`
                       }
-                      className="text-[10px] h-5"
-                    >
-                      {job.status === "running" && (
-                        <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
-                      )}
-                      {job.status}
-                    </Badge>
-                    {syncedRecently && job.status === "completed" && (
-                      <span className="text-[10px] text-green-500 font-medium">Up to date</span>
-                    )}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(job.handle)}&background=6366f1&color=fff&size=88&bold=true&format=svg`;
+                      }}
+                    />
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Film className="h-3 w-3" />
-                      {job.totalReels} reels
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Synced {timeAgo(job.updatedAt)}
-                    </span>
-                    <span className="flex items-center gap-1 hidden sm:flex">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(job.createdAt)}
-                    </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">@{job.handle}</span>
+                      <Badge variant="outline" className="text-[10px] h-5">
+                        {job.status === "running" && <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />}
+                        {job.status === "failed" ? jobStatusLabel(job) : job.status}
+                      </Badge>
+                      {niche ? (
+                        <span className="text-[10px] text-muted-foreground">{niche}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                      <span>{formatNumber(job.followerCount || 0)} followers</span>
+                      <span>{job.totalReels} reels</span>
+                      <span>{job.timeframeDays}d window</span>
+                      {stats?.totalViews ? <span>{formatNumber(stats.totalViews)} views</span> : null}
+                      {stats?.avgEngagementPct != null ? (
+                        <span className="text-emerald-400">{stats.avgEngagementPct.toFixed(2)}% avg ER</span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-1 flex-wrap items-center gap-4 text-xs text-muted-foreground sm:justify-center">
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> {timeAgo(job.updatedAt)}
+                  </span>
+                  {syncedRecently && job.status === "completed" ? (
+                    <span className="text-emerald-500 font-medium">Fresh</span>
+                  ) : null}
+                </div>
+                <div
+                  className="flex shrink-0 flex-wrap justify-end gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {job.status === "failed" && (
                     <Button
                       variant="outline"
@@ -278,17 +646,20 @@ export default function History() {
                       Refresh
                     </Button>
                   )}
+                  {canOpenRadar ? (
+                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => openJob(job)}>
+                      Open
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleDelete(e, job.id, job.handle)}
                     disabled={deleteMutation.isPending}
-                    title="Remove from monitoring"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>
             );
