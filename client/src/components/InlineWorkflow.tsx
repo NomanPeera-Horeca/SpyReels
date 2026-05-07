@@ -330,7 +330,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [saveDate, setSaveDate] = useState<Date | undefined>(undefined);
   const [saveTime, setSaveTime] = useState("09:00");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"draft" | "approved">("draft");
+  const [pendingSaveIntent, setPendingSaveIntent] = useState<"draft" | "approved" | null>(null);
   const [, navigate] = useLocation();
   const trpcUtils = trpc.useUtils();
 
@@ -430,11 +430,15 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput);
 
   const saveMutation = trpc.scripts.save.useMutation({
-    onSuccess: (data) => {
-      toast.success(saveStatus === "approved" ? "Script approved and saved!" : "Script saved as draft");
+    onSuccess: (data, variables) => {
+      const approved = variables.status === "approved";
+      toast.success(approved ? "Script approved and saved!" : "Script saved as draft");
       navigate(`/scripts/${data.id}`);
+      void trpcUtils.scripts.list.invalidate();
+      void trpcUtils.library.scripts.invalidate();
     },
     onError: () => toast.error("Failed to save script"),
+    onSettled: () => setPendingSaveIntent(null),
   });
 
   const t = transcriptionQuery.data;
@@ -596,12 +600,13 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     toast.success("SRT file downloaded");
   }, [segments, displayReelId]);
 
-  const handleSave = () => {
+  const handleSave = (statusIntent: "draft" | "approved") => {
     const content = editMode ? editedScript : generatedScript;
     if (!content.trim()) {
       toast.error("No script content to save");
       return;
     }
+    setPendingSaveIntent(statusIntent);
     // `scripts.save` only indexes by user-scrape reelId today; featured
     // saves simply omit it (the source handle + recreatedScriptId still
     // give us enough provenance in the library).
@@ -616,7 +621,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       postTime: saveTime || undefined,
       notes: saveNotes || undefined,
       tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
-      status: saveStatus,
+      status: statusIntent,
     } as any);
   };
 
@@ -782,8 +787,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             selectedTagIds={selectedTagIds}
             toggleTag={toggleTag}
             tags={tagsQuery.data}
-            saveStatus={saveStatus}
-            setSaveStatus={setSaveStatus}
+            pendingSaveIntent={pendingSaveIntent}
             onSave={handleSave}
             isSaving={saveMutation.isPending}
             userTimezone={userTimezone}
@@ -898,6 +902,7 @@ export function SearchInlineWorkflow({
   recreateMutation,
 }: SearchInlineWorkflowProps) {
   const [, navigate] = useLocation();
+  const trpcUtils = trpc.useUtils();
   const [gradeLevel, setGradeLevel] = useState("auto");
   const [customTopic, setCustomTopic] = useState("");
   const [showCustomTopic, setShowCustomTopic] = useState(false);
@@ -921,16 +926,20 @@ export function SearchInlineWorkflow({
   const [saveDate, setSaveDate] = useState<Date | undefined>(undefined);
   const [saveTime, setSaveTime] = useState("09:00");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"draft" | "approved">("draft");
+  const [pendingSaveIntent, setPendingSaveIntent] = useState<"draft" | "approved" | null>(null);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
   const saveMutation = trpc.scripts.save.useMutation({
-    onSuccess: (data) => {
-      toast.success(saveStatus === "approved" ? "Script approved and saved!" : "Script saved as draft");
+    onSuccess: (data, variables) => {
+      const approved = variables.status === "approved";
+      toast.success(approved ? "Script approved and saved!" : "Script saved as draft");
       navigate(`/scripts/${data.id}`);
+      void trpcUtils.scripts.list.invalidate();
+      void trpcUtils.library.scripts.invalidate();
     },
     onError: () => toast.error("Failed to save script"),
+    onSettled: () => setPendingSaveIntent(null),
   });
 
   const segments: Segment[] = transcript?.segments || [];
@@ -1054,12 +1063,13 @@ export function SearchInlineWorkflow({
     toast.success("SRT file downloaded");
   }, [segments, reel.shortcode]);
 
-  const handleSave = () => {
+  const handleSave = (statusIntent: "draft" | "approved") => {
     const content = editMode ? editedScript : generatedScript;
     if (!content.trim()) {
       toast.error("No script content to save");
       return;
     }
+    setPendingSaveIntent(statusIntent);
     saveMutation.mutate({
       title: saveTitle.trim() || `Script from @${reel.ownerUsername}`,
       content,
@@ -1069,7 +1079,7 @@ export function SearchInlineWorkflow({
       postTime: saveTime || undefined,
       notes: saveNotes || undefined,
       tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
-      status: saveStatus,
+      status: statusIntent,
     } as any);
   };
 
@@ -1191,8 +1201,7 @@ export function SearchInlineWorkflow({
             selectedTagIds={selectedTagIds}
             toggleTag={toggleTag}
             tags={tagsQuery.data}
-            saveStatus={saveStatus}
-            setSaveStatus={setSaveStatus}
+            pendingSaveIntent={pendingSaveIntent}
             onSave={handleSave}
             isSaving={saveMutation.isPending}
             userTimezone={userTimezone}
@@ -1551,8 +1560,7 @@ function CompletedScriptSection({
   selectedTagIds,
   toggleTag,
   tags,
-  saveStatus,
-  setSaveStatus,
+  pendingSaveIntent,
   onSave,
   isSaving,
   userTimezone,
@@ -1590,9 +1598,8 @@ function CompletedScriptSection({
   selectedTagIds: number[];
   toggleTag: (id: number) => void;
   tags?: { id: number; name: string; color: string }[];
-  saveStatus: "draft" | "approved";
-  setSaveStatus: (v: "draft" | "approved") => void;
-  onSave: () => void;
+  pendingSaveIntent: "draft" | "approved" | null;
+  onSave: (statusIntent: "draft" | "approved") => void;
   isSaving: boolean;
   userTimezone: string;
   sectionRef?: React.Ref<HTMLDivElement>;
@@ -1886,13 +1893,10 @@ function CompletedScriptSection({
           <Button
             variant="outline"
             className="flex-1 h-10"
-            onClick={() => {
-              setSaveStatus("draft");
-              onSave();
-            }}
+            onClick={() => onSave("draft")}
             disabled={isSaving}
           >
-            {isSaving && saveStatus === "draft" ? (
+            {isSaving && pendingSaveIntent === "draft" ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
             ) : (
               <><Save className="mr-2 h-4 w-4" /> Save as Draft</>
@@ -1900,13 +1904,10 @@ function CompletedScriptSection({
           </Button>
           <Button
             className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={() => {
-              setSaveStatus("approved");
-              onSave();
-            }}
+            onClick={() => onSave("approved")}
             disabled={isSaving}
           >
-            {isSaving && saveStatus === "approved" ? (
+            {isSaving && pendingSaveIntent === "approved" ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Approving...</>
             ) : (
               <><Check className="mr-2 h-4 w-4" /> Approve & Save</>

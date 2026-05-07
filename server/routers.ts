@@ -10,6 +10,7 @@ import {
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
 } from "@shared/instagramHandle";
 import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
+import { accountEngagementRatePercent } from "./accountEngagementRate";
 import {
   createCheckoutSession,
   createPortalSession,
@@ -109,6 +110,7 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
+import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import {
   monthlyUsage,
   users,
@@ -487,16 +489,15 @@ export const appRouter = router({
 
         return {
           followerCount,
-          reels: reelsList.map((r) => {
-            const engagementRate = followerCount > 0
-              ? ((r.likeCount + r.commentCount) / followerCount) * 100
-              : 0;
-            return {
-              ...r,
-              engagementRate: Math.round(engagementRate * 100) / 100, // 2 decimal places
-              transcription: transcriptionMap.get(r.id) || null,
-            };
-          }),
+          reels: reelsList.map((r) => ({
+            ...r,
+            engagementRate: accountEngagementRatePercent(
+              r.likeCount,
+              r.commentCount,
+              followerCount
+            ),
+            transcription: transcriptionMap.get(r.id) || null,
+          })),
         };
       }),
   }),
@@ -661,34 +662,32 @@ export const appRouter = router({
 
         const fc = acc.followerCount || 0;
 
-        const reels = reelRows.map((r) => {
-          const engagementRate =
-            fc > 0
-              ? ((r.likeCount + r.commentCount) / fc) * 100
-              : 0;
-          return {
-            id: r.id,
-            featuredReelId: r.id,
-            shortcode: r.reelShortcode,
-            thumbnailUrl: r.thumbnailUrl ?? "",
-            videoUrl: r.videoUrl ?? "",
-            caption: r.caption ?? "",
-            viewCount: r.viewCount,
-            likeCount: r.likeCount,
-            commentCount: r.commentCount,
-            duration: r.duration,
-            postedAt: r.postedAt,
-            reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
-            ownerUsername: acc.handle,
-            engagementRate: Math.round(engagementRate * 100) / 100,
-            transcription: transcriptionViewFromFeaturedReelRow(r),
-            contentType: r.contentType ?? null,
-            remakeabilityScore: r.remakeabilityScore ?? null,
-            suggestedAction: r.suggestedAction ?? null,
-            classificationReason: r.classificationReason ?? null,
-            classifiedAt: r.classifiedAt ?? null,
-          };
-        });
+        const reels = reelRows.map((r) => ({
+          id: r.id,
+          featuredReelId: r.id,
+          shortcode: r.reelShortcode,
+          thumbnailUrl: r.thumbnailUrl ?? "",
+          videoUrl: r.videoUrl ?? "",
+          caption: r.caption ?? "",
+          viewCount: r.viewCount,
+          likeCount: r.likeCount,
+          commentCount: r.commentCount,
+          duration: r.duration,
+          postedAt: r.postedAt,
+          reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+          ownerUsername: acc.handle,
+          engagementRate: accountEngagementRatePercent(
+            r.likeCount,
+            r.commentCount,
+            fc
+          ),
+          transcription: transcriptionViewFromFeaturedReelRow(r),
+          contentType: r.contentType ?? null,
+          remakeabilityScore: r.remakeabilityScore ?? null,
+          suggestedAction: r.suggestedAction ?? null,
+          classificationReason: r.classificationReason ?? null,
+          classifiedAt: r.classifiedAt ?? null,
+        }));
 
         return {
           isFeaturedView: true as const,
@@ -1725,16 +1724,17 @@ Return JSON only:
 
         const rows = reelsList.map((r) => {
           const t = transcriptionMap.get(r.id);
-          const engagementRate = followerCount > 0
-            ? ((r.likeCount + r.commentCount) / followerCount) * 100
-            : 0;
           return {
             reelUrl: r.reelUrl,
             caption: r.caption || "",
             viewCount: r.viewCount,
             likeCount: r.likeCount,
             commentCount: r.commentCount,
-            engagementRate: Math.round(engagementRate * 100) / 100,
+            engagementRate: accountEngagementRatePercent(
+              r.likeCount,
+              r.commentCount,
+              followerCount
+            ),
             duration: r.duration || 0,
             postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
             transcript: t?.transcript || "",
@@ -3215,11 +3215,7 @@ The hook MUST be 7-10 words. Count them.`
               continue;
             }
 
-            // Calculate engagement rate
-            const engagementRate = reelData.ownerFollowerCount > 0
-              ? ((reelData.likeCount + reelData.commentCount) / reelData.ownerFollowerCount) * 100
-              : 0;
-
+            // Calculate engagement rate (same formula as reels list + CSV exports)
             results.push({
               shortcode,
               caption: reelData.caption || "",
@@ -3235,7 +3231,11 @@ The hook MUST be 7-10 words. Count them.`
               ownerFullName: reelData.ownerFullName,
               ownerProfilePicUrl: reelData.ownerProfilePicUrl,
               ownerFollowerCount: reelData.ownerFollowerCount,
-              engagementRate: Math.round(engagementRate * 100) / 100,
+              engagementRate: accountEngagementRatePercent(
+                reelData.likeCount,
+                reelData.commentCount,
+                reelData.ownerFollowerCount
+              ),
             });
 
             // Small delay between requests to avoid rate limiting
@@ -4673,10 +4673,11 @@ async function buildExportData(jobId: number) {
 
   const bodyLines = reelsList.map((r) => {
     const t = transcriptionMap.get(r.id);
-    const engagementRate = followerCount > 0
-      ? ((r.likeCount + r.commentCount) / followerCount) * 100
-      : 0;
-    const er = Math.round(engagementRate * 100) / 100;
+    const er = accountEngagementRatePercent(
+      r.likeCount,
+      r.commentCount,
+      followerCount
+    );
     return [
       formatCsvField(r.reelUrl),
       formatCsvField(r.caption || ""),
@@ -4725,6 +4726,38 @@ async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
       error
     );
   }
+}
+
+/**
+ * Upload an array of reel thumbnails to R2 with bounded concurrency.
+ * Returns a map from shortcode → stable URL (R2 public URL on success,
+ * the original IG URL on failure). Skips entries with empty thumbnailUrl.
+ *
+ * Bounded at 5 concurrent uploads so a 200-reel scrape doesn't fan out
+ * 200 simultaneous CDN downloads, while staying ~40× faster than serial.
+ */
+async function uploadReelThumbnailsBounded(
+  items: Array<{ shortcode: string; thumbnailUrl: string }>,
+  concurrency = 5
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (items.length === 0) return out;
+
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        const item = items[i]!;
+        const stable = await ensureReelThumbnailOnR2(
+          item.shortcode,
+          item.thumbnailUrl ?? ""
+        );
+        out.set(item.shortcode, stable);
+      }
+    })
+  );
+  return out;
 }
 
 /** Background scrape job runner */
@@ -4793,6 +4826,16 @@ async function runScrapeJob(
       return;
     }
 
+    // Move IG-CDN thumbnails to R2 before inserting. Raw IG URLs carry a
+    // signed query string that expires every 24–48h, so persisting them
+    // directly to `reels.thumbnailUrl` is what causes blank tiles in the
+    // dashboard a day or two after the scrape. ensureReelThumbnailOnR2
+    // is best-effort: on any failure it returns the source URL unchanged
+    // so the insert always succeeds.
+    const stableThumbs = await uploadReelThumbnailsBounded(
+      reelData.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
+    );
+
     await insertReels(
       reelData.map((r) => ({
         jobId,
@@ -4801,7 +4844,7 @@ async function runScrapeJob(
         viewCount: r.viewCount,
         likeCount: r.likeCount,
         commentCount: r.commentCount,
-        thumbnailUrl: r.thumbnailUrl,
+        thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
         videoUrl: r.videoUrl,
         reelUrl: r.reelUrl,
         duration: r.duration,
@@ -4881,6 +4924,10 @@ async function runResyncJob(
     const newReels = reelData.filter(r => !existingShortcodes.has(r.shortcode));
 
     if (newReels.length > 0) {
+      const stableThumbs = await uploadReelThumbnailsBounded(
+        newReels.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
+      );
+
       await insertReels(
         newReels.map((r) => ({
           jobId,
@@ -4889,7 +4936,7 @@ async function runResyncJob(
           viewCount: r.viewCount,
           likeCount: r.likeCount,
           commentCount: r.commentCount,
-          thumbnailUrl: r.thumbnailUrl,
+          thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
           videoUrl: r.videoUrl,
           reelUrl: r.reelUrl,
           duration: r.duration,
