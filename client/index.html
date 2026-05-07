@@ -17,12 +17,17 @@
           try {
             dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           } catch (e) {
-            dark = true;
+            dark = false;
           }
         }
         var r = document.documentElement;
-        if (dark) r.classList.add("dark");
-        else r.classList.remove("dark");
+        if (dark) {
+          r.classList.add("dark");
+          r.style.colorScheme = "dark";
+        } else {
+          r.classList.remove("dark");
+          r.style.colorScheme = "light";
+        }
       })();
     </script>
     <script>(function(w,r){w._rwq=r;w[r]=w[r]||function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');</script>

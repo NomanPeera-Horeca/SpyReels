@@ -311,8 +311,8 @@ export function InterestsEditorSection({ variant }: InterestsEditorSectionProps)
     <div
       className={
         variant === "settings"
-          ? "max-h-[500px] overflow-y-auto rounded-lg border border-border/50 bg-card p-5"
-          : "rounded-lg border border-border/50 bg-card p-5"
+          ? "max-h-[500px] overflow-y-auto rounded-lg border border-border/50 bg-card p-5 text-card-foreground"
+          : "rounded-lg border border-border/50 bg-card p-5 text-card-foreground"
       }
     >
       {body}

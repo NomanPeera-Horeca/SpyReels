@@ -3,8 +3,10 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 const STORAGE_KEY = "theme";
@@ -48,8 +50,29 @@ function resolvePreference(
 
 function applyDomTheme(resolved: ResolvedTheme) {
   const root = document.documentElement;
-  if (resolved === "dark") root.classList.add("dark");
-  else root.classList.remove("dark");
+  if (resolved === "dark") {
+    root.classList.add("dark");
+    root.style.colorScheme = "dark";
+  } else {
+    root.classList.remove("dark");
+    root.style.colorScheme = "light";
+  }
+}
+
+function subscribeSystemColorScheme(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function getSystemIsDarkSnapshot(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function getSystemIsDarkServerSnapshot(): boolean {
+  return false;
 }
 
 interface ThemeProviderProps {
@@ -63,10 +86,12 @@ export function ThemeProvider({
   defaultTheme = "system",
   switchable = false,
 }: ThemeProviderProps) {
-  const [systemIsDark, setSystemIsDark] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+  /** Live OS dark-mode flag; useSyncExternalStore stays aligned with `prefers-color-scheme` (and fixes missed updates). */
+  const systemIsDark = useSyncExternalStore(
+    subscribeSystemColorScheme,
+    getSystemIsDarkSnapshot,
+    getSystemIsDarkServerSnapshot
+  );
 
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>(
     () => (switchable ? readStoredPreference() : defaultTheme)
@@ -81,7 +106,7 @@ export function ThemeProvider({
     [activePreference, systemIsDark]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     applyDomTheme(resolvedTheme);
   }, [resolvedTheme]);
 
@@ -94,25 +119,10 @@ export function ThemeProvider({
     }
   }, [themePreference, switchable]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || activePreference !== "system")
-      return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => setSystemIsDark(mq.matches);
-    mq.addEventListener("change", handler);
-    setSystemIsDark(mq.matches);
-    return () => mq.removeEventListener("change", handler);
-  }, [activePreference]);
-
   const setThemePreference = useCallback(
     (t: ThemePreference) => {
       if (!switchable) return;
       setThemePreferenceState(t);
-      if (t === "system" && typeof window !== "undefined") {
-        setSystemIsDark(
-          window.matchMedia("(prefers-color-scheme: dark)").matches
-        );
-      }
     },
     [switchable]
   );
@@ -122,11 +132,6 @@ export function ThemeProvider({
     setThemePreferenceState((prev) => {
       if (prev === "system") return "light";
       if (prev === "light") return "dark";
-      if (typeof window !== "undefined") {
-        setSystemIsDark(
-          window.matchMedia("(prefers-color-scheme: dark)").matches
-        );
-      }
       return "system";
     });
   }, [switchable]);
