@@ -3,7 +3,9 @@
     "client/src/**/*",
     "shared/**/*",
     "server/**/*",
-    "scripts/backfill-classifications.ts"
+    "scripts/backfill-classifications.ts",
+    "scripts/compute-reel-metrics.ts",
+    "scripts/dedupe-reels.ts"
   ],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
