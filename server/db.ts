@@ -421,10 +421,20 @@ export async function markOnboardingSkipped(
 
 // ── Scrape Jobs ──
 
+/** Max length for `scrape_jobs.errorMessage` — avoids MySQL overflow when errors embed huge SQL payloads. */
+const SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN = 250;
+
 export async function createScrapeJob(data: InsertScrapeJob): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(scrapeJobs).values(data);
+  const payload =
+    typeof data.errorMessage === "string"
+      ? {
+          ...data,
+          errorMessage: data.errorMessage.slice(0, SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN),
+        }
+      : data;
+  const result = await db.insert(scrapeJobs).values(payload);
   return result[0].insertId;
 }
 
@@ -438,7 +448,14 @@ export async function getScrapeJob(id: number): Promise<ScrapeJob | undefined> {
 export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "failureReason" | "profilePicUrl" | "currentStep" | "reelsFound" | "estimatedTotal" | "progressPercent" | "classifiedNicheSlug" | "classifiedConfidence" | "classifiedAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(scrapeJobs).set(data).where(eq(scrapeJobs.id, id));
+  const payload =
+    typeof data.errorMessage === "string"
+      ? {
+          ...data,
+          errorMessage: data.errorMessage.slice(0, SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN),
+        }
+      : data;
+  await db.update(scrapeJobs).set(payload).where(eq(scrapeJobs.id, id));
 }
 
 export async function getUserScrapeJobs(userId: number): Promise<ScrapeJob[]> {
