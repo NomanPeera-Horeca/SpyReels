@@ -6,7 +6,8 @@
     "scripts/backfill-classifications.ts",
     "scripts/compute-reel-metrics.ts",
     "scripts/dedupe-reels.ts",
-    "scripts/transcribe-missing-viral.ts"
+    "scripts/transcribe-missing-viral.ts",
+    "scripts/classify-reels.ts"
   ],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {

@@ -118,6 +118,7 @@ export const reels = mysqlTable("reels", {
     "other",
   ]),
   remakeabilityScore: tinyint("remakeabilityScore"),
+  confidence: tinyint("confidence", { unsigned: true }),
   suggestedAction: mysqlEnum("suggestedAction", ["make_version", "save_inspiration", "view_only"]),
   classificationReason: varchar("classificationReason", { length: 255 }),
   classifiedAt: timestamp("classifiedAt"),
