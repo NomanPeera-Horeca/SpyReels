@@ -478,10 +478,25 @@ export async function insertReels(data: InsertReel[]): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (data.length === 0) return;
+
+  /** On duplicate `shortcode`: refresh live scrape fields only; preserve classifications & immutable columns. */
+  const onDupSet = {
+    jobId: sql`VALUES(${reels.jobId})`,
+    caption: sql`VALUES(${reels.caption})`,
+    viewCount: sql`VALUES(${reels.viewCount})`,
+    likeCount: sql`VALUES(${reels.likeCount})`,
+    commentCount: sql`VALUES(${reels.commentCount})`,
+    thumbnailUrl: sql`VALUES(${reels.thumbnailUrl})`,
+    videoUrl: sql`VALUES(${reels.videoUrl})`,
+    duration: sql`VALUES(${reels.duration})`,
+  };
+
   // Insert in batches of 50 to avoid query size limits
   for (let i = 0; i < data.length; i += 50) {
     const batch = data.slice(i, i + 50);
-    await db.insert(reels).values(batch);
+    await db.insert(reels).values(batch).onDuplicateKeyUpdate({
+      set: onDupSet,
+    });
   }
 }
 
