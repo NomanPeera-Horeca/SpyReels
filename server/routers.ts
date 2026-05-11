@@ -9,6 +9,11 @@ import {
   isValidInstagramHandleNormalized,
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
 } from "@shared/instagramHandle";
+import { REEL_NICHE_VALUES } from "@shared/reelNiches";
+
+const reelNicheInputEnum = z.enum(
+  REEL_NICHE_VALUES as unknown as [string, ...string[]]
+);
 import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
 import { accountEngagementRatePercent } from "./accountEngagementRate";
 import {
@@ -128,7 +133,7 @@ import {
   reels as reelsTable,
   transcriptions,
 } from "../drizzle/schema";
-import type { Transcription } from "../drizzle/schema";
+import type { Transcription, Reel } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, getTableColumns } from "drizzle-orm";
 import { getDb } from "./db";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
@@ -532,10 +537,15 @@ export const appRouter = router({
   // ── Reels ──
   reels: router({
     list: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
+      .input(
+        z.object({
+          jobId: z.number(),
+          niche: reelNicheInputEnum.optional(),
+        })
+      )
       .query(async ({ input }) => {
         const job = await getScrapeJob(input.jobId);
-        const reelsList = await getReelsByJobId(input.jobId);
+        const reelsList = await getReelsByJobId(input.jobId, input.niche as NonNullable<Reel["niche"]>);
         const transcriptionsList = await getTranscriptionsByJobId(input.jobId);
         const transcriptionMap = new Map(
           transcriptionsList.map((t) => [t.reelId, t])
@@ -650,7 +660,12 @@ export const appRouter = router({
      * migration 0028 / Commit 3a.
      */
     getDashboardData: protectedProcedure
-      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .input(
+        z.object({
+          featuredAccountId: z.number().int().positive(),
+          niche: reelNicheInputEnum.optional(),
+        })
+      )
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) {
@@ -710,7 +725,8 @@ export const appRouter = router({
           .where(
             and(
               eq(featuredReels.featuredAccountId, acc.id),
-              ne(featuredReels.transcriptionStatus, "failed")
+              ne(featuredReels.transcriptionStatus, "failed"),
+              ...(input.niche ? [eq(featuredReels.niche, input.niche as NonNullable<Reel["niche"]>)] : [])
             )
           )
           .orderBy(desc(featuredReels.viewCount));
@@ -742,6 +758,10 @@ export const appRouter = router({
           suggestedAction: r.suggestedAction ?? null,
           classificationReason: r.classificationReason ?? null,
           classifiedAt: r.classifiedAt ?? null,
+          niche: r.niche ?? null,
+          hookPattern: r.hookPattern ?? null,
+          viralFlag: r.viralFlag ?? false,
+          confidence: r.confidence ?? null,
         }));
 
         return {

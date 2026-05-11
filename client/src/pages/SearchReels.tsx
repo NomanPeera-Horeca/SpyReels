@@ -59,6 +59,8 @@ import {
 } from "@/components/InlineWorkflow";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { REEL_NICHE_VALUES, formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 
 // ── Constants ──
 
@@ -85,6 +87,10 @@ interface SearchResult {
   remakeabilityScore?: number | null;
   suggestedAction?: string | null;
   classificationReason?: string | null;
+  niche?: string | null;
+  hookPattern?: string | null;
+  viralFlag?: boolean | number | null;
+  confidence?: number | null;
 }
 
 function formatDurationShort(seconds: number): string {
@@ -103,6 +109,7 @@ export default function SearchReels() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [sortField, setSortField] = useState<SortField>("viewCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [nicheFilter, setNicheFilter] = useState<string>("all");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -418,8 +425,13 @@ export default function SearchReels() {
 
   // ── Sort ──
 
+  const nicheFilteredResults = useMemo(() => {
+    if (nicheFilter === "all") return results;
+    return results.filter((r) => r.niche === nicheFilter);
+  }, [results, nicheFilter]);
+
   const sortedResults = useMemo(() => {
-    const sorted = [...results].sort((a, b) => {
+    const sorted = [...nicheFilteredResults].sort((a, b) => {
       let aVal: number;
       let bVal: number;
 
@@ -436,7 +448,7 @@ export default function SearchReels() {
       return sortDir === "desc" ? bVal - aVal : aVal - bVal;
     });
     return sorted;
-  }, [results, sortField, sortDir]);
+  }, [nicheFilteredResults, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -859,11 +871,24 @@ export default function SearchReels() {
       {results.length > 0 && (
         <>
           {/* Sort Controls */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm text-muted-foreground">
-              {results.length} reel{results.length !== 1 ? "s" : ""} found
+              {sortedResults.length} reel{sortedResults.length !== 1 ? "s" : ""} found
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Select value={nicheFilter} onValueChange={setNicheFilter}>
+                <SelectTrigger className="w-[min(100%,11rem)] min-w-[9rem] h-8 text-xs">
+                  <SelectValue placeholder="Niche" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Niches</SelectItem>
+                  {REEL_NICHE_VALUES.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {formatReelTaxonomyLabel(v)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <span className="text-xs text-muted-foreground">Sort by:</span>
               <Select
                 value={sortField}
@@ -1019,6 +1044,13 @@ function ReelRow({
               <p className="text-[10px] text-amber-400/70 mt-0.5">
                 {formatPostedTime(postedDate, userTimezone)}
               </p>
+              <V13ReelClassificationBadges
+                className="mt-1"
+                niche={reel.niche}
+                hookPattern={reel.hookPattern}
+                viralFlag={reel.viralFlag}
+                confidence={reel.confidence}
+              />
             </div>
           </div>
         </td>

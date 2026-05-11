@@ -63,6 +63,8 @@ import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
+import { REEL_NICHE_VALUES, formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 
 type SortOption =
   | "views_desc"
@@ -293,6 +295,7 @@ export default function Dashboard() {
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [nicheFilter, setNicheFilter] = useState<string>("all");
   /**
    * Grid is the default view as of Commit 7. The previous mode
    * (list|grid) is remembered per-browser in localStorage so users
@@ -404,7 +407,13 @@ export default function Dashboard() {
   });
 
   const featuredDataQuery = trpc.featured.getDashboardData.useQuery(
-    { featuredAccountId: featuredAccountId! },
+    {
+      featuredAccountId: featuredAccountId!,
+      niche:
+        nicheFilter === "all"
+          ? undefined
+          : (nicheFilter as (typeof REEL_NICHE_VALUES)[number]),
+    },
     { enabled: isFeaturedView }
   );
 
@@ -541,7 +550,13 @@ export default function Dashboard() {
   const jobComplete = isFeaturedView ? !!featuredData : job?.status === "completed";
 
   const reelsQuery = trpc.reels.list.useQuery(
-    { jobId: jobId! },
+    {
+      jobId: jobId!,
+      niche:
+        nicheFilter === "all"
+          ? undefined
+          : (nicheFilter as (typeof REEL_NICHE_VALUES)[number]),
+    },
     {
       enabled: !!jobId && jobQuery.data?.status === "completed",
       staleTime: DASHBOARD_SNAPSHOT_STALE_MS,
@@ -1937,6 +1952,24 @@ export default function Dashboard() {
                     </div>
                   </Tooltip>
 
+                  <Tooltip content="Filter reels by AI-assigned niche">
+                    <div>
+                      <Select value={nicheFilter} onValueChange={setNicheFilter}>
+                        <SelectTrigger className="w-[min(100%,11rem)] min-w-[9rem] h-9 bg-card text-sm">
+                          <SelectValue placeholder="Niche" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Niches</SelectItem>
+                          {REEL_NICHE_VALUES.map((v) => (
+                            <SelectItem key={v} value={v}>
+                              {formatReelTaxonomyLabel(v)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Tooltip>
+
                   <Tooltip content="Change how reels are sorted">
                     <div>
                       <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
@@ -2201,6 +2234,13 @@ export default function Dashboard() {
                             <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
                           )}
                         </div>
+                        <V13ReelClassificationBadges
+                          className="mt-1"
+                          niche={reel.niche}
+                          hookPattern={reel.hookPattern}
+                          viralFlag={reel.viralFlag}
+                          confidence={reel.confidence}
+                        />
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Eye className="h-3 w-3" />
@@ -2476,6 +2516,15 @@ export default function Dashboard() {
                             Processing
                           </span>
                         )}
+                      </div>
+
+                      <div className="px-2.5 pt-2 pb-0 shrink-0">
+                        <V13ReelClassificationBadges
+                          niche={reel.niche}
+                          hookPattern={reel.hookPattern}
+                          viralFlag={reel.viralFlag}
+                          confidence={reel.confidence}
+                        />
                       </div>
 
                       <div className="p-2.5 space-y-2 shrink-0">
@@ -2851,6 +2900,10 @@ export default function Dashboard() {
                 engagementRate: gridModalReel.engagementRate,
                 postedAt: gridModalReel.postedAt,
                 duration: gridModalReel.duration,
+                niche: gridModalReel.niche ?? null,
+                hookPattern: gridModalReel.hookPattern ?? null,
+                viralFlag: gridModalReel.viralFlag ?? false,
+                confidence: gridModalReel.confidence ?? null,
               }
             : null
         }

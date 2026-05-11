@@ -11,6 +11,7 @@ import {
   formatPostedTime,
 } from "@/components/InlineWorkflow";
 import { Film, Eye, Heart, MessageCircle, TrendingUp, Clock } from "lucide-react";
+import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 
 export type GridReelWorkflowPreview = {
   id: number;
@@ -24,6 +25,10 @@ export type GridReelWorkflowPreview = {
   engagementRate: number;
   postedAt: string | Date;
   duration: number | null;
+  niche?: string | null;
+  hookPattern?: string | null;
+  viralFlag?: boolean | number | null;
+  confidence?: number | null;
 };
 
 type GridReelWorkflowDialogProps = {
@@ -92,6 +97,14 @@ export function GridReelWorkflowDialog({
                     <span className="text-muted-foreground italic">No caption</span>
                   )}
                 </p>
+                <div className="mt-2">
+                  <V13ReelClassificationBadges
+                    niche={reel.niche}
+                    hookPattern={reel.hookPattern}
+                    viralFlag={reel.viralFlag}
+                    confidence={reel.confidence}
+                  />
+                </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Eye className="h-3 w-3 shrink-0" />

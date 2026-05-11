@@ -500,10 +500,20 @@ export async function insertReels(data: InsertReel[]): Promise<void> {
   }
 }
 
-export async function getReelsByJobId(jobId: number): Promise<Reel[]> {
+export async function getReelsByJobId(
+  jobId: number,
+  niche?: Reel["niche"]
+): Promise<Reel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(reels).where(eq(reels.jobId, jobId));
+  return db
+    .select()
+    .from(reels)
+    .where(
+      niche != null
+        ? and(eq(reels.jobId, jobId), eq(reels.niche, niche))
+        : eq(reels.jobId, jobId)
+    );
 }
 
 export async function getExistingShortcodes(jobId: number): Promise<string[]> {
