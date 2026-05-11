@@ -136,6 +136,7 @@ import {
 import type { Transcription, Reel } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, getTableColumns } from "drizzle-orm";
 import { getDb } from "./db";
+import { classifyReelsByIds } from "./services/classifyReels.js";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
@@ -5016,6 +5017,26 @@ async function runScrapeJob(
       failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
+
+    const classifyDb = await getDb();
+    if (classifyDb) {
+      const newReelIds = await classifyDb
+        .select({ id: reelsTable.id })
+        .from(reelsTable)
+        .where(eq(reelsTable.jobId, jobId))
+        .then((rows) => rows.map((r) => r.id));
+      if (newReelIds.length > 0) {
+        classifyReelsByIds(newReelIds)
+          .then((r) =>
+            console.log(
+              `[runScrapeJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
+            )
+          )
+          .catch((err) =>
+            console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
+          );
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     // Failure preserves the last progressPercent the UI saw — just flip the
@@ -5114,6 +5135,31 @@ async function runResyncJob(
     });
 
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
+
+    if (newReels.length > 0) {
+      const classifyDb = await getDb();
+      if (classifyDb) {
+        const shortcodes = newReels.map((r) => r.shortcode);
+        const insertedIds = await classifyDb
+          .select({ id: reelsTable.id })
+          .from(reelsTable)
+          .where(
+            and(eq(reelsTable.jobId, jobId), inArray(reelsTable.shortcode, shortcodes))
+          )
+          .then((rows) => rows.map((r) => r.id));
+        if (insertedIds.length > 0) {
+          classifyReelsByIds(insertedIds)
+            .then((r) =>
+              console.log(
+                `[runResyncJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
+              )
+            )
+            .catch((err) =>
+              console.error(`[runResyncJob ${jobId}] auto-classify error:`, err)
+            );
+        }
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     await updateScrapeJob(jobId, {

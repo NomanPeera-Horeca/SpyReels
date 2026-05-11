@@ -562,9 +562,18 @@ export default function Dashboard() {
       staleTime: DASHBOARD_SNAPSHOT_STALE_MS,
       refetchInterval: (query) => {
         const data = query.state.data;
-        if (data?.reels?.some((r: any) => r.transcription?.status === "processing")) {
-          return 3000;
-        }
+        if (!data?.reels?.length) return false;
+        const list = data.reels as Array<{ transcription?: { status?: string | null } | null; niche?: string | null }>;
+
+        const hasProcessingTranscription = list.some(
+          (r) => r.transcription?.status === "processing"
+        );
+        if (hasProcessingTranscription) return 3000;
+
+        const jobCompleted = scrapeJobData?.status === "completed";
+        const hasUnclassified = list.some((r) => r.niche == null);
+        if (jobCompleted && hasUnclassified) return 5000;
+
         return false;
       },
     }
