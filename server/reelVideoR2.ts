@@ -1,3 +1,6 @@
+import { eq, inArray } from "drizzle-orm";
+import { reels } from "../drizzle/schema";
+import { getDb } from "./db";
 import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
 
 /** Do not buffer larger videos server-side — mirrors best-effort only. */
@@ -59,4 +62,88 @@ export async function ensureReelVideoOnR2(
   } catch {
     return src;
   }
+}
+
+/**
+ * Background batch helper: mirror videoUrls of reels to R2 and update the DB.
+ * Idempotent (skips rows already on R2). Designed for fire-and-forget use after scrape completion.
+ */
+export async function mirrorReelVideosToR2ByIds(
+  reelIds: number[]
+): Promise<{ ok: number; failed: number; skipped: number }> {
+  const uniqueIds = [...new Set(reelIds.filter((id) => Number.isFinite(id)))];
+  if (uniqueIds.length === 0) {
+    return { ok: 0, failed: 0, skipped: 0 };
+  }
+
+  const startedAt = Date.now();
+  const counts = { ok: 0, failed: 0, skipped: 0 };
+  console.log(`[mirrorReelVideosToR2ByIds] start n=${uniqueIds.length}`);
+
+  try {
+    const db = await getDb();
+    if (!db) {
+      counts.failed = uniqueIds.length;
+      console.error("[mirrorReelVideosToR2ByIds] database unavailable");
+      return counts;
+    }
+    const mirrorDb = db;
+
+    const rows = await mirrorDb
+      .select({
+        id: reels.id,
+        shortcode: reels.shortcode,
+        videoUrl: reels.videoUrl,
+      })
+      .from(reels)
+      .where(inArray(reels.id, uniqueIds));
+
+    const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+    counts.skipped += Math.max(0, uniqueIds.length - rows.length);
+
+    async function mirrorOne(row: (typeof rows)[number]): Promise<void> {
+      try {
+        const videoUrl = (row.videoUrl ?? "").trim();
+        if (!videoUrl) {
+          counts.skipped++;
+          return;
+        }
+        if (publicBase && videoUrl.startsWith(publicBase)) {
+          counts.skipped++;
+          return;
+        }
+
+        const mirroredUrl = await ensureReelVideoOnR2(row.shortcode, videoUrl);
+        if (!publicBase || !mirroredUrl.startsWith(publicBase)) {
+          counts.failed++;
+          return;
+        }
+
+        await mirrorDb
+          .update(reels)
+          .set({ videoUrl: mirroredUrl })
+          .where(eq(reels.id, row.id));
+        counts.ok++;
+      } catch (err) {
+        counts.failed++;
+        console.error(
+          `[mirrorReelVideosToR2ByIds] reel id=${row.id} failed:`,
+          err
+        );
+      }
+    }
+
+    for (let i = 0; i < rows.length; i += 3) {
+      await Promise.all(rows.slice(i, i + 3).map((row) => mirrorOne(row)));
+    }
+  } catch (err) {
+    counts.failed += Math.max(0, uniqueIds.length - counts.ok - counts.failed - counts.skipped);
+    console.error("[mirrorReelVideosToR2ByIds] failed:", err);
+  } finally {
+    console.log(
+      `[mirrorReelVideosToR2ByIds] done ok=${counts.ok} failed=${counts.failed} skipped=${counts.skipped} ms=${Date.now() - startedAt}`
+    );
+  }
+
+  return counts;
 }

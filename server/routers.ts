@@ -116,7 +116,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
-import { ensureReelVideoOnR2 } from "./reelVideoR2";
+import { ensureReelVideoOnR2, mirrorReelVideosToR2ByIds } from "./reelVideoR2";
 import {
   monthlyUsage,
   users,
@@ -5038,6 +5038,15 @@ async function runScrapeJob(
           .catch((err) =>
             console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
           );
+        mirrorReelVideosToR2ByIds(newReelIds)
+          .then((r) =>
+            console.log(
+              `[runScrapeJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
+            )
+          )
+          .catch((err) =>
+            console.error(`[runScrapeJob ${jobId}] mirror-videos error:`, err)
+          );
       }
     }
   } catch (error) {
@@ -5159,6 +5168,15 @@ async function runResyncJob(
             )
             .catch((err) =>
               console.error(`[runResyncJob ${jobId}] auto-classify error:`, err)
+            );
+          mirrorReelVideosToR2ByIds(insertedIds)
+            .then((r) =>
+              console.log(
+                `[runResyncJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
+              )
+            )
+            .catch((err) =>
+              console.error(`[runResyncJob ${jobId}] mirror-videos error:`, err)
             );
         }
       }
