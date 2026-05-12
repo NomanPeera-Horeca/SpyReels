@@ -642,6 +642,7 @@ export default function BlogPost() {
             <Link href="/terms" className="hover:text-foreground">Terms</Link>
             <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
             <Link href="/blog" className="hover:text-foreground">Blog</Link>
+            <Link href="/affiliate" className="hover:text-foreground">Affiliate</Link>
             <Link href="/contact" className="hover:text-foreground">Contact</Link>
           </div>
         </div>

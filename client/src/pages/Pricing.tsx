@@ -925,6 +925,9 @@ export default function Pricing() {
             <Link href="/privacy" className="hover:text-foreground">
               Privacy
             </Link>
+            <Link href="/affiliate" className="hover:text-foreground">
+              Affiliate
+            </Link>
             <Link href="/contact" className="hover:text-foreground">
               Contact
             </Link>

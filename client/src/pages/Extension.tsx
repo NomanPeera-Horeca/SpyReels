@@ -413,6 +413,7 @@ export default function Extension() {
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
             <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
             <Link href="/blog" className="hover:text-foreground transition-colors">Blog</Link>
+            <Link href="/affiliate" className="hover:text-foreground transition-colors">Affiliate</Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>
           </div>
         </div>
