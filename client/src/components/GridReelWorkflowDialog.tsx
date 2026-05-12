@@ -92,7 +92,7 @@ export function GridReelWorkflowDialog({
                 )}
               </div>
               <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-sm leading-snug text-foreground line-clamp-4">
+                <p className="text-sm leading-snug text-foreground whitespace-pre-wrap max-h-40 overflow-y-auto pr-2">
                   {reel.caption || (
                     <span className="text-muted-foreground italic">No caption</span>
                   )}
