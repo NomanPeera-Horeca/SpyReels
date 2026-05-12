@@ -421,10 +421,20 @@ export async function markOnboardingSkipped(
 
 // ── Scrape Jobs ──
 
+/** Max length for `scrape_jobs.errorMessage` — avoids MySQL overflow when errors embed huge SQL payloads. */
+const SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN = 250;
+
 export async function createScrapeJob(data: InsertScrapeJob): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(scrapeJobs).values(data);
+  const payload =
+    typeof data.errorMessage === "string"
+      ? {
+          ...data,
+          errorMessage: data.errorMessage.slice(0, SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN),
+        }
+      : data;
+  const result = await db.insert(scrapeJobs).values(payload);
   return result[0].insertId;
 }
 
@@ -438,7 +448,14 @@ export async function getScrapeJob(id: number): Promise<ScrapeJob | undefined> {
 export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, "status" | "totalReels" | "followerCount" | "errorMessage" | "failureReason" | "profilePicUrl" | "currentStep" | "reelsFound" | "estimatedTotal" | "progressPercent" | "classifiedNicheSlug" | "classifiedConfidence" | "classifiedAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(scrapeJobs).set(data).where(eq(scrapeJobs.id, id));
+  const payload =
+    typeof data.errorMessage === "string"
+      ? {
+          ...data,
+          errorMessage: data.errorMessage.slice(0, SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN),
+        }
+      : data;
+  await db.update(scrapeJobs).set(payload).where(eq(scrapeJobs.id, id));
 }
 
 export async function getUserScrapeJobs(userId: number): Promise<ScrapeJob[]> {
@@ -461,17 +478,42 @@ export async function insertReels(data: InsertReel[]): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (data.length === 0) return;
+
+  /** On duplicate `shortcode`: refresh live scrape fields only; preserve classifications & immutable columns. */
+  const onDupSet = {
+    jobId: sql`VALUES(${reels.jobId})`,
+    caption: sql`VALUES(${reels.caption})`,
+    viewCount: sql`VALUES(${reels.viewCount})`,
+    likeCount: sql`VALUES(${reels.likeCount})`,
+    commentCount: sql`VALUES(${reels.commentCount})`,
+    thumbnailUrl: sql`VALUES(${reels.thumbnailUrl})`,
+    videoUrl: sql`VALUES(${reels.videoUrl})`,
+    duration: sql`VALUES(${reels.duration})`,
+  };
+
   // Insert in batches of 50 to avoid query size limits
   for (let i = 0; i < data.length; i += 50) {
     const batch = data.slice(i, i + 50);
-    await db.insert(reels).values(batch);
+    await db.insert(reels).values(batch).onDuplicateKeyUpdate({
+      set: onDupSet,
+    });
   }
 }
 
-export async function getReelsByJobId(jobId: number): Promise<Reel[]> {
+export async function getReelsByJobId(
+  jobId: number,
+  niche?: Reel["niche"]
+): Promise<Reel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(reels).where(eq(reels.jobId, jobId));
+  return db
+    .select()
+    .from(reels)
+    .where(
+      niche != null
+        ? and(eq(reels.jobId, jobId), eq(reels.niche, niche))
+        : eq(reels.jobId, jobId)
+    );
 }
 
 export async function getExistingShortcodes(jobId: number): Promise<string[]> {

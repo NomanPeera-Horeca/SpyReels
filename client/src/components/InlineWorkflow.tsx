@@ -38,7 +38,6 @@ import {
   Timer,
   Mic,
   Calendar as CalendarIcon,
-  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
@@ -840,11 +839,16 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
 function SearchInspirationPanel({
   reelUrl,
   reason,
+  classificationReason,
 }: {
   reelUrl: string;
   reason?: NotRemakeableReason;
+  classificationReason?: string | null;
 }) {
   const { body } = inspirationPanelCopy(reason);
+  const trimmed = classificationReason?.trim();
+  const snippet =
+    trimmed && trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
   return (
     <div>
       <div className="mb-3">
@@ -852,6 +856,11 @@ function SearchInspirationPanel({
           Make this viral hit YOURS
         </h4>
         <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+        {snippet ? (
+          <p className="mt-2 text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
+            {snippet}
+          </p>
+        ) : null}
       </div>
       <Button
         type="button"
@@ -1145,7 +1154,11 @@ export function SearchInlineWorkflow({
         {/* ── Section 2: Re-Create ── */}
         {!generatedScript ? (
           searchRemake.notRemakeable && !isGenerating ? (
-            <SearchInspirationPanel reelUrl={reel.reelUrl} reason={searchRemake.reason} />
+            <SearchInspirationPanel
+              reelUrl={reel.reelUrl}
+              reason={searchRemake.reason}
+              classificationReason={reel.classificationReason ?? null}
+            />
           ) : (
             <RecreateSection
               activeScriptId={null}
@@ -1243,22 +1256,20 @@ function InspirationOnlyPanel({
   onSelectScript: (id: number) => void;
 }) {
   const { body } = inspirationPanelCopy(reason);
-  const coachText = classificationReason?.trim();
+  const trimmed = classificationReason?.trim();
+  const snippet =
+    trimmed && trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
+
   return (
     <div ref={sectionRef}>
       <div className="mb-3">
         <h4 className="text-sm font-semibold text-foreground">Make this viral hit YOURS</h4>
-        {variant === "dashboard" && coachText ? (
-          <div className="mt-3 rounded-lg border border-border/50 bg-muted/50 p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Lightbulb className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
-              <span className="text-xs font-semibold text-foreground">Your Brand Coach</span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed italic">{coachText}</p>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
-        )}
+        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{body}</p>
+        {variant === "dashboard" && snippet ? (
+          <p className="mt-2 text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
+            {snippet}
+          </p>
+        ) : null}
         {variant === "saved-collected" && (
           <p className="text-xs italic text-muted-foreground mt-2">
             Already saved as inspiration

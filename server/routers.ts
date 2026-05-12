@@ -9,6 +9,11 @@ import {
   isValidInstagramHandleNormalized,
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
 } from "@shared/instagramHandle";
+import { REEL_NICHE_VALUES } from "@shared/reelNiches";
+
+const reelNicheInputEnum = z.enum(
+  REEL_NICHE_VALUES as unknown as [string, ...string[]]
+);
 import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
 import { accountEngagementRatePercent } from "./accountEngagementRate";
 import {
@@ -111,7 +116,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
-import { ensureReelVideoOnR2 } from "./reelVideoR2";
+import { ensureReelVideoOnR2, mirrorReelVideosToR2ByIds } from "./reelVideoR2";
 import {
   monthlyUsage,
   users,
@@ -128,9 +133,10 @@ import {
   reels as reelsTable,
   transcriptions,
 } from "../drizzle/schema";
-import type { Transcription } from "../drizzle/schema";
+import type { Transcription, Reel } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, getTableColumns } from "drizzle-orm";
 import { getDb } from "./db";
+import { classifyReelsByIds } from "./services/classifyReels.js";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
@@ -532,10 +538,15 @@ export const appRouter = router({
   // ── Reels ──
   reels: router({
     list: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
+      .input(
+        z.object({
+          jobId: z.number(),
+          niche: reelNicheInputEnum.optional(),
+        })
+      )
       .query(async ({ input }) => {
         const job = await getScrapeJob(input.jobId);
-        const reelsList = await getReelsByJobId(input.jobId);
+        const reelsList = await getReelsByJobId(input.jobId, input.niche as NonNullable<Reel["niche"]>);
         const transcriptionsList = await getTranscriptionsByJobId(input.jobId);
         const transcriptionMap = new Map(
           transcriptionsList.map((t) => [t.reelId, t])
@@ -650,7 +661,12 @@ export const appRouter = router({
      * migration 0028 / Commit 3a.
      */
     getDashboardData: protectedProcedure
-      .input(z.object({ featuredAccountId: z.number().int().positive() }))
+      .input(
+        z.object({
+          featuredAccountId: z.number().int().positive(),
+          niche: reelNicheInputEnum.optional(),
+        })
+      )
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) {
@@ -710,7 +726,8 @@ export const appRouter = router({
           .where(
             and(
               eq(featuredReels.featuredAccountId, acc.id),
-              ne(featuredReels.transcriptionStatus, "failed")
+              ne(featuredReels.transcriptionStatus, "failed"),
+              ...(input.niche ? [eq(featuredReels.niche, input.niche as NonNullable<Reel["niche"]>)] : [])
             )
           )
           .orderBy(desc(featuredReels.viewCount));
@@ -742,6 +759,10 @@ export const appRouter = router({
           suggestedAction: r.suggestedAction ?? null,
           classificationReason: r.classificationReason ?? null,
           classifiedAt: r.classifiedAt ?? null,
+          niche: r.niche ?? null,
+          hookPattern: r.hookPattern ?? null,
+          viralFlag: r.viralFlag ?? false,
+          confidence: r.confidence ?? null,
         }));
 
         return {
@@ -1830,6 +1851,7 @@ Return JSON only:
           input.featuredReelId != null ? "featured" : "user";
         let caption = "";
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
+        let reelForGeneration: any;
 
         if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
@@ -1837,6 +1859,7 @@ Return JSON only:
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
           }
           caption = fr.caption ?? "";
+          reelForGeneration = fr;
           transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
         } else {
           const reel = await getReelById(input.reelId!);
@@ -1844,6 +1867,7 @@ Return JSON only:
             throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
           }
           caption = reel.caption ?? "";
+          reelForGeneration = reel;
           transcription = await getTranscriptionByReelId(input.reelId!);
         }
 
@@ -1879,7 +1903,7 @@ Return JSON only:
         });
 
         // Run generation in background
-        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
+        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, reelForGeneration, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
 
@@ -4996,6 +5020,35 @@ async function runScrapeJob(
       failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
+
+    const classifyDb = await getDb();
+    if (classifyDb) {
+      const newReelIds = await classifyDb
+        .select({ id: reelsTable.id })
+        .from(reelsTable)
+        .where(eq(reelsTable.jobId, jobId))
+        .then((rows) => rows.map((r) => r.id));
+      if (newReelIds.length > 0) {
+        classifyReelsByIds(newReelIds)
+          .then((r) =>
+            console.log(
+              `[runScrapeJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
+            )
+          )
+          .catch((err) =>
+            console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
+          );
+        mirrorReelVideosToR2ByIds(newReelIds)
+          .then((r) =>
+            console.log(
+              `[runScrapeJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
+            )
+          )
+          .catch((err) =>
+            console.error(`[runScrapeJob ${jobId}] mirror-videos error:`, err)
+          );
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     // Failure preserves the last progressPercent the UI saw — just flip the
@@ -5094,6 +5147,40 @@ async function runResyncJob(
     });
 
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
+
+    if (newReels.length > 0) {
+      const classifyDb = await getDb();
+      if (classifyDb) {
+        const shortcodes = newReels.map((r) => r.shortcode);
+        const insertedIds = await classifyDb
+          .select({ id: reelsTable.id })
+          .from(reelsTable)
+          .where(
+            and(eq(reelsTable.jobId, jobId), inArray(reelsTable.shortcode, shortcodes))
+          )
+          .then((rows) => rows.map((r) => r.id));
+        if (insertedIds.length > 0) {
+          classifyReelsByIds(insertedIds)
+            .then((r) =>
+              console.log(
+                `[runResyncJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
+              )
+            )
+            .catch((err) =>
+              console.error(`[runResyncJob ${jobId}] auto-classify error:`, err)
+            );
+          mirrorReelVideosToR2ByIds(insertedIds)
+            .then((r) =>
+              console.log(
+                `[runResyncJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
+              )
+            )
+            .catch((err) =>
+              console.error(`[runResyncJob ${jobId}] mirror-videos error:`, err)
+            );
+        }
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     await updateScrapeJob(jobId, {
@@ -5341,12 +5428,67 @@ Keep the analysis concise and actionable.`;
   }
 }
 
+function formatNiche(niche: string | null): string | null {
+  if (!niche) return null;
+  return niche.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function formatHookPattern(hook: string | null): string | null {
+  if (!hook) return null;
+  return hook.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function formatRetentionTactics(tactics: unknown): string | null {
+  if (!Array.isArray(tactics) || tactics.length === 0) return null;
+  return tactics.map(t => String(t).split("_").join(" ")).join(", ");
+}
+
+function buildV13ContextBlock(reel: any): string {
+  const lines: string[] = [];
+  const {
+    niche: rawNiche = null,
+    hookPattern: rawHookPattern = null,
+    retentionTactics: rawRetentionTactics = null,
+    contentType: rawContentType = null,
+    classificationReason: rawClassificationReason = null,
+    viralFlag = false,
+  } = reel ?? {};
+  const niche = formatNiche(rawNiche ? String(rawNiche) : null);
+  const hookPattern = formatHookPattern(rawHookPattern ? String(rawHookPattern) : null);
+  const retentionTactics = formatRetentionTactics(rawRetentionTactics);
+  const contentType = rawContentType ? String(rawContentType) : null;
+  const classificationReason = rawClassificationReason ? String(rawClassificationReason) : null;
+  const isViral = viralFlag === 1 || viralFlag === true;
+
+  if (niche) lines.push(`- Niche: ${niche}`);
+  if (contentType) lines.push(`- Content type: ${contentType}`);
+  if (hookPattern) lines.push(`- Hook pattern used: ${hookPattern}`);
+  if (retentionTactics) lines.push(`- Retention tactics used: ${retentionTactics}`);
+  if (isViral) lines.push(`- Performance: VIRAL (top performer for this creator's recent posts)`);
+  if (classificationReason) lines.push(`- Editor's analysis: ${classificationReason}`);
+
+  if (lines.length === 0) return "";
+
+  return `
+**PRE-ANALYZED SOURCE REEL CONTEXT (from our classifier):**
+${lines.join("\n")}
+
+**APPLY THIS WHEN WRITING:**
+- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type (e.g., contrarian = open with a controversial stance; question = open with a challenging question; stat = open with a surprising number).
+- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script (e.g., cliffhanger = withhold key info until late; pattern_interrupt = abrupt shift in pace; specific_numbers = concrete data points).
+- The content type and niche guide the tone and vocabulary.
+- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.
+
+`;
+}
+
 /** Background job: analyze viral structure and generate a new script */
 async function runScriptGeneration(
   scriptId: number,
   originalTranscript: string,
   segments: unknown,
   caption: string,
+  reel: any,
   topic: string,
   gradeLevel: string
 ): Promise<void> {
@@ -5460,12 +5602,14 @@ Return ONLY valid JSON, no markdown formatting.`;
       : `Write at a Grade ${gradeLevel} reading level. Use simple vocabulary and short sentences appropriate for that grade level.`;
 
     const isSameTopic = topic === "SAME_TOPIC";
+    const v13Context = buildV13ContextBlock(reel);
 
     const scriptPrompt = isSameTopic
       ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original — not a copy.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
+${v13Context}
 
 **ORIGINAL VIRAL TRANSCRIPT:**
 ${originalTranscript}
@@ -5491,6 +5635,7 @@ Do NOT include any labels like "Hook:" or "Body:" - just write the flowing scrip
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
+${v13Context}
 
 **ORIGINAL VIRAL TRANSCRIPT (for reference of style and pacing):**
 ${originalTranscript}
