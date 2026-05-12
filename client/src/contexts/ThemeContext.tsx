@@ -28,6 +28,22 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const getInitialTheme = (): ResolvedTheme => {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    /* ignore */
+  }
+  if (window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+  return "dark";
+};
+
 function readStoredPreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
   try {
@@ -50,11 +66,11 @@ function resolvePreference(
 
 function applyDomTheme(resolved: ResolvedTheme) {
   const root = document.documentElement;
+  root.classList.remove("light", "dark");
+  root.classList.add(resolved);
   if (resolved === "dark") {
-    root.classList.add("dark");
     root.style.colorScheme = "dark";
   } else {
-    root.classList.remove("dark");
     root.style.colorScheme = "light";
   }
 }
@@ -67,12 +83,12 @@ function subscribeSystemColorScheme(onChange: () => void) {
 }
 
 function getSystemIsDarkSnapshot(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return getInitialTheme() === "dark";
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 function getSystemIsDarkServerSnapshot(): boolean {
-  return false;
+  return getInitialTheme() === "dark";
 }
 
 interface ThemeProviderProps {

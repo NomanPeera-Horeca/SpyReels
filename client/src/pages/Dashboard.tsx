@@ -2270,7 +2270,7 @@ export default function Dashboard() {
                             </span>
                           )}
                           {/* Competitor posting day & time in user timezone */}
-                          <span className="flex items-center gap-1 text-amber-400/80">
+                          <span className="flex items-center gap-1 text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             {formatPostedTime(reel.postedAt, userTimezone)}
                           </span>
@@ -2561,7 +2561,7 @@ export default function Dashboard() {
                               </>
                             )}
                             <span aria-hidden>·</span>
-                            <span className="text-amber-400/80">
+                            <span className="text-muted-foreground">
                               {formatPostedTime(reel.postedAt, userTimezone)}
                             </span>
                           </div>

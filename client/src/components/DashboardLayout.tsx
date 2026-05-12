@@ -56,7 +56,6 @@ import {
   type ThemePreference,
   useTheme,
 } from "@/contexts/ThemeContext";
-import { LightModeBanner } from "@/components/LightModeBanner";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
@@ -386,7 +385,6 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <LightModeBanner />
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
