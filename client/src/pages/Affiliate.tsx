@@ -320,6 +320,13 @@ export default function Affiliate() {
                 Blog
               </Link>
               <Link
+                href="/affiliate"
+                className="flex items-center gap-1.5 text-primary transition-colors hover:text-primary/80"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Earn 20%
+              </Link>
+              <Link
                 href="/contact"
                 className="transition-colors hover:text-foreground"
               >

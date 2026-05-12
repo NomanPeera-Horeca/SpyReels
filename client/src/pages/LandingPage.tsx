@@ -339,6 +339,10 @@ export default function LandingPage() {
               <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
               <a href="/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Blog</a>
+              <a href="/affiliate" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors">
+                <Sparkles className="h-3.5 w-3.5" />
+                Earn 20%
+              </a>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={handleGetStarted} className="bg-transparent">Log In</Button>
