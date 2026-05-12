@@ -758,6 +758,7 @@ export default function LandingPage() {
               <a href="https://spy-reels.getrewardful.com/signup" className="hover:text-foreground transition-colors" target="_blank" rel="noopener noreferrer">Affiliates</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
+              <a href="/contact" className="hover:text-foreground transition-colors">Contact</a>
             </div>
             <p className="text-xs text-muted-foreground/60">&copy; {new Date().getFullYear()} SpyReels. All rights reserved.</p>
           </div>
