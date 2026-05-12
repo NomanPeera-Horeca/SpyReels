@@ -4963,6 +4963,21 @@ async function runScrapeJob(
     );
 
     if (reelData.length === 0) {
+      if (followerCount > 0) {
+        await updateScrapeJob(jobId, {
+          status: "failed",
+          totalReels: 0,
+          followerCount,
+          profilePicUrl: proxiedPicUrl || undefined,
+          currentStep: "failed",
+          reelsFound: 0,
+          progressPercent: 100,
+          errorMessage: `Scraper returned 0 reels for an account with ${followerCount} followers. This usually means a temporary Instagram session issue. Please retry in a few minutes.`,
+          failureReason: "unknown",
+        });
+        return;
+      }
+
       await updateScrapeJob(jobId, {
         status: "completed",
         totalReels: 0,

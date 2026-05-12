@@ -50,6 +50,9 @@ async function scGet(
       data = text;
     }
   }
+  console.log(
+    `[Bug #64 diag] scGet path=${path} status=${res.status} bodyLength=${text.length}`
+  );
   return { status: res.status, data };
 }
 
