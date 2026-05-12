@@ -7,6 +7,7 @@ import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
 const MAX_VIDEO_DOWNLOAD_BYTES = 120 * 1024 * 1024; // 120 MiB
 
 const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const MIRROR_BATCH_SIZE = 1;
 
 export function reelVideoR2Key(shortcode: string): string {
   const safe = shortcode.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -53,12 +54,22 @@ export async function ensureReelVideoOnR2(
 
     if (res.statusCode !== 200 || !res.rawBody) return src;
 
-    const raw = res.rawBody;
-    if (raw.length > MAX_VIDEO_DOWNLOAD_BYTES) return src;
+    let raw: Buffer | undefined = Buffer.isBuffer(res.rawBody)
+      ? res.rawBody
+      : Buffer.from(res.rawBody);
+    if (raw.length > MAX_VIDEO_DOWNLOAD_BYTES) {
+      raw = undefined;
+      return src;
+    }
 
-    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-    const { url } = await storagePut(key, buf, "video/mp4");
-    return url;
+    let buf: Buffer | undefined = raw;
+    try {
+      const { url } = await storagePut(key, buf, "video/mp4");
+      return url;
+    } finally {
+      raw = undefined;
+      buf = undefined;
+    }
   } catch {
     return src;
   }
@@ -133,8 +144,8 @@ export async function mirrorReelVideosToR2ByIds(
       }
     }
 
-    for (let i = 0; i < rows.length; i += 3) {
-      await Promise.all(rows.slice(i, i + 3).map((row) => mirrorOne(row)));
+    for (let i = 0; i < rows.length; i += MIRROR_BATCH_SIZE) {
+      await Promise.all(rows.slice(i, i + MIRROR_BATCH_SIZE).map((row) => mirrorOne(row)));
     }
   } catch (err) {
     counts.failed += Math.max(0, uniqueIds.length - counts.ok - counts.failed - counts.skipped);
