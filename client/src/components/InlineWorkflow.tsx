@@ -670,9 +670,9 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     return (
       <div className="bg-muted/20 border-t border-border/30">
         <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
-          <Clock className="h-3 w-3 text-amber-400" />
-          <span className="text-amber-400/80">
-            Competitor posted: <strong className="text-amber-300">{formatPostedTime(postedAt, userTimezone)}</strong>
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <span className="text-muted-foreground">
+            Competitor posted: <strong className="text-muted-foreground">{formatPostedTime(postedAt, userTimezone)}</strong>
           </span>
           <span className="text-muted-foreground ml-1">
             (Timezone: {userTimezone.split("/").pop()?.replace("_", " ")})
@@ -692,9 +692,9 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     <div className="bg-muted/20 border-t border-border/30">
       {/* Competitor posting info bar */}
       <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
-        <Clock className="h-3 w-3 text-amber-400" />
-        <span className="text-amber-400/80">
-          Competitor posted: <strong className="text-amber-300">{formatPostedTime(postedAt, userTimezone)}</strong>
+        <Clock className="h-3 w-3 text-muted-foreground" />
+        <span className="text-muted-foreground">
+          Competitor posted: <strong className="text-muted-foreground">{formatPostedTime(postedAt, userTimezone)}</strong>
         </span>
         <span className="text-muted-foreground ml-1">
           (Timezone: {userTimezone.split("/").pop()?.replace("_", " ")})
@@ -1130,9 +1130,9 @@ export function SearchInlineWorkflow({
     <div className="bg-muted/20 border-t border-border/30">
       {/* Competitor posting info bar */}
       <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs">
-        <Clock className="h-3 w-3 text-amber-400" />
-        <span className="text-amber-400/80">
-          Competitor posted: <strong className="text-amber-300">{formatPostedTime(reel.postedAt, userTimezone)}</strong>
+        <Clock className="h-3 w-3 text-muted-foreground" />
+        <span className="text-muted-foreground">
+          Competitor posted: <strong className="text-muted-foreground">{formatPostedTime(reel.postedAt, userTimezone)}</strong>
         </span>
         <span className="text-muted-foreground ml-1">
           (Timezone: {userTimezone.split("/").pop()?.replace("_", " ")})

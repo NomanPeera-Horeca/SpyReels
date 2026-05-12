@@ -124,7 +124,7 @@ export function GridReelWorkflowDialog({
                       {reel.engagementRate.toFixed(2)}%
                     </span>
                   )}
-                  <span className="flex items-center gap-1 text-amber-400/80">
+                  <span className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="h-3 w-3 shrink-0" />
                     {formatPostedTime(reel.postedAt, userTimezone)}
                   </span>
