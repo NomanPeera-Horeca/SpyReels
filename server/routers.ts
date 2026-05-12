@@ -1851,6 +1851,7 @@ Return JSON only:
           input.featuredReelId != null ? "featured" : "user";
         let caption = "";
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
+        let reelForGeneration: any;
 
         if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
@@ -1858,6 +1859,7 @@ Return JSON only:
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
           }
           caption = fr.caption ?? "";
+          reelForGeneration = fr;
           transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
         } else {
           const reel = await getReelById(input.reelId!);
@@ -1865,6 +1867,7 @@ Return JSON only:
             throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
           }
           caption = reel.caption ?? "";
+          reelForGeneration = reel;
           transcription = await getTranscriptionByReelId(input.reelId!);
         }
 
@@ -1900,7 +1903,7 @@ Return JSON only:
         });
 
         // Run generation in background
-        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
+        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, reelForGeneration, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
 
@@ -5407,12 +5410,67 @@ Keep the analysis concise and actionable.`;
   }
 }
 
+function formatNiche(niche: string | null): string | null {
+  if (!niche) return null;
+  return niche.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function formatHookPattern(hook: string | null): string | null {
+  if (!hook) return null;
+  return hook.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function formatRetentionTactics(tactics: unknown): string | null {
+  if (!Array.isArray(tactics) || tactics.length === 0) return null;
+  return tactics.map(t => String(t).split("_").join(" ")).join(", ");
+}
+
+function buildV13ContextBlock(reel: any): string {
+  const lines: string[] = [];
+  const {
+    niche: rawNiche = null,
+    hookPattern: rawHookPattern = null,
+    retentionTactics: rawRetentionTactics = null,
+    contentType: rawContentType = null,
+    classificationReason: rawClassificationReason = null,
+    viralFlag = false,
+  } = reel ?? {};
+  const niche = formatNiche(rawNiche ? String(rawNiche) : null);
+  const hookPattern = formatHookPattern(rawHookPattern ? String(rawHookPattern) : null);
+  const retentionTactics = formatRetentionTactics(rawRetentionTactics);
+  const contentType = rawContentType ? String(rawContentType) : null;
+  const classificationReason = rawClassificationReason ? String(rawClassificationReason) : null;
+  const isViral = viralFlag === 1 || viralFlag === true;
+
+  if (niche) lines.push(`- Niche: ${niche}`);
+  if (contentType) lines.push(`- Content type: ${contentType}`);
+  if (hookPattern) lines.push(`- Hook pattern used: ${hookPattern}`);
+  if (retentionTactics) lines.push(`- Retention tactics used: ${retentionTactics}`);
+  if (isViral) lines.push(`- Performance: VIRAL (top performer for this creator's recent posts)`);
+  if (classificationReason) lines.push(`- Editor's analysis: ${classificationReason}`);
+
+  if (lines.length === 0) return "";
+
+  return `
+**PRE-ANALYZED SOURCE REEL CONTEXT (from our classifier):**
+${lines.join("\n")}
+
+**APPLY THIS WHEN WRITING:**
+- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type (e.g., contrarian = open with a controversial stance; question = open with a challenging question; stat = open with a surprising number).
+- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script (e.g., cliffhanger = withhold key info until late; pattern_interrupt = abrupt shift in pace; specific_numbers = concrete data points).
+- The content type and niche guide the tone and vocabulary.
+- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.
+
+`;
+}
+
 /** Background job: analyze viral structure and generate a new script */
 async function runScriptGeneration(
   scriptId: number,
   originalTranscript: string,
   segments: unknown,
   caption: string,
+  reel: any,
   topic: string,
   gradeLevel: string
 ): Promise<void> {
@@ -5526,12 +5584,14 @@ Return ONLY valid JSON, no markdown formatting.`;
       : `Write at a Grade ${gradeLevel} reading level. Use simple vocabulary and short sentences appropriate for that grade level.`;
 
     const isSameTopic = topic === "SAME_TOPIC";
+    const v13Context = buildV13ContextBlock(reel);
 
     const scriptPrompt = isSameTopic
       ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original — not a copy.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
+${v13Context}
 
 **ORIGINAL VIRAL TRANSCRIPT:**
 ${originalTranscript}
@@ -5557,6 +5617,7 @@ Do NOT include any labels like "Hook:" or "Body:" - just write the flowing scrip
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
+${v13Context}
 
 **ORIGINAL VIRAL TRANSCRIPT (for reference of style and pacing):**
 ${originalTranscript}
