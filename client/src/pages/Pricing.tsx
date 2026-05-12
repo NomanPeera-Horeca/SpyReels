@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePostHog } from "@posthog/react";
 import { getLoginUrl } from "@/const";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -913,6 +914,23 @@ export default function Pricing() {
           </CardContent>
         </Card>
       </div>
+
+      <footer className="border-t border-border/50 py-8">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 text-xs text-muted-foreground/60 sm:px-6 lg:px-8">
+          <span>&copy; {new Date().getFullYear()} SpyReels</span>
+          <div className="flex gap-4">
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/contact" className="hover:text-foreground">
+              Contact
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
