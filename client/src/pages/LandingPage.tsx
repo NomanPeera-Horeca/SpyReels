@@ -11,7 +11,7 @@ import {
   Check, X, Crown, Rocket, Building2, Star
 } from "lucide-react";
 
-const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-dashboard-EWAcrdvhz9tvRSUdzj7WCo.webp";
+const HERO_VIDEO_URL = "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
 const WORKFLOW_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
 const SPYREELS_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
@@ -357,37 +357,56 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-primary/8 rounded-full blur-[120px] pointer-events-none" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-12">
-          <div className="text-center max-w-4xl mx-auto">
-            <Badge variant="outline" className="mb-6 text-primary border-primary/30 px-4 py-1.5 text-sm">
-              <Star className="h-3.5 w-3.5 mr-2" />
-              12,000+ creators are already using SpyReels
-            </Badge>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
-              Why are their Reels getting 100K views{" "}
-              <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
-                and yours are getting 200?
-              </span>
-            </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-4 leading-relaxed">
-              SpyReels shows you exactly which Reels are going viral in your niche, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from zero to filming in under 10 minutes.
-            </p>
-            <p className="text-sm text-amber-400 font-medium mb-8">
-              While you are reading this, other creators in your niche are already using this.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-              <Button size="lg" onClick={handleGetStarted} className="text-base px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                Start Free. No Credit Card.
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-                See how it works <ChevronDown className="h-4 w-4" />
-              </a>
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
+            {/* Left: Copy + CTAs */}
+            <div className="text-center lg:text-left">
+              <Badge variant="outline" className="mb-6 text-primary border-primary/30 px-4 py-1.5 text-sm">
+                <Star className="h-3.5 w-3.5 mr-2" />
+                12,000+ creators are already using SpyReels
+              </Badge>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
+                Why are their Reels getting 100K views{" "}
+                <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
+                  and yours are getting 200?
+                </span>
+              </h1>
+              <p className="text-lg sm:text-xl text-muted-foreground mb-4 leading-relaxed mx-auto lg:mx-0 max-w-2xl lg:max-w-xl">
+                SpyReels shows you exactly which Reels are going viral in your niche, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from zero to filming in under 10 minutes.
+              </p>
+              <p className="text-sm text-amber-400 font-medium mb-8">
+                While you are reading this, other creators in your niche are already using this.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center lg:justify-start justify-center gap-4 mb-6">
+                <Button size="lg" onClick={handleGetStarted} className="text-base px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+                  Start Free. No Credit Card.
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+                <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                  See how it works <ChevronDown className="h-4 w-4" />
+                </a>
+              </div>
+              <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
             </div>
-            <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
+
+            {/* Right: Hero demo video (9:16 vertical) */}
+            <div className="relative mx-auto w-full max-w-[340px]">
+              <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-primary/5 to-transparent rounded-3xl blur-2xl pointer-events-none" />
+              <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/20 bg-card">
+                <video
+                  src={HERO_VIDEO_URL}
+                  className="block w-full h-auto aspect-[9/16] object-cover"
+                  controls
+                  autoPlay
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Social proof bar */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-8 text-sm text-muted-foreground">
+          <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-8 text-sm text-muted-foreground">
             {[
               { icon: Star, text: "12,000+ creators" },
               { icon: Film, text: "2.4M+ Reels analyzed" },
@@ -399,14 +418,6 @@ export default function LandingPage() {
                 <span>{item.text}</span>
               </div>
             ))}
-          </div>
-
-          {/* Product screenshot */}
-          <div className="mt-12 sm:mt-16 relative">
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent z-10 pointer-events-none" />
-            <div className="relative rounded-xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/10">
-              <img src={HERO_IMG} alt="SpyReels dashboard" className="w-full" loading="eager" />
-            </div>
           </div>
         </div>
       </section>
