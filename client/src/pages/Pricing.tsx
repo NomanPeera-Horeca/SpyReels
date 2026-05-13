@@ -48,6 +48,8 @@ type FeatureValue = boolean | string | number;
 
 const PLAN_ORDER: PublicPlanId[] = ["free", "starter", "pro", "business"];
 
+type FeatureSection = { label: string; items: string[] };
+
 const PLAN_COPY: Record<
   PublicPlanId,
   {
@@ -56,7 +58,8 @@ const PLAN_COPY: Record<
     description: string;
     badge?: string;
     icon: typeof Zap;
-    highlights: string[];
+    includesPrevious?: string;
+    sections: FeatureSection[];
     outcomes: string[];
     featured?: boolean;
   }
@@ -66,11 +69,38 @@ const PLAN_COPY: Record<
     eyebrow: "Try the workflow",
     description: "For creators who want proof before they pay.",
     icon: Zap,
-    highlights: [
-      "2 account research sessions/month",
-      "3 Reel transcripts/month",
-      "3 AI script re-creations/month",
-      "Basic teleprompter",
+    sections: [
+      {
+        label: "Find viral angles",
+        items: [
+          "2 account research sessions per month (10 Reels each)",
+          "3 keyword searches per day",
+          "Viral structure preview (hook + payoff)",
+          "Engagement metrics (views, likes, comments)",
+        ],
+      },
+      {
+        label: "Write your first script",
+        items: [
+          "3 Reel transcripts per month",
+          "3 AI script re-creations per month",
+          "3 Idea-to-Script generations per month",
+          "3 rewrites per script",
+        ],
+      },
+      {
+        label: "Record and organize",
+        items: [
+          "Basic teleprompter",
+          "SpyReels Bot (limited prompts)",
+          "5 saved scripts",
+          "Single creator workspace",
+        ],
+      },
+      {
+        label: "Support",
+        items: ["Help center access"],
+      },
     ],
     outcomes: [
       "Find viral angles in your niche",
@@ -83,14 +113,60 @@ const PLAN_COPY: Record<
     eyebrow: "Build consistency",
     description: "For creators posting 3 to 5 Reels a week.",
     icon: Rocket,
-    highlights: [
-      "10 account research sessions/month",
-      "30 Reel transcripts/month",
-      "15 AI script re-creations/month",
-      "Content calendar and Kanban board",
+    includesPrevious: "Free",
+    sections: [
+      {
+        label: "Research at scale",
+        items: [
+          "10 account research sessions per month (50 Reels each)",
+          "20 keyword searches per day",
+          "Full viral structure analysis (hook, beat, payoff, CTA)",
+          "Engagement breakdown with save rate and watch-through",
+          "Saved Reels library (organize what works)",
+        ],
+      },
+      {
+        label: "More scripts, faster",
+        items: [
+          "30 Reel transcripts per month",
+          "15 AI script re-creations per month",
+          "15 Idea-to-Script generations per month",
+          "Proven hook library (50+ opener templates)",
+          "AI caption + hashtag generator",
+        ],
+      },
+      {
+        label: "Production toolkit",
+        items: [
+          "SpyReels Bot full access (unlimited chats)",
+          "Basic teleprompter with section bookmarks",
+          "Auto-generated thumbnail prompts",
+        ],
+      },
+      {
+        label: "Plan and ship",
+        items: [
+          "50 saved scripts",
+          "Content calendar view",
+          "Kanban workflow board (Idea -> Filmed -> Posted)",
+          "Last 3 versions per script",
+        ],
+      },
+      {
+        label: "Exports",
+        items: [
+          "SRT subtitle export",
+          "CSV export",
+          "Google Sheets export",
+        ],
+      },
+      {
+        label: "Support",
+        items: ["Email support (response under 24 hours)"],
+      },
     ],
     outcomes: [
-      "Plan a full month of content",
+      "Plan a full month of content in one sitting",
       "Turn competitor Reels into your own scripts",
       "Export captions, SRT files, and research",
     ],
@@ -98,40 +174,138 @@ const PLAN_COPY: Record<
   pro: {
     name: "Pro",
     eyebrow: "Most creators pick this",
-    description: "For serious creators building a repeatable content engine.",
+    description:
+      "For serious creators building a repeatable content engine.",
     badge: "Best value",
     icon: Trophy,
     featured: true,
-    highlights: [
-      "50 account research sessions/month",
-      "200 Reel transcripts/month",
-      "100 AI script re-creations/month",
-      "Voice-driven teleprompter and smart take tracking",
+    includesPrevious: "Solo Creator",
+    sections: [
+      {
+        label: "Pro research",
+        items: [
+          "50 account research sessions per month",
+          "Unlimited Reels per researched account",
+          "Unlimited keyword searches",
+          "Brand Coach: AI viral-potential score on every Reel",
+          "Competitor radar (track up to 10 accounts, alerts on new viral posts)",
+          "Trending hook detection across your niche",
+          "Niche benchmark report (your numbers vs your competitors)",
+        ],
+      },
+      {
+        label: "Pro script studio",
+        items: [
+          "200 Reel transcripts per month",
+          "100 AI script re-creations per month",
+          "100 Idea-to-Script generations per month",
+          "10 rewrites per script",
+          "A/B variant generator (3 versions per script)",
+          "AI delivery cues and on-camera coaching notes",
+          "Tone presets (educational, story, hot-take, listicle)",
+        ],
+      },
+      {
+        label: "Pro production",
+        items: [
+          "Voice-driven teleprompter (hands-free scroll)",
+          "Smart take tracking with retake suggestions",
+          "Advanced SpyReels Bot (save and reuse custom prompts)",
+          "Audio cue and pacing recommendations",
+        ],
+      },
+      {
+        label: "Team-ready workflow",
+        items: [
+          "500 saved scripts",
+          "Up to 3 team members included",
+          "Full version history",
+          "Cross-script tags, folders, and search",
+          "Inline comments on scripts",
+        ],
+      },
+      {
+        label: "Pro exports",
+        items: [
+          "Google Docs, PDF, and DOCX export",
+          "Brand-formatted exports with logo + colors",
+          "Bulk export of saved Reels and transcripts",
+        ],
+      },
+      {
+        label: "Pro support",
+        items: ["Priority email + chat support (response under 4 hours)"],
+      },
     ],
     outcomes: [
-      "Unlimited keyword searches",
-      "AI delivery cues and coaching notes",
-      "Advanced SpyReels Bot access",
-      "Up to 3 team members",
+      "Score every Reel for viral potential before you film",
+      "Cut filming time in half with voice teleprompter",
+      "Run a 3-person creator team without losing scripts",
     ],
   },
   business: {
     name: "Agency / Team",
     eyebrow: "Scale a content studio",
-    description: "For teams managing multiple creators, brands, or clients.",
+    description:
+      "For teams managing multiple creators, brands, or clients.",
     badge: "For teams",
     icon: Users,
-    highlights: [
-      "200 account research sessions/month",
-      "1,000 Reel transcripts/month",
-      "500 AI script re-creations/month",
-      "10 team members and 3 workspaces",
+    includesPrevious: "Pro",
+    sections: [
+      {
+        label: "Agency research",
+        items: [
+          "200 account research sessions per month",
+          "Unlimited competitor radar tracking",
+          "Bulk research (analyze 10 accounts at once)",
+          "Niche heatmap (what is working across your client roster)",
+          "White-label competitor reports",
+        ],
+      },
+      {
+        label: "Agency script engine",
+        items: [
+          "1,000 Reel transcripts per month",
+          "500 AI script re-creations per month",
+          "500 Idea-to-Script generations per month",
+          "Unlimited rewrites per script",
+          "Brand voice library (save tone, vocabulary, do-not-say per client)",
+          "Pre-approved hook bank per client",
+        ],
+      },
+      {
+        label: "Team collaboration",
+        items: [
+          "10 team members included",
+          "3 separate workspaces (one per client or brand)",
+          "Role-based permissions (admin, editor, viewer)",
+          "Client approval workflow with sign-off",
+          "Threaded comments and @mentions inside scripts",
+          "Activity log and audit trail",
+        ],
+      },
+      {
+        label: "Power exports",
+        items: [
+          "API access (programmatic transcripts, research, scripts)",
+          "White-label PDF reports",
+          "Custom branding on every export",
+          "Webhooks for new Reels and finished scripts",
+        ],
+      },
+      {
+        label: "Concierge support",
+        items: [
+          "Priority chat support (response under 1 hour)",
+          "Dedicated onboarding session with a SpyReels strategist",
+          "Quarterly performance review and roadmap",
+        ],
+      },
     ],
     outcomes: [
-      "Unlimited rewrites, tags, and searches",
-      "API access and white-label reports",
-      "Priority chat support",
-      "Dedicated onboarding session",
+      "Run 5+ creator brands from one workspace",
+      "Hand clients white-label reports they actually read",
+      "Plug SpyReels into your stack with the API",
     ],
   },
 };
@@ -761,13 +935,34 @@ export default function Pricing() {
                     {!isCurrentPlan ? <ArrowRight className="h-4 w-4" /> : null}
                   </Button>
 
-                  <div className="mt-6 space-y-3">
-                    {copy.highlights.map(feature => (
-                      <div key={feature} className="flex items-start gap-2">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        <span className="text-sm text-muted-foreground">
-                          {feature}
-                        </span>
+                  {copy.includesPrevious ? (
+                    <div className="mt-6 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Everything in {copy.includesPrevious}, plus:
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-6 space-y-5">
+                    {copy.sections.map(section => (
+                      <div key={section.label}>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
+                          {section.label}
+                        </p>
+                        <div className="space-y-2">
+                          {section.items.map(item => (
+                            <div
+                              key={item}
+                              className="flex items-start gap-2"
+                            >
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                              <span className="text-sm leading-snug text-muted-foreground">
+                                {item}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
