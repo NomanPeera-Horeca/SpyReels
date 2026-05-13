@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
 import {
-  ArrowLeft,
   ArrowRight,
   BadgeCheck,
   Building2,
@@ -41,9 +39,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-
-const LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 
 const REWARDFUL_SIGNUP_URL = "https://spy-reels.getrewardful.com/signup";
 
@@ -292,56 +289,7 @@ export default function Affiliate() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ─── Nav ─── */}
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <img
-                src={LOGO_URL}
-                alt="SpyReels"
-                className="h-9 w-9 rounded-lg"
-              />
-              <span className="text-lg font-semibold tracking-tight">
-                SpyReels
-              </span>
-            </Link>
-            <div className="hidden items-center gap-6 text-sm text-muted-foreground sm:flex">
-              <Link
-                href="/pricing"
-                className="transition-colors hover:text-foreground"
-              >
-                Pricing
-              </Link>
-              <Link
-                href="/blog"
-                className="transition-colors hover:text-foreground"
-              >
-                Blog
-              </Link>
-              <Link
-                href="/affiliate"
-                className="flex items-center gap-1.5 text-primary transition-colors hover:text-primary/80"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Earn 20%
-              </Link>
-              <Link
-                href="/contact"
-                className="transition-colors hover:text-foreground"
-              >
-                Contact
-              </Link>
-            </div>
-            <Link
-              href="/"
-              className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground sm:hidden"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader />
 
       {/* ─── 1. Hero ─── */}
       <section className="relative overflow-hidden">
@@ -892,26 +840,7 @@ export default function Affiliate() {
         </div>
       </section>
 
-      {/* ─── Footer ─── */}
-      <footer className="border-t border-border/50 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 text-xs text-muted-foreground/60 sm:px-6 lg:px-8">
-          <span>&copy; {new Date().getFullYear()} SpyReels</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/affiliate" className="hover:text-foreground">
-              Affiliate
-            </Link>
-            <Link href="/contact" className="hover:text-foreground">
-              Contact
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

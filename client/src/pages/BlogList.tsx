@@ -1,31 +1,17 @@
-import { Film, ArrowLeft, Calendar, Tag, ArrowRight, Sparkles } from "lucide-react";
+import { Calendar, Tag, ArrowRight, Sparkles, Film } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { StickySignupBar } from "@/components/BlogConversion";
-
-const SPYREELS_LOGO =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 
 export default function BlogList() {
   const { data: posts, isLoading } = trpc.blog.published.useQuery();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
-              <span className="font-semibold text-lg tracking-tight">SpyReels</span>
-            </Link>
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="h-4 w-4" /> Back to App
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
         {/* Hero CTA Banner */}
@@ -150,19 +136,7 @@ export default function BlogList() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border/50 py-8 mt-12">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-muted-foreground/60">
-          <span>&copy; {new Date().getFullYear()} SpyReels</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/blog" className="hover:text-foreground">Blog</Link>
-            <Link href="/affiliate" className="hover:text-foreground">Affiliate</Link>
-            <Link href="/contact" className="hover:text-foreground">Contact</Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
 
       {/* Sticky signup bar */}
       <StickySignupBar />

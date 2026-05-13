@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import {
   Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
@@ -13,7 +15,6 @@ import {
 
 const HERO_VIDEO_URL = "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
 const WORKFLOW_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
-const SPYREELS_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
 // ─── Features ──────────────────────────────────────────────────
 const FEATURES = [
@@ -325,32 +326,7 @@ export default function LandingPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
-              <span className="font-semibold text-lg tracking-tight">SpyReels</span>
-            </div>
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
-              <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-              <a href="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
-              <a href="/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Blog</a>
-              <a href="/affiliate" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors">
-                <Sparkles className="h-3.5 w-3.5" />
-                Earn 20%
-              </a>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={handleGetStarted} className="bg-transparent">Log In</Button>
-              <Button size="sm" onClick={handleGetStarted}>Start Free <ArrowRight className="h-3.5 w-3.5 ml-1" /></Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader />
 
       {/* Hero */}
       <section className="relative overflow-hidden">
@@ -757,28 +733,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/50 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-8 w-8" />
-              <span className="font-semibold tracking-tight">SpyReels</span>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-              <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
-              <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
-              <a href="/blog" className="hover:text-foreground transition-colors">Blog</a>
-              {/* <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a> */}
-              <a href="/affiliate" className="hover:text-foreground transition-colors">Affiliate</a>
-              <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
-              <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
-              <a href="/contact" className="hover:text-foreground transition-colors">Contact</a>
-            </div>
-            <p className="text-xs text-muted-foreground/60">&copy; {new Date().getFullYear()} SpyReels. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
