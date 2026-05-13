@@ -390,6 +390,14 @@ export interface ScrapeResult {
   reels: ReelData[];
   followerCount: number;
   profilePicUrl: string;
+  /** Total reel items vendor returned and we parsed, regardless of the
+   * date-window filter. Lets the caller tell apart "vendor gave us
+   * nothing" (0) from "account just hasn't posted recently" (>0 with
+   * reels.length === 0). */
+  totalParsedItems: number;
+  /** Most recent posted date across ALL parsed items, regardless of the
+   * date-window filter. Null when no items parsed. */
+  mostRecentItemAt: Date | null;
 }
 
 export async function scrapeReels(
@@ -425,6 +433,10 @@ export async function scrapeReels(
   /** API returned rows we could not map to ReelData (shape drift / new fields). */
   let pagesWithItemsButNoParses = 0;
   let warnedUnparseablePage = false;
+  /** Most recent reel date across ALL parsed items, including those
+   * outside the timeframe window — used by callers to surface a clear
+   * "account hasn't posted in N days" message. */
+  let mostRecentItemAt: Date | null = null;
 
   while (hasMore && pageCount < maxPages) {
     if (Date.now() - startTime > timeoutMs) {
@@ -472,6 +484,10 @@ export async function scrapeReels(
       seenShortcodes.add(reel.shortcode);
 
       if (Number.isNaN(reel.postedAt.getTime())) continue;
+
+      if (!mostRecentItemAt || reel.postedAt > mostRecentItemAt) {
+        mostRecentItemAt = reel.postedAt;
+      }
 
       if (reel.postedAt >= cutoffDate) {
         allReels.push(reel);
@@ -522,7 +538,13 @@ export async function scrapeReels(
     `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
   );
 
-  return { reels: allReels, followerCount: profile.followerCount, profilePicUrl: profile.profilePicUrl };
+  return {
+    reels: allReels,
+    followerCount: profile.followerCount,
+    profilePicUrl: profile.profilePicUrl,
+    totalParsedItems: seenShortcodes.size,
+    mostRecentItemAt,
+  };
 }
 
 /* ------------------------------------------------------------------ */

@@ -5124,7 +5124,13 @@ async function runScrapeJob(
       progressPercent: 15,
     });
 
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
+    const {
+      reels: reelData,
+      followerCount,
+      profilePicUrl,
+      totalParsedItems,
+      mostRecentItemAt,
+    } = await scrapeReels(
       handle,
       timeframeDays,
       (count) => {
@@ -5155,10 +5161,50 @@ async function runScrapeJob(
 
     if (reelData.length === 0) {
       if (followerCount > 0) {
-        // Profile fetch succeeded (followerCount > 0) but zero reels
-        // returned. This is the vendor's "empty success" envelope —
-        // not the user's fault — so refund the quota slot and label the
-        // failure as rate-limited so the UI shows the retry-later copy.
+        // Two distinct sub-cases land here:
+        //
+        //  A. Vendor returned items but ALL were older than the user's
+        //     timeframe window. The account simply has not posted reels
+        //     recently. Show a friendly "expand timeframe" message rather
+        //     than blaming Instagram, and refund the quota since the
+        //     scrape did its job (we just found nothing in the window).
+        //
+        //  B. Vendor returned zero items at all (or only unparseable
+        //     items). That is the Bug #64 "empty success" envelope: a
+        //     transient vendor-pool issue. Keep the existing rate-limited
+        //     label and refund.
+        const itemsExisted = totalParsedItems > 0;
+        const ageDays =
+          itemsExisted && mostRecentItemAt
+            ? Math.max(
+                0,
+                Math.floor(
+                  (Date.now() - mostRecentItemAt.getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              )
+            : null;
+
+        if (itemsExisted) {
+          const ageCopy =
+            ageDays != null
+              ? ` Most recent reel was posted ${ageDays} day${ageDays === 1 ? "" : "s"} ago.`
+              : "";
+          await updateScrapeJob(jobId, {
+            status: "failed",
+            totalReels: 0,
+            followerCount,
+            profilePicUrl: proxiedPicUrl || undefined,
+            currentStep: "failed",
+            reelsFound: 0,
+            progressPercent: 100,
+            errorMessage: `@${handle.replace(/^@/, "")} has not posted reels in the last ${timeframeDays} days.${ageCopy} Try expanding the timeframe.`,
+            failureReason: "unknown",
+          });
+          await refundScrapeQuota("no_reels_in_window");
+          return;
+        }
+
         await updateScrapeJob(jobId, {
           status: "failed",
           totalReels: 0,
