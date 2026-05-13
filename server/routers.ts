@@ -461,10 +461,22 @@ export const appRouter = router({
         }
       }
 
-      return jobs.map((j) => ({
-        ...j,
-        reelStats: rollupMap.get(j.id) ?? null,
-      }));
+      // Hide failed scrapes that never produced reels — they're just
+      // noise on Creator Radar (no metrics, no insights, retry path is
+      // already available via "Spy A Creator"). Failed jobs that DID
+      // collect reels (e.g. a refresh that failed after a successful
+      // initial scrape) stay visible so the user keeps their data.
+      // Running and completed jobs always pass through.
+      return jobs
+        .map((j) => ({
+          ...j,
+          reelStats: rollupMap.get(j.id) ?? null,
+        }))
+        .filter((j) => {
+          if (j.status !== "failed") return true;
+          const reelCount = j.reelStats?.reelCountRollup ?? 0;
+          return reelCount > 0;
+        });
     }),
 
     /** Delete a scrape job and its associated reels */
