@@ -193,8 +193,8 @@ function BrandCoachDetailDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
-        <div className="border-b border-border bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6">
+      <DialogContent className="flex max-h-[88dvh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[84dvh]">
+        <div className="shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-4 sm:p-5">
           <DialogHeader className="space-y-2">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -205,13 +205,13 @@ function BrandCoachDetailDialog({
               </div>
               <ScoreCircle score={score.overallScore} verdict={score.verdict} />
             </div>
-            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+            <DialogDescription className="max-h-32 overflow-y-auto pr-1 text-sm leading-relaxed text-muted-foreground sm:max-h-40">
               {score.reasoning}
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid grid-cols-3 gap-3">
             <SubScore label="Hook" icon={Zap} score={score.hookScore} />
             <SubScore label="Retention" icon={TrendingUp} score={score.retentionScore} />
@@ -247,10 +247,12 @@ function BrandCoachDetailDialog({
           />
         </div>
 
-        <div className="flex justify-end border-t border-border bg-card/40 px-6 py-3">
+        <div className="shrink-0 border-t border-border bg-card/95 px-4 py-3 sm:px-6">
+          <div className="flex justify-end">
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
