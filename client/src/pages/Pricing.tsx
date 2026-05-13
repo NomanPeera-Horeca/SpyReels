@@ -75,8 +75,8 @@ const PLAN_COPY: Record<
         items: [
           "2 account research sessions per month (10 Reels each)",
           "3 keyword searches per day",
-          "Viral structure preview (hook + payoff)",
           "Engagement metrics (views, likes, comments)",
+          "Creator Radar history (re-open any past spy session)",
         ],
       },
       {
@@ -92,20 +92,20 @@ const PLAN_COPY: Record<
         label: "Record and organize",
         items: [
           "Basic teleprompter",
-          "SpyReels Bot (limited prompts)",
+          "SpyReels Bot on Telegram",
           "5 saved scripts",
           "Single creator workspace",
         ],
       },
       {
         label: "Support",
-        items: ["Help center access"],
+        items: ["Email support (best-effort response)"],
       },
     ],
     outcomes: [
       "Find viral angles in your niche",
       "Transcribe a Reel before rewriting it",
-      "Test SpyReels Bot prompts",
+      "Test the SpyReels workflow before paying",
     ],
   },
   starter: {
@@ -120,9 +120,8 @@ const PLAN_COPY: Record<
         items: [
           "10 account research sessions per month (50 Reels each)",
           "20 keyword searches per day",
-          "Full viral structure analysis (hook, beat, payoff, CTA)",
-          "Engagement breakdown with save rate and watch-through",
-          "Saved Reels library (organize what works)",
+          "Full transcript + structure on every Reel",
+          "Saved Reels library (organize what is working)",
         ],
       },
       {
@@ -131,16 +130,7 @@ const PLAN_COPY: Record<
           "30 Reel transcripts per month",
           "15 AI script re-creations per month",
           "15 Idea-to-Script generations per month",
-          "Proven hook library (50+ opener templates)",
-          "AI caption + hashtag generator",
-        ],
-      },
-      {
-        label: "Production toolkit",
-        items: [
-          "SpyReels Bot full access (unlimited chats)",
-          "Basic teleprompter with section bookmarks",
-          "Auto-generated thumbnail prompts",
+          "SpyReels Bot full access on Telegram",
         ],
       },
       {
@@ -149,7 +139,7 @@ const PLAN_COPY: Record<
           "50 saved scripts",
           "Content calendar view",
           "Kanban workflow board (Idea -> Filmed -> Posted)",
-          "Last 3 versions per script",
+          "Script version history",
         ],
       },
       {
@@ -185,12 +175,9 @@ const PLAN_COPY: Record<
         label: "Pro research",
         items: [
           "50 account research sessions per month",
-          "Unlimited Reels per researched account",
+          "100 Reels pulled per researched account",
           "Unlimited keyword searches",
-          "Brand Coach: AI viral-potential score on every Reel",
-          "Competitor radar (track up to 10 accounts, alerts on new viral posts)",
-          "Trending hook detection across your niche",
-          "Niche benchmark report (your numbers vs your competitors)",
+          "Full transcript + structure analysis on every Reel",
         ],
       },
       {
@@ -200,18 +187,15 @@ const PLAN_COPY: Record<
           "100 AI script re-creations per month",
           "100 Idea-to-Script generations per month",
           "10 rewrites per script",
-          "A/B variant generator (3 versions per script)",
-          "AI delivery cues and on-camera coaching notes",
-          "Tone presets (educational, story, hot-take, listicle)",
+          "AI delivery cues + on-camera coaching notes",
         ],
       },
       {
         label: "Pro production",
         items: [
           "Voice-driven teleprompter (hands-free scroll)",
-          "Smart take tracking with retake suggestions",
-          "Advanced SpyReels Bot (save and reuse custom prompts)",
-          "Audio cue and pacing recommendations",
+          "Smart take tracking with retake counter",
+          "Section bookmarks and hot-section jumps",
         ],
       },
       {
@@ -219,17 +203,15 @@ const PLAN_COPY: Record<
         items: [
           "500 saved scripts",
           "Up to 3 team members included",
-          "Full version history",
-          "Cross-script tags, folders, and search",
-          "Inline comments on scripts",
+          "Full script version history",
         ],
       },
       {
         label: "Pro exports",
         items: [
-          "Google Docs, PDF, and DOCX export",
-          "Brand-formatted exports with logo + colors",
-          "Bulk export of saved Reels and transcripts",
+          "Google Docs export",
+          "PDF export (print-ready)",
+          "Word (DOCX) export",
         ],
       },
       {
@@ -238,9 +220,9 @@ const PLAN_COPY: Record<
       },
     ],
     outcomes: [
-      "Score every Reel for viral potential before you film",
-      "Cut filming time in half with voice teleprompter",
-      "Run a 3-person creator team without losing scripts",
+      "Film hands-free with the voice teleprompter",
+      "Get AI delivery cues baked into every script",
+      "Run a small creator team without losing scripts",
     ],
   },
   business: {
@@ -253,13 +235,11 @@ const PLAN_COPY: Record<
     includesPrevious: "Pro",
     sections: [
       {
-        label: "Agency research",
+        label: "Agency-level research",
         items: [
           "200 account research sessions per month",
-          "Unlimited competitor radar tracking",
-          "Bulk research (analyze 10 accounts at once)",
-          "Niche heatmap (what is working across your client roster)",
-          "White-label competitor reports",
+          "Unlimited Reels per researched account",
+          "Unlimited Creator Radar history",
         ],
       },
       {
@@ -269,8 +249,6 @@ const PLAN_COPY: Record<
           "500 AI script re-creations per month",
           "500 Idea-to-Script generations per month",
           "Unlimited rewrites per script",
-          "Brand voice library (save tone, vocabulary, do-not-say per client)",
-          "Pre-approved hook bank per client",
         ],
       },
       {
@@ -278,19 +256,7 @@ const PLAN_COPY: Record<
         items: [
           "10 team members included",
           "3 separate workspaces (one per client or brand)",
-          "Role-based permissions (admin, editor, viewer)",
-          "Client approval workflow with sign-off",
-          "Threaded comments and @mentions inside scripts",
-          "Activity log and audit trail",
-        ],
-      },
-      {
-        label: "Power exports",
-        items: [
-          "API access (programmatic transcripts, research, scripts)",
-          "White-label PDF reports",
-          "Custom branding on every export",
-          "Webhooks for new Reels and finished scripts",
+          "Unlimited saved scripts",
         ],
       },
       {
@@ -303,9 +269,9 @@ const PLAN_COPY: Record<
       },
     ],
     outcomes: [
-      "Run 5+ creator brands from one workspace",
-      "Hand clients white-label reports they actually read",
-      "Plug SpyReels into your stack with the API",
+      "Run multiple creator brands from one workspace",
+      "Give every client their own isolated space",
+      "Get concierge support and a real onboarding call",
     ],
   },
 };
@@ -345,11 +311,18 @@ const FEATURE_SECTIONS: {
         business: "Unlimited",
       },
       {
-        label: "Viral structure analysis",
+        label: "Reel structure analysis",
         free: "Preview",
         starter: "Full",
         pro: "Full",
         business: "Full",
+      },
+      {
+        label: "Creator Radar history",
+        free: true,
+        starter: true,
+        pro: true,
+        business: true,
       },
     ],
   },
@@ -397,11 +370,11 @@ const FEATURE_SECTIONS: {
     title: "SpyReels Bot and production",
     rows: [
       {
-        label: "SpyReels Bot",
+        label: "SpyReels Bot (Telegram)",
         free: "Limited",
         starter: "Included",
-        pro: "Advanced",
-        business: "Advanced",
+        pro: "Included",
+        business: "Included",
       },
       {
         label: "Basic teleprompter",
@@ -505,18 +478,11 @@ const FEATURE_SECTIONS: {
         business: true,
       },
       {
-        label: "API access",
-        free: false,
-        starter: false,
-        pro: false,
-        business: true,
-      },
-      {
         label: "Support",
-        free: "Help center",
+        free: "Email (best effort)",
         starter: "Email",
-        pro: "Priority",
-        business: "Priority chat",
+        pro: "Priority email + chat",
+        business: "Priority chat + onboarding",
       },
     ],
   },

@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
 import NotFound from "@/pages/NotFound";
 import OnboardingPage from "@/pages/onboarding";
@@ -91,8 +92,10 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system" switchable={true}>
         <TooltipProvider>
-          <Toaster richColors />
-          <Router />
+          <UpgradeProvider>
+            <Toaster richColors />
+            <Router />
+          </UpgradeProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

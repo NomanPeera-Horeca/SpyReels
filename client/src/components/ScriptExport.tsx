@@ -8,9 +8,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { Download, FileText, FileType, File, Loader2, ChevronDown, ExternalLink } from "lucide-react";
+import { Download, FileText, FileType, File, Loader2, ChevronDown, ExternalLink, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useFeatureLock } from "@/components/UpgradeSidesheet";
 
 interface ScriptExportProps {
   title: string;
@@ -35,6 +36,8 @@ export function ScriptExport({
   notes,
 }: ScriptExportProps) {
   const [exporting, setExporting] = useState<string | null>(null);
+  const pdfLock = useFeatureLock("pdfExport");
+  const docsLock = useFeatureLock("googleDocs");
 
   // Check if Google Docs is configured
   const { data: docsConfig } = trpc.googleDocs.isConfigured.useQuery();
@@ -325,13 +328,39 @@ export function ScriptExport({
           <FileText className="w-3.5 h-3.5 mr-2" />
           Plain Text (.txt)
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportDocx} disabled={!!exporting}>
+        <DropdownMenuItem
+          onClick={(e) => {
+            if (pdfLock.locked) {
+              e.preventDefault();
+              pdfLock.requireUpgrade();
+              return;
+            }
+            exportDocx();
+          }}
+          disabled={!!exporting}
+        >
           <FileType className="w-3.5 h-3.5 mr-2" />
           Word Document (.docx)
+          {pdfLock.locked ? (
+            <Lock className="ml-auto h-3 w-3 text-primary" />
+          ) : null}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportPdf} disabled={!!exporting}>
+        <DropdownMenuItem
+          onClick={(e) => {
+            if (pdfLock.locked) {
+              e.preventDefault();
+              pdfLock.requireUpgrade();
+              return;
+            }
+            exportPdf();
+          }}
+          disabled={!!exporting}
+        >
           <File className="w-3.5 h-3.5 mr-2" />
           PDF (via Print)
+          {pdfLock.locked ? (
+            <Lock className="ml-auto h-3 w-3 text-primary" />
+          ) : null}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -339,7 +368,14 @@ export function ScriptExport({
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
-          onClick={exportGoogleDocs}
+          onClick={(e) => {
+            if (docsLock.locked) {
+              e.preventDefault();
+              docsLock.requireUpgrade();
+              return;
+            }
+            exportGoogleDocs();
+          }}
           disabled={!!exporting || !docsConfig?.configured}
         >
           <svg className="w-3.5 h-3.5 mr-2" viewBox="0 0 24 24" fill="none">
@@ -348,7 +384,11 @@ export function ScriptExport({
             <path d="M8 13h8M8 17h8M8 9h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           Google Docs
-          <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+          {docsLock.locked ? (
+            <Lock className="ml-auto h-3 w-3 text-primary" />
+          ) : (
+            <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+          )}
         </DropdownMenuItem>
 
         {!docsConfig?.configured && (

@@ -28,11 +28,13 @@ import {
   LayoutGrid,
   Columns3,
   GripVertical,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ShareScript } from "@/components/ShareScript";
+import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +99,24 @@ export default function MyScripts() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#7c3aed");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+
+  const kanbanLock = useFeatureLock("kanban");
+  const calendarLock = useFeatureLock("calendar");
+
+  const handleSwitchView = useCallback(
+    (mode: ViewMode) => {
+      if (mode === "kanban" && kanbanLock.locked) {
+        kanbanLock.requireUpgrade();
+        return;
+      }
+      if (mode === "calendar" && calendarLock.locked) {
+        calendarLock.requireUpgrade();
+        return;
+      }
+      setViewMode(mode);
+    },
+    [kanbanLock, calendarLock]
+  );
 
   // Calendar state
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -302,7 +322,7 @@ export default function MyScripts() {
         {/* View Mode Toggle */}
         <div className="flex items-center gap-1 rounded-lg border border-border/50 p-0.5">
           <button
-            onClick={() => setViewMode("grid")}
+            onClick={() => handleSwitchView("grid")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
               viewMode === "grid"
                 ? "bg-primary/10 text-primary"
@@ -313,26 +333,38 @@ export default function MyScripts() {
             <span className="hidden sm:inline">Grid</span>
           </button>
           <button
-            onClick={() => setViewMode("kanban")}
+            onClick={() => handleSwitchView("kanban")}
+            title={kanbanLock.locked ? "Kanban board is a Solo Creator feature" : undefined}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
               viewMode === "kanban"
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted/50"
+                : kanbanLock.locked
+                  ? "text-muted-foreground/70 hover:bg-muted/30"
+                  : "text-muted-foreground hover:bg-muted/50"
             }`}
           >
             <Columns3 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Kanban</span>
+            {kanbanLock.locked ? (
+              <Lock className="h-3 w-3 text-primary/80" />
+            ) : null}
           </button>
           <button
-            onClick={() => setViewMode("calendar")}
+            onClick={() => handleSwitchView("calendar")}
+            title={calendarLock.locked ? "Calendar view is a Solo Creator feature" : undefined}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
               viewMode === "calendar"
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted/50"
+                : calendarLock.locked
+                  ? "text-muted-foreground/70 hover:bg-muted/30"
+                  : "text-muted-foreground hover:bg-muted/50"
             }`}
           >
             <CalendarIcon className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Calendar</span>
+            {calendarLock.locked ? (
+              <Lock className="h-3 w-3 text-primary/80" />
+            ) : null}
           </button>
         </div>
       </div>

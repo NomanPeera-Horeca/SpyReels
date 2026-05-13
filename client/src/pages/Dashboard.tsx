@@ -58,6 +58,7 @@ import {
 } from "@/components/ReelActionButtons";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
@@ -271,6 +272,7 @@ export default function Dashboard() {
   const posthog = usePostHog();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const csvLock = useFeatureLock("csvExport");
   const searchString = useSearch();
   const jobId = useMemo(() => {
     const params = new URLSearchParams(searchString);
@@ -2032,6 +2034,10 @@ export default function Dashboard() {
                           size="sm"
                           className="h-9"
                           onClick={() => {
+                            if (csvLock.locked) {
+                              csvLock.requireUpgrade();
+                              return;
+                            }
                             if (!exportGate.allowed) {
                               toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
                                 description: "Upgrade your plan for more exports.",
