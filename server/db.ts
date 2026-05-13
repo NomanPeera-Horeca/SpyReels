@@ -523,6 +523,21 @@ export async function getExistingShortcodes(jobId: number): Promise<string[]> {
   return rows.map(r => r.shortcode);
 }
 
+/** Lightweight check used by failed-job cleanup to decide whether the
+ * row is safe to delete. Returns 0 if the scrape never inserted any
+ * reels (worker can drop the row); >0 if there is user-visible data
+ * we must preserve even though the job is marked failed. */
+export async function countReelsForJob(jobId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(reels)
+    .where(eq(reels.jobId, jobId));
+  const raw = rows[0]?.count ?? 0;
+  return typeof raw === "number" ? raw : Number(raw) || 0;
+}
+
 export async function updateScrapeJobResync(id: number, data: { totalReels: number; followerCount: number; status: string; profilePicUrl?: string }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

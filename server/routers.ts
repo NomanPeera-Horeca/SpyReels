@@ -95,6 +95,7 @@ import {
   getExistingShortcodes,
   updateScrapeJobResync,
   deleteScrapeJob,
+  countReelsForJob,
   getOnboardingState,
   updateOnboardingState,
   seedDemoScrape,
@@ -5120,6 +5121,27 @@ async function runScrapeJob(
     }
   };
 
+  // Schedule deletion of this scrape_jobs row after the client has had
+  // enough time to poll the failed status. The progress page polls every
+  // 1.5s and stops polling once it sees status=failed, so 30s is plenty
+  // of buffer. Keeps the DB and Creator Radar free of stale "tried it,
+  // didn't work" rows.
+  const scheduleFailedJobCleanup = (reason: string) => {
+    setTimeout(async () => {
+      try {
+        await deleteScrapeJob(jobId);
+        console.log(
+          `[runScrapeJob ${jobId}] cleaned up failed-zero-reel row (reason: ${reason})`
+        );
+      } catch (cleanupErr) {
+        console.error(
+          `[runScrapeJob ${jobId}] failed to clean up row:`,
+          cleanupErr
+        );
+      }
+    }, 30_000);
+  };
+
   try {
     // Stage 1: connecting → about to call Instagram for the profile.
     await updateScrapeJob(jobId, {
@@ -5214,6 +5236,7 @@ async function runScrapeJob(
             failureReason: "unknown",
           });
           await refundScrapeQuota("no_reels_in_window");
+          scheduleFailedJobCleanup("no_reels_in_window");
           return;
         }
 
@@ -5229,6 +5252,7 @@ async function runScrapeJob(
           failureReason: "instagram_rate_limited",
         });
         await refundScrapeQuota("zero_reels_with_followers");
+        scheduleFailedJobCleanup("zero_reels_with_followers");
         return;
       }
 
@@ -5334,6 +5358,13 @@ async function runScrapeJob(
     // input (handle_not_found, account_private, account_too_large).
     if (failureReason === "instagram_rate_limited") {
       await refundScrapeQuota(`exception:${failureReason}`);
+    }
+    // Schedule cleanup of the row ONLY when nothing useful was inserted.
+    // If reels were already persisted before the exception, we must keep
+    // the row so the user doesn't lose their data.
+    const reelCountAfterFailure = await countReelsForJob(jobId);
+    if (reelCountAfterFailure === 0) {
+      scheduleFailedJobCleanup(`exception:${failureReason}`);
     }
   }
 }
