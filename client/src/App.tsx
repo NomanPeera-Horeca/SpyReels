@@ -51,7 +51,6 @@ function DashboardRouter() {
         <Route path="/paste" component={PasteScript} />
         <Route path="/history" component={History} />
         <Route path="/settings" component={Settings} />
-        <Route path="/pricing" component={Pricing} />
         <Route path="/billing" component={Billing} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/blog/new" component={BlogEditor} />
@@ -71,6 +70,7 @@ function Router() {
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/contact" component={Contact} />
       <Route path="/affiliate" component={Affiliate} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/blog" component={BlogList} />
       <Route path="/blog/:slug" component={BlogPost} />
       {/* <Route path="/extension" component={Extension} /> */}
