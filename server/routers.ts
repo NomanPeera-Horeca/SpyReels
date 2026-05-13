@@ -107,6 +107,10 @@ import {
   saveFeaturedReel,
   unsaveFeaturedReel,
   isFeaturedReelSaved,
+  createBrandCoachScore,
+  getBrandCoachScoreByReelId,
+  getBrandCoachScoreByFeaturedReelId,
+  getBrandCoachScoresBatch,
   getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
@@ -4562,6 +4566,172 @@ The hook MUST be 7-10 words. Count them.`
       }),
   }),
 
+  // ── Brand Coach (AI viral-potential scoring) ──
+  brandCoach: router({
+    /** Fetch a cached score for a single reel (no LLM call). */
+    get: protectedProcedure
+      .input(
+        z
+          .object({
+            reelId: z.number().int().positive().optional(),
+            featuredReelId: z.number().int().positive().optional(),
+          })
+          .refine((d) => d.reelId != null || d.featuredReelId != null, {
+            message: "reelId or featuredReelId is required",
+          })
+      )
+      .query(async ({ input }) => {
+        if (input.reelId != null) {
+          return (await getBrandCoachScoreByReelId(input.reelId)) ?? null;
+        }
+        return (await getBrandCoachScoreByFeaturedReelId(input.featuredReelId!)) ?? null;
+      }),
+
+    /** Batch fetch cached scores for many reels at once (dashboard render). */
+    getBatch: protectedProcedure
+      .input(
+        z.object({
+          reelIds: z.array(z.number().int().positive()).optional(),
+          featuredReelIds: z.array(z.number().int().positive()).optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        return getBrandCoachScoresBatch({
+          reelIds: input.reelIds,
+          featuredReelIds: input.featuredReelIds,
+        });
+      }),
+
+    /**
+     * Score a reel. Pro+ only. If a cached row exists we return it
+     * unchanged - the LLM verdict is deterministic enough per-reel that
+     * we don't want to pay for re-scoring on every click.
+     */
+    score: protectedProcedure
+      .input(
+        z
+          .object({
+            reelId: z.number().int().positive().optional(),
+            featuredReelId: z.number().int().positive().optional(),
+          })
+          .refine((d) => d.reelId != null || d.featuredReelId != null, {
+            message: "reelId or featuredReelId is required",
+          })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const sub = await getUserSubscription(ctx.user.id);
+        const allowed = new Set(["pro", "business", "agency"]);
+        if (!allowed.has(sub.plan)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Brand Coach is a Pro feature. Upgrade to score Reels for viral potential.",
+          });
+        }
+
+        // Cache check first - shared across users since scores are deterministic
+        const cached = input.reelId != null
+          ? await getBrandCoachScoreByReelId(input.reelId)
+          : await getBrandCoachScoreByFeaturedReelId(input.featuredReelId!);
+        if (cached) return cached;
+
+        let caption: string | null = null;
+        let ownerUsername: string | null = null;
+        let viewCount = 0;
+        let likeCount = 0;
+        let commentCount = 0;
+        let engagementRate: number | null = null;
+        let duration: number | null = null;
+        let niche: string | null = null;
+        let hookPattern: string | null = null;
+        let transcript: string | null = null;
+
+        if (input.reelId != null) {
+          const reel = await getReelById(input.reelId);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          caption = reel.caption ?? null;
+          ownerUsername = reel.ownerUsername ?? null;
+          viewCount = Number(reel.viewCount ?? 0);
+          likeCount = Number(reel.likeCount ?? 0);
+          commentCount = Number(reel.commentCount ?? 0);
+          engagementRate =
+            reel.engagementRate != null ? Number(reel.engagementRate) : null;
+          duration = reel.duration ?? null;
+          niche = reel.niche ?? null;
+          hookPattern = reel.hookPattern ?? null;
+
+          const tx = await getTranscriptionByReelId(input.reelId);
+          if (tx && tx.status === "completed" && tx.transcript) {
+            transcript = tx.transcript;
+          }
+        } else {
+          const fr = await getFeaturedReelById(input.featuredReelId!);
+          if (!fr) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          caption = fr.caption ?? null;
+          ownerUsername = null;
+          viewCount = Number(fr.viewCount ?? 0);
+          likeCount = Number(fr.likeCount ?? 0);
+          commentCount = Number(fr.commentCount ?? 0);
+          engagementRate =
+            fr.engagementRate != null ? Number(fr.engagementRate) : null;
+          duration = fr.duration ?? null;
+          niche = fr.niche ?? null;
+          hookPattern = fr.hookPattern ?? null;
+          if (fr.transcriptionStatus === "completed" && fr.transcript) {
+            transcript = fr.transcript;
+          }
+        }
+
+        const analysis = await runBrandCoachLLM({
+          caption,
+          transcript,
+          ownerUsername,
+          viewCount,
+          likeCount,
+          commentCount,
+          engagementRate,
+          duration,
+          niche,
+          hookPattern,
+        });
+
+        try {
+          await createBrandCoachScore({
+            reelId: input.reelId ?? null,
+            featuredReelId: input.featuredReelId ?? null,
+            requestedByUserId: ctx.user.id,
+            overallScore: analysis.overallScore,
+            hookScore: analysis.hookScore,
+            retentionScore: analysis.retentionScore,
+            payoffScore: analysis.payoffScore,
+            verdict: analysis.verdict,
+            strengths: analysis.strengths,
+            weaknesses: analysis.weaknesses,
+            suggestions: analysis.suggestions,
+            reasoning: analysis.reasoning,
+            usedTranscript: transcript != null,
+          });
+        } catch (err) {
+          // Race - another caller scored the same reel between our cache
+          // check and insert. Return the winning row.
+          const winner = input.reelId != null
+            ? await getBrandCoachScoreByReelId(input.reelId)
+            : await getBrandCoachScoreByFeaturedReelId(input.featuredReelId!);
+          if (winner) return winner;
+          throw err;
+        }
+
+        const fresh = input.reelId != null
+          ? await getBrandCoachScoreByReelId(input.reelId)
+          : await getBrandCoachScoreByFeaturedReelId(input.featuredReelId!);
+        return fresh!;
+      }),
+  }),
+
   // ── Admin Dashboard ──
   admin: router({
     overview: adminProcedure.query(async () => {
@@ -6359,6 +6529,191 @@ Return JSON with:
   }
 }
 
+
+/**
+ * Brand Coach - score a Reel for viral potential.
+ *
+ * Pure function: receives whatever signal we have (caption + metrics,
+ * and optionally transcript) and returns a structured analysis. The
+ * caller (brandCoach.score mutation) handles caching and gating.
+ */
+type BrandCoachVerdict = "viral" | "strong" | "average" | "weak";
+
+interface BrandCoachAnalysis {
+  overallScore: number;
+  hookScore: number;
+  retentionScore: number;
+  payoffScore: number;
+  verdict: BrandCoachVerdict;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  reasoning: string;
+}
+
+function verdictForScore(score: number): BrandCoachVerdict {
+  if (score >= 85) return "viral";
+  if (score >= 70) return "strong";
+  if (score >= 50) return "average";
+  return "weak";
+}
+
+function clampScore(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 50;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+async function runBrandCoachLLM(input: {
+  caption: string | null;
+  transcript: string | null;
+  ownerUsername: string | null;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  engagementRate: number | null;
+  duration: number | null;
+  niche: string | null;
+  hookPattern: string | null;
+}): Promise<BrandCoachAnalysis> {
+  const transcriptSection = input.transcript
+    ? `Full transcript (recorded speech):\n"${input.transcript.slice(0, 4000)}"`
+    : `(No transcript available - score based on caption + metrics only. Note this lowers confidence on hook and payoff scores.)`;
+
+  const metricsSection = [
+    `Owner: @${input.ownerUsername ?? "unknown"}`,
+    `Views: ${input.viewCount.toLocaleString()}`,
+    `Likes: ${input.likeCount.toLocaleString()}`,
+    `Comments: ${input.commentCount.toLocaleString()}`,
+    input.engagementRate != null
+      ? `Engagement rate: ${input.engagementRate.toFixed(2)}%`
+      : null,
+    input.duration ? `Duration: ${input.duration}s` : null,
+    input.niche ? `Niche: ${input.niche}` : null,
+    input.hookPattern ? `Hook pattern (auto-classified): ${input.hookPattern}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const systemPrompt = `You are Brand Coach, a senior Instagram Reels strategist scoring a single Reel for viral potential. Your job is to look at the hook, retention pattern, and payoff and predict how repeatable this Reel's success would be if a creator were to make their own version.
+
+Score on a 0-100 scale:
+- 85-100: viral - hook is undeniable, retention is locked, payoff is sharp, format is replicable
+- 70-84: strong - solid Reel that consistently performs well in this niche
+- 50-69: average - works but missing one of (hook, retention, payoff)
+- 0-49: weak - skip this one or rewrite heavily before borrowing
+
+Be honest. A reel with 1M views can still be a weak template if its success came from luck, the creator's existing audience, or a trend that has already peaked. Conversely, a reel with 20K views can be a viral-pattern template if the structure is razor sharp.
+
+Sub-scores (also 0-100):
+- hookScore: does the first 1-3 seconds create a curiosity gap, contradiction, or visceral reaction?
+- retentionScore: does the middle keep viewers watching (pattern interrupts, escalating stakes, payoff tease)?
+- payoffScore: is there one clear takeaway, punchline, or transformation at the end?
+
+Return:
+- 2-3 specific strengths (what is working)
+- 2-3 specific weaknesses (what is fragile or unclear)
+- 2-3 concrete suggestions for a creator copying this template (what they should change)
+- one paragraph (3-5 sentences) of reasoning explaining the overall score
+
+Do not parrot the caption. Do not say "great content". Be specific about hook mechanics, retention beats, and payoff structure.`;
+
+  const userPrompt = `Reel caption:
+"${(input.caption ?? "(no caption)").slice(0, 1500)}"
+
+${transcriptSection}
+
+Metrics:
+${metricsSection}
+
+Score this Reel and return structured JSON.`;
+
+  const response = await invokeLLM({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "brand_coach_score",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            overallScore: { type: "number", description: "0-100" },
+            hookScore: { type: "number", description: "0-100" },
+            retentionScore: { type: "number", description: "0-100" },
+            payoffScore: { type: "number", description: "0-100" },
+            strengths: {
+              type: "array",
+              items: { type: "string" },
+              description: "2-3 specific things working in this Reel",
+            },
+            weaknesses: {
+              type: "array",
+              items: { type: "string" },
+              description: "2-3 specific weaknesses or risks if you copy this",
+            },
+            suggestions: {
+              type: "array",
+              items: { type: "string" },
+              description: "2-3 concrete suggestions for a creator borrowing this template",
+            },
+            reasoning: {
+              type: "string",
+              description: "3-5 sentence explanation of the overall score",
+            },
+          },
+          required: [
+            "overallScore",
+            "hookScore",
+            "retentionScore",
+            "payoffScore",
+            "strengths",
+            "weaknesses",
+            "suggestions",
+            "reasoning",
+          ],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const raw = response.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("No response from Brand Coach LLM");
+  const text = typeof raw === "string" ? raw : "";
+  const parsed = JSON.parse(
+    text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+  );
+
+  const overallScore = clampScore(parsed.overallScore);
+  const hookScore = clampScore(parsed.hookScore);
+  const retentionScore = clampScore(parsed.retentionScore);
+  const payoffScore = clampScore(parsed.payoffScore);
+
+  const sanitizeBullets = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((s) => s.length > 0)
+      .slice(0, 4);
+  };
+
+  return {
+    overallScore,
+    hookScore,
+    retentionScore,
+    payoffScore,
+    verdict: verdictForScore(overallScore),
+    strengths: sanitizeBullets(parsed.strengths),
+    weaknesses: sanitizeBullets(parsed.weaknesses),
+    suggestions: sanitizeBullets(parsed.suggestions),
+    reasoning:
+      typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "",
+  };
+}
 
 /**
  * AI validates an idea before script generation.

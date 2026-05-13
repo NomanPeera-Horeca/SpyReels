@@ -92,6 +92,12 @@ const FEATURE_GATES: Record<string, FeatureGateConfig> = {
     minPlan: "pro",
     upgradeMessage: "Voice-driven teleprompter is available on Pro and above.",
   },
+  brandCoach: {
+    label: "Brand Coach",
+    description: "AI viral-potential score on every Reel with hook, retention, and payoff breakdown",
+    minPlan: "pro",
+    upgradeMessage: "Brand Coach is available on Pro and above.",
+  },
   apiAccess: {
     label: "API Access",
     description: "Programmatic access to all features via REST API",

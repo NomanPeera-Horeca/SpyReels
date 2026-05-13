@@ -59,6 +59,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useFeatureLock } from "@/components/UpgradeSidesheet";
+import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
@@ -2249,13 +2250,22 @@ export default function Dashboard() {
                             <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
                           )}
                         </div>
-                        <V13ReelClassificationBadges
-                          className="mt-1"
-                          niche={reel.niche}
-                          hookPattern={reel.hookPattern}
-                          viralFlag={reel.viralFlag}
-                          confidence={reel.confidence}
-                        />
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <V13ReelClassificationBadges
+                            niche={reel.niche}
+                            hookPattern={reel.hookPattern}
+                            viralFlag={reel.viralFlag}
+                            confidence={reel.confidence}
+                          />
+                          <BrandCoachBadge
+                            source={
+                              isFeaturedView
+                                ? { kind: "featured", featuredReelId: reel.id }
+                                : { kind: "reel", reelId: reel.id }
+                            }
+                            hasTranscript={hasTranscription && !isNoSpeech}
+                          />
+                        </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
                             <Eye className="h-3 w-3" />
@@ -2534,12 +2544,22 @@ export default function Dashboard() {
                       </div>
 
                       <div className="px-2.5 pt-2 pb-0 shrink-0">
-                        <V13ReelClassificationBadges
-                          niche={reel.niche}
-                          hookPattern={reel.hookPattern}
-                          viralFlag={reel.viralFlag}
-                          confidence={reel.confidence}
-                        />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <V13ReelClassificationBadges
+                            niche={reel.niche}
+                            hookPattern={reel.hookPattern}
+                            viralFlag={reel.viralFlag}
+                            confidence={reel.confidence}
+                          />
+                          <BrandCoachBadge
+                            source={
+                              isFeaturedView
+                                ? { kind: "featured", featuredReelId: reel.id }
+                                : { kind: "reel", reelId: reel.id }
+                            }
+                            hasTranscript={hasTranscription && !isNoSpeech}
+                          />
+                        </div>
                       </div>
 
                       <div className="p-2.5 space-y-2 shrink-0">

@@ -181,6 +181,15 @@ const PLAN_COPY: Record<
         ],
       },
       {
+        label: "Brand Coach (AI)",
+        items: [
+          "0-100 viral-potential score on every Reel",
+          "Sub-scores for hook, retention, and payoff",
+          "Specific strengths, weaknesses, and remix suggestions",
+          "Cached per Reel so you can revisit without re-scoring",
+        ],
+      },
+      {
         label: "Pro script studio",
         items: [
           "200 Reel transcripts per month",
@@ -316,6 +325,13 @@ const FEATURE_SECTIONS: {
         starter: "Full",
         pro: "Full",
         business: "Full",
+      },
+      {
+        label: "Brand Coach viral score (AI)",
+        free: false,
+        starter: false,
+        pro: true,
+        business: true,
       },
       {
         label: "Creator Radar history",

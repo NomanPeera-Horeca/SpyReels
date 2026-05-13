@@ -718,3 +718,45 @@ export const featuredReels = mysqlTable(
 
 export type FeaturedReel = typeof featuredReels.$inferSelect;
 export type InsertFeaturedReel = typeof featuredReels.$inferInsert;
+
+/**
+ * Brand Coach scores - cached AI viral-potential analysis per Reel.
+ *
+ * One row per (reelId) for user-scraped reels, or per (featuredReelId)
+ * for the public catalog. The LLM verdict is deterministic for a given
+ * reel so the cache is shared across users (cost saving).
+ *
+ * `requestedByUserId` records who triggered the first scoring so we can
+ * attribute usage. The cache lookup keys are the reel ids only.
+ */
+export const brandCoachScores = mysqlTable(
+  "brand_coach_scores",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    reelId: int("reelId"),
+    featuredReelId: int("featuredReelId"),
+    requestedByUserId: int("requestedByUserId").notNull(),
+    overallScore: int("overallScore").notNull(),
+    hookScore: int("hookScore").notNull(),
+    retentionScore: int("retentionScore").notNull(),
+    payoffScore: int("payoffScore").notNull(),
+    verdict: mysqlEnum("verdict", ["viral", "strong", "average", "weak"]).notNull(),
+    strengths: json("strengths").$type<string[]>().notNull(),
+    weaknesses: json("weaknesses").$type<string[]>().notNull(),
+    suggestions: json("suggestions").$type<string[]>().notNull(),
+    reasoning: text("reasoning").notNull(),
+    /** Whether the LLM had a transcript when it scored. Drives the
+     *  "transcribe for a sharper score" nudge in the UI. */
+    usedTranscript: boolean("usedTranscript").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    reelUnique: uniqueIndex("brand_coach_scores_reel_unique").on(table.reelId),
+    featuredReelUnique: uniqueIndex("brand_coach_scores_featured_reel_unique").on(
+      table.featuredReelId
+    ),
+  })
+);
+
+export type BrandCoachScore = typeof brandCoachScores.$inferSelect;
+export type InsertBrandCoachScore = typeof brandCoachScores.$inferInsert;

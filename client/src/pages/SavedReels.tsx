@@ -33,6 +33,7 @@ import {
 import { mergeRemakeability } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import {
   InlineWorkflow,
   formatNumber,
@@ -711,6 +712,14 @@ export default function SavedReels() {
                                   Failed
                                 </span>
                               )}
+                              <BrandCoachBadge
+                                source={
+                                  item.source === "featured" && item.featuredReelId != null
+                                    ? { kind: "featured", featuredReelId: item.featuredReelId }
+                                    : { kind: "reel", reelId: reel.id }
+                                }
+                                hasTranscript={hasTranscription && !isNoSpeech}
+                              />
                             </div>
                             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">

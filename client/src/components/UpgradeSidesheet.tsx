@@ -49,7 +49,8 @@ export type FeatureKey =
   | "csvExport"
   | "sheetsExport"
   | "googleDocs"
-  | "pdfExport";
+  | "pdfExport"
+  | "brandCoach";
 
 const FEATURE_DETAILS: Record<
   FeatureKey,
@@ -178,6 +179,18 @@ const FEATURE_DETAILS: Record<
       "Bring it to set on an iPad or paper",
       "Use for client approvals and sign-offs",
       "DOCX format opens in Word, Pages, or any Office editor",
+    ],
+  },
+  brandCoach: {
+    title: "Brand Coach",
+    tagline:
+      "Your in-house viral strategist. Brand Coach scores every Reel 0-100 for hook, retention, and payoff - then tells you exactly how to remix it for your own audience.",
+    minPlanLabel: "Pro",
+    valueProps: [
+      "0-100 viral-potential score on every Reel you research",
+      "Sub-scores for hook, retention, and payoff so you know what is working",
+      "Specific strengths, weaknesses, and remix suggestions written for you",
+      "Stop guessing which competitor reels are worth borrowing",
     ],
   },
 };
