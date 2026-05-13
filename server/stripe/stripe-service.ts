@@ -396,6 +396,31 @@ export async function incrementUsage(userId: number, field: UsageField, amount: 
   });
 }
 
+/**
+ * Refund a previously incremented usage counter. Clamps at 0 so admin
+ * corrections (or replayed refunds) never produce negative counts. Use
+ * when a usage-incurring action fails for reasons outside the user's
+ * control (e.g. vendor rate limiting) and we don't want to burn the
+ * monthly slot.
+ */
+export async function decrementUsage(userId: number, field: UsageField, amount: number = 1): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  await db
+    .update(monthlyUsage)
+    .set({
+      [field]: sql`GREATEST(0, ${monthlyUsage[field]} - ${amount})`,
+    })
+    .where(
+      and(
+        eq(monthlyUsage.userId, userId),
+        eq(monthlyUsage.usageMonth, currentMonth)
+      )
+    );
+}
+
 export async function getMonthlyUsage(userId: number): Promise<Record<string, number>> {
   const db = await getDb();
   if (!db) return { scrapeCount: 0, searchCount: 0, transcribeCount: 0, recreateCount: 0, rewriteCount: 0, exportCount: 0, extensionSortCount: 0, extensionSaveCount: 0, extensionTranscribeCount: 0, extensionRecreateCount: 0 };

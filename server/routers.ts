@@ -23,6 +23,7 @@ import {
   getMonthlyUsage,
   checkUsageLimit,
   incrementUsage,
+  decrementUsage,
 } from "./stripe/stripe-service";
 import { PLANS, getPlanLimits } from "./stripe/products";
 import type { PlanId, BillingInterval } from "./stripe/products";
@@ -362,11 +363,13 @@ export const appRouter = router({
           currentStep: "connecting",
         });
 
-        // Track usage
+        // Track usage. Refunded inside runScrapeJob when the failure is
+        // vendor-side (rate limit / temporary restriction) so flaky scrapes
+        // don't burn the user's monthly quota.
         await incrementUsage(ctx.user.id, "scrapeCount");
 
         // Run scraping in background
-        runScrapeJob(jobId, normalizedHandle, input.timeframeDays).catch((err) => {
+        runScrapeJob(jobId, ctx.user.id, normalizedHandle, input.timeframeDays).catch((err) => {
           console.error(`Scrape job ${jobId} failed:`, err);
         });
 
@@ -5084,9 +5087,27 @@ async function uploadReelThumbnailsBounded(
 /** Background scrape job runner */
 async function runScrapeJob(
   jobId: number,
+  userId: number,
   handle: string,
   timeframeDays: number
 ): Promise<void> {
+  // Centralized refund helper so the multiple failure paths stay in sync.
+  // Only safe to call once per job (we never enter more than one failure
+  // branch in a single run).
+  const refundScrapeQuota = async (reason: string) => {
+    try {
+      await decrementUsage(userId, "scrapeCount");
+      console.warn(
+        `[runScrapeJob ${jobId}] refunded scrapeCount for user ${userId} (reason: ${reason})`
+      );
+    } catch (refundErr) {
+      console.error(
+        `[runScrapeJob ${jobId}] failed to refund scrapeCount for user ${userId}:`,
+        refundErr
+      );
+    }
+  };
+
   try {
     // Stage 1: connecting → about to call Instagram for the profile.
     await updateScrapeJob(jobId, {
@@ -5134,6 +5155,10 @@ async function runScrapeJob(
 
     if (reelData.length === 0) {
       if (followerCount > 0) {
+        // Profile fetch succeeded (followerCount > 0) but zero reels
+        // returned. This is the vendor's "empty success" envelope —
+        // not the user's fault — so refund the quota slot and label the
+        // failure as rate-limited so the UI shows the retry-later copy.
         await updateScrapeJob(jobId, {
           status: "failed",
           totalReels: 0,
@@ -5143,8 +5168,9 @@ async function runScrapeJob(
           reelsFound: 0,
           progressPercent: 100,
           errorMessage: `Scraper returned 0 reels for an account with ${followerCount} followers. This usually means a temporary Instagram session issue. Please retry in a few minutes.`,
-          failureReason: "unknown",
+          failureReason: "instagram_rate_limited",
         });
+        await refundScrapeQuota("zero_reels_with_followers");
         return;
       }
 
@@ -5236,14 +5262,21 @@ async function runScrapeJob(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    const failureReason = classifyScrapeFailureMessage(message);
     // Failure preserves the last progressPercent the UI saw — just flip the
     // terminal flags so the client can show the error state.
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
       currentStep: "failed",
-      failureReason: classifyScrapeFailureMessage(message),
+      failureReason,
     });
+    // Refund vendor-side failures so quotas aren't burned on flakes the
+    // user can't control. Keep the quota when the failure is the user's
+    // input (handle_not_found, account_private, account_too_large).
+    if (failureReason === "instagram_rate_limited") {
+      await refundScrapeQuota(`exception:${failureReason}`);
+    }
   }
 }
 

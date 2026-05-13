@@ -100,9 +100,16 @@ export async function fetchProfile(handle: string): Promise<ProfileInfo> {
   // message:"Profile is restricted"}`) when one of their scraper accounts
   // or proxies is blocked by Instagram for a given handle. The same call
   // succeeds on a different attempt because they rotate accounts. Retry a
-  // small number of times before surfacing the error so verified public
+  // moderate number of times before surfacing the error so verified public
   // profiles don't get mislabelled as "not found".
-  const MAX_TRIES = 3;
+  //
+  // Observed base success rate for "hard" handles is ~1/6, so 5 attempts
+  // gets us to ~60% success per preview call. Backoff is short (600ms·N)
+  // because preview runs inline on handle change and a 30s spinner feels
+  // broken; the scrape worker can absorb extra latency separately by
+  // retrying the whole job if needed.
+  const MAX_TRIES = 5;
+  const BACKOFF_MS = 600;
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
     const { status, data } = await scGet("/v1/instagram/profile", {
@@ -145,7 +152,7 @@ export async function fetchProfile(handle: string): Promise<ProfileInfo> {
           `[Instagram] Vendor returned restricted envelope for @${cleanHandle} ` +
             `(attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`
         );
-        await sleep(1500 * attempt);
+        await sleep(BACKOFF_MS * attempt);
         continue;
       }
       if (isVendorRestriction) {
@@ -207,7 +214,13 @@ async function fetchUserReelsPage(
   // Both happen on certain scraper-account/proxy assignments and resolve on
   // retry. We only retry on the first page (maxId === null); on subsequent
   // pages empty results legitimately mean "no more".
-  const MAX_TRIES = maxId ? 1 : 3;
+  //
+  // Observed base success rate for "hard" handles is ~1/6, so 8 attempts
+  // gets us to ~77% success on the first page. This only runs inside the
+  // background scrape worker (or admin search), so the longer total wait
+  // is acceptable — much better than failing a scrape and burning a quota
+  // slot.
+  const MAX_TRIES = maxId ? 1 : 8;
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
     let { status, data } = await scGet("/v1/instagram/user/reels", query);
