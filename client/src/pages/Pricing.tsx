@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -659,6 +659,21 @@ export default function Pricing() {
     );
     return PLAN_ORDER.map(id => byId.get(id)).filter(Boolean);
   }, [plansQuery.data]);
+
+  // Re-run the browser's anchor scroll AFTER the plans query lands so a
+  // /pricing#plans deep link reliably parks on the price cards (the
+  // cards are SSR-empty until trpc data arrives, so the initial scroll
+  // would otherwise overshoot).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!plansQuery.data || plans.length === 0) return;
+    if (window.location.hash !== "#plans") return;
+    const el = document.getElementById("plans");
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [plansQuery.data, plans.length]);
 
   const currentPlan = (subQuery.data?.plan || "free") as string;
   const monthlyHoursSaved = reelsPerWeek * hoursPerReel * 4;

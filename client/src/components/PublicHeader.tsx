@@ -50,12 +50,12 @@ export function PublicHeader() {
             >
               How It Works
             </a>
-            <Link
-              href="/pricing"
+            <a
+              href="/pricing#plans"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               Pricing
-            </Link>
+            </a>
             <a
               href="/#faq"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
