@@ -200,28 +200,85 @@ async function fetchUserReelsPage(
     query.max_id = maxId;
   }
 
-  let { status, data } = await scGet("/v1/instagram/user/reels", query);
+  // The vendor flakes on user/reels in two ways:
+  //   1. HTTP 404 with `{error:"not_found", message:"Profile is restricted"}`
+  //   2. HTTP 200 with `{items: [], paging_info: {...}}` — a clean "empty
+  //      success" even when the account has 100+ reels.
+  // Both happen on certain scraper-account/proxy assignments and resolve on
+  // retry. We only retry on the first page (maxId === null); on subsequent
+  // pages empty results legitimately mean "no more".
+  const MAX_TRIES = maxId ? 1 : 3;
 
-  if (status === 429) {
-    console.warn("[Instagram] Rate limited on user/reels, retrying in 5s…");
-    await sleep(5000);
-    const retry = await scGet("/v1/instagram/user/reels", query);
-    status = retry.status;
-    data = retry.data;
-    if (status !== 200 || !data) {
-      console.warn("[Instagram] Retry also failed, stopping pagination.");
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    let { status, data } = await scGet("/v1/instagram/user/reels", query);
+
+    if (status === 429) {
+      console.warn(
+        `[Instagram] Rate limited on user/reels for @${cleanHandle} ` +
+          `(attempt ${attempt}/${MAX_TRIES}), waiting 5s…`
+      );
+      await sleep(5000);
+      const retry = await scGet("/v1/instagram/user/reels", query);
+      status = retry.status;
+      data = retry.data;
+    }
+
+    const vendorError =
+      data && typeof data === "object" && typeof (data as any).error === "string"
+        ? (data as any).error
+        : "";
+    const vendorMsg =
+      data && typeof data === "object" && typeof (data as any).message === "string"
+        ? (data as any).message
+        : "";
+    const isVendorRestriction =
+      !!vendorError ||
+      (data && typeof data === "object" && (data as any).errorStatus === 404) ||
+      /restricted/i.test(vendorMsg);
+
+    if (status === 404 || isVendorRestriction) {
+      if (attempt < MAX_TRIES) {
+        console.warn(
+          `[Instagram] user/reels restricted for @${cleanHandle} ` +
+            `(attempt ${attempt}/${MAX_TRIES}, status ${status}, ${vendorError} ${vendorMsg}), retrying…`
+        );
+        await sleep(1500 * attempt);
+        continue;
+      }
+      console.warn(
+        `[Instagram] user/reels remained restricted for @${cleanHandle} after ${MAX_TRIES} attempts.`
+      );
       return { items: [], moreAvailable: false, maxId: null };
     }
-  } else if (status !== 200 || !data) {
-    console.warn(`[Instagram] user/reels returned HTTP ${status}, stopping pagination.`);
-    return { items: [], moreAvailable: false, maxId: null };
+
+    if (status !== 200 || !data) {
+      if (attempt < MAX_TRIES) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      console.warn(
+        `[Instagram] user/reels returned HTTP ${status} for @${cleanHandle}, stopping pagination.`
+      );
+      return { items: [], moreAvailable: false, maxId: null };
+    }
+
+    const items: any[] = Array.isArray((data as any).items) ? (data as any).items : [];
+    const moreAvailable = (data as any)?.paging_info?.more_available || false;
+    const nextMaxId = (data as any)?.paging_info?.max_id ?? null;
+
+    if (!maxId && items.length === 0 && !moreAvailable && attempt < MAX_TRIES) {
+      console.warn(
+        `[Instagram] user/reels returned 0 items on first page for @${cleanHandle} ` +
+          `(attempt ${attempt}/${MAX_TRIES}), retrying — likely vendor session flake…`
+      );
+      await sleep(1500 * attempt);
+      continue;
+    }
+
+    return { items, moreAvailable, maxId: nextMaxId };
   }
 
-  return {
-    items: data?.items || [],
-    moreAvailable: data?.paging_info?.more_available || false,
-    maxId: data?.paging_info?.max_id ?? null,
-  };
+  return { items: [], moreAvailable: false, maxId: null };
 }
 
 /* ------------------------------------------------------------------ */
