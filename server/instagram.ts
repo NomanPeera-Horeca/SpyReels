@@ -95,43 +95,89 @@ export interface ProfileInfo {
 
 export async function fetchProfile(handle: string): Promise<ProfileInfo> {
   const cleanHandle = handle.replace(/^@/, "").trim();
-  const { status, data } = await scGet("/v1/instagram/profile", {
-    handle: cleanHandle,
-  });
+  // ScrapeCreators occasionally responds with HTTP 200 plus an inline
+  // error envelope (e.g. `{error:"not_found", errorStatus:404,
+  // message:"Profile is restricted"}`) when one of their scraper accounts
+  // or proxies is blocked by Instagram for a given handle. The same call
+  // succeeds on a different attempt because they rotate accounts. Retry a
+  // small number of times before surfacing the error so verified public
+  // profiles don't get mislabelled as "not found".
+  const MAX_TRIES = 3;
 
-  if (status === 404) {
-    throw new Error(
-      `User "@${cleanHandle}" not found. Please check the username and try again.`
-    );
-  }
-  if (status === 429) {
-    throw new Error(
-      `Instagram rate limit reached. Please wait a few minutes and try again.`
-    );
-  }
-  if (status !== 200 || !data) {
-    throw new Error(`Failed to fetch profile for "@${cleanHandle}": HTTP ${status}`);
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    const { status, data } = await scGet("/v1/instagram/profile", {
+      handle: cleanHandle,
+    });
+
+    if (status === 404) {
+      throw new Error(
+        `User "@${cleanHandle}" not found. Please check the username and try again.`
+      );
+    }
+    if (status === 429) {
+      if (attempt < MAX_TRIES) {
+        await sleep(2000 * attempt);
+        continue;
+      }
+      throw new Error(
+        `Instagram rate limit reached. Please wait a few minutes and try again.`
+      );
+    }
+    if (status !== 200 || !data) {
+      if (attempt < MAX_TRIES) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      throw new Error(`Failed to fetch profile for "@${cleanHandle}": HTTP ${status}`);
+    }
+
+    const user = data?.data?.user;
+    if (!user) {
+      const vendorError = typeof data?.error === "string" ? data.error : "";
+      const vendorMsg = typeof data?.message === "string" ? data.message : "";
+      const isVendorRestriction =
+        !!vendorError ||
+        data?.errorStatus === 404 ||
+        /restricted/i.test(vendorMsg);
+
+      if (isVendorRestriction && attempt < MAX_TRIES) {
+        console.warn(
+          `[Instagram] Vendor returned restricted envelope for @${cleanHandle} ` +
+            `(attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`
+        );
+        await sleep(1500 * attempt);
+        continue;
+      }
+      if (isVendorRestriction) {
+        // Phrase contains "rate limit" so classifyScrapeFailureMessage maps
+        // this to `instagram_rate_limited` rather than `handle_not_found`.
+        throw new Error(
+          `Instagram is temporarily rate limiting access to "@${cleanHandle}". ` +
+            `Please try again in a few minutes.`
+        );
+      }
+      throw new Error(`User "@${cleanHandle}" not found or the profile is not accessible.`);
+    }
+
+    return {
+      userId: String(user.id ?? ""),
+      username: user.username || cleanHandle,
+      isPrivate: !!user.is_private,
+      followerCount: user.edge_followed_by?.count ?? 0,
+      fullName: user.full_name || "",
+      biography: user.biography || "",
+      profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || "",
+      postCount: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
+      followingCount: user.edge_follow?.count ?? user.following_count ?? 0,
+      isVerified: !!user.is_verified,
+      category: user.category_name || user.category || "",
+      externalUrl: user.external_url || "",
+    };
   }
 
-  const user = data?.data?.user;
-  if (!user) {
-    throw new Error(`User "@${cleanHandle}" not found or the profile is not accessible.`);
-  }
-
-  return {
-    userId: String(user.id ?? ""),
-    username: user.username || cleanHandle,
-    isPrivate: !!user.is_private,
-    followerCount: user.edge_followed_by?.count ?? 0,
-    fullName: user.full_name || "",
-    biography: user.biography || "",
-    profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || "",
-    postCount: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
-    followingCount: user.edge_follow?.count ?? user.following_count ?? 0,
-    isVerified: !!user.is_verified,
-    category: user.category_name || user.category || "",
-    externalUrl: user.external_url || "",
-  };
+  throw new Error(
+    `Failed to fetch profile for "@${cleanHandle}" after ${MAX_TRIES} attempts.`
+  );
 }
 
 /* ------------------------------------------------------------------ */
