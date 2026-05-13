@@ -6649,7 +6649,12 @@ Return:
 - 2-3 concrete suggestions for a creator copying this template (what they should change)
 - one paragraph (3-5 sentences) of reasoning explaining the overall score
 
-Do not parrot the caption. Do not say "great content". Be specific about hook mechanics, retention beats, and payoff structure.`;
+Do not parrot the caption. Do not say "great content". Be specific about hook mechanics, retention beats, and payoff structure.
+
+STYLE RULES (strict):
+- Never use em dashes (—) or en dashes (–). Use commas, periods, semicolons, or parentheses instead.
+- Use straight ASCII punctuation only.
+- No filler phrases like "in conclusion", "overall", "it is worth noting".`;
 
   const userPrompt = `Reel caption:
 "${(input.caption ?? "(no caption)").slice(0, 1500)}"
@@ -6726,10 +6731,21 @@ Score this Reel and return structured JSON.`;
   const retentionScore = clampScore(parsed.retentionScore);
   const payoffScore = clampScore(parsed.payoffScore);
 
+  // Belt-and-suspenders against the prompt's "no em dashes" rule: replace
+  // any em/en dashes the LLM still emits with normal punctuation, and
+  // collapse any double-spaces that result.
+  const stripDashes = (s: string): string =>
+    s
+      .replace(/\s*—\s*/g, ", ")
+      .replace(/\s*–\s*/g, ", ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+,/g, ",")
+      .trim();
+
   const sanitizeBullets = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
     return value
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .map((v) => (typeof v === "string" ? stripDashes(v.trim()) : ""))
       .filter((s) => s.length > 0)
       .slice(0, 4);
   };
@@ -6744,7 +6760,9 @@ Score this Reel and return structured JSON.`;
     weaknesses: sanitizeBullets(parsed.weaknesses),
     suggestions: sanitizeBullets(parsed.suggestions),
     reasoning:
-      typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "",
+      typeof parsed.reasoning === "string"
+        ? stripDashes(parsed.reasoning.trim())
+        : "",
   };
 }
 
