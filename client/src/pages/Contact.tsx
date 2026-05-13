@@ -1,9 +1,7 @@
-import { ArrowLeft, Bug, Handshake, Mail, MessageCircle } from "lucide-react";
-import { Link } from "wouter";
+import { Bug, Handshake, Mail, MessageCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-
-const LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 
 const CONTACT_EMAIL = "noah.perry@spyreels.ai";
 
@@ -37,28 +35,7 @@ const contactSections = [
 export default function Contact() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <img
-                src={LOGO_URL}
-                alt="SpyReels"
-                className="h-9 w-9 rounded-lg"
-              />
-              <span className="text-lg font-semibold tracking-tight">
-                SpyReels
-              </span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader />
 
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <section className="mx-auto max-w-3xl text-center">
@@ -118,25 +95,7 @@ export default function Contact() {
         </p>
       </main>
 
-      <footer className="border-t border-border/50 py-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 text-xs text-muted-foreground/60 sm:px-6 lg:px-8">
-          <span>&copy; {new Date().getFullYear()} SpyReels</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/affiliate" className="hover:text-foreground">
-              Affiliate
-            </Link>
-            <Link href="/contact" className="hover:text-foreground">
-              Contact
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

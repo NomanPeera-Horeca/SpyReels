@@ -13,7 +13,9 @@ import {
   Repeat,
   Mic,
   MicOff,
+  Lock,
 } from "lucide-react";
+import { useFeatureLock } from "@/components/UpgradeSidesheet";
 
 // ── Types ──
 
@@ -129,6 +131,9 @@ export function TeleprompterMode({
   script: string;
   onClose: () => void;
 }) {
+  const voiceLock = useFeatureLock("voiceTeleprompter");
+  const takesLock = useFeatureLock("smartTakes");
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(DEFAULT_SPEED);
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
@@ -222,8 +227,9 @@ export function TeleprompterMode({
     return counts;
   }, [takeHistory]);
 
-  // Find the section with the most takes (hot section)
+  // Find the section with the most takes (hot section) - Pro-only signal
   const hotSection = useMemo(() => {
+    if (takesLock.locked) return -1;
     let maxTakes = 0;
     let hotIdx = -1;
     for (const [idx, count] of Object.entries(takesPerSection)) {
@@ -233,7 +239,7 @@ export function TeleprompterMode({
       }
     }
     return hotIdx;
-  }, [takesPerSection]);
+  }, [takesPerSection, takesLock.locked]);
 
   // Check if Web Speech API is available
   const speechAvailable = useMemo(() => {
@@ -382,6 +388,10 @@ export function TeleprompterMode({
 
   // Toggle voice mode
   const toggleVoiceMode = useCallback(() => {
+    if (voiceLock.locked) {
+      voiceLock.requireUpgrade();
+      return;
+    }
     if (voiceMode) {
       // Turn off voice mode
       setVoiceMode(false);
@@ -396,7 +406,7 @@ export function TeleprompterMode({
       setVoiceMode(true);
       startRecognition();
     }
-  }, [voiceMode, stopRecognition, startRecognition]);
+  }, [voiceMode, stopRecognition, startRecognition, voiceLock]);
 
   // Cleanup recognition on unmount
   useEffect(() => {
@@ -658,16 +668,24 @@ export function TeleprompterMode({
               variant="ghost"
               size="sm"
               className={`h-8 px-3 ${
-                voiceMode
-                  ? voiceListening
-                    ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                    : "text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
-                  : "text-white/50 hover:text-white hover:bg-white/10"
+                voiceLock.locked
+                  ? "text-white/40 hover:text-white/70 hover:bg-white/10"
+                  : voiceMode
+                    ? voiceListening
+                      ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      : "text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
+                    : "text-white/50 hover:text-white hover:bg-white/10"
               }`}
               onClick={toggleVoiceMode}
-              title="Voice mode (V)"
+              title={voiceLock.locked ? "Voice mode (Pro)" : "Voice mode (V)"}
             >
-              {voiceMode ? (
+              {voiceLock.locked ? (
+                <>
+                  <Mic className="h-4 w-4 mr-1" />
+                  Voice
+                  <Lock className="h-3 w-3 ml-1.5 text-primary/80" />
+                </>
+              ) : voiceMode ? (
                 voiceListening ? (
                   <>
                     <Mic className="h-4 w-4 mr-1 animate-pulse" />
@@ -722,15 +740,26 @@ export function TeleprompterMode({
             Retake
           </Button>
 
-          {totalTakes > 0 && (
-            <Badge
-              variant="outline"
-              className="text-[10px] h-5 border-white/20 text-white/60"
-            >
-              <Repeat className="mr-1 h-2.5 w-2.5" />
-              {totalTakes} take{totalTakes !== 1 ? "s" : ""}
-            </Badge>
-          )}
+          {totalTakes > 0 &&
+            (takesLock.locked ? (
+              <button
+                type="button"
+                onClick={takesLock.requireUpgrade}
+                title="Smart take tracking is a Pro feature"
+                className="inline-flex h-5 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 text-[10px] font-medium text-primary hover:bg-primary/20"
+              >
+                <Lock className="h-2.5 w-2.5" />
+                {totalTakes} take{totalTakes !== 1 ? "s" : ""} - Pro
+              </button>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-5 border-white/20 text-white/60"
+              >
+                <Repeat className="mr-1 h-2.5 w-2.5" />
+                {totalTakes} take{totalTakes !== 1 ? "s" : ""}
+              </Badge>
+            ))}
         </div>
 
         {/* Speed & Font Controls */}

@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import {
   inspirationPanelCopy,
   mergeRemakeability,
@@ -584,7 +585,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     });
   }, [segments]);
 
+  const srtLock = useFeatureLock("srtExport");
   const handleExportSRT = useCallback(() => {
+    if (srtLock.locked) {
+      srtLock.requireUpgrade();
+      return;
+    }
     if (!segments.length) return;
     const srt = segmentsToSRT(segments);
     const blob = new Blob([srt], { type: "text/srt" });
@@ -597,7 +603,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success("SRT file downloaded");
-  }, [segments, displayReelId]);
+  }, [segments, displayReelId, srtLock]);
 
   const handleSave = (statusIntent: "draft" | "approved") => {
     const content = editMode ? editedScript : generatedScript;
@@ -1057,7 +1063,12 @@ export function SearchInlineWorkflow({
     });
   }, [segments]);
 
+  const srtLock = useFeatureLock("srtExport");
   const handleExportSRT = useCallback(() => {
+    if (srtLock.locked) {
+      srtLock.requireUpgrade();
+      return;
+    }
     if (!segments.length) return;
     const srt = segmentsToSRT(segments);
     const blob = new Blob([srt], { type: "text/srt" });
@@ -1070,7 +1081,7 @@ export function SearchInlineWorkflow({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success("SRT file downloaded");
-  }, [segments, reel.shortcode]);
+  }, [segments, reel.shortcode, srtLock]);
 
   const handleSave = (statusIntent: "draft" | "approved") => {
     const content = editMode ? editedScript : generatedScript;
@@ -1615,6 +1626,7 @@ function CompletedScriptSection({
   userTimezone: string;
   sectionRef?: React.Ref<HTMLDivElement>;
 }) {
+  const cuesLock = useFeatureLock("aiCues");
   return (
     <div ref={sectionRef}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
@@ -1707,14 +1719,30 @@ function CompletedScriptSection({
             Cues:
           </label>
           <button
-            onClick={() => setAddCues(!addCues)}
-            className={`h-7 px-2.5 text-xs rounded-md border transition-colors ${
-              addCues
-                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                : "border-border/50 bg-muted/30 text-muted-foreground hover:border-border"
+            onClick={() => {
+              if (cuesLock.locked) {
+                cuesLock.requireUpgrade();
+                return;
+              }
+              setAddCues(!addCues);
+            }}
+            title={cuesLock.locked ? "AI delivery cues are a Pro feature" : undefined}
+            className={`h-7 px-2.5 text-xs rounded-md border transition-colors flex items-center gap-1 ${
+              cuesLock.locked
+                ? "border-primary/30 bg-primary/5 text-muted-foreground hover:bg-primary/10"
+                : addCues
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  : "border-border/50 bg-muted/30 text-muted-foreground hover:border-border"
             }`}
           >
-            {addCues ? "On" : "Off"}
+            {cuesLock.locked ? (
+              <>
+                Pro
+                <span className="text-[9px] font-bold uppercase tracking-wider text-primary">!</span>
+              </>
+            ) : (
+              addCues ? "On" : "Off"
+            )}
           </button>
         </div>
 

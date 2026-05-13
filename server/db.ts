@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -1645,4 +1645,80 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
   const items = scripts.slice(offset, offset + limit);
 
   return { items, total };
+}
+
+// ── Brand Coach scores ─────────────────────────────────────────
+// One cached AI viral-potential analysis per reel. Lookups are by
+// reelId (user-scraped) OR featuredReelId (catalog). Both UNIQUE.
+
+export async function createBrandCoachScore(
+  data: InsertBrandCoachScore
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(brandCoachScores).values(data);
+  return result[0].insertId;
+}
+
+export async function getBrandCoachScoreByReelId(
+  reelId: number
+): Promise<BrandCoachScore | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(brandCoachScores)
+    .where(eq(brandCoachScores.reelId, reelId))
+    .limit(1);
+  return rows[0];
+}
+
+export async function getBrandCoachScoreByFeaturedReelId(
+  featuredReelId: number
+): Promise<BrandCoachScore | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(brandCoachScores)
+    .where(eq(brandCoachScores.featuredReelId, featuredReelId))
+    .limit(1);
+  return rows[0];
+}
+
+/** Batch fetch cached scores for a list of reel ids. Returns a map. */
+export async function getBrandCoachScoresBatch(opts: {
+  reelIds?: number[];
+  featuredReelIds?: number[];
+}): Promise<{
+  byReelId: Record<number, BrandCoachScore>;
+  byFeaturedReelId: Record<number, BrandCoachScore>;
+}> {
+  const byReelId: Record<number, BrandCoachScore> = {};
+  const byFeaturedReelId: Record<number, BrandCoachScore> = {};
+
+  const db = await getDb();
+  if (!db) return { byReelId, byFeaturedReelId };
+
+  if (opts.reelIds && opts.reelIds.length > 0) {
+    const rows = await db
+      .select()
+      .from(brandCoachScores)
+      .where(inArray(brandCoachScores.reelId, opts.reelIds));
+    for (const row of rows) {
+      if (row.reelId != null) byReelId[row.reelId] = row;
+    }
+  }
+
+  if (opts.featuredReelIds && opts.featuredReelIds.length > 0) {
+    const rows = await db
+      .select()
+      .from(brandCoachScores)
+      .where(inArray(brandCoachScores.featuredReelId, opts.featuredReelIds));
+    for (const row of rows) {
+      if (row.featuredReelId != null) byFeaturedReelId[row.featuredReelId] = row;
+    }
+  }
+
+  return { byReelId, byFeaturedReelId };
 }

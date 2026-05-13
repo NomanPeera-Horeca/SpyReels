@@ -1,95 +1,302 @@
-import { useState, useMemo } from "react";
-import { trpc } from "@/lib/trpc";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { usePostHog } from "@posthog/react";
 import { getLoginUrl } from "@/const";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { trpc } from "@/lib/trpc";
+import { usePostHog } from "@posthog/react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bot,
   Check,
+  CheckCircle2,
+  Clock,
+  FileText,
+  HelpCircle,
+  Mic2,
+  PlayCircle,
+  Rocket,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Timer,
+  Trophy,
+  Users,
+  Video,
+  Workflow,
   X,
   Zap,
-  Crown,
-  Building2,
-  Rocket,
-  Star,
-  ArrowRight,
-  Shield,
-  Clock,
-  Users,
-  Sparkles,
-  TrendingUp,
-  ChevronDown,
-  ChevronUp,
-  Gift,
 } from "lucide-react";
 
-// ─── Plan display config ────────────────────────────────────────
-const PLAN_DISPLAY = [
-  {
-    id: "free" as const,
-    icon: Zap,
-    color: "text-zinc-400",
-    borderColor: "border-zinc-700",
-    bgGradient: "",
-  },
-  {
-    id: "starter" as const,
-    icon: Rocket,
-    color: "text-blue-400",
-    borderColor: "border-blue-600/30",
-    bgGradient: "",
-  },
-  {
-    id: "pro" as const,
-    icon: Crown,
-    color: "text-purple-400",
-    borderColor: "border-purple-500/50",
-    bgGradient: "bg-gradient-to-b from-purple-500/10 to-transparent",
-    ring: "ring-2 ring-purple-500/40",
-  },
-  {
-    id: "business" as const,
-    icon: Building2,
-    color: "text-amber-400",
-    borderColor: "border-amber-500/30",
-    bgGradient: "",
-  },
-  {
-    id: "agency" as const,
-    icon: Star,
-    color: "text-emerald-400",
-    borderColor: "border-emerald-500/30",
-    bgGradient: "",
-  },
-];
-
-// ─── Feature comparison table data ──────────────────────────────
+type PublicPlanId = "free" | "starter" | "pro" | "business";
 type FeatureValue = boolean | string | number;
-interface FeatureRow {
-  label: string;
-  free: FeatureValue;
-  starter: FeatureValue;
-  pro: FeatureValue;
-  business: FeatureValue;
-  agency: FeatureValue;
-}
 
-const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
+const PLAN_ORDER: PublicPlanId[] = ["free", "starter", "pro", "business"];
+
+type FeatureSection = { label: string; items: string[] };
+
+const PLAN_COPY: Record<
+  PublicPlanId,
   {
-    title: "Account research and search",
+    name: string;
+    eyebrow: string;
+    description: string;
+    badge?: string;
+    icon: typeof Zap;
+    includesPrevious?: string;
+    sections: FeatureSection[];
+    outcomes: string[];
+    featured?: boolean;
+  }
+> = {
+  free: {
+    name: "Free",
+    eyebrow: "Try the workflow",
+    description: "For creators who want proof before they pay.",
+    icon: Zap,
+    sections: [
+      {
+        label: "Find viral angles",
+        items: [
+          "2 account research sessions per month (10 Reels each)",
+          "3 keyword searches per day",
+          "Engagement metrics (views, likes, comments)",
+          "Creator Radar history (re-open any past spy session)",
+        ],
+      },
+      {
+        label: "Write your first script",
+        items: [
+          "3 Reel transcripts per month",
+          "3 AI script re-creations per month",
+          "3 Idea-to-Script generations per month",
+          "3 rewrites per script",
+        ],
+      },
+      {
+        label: "Record and organize",
+        items: [
+          "Basic teleprompter",
+          "SpyReels Bot on Telegram",
+          "5 saved scripts",
+          "Single creator workspace",
+        ],
+      },
+      {
+        label: "Support",
+        items: ["Email support (best-effort response)"],
+      },
+    ],
+    outcomes: [
+      "Find viral angles in your niche",
+      "Transcribe a Reel before rewriting it",
+      "Test the SpyReels workflow before paying",
+    ],
+  },
+  starter: {
+    name: "Solo Creator",
+    eyebrow: "Build consistency",
+    description: "For creators posting 3 to 5 Reels a week.",
+    icon: Rocket,
+    includesPrevious: "Free",
+    sections: [
+      {
+        label: "Research at scale",
+        items: [
+          "10 account research sessions per month (50 Reels each)",
+          "20 keyword searches per day",
+          "Full transcript + structure on every Reel",
+          "Saved Reels library (organize what is working)",
+        ],
+      },
+      {
+        label: "More scripts, faster",
+        items: [
+          "30 Reel transcripts per month",
+          "15 AI script re-creations per month",
+          "15 Idea-to-Script generations per month",
+          "SpyReels Bot full access on Telegram",
+        ],
+      },
+      {
+        label: "Plan and ship",
+        items: [
+          "50 saved scripts",
+          "Content calendar view",
+          "Kanban workflow board (Idea -> Filmed -> Posted)",
+          "Script version history",
+        ],
+      },
+      {
+        label: "Exports",
+        items: [
+          "SRT subtitle export",
+          "CSV export",
+          "Google Sheets export",
+        ],
+      },
+      {
+        label: "Support",
+        items: ["Email support (response under 24 hours)"],
+      },
+    ],
+    outcomes: [
+      "Plan a full month of content in one sitting",
+      "Turn competitor Reels into your own scripts",
+      "Export captions, SRT files, and research",
+    ],
+  },
+  pro: {
+    name: "Pro",
+    eyebrow: "Most creators pick this",
+    description:
+      "For serious creators building a repeatable content engine.",
+    badge: "Best value",
+    icon: Trophy,
+    featured: true,
+    includesPrevious: "Solo Creator",
+    sections: [
+      {
+        label: "Pro research",
+        items: [
+          "50 account research sessions per month",
+          "100 Reels pulled per researched account",
+          "Unlimited keyword searches",
+          "Full transcript + structure analysis on every Reel",
+        ],
+      },
+      {
+        label: "Brand Coach (AI)",
+        items: [
+          "0-100 viral-potential score on every Reel",
+          "Sub-scores for hook, retention, and payoff",
+          "Specific strengths, weaknesses, and remix suggestions",
+          "Cached per Reel so you can revisit without re-scoring",
+        ],
+      },
+      {
+        label: "Pro script studio",
+        items: [
+          "200 Reel transcripts per month",
+          "100 AI script re-creations per month",
+          "100 Idea-to-Script generations per month",
+          "10 rewrites per script",
+          "AI delivery cues + on-camera coaching notes",
+        ],
+      },
+      {
+        label: "Pro production",
+        items: [
+          "Voice-driven teleprompter (hands-free scroll)",
+          "Smart take tracking with retake counter",
+          "Section bookmarks and hot-section jumps",
+        ],
+      },
+      {
+        label: "Team-ready workflow",
+        items: [
+          "500 saved scripts",
+          "Up to 3 team members included",
+          "Full script version history",
+        ],
+      },
+      {
+        label: "Pro exports",
+        items: [
+          "Google Docs export",
+          "PDF export (print-ready)",
+          "Word (DOCX) export",
+        ],
+      },
+      {
+        label: "Pro support",
+        items: ["Priority email + chat support (response under 4 hours)"],
+      },
+    ],
+    outcomes: [
+      "Film hands-free with the voice teleprompter",
+      "Get AI delivery cues baked into every script",
+      "Run a small creator team without losing scripts",
+    ],
+  },
+  business: {
+    name: "Agency / Team",
+    eyebrow: "Scale a content studio",
+    description:
+      "For teams managing multiple creators, brands, or clients.",
+    badge: "For teams",
+    icon: Users,
+    includesPrevious: "Pro",
+    sections: [
+      {
+        label: "Agency-level research",
+        items: [
+          "200 account research sessions per month",
+          "Unlimited Reels per researched account",
+          "Unlimited Creator Radar history",
+        ],
+      },
+      {
+        label: "Agency script engine",
+        items: [
+          "1,000 Reel transcripts per month",
+          "500 AI script re-creations per month",
+          "500 Idea-to-Script generations per month",
+          "Unlimited rewrites per script",
+        ],
+      },
+      {
+        label: "Team collaboration",
+        items: [
+          "10 team members included",
+          "3 separate workspaces (one per client or brand)",
+          "Unlimited saved scripts",
+        ],
+      },
+      {
+        label: "Concierge support",
+        items: [
+          "Priority chat support (response under 1 hour)",
+          "Dedicated onboarding session with a SpyReels strategist",
+          "Quarterly performance review and roadmap",
+        ],
+      },
+    ],
+    outcomes: [
+      "Run multiple creator brands from one workspace",
+      "Give every client their own isolated space",
+      "Get concierge support and a real onboarding call",
+    ],
+  },
+};
+
+const FEATURE_SECTIONS: {
+  title: string;
+  rows: {
+    label: string;
+    free: FeatureValue;
+    starter: FeatureValue;
+    pro: FeatureValue;
+    business: FeatureValue;
+  }[];
+}[] = [
+  {
+    title: "Viral research",
     rows: [
       {
         label: "Account research sessions/month",
@@ -97,15 +304,13 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: 10,
         pro: 50,
         business: 200,
-        agency: "Unlimited",
       },
       {
-        label: "Reels per account (max pulled)",
+        label: "Reels pulled per account",
         free: 10,
         starter: 50,
         pro: "Unlimited",
         business: "Unlimited",
-        agency: "Unlimited",
       },
       {
         label: "Keyword searches/day",
@@ -113,36 +318,39 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: 20,
         pro: "Unlimited",
         business: "Unlimited",
-        agency: "Unlimited",
       },
       {
-        label: "URL ingestion",
-        free: "5 URLs",
-        starter: "20 URLs",
-        pro: "20 URLs",
-        business: "20 URLs",
-        agency: "20 URLs",
+        label: "Reel structure analysis",
+        free: "Preview",
+        starter: "Full",
+        pro: "Full",
+        business: "Full",
       },
       {
-        label: "Profile preview",
+        label: "Brand Coach viral score (AI)",
+        free: false,
+        starter: false,
+        pro: true,
+        business: true,
+      },
+      {
+        label: "Creator Radar history",
         free: true,
         starter: true,
         pro: true,
         business: true,
-        agency: true,
       },
     ],
   },
   {
-    title: "Transcription & AI",
+    title: "Transcripts and scripts",
     rows: [
       {
-        label: "Transcriptions/month",
+        label: "Reel transcripts/month",
         free: 3,
         starter: 30,
         pro: 200,
         business: "1,000",
-        agency: "Unlimited",
       },
       {
         label: "AI script re-creations/month",
@@ -150,7 +358,13 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: 15,
         pro: 100,
         business: 500,
-        agency: "Unlimited",
+      },
+      {
+        label: "Idea-to-Script generations/month",
+        free: 3,
+        starter: 15,
+        pro: 100,
+        business: 500,
       },
       {
         label: "Rewrites per script",
@@ -158,134 +372,39 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: 2,
         pro: 10,
         business: "Unlimited",
-        agency: "Unlimited",
       },
       {
-        label: "AI delivery cues",
+        label: "AI delivery cues and coaching",
         free: false,
         starter: false,
         pro: true,
         business: true,
-        agency: true,
-      },
-      {
-        label: "Viral structure analysis",
-        free: "Preview",
-        starter: "Full",
-        pro: "Full",
-        business: "Full",
-        agency: "Full",
       },
     ],
   },
   {
-    title: "Script Library & Calendar",
+    title: "SpyReels Bot and production",
     rows: [
       {
-        label: "Saved scripts",
-        free: 5,
-        starter: 50,
-        pro: 500,
-        business: "Unlimited",
-        agency: "Unlimited",
+        label: "SpyReels Bot (Telegram)",
+        free: "Limited",
+        starter: "Included",
+        pro: "Included",
+        business: "Included",
       },
-      {
-        label: "Custom tags",
-        free: 2,
-        starter: 10,
-        pro: "Unlimited",
-        business: "Unlimited",
-        agency: "Unlimited",
-      },
-      {
-        label: "Calendar view",
-        free: false,
-        starter: true,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "Kanban board",
-        free: false,
-        starter: true,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "Version history",
-        free: false,
-        starter: "Last 3",
-        pro: "Full",
-        business: "Full",
-        agency: "Full",
-      },
-    ],
-  },
-  {
-    title: "Exports",
-    rows: [
-      {
-        label: "SRT subtitle export",
-        free: false,
-        starter: true,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "CSV export",
-        free: false,
-        starter: true,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "Google Sheets",
-        free: false,
-        starter: true,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "Google Docs",
-        free: false,
-        starter: false,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-      {
-        label: "PDF/DOCX export",
-        free: false,
-        starter: false,
-        pro: true,
-        business: true,
-        agency: true,
-      },
-    ],
-  },
-  {
-    title: "Teleprompter",
-    rows: [
       {
         label: "Basic teleprompter",
         free: true,
         starter: true,
         pro: true,
         business: true,
-        agency: true,
       },
       {
-        label: "Voice-driven mode",
+        label: "Voice-driven teleprompter",
         free: false,
         starter: false,
         pro: true,
         business: true,
-        agency: true,
       },
       {
         label: "Smart take tracking",
@@ -293,59 +412,46 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: false,
         pro: true,
         business: true,
-        agency: true,
       },
     ],
   },
-  /* Re-enable with /extension route
   {
-    title: "Chrome Extension",
+    title: "Workflow and sharing",
     rows: [
       {
-        label: "Sort Feed",
-        free: "5/day",
-        starter: "25/day",
-        pro: "Unlimited",
+        label: "Saved scripts",
+        free: 5,
+        starter: 50,
+        pro: 500,
         business: "Unlimited",
-        agency: "Unlimited",
       },
       {
-        label: "Save to Dashboard",
-        free: "3/day",
-        starter: "20/day",
-        pro: "Unlimited",
-        business: "Unlimited",
-        agency: "Unlimited",
+        label: "Calendar view",
+        free: false,
+        starter: true,
+        pro: true,
+        business: true,
       },
       {
-        label: "Transcribe in extension",
-        free: "3/mo",
-        starter: "15/mo",
-        pro: "100/mo",
-        business: "500/mo",
-        agency: "Unlimited",
+        label: "Kanban workflow board",
+        free: false,
+        starter: true,
+        pro: true,
+        business: true,
       },
       {
-        label: "Re-Create in extension",
-        free: "3/mo",
-        starter: "5/mo",
-        pro: "50/mo",
-        business: "250/mo",
-        agency: "Unlimited",
+        label: "Version history",
+        free: false,
+        starter: "Last 3",
+        pro: "Full",
+        business: "Full",
       },
-    ],
-  },
-  */
-  {
-    title: "Team & Support",
-    rows: [
       {
         label: "Team members",
         free: 1,
         starter: 1,
         pro: 3,
         business: 10,
-        agency: 25,
       },
       {
         label: "Workspaces",
@@ -353,110 +459,187 @@ const FEATURE_SECTIONS: { title: string; rows: FeatureRow[] }[] = [
         starter: 1,
         pro: 1,
         business: 3,
-        agency: 10,
       },
+    ],
+  },
+  {
+    title: "Exports and support",
+    rows: [
       {
-        label: "Priority support",
+        label: "SRT subtitle export",
         free: false,
-        starter: "Email",
-        pro: "Email",
-        business: "Chat",
-        agency: "Dedicated",
-      },
-      {
-        label: "API access",
-        free: false,
-        starter: false,
-        pro: false,
+        starter: true,
+        pro: true,
         business: true,
-        agency: true,
       },
       {
-        label: "White-label",
+        label: "CSV export",
+        free: false,
+        starter: true,
+        pro: true,
+        business: true,
+      },
+      {
+        label: "Google Sheets export",
+        free: false,
+        starter: true,
+        pro: true,
+        business: true,
+      },
+      {
+        label: "Google Docs, PDF, and DOCX export",
         free: false,
         starter: false,
-        pro: false,
-        business: false,
-        agency: true,
+        pro: true,
+        business: true,
+      },
+      {
+        label: "Support",
+        free: "Email (best effort)",
+        starter: "Email",
+        pro: "Priority email + chat",
+        business: "Priority chat + onboarding",
       },
     ],
   },
 ];
 
-// ─── Social proof data ──────────────────────────────────────────
-const TESTIMONIALS = [
+const WORKFLOW = [
   {
-    name: "Sarah K.",
-    role: "Content Creator",
-    text: "Went from 2K to 50K followers in 3 months using the script re-creation feature. The AI understands viral patterns better than I do.",
-    avatar: "SK",
+    icon: Search,
+    title: "Research",
+    body: "Spy on top-performing Reels by account or keyword before you film.",
   },
   {
-    name: "Marcus T.",
-    role: "Social Media Manager",
-    text: "Managing 8 client accounts is a breeze. The dashboard and script workflow keep every research pass in one place, and we have cut our weekly prep time in half before we even film.",
-    avatar: "MT",
+    icon: FileText,
+    title: "Transcript",
+    body: "Get the exact words, structure, and hook behind the viral post.",
   },
   {
-    name: "Priya R.",
-    role: "Agency Owner",
-    text: "ROI was instant. My team produces 4x more scripts per week. The calendar view keeps everything organized.",
-    avatar: "PR",
+    icon: Bot,
+    title: "Rewrite",
+    body: "Use SpyReels Bot to turn the pattern into a script in your voice.",
+  },
+  {
+    icon: Mic2,
+    title: "Record",
+    body: "Open the teleprompter, track takes, and film without losing momentum.",
   },
 ];
 
 const STATS = [
-  { value: "12,000+", label: "Creators" },
-  { value: "2.5M+", label: "Reels Analyzed" },
-  { value: "500K+", label: "Scripts Created" },
-  { value: "4.9/5", label: "User Rating" },
+  { value: "12,000+", label: "creators" },
+  { value: "2.4M+", label: "Reels analyzed" },
+  { value: "180K+", label: "scripts generated" },
+  { value: "9 min", label: "research to script" },
 ];
 
-// ─── Cell renderer ──────────────────────────────────────────────
-function CellValue({ value }: { value: FeatureValue }) {
-  if (value === true)
-    return <Check className="h-4 w-4 text-emerald-400 mx-auto" />;
-  if (value === false) return <X className="h-4 w-4 text-zinc-600 mx-auto" />;
-  return <span className="text-sm text-zinc-300">{String(value)}</span>;
-}
+const RISK_REVERSAL = [
+  "Free plan, no card",
+  "14-day money-back guarantee",
+  "Cancel in one click",
+  "Stripe-secured checkout",
+  "Built for Reels creators",
+];
 
-// ─── FAQ ────────────────────────────────────────────────────────
-const FAQ = [
+const ROI_DEFAULTS = {
+  reelsPerWeek: 5,
+  hoursPerReel: 2,
+  hourlyRate: 50,
+};
+
+const COMPETITOR_ROWS = [
+  { label: "Free plan", spyreels: "Yes, no card", meedro: "No" },
+  { label: "Entry paid plan", spyreels: "$19/mo", meedro: "$29/mo" },
+  { label: "Pro plan", spyreels: "$49/mo", meedro: "$59/mo" },
+  { label: "Team plan", spyreels: "$99/mo", meedro: "$199/mo" },
+  { label: "Annual discount", spyreels: "Up to 42%", meedro: "20%" },
+  { label: "Teleprompter workflow", spyreels: "Included", meedro: "Not emphasized" },
+  { label: "Reel transcripts", spyreels: "Included", meedro: "Included" },
+  { label: "Refund window", spyreels: "14 days", meedro: "Not listed" },
+];
+
+const TESTIMONIALS = [
   {
-    q: "Can I switch plans anytime?",
-    a: "Yes! Upgrade instantly and get prorated credit. Downgrade takes effect at the end of your billing cycle.",
+    quote:
+      "SpyReels turned competitor research from a weekend task into a 10-minute workflow. I finally know what to film before I open the camera.",
+    name: "Creator using SpyReels",
+    result: "Research to script in under 10 minutes",
   },
   {
-    q: "What happens when I hit my limit?",
-    a: "You'll see a friendly upgrade prompt. Your existing work is never lost. You can upgrade to continue or wait for the next billing cycle.",
+    quote:
+      "The transcript plus rewrite flow is the reason I upgraded. I can see the hook, study the structure, and record from the teleprompter without switching tools.",
+    name: "Short-form creator",
+    result: "Full workflow in one tab",
   },
   {
-    q: "Is there a free trial for paid plans?",
-    a: "The Free plan is your trial. Use it as long as you want. When you're ready to go pro, upgrade and start creating immediately.",
+    quote:
+      "For clients, the calendar and saved scripts make the whole process feel organized. We are not guessing anymore.",
+    name: "Content team lead",
+    result: "Repeatable client workflow",
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    q: "Is there a free trial?",
+    a: "The Free plan is your trial. You can research accounts, generate transcripts, rewrite scripts, and test the teleprompter without adding a card.",
   },
   {
     q: "Can I cancel anytime?",
-    a: "Absolutely. No contracts, no hidden fees. Cancel with one click and keep access until the end of your billing period.",
+    a: "Yes. There are no contracts or hidden fees. Cancel in one click and keep access until the end of your billing period.",
   },
   {
-    q: "Do you offer refunds?",
-    a: "We offer a 14-day money-back guarantee on all plans. If you're not satisfied, we'll refund you. No questions asked.",
+    q: "What is the 14-day money-back guarantee?",
+    a: "If you upgrade and SpyReels does not help your workflow, email us within 14 days and we will refund your first payment.",
   },
   {
-    q: "What payment methods do you accept?",
-    a: "We accept all major credit cards, debit cards, and PayPal through our secure Stripe payment processor.",
+    q: "What is SpyReels Bot?",
+    a: "SpyReels Bot helps you turn research and transcripts into sharper hooks, scripts, angles, and posting ideas based on what is already working in your niche.",
+  },
+  {
+    q: "Do transcripts count against my plan?",
+    a: "Yes. Each Reel transcription uses one transcript credit. Your limits reset every billing cycle.",
+  },
+  {
+    q: "Do I need Instagram login access?",
+    a: "No. SpyReels analyzes publicly available Reels and does not require your Instagram password.",
+  },
+  {
+    q: "Can I switch plans later?",
+    a: "Yes. You can upgrade, downgrade, or move from monthly to annual from billing. Your saved scripts and research stay in your account.",
+  },
+  {
+    q: "Which plan should I pick?",
+    a: "Start with Solo Creator if you post a few times a week. Pick Pro if you want the full research, transcript, Bot, script, and teleprompter workflow with enough volume to post daily.",
   },
 ];
 
-// ═══════════════════════════════════════════════════════════════
-// Main Pricing Page
-// ═══════════════════════════════════════════════════════════════
+function formatCurrency(value: number) {
+  return value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function renderFeatureValue(value: FeatureValue) {
+  if (value === true) {
+    return <Check className="mx-auto h-4 w-4 text-primary" />;
+  }
+  if (value === false) {
+    return <X className="mx-auto h-4 w-4 text-muted-foreground/40" />;
+  }
+  return <span>{value}</span>;
+}
+
 export default function Pricing() {
   const { user } = useAuth();
   const posthog = usePostHog();
-  const [isAnnual, setIsAnnual] = useState(true); // Default to annual
-  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const [showFullComparison, setShowFullComparison] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(true);
+  const [reelsPerWeek, setReelsPerWeek] = useState(ROI_DEFAULTS.reelsPerWeek);
+  const [hoursPerReel, setHoursPerReel] = useState(ROI_DEFAULTS.hoursPerReel);
+  const [showComparison, setShowComparison] = useState(false);
 
   const plansQuery = trpc.billing.plans.useQuery();
   const subQuery = trpc.billing.subscription.useQuery(undefined, {
@@ -470,8 +653,33 @@ export default function Pricing() {
     onError: err => toast.error(err.message),
   });
 
-  const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
-  const currentPlan = subQuery.data?.plan || "free";
+  const plans = useMemo(() => {
+    const byId = new Map(
+      (plansQuery.data || []).map(plan => [plan.id as PublicPlanId, plan])
+    );
+    return PLAN_ORDER.map(id => byId.get(id)).filter(Boolean);
+  }, [plansQuery.data]);
+
+  // Re-run the browser's anchor scroll AFTER the plans query lands so a
+  // /pricing#plans deep link reliably parks on the price cards (the
+  // cards are SSR-empty until trpc data arrives, so the initial scroll
+  // would otherwise overshoot).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!plansQuery.data || plans.length === 0) return;
+    if (window.location.hash !== "#plans") return;
+    const el = document.getElementById("plans");
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [plansQuery.data, plans.length]);
+
+  const currentPlan = (subQuery.data?.plan || "free") as string;
+  const monthlyHoursSaved = reelsPerWeek * hoursPerReel * 4;
+  const monthlyValue = monthlyHoursSaved * ROI_DEFAULTS.hourlyRate;
+  const proAnnualPrice = 29;
+  const proPayback = Math.max(1, Math.round(monthlyValue / proAnnualPrice));
 
   const handleCheckout = (planId: string) => {
     if (!user) {
@@ -490,450 +698,679 @@ export default function Pricing() {
       planId: planId as any,
       interval: isAnnual ? "yearly" : "monthly",
       origin: window.location.origin,
-      referralId:
-        typeof referralId === "string" ? referralId : undefined,
+      referralId: typeof referralId === "string" ? referralId : undefined,
     });
   };
 
   const getButtonText = (planId: string) => {
-    if (!user) return "Get Started";
+    if (!user) return planId === "free" ? "Start Free" : "Start Free First";
     if (planId === currentPlan) return "Current Plan";
     if (planId === "free") return "Free Forever";
-    const planOrder = ["free", "starter", "pro", "business", "agency"];
-    return planOrder.indexOf(planId) > planOrder.indexOf(currentPlan)
+    return PLAN_ORDER.indexOf(planId as PublicPlanId) >
+      PLAN_ORDER.indexOf(currentPlan as PublicPlanId)
       ? "Upgrade Now"
-      : "Downgrade";
-  };
-
-  const getButtonVariant = (
-    planId: string
-  ): "default" | "outline" | "secondary" => {
-    if (planId === currentPlan) return "secondary";
-    if (planId === "pro") return "default";
-    return "outline";
+      : "Switch Plan";
   };
 
   return (
-    <div className="min-h-screen pb-20">
-      {/* ─── Hero Section ─── */}
-      <div className="text-center pt-8 pb-6 px-4">
-        <Badge
-          variant="outline"
-          className="mb-4 text-purple-400 border-purple-500/30 px-3 py-1"
-        >
-          <Gift className="h-3.5 w-3.5 mr-1.5" />
-          Launch Special · Save up to 42% on annual plans
-        </Badge>
-        <h1 className="text-3xl md:text-4xl font-bold mb-3">
-          Turn Viral Reels Into{" "}
-          <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
-            Your Content Empire
-          </span>
-        </h1>
-        <p className="text-zinc-400 max-w-2xl mx-auto text-base md:text-lg">
-          Join 12,000+ creators who use SpyReels to analyze, transcribe, and
-          re-create viral content. Pick the plan that matches your ambition.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background pb-28 text-foreground">
+      <PublicHeader />
 
-      {/* ─── Social Proof Stats ─── */}
-      <div className="flex justify-center gap-6 md:gap-10 mb-8 px-4">
-        {STATS.map(s => (
-          <div key={s.label} className="text-center">
-            <div className="text-lg md:text-xl font-bold text-white">
-              {s.value}
-            </div>
-            <div className="text-xs text-zinc-500">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ─── Billing Toggle ─── */}
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <span
-          className={`text-sm font-medium ${!isAnnual ? "text-white" : "text-zinc-500"}`}
-        >
-          Monthly
-        </span>
-        <Switch
-          checked={isAnnual}
-          onCheckedChange={setIsAnnual}
-          className="data-[state=checked]:bg-purple-600"
-        />
-        <span
-          className={`text-sm font-medium ${isAnnual ? "text-white" : "text-zinc-500"}`}
-        >
-          Annual
-        </span>
-        {isAnnual && (
-          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs animate-pulse">
-            Save up to 42%
+      <section className="relative overflow-hidden border-b border-border/50">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-transparent" />
+        <div className="relative mx-auto max-w-6xl px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8">
+          <Badge
+            variant="outline"
+            className="mb-5 border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary"
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Pricing that pays for itself after one saved filming session
           </Badge>
-        )}
-      </div>
+          <h1 className="mx-auto max-w-4xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+            Stop buying generic AI tools. Build a Reels engine that actually
+            gets you to post.
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Research viral Reels, pull the transcript, rewrite the angle with
+            SpyReels Bot, and record with the teleprompter. Free to start. No
+            card required.
+          </p>
 
-      {/* ─── Pricing Cards ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 px-4 max-w-[1400px] mx-auto mb-16">
-        {plans.map(plan => {
-          const display =
-            PLAN_DISPLAY.find(d => d.id === plan.id) || PLAN_DISPLAY[0];
-          const Icon = display.icon;
-          const monthlyPrice = plan.monthlyPrice / 100;
-          const yearlyPerMonth = plan.yearlyPrice / 100;
-          const isCurrentPlan = plan.id === currentPlan;
-          const isPro = plan.id === "pro";
-          const isFree = plan.id === "free";
-
-          return (
-            <Card
-              key={plan.id}
-              className={`relative flex flex-col ${display.borderColor} ${display.bgGradient} ${
-                isPro ? display.ring + " scale-[1.02]" : ""
-              } ${isCurrentPlan ? "border-emerald-500/50" : ""} transition-all hover:scale-[1.01]`}
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button
+              size="lg"
+              onClick={() => handleCheckout("free")}
+              className="h-12 gap-2 px-8 text-base shadow-lg shadow-primary/20"
             >
-              {/* Badges */}
-              {plan.badge && !isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge
-                    className={`${
-                      isPro
-                        ? "bg-purple-600 text-white"
-                        : "bg-zinc-700 text-zinc-200"
-                    } text-xs px-3 py-0.5 whitespace-nowrap`}
-                  >
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
-              {isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-emerald-600 text-white text-xs px-3 py-0.5">
-                    Current Plan
-                  </Badge>
-                </div>
-              )}
+              Start Free, No Card
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-12 gap-2 px-8 text-base"
+            >
+              <a href="#plans">
+                See Plans
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </div>
 
-              <CardHeader className="pb-2 pt-6">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className={`h-5 w-5 ${display.color}`} />
-                  <CardTitle className="text-lg">{plan.name}</CardTitle>
-                </div>
-                <CardDescription className="text-xs min-h-[2rem]">
-                  {plan.description}
-                </CardDescription>
-              </CardHeader>
+          <div className="mt-10 grid gap-3 sm:grid-cols-4">
+            {STATS.map(stat => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-border bg-card/70 p-4"
+              >
+                <p className="text-2xl font-bold text-foreground">
+                  {stat.value}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-              <CardContent className="flex-1 pb-4">
-                {/* Price */}
-                <div className="mb-4">
-                  {isFree ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold">$0</span>
-                      <span className="text-zinc-500 text-sm">/forever</span>
+      <section className="border-b border-border/50 bg-card/30">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="grid gap-4 md:grid-cols-4">
+            {WORKFLOW.map(item => {
+              const Icon = item.icon;
+              return (
+                <Card key={item.title} className="border-border bg-card">
+                  <CardContent className="p-5">
+                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
+                      <Icon className="h-5 w-5 text-primary" />
                     </div>
-                  ) : (
+                    <h3 className="mb-2 font-semibold text-foreground">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {item.body}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="plans" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-col items-center justify-between gap-5 text-center md:flex-row md:text-left">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              Pick the plan that matches your posting pace
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Annual is selected by default because it is the best deal.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 rounded-full border border-border bg-card p-1.5">
+            <span
+              className={`pl-3 text-sm font-medium ${
+                !isAnnual ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              Monthly
+            </span>
+            <Switch checked={isAnnual} onCheckedChange={setIsAnnual} />
+            <span
+              className={`text-sm font-medium ${
+                isAnnual ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              Annual
+            </span>
+            <Badge className="mr-1 bg-primary text-primary-foreground">
+              Save up to 42%
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-4">
+          {plans.map(plan => {
+            if (!plan) return null;
+            const id = plan.id as PublicPlanId;
+            const copy = PLAN_COPY[id];
+            const Icon = copy.icon;
+            const monthlyPrice = plan.monthlyPrice / 100;
+            const yearlyPerMonth = plan.yearlyPrice / 100;
+            const yearlyTotal = plan.yearlyTotal / 100;
+            const price = isAnnual ? yearlyPerMonth : monthlyPrice;
+            const isFree = id === "free";
+            const isCurrentPlan = id === currentPlan;
+
+            return (
+              <Card
+                key={id}
+                className={`relative flex flex-col border-border bg-card ${
+                  copy.featured
+                    ? "scale-[1.01] border-primary/50 shadow-xl shadow-primary/10"
+                    : ""
+                }`}
+              >
+                {copy.badge ? (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-primary text-primary-foreground">
+                      {copy.badge}
+                    </Badge>
+                  </div>
+                ) : null}
+                {isCurrentPlan ? (
+                  <div className="absolute -top-3 right-4">
+                    <Badge variant="outline" className="bg-background">
+                      Current Plan
+                    </Badge>
+                  </div>
+                ) : null}
+                <CardContent className="flex h-full flex-col p-6">
+                  <div className="mb-5 flex items-start justify-between gap-4">
                     <div>
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-primary">
+                        {copy.eyebrow}
+                      </p>
+                      <h3 className="text-2xl font-bold text-foreground">
+                        {copy.name}
+                      </h3>
+                    </div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                  </div>
+
+                  <p className="min-h-[3.5rem] text-sm leading-relaxed text-muted-foreground">
+                    {copy.description}
+                  </p>
+
+                  <div className="mt-6">
+                    {isFree ? (
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold">
-                          ${isAnnual ? yearlyPerMonth : monthlyPrice}
+                        <span className="text-4xl font-bold">$0</span>
+                        <span className="text-sm text-muted-foreground">
+                          /forever
                         </span>
-                        <span className="text-zinc-500 text-sm">/mo</span>
                       </div>
-                      {isAnnual && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-zinc-500 line-through">
-                            ${monthlyPrice}/mo
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-bold">
+                            ${price}
                           </span>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] text-emerald-400 border-emerald-500/30 px-1.5 py-0"
-                          >
-                            Save{" "}
+                          <span className="text-sm text-muted-foreground">
+                            /mo
+                          </span>
+                        </div>
+                        {isAnnual ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            ${yearlyTotal.toLocaleString()} billed yearly.
+                            Monthly is ${monthlyPrice}/mo.
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Switch to annual to save{" "}
                             {Math.round(
                               (1 - yearlyPerMonth / monthlyPrice) * 100
                             )}
-                            %
-                          </Badge>
-                        </div>
-                      )}
-                      {isAnnual && (
-                        <p className="text-[10px] text-zinc-600 mt-0.5">
-                          Billed ${(plan.yearlyTotal / 100).toFixed(0)}/year
-                        </p>
-                      )}
+                            %.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={() => handleCheckout(id)}
+                    disabled={isCurrentPlan || checkoutMutation.isPending}
+                    variant={copy.featured ? "default" : "outline"}
+                    className="mt-6 w-full gap-2"
+                  >
+                    {getButtonText(id)}
+                    {!isCurrentPlan ? <ArrowRight className="h-4 w-4" /> : null}
+                  </Button>
+
+                  {copy.includesPrevious ? (
+                    <div className="mt-6 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Everything in {copy.includesPrevious}, plus:
+                      </p>
                     </div>
-                  )}
-                </div>
+                  ) : null}
 
-                {/* Feature list */}
-                <ul className="space-y-1.5">
-                  {plan.features.map((f: string) => (
-                    <li key={f} className="flex items-start gap-2 text-xs">
-                      <Check
-                        className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isPro ? "text-purple-400" : "text-emerald-400"}`}
-                      />
-                      <span className="text-zinc-300">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-
-              <CardFooter className="pt-0">
-                <Button
-                  className={`w-full ${
-                    isPro && !isCurrentPlan
-                      ? "bg-purple-600 hover:bg-purple-700 text-white"
-                      : ""
-                  }`}
-                  variant={getButtonVariant(plan.id)}
-                  disabled={isCurrentPlan || checkoutMutation.isPending}
-                  onClick={() => handleCheckout(plan.id)}
-                >
-                  {checkoutMutation.isPending
-                    ? "Processing..."
-                    : getButtonText(plan.id)}
-                  {!isCurrentPlan && !isFree && (
-                    <ArrowRight className="h-4 w-4 ml-1" />
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* ─── Trust Badges ─── */}
-      <div className="flex flex-wrap justify-center gap-6 mb-16 px-4">
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <Shield className="h-4 w-4" /> 14-day money-back guarantee
-        </div>
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <Clock className="h-4 w-4" /> Cancel anytime, no contracts
-        </div>
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <Users className="h-4 w-4" /> 12,000+ happy creators
-        </div>
-        <div className="flex items-center gap-2 text-zinc-500 text-sm">
-          <TrendingUp className="h-4 w-4" /> 99.9% uptime SLA
-        </div>
-      </div>
-
-      {/* ─── Testimonials ─── */}
-      <div className="max-w-4xl mx-auto mb-16 px-4">
-        <h2 className="text-2xl font-bold text-center mb-8">
-          Loved by Creators Worldwide
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TESTIMONIALS.map(t => (
-            <Card key={t.name} className="border-zinc-800">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm">
-                    {t.avatar}
+                  <div className="mt-6 space-y-5">
+                    {copy.sections.map(section => (
+                      <div key={section.label}>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
+                          {section.label}
+                        </p>
+                        <div className="space-y-2">
+                          {section.items.map(item => (
+                            <div
+                              key={item}
+                              className="flex items-start gap-2"
+                            >
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                              <span className="text-sm leading-snug text-muted-foreground">
+                                {item}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <div className="font-medium text-sm">{t.name}</div>
-                    <div className="text-xs text-zinc-500">{t.role}</div>
+
+                  <div className="mt-6 border-t border-border pt-5">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Best for
+                    </p>
+                    <ul className="space-y-2">
+                      {copy.outcomes.map(outcome => (
+                        <li
+                          key={outcome}
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                        >
+                          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                          {outcome}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-                <div className="flex gap-0.5 mb-2">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className="h-3.5 w-3.5 fill-amber-400 text-amber-400"
-                    />
-                  ))}
-                </div>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  "{t.text}"
-                </p>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          {RISK_REVERSAL.map(item => (
+            <div
+              key={item}
+              className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground"
+            >
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              {item}
+            </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* ─── Full Feature Comparison ─── */}
-      <div className="max-w-[1400px] mx-auto mb-16 px-4">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold mb-2">
-            Complete Feature Comparison
+      <section className="border-y border-border/50 bg-card/30">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:px-8">
+          <div>
+            <Badge
+              variant="outline"
+              className="mb-4 border-primary/30 bg-primary/5 text-primary"
+            >
+              <Timer className="mr-2 h-3.5 w-3.5" />
+              ROI calculator
+            </Badge>
+            <h2 className="text-3xl font-bold tracking-tight">
+              Your time is the real subscription cost
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              If SpyReels saves one research and scripting session a week, Pro
+              can pay for itself before you publish your next batch.
+            </p>
+          </div>
+
+          <Card className="border-border bg-card">
+            <CardContent className="p-6">
+              <div className="space-y-7">
+                <div>
+                  <div className="mb-3 flex justify-between gap-3">
+                    <label className="text-sm font-medium">
+                      Reels you plan to publish each week
+                    </label>
+                    <span className="font-semibold tabular-nums">
+                      {reelsPerWeek}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[reelsPerWeek]}
+                    min={1}
+                    max={20}
+                    step={1}
+                    onValueChange={value => setReelsPerWeek(value[0] ?? 1)}
+                  />
+                </div>
+                <div>
+                  <div className="mb-3 flex justify-between gap-3">
+                    <label className="text-sm font-medium">
+                      Hours you spend researching and scripting each Reel today
+                    </label>
+                    <span className="font-semibold tabular-nums">
+                      {hoursPerReel}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[hoursPerReel]}
+                    min={1}
+                    max={8}
+                    step={1}
+                    onValueChange={value => setHoursPerReel(value[0] ?? 1)}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-border bg-background p-4 text-center">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Hours saved/month
+                  </p>
+                  <p className="mt-2 text-3xl font-bold">
+                    {monthlyHoursSaved}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-center">
+                  <p className="text-xs uppercase tracking-wider text-primary">
+                    Time value/month
+                  </p>
+                  <p className="mt-2 text-3xl font-bold">
+                    {formatCurrency(monthlyValue)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-background p-4 text-center">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Pro payback
+                  </p>
+                  <p className="mt-2 text-3xl font-bold">{proPayback}x</p>
+                </div>
+              </div>
+              <p className="mt-5 text-center text-xs text-muted-foreground">
+                Assumes your content time is worth $50/hour and Pro annual is
+                $29/month.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <Badge
+            variant="outline"
+            className="mb-4 border-primary/30 bg-primary/5 text-primary"
+          >
+            <BadgeCheck className="mr-2 h-3.5 w-3.5" />
+            Side-by-side value check
+          </Badge>
+          <h2 className="text-3xl font-bold tracking-tight">
+            More Reels workflow, less money than Meedro
           </h2>
-          <p className="text-zinc-500 text-sm">
-            Every feature, every plan, side by side
+          <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+            Public comparison based on visible pricing as of May 2026. Always
+            verify details before you buy, but the value gap is clear.
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          className="mx-auto mb-6 flex items-center gap-2"
-          onClick={() => setShowFullComparison(!showFullComparison)}
-        >
-          {showFullComparison ? "Hide" : "Show"} Full Comparison
-          {showFullComparison ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </Button>
-
-        {showFullComparison && (
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                  <th className="text-left p-3 font-medium text-zinc-400 min-w-[200px]">
-                    Feature
-                  </th>
-                  {PLAN_DISPLAY.map(d => (
-                    <th
-                      key={d.id}
-                      className={`text-center p-3 font-medium ${d.color} min-w-[100px] ${
-                        d.id === "pro" ? "bg-purple-500/5" : ""
-                      }`}
-                    >
-                      {d.id.charAt(0).toUpperCase() + d.id.slice(1)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {FEATURE_SECTIONS.map(section => (
-                  <>
-                    <tr
-                      key={section.title}
-                      className="border-b border-zinc-800/50"
-                    >
-                      <td
-                        colSpan={6}
-                        className="p-3 pt-4 font-semibold text-zinc-300 bg-zinc-900/30"
-                      >
-                        {section.title}
-                      </td>
-                    </tr>
-                    {section.rows.map(row => (
-                      <tr
-                        key={row.label}
-                        className="border-b border-zinc-800/30 hover:bg-zinc-800/20"
-                      >
-                        <td className="p-3 text-zinc-400">{row.label}</td>
-                        {(
-                          [
-                            "free",
-                            "starter",
-                            "pro",
-                            "business",
-                            "agency",
-                          ] as const
-                        ).map(planId => (
-                          <td
-                            key={planId}
-                            className={`p-3 text-center ${planId === "pro" ? "bg-purple-500/5" : ""}`}
-                          >
-                            <CellValue value={row[planId]} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ─── FAQ ─── */}
-      <div className="max-w-2xl mx-auto mb-16 px-4">
-        <h2 className="text-2xl font-bold text-center mb-8">
-          Frequently Asked Questions
-        </h2>
-        <div className="space-y-2">
-          {FAQ.map((item, i) => (
-            <Card
-              key={i}
-              className="border-zinc-800 cursor-pointer"
-              onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{item.q}</span>
-                  {expandedFaq === i ? (
-                    <ChevronUp className="h-4 w-4 text-zinc-500 shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-zinc-500 shrink-0" />
-                  )}
-                </div>
-                {expandedFaq === i && (
-                  <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
-                    {item.a}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* ─── Final CTA ─── */}
-      <div className="text-center px-4 pb-8">
-        <Card className="max-w-xl mx-auto border-purple-500/30 bg-gradient-to-b from-purple-500/10 to-transparent">
-          <CardContent className="pt-8 pb-6">
-            <Sparkles className="h-8 w-8 text-purple-400 mx-auto mb-3" />
-            <h3 className="text-xl font-bold mb-2">Ready to Go Viral?</h3>
-            <p className="text-zinc-400 text-sm mb-6">
-              Start free, upgrade when you're ready. No credit card required.
-            </p>
-            <div className="flex gap-3 justify-center">
-              {!user ? (
-                <Button
-                  className="bg-purple-600 hover:bg-purple-700"
-                  onClick={() => {
-                    window.location.href = getLoginUrl();
-                  }}
-                >
-                  Start Free <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
-              ) : currentPlan === "free" ? (
-                <Button
-                  className="bg-purple-600 hover:bg-purple-700"
-                  onClick={() => handleCheckout("pro")}
-                  disabled={checkoutMutation.isPending}
-                >
-                  Upgrade to Pro <Crown className="h-4 w-4 ml-1" />
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => (window.location.href = "/billing")}
-                >
-                  Manage Subscription
-                </Button>
-              )}
+        <Card className="overflow-hidden border-border bg-card">
+          <CardContent className="p-0">
+            <div className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border bg-card/70 px-4 py-3 text-sm font-semibold">
+              <span>Decision point</span>
+              <span className="text-primary">SpyReels</span>
+              <span className="text-muted-foreground">Meedro</span>
             </div>
+            {COMPETITOR_ROWS.map(row => (
+              <div
+                key={row.label}
+                className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border px-4 py-3 text-sm last:border-b-0"
+              >
+                <span className="font-medium text-foreground">{row.label}</span>
+                <span className="text-foreground">{row.spyreels}</span>
+                <span className="text-muted-foreground">{row.meedro}</span>
+              </div>
+            ))}
           </CardContent>
         </Card>
-      </div>
+      </section>
 
-      <footer className="border-t border-border/50 py-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 text-xs text-muted-foreground/60 sm:px-6 lg:px-8">
-          <span>&copy; {new Date().getFullYear()} SpyReels</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/affiliate" className="hover:text-foreground">
-              Affiliate
-            </Link>
-            <Link href="/contact" className="hover:text-foreground">
-              Contact
-            </Link>
+      <section className="border-y border-border/50 bg-card/30">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">
+                Full feature comparison
+              </h2>
+              <p className="mt-2 text-muted-foreground">
+                Just the workflow creators can use now: research, transcripts,
+                SpyReels Bot, scripts, teleprompter, and posting.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowComparison(value => !value)}
+            >
+              {showComparison ? "Hide table" : "Show full table"}
+            </Button>
+          </div>
+
+          {showComparison ? (
+            <Card className="overflow-hidden border-border bg-card">
+              <CardContent className="overflow-x-auto p-0">
+                <div className="min-w-[860px]">
+                  <div className="grid grid-cols-[1.5fr_repeat(4,1fr)] border-b border-border bg-background px-4 py-4 text-sm font-semibold">
+                    <span>Feature</span>
+                    {PLAN_ORDER.map(id => (
+                      <span key={id} className="text-center">
+                        {PLAN_COPY[id].name}
+                      </span>
+                    ))}
+                  </div>
+                  {FEATURE_SECTIONS.map(section => (
+                    <div key={section.title}>
+                      <div className="border-b border-border bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
+                        {section.title}
+                      </div>
+                      {section.rows.map(row => (
+                        <div
+                          key={row.label}
+                          className="grid grid-cols-[1.5fr_repeat(4,1fr)] border-b border-border px-4 py-3 text-sm last:border-b-0"
+                        >
+                          <span className="font-medium text-foreground">
+                            {row.label}
+                          </span>
+                          <span className="text-center text-muted-foreground">
+                            {renderFeatureValue(row.free)}
+                          </span>
+                          <span className="text-center text-muted-foreground">
+                            {renderFeatureValue(row.starter)}
+                          </span>
+                          <span className="text-center text-muted-foreground">
+                            {renderFeatureValue(row.pro)}
+                          </span>
+                          <span className="text-center text-muted-foreground">
+                            {renderFeatureValue(row.business)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl font-bold tracking-tight">
+            Built to remove every excuse before you film
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+            Pricing pages convert when the product story is obvious. SpyReels is
+            not another blank chat box. It is the workflow from idea to recorded
+            Reel.
+          </p>
+        </div>
+        <div className="grid gap-5 md:grid-cols-3">
+          {[
+            {
+              icon: Video,
+              title: "The transcript is the proof",
+              body: "You do not start with a blank page. You start with the exact words and structure behind a winning Reel.",
+            },
+            {
+              icon: Bot,
+              title: "SpyReels Bot writes in context",
+              body: "It has the Reel, the hook, the niche, and the workflow. That beats prompting a generic chatbot from scratch.",
+            },
+            {
+              icon: PlayCircle,
+              title: "The teleprompter closes the loop",
+              body: "Most tools stop at a draft. SpyReels helps you get from script to recorded take while the idea is still fresh.",
+            },
+          ].map(item => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.title} className="border-border bg-card">
+                <CardContent className="p-6">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold">{item.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {item.body}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="border-y border-border/50 bg-card/30">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <div className="grid gap-5 md:grid-cols-3">
+            {TESTIMONIALS.map(item => (
+              <Card key={item.quote} className="border-border bg-card">
+                <CardContent className="p-6">
+                  <div className="mb-4 flex gap-1 text-primary">
+                    {[0, 1, 2, 3, 4].map(star => (
+                      <Star key={star} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    "{item.quote}"
+                  </p>
+                  <div className="mt-5 border-t border-border pt-4">
+                    <p className="font-semibold text-foreground">{item.name}</p>
+                    <p className="text-xs text-primary">{item.result}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
-      </footer>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="p-7">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-background">
+                <Workflow className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">
+                A note from Noah
+              </h2>
+              <p className="mt-4 leading-relaxed text-muted-foreground">
+                Most creators do not need more AI outputs. They need a workflow
+                that shows them what is working, turns it into a script, and
+                helps them record before momentum dies. That is why SpyReels is
+                priced around usage, transcripts, scripts, Bot help, and the
+                teleprompter.
+              </p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Questions before upgrading? Email{" "}
+                <a
+                  href="mailto:noah.perry@spyreels.ai"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  noah.perry@spyreels.ai
+                </a>
+                .
+              </p>
+            </CardContent>
+          </Card>
+
+          <div>
+            <div className="mb-5 flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-primary" />
+              <h2 className="text-2xl font-bold tracking-tight">
+                Pricing questions
+              </h2>
+            </div>
+            <Card className="border-border bg-card">
+              <CardContent className="p-2 sm:p-4">
+                <Accordion type="single" collapsible>
+                  {FAQ_ITEMS.map((item, index) => (
+                    <AccordionItem
+                      key={item.q}
+                      value={`item-${index}`}
+                      className="px-3"
+                    >
+                      <AccordionTrigger className="text-left text-sm font-semibold">
+                        {item.q}
+                      </AccordionTrigger>
+                      <AccordionContent className="leading-relaxed text-muted-foreground">
+                        {item.a}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 pb-20 text-center sm:px-6 lg:px-8">
+        <div className="rounded-3xl border border-border bg-card p-8 shadow-xl shadow-primary/5 sm:p-10">
+          <Clock className="mx-auto mb-5 h-10 w-10 text-primary" />
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            You can keep guessing, or you can know what to film today.
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+            Start free. Pull your first transcript. Let SpyReels Bot rewrite it.
+            Then record it in the teleprompter.
+          </p>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button
+              size="lg"
+              onClick={() => handleCheckout("free")}
+              className="gap-2"
+            >
+              Start Free Today
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href="/contact">Talk to Noah</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 backdrop-blur-lg sm:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Start free</p>
+            <p className="text-xs text-muted-foreground">
+              No card. Upgrade when ready.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => handleCheckout("free")}>
+            Start Free
+          </Button>
+        </div>
+      </div>
+
+      <PublicFooter />
     </div>
   );
 }

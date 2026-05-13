@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import {
   Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
@@ -13,7 +15,6 @@ import {
 
 const HERO_VIDEO_URL = "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
 const WORKFLOW_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
-const SPYREELS_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
 // ─── Features ──────────────────────────────────────────────────
 const FEATURES = [
@@ -112,50 +113,6 @@ const STEPS = [
   },
 ];
 
-// ─── Pricing preview ───────────────────────────────────────────
-const PRICING_PREVIEW = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    description: "Try everything. No credit card.",
-    icon: Zap,
-    color: "text-zinc-400",
-    highlights: ["2 account research sessions/month", "3 transcriptions/month", "3 AI re-creates/month", "3 Idea to Script/month", "5 saved scripts", "Core product features"],
-  },
-  {
-    name: "Starter",
-    price: "$19",
-    period: "/mo",
-    yearlyPrice: "$11",
-    description: "For creators getting serious.",
-    icon: Rocket,
-    color: "text-blue-400",
-    highlights: ["10 account research sessions/month", "30 transcriptions/month", "15 AI re-creations", "CSV & Google Sheets export"],
-  },
-  {
-    name: "Pro",
-    price: "$49",
-    period: "/mo",
-    yearlyPrice: "$29",
-    description: "The full content machine.",
-    icon: Crown,
-    color: "text-purple-400",
-    highlighted: true,
-    highlights: ["50 account research sessions/month", "200 transcriptions/month", "100 AI re-creations", "Voice teleprompter & smart takes"],
-  },
-  {
-    name: "Business",
-    price: "$99",
-    period: "/mo",
-    yearlyPrice: "$59",
-    description: "For teams and agencies.",
-    icon: Building2,
-    color: "text-amber-400",
-    highlights: ["200 account research sessions/month", "1,000 transcriptions/month", "500 AI re-creations", "10 team members + API access"],
-  },
-];
-
 // ─── FAQ ───────────────────────────────────────────────────────
 const FAQ = [
   {
@@ -189,7 +146,6 @@ const FAQ = [
 // ═══════════════════════════════════════════════════════════════
 export default function LandingPage() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const [isAnnual, setIsAnnual] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const handleGetStarted = () => {
     setShowLoginModal(true);
@@ -325,32 +281,7 @@ export default function LandingPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
-              <span className="font-semibold text-lg tracking-tight">SpyReels</span>
-            </div>
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
-              <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-              <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
-              <a href="/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Blog</a>
-              <a href="/affiliate" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors">
-                <Sparkles className="h-3.5 w-3.5" />
-                Earn 20%
-              </a>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={handleGetStarted} className="bg-transparent">Log In</Button>
-              <Button size="sm" onClick={handleGetStarted}>Start Free <ArrowRight className="h-3.5 w-3.5 ml-1" /></Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader />
 
       {/* Hero */}
       <section className="relative overflow-hidden">
@@ -639,62 +570,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-20 sm:py-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <Badge variant="outline" className="mb-4 text-primary border-primary/30 px-3 py-1">Simple, transparent pricing</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Start free. Upgrade when you're ready.</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-8">No tricks, no hidden fees. The free plan is genuinely useful.</p>
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <span className={`text-sm ${!isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}`}>Monthly</span>
-              <button onClick={() => setIsAnnual(!isAnnual)} className={`relative h-7 w-12 rounded-full transition-colors ${isAnnual ? "bg-primary" : "bg-muted"}`}>
-                <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${isAnnual ? "translate-x-5.5" : "translate-x-0.5"}`} />
-              </button>
-              <span className={`text-sm ${isAnnual ? "text-foreground font-medium" : "text-muted-foreground"}`}>Annual</span>
-              {isAnnual && <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-xs">Save 40%+</Badge>}
-            </div>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {PRICING_PREVIEW.map((plan) => (
-              <Card key={plan.name} className={`relative bg-card/50 border-border/50 ${plan.highlighted ? "ring-2 ring-primary/40 bg-gradient-to-b from-primary/5 to-transparent" : ""}`}>
-                {plan.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground text-xs px-3">Most Popular</Badge>
-                  </div>
-                )}
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <plan.icon className={`h-5 w-5 ${plan.color}`} />
-                    <h3 className="font-semibold text-foreground">{plan.name}</h3>
-                  </div>
-                  <div className="mb-1">
-                    <span className="text-3xl font-bold text-foreground">{plan.price === "$0" ? "$0" : isAnnual && plan.yearlyPrice ? plan.yearlyPrice : plan.price}</span>
-                    <span className="text-muted-foreground text-sm">{plan.price === "$0" ? "" : "/mo"}</span>
-                  </div>
-                  {isAnnual && plan.yearlyPrice && (
-                    <p className="text-xs text-muted-foreground mb-4"><span className="line-through">{plan.price}/mo</span> <span className="text-emerald-400">billed annually</span></p>
-                  )}
-                  {plan.price === "$0" && <p className="text-xs text-muted-foreground mb-4">{plan.period}</p>}
-                  <p className="text-sm text-muted-foreground mb-5">{plan.description}</p>
-                  <Button onClick={handleGetStarted} variant={plan.highlighted ? "default" : "outline"} className={`w-full mb-5 ${plan.highlighted ? "shadow-lg shadow-primary/25" : "bg-transparent"}`} size="sm">
-                    {plan.price === "$0" ? "Start Free" : "Get Started"}
-                  </Button>
-                  <ul className="space-y-2.5">
-                    {plan.highlights.map((h) => (
-                      <li key={h} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                        <span>{h}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Trust signals */}
       <section className="py-12 border-y border-border/50 bg-card/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -757,28 +632,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/50 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-8 w-8" />
-              <span className="font-semibold tracking-tight">SpyReels</span>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-              <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
-              <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
-              <a href="/blog" className="hover:text-foreground transition-colors">Blog</a>
-              {/* <a href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</a> */}
-              <a href="/affiliate" className="hover:text-foreground transition-colors">Affiliate</a>
-              <a href="/terms" className="hover:text-foreground transition-colors">Terms</a>
-              <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
-              <a href="/contact" className="hover:text-foreground transition-colors">Contact</a>
-            </div>
-            <p className="text-xs text-muted-foreground/60">&copy; {new Date().getFullYear()} SpyReels. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
 import NotFound from "@/pages/NotFound";
 import OnboardingPage from "@/pages/onboarding";
@@ -51,7 +52,6 @@ function DashboardRouter() {
         <Route path="/paste" component={PasteScript} />
         <Route path="/history" component={History} />
         <Route path="/settings" component={Settings} />
-        <Route path="/pricing" component={Pricing} />
         <Route path="/billing" component={Billing} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/blog/new" component={BlogEditor} />
@@ -71,6 +71,7 @@ function Router() {
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/contact" component={Contact} />
       <Route path="/affiliate" component={Affiliate} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/blog" component={BlogList} />
       <Route path="/blog/:slug" component={BlogPost} />
       {/* <Route path="/extension" component={Extension} /> */}
@@ -91,8 +92,10 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system" switchable={true}>
         <TooltipProvider>
-          <Toaster richColors />
-          <Router />
+          <UpgradeProvider>
+            <Toaster richColors />
+            <Router />
+          </UpgradeProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
