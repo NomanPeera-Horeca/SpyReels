@@ -321,6 +321,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [targetDuration, setTargetDuration] = useState("any");
   const [addCues, setAddCues] = useState(true);
   const [isRewriting, setIsRewriting] = useState(false);
+  const cuesLock = useFeatureLock("aiCues");
 
   // Save/Approve state
   const [editMode, setEditMode] = useState(false);
@@ -561,6 +562,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       ...recreateIdInput,
       topic: showCustomTopic ? customTopic : "",
       gradeLevel: gradeLevel as "auto" | "2" | "3" | "4" | "5" | "6",
+      addCues: cuesLock.locked ? false : addCues,
     });
   };
 

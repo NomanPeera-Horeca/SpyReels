@@ -1862,6 +1862,8 @@ Return JSON only:
             featuredReelId: z.number().optional(),
             topic: z.string().max(2000).optional().default(""),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
+            /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
+            addCues: z.boolean().optional().default(true),
           })
           .refine(
             (d) => (d.reelId != null) !== (d.featuredReelId != null),
@@ -1924,8 +1926,21 @@ Return JSON only:
           status: "processing",
         });
 
+        const subGen = await getUserSubscription(ctx.user.id);
+        const limitsGen = getPlanLimits(subGen.plan as PlanId);
+        const effectiveAddCues = Boolean(input.addCues && limitsGen.hasAiCues);
+
         // Run generation in background
-        runScriptGeneration(scriptId, transcription.transcript, transcription.segments, caption, reelForGeneration, effectiveTopic, input.gradeLevel).catch((err: unknown) => {
+        runScriptGeneration(
+          scriptId,
+          transcription.transcript,
+          transcription.segments,
+          caption,
+          reelForGeneration,
+          effectiveTopic,
+          input.gradeLevel,
+          effectiveAddCues
+        ).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
 
@@ -1960,6 +1975,10 @@ Return JSON only:
           });
         }
         await incrementUsage(ctx.user.id, "rewriteCount");
+
+        const subRw = await getUserSubscription(ctx.user.id);
+        const limitsRw = getPlanLimits(subRw.plan as PlanId);
+        const effectiveAddCues = Boolean(input.addCues && limitsRw.hasAiCues);
 
         // Get the original source (user-scrape reel OR featured reel) for
         // caption + transcript context. The new rewrite row inherits whichever
@@ -1997,7 +2016,7 @@ Return JSON only:
           reelCaption,
           input.gradeLevel,
           input.targetDuration,
-          input.addCues
+          effectiveAddCues
         ).catch((err: unknown) => {
           console.error(`Script rewrite ${newScriptId} failed:`, err);
         });
@@ -5936,6 +5955,28 @@ ${lines.join("\n")}
 `;
 }
 
+/** Shared LLM instructions for [BRACKET] delivery cues (recreate + rewrite). */
+function buildDeliveryCuesPromptSection(): string {
+  return `
+**DELIVERY CUES:** Add performance/delivery cues in square brackets throughout the script to guide the speaker on HOW to deliver each line. These cues should be based on analyzing the viral structure and what makes the original engaging. Use cues like:
+- [PAUSE] - dramatic pause for emphasis
+- [LEAN IN] - get closer to camera, create intimacy
+- [SPEED UP] - increase pace for energy/urgency
+- [SLOW DOWN] - slow pace for emphasis on key point
+- [WHISPER] - lower voice for dramatic effect
+- [EMPHASIZE] - stress the next word/phrase
+- [LOOK AT CAMERA] - direct eye contact moment
+- [GESTURE] - use hand gesture to illustrate
+- [RAISE VOICE] - increase volume for impact
+- [SMILE] - show enthusiasm/warmth
+- [SERIOUS FACE] - convey gravity/importance
+- [COUNT ON FINGERS] - enumerate points visually
+- [SHAKE HEAD] - express disagreement/disbelief
+- [NOD] - affirm the point being made
+
+Place cues at the START of the line they apply to. Every 2-3 lines should have a cue. The cues should create a dynamic, engaging delivery that keeps viewer attention throughout.`;
+}
+
 /** Background job: analyze viral structure and generate a new script */
 async function runScriptGeneration(
   scriptId: number,
@@ -5944,7 +5985,8 @@ async function runScriptGeneration(
   caption: string,
   reel: any,
   topic: string,
-  gradeLevel: string
+  gradeLevel: string,
+  addCues: boolean
 ): Promise<void> {
   try {
     // Step 1: Analyze viral structure
@@ -6057,6 +6099,14 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     const isSameTopic = topic === "SAME_TOPIC";
     const v13Context = buildV13ContextBlock(reel);
+    const cuesInstruction = addCues ? buildDeliveryCuesPromptSection() : "";
+    const scriptFormatClosing = addCues
+      ? `Write the script as natural spoken text. Add delivery cues in [BRACKETS] throughout using the cue types above. Place each cue at the START of the line it applies to. Every 2-3 spoken lines should include a cue.
+Use short paragraphs for natural pauses.
+Do NOT include structural labels like "Hook:" or "Body:"; write one flowing speaking script with inline [CUES] only.`
+      : `Write the script as spoken text (no stage directions, no [brackets]). Write it exactly as it should be spoken aloud.
+Use short paragraphs to indicate natural pauses.
+Do NOT include any labels like "Hook:" or "Body:" - just write the flowing script.`;
 
     const scriptPrompt = isSameTopic
       ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original — not a copy.
@@ -6069,7 +6119,7 @@ ${v13Context}
 ${originalTranscript}
 
 **READABILITY REQUIREMENT:**
-${gradeLevelInstruction}
+${gradeLevelInstruction}${cuesInstruction}
 
 **INSTRUCTIONS:**
 1. Keep the SAME topic and core message as the original.
@@ -6082,9 +6132,7 @@ ${gradeLevelInstruction}
 8. The result should feel like a DIFFERENT PERSON making the same argument — same topic, same structure, but different wording throughout.
 9. Do NOT just swap synonyms — genuinely rephrase and restructure sentences while keeping the meaning.
 
-Write the script as spoken text (no stage directions, no [brackets]). Write it exactly as it should be spoken aloud.
-Use short paragraphs to indicate natural pauses.
-Do NOT include any labels like "Hook:" or "Body:" - just write the flowing script.`
+${scriptFormatClosing}`
       : `You are an expert Instagram Reels scriptwriter. Using the EXACT viral structure from a proven viral Reel, write a NEW script on a different topic.
 
 **VIRAL STRUCTURE ANALYSIS:**
@@ -6098,7 +6146,7 @@ ${originalTranscript}
 ${topic}
 
 **READABILITY REQUIREMENT:**
-${gradeLevelInstruction}
+${gradeLevelInstruction}${cuesInstruction}
 
 **INSTRUCTIONS:**
 1. HOOK: Use the SAME hook pattern type ("${(viralStructure.hook as any)?.type || 'Bold Statement'}") but adapted to the new topic. Keep it punchy and attention-grabbing.
@@ -6108,9 +6156,7 @@ ${gradeLevelInstruction}
 5. Match the overall tone: "${(viralStructure as any)?.overallTone || 'engaging'}"
 6. Keep similar length and pacing to the original.
 
-Write the script as spoken text (no stage directions, no [brackets]). Write it exactly as it should be spoken aloud.
-Use short paragraphs to indicate natural pauses.
-Do NOT include any labels like "Hook:" or "Body:" - just write the flowing script.`;
+${scriptFormatClosing}`;
 
     const scriptResponse = await invokeLLM({
       messages: [
@@ -6249,23 +6295,7 @@ async function runScriptRewrite(
 
     let cuesInstruction = "";
     if (addCues) {
-      cuesInstruction = `\n**DELIVERY CUES:** Add performance/delivery cues in square brackets throughout the script to guide the speaker on HOW to deliver each line. These cues should be based on analyzing the viral structure and what makes the original engaging. Use cues like:
-- [PAUSE] - dramatic pause for emphasis
-- [LEAN IN] - get closer to camera, create intimacy
-- [SPEED UP] - increase pace for energy/urgency
-- [SLOW DOWN] - slow pace for emphasis on key point
-- [WHISPER] - lower voice for dramatic effect
-- [EMPHASIZE] - stress the next word/phrase
-- [LOOK AT CAMERA] - direct eye contact moment
-- [GESTURE] - use hand gesture to illustrate
-- [RAISE VOICE] - increase volume for impact
-- [SMILE] - show enthusiasm/warmth
-- [SERIOUS FACE] - convey gravity/importance
-- [COUNT ON FINGERS] - enumerate points visually
-- [SHAKE HEAD] - express disagreement/disbelief
-- [NOD] - affirm the point being made
-
-Place cues at the START of the line they apply to. Every 2-3 lines should have a cue. The cues should create a dynamic, engaging delivery that keeps viewer attention throughout.`;
+      cuesInstruction = buildDeliveryCuesPromptSection();
     }
 
     const rewritePrompt = `You are an expert Instagram Reels scriptwriter. Rewrite the following script with the specified adjustments.
