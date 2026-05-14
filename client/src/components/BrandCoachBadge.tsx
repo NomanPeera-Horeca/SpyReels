@@ -29,6 +29,9 @@ import {
 import { useFeatureLock, useUpgrade } from "@/components/UpgradeSidesheet";
 import { toast } from "sonner";
 
+/** Must match server `BRAND_COACH_SCORE_VERSION` in server/routers.ts for refresh prompts. */
+const BRAND_COACH_SCORE_VERSION = 3;
+
 type BrandCoachSource =
   | { kind: "reel"; reelId: number }
   | { kind: "featured"; featuredReelId: number };
@@ -219,8 +222,9 @@ function BrandCoachDetailDialog({
   onRescore?: () => void;
   rescorePending?: boolean;
 }) {
-  const showV2 = (score.scoreVersion ?? 0) >= 2;
-  const needsRescore = !showV2;
+  const showFourMetrics =
+    (score.scoreVersion ?? 0) >= 2 && typeof score.replicabilityScore === "number";
+  const needsRescore = (score.scoreVersion ?? 0) < BRAND_COACH_SCORE_VERSION;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -236,7 +240,7 @@ function BrandCoachDetailDialog({
               </div>
               <ScoreCircle score={score.overallScore} verdict={score.verdict} />
             </div>
-            <DialogDescription className="max-h-32 overflow-y-auto pr-1 text-sm leading-relaxed text-muted-foreground sm:max-h-40">
+            <DialogDescription className="max-h-28 overflow-y-auto pr-1 text-xs leading-relaxed text-muted-foreground sm:max-h-36 sm:text-sm">
               {score.reasoning}
             </DialogDescription>
           </DialogHeader>
@@ -244,13 +248,13 @@ function BrandCoachDetailDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div
-            className={`grid gap-3 ${showV2 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}
+            className={`grid gap-3 min-w-0 ${showFourMetrics ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}
           >
             <SubScore label="Hook" icon={Zap} score={score.hookScore} />
             <SubScore label="Retention" icon={TrendingUp} score={score.retentionScore} />
             <SubScore label="Payoff" icon={Sparkles} score={score.payoffScore} />
-            {showV2 && typeof score.replicabilityScore === "number" ? (
-              <SubScore label="Replicate" icon={Repeat2} score={score.replicabilityScore} />
+            {showFourMetrics ? (
+              <SubScore label="Copy format" icon={Repeat2} score={score.replicabilityScore!} />
             ) : null}
           </div>
 
@@ -258,7 +262,7 @@ function BrandCoachDetailDialog({
             <div className="mt-4 flex items-start gap-2 rounded-md border border-sky-400/25 bg-sky-400/5 p-3">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
               <p className="text-xs leading-relaxed text-sky-100/90">
-                This score used an older rubric. Tap &quot;Update score&quot; below for the latest breakdown, including how easy this format is to copy as a solo creator.
+                A newer Brand Coach pass is available (tighter layout in the app and shorter, easier to read bullets). Tap &quot;Update score&quot; to refresh this reel.
               </p>
             </div>
           ) : null}
@@ -367,14 +371,15 @@ function SubScore({
     : score >= 50 ? "bg-amber-400"
     : "bg-rose-400";
   return (
-    <div className="rounded-md border border-border bg-card/40 p-3">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <Icon className="h-3 w-3" /> {label}
-        </span>
-        <span className="text-sm font-bold text-foreground">{score}</span>
+    <div className="flex min-h-[5.5rem] min-w-0 flex-col gap-2 rounded-md border border-border bg-card/40 p-2.5 sm:min-h-0 sm:p-3">
+      <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-[11px]">
+        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="min-w-0 break-words leading-snug">{label}</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div className="text-xl font-bold tabular-nums leading-none text-foreground sm:text-2xl">
+        {score}
+      </div>
+      <div className="mt-auto h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
           className={`h-full ${colorBar}`}
           style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
@@ -405,14 +410,14 @@ function Section({
       <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground/80">
         <Icon className={`h-3.5 w-3.5 ${iconColor}`} /> {title}
       </p>
-      <ul className="space-y-2">
+      <ul className="space-y-1.5">
         {items.map((it, idx) => (
           <li
             key={`${title}-${idx}`}
-            className="flex items-start gap-2 text-sm leading-relaxed text-foreground/90"
+            className="flex items-start gap-2 text-xs leading-snug text-foreground/90 sm:text-sm sm:leading-relaxed"
           >
             <span className={`mt-1.5 inline-block h-1 w-1 shrink-0 rounded-full ${iconColor.replace("text-", "bg-")}`} />
-            <span>{it}</span>
+            <span className="min-w-0 break-words">{it}</span>
           </li>
         ))}
       </ul>

@@ -6806,7 +6806,7 @@ Return JSON with:
  * and optionally transcript) and returns a structured analysis. The
  * caller (brandCoach.score mutation) handles caching and gating.
  */
-const BRAND_COACH_SCORE_VERSION = 2 as const;
+const BRAND_COACH_SCORE_VERSION = 3 as const; // keep in sync with client BrandCoachBadge BRAND_COACH_SCORE_VERSION
 
 function brandCoachCacheIsFresh(row: { scoreVersion?: number | null }): boolean {
   return (row.scoreVersion ?? 0) >= BRAND_COACH_SCORE_VERSION;
@@ -6865,6 +6865,22 @@ function clampScore(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return 50;
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** Clip long LLM lines so the Brand Coach modal stays scannable. */
+function clampCoachLine(s: string, maxLen: number): string {
+  const t = s
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/\s*–\s*/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (t.length <= maxLen) return t;
+  const budget = maxLen - 3;
+  const cut = t.slice(0, budget);
+  const dot = cut.lastIndexOf(". ");
+  if (dot >= Math.floor(budget * 0.35)) return cut.slice(0, dot + 1).trim();
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 24 ? cut.slice(0, sp) : cut).trim() + "...";
 }
 
 async function runBrandCoachLLM(input: {
@@ -6950,7 +6966,11 @@ ENGAGEMENT RATE (if present) is total engagement over views as stored in our app
 
 VIEWS PER FOLLOWER: above 0.5 often means strong breakout for that account size; above 1.0 is exceptional. Below 0.05 may mean mostly followers or older reach; do not call a reel "viral template" on reach alone.
 
-Return 2-3 strengths, 2-3 weaknesses, 2-3 concrete remix suggestions. Be specific about mechanics. Never say "great content" or parrot the caption.
+UI COPY LIMITS (strict, the product shows this on a phone):
+- strengths, weaknesses, suggestions: exactly 2 or 3 strings each. Each string is ONE short sentence, max 20 words. No second sentence. No semicolons. Lead with the insight, not setup like "This reel" or "The creator".
+- reasoning: max 3 short sentences, max 70 words total. Punchy, no recap filler.
+
+Never say "great content" or parrot the caption.
 
 STYLE RULES (strict):
 - Never use em dashes (—) or en dashes (–). Use commas, periods, semicolons, or parentheses instead.
@@ -6993,21 +7013,21 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
             strengths: {
               type: "array",
               items: { type: "string" },
-              description: "2-3 specific things working in this Reel",
+              description: "2-3 bullets, each one sentence under 20 words",
             },
             weaknesses: {
               type: "array",
               items: { type: "string" },
-              description: "2-3 specific weaknesses or risks if you copy this",
+              description: "2-3 bullets, each one sentence under 20 words",
             },
             suggestions: {
               type: "array",
               items: { type: "string" },
-              description: "2-3 concrete suggestions for a creator borrowing this template",
+              description: "2-3 bullets, each one sentence under 20 words",
             },
             reasoning: {
               type: "string",
-              description: "3-5 sentence explanation of the overall score",
+              description: "Max 70 words, max 3 short sentences",
             },
           },
           required: [
@@ -7051,7 +7071,9 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
   const sanitizeBullets = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
     return value
-      .map((v) => (typeof v === "string" ? stripDashes(v.trim()) : ""))
+      .map((v) =>
+        typeof v === "string" ? clampCoachLine(stripDashes(v.trim()), 160) : ""
+      )
       .filter((s) => s.length > 0)
       .slice(0, 4);
   };
@@ -7068,7 +7090,7 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
     suggestions: sanitizeBullets(parsed.suggestions),
     reasoning:
       typeof parsed.reasoning === "string"
-        ? stripDashes(parsed.reasoning.trim())
+        ? clampCoachLine(stripDashes(parsed.reasoning.trim()), 360)
         : "",
   };
 }
