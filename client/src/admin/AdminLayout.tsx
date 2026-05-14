@@ -7,7 +7,7 @@ const TABS: { id: string; label: string; href: string }[] = [
   { id: "creators", label: "Creators", href: "/admin/creators" },
   { id: "emails", label: "Emails", href: "/admin/emails" },
   { id: "users", label: "Users", href: "/admin/users" },
-  { id: "seo", label: "SEO Hub", href: "/admin/seo" },
+  { id: "seo", label: "SEO Hub", href: "/admin/seo/health" },
 ];
 
 export function AdminLayout({
@@ -20,7 +20,7 @@ export function AdminLayout({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-background dark:text-foreground">
       <div className="border-b border-violet-200/90 bg-violet-100 px-4 py-2.5 text-center text-sm text-violet-950 dark:border-violet-900/50 dark:bg-violet-950/50 dark:text-violet-100">
-        SpyReels admin (Phase 1). Access is limited to the address in{" "}
+        SpyReels admin. Access is limited to the address in{" "}
         <code className="rounded bg-white/60 px-1 py-0.5 text-xs dark:bg-black/30">ADMIN_EMAIL</code>
         .
       </div>
@@ -29,7 +29,7 @@ export function AdminLayout({
           <div>
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Admin</h1>
             <p className="text-sm text-muted-foreground">
-              Traffic, blogs, and creators for Scope A. Other tabs unlock in later phases.
+              Traffic through SEO Hub — gated by <code className="text-xs">ADMIN_EMAIL</code> / client allowlist.
             </p>
           </div>
         </header>

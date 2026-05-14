@@ -1,4 +1,21 @@
-import { bigint, boolean, datetime, decimal, index, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import {
+  bigint,
+  boolean,
+  date,
+  datetime,
+  decimal,
+  index,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  primaryKey,
+  text,
+  timestamp,
+  tinyint,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -899,3 +916,141 @@ export const emailEvents = mysqlTable(
 );
 
 export type EmailEvent = typeof emailEvents.$inferSelect;
+
+/** Daily SEO health check snapshot (Site Health tab). */
+export const seoHealthSnapshots = mysqlTable(
+  "seo_health_snapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    snapshotDate: date("snapshotDate", { mode: "date" }).notNull(),
+    pageSpeedScore: int("pageSpeedScore"),
+    schemaStatus: varchar("schemaStatus", { length: 32 }),
+    cwvStatus: varchar("cwvStatus", { length: 32 }),
+    sslStatus: varchar("sslStatus", { length: 32 }),
+    indexabilityStatus: varchar("indexabilityStatus", { length: 32 }),
+    recommendedAction: text("recommendedAction"),
+    raw: json("raw").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    snapshotDateUnique: uniqueIndex("seo_health_snapshots_date_unique").on(table.snapshotDate),
+  })
+);
+
+export type SeoHealthSnapshot = typeof seoHealthSnapshots.$inferSelect;
+
+export const gscDailyMetrics = mysqlTable(
+  "gsc_daily_metrics",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    metricDate: date("metricDate", { mode: "date" }).notNull(),
+    clicks: int("clicks").default(0).notNull(),
+    impressions: int("impressions").default(0).notNull(),
+    ctr: decimal("ctr", { precision: 8, scale: 6 }).default("0").notNull(),
+    positionAvg: decimal("positionAvg", { precision: 6, scale: 2 }),
+    topQueries: json("topQueries").$type<unknown[]>(),
+    raw: json("raw").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    metricDateUnique: uniqueIndex("gsc_daily_metrics_date_unique").on(table.metricDate),
+    createdIdx: index("gsc_daily_metrics_created_idx").on(table.createdAt),
+  })
+);
+
+export type GscDailyMetric = typeof gscDailyMetrics.$inferSelect;
+
+export const bingDailyMetrics = mysqlTable(
+  "bing_daily_metrics",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    metricDate: date("metricDate", { mode: "date" }).notNull(),
+    clicks: int("clicks").default(0).notNull(),
+    impressions: int("impressions").default(0).notNull(),
+    ctr: decimal("ctr", { precision: 8, scale: 6 }).default("0").notNull(),
+    positionAvg: decimal("positionAvg", { precision: 6, scale: 2 }),
+    topQueries: json("topQueries").$type<unknown[]>(),
+    raw: json("raw").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    metricDateUnique: uniqueIndex("bing_daily_metrics_date_unique").on(table.metricDate),
+    createdIdx: index("bing_daily_metrics_created_idx").on(table.createdAt),
+  })
+);
+
+export type BingDailyMetric = typeof bingDailyMetrics.$inferSelect;
+
+export const aiMentionPrompts = mysqlTable(
+  "ai_mention_prompts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    body: text("body").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    sortIdx: index("ai_mention_prompts_sort_idx").on(table.sortOrder),
+  })
+);
+
+export type AiMentionPrompt = typeof aiMentionPrompts.$inferSelect;
+
+export const aiMentionRuns = mysqlTable(
+  "ai_mention_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    promptId: int("promptId")
+      .notNull()
+      .references(() => aiMentionPrompts.id, { onDelete: "cascade" }),
+    engine: varchar("engine", { length: 32 }).notNull(),
+    responseText: text("responseText"),
+    parsedScore: tinyint("parsedScore"),
+    weekStartDate: date("weekStartDate", { mode: "date" }).notNull(),
+    payload: json("payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    promptWeekIdx: index("ai_mention_runs_prompt_week_idx").on(table.promptId, table.weekStartDate),
+    createdIdx: index("ai_mention_runs_created_idx").on(table.createdAt),
+  })
+);
+
+export type AiMentionRun = typeof aiMentionRuns.$inferSelect;
+
+export const botCrawlLog = mysqlTable(
+  "bot_crawl_log",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    botFamily: varchar("botFamily", { length: 64 }).notNull(),
+    userAgent: varchar("userAgent", { length: 512 }).notNull(),
+    path: varchar("path", { length: 512 }).notNull(),
+    method: varchar("method", { length: 16 }).default("GET").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    familyCreatedIdx: index("bot_crawl_log_family_created_idx").on(table.botFamily, table.createdAt),
+    createdIdx: index("bot_crawl_log_created_idx").on(table.createdAt),
+  })
+);
+
+export type BotCrawlLogRow = typeof botCrawlLog.$inferSelect;
+
+export const sitemapSubmissions = mysqlTable(
+  "sitemap_submissions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    channel: varchar("channel", { length: 32 }).notNull(),
+    status: varchar("status", { length: 64 }).notNull(),
+    detail: text("detail"),
+    payload: json("payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    channelCreatedIdx: index("sitemap_submissions_channel_created_idx").on(table.channel, table.createdAt),
+  })
+);
+
+export type SitemapSubmission = typeof sitemapSubmissions.$inferSelect;
