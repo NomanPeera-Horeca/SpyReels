@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getLoginUrl } from "@/const";
+import { signupAttributionBody } from "@/utils/utm-capture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -165,9 +166,15 @@ export default function LandingPage() {
     setAuthLoading(true);
     try {
       const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const body = authMode === "signup"
-        ? { email: authEmail, password: authPassword, name: authName }
-        : { email: authEmail, password: authPassword };
+      const body =
+        authMode === "signup"
+          ? {
+              email: authEmail,
+              password: authPassword,
+              name: authName,
+              ...signupAttributionBody(),
+            }
+          : { email: authEmail, password: authPassword };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

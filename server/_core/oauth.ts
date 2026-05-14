@@ -7,6 +7,37 @@ import { notifyOwnerViaTelegram } from "../telegramBot";
 import axios from "axios";
 import { sendWelcomeEmail, sendPasswordResetEmail } from "../utils/email.js";
 
+type GoogleOAuthStatePayload = {
+  v: number;
+  utm?: Record<string, string | undefined>;
+  returnTo?: string | null;
+  firstReferrer?: string | null;
+};
+
+function decodeGoogleOAuthState(raw: string | undefined): GoogleOAuthStatePayload | null {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const json = Buffer.from(decodeURIComponent(raw), "base64").toString("utf8");
+    const parsed = JSON.parse(json) as GoogleOAuthStatePayload;
+    if (!parsed || parsed.v !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function safePostLoginRedirect(returnTo: string | null | undefined): string {
+  if (
+    returnTo &&
+    returnTo.startsWith("/") &&
+    !returnTo.startsWith("//") &&
+    !returnTo.startsWith("/api/")
+  ) {
+    return returnTo;
+  }
+  return "/";
+}
+
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
   return typeof value === "string" ? value : undefined;
@@ -18,9 +49,10 @@ const getBaseUrl = (): string => {
 };
 
 export function registerOAuthRoutes(app: Express) {
-  app.get("/api/auth/google", (_req: Request, res: Response) => {
+  app.get("/api/auth/google", (req: Request, res: Response) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = `${getBaseUrl()}/api/oauth/callback`;
+    const forwardedState = typeof req.query.state === "string" ? req.query.state : "";
     const params = new URLSearchParams({
       client_id: clientId!,
       redirect_uri: redirectUri,
@@ -29,11 +61,16 @@ export function registerOAuthRoutes(app: Express) {
       access_type: "offline",
       prompt: "select_account",
     });
+    if (forwardedState) {
+      params.set("state", forwardedState);
+    }
     res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
   });
 
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
+    const oauthStateRaw = getQueryParam(req, "state");
+    const oauthState = decodeGoogleOAuthState(oauthStateRaw);
     if (!code) {
       res.status(400).json({ error: "Missing code from Google" });
       return;
@@ -77,6 +114,18 @@ export function registerOAuthRoutes(app: Express) {
         ].join("\n")).catch(console.warn);
         sendWelcomeEmail(userEmail, googleUser.name?.split(" ")[0] || "there").catch(console.warn);
         console.log(`[OAuth] New user signup: ${userName} (${userEmail})`);
+        const created = await db.getUserByOpenId(openId);
+        if (created && oauthState) {
+          const u = oauthState.utm ?? {};
+          await db.applySignupAttribution(created.id, {
+            utmSource: u.utm_source ?? null,
+            utmMedium: u.utm_medium ?? null,
+            utmCampaign: u.utm_campaign ?? null,
+            utmTerm: u.utm_term ?? null,
+            utmContent: u.utm_content ?? null,
+            firstReferrer: oauthState.firstReferrer ?? null,
+          });
+        }
       }
       const sessionToken = await sdk.createSessionToken(openId, {
         name: googleUser.name || "",
@@ -84,7 +133,7 @@ export function registerOAuthRoutes(app: Express) {
       });
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.redirect(302, "/");
+      res.redirect(302, safePostLoginRedirect(oauthState?.returnTo));
     } catch (error) {
       console.error("[OAuth] Google callback failed", error);
       res.redirect("/?error=login_failed");
@@ -125,7 +174,19 @@ export function registerOAuthRoutes(app: Express) {
 
   // Email/password register
   app.post("/api/auth/register", async (req, res) => {
-    const { email, password, name } = req.body;
+    const { email, password, name, attribution } = req.body as {
+      email?: string;
+      password?: string;
+      name?: string;
+      attribution?: {
+        utmSource?: string | null;
+        utmMedium?: string | null;
+        utmCampaign?: string | null;
+        utmTerm?: string | null;
+        utmContent?: string | null;
+        firstReferrer?: string | null;
+      };
+    };
     if (!email || !password) {
       res.status(400).json({ error: "Email and password required" });
       return;
@@ -147,6 +208,17 @@ export function registerOAuthRoutes(app: Express) {
         passwordHash,
         lastSignedIn: new Date(),
       });
+      const created = await db.getUserByEmail(email);
+      if (created && attribution) {
+        await db.applySignupAttribution(created.id, {
+          utmSource: attribution.utmSource ?? null,
+          utmMedium: attribution.utmMedium ?? null,
+          utmCampaign: attribution.utmCampaign ?? null,
+          utmTerm: attribution.utmTerm ?? null,
+          utmContent: attribution.utmContent ?? null,
+          firstReferrer: attribution.firstReferrer ?? null,
+        });
+      }
       sendWelcomeEmail(email, name?.split(" ")[0] || "there").catch(console.warn);
       const sessionToken = await sdk.createSessionToken(openId, {
         name: name || "",

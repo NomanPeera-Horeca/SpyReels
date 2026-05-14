@@ -31,7 +31,7 @@ import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
 import Interests from "./pages/Interests";
-import AdminDashboard from "./pages/AdminDashboard";
+import AdminEntry from "./admin/AdminEntry";
 import ResetPassword from "./pages/ResetPassword";
 
 function DashboardRouter() {
@@ -53,7 +53,14 @@ function DashboardRouter() {
         <Route path="/history" component={History} />
         <Route path="/settings" component={Settings} />
         <Route path="/billing" component={Billing} />
-        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/traffic" component={AdminEntry} />
+        <Route path="/admin/blogs/:slug?" component={AdminEntry} />
+        <Route path="/admin/creators/:segment?" component={AdminEntry} />
+        <Route path="/admin/users/:userId" component={AdminEntry} />
+        <Route path="/admin/emails" component={AdminEntry} />
+        <Route path="/admin/users" component={AdminEntry} />
+        <Route path="/admin/seo/:tab?" component={AdminEntry} />
+        <Route path="/admin" component={AdminEntry} />
         <Route path="/blog/new" component={BlogEditor} />
         <Route path="/blog/edit/:slug" component={BlogEditor} />
         <Route path="/404" component={NotFound} />

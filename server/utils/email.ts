@@ -9,6 +9,7 @@ export async function sendWelcomeEmail(toEmail: string, firstName: string) {
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
     subject: "Welcome to SpyReels",
+    tags: [{ name: "template", value: "welcome" }],
     html: `
       <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
         <h2 style="margin: 0 0 16px;">Welcome to SpyReels, ${safeName}!</h2>
@@ -31,6 +32,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetLink: string)
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
     subject: "Reset your SpyReels password",
+    tags: [{ name: "template", value: "password_reset" }],
     html: `
       <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
         <h2 style="margin: 0 0 16px;">Reset your password</h2>

@@ -235,6 +235,9 @@ importers:
       superjson:
         specifier: ^1.13.3
         version: 1.13.3
+      svix:
+        specifier: ^1.76.1
+        version: 1.88.0
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -4937,6 +4940,7 @@ packages:
 
   uuid@10.0.0:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@11.1.0:

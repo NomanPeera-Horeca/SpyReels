@@ -1,6 +1,6 @@
 import { and, desc, asc, eq, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -15,6 +15,34 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function applySignupAttribution(
+  userId: number,
+  partial: {
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmTerm?: string | null;
+    utmContent?: string | null;
+    firstReferrer?: string | null;
+  }
+): Promise<void> {
+  const set: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(partial)) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      set[key] = value;
+    }
+  }
+  if (Object.keys(set).length === 0) return;
+
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot apply signup attribution: database not available");
+    return;
+  }
+
+  await db.update(users).set(set).where(eq(users.id, userId));
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -1752,4 +1780,25 @@ export async function getBrandCoachScoresBatch(opts: {
   }
 
   return { byReelId, byFeaturedReelId };
+}
+
+export async function insertEmailEventRow(data: {
+  resendEmailId?: string | null;
+  eventType: string;
+  recipient?: string | null;
+  templateSlug?: string | null;
+  payload: Record<string, unknown>;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Email] Skipping email_events insert: database unavailable");
+    return;
+  }
+  await db.insert(emailEvents).values({
+    resendEmailId: data.resendEmailId ?? null,
+    eventType: data.eventType,
+    recipient: data.recipient ?? null,
+    templateSlug: data.templateSlug ?? null,
+    payload: data.payload,
+  });
 }

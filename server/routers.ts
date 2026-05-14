@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -140,9 +140,13 @@ import {
   recreatedScripts,
   reels as reelsTable,
   transcriptions,
+  creatorViewEvents,
+  nicheViewEvents,
+  emailEvents,
+  emailTemplates,
 } from "../drizzle/schema";
 import type { Transcription, Reel } from "../drizzle/schema";
-import { eq, ne, desc, asc, sql, and, inArray, getTableColumns } from "drizzle-orm";
+import { eq, ne, desc, asc, sql, and, inArray, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import { classifyReelsByIds } from "./services/classifyReels.js";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
@@ -199,6 +203,15 @@ function formatBestPostingTime(
     return `Posts ${capitalized}s around ${timeStr}`;
   }
   return `Posts weekdays around ${timeStr}`;
+}
+
+function inferPanelTestAccount(u: (typeof users.$inferSelect)): boolean {
+  if (u.isTestAccount) return true;
+  const e = (u.email || "").toLowerCase();
+  const o = (u.openId || "").toLowerCase();
+  if (e.includes("+test") || e.endsWith("@example.com") || e.endsWith("@example.org")) return true;
+  if (o.includes("test_") || o.startsWith("demo_")) return true;
+  return false;
 }
 
 export const appRouter = router({
@@ -4916,38 +4929,113 @@ The hook MUST be 7-10 words. Count them.`
 
   // ── Admin Dashboard ──
   admin: router({
-    overview: adminProcedure.query(async () => {
+    ping: adminPanelProcedure.query(() => ({ ok: true as const })),
+
+    trafficOverview: adminPanelProcedure.query(() => ({
+      visitors: 0,
+      signups7d: 0,
+      note: "Wire PostHog and aggregates in Phase 1 Prompt 5.",
+    })),
+
+    creatorsSummary: adminPanelProcedure.query(() => ({
+      featuredCount: 0,
+      note: "Featured creators admin in Phase 1 Prompt 4.",
+    })),
+
+    blogStudioSummary: adminPanelProcedure.query(() => ({
+      draftCount: 0,
+      note: "Blog Studio pipeline in Phase 1 Prompt 6.",
+    })),
+
+    trackCreatorView: adminPanelProcedure
+      .input(z.object({ creatorHandle: z.string().min(1).max(128) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { ok: true as const };
+        await db.insert(creatorViewEvents).values({
+          creatorHandle: input.creatorHandle.trim().toLowerCase(),
+          viewerUserId: ctx.user.id,
+        });
+        return { ok: true as const };
+      }),
+
+    trackNicheView: adminPanelProcedure
+      .input(z.object({ nicheSlug: z.string().min(1).max(128) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { ok: true as const };
+        await db.insert(nicheViewEvents).values({
+          nicheSlug: input.nicheSlug.trim().toLowerCase(),
+          viewerUserId: ctx.user.id,
+        });
+        return { ok: true as const };
+      }),
+
+    emailRecentEvents: adminPanelProcedure
+      .input(z.object({ limit: z.number().min(1).max(200).default(80) }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { items: [] };
+        const limit = input?.limit ?? 80;
+        const items = await db
+          .select()
+          .from(emailEvents)
+          .orderBy(desc(emailEvents.createdAt))
+          .limit(limit);
+        return { items };
+      }),
+
+    emailTemplatesList: adminPanelProcedure.query(async () => {
       const db = await getDb();
-      if (!db) return { totalUsers: 0, paidUsers: 0, freeUsers: 0, mrr: 0, activeToday: 0, activeThisWeek: 0, activeThisMonth: 0, newThisWeek: 0 };
-      const allUsers = await db.select().from(users);
-      const allSubs = await db.select().from(subscriptions);
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const paidPlans = ["starter", "pro", "business", "agency"];
-      const paidSubs = allSubs.filter(s => paidPlans.includes(s.plan) && s.stripeSubscriptionId);
-      const priceMap: Record<string, number> = { starter: 19, pro: 49, business: 99, agency: 199 };
-      const mrr = paidSubs.reduce((sum, s) => {
-        const base = priceMap[s.plan] || 0;
-        return sum + (s.billingInterval === "yearly" ? Math.round(base * 0.8) : base);
-      }, 0);
-      return {
-        totalUsers: allUsers.length,
-        paidUsers: paidSubs.length,
-        freeUsers: allUsers.length - paidSubs.length,
-        mrr,
-        activeToday: allUsers.filter(u => u.lastSignedIn >= todayStart).length,
-        activeThisWeek: allUsers.filter(u => u.lastSignedIn >= weekAgo).length,
-        activeThisMonth: allUsers.filter(u => u.lastSignedIn >= monthAgo).length,
-        newThisWeek: allUsers.filter(u => u.createdAt >= weekAgo).length,
-      };
+      if (!db) return { items: [] };
+      const items = await db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug));
+      return { items };
     }),
 
-    users: adminProcedure
+    emailTemplateStats: adminPanelProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return { items: [] as { templateSlug: string; count: number }[] };
+      const rows = await db
+        .select({
+          templateSlug: emailEvents.templateSlug,
+          count: sql<number>`count(*)`,
+        })
+        .from(emailEvents)
+        .where(isNotNull(emailEvents.templateSlug))
+        .groupBy(emailEvents.templateSlug);
+      const items = rows
+        .filter((r) => r.templateSlug)
+        .map((r) => ({ templateSlug: r.templateSlug as string, count: Number(r.count) }))
+        .sort((a, b) => b.count - a.count);
+      return { items };
+    }),
+
+    emailBounces: adminPanelProcedure
+      .input(z.object({ limit: z.number().min(1).max(200).default(100) }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { items: [] };
+        const limit = input?.limit ?? 100;
+        const items = await db
+          .select()
+          .from(emailEvents)
+          .where(
+            or(
+              eq(emailEvents.eventType, "email.bounced"),
+              eq(emailEvents.eventType, "email.complained"),
+              like(emailEvents.eventType, "%bounce%")
+            )
+          )
+          .orderBy(desc(emailEvents.createdAt))
+          .limit(limit);
+        return { items };
+      }),
+
+    panelUserList: adminPanelProcedure
       .input(z.object({
         search: z.string().optional(),
         plan: z.string().optional(),
+        testOnly: z.boolean().optional(),
         sortBy: z.enum(["createdAt", "lastSignedIn", "name"]).default("createdAt"),
         sortOrder: z.enum(["asc", "desc"]).default("desc"),
         limit: z.number().min(1).max(100).default(50),
@@ -4956,33 +5044,28 @@ The hook MUST be 7-10 words. Count them.`
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) return { items: [], total: 0 };
-        const opts = input || { sortBy: "createdAt", sortOrder: "desc", limit: 50, offset: 0 };
+        const opts = input || { sortBy: "createdAt" as const, sortOrder: "desc" as const, limit: 50, offset: 0 };
         const allUsers = await db.select().from(users).orderBy(
           opts.sortOrder === "asc" ? asc(users[opts.sortBy]) : desc(users[opts.sortBy])
         );
         const allSubs = await db.select().from(subscriptions);
         const subMap = new Map(allSubs.map(s => [s.userId, s]));
-        
-        // Get current month usage for all users
         const currentMonth = new Date().toISOString().slice(0, 7);
         const allUsage = await db.select().from(monthlyUsage).where(eq(monthlyUsage.usageMonth, currentMonth));
         const usageMap = new Map(allUsage.map(u => [u.userId, u]));
-        
-        // Get script counts per user
+
         const scriptCounts = await db.select({
           userId: savedScripts.userId,
           count: sql<number>`count(*)`,
         }).from(savedScripts).groupBy(savedScripts.userId);
         const scriptMap = new Map(scriptCounts.map(s => [s.userId, s.count]));
-        
-        // Get scrape job counts per user
+
         const scrapeCounts = await db.select({
           userId: scrapeJobs.userId,
           count: sql<number>`count(*)`,
         }).from(scrapeJobs).groupBy(scrapeJobs.userId);
         const scrapeMap = new Map(scrapeCounts.map(s => [s.userId, s.count]));
-        
-        // Get collected reel counts per user
+
         const collectedCounts = await db.select({
           userId: collectedReels.userId,
           count: sql<number>`count(*)`,
@@ -5012,6 +5095,8 @@ The hook MUST be 7-10 words. Count them.`
             scriptsCreated: scriptMap.get(u.id) || 0,
             scrapeJobsRun: scrapeMap.get(u.id) || 0,
             reelsCollected: collectedMap.get(u.id) || 0,
+            isTestAccount: u.isTestAccount,
+            inferredTestAccount: inferPanelTestAccount(u),
             monthlyUsage: usage ? {
               scrapes: usage.scrapeCount,
               transcriptions: usage.transcribeCount,
@@ -5022,7 +5107,6 @@ The hook MUST be 7-10 words. Count them.`
           };
         });
 
-        // Apply search filter
         if (opts.search) {
           const lower = opts.search.toLowerCase();
           enriched = enriched.filter(u =>
@@ -5030,9 +5114,11 @@ The hook MUST be 7-10 words. Count them.`
             u.email.toLowerCase().includes(lower)
           );
         }
-        // Apply plan filter
         if (opts.plan) {
           enriched = enriched.filter(u => u.plan === opts.plan);
+        }
+        if (opts.testOnly) {
+          enriched = enriched.filter(u => u.inferredTestAccount || u.isTestAccount);
         }
 
         const total = enriched.length;
@@ -5040,27 +5126,24 @@ The hook MUST be 7-10 words. Count them.`
         return { items, total };
       }),
 
-    userDetail: adminProcedure
+    panelUserDetail: adminPanelProcedure
       .input(z.object({ userId: z.number() }))
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
         const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-        
-        // Get all monthly usage history
+
         const usageHistory = await db.select().from(monthlyUsage)
           .where(eq(monthlyUsage.userId, input.userId))
           .orderBy(desc(monthlyUsage.usageMonth))
           .limit(12);
-        
-        // Get recent scrape jobs
+
         const recentJobs = await db.select().from(scrapeJobs)
           .where(eq(scrapeJobs.userId, input.userId))
           .orderBy(desc(scrapeJobs.createdAt))
           .limit(10);
-        
-        // Get recent scripts
+
         const recentScripts = await db.select({
           id: savedScripts.id,
           title: savedScripts.title,
@@ -5070,11 +5153,24 @@ The hook MUST be 7-10 words. Count them.`
           .where(eq(savedScripts.userId, input.userId))
           .orderBy(desc(savedScripts.createdAt))
           .limit(10);
-        
+
         const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, input.userId)).limit(1);
-        
+
         return {
-          user: { id: user.id, name: user.name, email: user.email, loginMethod: user.loginMethod, role: user.role, createdAt: user.createdAt, lastSignedIn: user.lastSignedIn },
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            loginMethod: user.loginMethod,
+            role: user.role,
+            createdAt: user.createdAt,
+            lastSignedIn: user.lastSignedIn,
+            utmSource: user.utmSource,
+            utmMedium: user.utmMedium,
+            utmCampaign: user.utmCampaign,
+            isTestAccount: user.isTestAccount,
+            inferredTestAccount: inferPanelTestAccount(user),
+          },
           subscription: sub ? { plan: sub.plan, status: sub.status, billingInterval: sub.billingInterval, stripeCustomerId: sub.stripeCustomerId, currentPeriodEnd: sub.currentPeriodEnd } : null,
           usageHistory,
           recentJobs,

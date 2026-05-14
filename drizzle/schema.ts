@@ -1,4 +1,4 @@
-import { bigint, boolean, datetime, decimal, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, datetime, decimal, index, int, json, mysqlEnum, mysqlTable, primaryKey, text, timestamp, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -36,6 +36,15 @@ export const users = mysqlTable("users", {
   selectedCreatorHandles: json("selectedCreatorHandles").$type<string[] | null>(),
   onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
   onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
+  /** First-touch marketing attribution (set once on signup). */
+  utmSource: varchar("utmSource", { length: 255 }),
+  utmMedium: varchar("utmMedium", { length: 255 }),
+  utmCampaign: varchar("utmCampaign", { length: 255 }),
+  utmTerm: varchar("utmTerm", { length: 255 }),
+  utmContent: varchar("utmContent", { length: 255 }),
+  firstReferrer: text("firstReferrer"),
+  /** Heuristic + manual: QA fixtures, disposable domains, etc. */
+  isTestAccount: boolean("isTestAccount").default(false).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -430,6 +439,11 @@ export const blogPosts = mysqlTable("blog_posts", {
   metaDescription: text("metaDescription"),
   status: mysqlEnum("status", ["draft", "published"]).default("draft").notNull(),
   publishedAt: timestamp("publishedAt"),
+  canonicalUrl: varchar("canonicalUrl", { length: 1024 }),
+  ogImageUrl: text("ogImageUrl"),
+  noIndex: boolean("noIndex").default(false).notNull(),
+  sourceKeyword: varchar("sourceKeyword", { length: 255 }),
+  generatedByAi: boolean("generatedByAi").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -764,3 +778,124 @@ export const brandCoachScores = mysqlTable(
 
 export type BrandCoachScore = typeof brandCoachScores.$inferSelect;
 export type InsertBrandCoachScore = typeof brandCoachScores.$inferInsert;
+
+/** Snapshot of a blog post body and meta for admin version history. */
+export const blogVersions = mysqlTable(
+  "blog_versions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    blogPostId: int("blogPostId").notNull(),
+    title: varchar("title", { length: 512 }).notNull(),
+    slug: varchar("slug", { length: 512 }).notNull(),
+    excerpt: text("excerpt"),
+    content: text("content").notNull(),
+    metaTitle: varchar("metaTitle", { length: 512 }),
+    metaDescription: text("metaDescription"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    postIdx: index("blog_versions_post_idx").on(table.blogPostId),
+  })
+);
+
+export type BlogVersion = typeof blogVersions.$inferSelect;
+export type InsertBlogVersion = typeof blogVersions.$inferInsert;
+
+export const creatorViewEvents = mysqlTable(
+  "creator_view_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    creatorHandle: varchar("creatorHandle", { length: 128 }).notNull(),
+    viewerUserId: int("viewerUserId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    handleIdx: index("creator_view_events_handle_idx").on(table.creatorHandle),
+    createdIdx: index("creator_view_events_created_idx").on(table.createdAt),
+  })
+);
+
+export type CreatorViewEvent = typeof creatorViewEvents.$inferSelect;
+
+export const nicheViewEvents = mysqlTable(
+  "niche_view_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    nicheSlug: varchar("nicheSlug", { length: 128 }).notNull(),
+    viewerUserId: int("viewerUserId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    slugIdx: index("niche_view_events_slug_idx").on(table.nicheSlug),
+    createdIdx: index("niche_view_events_created_idx").on(table.createdAt),
+  })
+);
+
+export type NicheViewEvent = typeof nicheViewEvents.$inferSelect;
+
+export const keywordOpportunities = mysqlTable(
+  "keyword_opportunities",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    keyword: varchar("keyword", { length: 255 }).notNull(),
+    searchVolume: int("searchVolume"),
+    difficulty: int("difficulty"),
+    cpc: decimal("cpc", { precision: 8, scale: 2 }),
+    weekStartDate: datetime("weekStartDate", { mode: "date" }),
+    raw: json("raw").$type<Record<string, unknown>>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    weekIdx: index("keyword_opportunities_week_idx").on(table.weekStartDate),
+  })
+);
+
+export type KeywordOpportunity = typeof keywordOpportunities.$inferSelect;
+
+export const aiInsights = mysqlTable(
+  "ai_insights",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    title: varchar("title", { length: 512 }).notNull(),
+    body: text("body").notNull(),
+    ctaPath: varchar("ctaPath", { length: 512 }),
+    insightDate: datetime("insightDate", { mode: "date" }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    dateIdx: index("ai_insights_date_idx").on(table.insightDate),
+  })
+);
+
+export type AiInsight = typeof aiInsights.$inferSelect;
+
+export const emailTemplates = mysqlTable("email_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+
+export const emailEvents = mysqlTable(
+  "email_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    resendEmailId: varchar("resendEmailId", { length: 128 }),
+    eventType: varchar("eventType", { length: 128 }).notNull(),
+    recipient: varchar("recipient", { length: 320 }),
+    templateSlug: varchar("templateSlug", { length: 64 }),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    resendIdx: index("email_events_resend_idx").on(table.resendEmailId),
+    typeIdx: index("email_events_type_idx").on(table.eventType),
+    templateIdx: index("email_events_template_idx").on(table.templateSlug),
+    createdIdx: index("email_events_created_idx").on(table.createdAt),
+  })
+);
+
+export type EmailEvent = typeof emailEvents.$inferSelect;

@@ -2,6 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { assertAdminEmailUser } from "../middleware/requireAdmin";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -27,7 +28,22 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
+const requireAdminEmail = t.middleware(async (opts) => {
+  const { ctx, next } = opts;
+  assertAdminEmailUser(ctx.user);
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user!,
+    },
+  });
+});
+
+/** Single-owner admin panel: must match `process.env.ADMIN_EMAIL` (404 for others). */
+export const adminPanelProcedure = protectedProcedure.use(requireAdminEmail);
+
+/** Owner automation (role === admin). Kept for notifyOwner; owner gets role via db upsert. */
+export const ownerProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 

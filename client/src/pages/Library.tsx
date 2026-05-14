@@ -163,7 +163,7 @@ export default function Library() {
           Sign in to see yours.
         </p>
         <Button asChild>
-          <a href={`${getLoginUrl()}?returnTo=${encodeURIComponent("/library")}`}>
+          <a href={getLoginUrl({ returnTo: "/library" })}>
             Sign In to Continue
           </a>
         </Button>

@@ -278,7 +278,7 @@ function DashboardLayoutContent({
                   </Fragment>
                 );
               })}
-              {user?.role === "admin" &&
+              {user?.email === import.meta.env.VITE_ADMIN_EMAIL &&
                 adminMenuItems.map(item => {
                   const isActive = location === item.path;
                   return (

@@ -5,6 +5,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { captureUtmsFromLocation } from "./utils/utm-capture";
 import { getLoginUrl } from "./const";
 import "./index.css";
 import posthog from "posthog-js";
@@ -14,6 +15,8 @@ posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
   defaults: "2026-01-30",
 });
+
+captureUtmsFromLocation();
 
 const queryClient = new QueryClient();
 

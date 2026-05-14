@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getLoginUrl } from "@/const";
+import { signupAttributionBody } from "@/utils/utm-capture";
 
 type AuthMode = "login" | "signup" | "forgot";
 
@@ -45,7 +46,12 @@ export function AuthDialog({
         authMode === "login" ? "/api/auth/login" : "/api/auth/register";
       const body =
         authMode === "signup"
-          ? { email: authEmail, password: authPassword, name: authName }
+          ? {
+              email: authEmail,
+              password: authPassword,
+              name: authName,
+              ...signupAttributionBody(),
+            }
           : { email: authEmail, password: authPassword };
       const res = await fetch(endpoint, {
         method: "POST",
