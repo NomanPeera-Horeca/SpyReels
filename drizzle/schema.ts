@@ -740,6 +740,10 @@ export const brandCoachScores = mysqlTable(
     hookScore: int("hookScore").notNull(),
     retentionScore: int("retentionScore").notNull(),
     payoffScore: int("payoffScore").notNull(),
+    /** How easy it is for a solo creator to copy the format (crew, budget, props). v2+ rubric. */
+    replicabilityScore: int("replicabilityScore"),
+    /** Bump when the scoring rubric changes; rows below current version are re-scored on demand. */
+    scoreVersion: int("scoreVersion").default(1).notNull(),
     verdict: mysqlEnum("verdict", ["viral", "strong", "average", "weak"]).notNull(),
     strengths: json("strengths").$type<string[]>().notNull(),
     weaknesses: json("weaknesses").$type<string[]>().notNull(),

@@ -1701,6 +1701,22 @@ export async function getBrandCoachScoreByFeaturedReelId(
   return rows[0];
 }
 
+export async function deleteBrandCoachScoreByReelId(reelId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(brandCoachScores).where(eq(brandCoachScores.reelId, reelId));
+}
+
+export async function deleteBrandCoachScoreByFeaturedReelId(
+  featuredReelId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .delete(brandCoachScores)
+    .where(eq(brandCoachScores.featuredReelId, featuredReelId));
+}
+
 /** Batch fetch cached scores for a list of reel ids. Returns a map. */
 export async function getBrandCoachScoresBatch(opts: {
   reelIds?: number[];
