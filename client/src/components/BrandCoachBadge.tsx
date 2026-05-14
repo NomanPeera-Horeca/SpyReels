@@ -7,8 +7,8 @@
  *   - unscored: Pro user with no cached score sees "Score" -> click runs
  *     the LLM mutation, shows a spinner, then flips to the scored state.
  *   - scored: colored badge with the overall number. Click opens the
- *     full breakdown dialog (hook / retention / payoff + strengths,
- *     weaknesses, suggestions, reasoning).
+ *     full breakdown dialog (hook / retention / payoff / replicability,
+ *     strengths, weaknesses, suggestions, reasoning).
  *
  * Cached scores are fetched lazily via trpc.brandCoach.get on the first
  * render of a badge. The Dashboard render path could be optimised to use
@@ -16,7 +16,7 @@
  * <BrandCoachBadge> drop-in works without parent wiring.
  */
 import { useState } from "react";
-import { Loader2, Sparkles, Lock, Crown, Mic, TrendingUp, Zap, AlertTriangle, Lightbulb, CheckCircle2 } from "lucide-react";
+import { Loader2, Sparkles, Lock, Crown, Mic, TrendingUp, Zap, AlertTriangle, Lightbulb, CheckCircle2, Repeat2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +47,8 @@ interface CachedScore {
   hookScore: number;
   retentionScore: number;
   payoffScore: number;
+  replicabilityScore?: number | null;
+  scoreVersion?: number | null;
   verdict: "viral" | "strong" | "average" | "weak";
   strengths: string[];
   weaknesses: string[];
@@ -96,6 +98,15 @@ export function BrandCoachBadge({
   const scoreMutation = trpc.brandCoach.score.useMutation({
     onSuccess: (data) => {
       utils.brandCoach.get.setData(queryInput, data);
+      // Auto-transcribe may have run on the server, so refresh the
+      // caches that surface transcription status in parent UI.
+      if (source.kind === "reel") {
+        void utils.collected.invalidate?.();
+        void utils.search.invalidate?.();
+        void utils.reels.invalidate?.();
+      } else {
+        void utils.featured.invalidate?.();
+      }
       setDetailOpen(true);
     },
     onError: (err) => {
@@ -151,6 +162,8 @@ export function BrandCoachBadge({
           onClose={() => setDetailOpen(false)}
           score={cached}
           hasTranscript={hasTranscript}
+          onRescore={() => scoreMutation.mutate(queryInput)}
+          rescorePending={scoreMutation.isPending}
         />
       </>
     );
@@ -158,23 +171,34 @@ export function BrandCoachBadge({
 
   // ── Unscored: show "Score" button (Pro user, no cached row) ──
   const isPending = scoreMutation.isPending;
+  const willTranscribe = !hasTranscript;
   return (
     <button
       type="button"
       disabled={isPending}
       onClick={(e) => {
         e.stopPropagation();
+        if (willTranscribe) {
+          toast.message("Transcribing audio for a sharper score", {
+            description: "This takes a few seconds the first time.",
+            duration: 4000,
+          });
+        }
         scoreMutation.mutate(queryInput);
       }}
       className={`inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-60 ${heightClass} ${textClass} ${className ?? ""}`}
-      title="Score this Reel for viral potential"
+      title={
+        willTranscribe
+          ? "Score this Reel (auto-transcribes the audio first for a sharper read)"
+          : "Score this Reel for viral potential"
+      }
     >
       {isPending ? (
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : (
         <Sparkles className="h-3 w-3" />
       )}
-      {isPending ? "Scoring" : "Score"}
+      {isPending ? (willTranscribe ? "Analyzing" : "Scoring") : "Score"}
     </button>
   );
 }
@@ -185,12 +209,19 @@ function BrandCoachDetailDialog({
   onClose,
   score,
   hasTranscript,
+  onRescore,
+  rescorePending,
 }: {
   open: boolean;
   onClose: () => void;
   score: CachedScore;
   hasTranscript?: boolean;
+  onRescore?: () => void;
+  rescorePending?: boolean;
 }) {
+  const showV2 = (score.scoreVersion ?? 0) >= 2;
+  const needsRescore = !showV2;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="flex max-h-[88dvh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[84dvh]">
@@ -212,17 +243,31 @@ function BrandCoachDetailDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid grid-cols-3 gap-3">
+          <div
+            className={`grid gap-3 ${showV2 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}
+          >
             <SubScore label="Hook" icon={Zap} score={score.hookScore} />
             <SubScore label="Retention" icon={TrendingUp} score={score.retentionScore} />
             <SubScore label="Payoff" icon={Sparkles} score={score.payoffScore} />
+            {showV2 && typeof score.replicabilityScore === "number" ? (
+              <SubScore label="Replicate" icon={Repeat2} score={score.replicabilityScore} />
+            ) : null}
           </div>
+
+          {needsRescore ? (
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-sky-400/25 bg-sky-400/5 p-3">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
+              <p className="text-xs leading-relaxed text-sky-100/90">
+                This score used an older rubric. Tap &quot;Update score&quot; below for the latest breakdown, including how easy this format is to copy as a solo creator.
+              </p>
+            </div>
+          ) : null}
 
           {!score.usedTranscript && !hasTranscript ? (
             <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-400/30 bg-amber-400/5 p-3">
               <Mic className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
               <p className="text-xs leading-relaxed text-amber-200/90">
-                Scored from the caption and engagement signals only. Transcribe the Reel first for a sharper hook and payoff read.
+                No transcript was available for this Reel (silent, music only, or speech could not be detected), so the score is based on caption and engagement signals only.
               </p>
             </div>
           ) : null}
@@ -248,10 +293,28 @@ function BrandCoachDetailDialog({
         </div>
 
         <div className="shrink-0 border-t border-border bg-card/95 px-4 py-3 sm:px-6">
-          <div className="flex justify-end">
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {needsRescore && onRescore ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={rescorePending}
+                onClick={() => onRescore()}
+                className="mr-auto"
+              >
+                {rescorePending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating
+                  </>
+                ) : (
+                  "Update score"
+                )}
+              </Button>
+            ) : null}
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
           </div>
         </div>
       </DialogContent>

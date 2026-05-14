@@ -112,6 +112,8 @@ import {
   createBrandCoachScore,
   getBrandCoachScoreByReelId,
   getBrandCoachScoreByFeaturedReelId,
+  deleteBrandCoachScoreByReelId,
+  deleteBrandCoachScoreByFeaturedReelId,
   getBrandCoachScoresBatch,
   getSavedFeaturedReelsWithDetails,
 } from "./db";
@@ -4619,9 +4621,8 @@ The hook MUST be 7-10 words. Count them.`
       }),
 
     /**
-     * Score a reel. Pro+ only. If a cached row exists we return it
-     * unchanged - the LLM verdict is deterministic enough per-reel that
-     * we don't want to pay for re-scoring on every click.
+     * Score a reel. Pro+ only. Cached per reel; rows below the current
+     * rubric version are re-scored on the next click.
      */
     score: protectedProcedure
       .input(
@@ -4645,11 +4646,11 @@ The hook MUST be 7-10 words. Count them.`
           });
         }
 
-        // Cache check first - shared across users since scores are deterministic
+        // Cache: fresh rows match the current rubric (scoreVersion).
         const cached = input.reelId != null
           ? await getBrandCoachScoreByReelId(input.reelId)
           : await getBrandCoachScoreByFeaturedReelId(input.featuredReelId!);
-        if (cached) return cached;
+        if (cached && brandCoachCacheIsFresh(cached)) return cached;
 
         let caption: string | null = null;
         let ownerUsername: string | null = null;
@@ -4661,6 +4662,10 @@ The hook MUST be 7-10 words. Count them.`
         let niche: string | null = null;
         let hookPattern: string | null = null;
         let transcript: string | null = null;
+        // True if a transcription was already attempted (any status). Lets
+        // us skip retrying known-failed or no-speech reels in the auto
+        // transcribe step below.
+        let priorTranscribeAttempt = false;
 
         if (input.reelId != null) {
           const reel = await getReelById(input.reelId);
@@ -4679,8 +4684,11 @@ The hook MUST be 7-10 words. Count them.`
           hookPattern = reel.hookPattern ?? null;
 
           const tx = await getTranscriptionByReelId(input.reelId);
-          if (tx && tx.status === "completed" && tx.transcript) {
-            transcript = tx.transcript;
+          if (tx) {
+            priorTranscribeAttempt = true;
+            if (tx.status === "completed" && tx.transcript) {
+              transcript = tx.transcript;
+            }
           }
         } else {
           const fr = await getFeaturedReelById(input.featuredReelId!);
@@ -4697,14 +4705,140 @@ The hook MUST be 7-10 words. Count them.`
           duration = fr.duration ?? null;
           niche = fr.niche ?? null;
           hookPattern = fr.hookPattern ?? null;
+          if (fr.transcriptionStatus != null) {
+            priorTranscribeAttempt = true;
+          }
           if (fr.transcriptionStatus === "completed" && fr.transcript) {
             transcript = fr.transcript;
           }
         }
 
+        // ── Auto-transcribe before scoring (best-effort) ──
+        // Transcripts dramatically improve hook and payoff accuracy
+        // because the LLM can grade what was actually said instead of
+        // inferring from the caption. When the reel has never been
+        // transcribed we run the same Deepgram pipeline that the manual
+        // Transcribe button uses, then fall through to the LLM with a
+        // fuller picture. Any failure here (quota exhausted, no speech,
+        // vendor flake) is non-blocking: we still score from caption
+        // and engagement signals so the click never returns empty.
+        if (transcript == null && !priorTranscribeAttempt) {
+          try {
+            const txCheck = await checkUsageLimit(
+              ctx.user.id,
+              "transcribeCount",
+              ctx.user.openId
+            );
+            if (txCheck.allowed) {
+              await incrementUsage(ctx.user.id, "transcribeCount");
+              if (input.reelId != null) {
+                const reel = await getReelById(input.reelId);
+                if (reel) {
+                  const transcriptionId = await createTranscription({
+                    reelId: input.reelId,
+                    status: "processing",
+                    queuedAt: new Date(),
+                  });
+                  await runTranscription(transcriptionId, {
+                    id: reel.id,
+                    shortcode: reel.shortcode,
+                    videoUrl: reel.videoUrl,
+                    caption: reel.caption,
+                    thumbnailUrl: reel.thumbnailUrl,
+                  });
+                  const refreshed = await getTranscriptionByReelId(input.reelId);
+                  if (
+                    refreshed?.status === "completed" &&
+                    refreshed.transcript
+                  ) {
+                    transcript = refreshed.transcript;
+                  }
+                }
+              } else {
+                const fr = await getFeaturedReelById(input.featuredReelId!);
+                if (fr) {
+                  await updateFeaturedReelTranscription(fr.id, {
+                    transcriptionStatus: "processing",
+                  });
+                  await runFeaturedReelTranscription({
+                    id: fr.id,
+                    shortcode: fr.reelShortcode,
+                    videoUrl: fr.videoUrl,
+                  });
+                  const refreshed = await getFeaturedReelById(
+                    input.featuredReelId!
+                  );
+                  if (
+                    refreshed?.transcriptionStatus === "completed" &&
+                    refreshed.transcript
+                  ) {
+                    transcript = refreshed.transcript;
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(
+              `[brandCoach.score] auto-transcribe failed for ${
+                input.reelId != null
+                  ? `reel ${input.reelId}`
+                  : `featured ${input.featuredReelId}`
+              }:`,
+              err
+            );
+          }
+        }
+
+        // Final transcript + timed hook extract + follower context (after any auto-transcribe).
+        let hookText: string | null = null;
+        let followerCount: number | null = null;
+
+        if (input.reelId != null) {
+          const reelForSignals = await getReelById(input.reelId);
+          if (reelForSignals && reelForSignals.jobId > 0) {
+            const job = await getScrapeJob(reelForSignals.jobId);
+            const fc = job?.followerCount ?? 0;
+            if (fc > 0) followerCount = fc;
+          }
+          const txFinal = await getTranscriptionByReelId(input.reelId);
+          if (txFinal?.status === "completed" && typeof txFinal.transcript === "string") {
+            transcript = txFinal.transcript;
+          }
+          hookText = extractHookTextFromSegments(txFinal?.segments ?? null);
+        } else {
+          const frFinal = await getFeaturedReelById(input.featuredReelId!);
+          if (frFinal) {
+            if (
+              frFinal.transcriptionStatus === "completed" &&
+              typeof frFinal.transcript === "string"
+            ) {
+              transcript = frFinal.transcript;
+            }
+            hookText = extractHookTextFromSegments(frFinal.transcriptSegments ?? null);
+            const db = await getDb();
+            if (db) {
+              const acc = await db
+                .select({ followerCount: featuredAccounts.followerCount })
+                .from(featuredAccounts)
+                .where(eq(featuredAccounts.id, frFinal.featuredAccountId))
+                .limit(1);
+              const fc = acc[0]?.followerCount ?? 0;
+              if (fc > 0) followerCount = fc;
+            }
+          }
+        }
+
+        const commentToLikeRatio = likeCount > 0 ? commentCount / likeCount : null;
+        const viewsToFollowersRatio =
+          followerCount != null && followerCount > 0
+            ? viewCount / followerCount
+            : null;
+        const durationBucket = durationBucketLabel(duration);
+
         const analysis = await runBrandCoachLLM({
           caption,
           transcript,
+          hookText,
           ownerUsername,
           viewCount,
           likeCount,
@@ -4713,9 +4847,20 @@ The hook MUST be 7-10 words. Count them.`
           duration,
           niche,
           hookPattern,
+          followerCount,
+          commentToLikeRatio,
+          viewsToFollowersRatio,
+          durationBucket,
         });
 
         try {
+          if (cached && !brandCoachCacheIsFresh(cached)) {
+            if (input.reelId != null) {
+              await deleteBrandCoachScoreByReelId(input.reelId);
+            } else {
+              await deleteBrandCoachScoreByFeaturedReelId(input.featuredReelId!);
+            }
+          }
           await createBrandCoachScore({
             reelId: input.reelId ?? null,
             featuredReelId: input.featuredReelId ?? null,
@@ -4724,12 +4869,14 @@ The hook MUST be 7-10 words. Count them.`
             hookScore: analysis.hookScore,
             retentionScore: analysis.retentionScore,
             payoffScore: analysis.payoffScore,
+            replicabilityScore: analysis.replicabilityScore,
+            scoreVersion: BRAND_COACH_SCORE_VERSION,
             verdict: analysis.verdict,
             strengths: analysis.strengths,
             weaknesses: analysis.weaknesses,
             suggestions: analysis.suggestions,
             reasoning: analysis.reasoning,
-            usedTranscript: transcript != null,
+            usedTranscript: Boolean(transcript && transcript.trim().length > 0),
           });
         } catch (err) {
           // Race - another caller scored the same reel between our cache
@@ -6659,6 +6806,39 @@ Return JSON with:
  * and optionally transcript) and returns a structured analysis. The
  * caller (brandCoach.score mutation) handles caching and gating.
  */
+const BRAND_COACH_SCORE_VERSION = 2 as const;
+
+function brandCoachCacheIsFresh(row: { scoreVersion?: number | null }): boolean {
+  return (row.scoreVersion ?? 0) >= BRAND_COACH_SCORE_VERSION;
+}
+
+/** First ~3.5s of speech from timed segments (Deepgram), for hook grading. */
+function extractHookTextFromSegments(
+  segments: unknown,
+  hookWindowSec = 3.6
+): string | null {
+  if (!Array.isArray(segments)) return null;
+  const parts: string[] = [];
+  for (const seg of segments) {
+    if (!seg || typeof seg !== "object") continue;
+    const s = seg as { start?: unknown; end?: unknown; text?: unknown };
+    const end = typeof s.end === "number" ? s.end : Number(s.end);
+    const text = typeof s.text === "string" ? s.text.trim() : "";
+    if (!text || !Number.isFinite(end)) continue;
+    if (end <= hookWindowSec + 0.25) parts.push(text);
+  }
+  const joined = parts.join(" ").replace(/\s+/g, " ").trim();
+  return joined.length > 0 ? joined.slice(0, 800) : null;
+}
+
+function durationBucketLabel(sec: number | null): string | null {
+  if (sec == null || !Number.isFinite(sec) || sec <= 0) return null;
+  if (sec < 15) return "under_15s (ultra-short; every word must earn attention)";
+  if (sec <= 30) return "15_30s (common viral slot)";
+  if (sec <= 60) return "30_60s (needs strong mid-rehooks)";
+  return "over_60s (needs exceptional density and payoff)";
+}
+
 type BrandCoachVerdict = "viral" | "strong" | "average" | "weak";
 
 interface BrandCoachAnalysis {
@@ -6666,6 +6846,7 @@ interface BrandCoachAnalysis {
   hookScore: number;
   retentionScore: number;
   payoffScore: number;
+  replicabilityScore: number;
   verdict: BrandCoachVerdict;
   strengths: string[];
   weaknesses: string[];
@@ -6689,6 +6870,7 @@ function clampScore(value: unknown): number {
 async function runBrandCoachLLM(input: {
   caption: string | null;
   transcript: string | null;
+  hookText: string | null;
   ownerUsername: string | null;
   viewCount: number;
   likeCount: number;
@@ -6697,48 +6879,78 @@ async function runBrandCoachLLM(input: {
   duration: number | null;
   niche: string | null;
   hookPattern: string | null;
+  followerCount: number | null;
+  commentToLikeRatio: number | null;
+  viewsToFollowersRatio: number | null;
+  durationBucket: string | null;
 }): Promise<BrandCoachAnalysis> {
-  const transcriptSection = input.transcript
-    ? `Full transcript (recorded speech):\n"${input.transcript.slice(0, 4000)}"`
-    : `(No transcript available - score based on caption + metrics only. Note this lowers confidence on hook and payoff scores.)`;
+  const transcriptSection = input.transcript?.trim()
+    ? `Full transcript (recorded speech):\n"${input.transcript.trim().slice(0, 4000)}"`
+    : `(No usable transcript. Score from caption + metrics only. State lower confidence on hook and payoff.)`;
+
+  const hookLine = input.hookText?.trim()
+    ? `First ~3 seconds of speech (from timed transcript segments):\n"${input.hookText.trim().slice(0, 600)}"`
+    : `(No timed hook extract. If a full transcript exists above, infer the opener from its start; otherwise grade hook mainly from caption and pacing hints.)`;
+
+  const followerLine =
+    input.followerCount != null && input.followerCount > 0
+      ? `Account follower count (approximate): ${input.followerCount.toLocaleString()}`
+      : `Account follower count: unknown (do not infer audience size from the username alone)`;
+
+  const vfrLine =
+    input.viewsToFollowersRatio != null
+      ? `Views per follower on this reel (computed): ${input.viewsToFollowersRatio.toFixed(3)} (higher usually means stronger breakout vs existing audience)`
+      : `Views per follower: not computable (missing follower count)`;
+
+  const clrLine =
+    input.commentToLikeRatio != null
+      ? `Comments per like (computed): ${input.commentToLikeRatio.toFixed(4)} (higher often means debate, story stakes, or save-worthy tension)`
+      : `Comments per like: not computable (no likes on record)`;
 
   const metricsSection = [
     `Owner: @${input.ownerUsername ?? "unknown"}`,
+    followerLine,
     `Views: ${input.viewCount.toLocaleString()}`,
     `Likes: ${input.likeCount.toLocaleString()}`,
     `Comments: ${input.commentCount.toLocaleString()}`,
+    vfrLine,
+    clrLine,
     input.engagementRate != null
-      ? `Engagement rate: ${input.engagementRate.toFixed(2)}%`
+      ? `Engagement rate (likes + comments + shares proxy, as stored): ${input.engagementRate.toFixed(2)}%`
       : null,
-    input.duration ? `Duration: ${input.duration}s` : null,
+    input.duration != null && input.duration > 0
+      ? `Duration: ${input.duration}s`
+      : null,
+    input.durationBucket ? `Duration bucket: ${input.durationBucket}` : null,
     input.niche ? `Niche: ${input.niche}` : null,
-    input.hookPattern ? `Hook pattern (auto-classified): ${input.hookPattern}` : null,
+    input.hookPattern ? `Hook pattern (auto-classified label): ${input.hookPattern}` : null,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const systemPrompt = `You are Brand Coach, a senior Instagram Reels strategist scoring a single Reel for viral potential. Your job is to look at the hook, retention pattern, and payoff and predict how repeatable this Reel's success would be if a creator were to make their own version.
+  const systemPrompt = `You are Brand Coach, a senior Instagram Reels strategist and short-form editor. Score ONE reel for viral TEMPLATE quality: how strong the hook, retention, payoff, and replicability are if a solo creator remade the idea with a phone.
 
-Score on a 0-100 scale:
-- 85-100: viral - hook is undeniable, retention is locked, payoff is sharp, format is replicable
-- 70-84: strong - solid Reel that consistently performs well in this niche
-- 50-69: average - works but missing one of (hook, retention, payoff)
-- 0-49: weak - skip this one or rewrite heavily before borrowing
+You are not predicting guaranteed views. You judge structure, clarity, and repeatability. Penalize luck-only wins: huge views with weak structure still score lower. Reward sharp structure even with modest views.
 
-Be honest. A reel with 1M views can still be a weak template if its success came from luck, the creator's existing audience, or a trend that has already peaked. Conversely, a reel with 20K views can be a viral-pattern template if the structure is razor sharp.
+OVERALL (0-100) must blend hook, retention, payoff, and replicability. Give replicability roughly one quarter of your mental weight: a reel that needs a film crew, rare location, or A-list identity is a weaker template for most SpyReels users.
 
-Sub-scores (also 0-100):
-- hookScore: does the first 1-3 seconds create a curiosity gap, contradiction, or visceral reaction?
-- retentionScore: does the middle keep viewers watching (pattern interrupts, escalating stakes, payoff tease)?
-- payoffScore: is there one clear takeaway, punchline, or transformation at the end?
+ANCHOR BANDS (overall and sub-scores):
+- 85-100: elite pattern, would teach this in a workshop
+- 70-84: strong, clear template worth borrowing
+- 50-69: mixed, needs one major rewrite axis
+- 0-49: weak template or high copy risk
 
-Return:
-- 2-3 specific strengths (what is working)
-- 2-3 specific weaknesses (what is fragile or unclear)
-- 2-3 concrete suggestions for a creator copying this template (what they should change)
-- one paragraph (3-5 sentences) of reasoning explaining the overall score
+SUB-SCORES (each 0-100):
+- hookScore: first 1-3 seconds. Use HOOK TEXT when provided; otherwise caption first line + metrics. Map to patterns: curiosity gap, contrarian, specificity or numbers, bold claim, question, open loop, pattern interrupt, "you" callout, mistake reveal, comparison, listicle promise, confession, POV.
+- retentionScore: middle holds attention. Look for chained open loops, escalating stakes, info density, payoff teases, mid-point re-hook, clear one-idea-per-beat progression. If transcript is missing, infer cautiously from caption length, numbers, and comment-to-like ratio.
+- payoffScore: ending lands. Types: insight payoff, emotional payoff, twist, comment-bait (intentional tension), transformation, clear CTA, loop-back to the opening line (rewatch bait). Penalize abrupt stops with no resolution.
+- replicabilityScore: can a typical solo creator reproduce the FORMAT this week without a big budget? Penalize heavy production, rare props, location dependency, cast size, faceless brand-only shots that need a full team, or identity that is not borrowable. Reward simple talking-head + b-roll, one-location, repeatable series formats.
 
-Do not parrot the caption. Do not say "great content". Be specific about hook mechanics, retention beats, and payoff structure.
+ENGAGEMENT RATE (if present) is total engagement over views as stored in our app. Rough calibration for Reels (not universal): below 1% weak, 1-3% typical, 3-5% strong, above 5% excellent for non-fanbase reach. Mention this only if it helps; do not worship a single metric.
+
+VIEWS PER FOLLOWER: above 0.5 often means strong breakout for that account size; above 1.0 is exceptional. Below 0.05 may mean mostly followers or older reach; do not call a reel "viral template" on reach alone.
+
+Return 2-3 strengths, 2-3 weaknesses, 2-3 concrete remix suggestions. Be specific about mechanics. Never say "great content" or parrot the caption.
 
 STYLE RULES (strict):
 - Never use em dashes (—) or en dashes (–). Use commas, periods, semicolons, or parentheses instead.
@@ -6748,12 +6960,14 @@ STYLE RULES (strict):
   const userPrompt = `Reel caption:
 "${(input.caption ?? "(no caption)").slice(0, 1500)}"
 
+${hookLine}
+
 ${transcriptSection}
 
 Metrics:
 ${metricsSection}
 
-Score this Reel and return structured JSON.`;
+Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
 
   const response = await invokeLLM({
     messages: [
@@ -6768,10 +6982,14 @@ Score this Reel and return structured JSON.`;
         schema: {
           type: "object",
           properties: {
-            overallScore: { type: "number", description: "0-100" },
-            hookScore: { type: "number", description: "0-100" },
-            retentionScore: { type: "number", description: "0-100" },
-            payoffScore: { type: "number", description: "0-100" },
+            overallScore: { type: "number", description: "0-100 blended weighted score" },
+            hookScore: { type: "number", description: "0-100 first 1-3 seconds" },
+            retentionScore: { type: "number", description: "0-100 middle holds attention" },
+            payoffScore: { type: "number", description: "0-100 ending lands" },
+            replicabilityScore: {
+              type: "number",
+              description: "0-100 solo creator can copy the format this week",
+            },
             strengths: {
               type: "array",
               items: { type: "string" },
@@ -6797,6 +7015,7 @@ Score this Reel and return structured JSON.`;
             "hookScore",
             "retentionScore",
             "payoffScore",
+            "replicabilityScore",
             "strengths",
             "weaknesses",
             "suggestions",
@@ -6819,10 +7038,8 @@ Score this Reel and return structured JSON.`;
   const hookScore = clampScore(parsed.hookScore);
   const retentionScore = clampScore(parsed.retentionScore);
   const payoffScore = clampScore(parsed.payoffScore);
+  const replicabilityScore = clampScore(parsed.replicabilityScore);
 
-  // Belt-and-suspenders against the prompt's "no em dashes" rule: replace
-  // any em/en dashes the LLM still emits with normal punctuation, and
-  // collapse any double-spaces that result.
   const stripDashes = (s: string): string =>
     s
       .replace(/\s*—\s*/g, ", ")
@@ -6844,6 +7061,7 @@ Score this Reel and return structured JSON.`;
     hookScore,
     retentionScore,
     payoffScore,
+    replicabilityScore,
     verdict: verdictForScore(overallScore),
     strengths: sanitizeBullets(parsed.strengths),
     weaknesses: sanitizeBullets(parsed.weaknesses),
