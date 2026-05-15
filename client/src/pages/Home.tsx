@@ -89,6 +89,9 @@ function TipDot() {
   );
 }
 
+const PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE =
+  "Instagram handles can only contain letters, numbers, underscores, and periods.";
+
 export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
@@ -117,10 +120,22 @@ export default function Home() {
 
   const RESEARCH_STALE_MS = 300_000;
 
+  const debouncedNormalized = useMemo(
+    () =>
+      debouncedHandle.length > 0 ? normalizeInstagramHandle(debouncedHandle) : "",
+    [debouncedHandle]
+  );
+  const debouncedHandleShapeOk = useMemo(
+    () =>
+      debouncedHandle.length >= 2 &&
+      isValidInstagramHandleNormalized(debouncedNormalized),
+    [debouncedHandle, debouncedNormalized]
+  );
+
   const profileQuery = trpc.scrape.profilePreview.useQuery(
     { handle: debouncedHandle },
     {
-      enabled: debouncedHandle.length >= 2,
+      enabled: debouncedHandleShapeOk,
       retry: false,
       staleTime: RESEARCH_STALE_MS,
     }
@@ -129,7 +144,13 @@ export default function Home() {
   const profile = profileQuery.data;
   const isLoadingProfile = profileQuery.isFetching;
   const profileFound = profile?.found === true;
-  const profileError = profile?.found === false ? profile.error : null;
+  const profilePreviewInvalidShape =
+    debouncedHandle.length >= 2 && !debouncedHandleShapeOk;
+  const profileError = profilePreviewInvalidShape
+    ? PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE
+    : profile?.found === false
+      ? profile.error
+      : null;
 
   const scrapeGate = useUsageGate("scrapeCount");
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
