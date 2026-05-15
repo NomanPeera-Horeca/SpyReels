@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { sanitizeAiOutput } from "../utils/sanitizeAiOutput";
 import Anthropic from "@anthropic-ai/sdk";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -320,7 +321,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   });
 
   const textContent = response.content.find(b => b.type === "text");
-  const textValue = textContent && textContent.type === "text" ? textContent.text : "";
+  const rawTextValue =
+    textContent && textContent.type === "text" ? textContent.text : "";
+  const textValue = sanitizeAiOutput(rawTextValue);
 
   return {
     id: response.id,
