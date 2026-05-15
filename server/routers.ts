@@ -120,6 +120,8 @@ import {
 import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
+import { withAiFormattingRules } from "./utils/aiFormattingRules";
+import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
@@ -1461,8 +1463,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content:
-                "You classify Instagram creators into niches. Respond with valid JSON only — no prose, no markdown, no code fences.",
+              content: withAiFormattingRules(
+                "You classify Instagram creators into niches. Respond with valid JSON only, no prose, no markdown, no code fences."
+              ),
             },
             { role: "user", content: prompt },
           ],
@@ -1474,7 +1477,7 @@ Return JSON only:
         ).trim();
         let parsed: { nicheSlug?: unknown; confidence?: unknown };
         try {
-          parsed = JSON.parse(raw);
+          parsed = sanitizeAiOutputDeep(JSON.parse(raw));
         } catch {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -2604,7 +2607,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: "You are a professional editor and grammar checker. Fix spelling mistakes, grammar errors, and improve sentence structure while keeping the original meaning, tone, and style intact. Do NOT change the content or add new ideas. Return ONLY the corrected text, nothing else."
+              content: withAiFormattingRules(
+                "You are a professional editor and grammar checker. Fix spelling mistakes, grammar errors, and improve sentence structure while keeping the original meaning, tone, and style intact. Do NOT change the content or add new ideas. Return ONLY the corrected text, nothing else."
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2641,7 +2646,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: `You are a professional script rewriter for short-form video content. ${instruction} Return ONLY the rewritten script text, nothing else.`
+              content: withAiFormattingRules(
+                `You are a professional script rewriter for short-form video content. ${instruction} Return ONLY the rewritten script text, nothing else.`
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2672,7 +2679,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: "You are a creative copywriter for short-form video scripts. Your job is to swap key phrases, power words, and expressions with fresh, punchy alternatives that sound more engaging and viral. Keep the same meaning, structure, and flow. Swap at least 5-8 phrases throughout the script. Do NOT add new sentences or change the topic. Return ONLY the updated script text, nothing else."
+              content: withAiFormattingRules(
+                "You are a creative copywriter for short-form video scripts. Your job is to swap key phrases, power words, and expressions with fresh, punchy alternatives that sound more engaging and viral. Keep the same meaning, structure, and flow. Swap at least 5-8 phrases throughout the script. Do NOT add new sentences or change the topic. Return ONLY the updated script text, nothing else."
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2703,7 +2712,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: "You are a script simplifier for short-form video content. Rewrite this script using simpler, everyday language that anyone can understand. Use short sentences. Replace jargon with plain words. Make it sound like you're talking to a friend. Keep the same structure, key points, and hook. Return ONLY the simplified script text, nothing else."
+              content: withAiFormattingRules(
+                "You are a script simplifier for short-form video content. Rewrite this script using simpler, everyday language that anyone can understand. Use short sentences. Replace jargon with plain words. Make it sound like you're talking to a friend. Keep the same structure, key points, and hook. Return ONLY the simplified script text, nothing else."
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2735,17 +2746,19 @@ Return JSON only:
           throw new TRPCError({ code: "NOT_FOUND" });
         }
         const tonePrompts: Record<string, string> = {
-          casual: "Rewrite in a super casual, friendly tone — like texting a buddy. Use contractions, slang, and keep it real. Short punchy sentences.",
+          casual: "Rewrite in a super casual, friendly tone, like texting a buddy. Use contractions, slang, and keep it real. Short punchy sentences.",
           professional: "Rewrite in a polished, professional tone suitable for a business audience. Clear, confident, and authoritative. No slang.",
           academic: "Rewrite in an educational, informative tone. Use precise language, cite-worthy phrasing, and structured arguments. Sound like a TED talk.",
-          gen_z: "Rewrite in Gen Z internet speak — use trending phrases, be relatable, add energy. Think TikTok creator vibes. Keep it short and punchy with attitude.",
+          gen_z: "Rewrite in Gen Z internet speak. Use trending phrases, be relatable, add energy. Think TikTok creator vibes. Keep it short and punchy with attitude.",
           storyteller: "Rewrite as a compelling story. Add narrative hooks, build tension, use vivid descriptions. Make the viewer feel like they're watching a mini-movie.",
         };
         const response = await invokeLLM({
           messages: [
             {
               role: "system",
-              content: `You are a script tone adjuster for short-form video content. ${tonePrompts[input.tone]} Keep the same key points and structure. Return ONLY the rewritten script text, nothing else.`
+              content: withAiFormattingRules(
+                `You are a script tone adjuster for short-form video content. ${tonePrompts[input.tone]} Keep the same key points and structure. Return ONLY the rewritten script text, nothing else.`
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2782,7 +2795,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: `You are a script editor specializing in short-form video content. Condense this script to approximately ${targetWords} words (about ${input.targetSeconds} seconds when spoken). Keep the hook, the core message, and the call-to-action. Cut filler, redundant points, and unnecessary details. Make every word count. Return ONLY the shortened script text, nothing else.`
+              content: withAiFormattingRules(
+                `You are a script editor specializing in short-form video content. Condense this script to approximately ${targetWords} words (about ${input.targetSeconds} seconds when spoken). Keep the hook, the core message, and the call-to-action. Cut filler, redundant points, and unnecessary details. Make every word count. Return ONLY the shortened script text, nothing else.`
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2819,7 +2834,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: `You are a script editor for short-form video content. The user has selected a specific portion of their script to rewrite. Rewrite ONLY the selected text according to the instruction: "${instruction}". Keep the same approximate length. Return ONLY the rewritten selected text, nothing else — do NOT return the full script.`
+              content: withAiFormattingRules(
+                `You are a script editor for short-form video content. The user has selected a specific portion of their script to rewrite. Rewrite ONLY the selected text according to the instruction: "${instruction}". Keep the same approximate length. Return ONLY the rewritten selected text, nothing else. Do NOT return the full script.`
+              ),
             },
             {
               role: "user",
@@ -2859,7 +2876,9 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: `You are a creative script writer for short-form video content. Rewrite this script with a completely new angle/perspective: "${input.angle}". Keep the same core topic but approach it from this new angle. Maintain a similar length and the hook-body-CTA structure. Make it feel fresh and original. Return ONLY the rewritten script text, nothing else.`
+              content: withAiFormattingRules(
+                `You are a creative script writer for short-form video content. Rewrite this script with a completely new angle/perspective: "${input.angle}". Keep the same core topic but approach it from this new angle. Maintain a similar length and the hook-body-CTA structure. Make it feel fresh and original. Return ONLY the rewritten script text, nothing else.`
+              ),
             },
             { role: "user", content: input.content }
           ],
@@ -2920,9 +2939,9 @@ Return JSON only:
         } else if (input.captionLength === "short") {
           lengthInstruction = "SHORT caption (5-7 lines / 40-70 words). Keep it tight and punchy. Every word must earn its place.";
         } else if (input.captionLength === "medium") {
-          lengthInstruction = "MEDIUM caption (8-12 lines / 70-120 words). Balanced — enough value without overwhelming.";
+          lengthInstruction = "MEDIUM caption (8-12 lines / 70-120 words). Balanced, enough value without overwhelming.";
         } else {
-          lengthInstruction = "LONG caption (13+ lines / 120-200 words). Go deep — provide extra value, context, and keywords for SEO.";
+          lengthInstruction = "LONG caption (13+ lines / 120-200 words). Go deep: provide extra value, context, and keywords for SEO.";
         }
 
         const nicheContext = input.niche ? `The creator's niche is: ${input.niche}.` : "";
@@ -2933,13 +2952,13 @@ Return JSON only:
           messages: [
             {
               role: "system",
-              content: `You are an expert Instagram caption writer and SEO strategist specializing in Reels. You follow the proven 6-step caption framework used by top creators.
+              content: withAiFormattingRules(`You are an expert Instagram caption writer and SEO strategist specializing in Reels. You follow the proven 6-step caption framework used by top creators.
 
 === THE 3-PART CAPTION STRUCTURE ===
 Every caption MUST have exactly 3 parts:
 
 1. THE HOOK (first line, before "...more")
-   - MUST be exactly 7-10 words — no more, no less
+   - MUST be exactly 7-10 words, no more, no less
    - This is the only line visible before users tap "more"
    - Must contain the primary SEO keyword
    - Use one of these proven hook templates:
@@ -2953,7 +2972,7 @@ Every caption MUST have exactly 3 parts:
      * Or create a similarly compelling 7-10 word hook
 
 2. THE BODY (5-15 lines depending on length setting)
-   - Provide EXTRA VALUE beyond what the video shows — don't just summarize the video
+   - Provide EXTRA VALUE beyond what the video shows. Do not just summarize the video
    - Give context as to WHY people should care about this post
    - Use proper formatting: emojis + line breaks for readability
    - AVOID long paragraphs, especially at the beginning
@@ -2974,7 +2993,7 @@ Every caption MUST have exactly 3 parts:
 - Use line breaks between every 1-2 sentences
 - NO long paragraphs, especially at the start
 - Add blank line between hook and body, and between body and CTA
-- The caption must provide ADDITIONAL VALUE to the audience and the algorithm — not just repeat what's in the video
+- The caption must provide ADDITIONAL VALUE to the audience and the algorithm, not just repeat what's in the video
 
 === CAPTION LENGTH ===
 ${lengthInstruction}
@@ -2982,18 +3001,18 @@ ${lengthInstruction}
 === CAPTION STYLE ===
 ${styleGuides[input.style]}
 
-=== HASHTAG FRAMEWORK — 3x3 STRATEGY (exactly 5) ===
+=== HASHTAG FRAMEWORK: 3x3 STRATEGY (exactly 5) ===
 Use the proven 3x3 hashtag strategy adapted for Instagram's 5-hashtag limit:
 
-1-2. VIDEO TOPIC (2 hashtags) — What is this content about?
+1-2. VIDEO TOPIC (2 hashtags): What is this content about?
    - Specific to the video's subject matter (not generic like #marketing)
    - Example for a fitness video: #weightlifting, #homeworkout
 
-3-4. TARGET AUDIENCE (2 hashtags) — Who should see this?
+3-4. TARGET AUDIENCE (2 hashtags): Who should see this?
    - Describe the ideal viewer's identity or situation
    - Example: #busydad, #businessowner
 
-5. DREAM RESULT (1 hashtag) — What outcome does the viewer want?
+5. DREAM RESULT (1 hashtag): What outcome does the viewer want?
    - The transformation or goal the audience is chasing
    - Example: #losefat, #growoninstagram, #makemoneyonline
    ${input.brandHashtag ? "- Replace one Video Topic hashtag with the brand hashtag: " + input.brandHashtag : ""}
@@ -3010,9 +3029,9 @@ RESPOND IN THIS EXACT JSON FORMAT:
   "hookType": "the type of hook used"
 }
 
-Do NOT include # in the hashtags array — just the word/phrase.
-Do NOT put hashtags inside the caption text — they go separately.
-The hook MUST be 7-10 words. Count them.`
+Do NOT include # in the hashtags array, just the word/phrase.
+Do NOT put hashtags inside the caption text, they go separately.
+The hook MUST be 7-10 words. Count them.`),
             },
             {
               role: "user",
@@ -3042,7 +3061,7 @@ The hook MUST be 7-10 words. Count them.`
         const raw = ((response.choices[0]?.message?.content as string) || "").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         let result: { caption: string; hashtags: string[]; primaryKeyword: string; hookType: string };
         try {
-          result = JSON.parse(raw);
+          result = sanitizeAiOutputDeep(JSON.parse(raw));
         } catch {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to parse caption response" });
         }
@@ -3255,7 +3274,7 @@ The hook MUST be 7-10 words. Count them.`
         // Step 1: Analyze viral structure
         const structureResponse = await invokeLLM({
           messages: [
-            { role: "system", content: "You are a viral content structure analyst. Always respond with valid JSON only." },
+            { role: "system", content: withAiFormattingRules("You are a viral content structure analyst. Always respond with valid JSON only.") },
             { role: "user", content: `Analyze the following viral Reel transcript and identify its exact structure. Return JSON with: hook (type, text, technique), body (pacing, structure, keyPoints), transition (type, text), cta (type, text), overallTone, estimatedPace.\n\nCaption: ${input.caption}\n\nTranscript:\n${input.transcript}` },
           ],
           response_format: {
@@ -3282,7 +3301,9 @@ The hook MUST be 7-10 words. Count them.`
 
         let viralStructure: Record<string, any>;
         try {
-          viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+          viralStructure = sanitizeAiOutputDeep(
+            JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+          );
         } catch {
           viralStructure = { error: "Failed to parse" };
         }
@@ -3298,7 +3319,7 @@ The hook MUST be 7-10 words. Count them.`
 
         const scriptResponse = await invokeLLM({
           messages: [
-            { role: "system", content: "You are an expert Instagram Reels scriptwriter." },
+            { role: "system", content: withAiFormattingRules("You are an expert Instagram Reels scriptwriter.") },
             { role: "user", content: scriptPrompt },
           ],
         });
@@ -5985,7 +6006,9 @@ Keep the analysis concise and actionable.`;
       messages: [
         {
           role: "system",
-          content: "You are a social media content strategist.",
+          content: withAiFormattingRules(
+            "You are a social media content strategist."
+          ),
         },
         { role: "user", content: prompt },
       ],
@@ -5993,7 +6016,7 @@ Keep the analysis concise and actionable.`;
 
     return (result.choices[0]?.message?.content as string) || "Analysis unavailable";
   } catch (error) {
-    return "Hook analysis failed – transcript is still available above.";
+    return "Hook analysis failed. Transcript is still available above.";
   }
 }
 
@@ -6122,7 +6145,7 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     const structureResponse = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a viral content structure analyst. Always respond with valid JSON only." },
+        { role: "system", content: withAiFormattingRules("You are a viral content structure analyst. Always respond with valid JSON only.") },
         { role: "user", content: structurePrompt },
       ],
       response_format: {
@@ -6183,7 +6206,9 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     let viralStructure: Record<string, unknown>;
     try {
-      viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+      viralStructure = sanitizeAiOutputDeep(
+        JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+      );
     } catch {
       viralStructure = { error: "Failed to parse structure" };
     }
@@ -6205,7 +6230,7 @@ Use short paragraphs to indicate natural pauses.
 Do NOT include any labels like "Hook:" or "Body:" - just write the flowing script.`;
 
     const scriptPrompt = isSameTopic
-      ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original — not a copy.
+      ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original, not a copy.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
@@ -6225,8 +6250,8 @@ ${gradeLevelInstruction}${cuesInstruction}
 5. CTA: End with a similar call-to-action style ("${(viralStructure.cta as any)?.type || 'engagement'}") but phrase it in your own words.
 6. Match the overall tone: "${(viralStructure as any)?.overallTone || 'engaging'}"
 7. Keep similar length and pacing to the original.
-8. The result should feel like a DIFFERENT PERSON making the same argument — same topic, same structure, but different wording throughout.
-9. Do NOT just swap synonyms — genuinely rephrase and restructure sentences while keeping the meaning.
+8. The result should feel like a DIFFERENT PERSON making the same argument: same topic, same structure, but different wording throughout.
+9. Do NOT just swap synonyms. Genuinely rephrase and restructure sentences while keeping the meaning.
 
 ${scriptFormatClosing}`
       : `You are an expert Instagram Reels scriptwriter. Using the EXACT viral structure from a proven viral Reel, write a NEW script on a different topic.
@@ -6256,7 +6281,7 @@ ${scriptFormatClosing}`;
 
     const scriptResponse = await invokeLLM({
       messages: [
-        { role: "system", content: "You are an expert Instagram Reels scriptwriter. Write natural, spoken scripts that match viral patterns." },
+        { role: "system", content: withAiFormattingRules("You are an expert Instagram Reels scriptwriter. Write natural, spoken scripts that match viral patterns.") },
         { role: "user", content: scriptPrompt },
       ],
     });
@@ -6296,7 +6321,7 @@ Return ONLY valid JSON.`;
 
     const hemingwayResponse = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a readability analysis engine. Always respond with valid JSON only." },
+        { role: "system", content: withAiFormattingRules("You are a readability analysis engine. Always respond with valid JSON only.") },
         { role: "user", content: hemingwayPrompt },
       ],
       response_format: {
@@ -6344,7 +6369,9 @@ Return ONLY valid JSON.`;
 
     let readabilityAnalysis: Record<string, unknown>;
     try {
-      readabilityAnalysis = JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+      readabilityAnalysis = sanitizeAiOutputDeep(
+        JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+      );
     } catch {
       readabilityAnalysis = { error: "Failed to parse readability analysis" };
     }
@@ -6419,7 +6446,7 @@ ${cuesInstruction}
 
     const scriptResponse = await invokeLLM({
       messages: [
-        { role: "system", content: "You are an expert Instagram Reels scriptwriter. Write natural, spoken scripts that match viral patterns." },
+        { role: "system", content: withAiFormattingRules("You are an expert Instagram Reels scriptwriter. Write natural, spoken scripts that match viral patterns.") },
         { role: "user", content: rewritePrompt },
       ],
     });
@@ -6459,7 +6486,7 @@ Return ONLY valid JSON.`;
 
     const hemingwayResponse = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a readability analysis engine. Always respond with valid JSON only." },
+        { role: "system", content: withAiFormattingRules("You are a readability analysis engine. Always respond with valid JSON only.") },
         { role: "user", content: hemingwayPrompt },
       ],
       response_format: {
@@ -6507,7 +6534,9 @@ Return ONLY valid JSON.`;
 
     let readabilityAnalysis: Record<string, unknown>;
     try {
-      readabilityAnalysis = JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+      readabilityAnalysis = sanitizeAiOutputDeep(
+        JSON.parse((String(hemingwayResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+      );
     } catch {
       readabilityAnalysis = { error: "Failed to parse readability analysis" };
     }
@@ -6529,7 +6558,7 @@ Return ONLY valid JSON.`;
 }
 
 
-/** Passing score (1–10) keeps the drafted script without another LLM regeneration pass. */
+/** Passing score (1-10) keeps the drafted script without another LLM regeneration pass. */
 const IDEA_SCRIPT_JUDGE_PASS_SCORE = 7;
 /** Attempts after the first draft when the judge score is below {@link IDEA_SCRIPT_JUDGE_PASS_SCORE}. */
 const IDEA_SCRIPT_JUDGE_MAX_EXTRA_DRAFTS = 2;
@@ -6538,15 +6567,15 @@ function ideaCreatorGoalDirectives(goal: string | null | undefined): string {
   const g = (goal || "balanced").trim();
   switch (g) {
     case "growth_virality":
-      return `Creator goal — MAXIMUM DISCOVERY / REPLAY: Prioritize curiosity gaps, punchy openings, tighter pacing, novelty or a sharp (honest) contrarian angle. Hooks may be bold if not misleading.`;
+      return `Creator goal, MAXIMUM DISCOVERY / REPLAY: Prioritize curiosity gaps, punchy openings, tighter pacing, novelty or a sharp (honest) contrarian angle. Hooks may be bold if not misleading.`;
     case "personal_brand":
-      return `Creator goal — PERSONAL BRAND & CONTENT CALENDAR: One consistent human voice in first person. Favor specific lived details, credibility, and repeatable “pillar” angles people can expect from this creator week to week. Trust and authenticity beat empty shock; never sound like a generic AI hype template.`;
+      return `Creator goal, PERSONAL BRAND & CONTENT CALENDAR: One consistent human voice in first person. Favor specific lived details, credibility, and repeatable "pillar" angles people can expect from this creator week to week. Trust and authenticity beat empty shock; never sound like a generic AI hype template.`;
     case "education_authority":
-      return `Creator goal — TEACH & BUILD AUTHORITY: Clear arc (promise → simple framework → 1–3 concrete steps → memorable takeaway). Still needs a scroll-stopping hook in the first 3 seconds. Plain language; minimal jargon; invite saves or screenshots when natural.`;
+      return `Creator goal, TEACH & BUILD AUTHORITY: Clear arc (promise, simple framework, 1-3 concrete steps, memorable takeaway). Still needs a scroll-stopping hook in the first 3 seconds. Plain language; minimal jargon; invite saves or screenshots when natural.`;
     case "warm_promo":
-      return `Creator goal — SOFT PROMOTION: Teach-first — deliver real value before any ask. Weave offer, booking, or list sign-up as a natural escalation, not an infomercial pile-on.`;
+      return `Creator goal, SOFT PROMOTION: Teach-first. Deliver real value before any ask. Weave offer, booking, or list sign-up as a natural escalation, not an infomercial pile-on.`;
     default:
-      return `Creator goal — BALANCED REEL: Strong hook in the first 3 seconds, ONE memorable payoff, conversational contractions, rhythmic pacing with micro-beats every ~10–14 seconds, CTA matched to the topic. No fake stats or filler “bro science.”`;
+      return `Creator goal, BALANCED REEL: Strong hook in the first 3 seconds, ONE memorable payoff, conversational contractions, rhythmic pacing with micro-beats every ~10-14 seconds, CTA matched to the topic. No fake stats or filler "bro science."`;
   }
 }
 
@@ -6602,16 +6631,16 @@ async function invokeIdeaScriptJudge(opts: {
       messages: [
         {
           role: "system",
-          content: `You are a ruthless but fair Instagram Reels script judge. You evaluate SPOKEN drafts (not essays) for mobile viewing.
+          content: withAiFormattingRules(`You are a ruthless but fair Instagram Reels script judge. You evaluate SPOKEN drafts (not essays) for mobile viewing.
 
-Score each dimension 1–10 using short-form best practices:
+Score each dimension 1-10 using short-form best practices:
 - Hook: pattern interrupt or curiosity gap in the first sentence; no sleepy setup.
 - Pacing / retention: idea density every ~12s of speech; avoids monologue walls; payoff stays on-theme.
 - Goal fit: aligns with the stated creator objective (growth vs trust vs teaching vs gentle promo).
 
 Overall score = holistic blend (not pure average).
 
-Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS_SCORE} AND the draft is legitimately worthy of filming without another rewrite.`,
+Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS_SCORE} AND the draft is legitimately worthy of filming without another rewrite.`),
         },
         {
           role: "user",
@@ -6663,7 +6692,7 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
     const raw = response.choices?.[0]?.message?.content;
     if (!raw) return safeFallback();
     const cleaned = String(raw).replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const parsed = JSON.parse(cleaned) as {
+    const parsed = sanitizeAiOutputDeep(JSON.parse(cleaned)) as {
       overallScore: number;
       hookEffectiveness?: number;
       pacingRetention?: number;
@@ -6729,10 +6758,10 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       : `Write at a Grade ${scriptIdea.gradeLevel} reading level.`;
 
     const writerRules = `Follow Instagram Reels script rules:
-- Spoken monologue only — short paragraphs (1–2 sentences) for breath pauses.
-- No labels, bullets, scene directions, or “[music]” unless the creator would literally say it.
-- Start with the hook line immediately (no “Hey guys” meta intro).
-- 150–300 spoken words (roughly 30–60s). One clear takeaway.
+- Spoken monologue only. Short paragraphs (1-2 sentences) for breath pauses.
+- No labels, bullets, scene directions, or "[music]" unless the creator would literally say it.
+- Start with the hook line immediately (no "Hey guys" meta intro).
+- 150-300 spoken words (roughly 30-60s). One clear takeaway.
 - ${goalBrief}`;
 
     // Step 1: Generate a viral structure for the idea
@@ -6740,8 +6769,9 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       messages: [
         {
           role: "system",
-          content:
-            "You are a senior short-form script architect. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew.",
+          content: withAiFormattingRules(
+            "You are a senior short-form script architect. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew."
+          ),
         },
         {
           role: "user",
@@ -6820,7 +6850,9 @@ Return JSON with:
 
     let viralStructure: Record<string, any>;
     try {
-      viralStructure = JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+      viralStructure = sanitizeAiOutputDeep(
+        JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+      );
     } catch {
       viralStructure = { error: "Failed to parse structure" };
     }
@@ -6831,19 +6863,20 @@ Return JSON with:
 
     async function draftScript(refinementBrief: string | null): Promise<string> {
       const refineBlock = refinementBrief
-        ? `\n\nREVISION BRIEF (you previously missed the mark):\n${refinementBrief}\nRewrite from scratch — new wording, tighter hook, sharper pacing.\n`
+        ? `\n\nREVISION BRIEF (you previously missed the mark):\n${refinementBrief}\nRewrite from scratch with new wording, tighter hook, sharper pacing.\n`
         : "";
 
       const scriptResponse = await invokeLLM({
         messages: [
           {
             role: "system",
-            content:
-              `You are an elite Instagram Reels scriptwriter focused on filmed talking-head delivery.\n\n${writerRules}`,
+            content: withAiFormattingRules(
+              `You are an elite Instagram Reels scriptwriter focused on filmed talking-head delivery.\n\n${writerRules}`
+            ),
           },
           {
             role: "user",
-            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150–300 spoken words.${refineBlock}\n\n${goalLine}`,
+            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150-300 spoken words.${refineBlock}\n\n${goalLine}`,
           },
         ],
       });
@@ -7117,7 +7150,7 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
 
   const response = await invokeLLM({
     messages: [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: withAiFormattingRules(systemPrompt) },
       { role: "user", content: userPrompt },
     ],
     response_format: {
@@ -7176,8 +7209,8 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
   const raw = response.choices?.[0]?.message?.content;
   if (!raw) throw new Error("No response from Brand Coach LLM");
   const text = typeof raw === "string" ? raw : "";
-  const parsed = JSON.parse(
-    text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+  const parsed = sanitizeAiOutputDeep(
+    JSON.parse(text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
   );
 
   const overallScore = clampScore(parsed.overallScore);
@@ -7238,20 +7271,20 @@ async function validateIdeaInBackground(ideaId: number) {
       messages: [
         {
           role: "system",
-          content: `You are a senior Instagram Reels producer. You review raw ideas BEFORE scripting.
+          content: withAiFormattingRules(`You are a senior Instagram Reels producer. You review raw ideas BEFORE scripting.
 
 ${goalBrief}
 
 Score the IDEA (not a script yet) on:
-1. Clarity — specific audience + promise; enough detail to write a teleprompter-ready monologue.
-2. Hook potential — can the first spoken line create a curiosity gap or tension?
-3. Emotional pull — relatability, stakes, or aspiration (pick what fits the creator goal).
-4. Payoff — is there one obvious insight, story turn, or takeaway?
-5. Shelf life / calendar fit — can this become repeat-friendly content (series, pillar) when the goal is branding or education?
+1. Clarity: specific audience + promise; enough detail to write a teleprompter-ready monologue.
+2. Hook potential: can the first spoken line create a curiosity gap or tension?
+3. Emotional pull: relatability, stakes, or aspiration (pick what fits the creator goal).
+4. Payoff: is there one obvious insight, story turn, or takeaway?
+5. Shelf life / calendar fit: can this become repeat-friendly content (series, pillar) when the goal is branding or education?
 
-Return a 1–10 "viralScore" that reflects potential IF executed well (not a promise of views). Suggest a tighter improvedIdea (max 2 sentences) the user can approve.
+Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views). Suggest a tighter improvedIdea (max 2 sentences) the user can approve.
 
-If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.`,
+If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.`),
         },
         {
           role: "user",
@@ -7281,7 +7314,9 @@ If the raw idea is strong (8+) you may keep improvedIdea very close to what they
     if (!content) throw new Error("No validation response from AI");
 
     const contentStr = typeof content === "string" ? content : "";
-    const validation = JSON.parse(contentStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
+    const validation = sanitizeAiOutputDeep(
+      JSON.parse(contentStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+    );
 
     await updateScriptIdea(ideaId, {
       aiSuggestion: validation.improvedIdea,

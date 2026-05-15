@@ -5,6 +5,8 @@
 
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
+import { withAiFormattingRules } from "../utils/aiFormattingRules";
+import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
 import { getDb } from "../db";
 import { reels, transcriptions } from "../../drizzle/schema";
 
@@ -92,7 +94,7 @@ RULES:
 
 EXAMPLES (4 hand-crafted, baked into prompt):
 
-Example 1 — Educational fitness:
+Example 1: Educational fitness:
 Transcript: "If you want to lose belly fat, stop doing crunches. Here are 3 exercises that actually work. First, dead bugs. 12 reps each side. Second, plank reaches. 30 seconds. Third, mountain climbers. 45 seconds. Do this 3x a week. You will see results in 21 days."
 Caption: "The truth about belly fat 🔥 #fitness #fatloss"
 Owner: trainwithjess
@@ -108,7 +110,7 @@ Output:
   "classificationReason": "Clear contrarian hook with structured 3-item list and concrete numbers, fully repeatable framework."
 }
 
-Example 2 — Business contrarian:
+Example 2: Business contrarian:
 Transcript: "Most people think rich people work harder. They don't. They work on different things. While you're answering emails, they're building systems that answer emails for them. The difference between rich and broke isn't hours worked. It's leverage."
 Caption: "How rich people actually think differently"
 Owner: codiesanchez
@@ -124,7 +126,7 @@ Output:
   "classificationReason": "Contrarian myth-busting structure with rich-vs-broke contrast, easily adapted to other contrarian takes."
 }
 
-Example 3 — Personal story:
+Example 3: Personal story:
 Transcript: "I was 23 when my dad died. He left me $3,000 and a letter that said 'don't waste this on stupid stuff.' I used it to start a food truck. Today that food truck is a chain of 14 restaurants. This is for you, dad."
 Caption: "My dad's last gift 💔"
 Owner: hungry_jeff
@@ -140,7 +142,7 @@ Output:
   "classificationReason": "Deeply personal life story tied to creator's specific biography, cannot be remade in another voice."
 }
 
-Example 4 — NO_SPEECH visual content (transcript empty):
+Example 4: NO_SPEECH visual content (transcript empty):
 Transcript: ""
 Caption: "POV: when the beat drops 🎵"
 Owner: dancingwithanna
@@ -346,7 +348,7 @@ async function invokeClassifyWithRetry(userPayload: string): Promise<string> {
   const call = () =>
     invokeLLM({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: withAiFormattingRules(SYSTEM_PROMPT) },
         { role: "user", content: userPayload },
       ],
     });
@@ -417,7 +419,7 @@ async function processRow(
   const stripped = stripJsonFences(rawText);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stripped);
+    parsed = sanitizeAiOutputDeep(JSON.parse(stripped));
   } catch {
     console.warn(
       `[classify-reels] id=${row.id} JSON.parse failed. raw (first 500): ${rawText.slice(0, 500)}`
