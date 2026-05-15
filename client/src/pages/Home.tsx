@@ -394,8 +394,7 @@ export default function Home() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestStartSpy = () => {
     if (!handle.trim()) {
       toast.error("Please enter an Instagram handle");
       return;
@@ -431,6 +430,32 @@ export default function Home() {
       handle: normalized,
       timeframeDays: parseInt(timeframe),
     });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    requestStartSpy();
+  };
+
+  const startSpyingDisabled =
+    startScrape.isPending ||
+    !handleReadyForSubmit ||
+    (profile?.found === true && profile.isPrivate) ||
+    !scrapeGate.allowed ||
+    scrapeGate.isLoading;
+
+  const profileCardCanStartSpy =
+    profileFound &&
+    profile?.found === true &&
+    !isLoadingProfile &&
+    !startSpyingDisabled;
+
+  const handleProfileCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!profileCardCanStartSpy) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      requestStartSpy();
+    }
   };
 
   return (
@@ -589,7 +614,28 @@ export default function Home() {
 
               {/* Profile Preview Card */}
               {profileFound && profile.found && (
-                <div className="rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div
+                  className={
+                    profileCardCanStartSpy
+                      ? "relative rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300 cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      : "rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                  }
+                  role={profileCardCanStartSpy ? "button" : undefined}
+                  tabIndex={profileCardCanStartSpy ? 0 : undefined}
+                  aria-label={
+                    profileCardCanStartSpy
+                      ? `Start spy session for @${profile.username}`
+                      : undefined
+                  }
+                  onClick={profileCardCanStartSpy ? () => requestStartSpy() : undefined}
+                  onKeyDown={handleProfileCardKeyDown}
+                >
+                  {profileCardCanStartSpy && (
+                    <span className="absolute top-3 right-3 flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                      Click to start
+                      <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+                    </span>
+                  )}
                   <div className="flex items-start gap-4">
                     {/* Profile Picture */}
                     <div className="shrink-0">
@@ -681,6 +727,7 @@ export default function Home() {
                             href={profile.externalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
                             className="flex items-center gap-1 text-primary hover:underline ml-auto"
                           >
                             <ExternalLink className="h-3 w-3" />
@@ -795,12 +842,7 @@ export default function Home() {
                 type="submit"
                 size="lg"
                 className="w-full h-12 text-base font-medium"
-                disabled={
-                  startScrape.isPending ||
-                  !handleReadyForSubmit ||
-                  (profile?.found === true && profile.isPrivate) ||
-                  !scrapeGate.allowed
-                }
+                disabled={startSpyingDisabled}
               >
                 {startScrape.isPending ? (
                   <>
