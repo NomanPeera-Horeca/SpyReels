@@ -2,9 +2,7 @@
 export function isLikelyInstagramRateLimitMessage(message: string): boolean {
   const m = message.toLowerCase();
   return (
-    m.includes("rate limit") ||
-    m.includes("429") ||
-    m.includes("temporarily restricting") ||
-    m.includes("temporarily rate limiting")
+    m.includes("instagram rate limit reached") ||
+    m.includes("temporarily rate limiting access")
   );
 }

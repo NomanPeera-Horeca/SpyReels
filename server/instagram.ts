@@ -93,6 +93,62 @@ export interface ProfileInfo {
   externalUrl: string;
 }
 
+type VendorEnvelopeFailure = "rate_limit" | "not_found" | "private" | "generic";
+
+function readVendorEnvelope(data: unknown): {
+  vendorError: string;
+  vendorMsg: string;
+  errorStatus: number | undefined;
+} {
+  if (!data || typeof data !== "object") {
+    return { vendorError: "", vendorMsg: "", errorStatus: undefined };
+  }
+  const d = data as Record<string, unknown>;
+  return {
+    vendorError: typeof d.error === "string" ? d.error : "",
+    vendorMsg: typeof d.message === "string" ? d.message : "",
+    errorStatus: typeof d.errorStatus === "number" ? d.errorStatus : undefined,
+  };
+}
+
+/** Classify ScrapeCreators HTTP-200 error envelopes when `data.data.user` is missing. */
+function classifyVendorEnvelopeFailure(data: unknown): VendorEnvelopeFailure | null {
+  const { vendorError, vendorMsg, errorStatus } = readVendorEnvelope(data);
+  const errLower = vendorError.toLowerCase();
+  const msgLower = vendorMsg.toLowerCase();
+
+  if (
+    errorStatus === 429 ||
+    /rate limit|429|too many requests|throttle|temporarily blocked/i.test(vendorMsg) ||
+    /rate limit|429|too many requests|throttle|temporarily blocked/i.test(vendorError)
+  ) {
+    return "rate_limit";
+  }
+
+  if (
+    errorStatus === 404 ||
+    errLower.includes("not_found") ||
+    /not found|does not exist|user not found|no such user/i.test(msgLower) ||
+    /not found|does not exist|user not found|no such user/i.test(errLower)
+  ) {
+    return "not_found";
+  }
+
+  if (/private|protected/i.test(msgLower) || /private|protected/i.test(errLower)) {
+    return "private";
+  }
+
+  if (vendorError || vendorMsg || errorStatus !== undefined) {
+    return "generic";
+  }
+
+  return null;
+}
+
+function shouldRetryVendorFailure(kind: VendorEnvelopeFailure): boolean {
+  return kind === "rate_limit" || kind === "generic";
+}
+
 export async function fetchProfile(handle: string): Promise<ProfileInfo> {
   const cleanHandle = handle.replace(/^@/, "").trim();
   // ScrapeCreators occasionally responds with HTTP 200 plus an inline
@@ -140,27 +196,36 @@ export async function fetchProfile(handle: string): Promise<ProfileInfo> {
 
     const user = data?.data?.user;
     if (!user) {
-      const vendorError = typeof data?.error === "string" ? data.error : "";
-      const vendorMsg = typeof data?.message === "string" ? data.message : "";
-      const isVendorRestriction =
-        !!vendorError ||
-        data?.errorStatus === 404 ||
-        /restricted/i.test(vendorMsg);
+      const failureKind = classifyVendorEnvelopeFailure(data);
+      const { vendorError, vendorMsg } = readVendorEnvelope(data);
 
-      if (isVendorRestriction && attempt < MAX_TRIES) {
+      if (failureKind === "not_found") {
+        throw new Error(
+          `User "@${cleanHandle}" not found. Please check the username and try again.`
+        );
+      }
+      if (failureKind === "private") {
+        throw new Error(
+          `The account @${cleanHandle} is private. Only public accounts can be analyzed.`
+        );
+      }
+      if (failureKind && shouldRetryVendorFailure(failureKind) && attempt < MAX_TRIES) {
         console.warn(
-          `[Instagram] Vendor returned restricted envelope for @${cleanHandle} ` +
-            `(attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`
+          `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
+            `(attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`.trim()
         );
         await sleep(BACKOFF_MS * attempt);
         continue;
       }
-      if (isVendorRestriction) {
-        // Phrase contains "rate limit" so classifyScrapeFailureMessage maps
-        // this to `instagram_rate_limited` rather than `handle_not_found`.
+      if (failureKind === "rate_limit") {
         throw new Error(
           `Instagram is temporarily rate limiting access to "@${cleanHandle}". ` +
             `Please try again in a few minutes.`
+        );
+      }
+      if (failureKind === "generic") {
+        throw new Error(
+          `We couldn't load @${cleanHandle}'s profile right now. Please try again in a few minutes.`
         );
       }
       throw new Error(`User "@${cleanHandle}" not found or the profile is not accessible.`);
