@@ -10,11 +10,16 @@ import { getLoginUrl } from "./const";
 import "./index.css";
 import posthog from "posthog-js";
 import { PostHogProvider } from "@posthog/react";
+import { installClientLoadFailureReporting } from "./utils/clientLoadFailureReporting";
 
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
   defaults: "2026-01-30",
 });
+
+if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {
+  installClientLoadFailureReporting(posthog);
+}
 
 captureUtmsFromLocation();
 

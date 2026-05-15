@@ -43,6 +43,7 @@ import {
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import Tooltip from "@/components/Tooltip";
+import { isLikelyInstagramRateLimitMessage } from "@/utils/instagramErrors";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -98,14 +99,6 @@ export default function Home() {
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const normalizedHandleInput = useMemo(
-    () => normalizeInstagramHandle(handle),
-    [handle]
-  );
-  const handleInputInvalid =
-    handle.trim() !== "" &&
-    !isValidInstagramHandleNormalized(normalizedHandleInput);
-
   // Debounce handle input - only query after 800ms of no typing and min 2 chars
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -143,6 +136,24 @@ export default function Home() {
     staleTime: RESEARCH_STALE_MS,
     refetchOnWindowFocus: false,
   });
+
+  const normalizedTyped = useMemo(() => normalizeInstagramHandle(handle), [handle]);
+  const clientStrictOk = useMemo(
+    () => isValidInstagramHandleNormalized(normalizedTyped),
+    [normalizedTyped]
+  );
+  const previewOk = Boolean(profileFound && profile?.found === true);
+  const handleReadyForSubmit =
+    handle.trim().length > 0 && (previewOk || clientStrictOk);
+
+  useEffect(() => {
+    if (previewOk) setHandleError(null);
+  }, [previewOk]);
+
+  const prioritizeFeatured =
+    onboardingStateQuery.isSuccess &&
+    onboardingStateQuery.data?.hasCompletedFirstSpy !== true;
+
   const dismissHintCardMutation = trpc.onboarding.dismissHintCard.useMutation();
   const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
     staleTime: RESEARCH_STALE_MS,
@@ -337,8 +348,27 @@ export default function Home() {
       setLocation(`/scraping?jobId=${data.jobId}`);
     },
     onError: error => {
+      const msg = error.message ?? "";
+      if (isLikelyInstagramRateLimitMessage(msg)) {
+        toast.error("Instagram is limiting requests right now", {
+          description:
+            "Try again in a few minutes — or open ready-made viral reels from featured creators.",
+          duration: 12_000,
+          action: {
+            label: "Featured creators",
+            onClick: () =>
+              document
+                .getElementById("featured-creators")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          },
+        });
+        posthog?.capture("research_scrape_rate_limited", {
+          surface: "research_start_toast",
+        });
+        return;
+      }
       toast.error("Failed to start account research", {
-        description: error.message,
+        description: msg,
       });
     },
   });
@@ -349,11 +379,14 @@ export default function Home() {
       toast.error("Please enter an Instagram handle");
       return;
     }
-    const normalized = normalizeInstagramHandle(handle);
-    if (!isValidInstagramHandleNormalized(normalized)) {
+    if (!previewOk && !isValidInstagramHandleNormalized(normalizeInstagramHandle(handle))) {
       setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
       return;
     }
+    const normalized =
+      previewOk && profile?.found === true
+        ? normalizeInstagramHandle(profile.username)
+        : normalizeInstagramHandle(handle);
     setHandleError(null);
     if (profile?.found && profile.isPrivate) {
       toast.error("This account is private and cannot be analyzed.");
@@ -380,7 +413,7 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-3 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+    <div className="mx-auto w-full min-w-0 max-w-6xl px-3 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -422,8 +455,17 @@ export default function Home() {
                 1
               </span>
               <p>
-                <span className="font-medium text-foreground">Pick a creator.</span>{" "}
-                Type any @handle or click a featured viral creator below.
+                {prioritizeFeatured ? (
+                  <>
+                    <span className="font-medium text-foreground">Pick a creator.</span> Tap a
+                    featured creator above, or type any public handle below.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">Pick a creator.</span> Type any
+                    @handle or click a featured viral creator below.
+                  </>
+                )}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
@@ -448,7 +490,12 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div className="max-w-2xl">
+      <div className="flex flex-col">
+      <div
+        className={
+          "max-w-2xl " + (prioritizeFeatured ? "order-3" : "order-1")
+        }
+      >
         <Card className="border-border/50 bg-card">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg text-card-foreground">
@@ -486,7 +533,11 @@ export default function Home() {
                     }}
                     onBlur={() => {
                       const n = normalizeInstagramHandle(handle);
-                      if (handle.trim() && !isValidInstagramHandleNormalized(n)) {
+                      if (
+                        handle.trim() &&
+                        !previewOk &&
+                        !isValidInstagramHandleNormalized(n)
+                      ) {
                         setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
                       }
                     }}
@@ -641,6 +692,26 @@ export default function Home() {
                     <XCircle className="h-3 w-3 shrink-0" />
                     {profileError}
                   </p>
+                  {isLikelyInstagramRateLimitMessage(profileError) ? (
+                    <div className="mt-3 flex flex-col gap-2 border-t border-destructive/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Skip the wait: open a hand-picked creator with reels already loaded.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() =>
+                          document
+                            .getElementById("featured-creators")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                      >
+                        Browse featured creators
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -705,8 +776,7 @@ export default function Home() {
                 className="w-full h-12 text-base font-medium"
                 disabled={
                   startScrape.isPending ||
-                  !handle.trim() ||
-                  handleInputInvalid ||
+                  !handleReadyForSubmit ||
                   (profile?.found === true && profile.isPrivate) ||
                   !scrapeGate.allowed
                 }
@@ -728,15 +798,20 @@ export default function Home() {
         </Card>
       </div>
 
-      <Separator className="my-10" />
+      <Separator className={"my-10 order-2"} />
 
-      <section>
+      <section
+        id="featured-creators"
+        className={"scroll-mt-24 " + (prioritizeFeatured ? "order-1" : "order-3")}
+      >
         <div className="mb-5">
           <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-primary">
             Instant research · No waiting
           </span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-            Or spy on top viral creators
+            {prioritizeFeatured
+              ? "Start here: top viral creators"
+              : "Or spy on top viral creators"}
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
             Hand-picked creators with massive audiences. Their top viral reels
@@ -860,7 +935,9 @@ export default function Home() {
               More creators coming to this niche soon
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use the spy session card above to research any handle directly.
+              {prioritizeFeatured
+                ? "Use the spy session below to research any public handle directly."
+                : "Use the spy session card above to research any handle directly."}
             </p>
           </div>
         ) : (
@@ -935,6 +1012,8 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 border-t border-border pt-8 sm:grid-cols-3">
         {[
