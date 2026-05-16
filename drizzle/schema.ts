@@ -70,9 +70,14 @@ export type InsertUser = typeof users.$inferInsert;
 /**
  * Scrape jobs track each scraping request for an Instagram handle.
  */
-export const scrapeJobs = mysqlTable("scrape_jobs", {
+export const scrapeJobs = mysqlTable(
+  "scrape_jobs",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   handle: varchar("handle", { length: 128 }).notNull(),
   timeframeDays: int("timeframeDays").notNull(),
   status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
@@ -109,7 +114,11 @@ export const scrapeJobs = mysqlTable("scrape_jobs", {
   isDemo: boolean("isDemo").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_scrape_jobs_workspace").on(table.workspaceId),
+  })
+);
 
 export type ScrapeJob = typeof scrapeJobs.$inferSelect;
 export type InsertScrapeJob = typeof scrapeJobs.$inferInsert;
@@ -117,9 +126,14 @@ export type InsertScrapeJob = typeof scrapeJobs.$inferInsert;
 /**
  * Individual reels collected from a scrape job.
  */
-export const reels = mysqlTable("reels", {
+export const reels = mysqlTable(
+  "reels",
+  {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("jobId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   shortcode: varchar("shortcode", { length: 64 }).notNull(),
   caption: text("caption"),
   viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
@@ -199,7 +213,11 @@ export const reels = mysqlTable("reels", {
   completionRate: decimal("completionRate", { precision: 5, scale: 2 }),
   engagementRate: decimal("engagementRate", { precision: 5, scale: 4 }),
   viralFlag: boolean("viralFlag").default(false).notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_reels_workspace").on(table.workspaceId),
+  })
+);
 
 export type Reel = typeof reels.$inferSelect;
 export type InsertReel = typeof reels.$inferInsert;
@@ -212,11 +230,19 @@ export type InsertReel = typeof reels.$inferInsert;
  * MySQL can't express a cheap "xor" CHECK on nullable columns without
  * function dependencies. `reelId` points at `reels.id` (user-scraped),
  * `featuredReelId` at `featured_reels.id` (catalog).
+ *
+ * `workspaceId` stays nullable forever: backfill copies reels.workspaceId
+ * when reelId IS NOT NULL; featured-only rows keep workspaceId NULL.
  */
-export const transcriptions = mysqlTable("transcriptions", {
+export const transcriptions = mysqlTable(
+  "transcriptions",
+  {
   id: int("id").autoincrement().primaryKey(),
   reelId: int("reelId"),
   featuredReelId: int("featuredReelId"),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   transcript: text("transcript"),
   segments: json("segments"),
   hookAnalysis: text("hookAnalysis"),
@@ -227,7 +253,11 @@ export const transcriptions = mysqlTable("transcriptions", {
   startedAt: timestamp("startedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_transcriptions_workspace").on(table.workspaceId),
+  })
+);
 
 export type Transcription = typeof transcriptions.$inferSelect;
 export type InsertTranscription = typeof transcriptions.$inferInsert;
@@ -238,11 +268,16 @@ export type InsertTranscription = typeof transcriptions.$inferInsert;
  * Exactly one of (`reelId`, `featuredReelId`) must be non-null —
  * enforced in the `recreate.*` handlers.
  */
-export const recreatedScripts = mysqlTable("recreated_scripts", {
+export const recreatedScripts = mysqlTable(
+  "recreated_scripts",
+  {
   id: int("id").autoincrement().primaryKey(),
   reelId: int("reelId"),
   featuredReelId: int("featuredReelId"),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   topic: text("topic").notNull(),
   gradeLevel: varchar("gradeLevel", { length: 16 }).notNull(), // "auto", "2", "3", "4", "5", "6"
   viralStructure: json("viralStructure"), // { hook, body, transition, cta } analysis
@@ -252,7 +287,11 @@ export const recreatedScripts = mysqlTable("recreated_scripts", {
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_recreated_scripts_workspace").on(table.workspaceId),
+  })
+);
 
 export type RecreatedScript = typeof recreatedScripts.$inferSelect;
 export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
@@ -265,15 +304,34 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
  *   - featured catalog: `featuredReelId` non-null, `reelId` and `jobId` null.
  * Enforced in the `saved.toggle` handler.
  */
-export const savedReels = mysqlTable("saved_reels", {
+export const savedReels = mysqlTable(
+  "saved_reels",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   reelId: int("reelId"),
   jobId: int("jobId"),
   featuredReelId: int("featuredReelId"),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_saved_reels_workspace").on(table.workspaceId),
+    workspaceUserReelUnique: uniqueIndex("uniq_saved_reels_workspace_user_reel").on(
+      table.workspaceId,
+      table.userId,
+      table.reelId
+    ),
+    workspaceUserFeaturedUnique: uniqueIndex("uniq_saved_reels_workspace_user_featured").on(
+      table.workspaceId,
+      table.userId,
+      table.featuredReelId
+    ),
+  })
+);
 
 export type SavedReel = typeof savedReels.$inferSelect;
 export type InsertSavedReel = typeof savedReels.$inferInsert;
@@ -281,15 +339,24 @@ export type InsertSavedReel = typeof savedReels.$inferInsert;
 /**
  * Tags for organizing scripts (default stages + custom user tags).
  */
-export const scriptTags = mysqlTable("script_tags", {
+export const scriptTags = mysqlTable(
+  "script_tags",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   name: varchar("name", { length: 64 }).notNull(),
   color: varchar("color", { length: 16 }).notNull(), // hex color like #7c3aed
   isDefault: int("isDefault").default(0).notNull(), // 1 = system default stage tag
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_script_tags_workspace").on(table.workspaceId),
+  })
+);
 
 export type ScriptTag = typeof scriptTags.$inferSelect;
 export type InsertScriptTag = typeof scriptTags.$inferInsert;
@@ -297,9 +364,14 @@ export type InsertScriptTag = typeof scriptTags.$inferInsert;
 /**
  * Saved scripts in the user's library with metadata.
  */
-export const savedScripts = mysqlTable("saved_scripts", {
+export const savedScripts = mysqlTable(
+  "saved_scripts",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   reelId: int("reelId"), // optional - linked to original reel
   recreatedScriptId: int("recreatedScriptId"), // optional - linked to recreated script
   title: varchar("title", { length: 256 }).notNull(),
@@ -317,7 +389,21 @@ export const savedScripts = mysqlTable("saved_scripts", {
   captionStyle: varchar("captionStyle", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_saved_scripts_workspace").on(table.workspaceId),
+    workspaceUserReelUnique: uniqueIndex("uniq_saved_scripts_workspace_user_reel").on(
+      table.workspaceId,
+      table.userId,
+      table.reelId
+    ),
+    workspaceUserRecreatedUnique: uniqueIndex("uniq_saved_scripts_workspace_user_recreated").on(
+      table.workspaceId,
+      table.userId,
+      table.recreatedScriptId
+    ),
+  })
+);
 
 export type SavedScript = typeof savedScripts.$inferSelect;
 export type InsertSavedScript = typeof savedScripts.$inferInsert;
@@ -325,12 +411,21 @@ export type InsertSavedScript = typeof savedScripts.$inferInsert;
 /**
  * Many-to-many relationship between scripts and tags.
  */
-export const scriptTagAssignments = mysqlTable("script_tag_assignments", {
+export const scriptTagAssignments = mysqlTable(
+  "script_tag_assignments",
+  {
   id: int("id").autoincrement().primaryKey(),
   scriptId: int("scriptId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   tagId: int("tagId").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_script_tag_assignments_workspace").on(table.workspaceId),
+  })
+);
 
 export type ScriptTagAssignment = typeof scriptTagAssignments.$inferSelect;
 export type InsertScriptTagAssignment = typeof scriptTagAssignments.$inferInsert;
@@ -338,15 +433,24 @@ export type InsertScriptTagAssignment = typeof scriptTagAssignments.$inferInsert
 /**
  * Version history for scripts - each edit/rewrite creates a new version.
  */
-export const scriptVersions = mysqlTable("script_versions", {
+export const scriptVersions = mysqlTable(
+  "script_versions",
+  {
   id: int("id").autoincrement().primaryKey(),
   scriptId: int("scriptId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   content: text("content").notNull(),
   versionNumber: int("versionNumber").notNull(),
   changeType: mysqlEnum("changeType", ["initial", "manual_edit", "ai_rewrite", "grammar_fix"]).default("initial").notNull(),
   changeDescription: text("changeDescription"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_script_versions_workspace").on(table.workspaceId),
+  })
+);
 
 export type ScriptVersion = typeof scriptVersions.$inferSelect;
 export type InsertScriptVersion = typeof scriptVersions.$inferInsert;
@@ -490,9 +594,14 @@ export type InsertTelegramConnection = typeof telegramConnections.$inferInsert;
  * Collected reels - reels sent via Telegram bot or other collection methods.
  * These are standalone (not tied to a scrape job) and can be transcribed/re-created.
  */
-export const collectedReels = mysqlTable("collected_reels", {
+export const collectedReels = mysqlTable(
+  "collected_reels",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   shortcode: varchar("shortcode", { length: 64 }).notNull(),
   caption: text("caption"),
   viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
@@ -513,7 +622,11 @@ export const collectedReels = mysqlTable("collected_reels", {
   transcriptionReelId: int("transcriptionReelId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_collected_reels_workspace").on(table.workspaceId),
+  })
+);
 
 export type CollectedReel = typeof collectedReels.$inferSelect;
 export type InsertCollectedReel = typeof collectedReels.$inferInsert;
@@ -522,9 +635,14 @@ export type InsertCollectedReel = typeof collectedReels.$inferInsert;
  * Script ideas - users submit topic ideas that get processed into full scripts in the background.
  * Acts as a "script factory" where ideas queue up and scripts are ready when users return.
  */
-export const scriptIdeas = mysqlTable("script_ideas", {
+export const scriptIdeas = mysqlTable(
+  "script_ideas",
+  {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
+    onDelete: "cascade",
+  }),
   idea: text("idea").notNull(), // The topic/idea text submitted by the user
   niche: varchar("niche", { length: 128 }), // Optional niche/category hint
   tone: varchar("tone", { length: 64 }).default("engaging"), // casual, professional, humorous, educational, engaging
@@ -545,7 +663,11 @@ export const scriptIdeas = mysqlTable("script_ideas", {
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  },
+  (table) => ({
+    workspaceIdx: index("idx_script_ideas_workspace").on(table.workspaceId),
+  })
+);
 
 export type ScriptIdea = typeof scriptIdeas.$inferSelect;
 export type InsertScriptIdea = typeof scriptIdeas.$inferInsert;

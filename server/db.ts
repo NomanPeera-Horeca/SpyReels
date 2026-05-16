@@ -706,6 +706,7 @@ export function transcriptionViewFromFeaturedReelRow(
     id: fr.id,
     reelId: null,
     featuredReelId: fr.id,
+    workspaceId: null,
     transcript,
     segments: segments as Transcription["segments"],
     hookAnalysis: null,
