@@ -633,9 +633,51 @@ export interface ReelFullData {
 
 function normalizeShortcode(raw: string): string {
   const s = raw.trim();
-  const m = s.match(/instagram\.com\/(?:reel|p|tv)\/([^/?#]+)/i);
+  const m = s.match(/instagram\.com\/(?:reels?|p|tv)\/([^/?#&]+)/i);
   if (m) return m[1];
+  const m2 = s.match(/instagr\.am\/(?:reels?|p|tv)\/([^/?#&]+)/i);
+  if (m2) return m2[1];
   return s.replace(/^@/, "");
+}
+
+/** Follow redirects for share / redirect links before ScrapeCreators fetch. */
+async function resolveInstagramPostUrl(rawUrl: string): Promise<string> {
+  const trimmed = rawUrl.trim();
+  if (!/instagram\.com|instagr\.am/i.test(trimmed)) return trimmed;
+  if (/instagram\.com\/(?:reels?|p|tv)\//i.test(trimmed)) return trimmed;
+
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 12_000);
+    const res = await fetch(trimmed, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      },
+    });
+    clearTimeout(t);
+    return res.url?.trim() || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function extractPostMediaFromResponse(data: unknown): any | null {
+  if (!data || typeof data !== "object") return null;
+  const root = data as Record<string, unknown>;
+  const inner = root.data;
+  if (!inner || typeof inner !== "object") return null;
+  const d = inner as Record<string, unknown>;
+  return (
+    d.xdt_shortcode_media ??
+    d.shortcode_media ??
+    d.media ??
+    d.item ??
+    null
+  );
 }
 
 function mapPostMediaToReelFull(item: any): ReelFullData | null {
@@ -684,7 +726,7 @@ export type ReelFetchFailureReason =
 export function reelFetchFailureMessage(reason: ReelFetchFailureReason): string {
   switch (reason) {
     case "not_found":
-      return "Instagram reel was not found. It may have been deleted or the link may be invalid.";
+      return "Could not load this reel after several attempts. Open it in the Instagram app, copy the link again, and retry.";
     case "private":
       return "This reel is from a private or restricted account and cannot be fetched.";
     case "rate_limit":
@@ -709,8 +751,15 @@ function postUrlsForShortcode(code: string, preferUrl?: string): string[] {
     urls.push(trimmedPrefer);
   }
   urls.push(`https://www.instagram.com/reel/${code}/`);
+  urls.push(`https://www.instagram.com/reels/${code}/`);
   urls.push(`https://www.instagram.com/p/${code}/`);
   return [...new Set(urls)];
+}
+
+function regionForReelFetchAttempt(attempt: number): string | undefined {
+  if (attempt >= 4) return "GB";
+  if (attempt >= 3) return "US";
+  return undefined;
 }
 
 /**
@@ -721,18 +770,25 @@ export async function fetchReelByShortcodeResult(
   shortcode: string,
   options?: { preferUrl?: string }
 ): Promise<FetchReelByShortcodeResult> {
-  const code = normalizeShortcode(options?.preferUrl || shortcode);
+  const resolvedPrefer = options?.preferUrl
+    ? await resolveInstagramPostUrl(options.preferUrl)
+    : undefined;
+  const code = normalizeShortcode(resolvedPrefer || shortcode);
   if (!code) return { ok: false, reason: "not_found" };
 
-  const urls = postUrlsForShortcode(code, options?.preferUrl);
-  const MAX_TRIES = 5;
+  const urls = postUrlsForShortcode(code, resolvedPrefer);
+  const MAX_TRIES = 6;
   const BACKOFF_MS = 600;
 
   let lastReason: ReelFetchFailureReason = "unknown";
 
   for (const postUrl of urls) {
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      const { status, data } = await scGet("/v1/instagram/post", { url: postUrl });
+      const region = regionForReelFetchAttempt(attempt);
+      const { status, data } = await scGet("/v1/instagram/post", {
+        url: postUrl,
+        region,
+      });
 
       if (status === 408) {
         lastReason = "timeout";
@@ -754,19 +810,26 @@ export async function fetchReelByShortcodeResult(
 
       if (status === 404) {
         lastReason = "not_found";
-        break;
-      }
-
-      if (status !== 200 || !data) {
-        lastReason = status >= 500 ? "api_error" : "unknown";
-        if (attempt < MAX_TRIES && status >= 500) {
-          await sleep(1000 * attempt);
+        if (attempt < MAX_TRIES) {
+          console.warn(
+            `[Instagram] HTTP 404 for reel ${code} url=${postUrl} (attempt ${attempt}/${MAX_TRIES}), retrying`
+          );
+          await sleep(BACKOFF_MS * attempt);
           continue;
         }
         break;
       }
 
-      const media = data?.data?.xdt_shortcode_media;
+      if (status !== 200 || !data) {
+        lastReason = status >= 500 ? "api_error" : "unknown";
+        if (attempt < MAX_TRIES) {
+          await sleep(status >= 500 ? 1000 * attempt : BACKOFF_MS * attempt);
+          continue;
+        }
+        break;
+      }
+
+      const media = extractPostMediaFromResponse(data);
       if (media) {
         const mapped = mapPostMediaToReelFull(media);
         return mapped ? { ok: true, data: mapped } : { ok: false, reason: "unknown" };
@@ -777,6 +840,13 @@ export async function fetchReelByShortcodeResult(
 
       if (failureKind === "not_found") {
         lastReason = "not_found";
+        if (attempt < MAX_TRIES) {
+          console.warn(
+            `[Instagram] Vendor not_found for reel ${code} (attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`.trim()
+          );
+          await sleep(BACKOFF_MS * attempt);
+          continue;
+        }
         break;
       }
       if (failureKind === "private") {
@@ -815,6 +885,9 @@ export async function fetchReelByShortcodeResult(
     }
   }
 
+  console.warn(
+    `[Instagram] fetchReelByShortcode exhausted retries shortcode=${code} urls=${urls.length} reason=${lastReason}`
+  );
   return { ok: false, reason: lastReason };
 }
 
