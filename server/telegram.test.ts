@@ -331,13 +331,40 @@ describe("collected.addByUrl", () => {
     }));
   });
 
-  it("returns duplicate flag when reel already exists", async () => {
-    mockGetCollectedReelByShortcode.mockResolvedValue({ id: 10, userId: 1, shortcode: "ABC123" });
+  it("returns duplicate flag when reel already exists and is ready", async () => {
+    mockGetCollectedReelByShortcode.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      shortcode: "ABC123",
+      status: "ready",
+    });
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.collected.addByUrl({ url: "https://www.instagram.com/reel/ABC123/" });
     expect(result.id).toBe(10);
     expect(result.duplicate).toBe(true);
+    expect(result.retried).toBe(false);
     expect(mockCreateCollectedReel).not.toHaveBeenCalled();
+    expect(mockUpdateCollectedReel).not.toHaveBeenCalled();
+  });
+
+  it("re-queues fetch when reel exists but failed", async () => {
+    mockGetCollectedReelByShortcode.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      shortcode: "ABC123",
+      status: "failed",
+    });
+    mockUpdateCollectedReel.mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.collected.addByUrl({ url: "https://www.instagram.com/reel/ABC123/" });
+    expect(result.id).toBe(10);
+    expect(result.duplicate).toBe(false);
+    expect(result.retried).toBe(true);
+    expect(mockCreateCollectedReel).not.toHaveBeenCalled();
+    expect(mockUpdateCollectedReel).toHaveBeenCalledWith(10, expect.objectContaining({
+      status: "pending",
+      errorMessage: null,
+    }));
   });
 
   it("throws BAD_REQUEST for invalid URL", async () => {

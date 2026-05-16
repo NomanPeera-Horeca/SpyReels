@@ -10,10 +10,9 @@ import {
   getTelegramConnectionByChatId,
   getTelegramConnectionByLinkCode,
   updateTelegramConnection,
-  createCollectedReel,
-  getCollectedReelByShortcode,
   updateCollectedReel,
 } from "./db";
+import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
   fetchReelByShortcodeResult,
   reelFetchFailureMessage,
@@ -243,37 +242,32 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   // Process each shortcode
   const userId = connection.userId;
   let saved = 0;
+  let retried = 0;
   let duplicates = 0;
   let errors = 0;
 
   for (const shortcode of shortcodes) {
     try {
-      // Check for duplicates
-      const existing = await getCollectedReelByShortcode(userId, shortcode);
-      if (existing) {
-        duplicates++;
-        continue;
-      }
-
-      // Create a pending collected reel first
-      const reelId = await createCollectedReel({
+      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+      const result = await ingestCollectedReelByShortcode({
         userId,
         shortcode,
-        reelUrl: `https://www.instagram.com/reel/${shortcode}/`,
+        reelUrl,
         source: "telegram",
-        status: "pending",
+        queueFetch: (reelId, sc, preferUrl) => {
+          fetchAndUpdateCollectedReel(reelId, sc, preferUrl).catch((err) => {
+            console.error(`[Telegram] Failed to fetch reel ${sc}:`, err);
+          });
+        },
       });
 
-      // Fetch metadata in background
-      fetchAndUpdateCollectedReel(
-        reelId,
-        shortcode,
-        `https://www.instagram.com/reel/${shortcode}/`
-      ).catch((err) => {
-        console.error(`[Telegram] Failed to fetch reel ${shortcode}:`, err);
-      });
-
-      saved++;
+      if (result.action === "duplicate") {
+        duplicates++;
+      } else if (result.action === "retried") {
+        retried++;
+      } else {
+        saved++;
+      }
     } catch (err) {
       console.error(`[Telegram] Error saving reel ${shortcode}:`, err);
       errors++;
@@ -283,6 +277,11 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   // Send confirmation
   const parts: string[] = [];
   if (saved > 0) parts.push(`✅ ${saved} reel${saved > 1 ? "s" : ""} saved to your dashboard!`);
+  if (retried > 0) {
+    parts.push(
+      `🔄 ${retried} reel${retried > 1 ? "s" : ""} re-queued (previous fetch failed or was still loading).`
+    );
+  }
   if (duplicates > 0) parts.push(`⚠️ ${duplicates} already in your collection.`);
   if (errors > 0) parts.push(`❌ ${errors} failed to save.`);
 

@@ -81,6 +81,7 @@ import {
   getCollectedReelsByUser,
   getCollectedReelById,
   deleteCollectedReel,
+  deleteFailedCollectedReelsByUser,
   createCollectedReel,
   getCollectedReelByShortcode,
   updateCollectedReel,
@@ -126,6 +127,7 @@ import {
   searchReelsByKeyword,
   searchReelsByHandle,
 } from "./instagram";
+import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
@@ -4164,28 +4166,33 @@ The hook MUST be 7-10 words. Count them.`),
           throw new TRPCError({ code: "BAD_REQUEST", message: "Could not parse Instagram Reel URL" });
         }
 
-        // Check for duplicates
-        const existing = await getCollectedReelByShortcode(ctx.user.id, shortcode);
-        if (existing) {
-          return { id: existing.id, duplicate: true };
-        }
-
-        // Create pending reel
-        const id = await createCollectedReel({
+        const reelUrl = input.url.trim();
+        const ingest = await ingestCollectedReelByShortcode({
           userId: ctx.user.id,
           shortcode,
-          reelUrl: `https://www.instagram.com/reel/${shortcode}/`,
+          reelUrl: reelUrl.includes("instagram.com") || reelUrl.includes("instagr.am")
+            ? reelUrl
+            : `https://www.instagram.com/reel/${shortcode}/`,
           source: "url_paste",
-          status: "pending",
+          queueFetch: (id, sc) => {
+            fetchAndUpdateCollectedReelBg(id, sc).catch((err) => {
+              console.error(`[Collected] Failed to fetch reel ${sc}:`, err);
+            });
+          },
         });
 
-        // Fetch metadata in background
-        fetchAndUpdateCollectedReelBg(id, shortcode).catch((err) => {
-          console.error(`[Collected] Failed to fetch reel ${shortcode}:`, err);
-        });
-
-        return { id, duplicate: false };
+        return {
+          id: ingest.id,
+          duplicate: ingest.action === "duplicate",
+          retried: ingest.action === "retried",
+        };
       }),
+
+    /** Remove all failed collected reels (ghost rows that block Telegram re-add) */
+    deleteFailed: protectedProcedure.mutation(async ({ ctx }) => {
+      const deleted = await deleteFailedCollectedReelsByUser(ctx.user.id);
+      return { deleted };
+    }),
 
     /** Refresh metadata for a failed or incomplete reel */
     retry: protectedProcedure

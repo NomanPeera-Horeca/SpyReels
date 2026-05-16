@@ -1402,6 +1402,23 @@ export async function deleteCollectedReel(id: number): Promise<void> {
   await db.delete(collectedReels).where(eq(collectedReels.id, id));
 }
 
+export async function deleteFailedCollectedReelsByUser(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: collectedReels.id })
+    .from(collectedReels)
+    .where(and(eq(collectedReels.userId, userId), eq(collectedReels.status, "failed")));
+  if (rows.length === 0) return 0;
+  await db.delete(collectedReels).where(
+    inArray(
+      collectedReels.id,
+      rows.map((r) => r.id)
+    )
+  );
+  return rows.length;
+}
+
 export async function getCollectedReelByShortcode(userId: number, shortcode: string): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

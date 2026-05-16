@@ -199,11 +199,25 @@ export default function CollectedReels() {
       utils.collected.list.invalidate();
       if (data.duplicate) {
         toast.info("This reel is already in your collection");
+      } else if (data.retried) {
+        toast.success("Re-fetching reel metadata...");
       } else {
         posthog?.capture("reel_added_by_url");
         toast.success("Reel added! Fetching metadata...");
       }
       setUrlInput("");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteFailedMutation = trpc.collected.deleteFailed.useMutation({
+    onSuccess: (data) => {
+      utils.collected.list.invalidate();
+      if (data.deleted > 0) {
+        toast.success(`Removed ${data.deleted} failed reel${data.deleted === 1 ? "" : "s"}`);
+      } else {
+        toast.info("No failed reels to remove");
+      }
     },
     onError: (err) => toast.error(err.message),
   });
@@ -415,6 +429,7 @@ export default function CollectedReels() {
   const isTelegramConnected = telegramQuery.data?.connected;
   const botUsername = telegramQuery.data?.botUsername;
   const telegramReels = collectedRows.filter((r) => r.source === "telegram");
+  const failedCount = collectedRows.filter((r) => r.status === "failed").length;
 
   const noopSave = () => {};
 
@@ -664,6 +679,21 @@ export default function CollectedReels() {
                 <RefreshCw className="mr-1 h-3 w-3" />
               )}
               Refresh All
+            </Button>
+          )}
+
+          {failedCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              onClick={() => deleteFailedMutation.mutate()}
+              disabled={deleteFailedMutation.isPending}
+            >
+              {deleteFailedMutation.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : null}
+              Clear {failedCount} failed
             </Button>
           )}
 
