@@ -117,7 +117,15 @@ import {
   getBrandCoachScoresBatch,
   getSavedFeaturedReelsWithDetails,
 } from "./db";
-import { scrapeReels, fetchReelByShortcode, fetchProfile, searchReelsByKeyword, searchReelsByHandle } from "./instagram";
+import {
+  scrapeReels,
+  fetchReelByShortcode,
+  fetchReelByShortcodeResult,
+  reelFetchFailureMessage,
+  fetchProfile,
+  searchReelsByKeyword,
+  searchReelsByHandle,
+} from "./instagram";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
@@ -5207,19 +5215,22 @@ export type AppRouter = typeof appRouter;
 
 async function fetchAndUpdateCollectedReelBg(reelId: number, shortcode: string): Promise<void> {
   try {
-    const data = await fetchReelByShortcode(shortcode);
-    if (!data) {
+    const existing = await getCollectedReelById(reelId);
+    const result = await fetchReelByShortcodeResult(shortcode, {
+      preferUrl: existing?.reelUrl || undefined,
+    });
+    if (!result.ok) {
       await updateCollectedReel(reelId, {
         status: "failed",
-        errorMessage: "Could not fetch reel data from Instagram",
+        errorMessage: reelFetchFailureMessage(result.reason),
       });
       return;
     }
+    const data = result.data;
 
-    // Read existing reel data to preserve values that Instagram may not return
+    // Preserve values that Instagram may not return on refresh
     // (e.g., view counts are often null/0 from page scrape since Instagram
     // restricts play_count for unauthenticated requests)
-    const existing = await getCollectedReelById(reelId);
 
     const thumbCand = (
       data.thumbnailUrl ||

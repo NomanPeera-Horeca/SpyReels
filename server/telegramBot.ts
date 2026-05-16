@@ -14,7 +14,10 @@ import {
   getCollectedReelByShortcode,
   updateCollectedReel,
 } from "./db";
-import { fetchReelByShortcode } from "./instagram";
+import {
+  fetchReelByShortcodeResult,
+  reelFetchFailureMessage,
+} from "./instagram";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import { ensureReelVideoOnR2 } from "./reelVideoR2";
 
@@ -59,6 +62,36 @@ function extractInstagramShortcode(text: string): string | null {
   return null;
 }
 
+/** Combine message text, caption, and link entities (Instagram share-to-Telegram). */
+function messageTextForUrlParsing(message: {
+  text?: string;
+  caption?: string;
+  entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
+  caption_entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
+}): string {
+  const parts: string[] = [];
+  if (message.text?.trim()) parts.push(message.text.trim());
+  if (message.caption?.trim()) parts.push(message.caption.trim());
+
+  const addEntities = (
+    entities: typeof message.entities,
+    source: string | undefined
+  ) => {
+    if (!entities?.length || !source) return;
+    for (const e of entities) {
+      if (e.type === "text_link" && e.url) {
+        parts.push(e.url);
+      } else if (e.type === "url") {
+        parts.push(source.substring(e.offset, e.offset + e.length));
+      }
+    }
+  };
+
+  addEntities(message.entities, message.text);
+  addEntities(message.caption_entities, message.caption);
+  return parts.join("\n");
+}
+
 function extractAllInstagramShortcodes(text: string): string[] {
   const patterns = [
     /instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/g,
@@ -81,7 +114,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   if (!message) return;
 
   const chatId = String(message.chat.id);
-  const text = (message.text || "").trim();
+  const text = messageTextForUrlParsing(message);
   const username = message.from?.username || "";
 
   // Handle /start command
@@ -232,7 +265,11 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       });
 
       // Fetch metadata in background
-      fetchAndUpdateCollectedReel(reelId, shortcode).catch((err) => {
+      fetchAndUpdateCollectedReel(
+        reelId,
+        shortcode,
+        `https://www.instagram.com/reel/${shortcode}/`
+      ).catch((err) => {
         console.error(`[Telegram] Failed to fetch reel ${shortcode}:`, err);
       });
 
@@ -259,16 +296,21 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 
 // ── Background: fetch reel metadata and update the collected reel ──
 
-async function fetchAndUpdateCollectedReel(reelId: number, shortcode: string): Promise<void> {
+async function fetchAndUpdateCollectedReel(
+  reelId: number,
+  shortcode: string,
+  preferUrl?: string
+): Promise<void> {
   try {
-    const data = await fetchReelByShortcode(shortcode);
-    if (!data) {
+    const result = await fetchReelByShortcodeResult(shortcode, { preferUrl });
+    if (!result.ok) {
       await updateCollectedReel(reelId, {
         status: "failed",
-        errorMessage: "Could not fetch reel data from Instagram",
+        errorMessage: reelFetchFailureMessage(result.reason),
       });
       return;
     }
+    const data = result.data;
 
     const thumbCand = (data.thumbnailUrl || "").trim();
     const vidCand = (data.videoUrl || "").trim();
