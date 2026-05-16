@@ -128,6 +128,10 @@ import {
   searchReelsByHandle,
 } from "./instagram";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
+import {
+  canonicalInstagramReelUrl,
+  parseInstagramReelShortcode,
+} from "./instagramUrl";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
@@ -4152,30 +4156,23 @@ The hook MUST be 7-10 words. Count them.`),
     addByUrl: protectedProcedure
       .input(z.object({ url: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        // Parse shortcode from URL
-        const urlPatterns = [
-          /instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/,
-          /instagr\.am\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/,
-        ];
-        let shortcode = "";
-        for (const pattern of urlPatterns) {
-          const match = input.url.match(pattern);
-          if (match && match[1]) { shortcode = match[1]; break; }
-        }
+        const shortcode = parseInstagramReelShortcode(input.url);
         if (!shortcode) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Could not parse Instagram Reel URL" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Could not parse Instagram Reel URL. Use a link like instagram.com/reel/ABC123/ or instagram.com/username/reel/ABC123/",
+          });
         }
 
-        const reelUrl = input.url.trim();
+        const reelUrl = canonicalInstagramReelUrl(shortcode, input.url);
         const ingest = await ingestCollectedReelByShortcode({
           userId: ctx.user.id,
           shortcode,
-          reelUrl: reelUrl.includes("instagram.com") || reelUrl.includes("instagr.am")
-            ? reelUrl
-            : `https://www.instagram.com/reel/${shortcode}/`,
+          reelUrl,
           source: "url_paste",
-          queueFetch: (id, sc) => {
-            fetchAndUpdateCollectedReelBg(id, sc).catch((err) => {
+          queueFetch: (id, sc, preferUrl) => {
+            fetchAndUpdateCollectedReelBg(id, sc, preferUrl).catch((err) => {
               console.error(`[Collected] Failed to fetch reel ${sc}:`, err);
             });
           },
@@ -4203,7 +4200,7 @@ The hook MUST be 7-10 words. Count them.`),
           throw new TRPCError({ code: "NOT_FOUND" });
         }
         await updateCollectedReel(input.id, { status: "pending", errorMessage: null });
-        fetchAndUpdateCollectedReelBg(input.id, reel.shortcode).catch((err) => {
+        fetchAndUpdateCollectedReelBg(input.id, reel.shortcode, reel.reelUrl).catch((err) => {
           console.error(`[Collected] Retry failed for ${reel.shortcode}:`, err);
         });
         return { success: true };
@@ -4223,7 +4220,7 @@ The hook MUST be 7-10 words. Count them.`),
           if (reel.status !== "ready") {
             await updateCollectedReel(reel.id, { status: "pending", errorMessage: null });
           }
-          fetchAndUpdateCollectedReelBg(reel.id, reel.shortcode).catch((err) => {
+          fetchAndUpdateCollectedReelBg(reel.id, reel.shortcode, reel.reelUrl).catch((err) => {
             console.error(`[Collected] Refresh failed for ${reel.shortcode}:`, err);
           });
           count++;
@@ -5220,11 +5217,15 @@ export type AppRouter = typeof appRouter;
 
 // ── Helper functions ──
 
-async function fetchAndUpdateCollectedReelBg(reelId: number, shortcode: string): Promise<void> {
+async function fetchAndUpdateCollectedReelBg(
+  reelId: number,
+  shortcode: string,
+  preferUrl?: string
+): Promise<void> {
   try {
     const existing = await getCollectedReelById(reelId);
     const result = await fetchReelByShortcodeResult(shortcode, {
-      preferUrl: existing?.reelUrl || undefined,
+      preferUrl: preferUrl || existing?.reelUrl || undefined,
     });
     if (!result.ok) {
       await updateCollectedReel(reelId, {

@@ -14,6 +14,10 @@ import {
 } from "./db";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
+  canonicalInstagramReelUrl,
+  extractAllInstagramReelShortcodes,
+} from "./instagramUrl";
+import {
   fetchReelByShortcodeResult,
   reelFetchFailureMessage,
 } from "./instagram";
@@ -48,19 +52,6 @@ async function sendMessage(chatId: string, text: string, parseMode: string = "HT
 
 // ── Parse Instagram URL from message ──
 
-function extractInstagramShortcode(text: string): string | null {
-  // Match various Instagram URL patterns
-  const patterns = [
-    /instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/,
-    /instagr\.am\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) return match[1];
-  }
-  return null;
-}
-
 /** Combine message text, caption, and link entities (Instagram share-to-Telegram). */
 function messageTextForUrlParsing(message: {
   text?: string;
@@ -91,19 +82,21 @@ function messageTextForUrlParsing(message: {
   return parts.join("\n");
 }
 
-function extractAllInstagramShortcodes(text: string): string[] {
-  const patterns = [
-    /instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/g,
-    /instagr\.am\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/g,
-  ];
-  const shortcodes = new Set<string>();
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      if (match[1]) shortcodes.add(match[1]);
-    }
+function reelUrlFromMessage(text: string, shortcode: string): string {
+  const urlMatch = text.match(
+    new RegExp(`https?:\\/\\/[^\\s]*instagram\\.com[^\\s]*${shortcode}[^\\s]*`, "i")
+  );
+  if (urlMatch) {
+    return urlMatch[0].replace(/[.,;:!?)\\]]+$/, "");
   }
-  return Array.from(shortcodes);
+  const igMatch = text.match(
+    new RegExp(`[^\\s]*instagram\\.com[^\\s]*${shortcode}[^\\s]*`, "i")
+  );
+  if (igMatch) {
+    const raw = igMatch[0].replace(/[.,;:!?)\\]]+$/, "");
+    return raw.startsWith("http") ? raw : `https://${raw}`;
+  }
+  return canonicalInstagramReelUrl(shortcode);
 }
 
 // ── Handle incoming Telegram messages ──
@@ -228,7 +221,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   }
 
   // Extract Instagram URLs from message
-  const shortcodes = extractAllInstagramShortcodes(text);
+  const shortcodes = extractAllInstagramReelShortcodes(text);
 
   if (shortcodes.length === 0) {
     await sendMessage(chatId,
@@ -248,7 +241,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 
   for (const shortcode of shortcodes) {
     try {
-      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+      const reelUrl = reelUrlFromMessage(text, shortcode);
       const result = await ingestCollectedReelByShortcode({
         userId,
         shortcode,

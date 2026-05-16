@@ -3,6 +3,8 @@
  * Uses global fetch with x-api-key (no direct Instagram mobile API calls).
  */
 
+import { parseInstagramReelShortcode } from "./instagramUrl";
+
 const API_BASE = "https://api.scrapecreators.com";
 
 function requireApiKey(): string {
@@ -632,19 +634,14 @@ export interface ReelFullData {
 }
 
 function normalizeShortcode(raw: string): string {
-  const s = raw.trim();
-  const m = s.match(/instagram\.com\/(?:reels?|p|tv)\/([^/?#&]+)/i);
-  if (m) return m[1];
-  const m2 = s.match(/instagr\.am\/(?:reels?|p|tv)\/([^/?#&]+)/i);
-  if (m2) return m2[1];
-  return s.replace(/^@/, "");
+  return parseInstagramReelShortcode(raw) ?? "";
 }
 
 /** Follow redirects for share / redirect links before ScrapeCreators fetch. */
 async function resolveInstagramPostUrl(rawUrl: string): Promise<string> {
   const trimmed = rawUrl.trim();
   if (!/instagram\.com|instagr\.am/i.test(trimmed)) return trimmed;
-  if (/instagram\.com\/(?:reels?|p|tv)\//i.test(trimmed)) return trimmed;
+  if (parseInstagramReelShortcode(trimmed)) return trimmed;
 
   try {
     const controller = new AbortController();
@@ -751,7 +748,6 @@ function postUrlsForShortcode(code: string, preferUrl?: string): string[] {
     urls.push(trimmedPrefer);
   }
   urls.push(`https://www.instagram.com/reel/${code}/`);
-  urls.push(`https://www.instagram.com/reels/${code}/`);
   urls.push(`https://www.instagram.com/p/${code}/`);
   return [...new Set(urls)];
 }

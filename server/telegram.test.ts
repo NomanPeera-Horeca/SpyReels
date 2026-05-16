@@ -385,6 +385,18 @@ describe("collected.addByUrl", () => {
     mockCreateCollectedReel.mockClear();
     await caller.collected.addByUrl({ url: "https://www.instagram.com/p/ABC123/" });
     expect(mockCreateCollectedReel).toHaveBeenCalledWith(expect.objectContaining({ shortcode: "ABC123" }));
+
+    // /username/reel/ format (mobile Copy link)
+    mockCreateCollectedReel.mockClear();
+    await caller.collected.addByUrl({
+      url: "https://www.instagram.com/somecreator/reel/MOBILE99/",
+    });
+    expect(mockCreateCollectedReel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shortcode: "MOBILE99",
+        reelUrl: "https://www.instagram.com/somecreator/reel/MOBILE99/",
+      })
+    );
   });
 });
 
