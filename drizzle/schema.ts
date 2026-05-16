@@ -1054,3 +1054,86 @@ export const sitemapSubmissions = mysqlTable(
 );
 
 export type SitemapSubmission = typeof sitemapSubmissions.$inferSelect;
+
+/**
+ * Agency workspaces (V1). Workspace ids are UUID strings (varchar 36).
+ * User references stay INT to match users.id. No slug column in V1.
+ */
+export const workspaces = mysqlTable(
+  "workspaces",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    logoUrl: varchar("logoUrl", { length: 500 }),
+    ownerUserId: int("ownerUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    plan: varchar("plan", { length: 20 }).default("free").notNull(),
+    stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 100 }),
+    includedSeats: int("includedSeats").default(1).notNull(),
+    isPersonal: boolean("isPersonal").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    deletedAt: timestamp("deletedAt"),
+  },
+  (table) => ({
+    ownerIdx: index("idx_workspaces_owner").on(table.ownerUserId),
+    stripeSubIdx: index("idx_workspaces_stripe_sub").on(table.stripeSubscriptionId),
+  })
+);
+
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = typeof workspaces.$inferInsert;
+
+export const workspaceMembers = mysqlTable(
+  "workspace_members",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).default("member").notNull(),
+    invitedByUserId: int("invitedByUserId").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceUserUnique: uniqueIndex("uniq_workspace_user").on(table.workspaceId, table.userId),
+    workspaceIdx: index("idx_members_workspace").on(table.workspaceId),
+    userIdx: index("idx_members_user").on(table.userId),
+  })
+);
+
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type InsertWorkspaceMember = typeof workspaceMembers.$inferInsert;
+
+export const workspaceInvitations = mysqlTable(
+  "workspace_invitations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    invitedEmail: varchar("invitedEmail", { length: 255 }).notNull(),
+    role: varchar("role", { length: 20 }).default("member").notNull(),
+    token: varchar("token", { length: 64 }).notNull(),
+    invitedByUserId: int("invitedByUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    acceptedAt: timestamp("acceptedAt"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenUnique: uniqueIndex("uniq_invitation_token").on(table.token),
+    workspaceIdx: index("idx_invitations_workspace").on(table.workspaceId),
+    emailIdx: index("idx_invitations_email").on(table.invitedEmail),
+  })
+);
+
+export type WorkspaceInvitation = typeof workspaceInvitations.$inferSelect;
+export type InsertWorkspaceInvitation = typeof workspaceInvitations.$inferInsert;
