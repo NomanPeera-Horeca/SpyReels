@@ -1,4 +1,19 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -1368,32 +1383,112 @@ export async function deleteTelegramConnection(id: number): Promise<void> {
 
 // ── Collected Reels ──
 
+let collectedReelIngestColumnsCached: boolean | undefined;
+
+/** Migration 0044 — probe so staging can deploy before SQL is applied. */
+export async function hasCollectedReelIngestColumns(): Promise<boolean> {
+  if (collectedReelIngestColumnsCached !== undefined) {
+    return collectedReelIngestColumnsCached;
+  }
+  const db = await getDb();
+  if (!db) {
+    collectedReelIngestColumnsCached = false;
+    return false;
+  }
+  try {
+    await db.execute(
+      sql`SELECT fetchAttempts, lastFetchAt, nextFetchAt, fetchProvider FROM collected_reels LIMIT 0`
+    );
+    collectedReelIngestColumnsCached = true;
+  } catch {
+    collectedReelIngestColumnsCached = false;
+    console.warn(
+      "[db] collected_reels ingest columns missing — run drizzle/0044_collected_reel_ingest.sql"
+    );
+  }
+  return collectedReelIngestColumnsCached;
+}
+
+export async function collectedReelsColumnsForQuery() {
+  return collectedReelsSelectColumns(await hasCollectedReelIngestColumns());
+}
+
+function collectedReelsSelectColumns(includeIngest: boolean) {
+  const all = getTableColumns(collectedReels);
+  if (includeIngest) return all;
+  const {
+    fetchAttempts: _a,
+    lastFetchAt: _b,
+    nextFetchAt: _c,
+    fetchProvider: _d,
+    ...core
+  } = all;
+  return core;
+}
+
+function withIngestDefaults(row: Record<string, unknown>): CollectedReel {
+  return {
+    ...row,
+    fetchAttempts: (row.fetchAttempts as number | undefined) ?? 0,
+    lastFetchAt: (row.lastFetchAt as Date | null | undefined) ?? null,
+    nextFetchAt: (row.nextFetchAt as Date | null | undefined) ?? null,
+    fetchProvider: (row.fetchProvider as string | null | undefined) ?? null,
+  } as CollectedReel;
+}
+
+async function stripIngestFieldsIfNeeded<T extends Record<string, unknown>>(
+  data: T
+): Promise<Partial<T>> {
+  if (await hasCollectedReelIngestColumns()) return data;
+  const out = { ...data };
+  delete out.fetchAttempts;
+  delete out.lastFetchAt;
+  delete out.nextFetchAt;
+  delete out.fetchProvider;
+  return out;
+}
+
 export async function createCollectedReel(data: InsertCollectedReel): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(collectedReels).values(data);
+  const values = (await stripIngestFieldsIfNeeded(data)) as InsertCollectedReel;
+  const result = await db.insert(collectedReels).values(values);
   return result[0].insertId;
 }
 
 export async function getCollectedReelsByUser(userId: number): Promise<CollectedReel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(collectedReels)
+  const includeIngest = await hasCollectedReelIngestColumns();
+  const rows = await db
+    .select(collectedReelsSelectColumns(includeIngest))
+    .from(collectedReels)
     .where(eq(collectedReels.userId, userId))
     .orderBy(desc(collectedReels.createdAt));
+  return includeIngest ? (rows as CollectedReel[]) : rows.map((r) => withIngestDefaults(r));
 }
 
 export async function getCollectedReelById(id: number): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.select().from(collectedReels).where(eq(collectedReels.id, id)).limit(1);
-  return result[0];
+  const includeIngest = await hasCollectedReelIngestColumns();
+  const result = await db
+    .select(collectedReelsSelectColumns(includeIngest))
+    .from(collectedReels)
+    .where(eq(collectedReels.id, id))
+    .limit(1);
+  const row = result[0];
+  if (!row) return undefined;
+  return includeIngest ? (row as CollectedReel) : withIngestDefaults(row);
 }
 
 export async function updateCollectedReel(id: number, data: Partial<Omit<CollectedReel, "id" | "createdAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(collectedReels).set(data).where(eq(collectedReels.id, id));
+  const patch = (await stripIngestFieldsIfNeeded(data)) as Partial<
+    Omit<CollectedReel, "id" | "createdAt">
+  >;
+  await db.update(collectedReels).set(patch).where(eq(collectedReels.id, id));
 }
 
 export async function deleteCollectedReel(id: number): Promise<void> {
@@ -1422,20 +1517,35 @@ export async function deleteFailedCollectedReelsByUser(userId: number): Promise<
 export async function getCollectedReelByShortcode(userId: number, shortcode: string): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.select().from(collectedReels)
+  const includeIngest = await hasCollectedReelIngestColumns();
+  const result = await db
+    .select(collectedReelsSelectColumns(includeIngest))
+    .from(collectedReels)
     .where(and(eq(collectedReels.userId, userId), eq(collectedReels.shortcode, shortcode)))
     .limit(1);
-  return result[0];
+  const row = result[0];
+  if (!row) return undefined;
+  return includeIngest ? (row as CollectedReel) : withIngestDefaults(row);
 }
 
 /** Pending collected reels due for background ingest (worker / sweeper). */
 export async function listCollectedReelsDueForIngest(limit: number): Promise<CollectedReel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const includeIngest = await hasCollectedReelIngestColumns();
+  if (!includeIngest) {
+    const rows = await db
+      .select(collectedReelsSelectColumns(false))
+      .from(collectedReels)
+      .where(eq(collectedReels.status, "pending"))
+      .orderBy(asc(collectedReels.createdAt))
+      .limit(limit);
+    return rows.map((r) => withIngestDefaults(r));
+  }
   const now = new Date();
   const maxAttempts = 24;
-  return db
-    .select()
+  const rows = await db
+    .select(collectedReelsSelectColumns(true))
     .from(collectedReels)
     .where(
       and(
@@ -1446,6 +1556,7 @@ export async function listCollectedReelsDueForIngest(limit: number): Promise<Col
     )
     .orderBy(asc(collectedReels.createdAt))
     .limit(limit);
+  return rows as CollectedReel[];
 }
 
 

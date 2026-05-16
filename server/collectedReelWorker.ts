@@ -5,6 +5,7 @@
 
 import {
   getCollectedReelById,
+  hasCollectedReelIngestColumns,
   listCollectedReelsDueForIngest,
   updateCollectedReel,
 } from "./db";
@@ -39,7 +40,60 @@ async function runCollectedReelIngest(reelId: number): Promise<void> {
   }
 }
 
+async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
+  const reel = await getCollectedReelById(reelId);
+  if (!reel || reel.status !== "pending") return;
+
+  const preferUrl = reel.reelUrl?.trim() || undefined;
+  try {
+    const outcome = await fetchCollectedReelMetadata(reel.shortcode, preferUrl);
+    if (!outcome.ok) {
+      await updateCollectedReel(reelId, {
+        status: "failed",
+        errorMessage: outcome.message,
+      });
+      return;
+    }
+    const data = outcome.data;
+    const [stableThumb, stableVid] = await Promise.all([
+      ensureReelThumbnailOnR2(reel.shortcode, (data.thumbnailUrl || "").trim() || null),
+      ensureReelVideoOnR2(reel.shortcode, (data.videoUrl || "").trim() || null),
+    ]);
+    if (!stableThumb.trim() && !stableVid.trim()) {
+      await updateCollectedReel(reelId, {
+        status: "failed",
+        errorMessage:
+          "Could not download reel media. Try Retry or paste the link again.",
+      });
+      return;
+    }
+    await updateCollectedReel(reelId, {
+      caption: data.caption || null,
+      viewCount: data.viewCount || 0,
+      likeCount: data.likeCount || 0,
+      commentCount: data.commentCount || 0,
+      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
+      videoUrl: stableVid.trim() ? stableVid : null,
+      duration: data.duration || null,
+      postedAt: data.postedAt || null,
+      ownerUsername: data.ownerUsername || null,
+      ownerFullName: data.ownerFullName || null,
+      ownerProfilePicUrl: data.ownerProfilePicUrl || null,
+      ownerFollowerCount: data.ownerFollowerCount || 0,
+      status: "ready",
+      errorMessage: null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await updateCollectedReel(reelId, { status: "failed", errorMessage: message });
+  }
+}
+
 export async function processCollectedReelIngest(reelId: number): Promise<void> {
+  if (!(await hasCollectedReelIngestColumns())) {
+    return processCollectedReelIngestLegacy(reelId);
+  }
+
   const reel = await getCollectedReelById(reelId);
   if (!reel || reel.status !== "pending") return;
 

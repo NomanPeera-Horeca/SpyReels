@@ -79,6 +79,7 @@ import {
   updateTelegramConnection,
   deleteTelegramConnection,
   getCollectedReelsByUser,
+  collectedReelsColumnsForQuery,
   getCollectedReelById,
   deleteCollectedReel,
   deleteFailedCollectedReelsByUser,
@@ -3990,9 +3991,10 @@ The hook MUST be 7-10 words. Count them.`),
         }));
       }
 
+      const collectedCols = await collectedReelsColumnsForQuery();
       const joined = await db
         .select({
-          ...getTableColumns(collectedReels),
+          ...collectedCols,
           clsContentType: reelsTable.contentType,
           clsRemakeabilityScore: reelsTable.remakeabilityScore,
           clsSuggestedAction: reelsTable.suggestedAction,

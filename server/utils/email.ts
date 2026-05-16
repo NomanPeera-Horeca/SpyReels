@@ -1,11 +1,22 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY?.trim();
+  if (!key) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+  if (!resendClient) {
+    resendClient = new Resend(key);
+  }
+  return resendClient;
+}
 
 export async function sendWelcomeEmail(toEmail: string, firstName: string) {
   const safeName = firstName?.trim() || "there";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
     subject: "Welcome to SpyReels",
@@ -28,7 +39,7 @@ export async function sendWelcomeEmail(toEmail: string, firstName: string) {
 }
 
 export async function sendPasswordResetEmail(toEmail: string, resetLink: string) {
-  await resend.emails.send({
+  await getResend().emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
     subject: "Reset your SpyReels password",
@@ -63,7 +74,6 @@ export async function sendPaymentConfirmationEmail(
   planPrice: string,
   nextBillingDate: string
 ) {
-  // Import and delegate to the JS implementation
   const { sendPaymentConfirmationEmail: sendEmail } = await import("./email.js");
   return sendEmail(toEmail, firstName, planName, planPrice, nextBillingDate);
 }
