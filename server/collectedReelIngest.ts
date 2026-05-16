@@ -9,6 +9,7 @@ import {
   getCollectedReelByShortcode,
   updateCollectedReel,
 } from "./db";
+import { enqueueCollectedReelIngest } from "./collectedReelWorker";
 
 export type CollectedReelSource = "telegram" | "url_paste" | "extension";
 
@@ -27,9 +28,8 @@ export async function ingestCollectedReelByShortcode(opts: {
   shortcode: string;
   reelUrl: string;
   source: CollectedReelSource;
-  queueFetch: (reelId: number, shortcode: string, preferUrl: string) => void;
 }): Promise<CollectedReelIngestResult> {
-  const { userId, shortcode, reelUrl, source, queueFetch } = opts;
+  const { userId, shortcode, reelUrl, source } = opts;
   const existing = await getCollectedReelByShortcode(userId, shortcode);
 
   if (existing && collectedReelBlocksDuplicate(existing)) {
@@ -42,8 +42,11 @@ export async function ingestCollectedReelByShortcode(opts: {
       errorMessage: null,
       reelUrl,
       source,
+      fetchAttempts: 0,
+      nextFetchAt: null,
+      lastFetchAt: null,
     });
-    queueFetch(existing.id, shortcode, reelUrl);
+    enqueueCollectedReelIngest(existing.id);
     return { action: "retried", id: existing.id };
   }
 
@@ -53,7 +56,8 @@ export async function ingestCollectedReelByShortcode(opts: {
     reelUrl,
     source,
     status: "pending",
+    fetchAttempts: 0,
   });
-  queueFetch(id, shortcode, reelUrl);
+  enqueueCollectedReelIngest(id);
   return { action: "created", id };
 }

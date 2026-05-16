@@ -121,12 +121,14 @@ import {
 import {
   scrapeReels,
   fetchReelByShortcode,
-  fetchReelByShortcodeResult,
-  reelFetchFailureMessage,
   fetchProfile,
   searchReelsByKeyword,
   searchReelsByHandle,
 } from "./instagram";
+import {
+  enqueueCollectedReelIngest,
+  enqueueCollectedReelRefresh,
+} from "./collectedReelWorker";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
   canonicalInstagramReelUrl,
@@ -4171,11 +4173,6 @@ The hook MUST be 7-10 words. Count them.`),
           shortcode,
           reelUrl,
           source: "url_paste",
-          queueFetch: (id, sc, preferUrl) => {
-            fetchAndUpdateCollectedReelBg(id, sc, preferUrl).catch((err) => {
-              console.error(`[Collected] Failed to fetch reel ${sc}:`, err);
-            });
-          },
         });
 
         return {
@@ -4199,10 +4196,14 @@ The hook MUST be 7-10 words. Count them.`),
         if (!reel || reel.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
-        await updateCollectedReel(input.id, { status: "pending", errorMessage: null });
-        fetchAndUpdateCollectedReelBg(input.id, reel.shortcode, reel.reelUrl).catch((err) => {
-          console.error(`[Collected] Retry failed for ${reel.shortcode}:`, err);
+        await updateCollectedReel(input.id, {
+          status: "pending",
+          errorMessage: null,
+          fetchAttempts: 0,
+          nextFetchAt: null,
+          lastFetchAt: null,
         });
+        enqueueCollectedReelIngest(input.id);
         return { success: true };
       }),
 
@@ -4218,11 +4219,16 @@ The hook MUST be 7-10 words. Count them.`),
         for (const reel of needsRefresh) {
           // Only set to pending for non-ready reels; for ready reels, refresh in background without status change
           if (reel.status !== "ready") {
-            await updateCollectedReel(reel.id, { status: "pending", errorMessage: null });
+            await updateCollectedReel(reel.id, {
+              status: "pending",
+              errorMessage: null,
+              fetchAttempts: 0,
+              nextFetchAt: null,
+            });
+            enqueueCollectedReelIngest(reel.id);
+          } else {
+            enqueueCollectedReelRefresh(reel.id);
           }
-          fetchAndUpdateCollectedReelBg(reel.id, reel.shortcode, reel.reelUrl).catch((err) => {
-            console.error(`[Collected] Refresh failed for ${reel.shortcode}:`, err);
-          });
           count++;
           // Small delay between requests
           if (count < needsRefresh.length) {
@@ -5216,69 +5222,6 @@ The hook MUST be 7-10 words. Count them.`),
 export type AppRouter = typeof appRouter;
 
 // ── Helper functions ──
-
-async function fetchAndUpdateCollectedReelBg(
-  reelId: number,
-  shortcode: string,
-  preferUrl?: string
-): Promise<void> {
-  try {
-    const existing = await getCollectedReelById(reelId);
-    const result = await fetchReelByShortcodeResult(shortcode, {
-      preferUrl: preferUrl || existing?.reelUrl || undefined,
-    });
-    if (!result.ok) {
-      await updateCollectedReel(reelId, {
-        status: "failed",
-        errorMessage: reelFetchFailureMessage(result.reason),
-      });
-      return;
-    }
-    const data = result.data;
-
-    // Preserve values that Instagram may not return on refresh
-    // (e.g., view counts are often null/0 from page scrape since Instagram
-    // restricts play_count for unauthenticated requests)
-
-    const thumbCand = (
-      data.thumbnailUrl ||
-      existing?.thumbnailUrl ||
-      ""
-    ).trim();
-    const vidCand = (
-      data.videoUrl ||
-      existing?.videoUrl ||
-      ""
-    ).trim();
-    const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(shortcode, thumbCand || null),
-      ensureReelVideoOnR2(shortcode, vidCand || null),
-    ]);
-
-    await updateCollectedReel(reelId, {
-      caption: data.caption || existing?.caption || null,
-      // Preserve existing view count if the new fetch returns 0 (Instagram restriction)
-      viewCount: data.viewCount > 0 ? data.viewCount : (existing?.viewCount || 0),
-      likeCount: data.likeCount > 0 ? data.likeCount : (existing?.likeCount || 0),
-      commentCount: data.commentCount > 0 ? data.commentCount : (existing?.commentCount || 0),
-      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
-      videoUrl: stableVid.trim() ? stableVid : null,
-      duration: data.duration || existing?.duration || null,
-      postedAt: data.postedAt || existing?.postedAt || null,
-      ownerUsername: data.ownerUsername || existing?.ownerUsername || null,
-      ownerFullName: data.ownerFullName || existing?.ownerFullName || null,
-      ownerProfilePicUrl: data.ownerProfilePicUrl || existing?.ownerProfilePicUrl || null,
-      ownerFollowerCount: data.ownerFollowerCount > 0 ? data.ownerFollowerCount : (existing?.ownerFollowerCount || 0),
-      status: "ready",
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    await updateCollectedReel(reelId, {
-      status: "failed",
-      errorMessage: message,
-    });
-  }
-}
 
 /** RFC 4180: every field double-quoted; internal " escaped as "". */
 function formatCsvField(value: string | number | boolean | null | undefined): string {

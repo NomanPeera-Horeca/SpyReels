@@ -99,7 +99,11 @@ export default function CollectedReels() {
   const transcribeGate = useUsageGate("transcribeCount");
 
   const collectedQuery = trpc.collected.list.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data;
+      const hasPending = rows?.some((r) => r.status === "pending");
+      return hasPending ? 3000 : 8000;
+    },
   });
   const prefsQuery = trpc.preferences.get.useQuery();
   const telegramQuery = trpc.telegram.status.useQuery();
@@ -893,7 +897,7 @@ export default function CollectedReels() {
                     {isPending && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Fetching reel data...</span>
+                        <span>{reel.errorMessage || "Fetching reel from Instagram…"}</span>
                       </div>
                     )}
                     {isFailed && (
@@ -1024,8 +1028,12 @@ export default function CollectedReels() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span>#{index + 1}</span>
-                    <span className="line-clamp-2 text-right">
-                      {isPending ? "Fetching…" : isFailed ? reel.errorMessage || "Failed" : "-"}
+                    <span className="line-clamp-3 text-right">
+                      {isPending
+                        ? reel.errorMessage || "Fetching from Instagram…"
+                        : isFailed
+                          ? reel.errorMessage || "Failed"
+                          : "-"}
                     </span>
                   </div>
                   <div className="flex flex-wrap justify-end gap-1" onClick={(e) => e.stopPropagation()}>

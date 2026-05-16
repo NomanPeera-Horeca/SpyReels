@@ -619,12 +619,21 @@ export const collectedReels = mysqlTable(
   source: mysqlEnum("source", ["telegram", "url_paste", "extension"]).default("telegram").notNull(),
   status: mysqlEnum("status", ["pending", "ready", "failed"]).default("pending").notNull(), // pending = fetching metadata
   errorMessage: text("errorMessage"),
+  fetchAttempts: int("fetchAttempts").default(0).notNull(),
+  lastFetchAt: timestamp("lastFetchAt"),
+  nextFetchAt: timestamp("nextFetchAt"),
+  fetchProvider: varchar("fetchProvider", { length: 64 }),
   transcriptionReelId: int("transcriptionReelId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => ({
     workspaceIdx: index("idx_collected_reels_workspace").on(table.workspaceId),
+    ingestDueIdx: index("idx_collected_reels_ingest_due").on(
+      table.status,
+      table.nextFetchAt,
+      table.fetchAttempts
+    ),
   })
 );
 

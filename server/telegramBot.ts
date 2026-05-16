@@ -10,19 +10,12 @@ import {
   getTelegramConnectionByChatId,
   getTelegramConnectionByLinkCode,
   updateTelegramConnection,
-  updateCollectedReel,
 } from "./db";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
   canonicalInstagramReelUrl,
   extractAllInstagramReelShortcodes,
 } from "./instagramUrl";
-import {
-  fetchReelByShortcodeResult,
-  reelFetchFailureMessage,
-} from "./instagram";
-import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
-import { ensureReelVideoOnR2 } from "./reelVideoR2";
 
 const TELEGRAM_API = "https://api.telegram.org/bot";
 
@@ -247,11 +240,6 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
         shortcode,
         reelUrl,
         source: "telegram",
-        queueFetch: (reelId, sc, preferUrl) => {
-          fetchAndUpdateCollectedReel(reelId, sc, preferUrl).catch((err) => {
-            console.error(`[Telegram] Failed to fetch reel ${sc}:`, err);
-          });
-        },
       });
 
       if (result.action === "duplicate") {
@@ -284,55 +272,6 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   }
 
   await sendMessage(chatId, reply);
-}
-
-// ── Background: fetch reel metadata and update the collected reel ──
-
-async function fetchAndUpdateCollectedReel(
-  reelId: number,
-  shortcode: string,
-  preferUrl?: string
-): Promise<void> {
-  try {
-    const result = await fetchReelByShortcodeResult(shortcode, { preferUrl });
-    if (!result.ok) {
-      await updateCollectedReel(reelId, {
-        status: "failed",
-        errorMessage: reelFetchFailureMessage(result.reason),
-      });
-      return;
-    }
-    const data = result.data;
-
-    const thumbCand = (data.thumbnailUrl || "").trim();
-    const vidCand = (data.videoUrl || "").trim();
-    const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(shortcode, thumbCand || null),
-      ensureReelVideoOnR2(shortcode, vidCand || null),
-    ]);
-
-    await updateCollectedReel(reelId, {
-      caption: data.caption || null,
-      viewCount: data.viewCount || 0,
-      likeCount: data.likeCount || 0,
-      commentCount: data.commentCount || 0,
-      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
-      videoUrl: stableVid.trim() ? stableVid : null,
-      duration: data.duration || null,
-      postedAt: data.postedAt || null,
-      ownerUsername: data.ownerUsername || null,
-      ownerFullName: data.ownerFullName || null,
-      ownerProfilePicUrl: data.ownerProfilePicUrl || null,
-      ownerFollowerCount: data.ownerFollowerCount || 0,
-      status: "ready",
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    await updateCollectedReel(reelId, {
-      status: "failed",
-      errorMessage: message,
-    });
-  }
 }
 
 // ── Set up Telegram webhook ──

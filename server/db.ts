@@ -1,4 +1,4 @@
-import { and, desc, asc, eq, gte, inArray, isNotNull, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -1426,6 +1426,26 @@ export async function getCollectedReelByShortcode(userId: number, shortcode: str
     .where(and(eq(collectedReels.userId, userId), eq(collectedReels.shortcode, shortcode)))
     .limit(1);
   return result[0];
+}
+
+/** Pending collected reels due for background ingest (worker / sweeper). */
+export async function listCollectedReelsDueForIngest(limit: number): Promise<CollectedReel[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const maxAttempts = 24;
+  return db
+    .select()
+    .from(collectedReels)
+    .where(
+      and(
+        eq(collectedReels.status, "pending"),
+        lt(collectedReels.fetchAttempts, maxAttempts),
+        or(isNull(collectedReels.nextFetchAt), lte(collectedReels.nextFetchAt, now))
+      )
+    )
+    .orderBy(asc(collectedReels.createdAt))
+    .limit(limit);
 }
 
 

@@ -361,10 +361,14 @@ describe("collected.addByUrl", () => {
     expect(result.duplicate).toBe(false);
     expect(result.retried).toBe(true);
     expect(mockCreateCollectedReel).not.toHaveBeenCalled();
-    expect(mockUpdateCollectedReel).toHaveBeenCalledWith(10, expect.objectContaining({
-      status: "pending",
-      errorMessage: null,
-    }));
+    expect(mockUpdateCollectedReel).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({
+        status: "pending",
+        errorMessage: null,
+        fetchAttempts: 0,
+      })
+    );
   });
 
   it("throws BAD_REQUEST for invalid URL", async () => {
@@ -407,7 +411,14 @@ describe("collected.retry", () => {
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.collected.retry({ id: 1 });
     expect(result.success).toBe(true);
-    expect(mockUpdateCollectedReel).toHaveBeenCalledWith(1, { status: "pending", errorMessage: null });
+    expect(mockUpdateCollectedReel).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        status: "pending",
+        errorMessage: null,
+        fetchAttempts: 0,
+      })
+    );
   });
 
   it("throws NOT_FOUND when reel does not belong to user", async () => {

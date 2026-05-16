@@ -764,7 +764,7 @@ function regionForReelFetchAttempt(attempt: number): string | undefined {
  */
 export async function fetchReelByShortcodeResult(
   shortcode: string,
-  options?: { preferUrl?: string }
+  options?: { preferUrl?: string; downloadMedia?: boolean }
 ): Promise<FetchReelByShortcodeResult> {
   const resolvedPrefer = options?.preferUrl
     ? await resolveInstagramPostUrl(options.preferUrl)
@@ -784,6 +784,7 @@ export async function fetchReelByShortcodeResult(
       const { status, data } = await scGet("/v1/instagram/post", {
         url: postUrl,
         region,
+        download_media: options?.downloadMedia ? "true" : undefined,
       });
 
       if (status === 408) {
