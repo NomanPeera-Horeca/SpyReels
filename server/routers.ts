@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
+import { workspacesRouter } from "./routers/workspacesRouter";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -235,6 +236,8 @@ function inferPanelTestAccount(u: (typeof users.$inferSelect)): boolean {
 
 export const appRouter = router({
   system: systemRouter,
+
+  workspaces: workspacesRouter,
 
   // ── Billing & Subscription ──
   billing: router({
