@@ -51,6 +51,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { Button } from "./ui/button";
 import {
   type ThemePreference,
@@ -203,6 +204,7 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
+          <WorkspaceSwitcher />
           <SidebarHeader className="h-16 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
