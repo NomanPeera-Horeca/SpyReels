@@ -19,7 +19,7 @@ vi.mock("./db", () => ({
   createScrapeJob: vi.fn().mockResolvedValue(1),
   getScrapeJob: vi.fn().mockResolvedValue(null),
   updateScrapeJob: vi.fn().mockResolvedValue(undefined),
-  getUserScrapeJobs: vi.fn().mockResolvedValue([]),
+  getScrapeJobsByWorkspace: vi.fn().mockResolvedValue([]),
   insertReels: vi.fn().mockResolvedValue(undefined),
   getReelsByJobId: vi.fn().mockResolvedValue([]),
   getReelById: vi.fn().mockResolvedValue(null),
@@ -100,7 +100,7 @@ vi.mock("./db", () => ({
     { id: 4, userId: 1, name: "Editing", color: "#059669", isDefault: 1, sortOrder: 4, createdAt: new Date() },
     { id: 5, userId: 1, name: "Posting", color: "#dc2626", isDefault: 1, sortOrder: 5, createdAt: new Date() },
   ]),
-  getSavedReelsByUser: vi.fn().mockResolvedValue([]),
+  getSavedReelsByWorkspace: vi.fn().mockResolvedValue([]),
   getUserPreferences: vi.fn().mockResolvedValue(null),
   upsertUserPreferences: vi.fn().mockResolvedValue(undefined),
 }));

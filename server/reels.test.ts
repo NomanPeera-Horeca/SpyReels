@@ -21,6 +21,7 @@ vi.mock("./db", () => ({
   getScrapeJob: vi.fn().mockResolvedValue({
     id: 1,
     userId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
     handle: "testuser",
     timeframeDays: 30,
     status: "completed",
@@ -32,10 +33,11 @@ vi.mock("./db", () => ({
   }),
   updateScrapeJob: vi.fn().mockResolvedValue(undefined),
   deleteScrapeJob: vi.fn().mockResolvedValue(undefined),
-  getUserScrapeJobs: vi.fn().mockResolvedValue([
+  getScrapeJobsByWorkspace: vi.fn().mockResolvedValue([
     {
       id: 1,
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       handle: "testuser",
       timeframeDays: 30,
       status: "completed",
@@ -47,6 +49,7 @@ vi.mock("./db", () => ({
     {
       id: 2,
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       handle: "anotheruser",
       timeframeDays: 90,
       status: "running",
@@ -226,7 +229,7 @@ vi.mock("./db", () => ({
     { id: 1, userId: 1, name: "Scripting", color: "#6366f1", createdAt: new Date() },
     { id: 2, userId: 1, name: "Filming", color: "#22c55e", createdAt: new Date() },
   ]),
-  getSavedReelsByUser: vi.fn().mockResolvedValue([]),
+  getSavedReelsByWorkspace: vi.fn().mockResolvedValue([]),
   getLibraryTranscripts: vi.fn().mockResolvedValue({
     items: [
       {
@@ -1023,7 +1026,7 @@ describe("scrape.start - duplicate prevention", () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    // The mock getUserScrapeJobs returns "testuser" as completed,
+    // The mock getScrapeJobsByWorkspace returns "testuser" as completed,
     // so trying to start a scrape for "testuser" should throw CONFLICT
     await expect(
       caller.scrape.start({

@@ -510,10 +510,14 @@ export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, 
   await db.update(scrapeJobs).set(payload).where(eq(scrapeJobs.id, id));
 }
 
-export async function getUserScrapeJobs(userId: number): Promise<ScrapeJob[]> {
+export async function getScrapeJobsByWorkspace(workspaceId: string): Promise<ScrapeJob[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(scrapeJobs).where(eq(scrapeJobs.userId, userId)).orderBy(desc(scrapeJobs.createdAt));
+  return db
+    .select()
+    .from(scrapeJobs)
+    .where(eq(scrapeJobs.workspaceId, workspaceId))
+    .orderBy(desc(scrapeJobs.createdAt));
 }
 
 export async function deleteScrapeJob(id: number): Promise<void> {
@@ -887,22 +891,32 @@ export async function saveReel(
   return result[0].insertId;
 }
 
-export async function unsaveReel(userId: number, reelId: number): Promise<void> {
+export async function unsaveReel(workspaceId: string, reelId: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(savedReels).where(and(eq(savedReels.userId, userId), eq(savedReels.reelId, reelId)));
+  await db
+    .delete(savedReels)
+    .where(and(eq(savedReels.workspaceId, workspaceId), eq(savedReels.reelId, reelId)));
 }
 
-export async function getSavedReelsByUser(userId: number): Promise<SavedReel[]> {
+export async function getSavedReelsByWorkspace(workspaceId: string): Promise<SavedReel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(savedReels).where(eq(savedReels.userId, userId)).orderBy(desc(savedReels.createdAt));
+  return db
+    .select()
+    .from(savedReels)
+    .where(eq(savedReels.workspaceId, workspaceId))
+    .orderBy(desc(savedReels.createdAt));
 }
 
-export async function isReelSaved(userId: number, reelId: number): Promise<boolean> {
+export async function isReelSaved(workspaceId: string, reelId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.select().from(savedReels).where(and(eq(savedReels.userId, userId), eq(savedReels.reelId, reelId))).limit(1);
+  const result = await db
+    .select()
+    .from(savedReels)
+    .where(and(eq(savedReels.workspaceId, workspaceId), eq(savedReels.reelId, reelId)))
+    .limit(1);
   return result.length > 0;
 }
 
@@ -923,21 +937,21 @@ export async function saveFeaturedReel(userId: number, featuredReelId: number): 
   return result[0].insertId;
 }
 
-export async function unsaveFeaturedReel(userId: number, featuredReelId: number): Promise<void> {
+export async function unsaveFeaturedReel(workspaceId: string, featuredReelId: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
     .delete(savedReels)
     .where(
       and(
-        eq(savedReels.userId, userId),
+        eq(savedReels.workspaceId, workspaceId),
         eq(savedReels.featuredReelId, featuredReelId)
       )
     );
 }
 
 export async function isFeaturedReelSaved(
-  userId: number,
+  workspaceId: string,
   featuredReelId: number
 ): Promise<boolean> {
   const db = await getDb();
@@ -947,7 +961,7 @@ export async function isFeaturedReelSaved(
     .from(savedReels)
     .where(
       and(
-        eq(savedReels.userId, userId),
+        eq(savedReels.workspaceId, workspaceId),
         eq(savedReels.featuredReelId, featuredReelId)
       )
     )
@@ -969,7 +983,7 @@ type SavedReelFeatured = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> 
 };
 
 export async function getSavedFeaturedReelsWithDetails(
-  userId: number
+  workspaceId: string
 ): Promise<
   Array<
     SavedReelFeatured & {
@@ -1001,7 +1015,7 @@ export async function getSavedFeaturedReelsWithDetails(
     .from(savedReels)
     .innerJoin(featuredReels, eq(savedReels.featuredReelId, featuredReels.id))
     .innerJoin(featuredAccounts, eq(featuredReels.featuredAccountId, featuredAccounts.id))
-    .where(and(eq(savedReels.userId, userId), isNotNull(savedReels.featuredReelId)))
+    .where(and(eq(savedReels.workspaceId, workspaceId), isNotNull(savedReels.featuredReelId)))
     .orderBy(desc(savedReels.createdAt));
 
   return rows.map(({ saved, featuredReel: fr, accId, accHandle, accDisplay, accFollowers, accPic }) => ({
@@ -1034,7 +1048,9 @@ type SavedReelScraped = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> &
   featuredReelId: null;
 };
 
-export async function getSavedReelsWithDetails(userId: number): Promise<Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
+export async function getSavedReelsWithDetails(
+  workspaceId: string
+): Promise<Array<SavedReelScraped & { reel: Reel; job: ScrapeJob; transcription?: Transcription }>> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1048,7 +1064,11 @@ export async function getSavedReelsWithDetails(userId: number): Promise<Array<Sa
     .innerJoin(reels, eq(savedReels.reelId, reels.id))
     .innerJoin(scrapeJobs, eq(savedReels.jobId, scrapeJobs.id))
     .where(
-      and(eq(savedReels.userId, userId), isNotNull(savedReels.reelId), isNotNull(savedReels.jobId))
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        isNotNull(savedReels.reelId),
+        isNotNull(savedReels.jobId)
+      )
     )
     .orderBy(desc(savedReels.createdAt));
 

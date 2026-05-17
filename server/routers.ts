@@ -32,7 +32,7 @@ import {
   createScrapeJob,
   getScrapeJob,
   updateScrapeJob,
-  getUserScrapeJobs,
+  getScrapeJobsByWorkspace,
   insertReels,
   getReelsByJobId,
   getReelById,
@@ -46,7 +46,6 @@ import {
   getRecreatedScriptsByReelId,
   saveReel,
   unsaveReel,
-  getSavedReelsByUser,
   isReelSaved,
   getSavedReelsWithDetails,
   createScriptTag,
@@ -349,7 +348,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check if handle already exists in monitoring
         const normalizedHandle = normalizeInstagramHandle(input.handle);
-        const existingJobs = await getUserScrapeJobs(ctx.user.id);
+        const existingJobs = await getScrapeJobsByWorkspace(ctx.workspaceId);
         const existingJob = existingJobs.find(
           (j) => j.handle.toLowerCase() === normalizedHandle && (j.status === "completed" || j.status === "running")
         );
@@ -432,7 +431,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         return {
           status: job.status,
           currentStep: job.currentStep,
@@ -447,7 +446,7 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      const jobs = await getUserScrapeJobs(ctx.user.id);
+      const jobs = await getScrapeJobsByWorkspace(ctx.workspaceId);
       const db = await getDb();
       const jobIds = jobs.map((j) => j.id);
 
@@ -481,7 +480,7 @@ export const appRouter = router({
           })
           .from(reelsTable)
           .innerJoin(scrapeJobs, eq(reelsTable.jobId, scrapeJobs.id))
-          .where(and(inArray(reelsTable.jobId, jobIds), eq(scrapeJobs.userId, ctx.user.id)))
+          .where(and(inArray(reelsTable.jobId, jobIds), eq(scrapeJobs.workspaceId, ctx.workspaceId)))
           .groupBy(reelsTable.jobId);
 
         for (const row of rollupRows) {
@@ -523,7 +522,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         await deleteScrapeJob(input.jobId);
         return { success: true };
       }),
@@ -534,7 +533,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         if (job.status === "running") throw new TRPCError({ code: "BAD_REQUEST", message: "Job is already running" });
 
         // Calculate days since last sync (updatedAt) — only fetch reels from that period
@@ -601,8 +600,10 @@ export const appRouter = router({
           niche: reelNicheInputEnum.optional(),
         })
       )
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         const reelsList = await getReelsByJobId(input.jobId, input.niche as NonNullable<Reel["niche"]>);
         const transcriptionsList = await getTranscriptionsByJobId(input.jobId);
         const transcriptionMap = new Map(
@@ -2216,17 +2217,17 @@ Return JSON only:
       )
       .mutation(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          const alreadySaved = await isFeaturedReelSaved(ctx.user.id, input.featuredReelId);
+          const alreadySaved = await isFeaturedReelSaved(ctx.workspaceId, input.featuredReelId);
           if (alreadySaved) {
-            await unsaveFeaturedReel(ctx.user.id, input.featuredReelId);
+            await unsaveFeaturedReel(ctx.workspaceId, input.featuredReelId);
             return { saved: false } as const;
           }
           await saveFeaturedReel(ctx.user.id, input.featuredReelId);
           return { saved: true } as const;
         }
-        const alreadySaved = await isReelSaved(ctx.user.id, input.reelId!);
+        const alreadySaved = await isReelSaved(ctx.workspaceId, input.reelId!);
         if (alreadySaved) {
-          await unsaveReel(ctx.user.id, input.reelId!);
+          await unsaveReel(ctx.workspaceId, input.reelId!);
           return { saved: false } as const;
         }
         await saveReel({ userId: ctx.user.id, reelId: input.reelId!, jobId: input.jobId! });
@@ -2248,9 +2249,9 @@ Return JSON only:
       )
       .query(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          return { saved: await isFeaturedReelSaved(ctx.user.id, input.featuredReelId) };
+          return { saved: await isFeaturedReelSaved(ctx.workspaceId, input.featuredReelId) };
         }
-        return { saved: await isReelSaved(ctx.user.id, input.reelId!) };
+        return { saved: await isReelSaved(ctx.workspaceId, input.reelId!) };
       }),
 
     /**
@@ -2334,8 +2335,8 @@ Return JSON only:
      * the same keys from `featured_reels` / `featured_accounts`.
      */
     list: protectedProcedure.query(async ({ ctx }) => {
-      const scraped = await getSavedReelsWithDetails(ctx.user.id);
-      const featured = await getSavedFeaturedReelsWithDetails(ctx.user.id);
+      const scraped = await getSavedReelsWithDetails(ctx.workspaceId);
+      const featured = await getSavedFeaturedReelsWithDetails(ctx.workspaceId);
 
       type ListedSaved = {
         id: number;
