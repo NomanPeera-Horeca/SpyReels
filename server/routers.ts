@@ -2217,20 +2217,29 @@ Return JSON only:
       )
       .mutation(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          const alreadySaved = await isFeaturedReelSaved(ctx.workspaceId, input.featuredReelId);
+          const alreadySaved = await isFeaturedReelSaved(
+            ctx.workspaceId,
+            ctx.user.id,
+            input.featuredReelId
+          );
           if (alreadySaved) {
-            await unsaveFeaturedReel(ctx.workspaceId, input.featuredReelId);
+            await unsaveFeaturedReel(ctx.workspaceId, ctx.user.id, input.featuredReelId);
             return { saved: false } as const;
           }
-          await saveFeaturedReel(ctx.user.id, input.featuredReelId);
+          await saveFeaturedReel(ctx.user.id, input.featuredReelId, ctx.workspaceId);
           return { saved: true } as const;
         }
-        const alreadySaved = await isReelSaved(ctx.workspaceId, input.reelId!);
+        const alreadySaved = await isReelSaved(ctx.workspaceId, ctx.user.id, input.reelId!);
         if (alreadySaved) {
-          await unsaveReel(ctx.workspaceId, input.reelId!);
+          await unsaveReel(ctx.workspaceId, ctx.user.id, input.reelId!);
           return { saved: false } as const;
         }
-        await saveReel({ userId: ctx.user.id, reelId: input.reelId!, jobId: input.jobId! });
+        await saveReel({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          reelId: input.reelId!,
+          jobId: input.jobId!,
+        });
         return { saved: true } as const;
       }),
 
@@ -2249,9 +2258,15 @@ Return JSON only:
       )
       .query(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          return { saved: await isFeaturedReelSaved(ctx.workspaceId, input.featuredReelId) };
+          return {
+            saved: await isFeaturedReelSaved(
+              ctx.workspaceId,
+              ctx.user.id,
+              input.featuredReelId
+            ),
+          };
         }
-        return { saved: await isReelSaved(ctx.workspaceId, input.reelId!) };
+        return { saved: await isReelSaved(ctx.workspaceId, ctx.user.id, input.reelId!) };
       }),
 
     /**
@@ -2279,6 +2294,7 @@ Return JSON only:
       .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Database not available");
+        const { workspaceId } = ctx;
         const userId = ctx.user.id;
         const savedMap: Record<number, boolean> = {};
 
@@ -2294,6 +2310,7 @@ Return JSON only:
               .from(savedReels)
               .where(
                 and(
+                  eq(savedReels.workspaceId, workspaceId),
                   eq(savedReels.userId, userId),
                   inArray(savedReels.featuredReelId, chunk)
                 )
@@ -2316,7 +2333,11 @@ Return JSON only:
             .select({ reelId: savedReels.reelId })
             .from(savedReels)
             .where(
-              and(eq(savedReels.userId, userId), inArray(savedReels.reelId, chunk))
+              and(
+                eq(savedReels.workspaceId, workspaceId),
+                eq(savedReels.userId, userId),
+                inArray(savedReels.reelId, chunk)
+              )
             );
           for (const r of rows) {
             if (r.reelId != null) savedSet.add(r.reelId);
@@ -2340,6 +2361,7 @@ Return JSON only:
 
       type ListedSaved = {
         id: number;
+        userId: number;
         createdAt: Date;
         source: "scraped" | "featured";
         reelId: number | null;
@@ -2375,6 +2397,7 @@ Return JSON only:
 
       const scrapedItems: ListedSaved[] = scraped.map((s) => ({
         id: s.id,
+        userId: s.userId,
         createdAt: s.createdAt,
         source: "scraped" as const,
         reelId: s.reelId,
@@ -2410,6 +2433,7 @@ Return JSON only:
 
       const featuredItems: ListedSaved[] = featured.map((f) => ({
         id: f.id,
+        userId: f.userId,
         createdAt: f.createdAt,
         source: "featured" as const,
         reelId: null,

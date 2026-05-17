@@ -891,12 +891,22 @@ export async function saveReel(
   return result[0].insertId;
 }
 
-export async function unsaveReel(workspaceId: string, reelId: number): Promise<void> {
+export async function unsaveReel(
+  workspaceId: string,
+  userId: number,
+  reelId: number
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
     .delete(savedReels)
-    .where(and(eq(savedReels.workspaceId, workspaceId), eq(savedReels.reelId, reelId)));
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.reelId, reelId)
+      )
+    );
 }
 
 export async function getSavedReelsByWorkspace(workspaceId: string): Promise<SavedReel[]> {
@@ -909,13 +919,23 @@ export async function getSavedReelsByWorkspace(workspaceId: string): Promise<Sav
     .orderBy(desc(savedReels.createdAt));
 }
 
-export async function isReelSaved(workspaceId: string, reelId: number): Promise<boolean> {
+export async function isReelSaved(
+  workspaceId: string,
+  userId: number,
+  reelId: number
+): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db
     .select()
     .from(savedReels)
-    .where(and(eq(savedReels.workspaceId, workspaceId), eq(savedReels.reelId, reelId)))
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.reelId, reelId)
+      )
+    )
     .limit(1);
   return result.length > 0;
 }
@@ -923,10 +943,13 @@ export async function isReelSaved(workspaceId: string, reelId: number): Promise<
 // ── Saved Reels (featured variant) ──
 
 /** Save a featured-catalog reel. Returns the saved_reels row id. */
-export async function saveFeaturedReel(userId: number, featuredReelId: number): Promise<number> {
+export async function saveFeaturedReel(
+  userId: number,
+  featuredReelId: number,
+  workspaceId: string
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const workspaceId = await getPersonalWorkspaceId(userId);
   const result = await db.insert(savedReels).values({
     userId,
     workspaceId,
@@ -937,7 +960,11 @@ export async function saveFeaturedReel(userId: number, featuredReelId: number): 
   return result[0].insertId;
 }
 
-export async function unsaveFeaturedReel(workspaceId: string, featuredReelId: number): Promise<void> {
+export async function unsaveFeaturedReel(
+  workspaceId: string,
+  userId: number,
+  featuredReelId: number
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
@@ -945,6 +972,7 @@ export async function unsaveFeaturedReel(workspaceId: string, featuredReelId: nu
     .where(
       and(
         eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
         eq(savedReels.featuredReelId, featuredReelId)
       )
     );
@@ -952,6 +980,7 @@ export async function unsaveFeaturedReel(workspaceId: string, featuredReelId: nu
 
 export async function isFeaturedReelSaved(
   workspaceId: string,
+  userId: number,
   featuredReelId: number
 ): Promise<boolean> {
   const db = await getDb();
@@ -962,6 +991,7 @@ export async function isFeaturedReelSaved(
     .where(
       and(
         eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
         eq(savedReels.featuredReelId, featuredReelId)
       )
     )
