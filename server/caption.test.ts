@@ -26,6 +26,7 @@ vi.mock("./db", async () => {
     getSavedScript: vi.fn().mockResolvedValue({
       id: 1,
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       title: "Test Script",
       content: "This is a test script about content creation.",
       status: "draft",

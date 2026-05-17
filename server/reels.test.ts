@@ -188,6 +188,7 @@ vi.mock("./db", () => ({
   getSavedScript: vi.fn().mockResolvedValue({
     id: 1,
     userId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
     reelId: 1,
     recreatedScriptId: 1,
     title: "Test Script",
@@ -200,7 +201,7 @@ vi.mock("./db", () => ({
     createdAt: new Date(),
     updatedAt: new Date(),
   }),
-  getSavedScriptsByUser: vi.fn().mockResolvedValue([
+  getSavedScriptsByWorkspace: vi.fn().mockResolvedValue([
     {
       id: 1,
       userId: 1,
@@ -225,7 +226,7 @@ vi.mock("./db", () => ({
   getLatestVersionNumber: vi.fn().mockResolvedValue(1),
   ensureDefaultTags: vi.fn().mockResolvedValue(undefined),
   updateScriptTag: vi.fn().mockResolvedValue(undefined),
-  getScriptTagsByUser: vi.fn().mockResolvedValue([
+  getScriptTagsByWorkspace: vi.fn().mockResolvedValue([
     { id: 1, userId: 1, name: "Scripting", color: "#6366f1", createdAt: new Date() },
     { id: 2, userId: 1, name: "Filming", color: "#22c55e", createdAt: new Date() },
   ]),

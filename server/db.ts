@@ -1146,10 +1146,14 @@ export async function createScriptTag(
   return result[0].insertId;
 }
 
-export async function getScriptTagsByUser(userId: number): Promise<ScriptTag[]> {
+export async function getScriptTagsByWorkspace(workspaceId: string): Promise<ScriptTag[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(scriptTags).where(eq(scriptTags.userId, userId)).orderBy(asc(scriptTags.sortOrder));
+  return db
+    .select()
+    .from(scriptTags)
+    .where(eq(scriptTags.workspaceId, workspaceId))
+    .orderBy(asc(scriptTags.sortOrder));
 }
 
 export async function updateScriptTag(id: number, data: Partial<Pick<ScriptTag, "name" | "color" | "sortOrder">>): Promise<void> {
@@ -1165,10 +1169,16 @@ export async function deleteScriptTag(id: number): Promise<void> {
   await db.delete(scriptTags).where(eq(scriptTags.id, id));
 }
 
-export async function ensureDefaultTags(userId: number): Promise<void> {
+export async function ensureDefaultTags(
+  workspaceId: string,
+  createdByUserId: number
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const existing = await db.select().from(scriptTags).where(and(eq(scriptTags.userId, userId), eq(scriptTags.isDefault, 1)));
+  const existing = await db
+    .select()
+    .from(scriptTags)
+    .where(and(eq(scriptTags.workspaceId, workspaceId), eq(scriptTags.isDefault, 1)));
   if (existing.length > 0) return;
   const defaults = [
     { name: "Scripting", color: "#7c3aed", sortOrder: 1 },
@@ -1177,9 +1187,13 @@ export async function ensureDefaultTags(userId: number): Promise<void> {
     { name: "Editing", color: "#059669", sortOrder: 4 },
     { name: "Posting", color: "#dc2626", sortOrder: 5 },
   ];
-  const workspaceId = await getPersonalWorkspaceId(userId);
   for (const d of defaults) {
-    await db.insert(scriptTags).values({ userId, workspaceId, ...d, isDefault: 1 });
+    await db.insert(scriptTags).values({
+      userId: createdByUserId,
+      workspaceId,
+      ...d,
+      isDefault: 1,
+    });
   }
 }
 
@@ -1202,10 +1216,14 @@ export async function getSavedScript(id: number): Promise<SavedScript | undefine
   return result[0];
 }
 
-export async function getSavedScriptsByUser(userId: number): Promise<SavedScript[]> {
+export async function getSavedScriptsByWorkspace(workspaceId: string): Promise<SavedScript[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(savedScripts).where(eq(savedScripts.userId, userId)).orderBy(desc(savedScripts.postDate), desc(savedScripts.updatedAt));
+  return db
+    .select()
+    .from(savedScripts)
+    .where(eq(savedScripts.workspaceId, workspaceId))
+    .orderBy(desc(savedScripts.postDate), desc(savedScripts.updatedAt));
 }
 
 export async function updateSavedScript(id: number, data: Partial<Pick<SavedScript, "title" | "content" | "wordCount" | "postDate" | "postTime" | "status" | "notes" | "gradeLevel">>): Promise<void> {
@@ -1248,13 +1266,25 @@ export async function getTagsForScript(scriptId: number): Promise<ScriptTag[]> {
   return db.select().from(scriptTags).where(inArray(scriptTags.id, tagIds));
 }
 
-export async function getScriptsByTag(userId: number, tagId: number): Promise<SavedScript[]> {
+export async function getScriptsByTag(
+  workspaceId: string,
+  tagId: number
+): Promise<SavedScript[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const assignments = await db.select().from(scriptTagAssignments).where(eq(scriptTagAssignments.tagId, tagId));
+  const assignments = await db
+    .select()
+    .from(scriptTagAssignments)
+    .where(eq(scriptTagAssignments.tagId, tagId));
   if (assignments.length === 0) return [];
-  const scriptIds = assignments.map(a => a.scriptId);
-  return db.select().from(savedScripts).where(and(eq(savedScripts.userId, userId), inArray(savedScripts.id, scriptIds))).orderBy(desc(savedScripts.updatedAt));
+  const scriptIds = assignments.map((a) => a.scriptId);
+  return db
+    .select()
+    .from(savedScripts)
+    .where(
+      and(eq(savedScripts.workspaceId, workspaceId), inArray(savedScripts.id, scriptIds))
+    )
+    .orderBy(desc(savedScripts.updatedAt));
 }
 
 // ── Script Versions ──

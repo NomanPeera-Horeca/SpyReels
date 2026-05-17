@@ -49,13 +49,12 @@ import {
   isReelSaved,
   getSavedReelsWithDetails,
   createScriptTag,
-  getScriptTagsByUser,
+  getScriptTagsByWorkspace,
   updateScriptTag,
   deleteScriptTag,
   ensureDefaultTags,
   createSavedScript,
-  getSavedScript,
-  getSavedScriptsByUser,
+  getSavedScriptsByWorkspace,
   updateSavedScript,
   deleteSavedScript,
   assignTagToScript,
@@ -119,6 +118,7 @@ import {
   getBrandCoachScoresBatch,
   getSavedFeaturedReelsWithDetails,
 } from "./db";
+import { assertScriptInWorkspace } from "./assertScriptInWorkspace";
 import {
   scrapeReels,
   fetchReelByShortcode,
@@ -2492,10 +2492,11 @@ Return JSON only:
         status: z.enum(["draft", "approved"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await ensureDefaultTags(ctx.user.id);
+        await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
         const wordCount = input.content.trim().split(/\s+/).length;
         const scriptId = await createSavedScript({
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           reelId: input.reelId ?? null,
           recreatedScriptId: input.recreatedScriptId ?? null,
           title: input.title,
@@ -2530,10 +2531,7 @@ Return JSON only:
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.id);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
-        }
+        const script = await assertScriptInWorkspace(input.id, ctx);
         const tags = await getTagsForScript(input.id);
         const versions = await getScriptVersions(input.id);
         return { ...script, tags, versions };
@@ -2546,12 +2544,12 @@ Return JSON only:
         status: z.enum(["draft", "approved"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
-        await ensureDefaultTags(ctx.user.id);
-        let scripts: Awaited<ReturnType<typeof getSavedScriptsByUser>>;
+        await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
+        let scripts: Awaited<ReturnType<typeof getSavedScriptsByWorkspace>>;
         if (input?.tagId) {
-          scripts = await getScriptsByTag(ctx.user.id, input.tagId);
+          scripts = await getScriptsByTag(ctx.workspaceId, input.tagId);
         } else {
-          scripts = await getSavedScriptsByUser(ctx.user.id);
+          scripts = await getSavedScriptsByWorkspace(ctx.workspaceId);
         }
         if (input?.status) {
           scripts = scripts.filter(s => s.status === input.status);
@@ -2582,10 +2580,7 @@ Return JSON only:
         changeDescription: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.id);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
-        }
+        await assertScriptInWorkspace(input.id, ctx);
         const updateData: Parameters<typeof updateSavedScript>[1] = {};
         if (input.title !== undefined) updateData.title = input.title;
         if (input.postDate !== undefined) updateData.postDate = input.postDate ? parseDateSafe(input.postDate) : null;
@@ -2617,10 +2612,7 @@ Return JSON only:
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.id);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
-        }
+        await assertScriptInWorkspace(input.id, ctx);
         await deleteSavedScript(input.id);
         return { success: true };
       }),
@@ -2628,14 +2620,16 @@ Return JSON only:
     /** Assign/remove tags */
     assignTag: protectedProcedure
       .input(z.object({ scriptId: z.number(), tagId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertScriptInWorkspace(input.scriptId, ctx);
         await assignTagToScript(input.scriptId, input.tagId);
         return { success: true };
       }),
 
     removeTag: protectedProcedure
       .input(z.object({ scriptId: z.number(), tagId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertScriptInWorkspace(input.scriptId, ctx);
         await removeTagFromScript(input.scriptId, input.tagId);
         return { success: true };
       }),
@@ -2644,10 +2638,7 @@ Return JSON only:
     grammarCheck: protectedProcedure
       .input(z.object({ scriptId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const response = await invokeLLM({
           messages: [
             {
@@ -2682,10 +2673,7 @@ Return JSON only:
         instruction: z.string().optional(), // optional custom instruction
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const instruction = input.instruction || "Rewrite this script to sound more natural and engaging while keeping the exact same structure, topic, and key points. Make it sound like a confident creator speaking to camera.";
         const response = await invokeLLM({
           messages: [
@@ -2716,10 +2704,7 @@ Return JSON only:
     phraseSwap: protectedProcedure
       .input(z.object({ scriptId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const response = await invokeLLM({
           messages: [
             {
@@ -2749,10 +2734,7 @@ Return JSON only:
     simplify: protectedProcedure
       .input(z.object({ scriptId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const response = await invokeLLM({
           messages: [
             {
@@ -2786,10 +2768,7 @@ Return JSON only:
         tone: z.enum(["casual", "professional", "academic", "gen_z", "storyteller"]),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const tonePrompts: Record<string, string> = {
           casual: "Rewrite in a super casual, friendly tone, like texting a buddy. Use contractions, slang, and keep it real. Short punchy sentences.",
           professional: "Rewrite in a polished, professional tone suitable for a business audience. Clear, confident, and authoritative. No slang.",
@@ -2830,10 +2809,7 @@ Return JSON only:
         targetSeconds: z.number().min(15).max(120),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         // Average speaking rate: ~3 words per second
         const targetWords = Math.round(input.targetSeconds * 3);
         const response = await invokeLLM({
@@ -2870,10 +2846,7 @@ Return JSON only:
         instruction: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const instruction = input.instruction || "Make it more engaging and punchy";
         const response = await invokeLLM({
           messages: [
@@ -2913,10 +2886,7 @@ Return JSON only:
         angle: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const response = await invokeLLM({
           messages: [
             {
@@ -2954,10 +2924,7 @@ Return JSON only:
         targetAudience: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
 
         const styleGuides: Record<string, string> = {
           storytelling: "Write as a personal narrative. Start with a relatable moment or struggle, build tension, then deliver a lesson. Use first person. Make the reader feel like they're hearing from a friend.",
@@ -3134,10 +3101,7 @@ The hook MUST be 7-10 words. Count them.`),
     versions: protectedProcedure
       .input(z.object({ scriptId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         return getScriptVersions(input.scriptId);
       }),
 
@@ -3145,10 +3109,7 @@ The hook MUST be 7-10 words. Count them.`),
     restoreVersion: protectedProcedure
       .input(z.object({ scriptId: z.number(), versionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const script = await getSavedScript(input.scriptId);
-        if (!script || script.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertScriptInWorkspace(input.scriptId, ctx);
         const versions = await getScriptVersions(input.scriptId);
         const version = versions.find(v => v.id === input.versionId);
         if (!version) throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
@@ -3491,8 +3452,8 @@ The hook MUST be 7-10 words. Count them.`),
   tags: router({
     /** List all tags for the user (creates defaults if needed) */
     list: protectedProcedure.query(async ({ ctx }) => {
-      await ensureDefaultTags(ctx.user.id);
-      return getScriptTagsByUser(ctx.user.id);
+      await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
+      return getScriptTagsByWorkspace(ctx.workspaceId);
     }),
 
     /** Create a custom tag */
