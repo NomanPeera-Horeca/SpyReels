@@ -1,4 +1,4 @@
-import { trpc } from "@/lib/trpc";
+import { getCurrentWorkspaceId, trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -58,9 +58,15 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        const headers = new Headers(init?.headers);
+        const workspaceId = getCurrentWorkspaceId();
+        if (workspaceId) {
+          headers.set("x-workspace-id", workspaceId);
+        }
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+          headers,
         });
       },
     }),
