@@ -17,6 +17,11 @@ import {
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import {
+  getPersonalWorkspaceId,
+  getSavedScriptWorkspaceId,
+  getScrapeJobWorkspaceId,
+} from "./personalWorkspace";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -467,16 +472,20 @@ export async function markOnboardingSkipped(
 /** Max length for `scrape_jobs.errorMessage` — avoids MySQL overflow when errors embed huge SQL payloads. */
 const SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN = 250;
 
-export async function createScrapeJob(data: InsertScrapeJob): Promise<number> {
+export async function createScrapeJob(
+  data: Omit<InsertScrapeJob, "workspaceId"> & Partial<Pick<InsertScrapeJob, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
   const payload =
     typeof data.errorMessage === "string"
       ? {
           ...data,
+          workspaceId,
           errorMessage: data.errorMessage.slice(0, SCRAPE_JOB_ERROR_MESSAGE_MAX_LEN),
         }
-      : data;
+      : { ...data, workspaceId };
   const result = await db.insert(scrapeJobs).values(payload);
   return result[0].insertId;
 }
@@ -517,10 +526,15 @@ export async function deleteScrapeJob(id: number): Promise<void> {
 
 // ── Reels ──
 
-export async function insertReels(data: InsertReel[]): Promise<void> {
+export async function insertReels(
+  data: Array<Omit<InsertReel, "workspaceId"> & Partial<Pick<InsertReel, "workspaceId">>>
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (data.length === 0) return;
+
+  const jobId = data[0]!.jobId;
+  const defaultWorkspaceId = await getScrapeJobWorkspaceId(jobId);
 
   /** On duplicate `shortcode`: refresh live scrape fields only; preserve classifications & immutable columns. */
   const onDupSet = {
@@ -536,7 +550,10 @@ export async function insertReels(data: InsertReel[]): Promise<void> {
 
   // Insert in batches of 50 to avoid query size limits
   for (let i = 0; i < data.length; i += 50) {
-    const batch = data.slice(i, i + 50);
+    const batch = data.slice(i, i + 50).map((row) => ({
+      ...row,
+      workspaceId: row.workspaceId ?? defaultWorkspaceId,
+    }));
     await db.insert(reels).values(batch).onDuplicateKeyUpdate({
       set: onDupSet,
     });
@@ -651,10 +668,13 @@ export async function getTranscriptionsByJobId(jobId: number): Promise<Transcrip
 
 // ── Recreated Scripts ──
 
-export async function createRecreatedScript(data: InsertRecreatedScript): Promise<number> {
+export async function createRecreatedScript(
+  data: Omit<InsertRecreatedScript, "workspaceId"> & Partial<Pick<InsertRecreatedScript, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(recreatedScripts).values(data);
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(recreatedScripts).values({ ...data, workspaceId });
   return result[0].insertId;
 }
 
@@ -857,10 +877,13 @@ export async function getRecreatedScriptsByFeaturedReelId(
 
 // ── Saved Reels ──
 
-export async function saveReel(data: InsertSavedReel): Promise<number> {
+export async function saveReel(
+  data: Omit<InsertSavedReel, "workspaceId"> & Partial<Pick<InsertSavedReel, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(savedReels).values(data);
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(savedReels).values({ ...data, workspaceId });
   return result[0].insertId;
 }
 
@@ -889,8 +912,10 @@ export async function isReelSaved(userId: number, reelId: number): Promise<boole
 export async function saveFeaturedReel(userId: number, featuredReelId: number): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const workspaceId = await getPersonalWorkspaceId(userId);
   const result = await db.insert(savedReels).values({
     userId,
+    workspaceId,
     reelId: null,
     jobId: null,
     featuredReelId,
@@ -1061,10 +1086,13 @@ export async function getSavedReelsWithDetails(userId: number): Promise<Array<Sa
 
 // ── Script Tags ──
 
-export async function createScriptTag(data: InsertScriptTag): Promise<number> {
+export async function createScriptTag(
+  data: Omit<InsertScriptTag, "workspaceId"> & Partial<Pick<InsertScriptTag, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(scriptTags).values(data);
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(scriptTags).values({ ...data, workspaceId });
   return result[0].insertId;
 }
 
@@ -1099,17 +1127,21 @@ export async function ensureDefaultTags(userId: number): Promise<void> {
     { name: "Editing", color: "#059669", sortOrder: 4 },
     { name: "Posting", color: "#dc2626", sortOrder: 5 },
   ];
+  const workspaceId = await getPersonalWorkspaceId(userId);
   for (const d of defaults) {
-    await db.insert(scriptTags).values({ userId, ...d, isDefault: 1 });
+    await db.insert(scriptTags).values({ userId, workspaceId, ...d, isDefault: 1 });
   }
 }
 
 // ── Saved Scripts ──
 
-export async function createSavedScript(data: InsertSavedScript): Promise<number> {
+export async function createSavedScript(
+  data: Omit<InsertSavedScript, "workspaceId"> & Partial<Pick<InsertSavedScript, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(savedScripts).values(data);
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(savedScripts).values({ ...data, workspaceId });
   return result[0].insertId;
 }
 
@@ -1147,7 +1179,8 @@ export async function assignTagToScript(scriptId: number, tagId: number): Promis
   if (!db) throw new Error("Database not available");
   const existing = await db.select().from(scriptTagAssignments).where(and(eq(scriptTagAssignments.scriptId, scriptId), eq(scriptTagAssignments.tagId, tagId))).limit(1);
   if (existing.length > 0) return;
-  await db.insert(scriptTagAssignments).values({ scriptId, tagId });
+  const workspaceId = await getSavedScriptWorkspaceId(scriptId);
+  await db.insert(scriptTagAssignments).values({ scriptId, tagId, workspaceId });
 }
 
 export async function removeTagFromScript(scriptId: number, tagId: number): Promise<void> {
@@ -1176,10 +1209,13 @@ export async function getScriptsByTag(userId: number, tagId: number): Promise<Sa
 
 // ── Script Versions ──
 
-export async function createScriptVersion(data: InsertScriptVersion): Promise<number> {
+export async function createScriptVersion(
+  data: Omit<InsertScriptVersion, "workspaceId"> & Partial<Pick<InsertScriptVersion, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(scriptVersions).values(data);
+  const workspaceId = data.workspaceId ?? (await getSavedScriptWorkspaceId(data.scriptId));
+  const result = await db.insert(scriptVersions).values({ ...data, workspaceId });
   return result[0].insertId;
 }
 
@@ -1448,10 +1484,13 @@ async function stripIngestFieldsIfNeeded<T extends Record<string, unknown>>(
   return out;
 }
 
-export async function createCollectedReel(data: InsertCollectedReel): Promise<number> {
+export async function createCollectedReel(
+  data: Omit<InsertCollectedReel, "workspaceId"> & Partial<Pick<InsertCollectedReel, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const values = (await stripIngestFieldsIfNeeded(data)) as InsertCollectedReel;
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const values = (await stripIngestFieldsIfNeeded({ ...data, workspaceId })) as InsertCollectedReel;
   const result = await db.insert(collectedReels).values(values);
   return result[0].insertId;
 }
@@ -1562,10 +1601,13 @@ export async function listCollectedReelsDueForIngest(limit: number): Promise<Col
 
 // ── Script Ideas ──
 
-export async function createScriptIdea(data: InsertScriptIdea): Promise<number> {
+export async function createScriptIdea(
+  data: Omit<InsertScriptIdea, "workspaceId"> & Partial<Pick<InsertScriptIdea, "workspaceId">>
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(scriptIdeas).values(data);
+  const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(scriptIdeas).values({ ...data, workspaceId });
   return Number(result[0].insertId);
 }
 

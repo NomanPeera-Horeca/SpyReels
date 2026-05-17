@@ -4270,6 +4270,7 @@ The hook MUST be 7-10 words. Count them.`),
         // We'll create a temporary reel entry to reuse the transcription system
         const tempReelData = {
           jobId: 0, // 0 = collected reel, not from a scrape job
+          workspaceId: reel.workspaceId,
           shortcode: reel.shortcode,
           caption: reel.caption || "",
           viewCount: reel.viewCount || 0,

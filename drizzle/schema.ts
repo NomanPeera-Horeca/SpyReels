@@ -75,9 +75,11 @@ export const scrapeJobs = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   handle: varchar("handle", { length: 128 }).notNull(),
   timeframeDays: int("timeframeDays").notNull(),
   status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
@@ -131,9 +133,11 @@ export const reels = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   jobId: int("jobId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   shortcode: varchar("shortcode", { length: 64 }).notNull(),
   caption: text("caption"),
   viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
@@ -275,9 +279,11 @@ export const recreatedScripts = mysqlTable(
   reelId: int("reelId"),
   featuredReelId: int("featuredReelId"),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   topic: text("topic").notNull(),
   gradeLevel: varchar("gradeLevel", { length: 16 }).notNull(), // "auto", "2", "3", "4", "5", "6"
   viralStructure: json("viralStructure"), // { hook, body, transition, cta } analysis
@@ -309,9 +315,11 @@ export const savedReels = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   reelId: int("reelId"),
   jobId: int("jobId"),
   featuredReelId: int("featuredReelId"),
@@ -344,9 +352,11 @@ export const scriptTags = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   name: varchar("name", { length: 64 }).notNull(),
   color: varchar("color", { length: 16 }).notNull(), // hex color like #7c3aed
   isDefault: int("isDefault").default(0).notNull(), // 1 = system default stage tag
@@ -369,9 +379,11 @@ export const savedScripts = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   reelId: int("reelId"), // optional - linked to original reel
   recreatedScriptId: int("recreatedScriptId"), // optional - linked to recreated script
   title: varchar("title", { length: 256 }).notNull(),
@@ -416,9 +428,11 @@ export const scriptTagAssignments = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   scriptId: int("scriptId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   tagId: int("tagId").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
@@ -438,9 +452,11 @@ export const scriptVersions = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   scriptId: int("scriptId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   content: text("content").notNull(),
   versionNumber: int("versionNumber").notNull(),
   changeType: mysqlEnum("changeType", ["initial", "manual_edit", "ai_rewrite", "grammar_fix"]).default("initial").notNull(),
@@ -599,9 +615,11 @@ export const collectedReels = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   shortcode: varchar("shortcode", { length: 64 }).notNull(),
   caption: text("caption"),
   viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
@@ -649,9 +667,11 @@ export const scriptIdeas = mysqlTable(
   {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
-    onDelete: "cascade",
-  }),
+  workspaceId: varchar("workspaceId", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
   idea: text("idea").notNull(), // The topic/idea text submitted by the user
   niche: varchar("niche", { length: 128 }), // Optional niche/category hint
   tone: varchar("tone", { length: 64 }).default("engaging"), // casual, professional, humorous, educational, engaging
