@@ -121,6 +121,8 @@ import { assertScriptInWorkspace } from "./assertScriptInWorkspace";
 import { assertCollectedReelInWorkspace } from "./assertCollectedReelInWorkspace";
 import { assertIdeaInWorkspace } from "./assertIdeaInWorkspace";
 import { assertTagInWorkspace } from "./assertTagInWorkspace";
+import { assertRecreatedScriptInWorkspace } from "./assertRecreatedScriptInWorkspace";
+import { assertUserScrapeReelInWorkspace } from "./assertUserScrapeReelInWorkspace";
 import {
   scrapeReels,
   fetchReelByShortcode,
@@ -1404,7 +1406,7 @@ export const appRouter = router({
             .where(
               and(
                 eq(scrapeJobs.id, input.scrapeJobId),
-                eq(scrapeJobs.userId, ctx.user.id)
+                eq(scrapeJobs.workspaceId, ctx.workspaceId)
               )
             )
             .limit(1);
@@ -1578,7 +1580,7 @@ Return JSON only:
           .from(scrapeJobs)
           .where(
             and(
-              eq(scrapeJobs.userId, ctx.user.id),
+              eq(scrapeJobs.workspaceId, ctx.workspaceId),
               eq(scrapeJobs.handle, account.handle),
               eq(scrapeJobs.isDemo, true),
               eq(scrapeJobs.status, "completed")
@@ -1720,10 +1722,7 @@ Return JSON only:
         // User-scrape branch — unchanged behavior. Each user owns
         // their own row in `transcriptions`.
         // ────────────────────────────────────────────────────────────
-        const reel = await getReelById(input.reelId!);
-        if (!reel) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
-        }
+        const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
         const reelForRun = {
           id: reel.id,
           shortcode: reel.shortcode,
@@ -1819,6 +1818,9 @@ Return JSON only:
           });
         }
         await incrementUsage(ctx.user.id, "exportCount");
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         const { csvContent, filename } = await buildExportData(input.jobId);
         return { csv: csvContent, filename };
       }),
@@ -1850,14 +1852,17 @@ Return JSON only:
         }
         await incrementUsage(ctx.user.id, "exportCount");
 
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
+
         const reelsList = await getReelsByJobId(input.jobId);
         const transcriptionsList = await getTranscriptionsByJobId(input.jobId);
         const transcriptionMap = new Map(
           transcriptionsList.map((t) => [t.reelId, t])
         );
-        const job = await getScrapeJob(input.jobId);
 
-        const followerCount = job?.followerCount || 0;
+        const followerCount = job.followerCount || 0;
 
         const rows = reelsList.map((r) => {
           const t = transcriptionMap.get(r.id);
@@ -1879,7 +1884,7 @@ Return JSON only:
           };
         });
 
-        const title = `Reels - @${job?.handle || "export"} - ${new Date().toLocaleDateString()}`;
+        const title = `Reels - @${job.handle || "export"} - ${new Date().toLocaleDateString()}`;
 
         const result = await exportToGoogleSheets(title, rows, input.email);
 
@@ -1925,10 +1930,7 @@ Return JSON only:
           reelForGeneration = fr;
           transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
         } else {
-          const reel = await getReelById(input.reelId!);
-          if (!reel) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
-          }
+          const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
           caption = reel.caption ?? "";
           reelForGeneration = reel;
           transcription = await getTranscriptionByReelId(input.reelId!);
@@ -1960,6 +1962,7 @@ Return JSON only:
           reelId: source === "user" ? input.reelId! : null,
           featuredReelId: source === "featured" ? input.featuredReelId! : null,
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           topic: effectiveTopic,
           gradeLevel: input.gradeLevel,
           status: "processing",
@@ -1997,10 +2000,7 @@ Return JSON only:
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const existingScript = await getRecreatedScript(input.scriptId);
-        if (!existingScript) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
-        }
+        const existingScript = await assertRecreatedScriptInWorkspace(input.scriptId, ctx);
         if (!existingScript.generatedScript) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Script has no content to rewrite" });
         }
@@ -2041,6 +2041,7 @@ Return JSON only:
           reelId: existingScript.reelId,
           featuredReelId: existingScript.featuredReelId,
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           topic: existingScript.topic || "SAME_TOPIC",
           gradeLevel: input.gradeLevel,
           status: "processing",
@@ -2066,10 +2067,8 @@ Return JSON only:
     /** Get status of a specific recreated script */
     status: protectedProcedure
       .input(z.object({ scriptId: z.number() }))
-      .query(async ({ input }) => {
-        const script = await getRecreatedScript(input.scriptId);
-        if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
-        return script;
+      .query(async ({ ctx, input }) => {
+        return assertRecreatedScriptInWorkspace(input.scriptId, ctx);
       }),
 
     /** List all recreated scripts for a reel (either source). */
@@ -2085,11 +2084,11 @@ Return JSON only:
             { message: "Provide exactly one of reelId or featuredReelId" }
           )
       )
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          return getRecreatedScriptsByFeaturedReelId(input.featuredReelId);
+          return getRecreatedScriptsByFeaturedReelId(input.featuredReelId, ctx.workspaceId);
         }
-        return getRecreatedScriptsByReelId(input.reelId!);
+        return getRecreatedScriptsByReelId(input.reelId!, ctx.workspaceId);
       }),
 
     /**
@@ -2132,7 +2131,7 @@ Return JSON only:
             .from(recreatedScripts)
             .where(
               and(
-                eq(recreatedScripts.userId, ctx.user.id),
+                eq(recreatedScripts.workspaceId, ctx.workspaceId),
                 inArray(
                   recreatedScripts.featuredReelId as any,
                   input.featuredReelIds
@@ -2164,7 +2163,7 @@ Return JSON only:
           .from(recreatedScripts)
           .where(
             and(
-              eq(recreatedScripts.userId, ctx.user.id),
+              eq(recreatedScripts.workspaceId, ctx.workspaceId),
               inArray(recreatedScripts.reelId as any, input.reelIds!)
             )
           );
@@ -4716,10 +4715,7 @@ The hook MUST be 7-10 words. Count them.`),
         let priorTranscribeAttempt = false;
 
         if (input.reelId != null) {
-          const reel = await getReelById(input.reelId);
-          if (!reel) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
-          }
+          const reel = await assertUserScrapeReelInWorkspace(input.reelId, ctx);
           caption = reel.caption ?? null;
           ownerUsername = reel.ownerUsername ?? null;
           viewCount = Number(reel.viewCount ?? 0);

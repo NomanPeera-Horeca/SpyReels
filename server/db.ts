@@ -695,10 +695,19 @@ export async function updateRecreatedScript(id: number, data: Partial<Pick<Recre
   await db.update(recreatedScripts).set(data).where(eq(recreatedScripts.id, id));
 }
 
-export async function getRecreatedScriptsByReelId(reelId: number): Promise<RecreatedScript[]> {
+export async function getRecreatedScriptsByReelId(
+  reelId: number,
+  workspaceId: string
+): Promise<RecreatedScript[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(recreatedScripts).where(eq(recreatedScripts.reelId, reelId)).orderBy(desc(recreatedScripts.createdAt));
+  return db
+    .select()
+    .from(recreatedScripts)
+    .where(
+      and(eq(recreatedScripts.reelId, reelId), eq(recreatedScripts.workspaceId, workspaceId))
+    )
+    .orderBy(desc(recreatedScripts.createdAt));
 }
 
 // ── Featured Reel helpers (Path B: catalog-backed transcribe/recreate/save) ──
@@ -868,14 +877,20 @@ export async function updateReelClassification(
 
 /** All recreated scripts attached to a featured reel (newest first). */
 export async function getRecreatedScriptsByFeaturedReelId(
-  featuredReelId: number
+  featuredReelId: number,
+  workspaceId: string
 ): Promise<RecreatedScript[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db
     .select()
     .from(recreatedScripts)
-    .where(eq(recreatedScripts.featuredReelId, featuredReelId))
+    .where(
+      and(
+        eq(recreatedScripts.featuredReelId, featuredReelId),
+        eq(recreatedScripts.workspaceId, workspaceId)
+      )
+    )
     .orderBy(desc(recreatedScripts.createdAt));
 }
 

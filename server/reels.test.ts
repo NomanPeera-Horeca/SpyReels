@@ -97,6 +97,7 @@ vi.mock("./db", () => ({
   getReelById: vi.fn().mockResolvedValue({
     id: 1,
     jobId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
     shortcode: "ABC123",
     caption: "Test reel caption",
     viewCount: 10000,
@@ -119,6 +120,7 @@ vi.mock("./db", () => ({
     id: 1,
     reelId: 1,
     userId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
     topic: "How AI changes fitness",
     gradeLevel: "4",
     viralStructure: { hook: { type: "Bold Statement", text: "Test", technique: "Attention" }, body: { pacing: "Rapid-fire", structure: "List", keyPoints: ["Point 1"] }, transition: { type: "But here's the thing", text: "But" }, cta: { type: "Follow", text: "Follow me" }, overallTone: "casual", estimatedPace: "fast" },
