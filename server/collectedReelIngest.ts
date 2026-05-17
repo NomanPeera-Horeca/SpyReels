@@ -9,6 +9,7 @@ import {
   getCollectedReelByShortcode,
   updateCollectedReel,
 } from "./db";
+import { getPersonalWorkspaceId } from "./personalWorkspace";
 import { enqueueCollectedReelIngest } from "./collectedReelWorker";
 
 export type CollectedReelSource = "telegram" | "url_paste" | "extension";
@@ -28,9 +29,11 @@ export async function ingestCollectedReelByShortcode(opts: {
   shortcode: string;
   reelUrl: string;
   source: CollectedReelSource;
+  workspaceId?: string;
 }): Promise<CollectedReelIngestResult> {
   const { userId, shortcode, reelUrl, source } = opts;
-  const existing = await getCollectedReelByShortcode(userId, shortcode);
+  const workspaceId = opts.workspaceId ?? (await getPersonalWorkspaceId(userId));
+  const existing = await getCollectedReelByShortcode(workspaceId, shortcode);
 
   if (existing && collectedReelBlocksDuplicate(existing)) {
     return { action: "duplicate", id: existing.id };
@@ -52,6 +55,7 @@ export async function ingestCollectedReelByShortcode(opts: {
 
   const id = await createCollectedReel({
     userId,
+    workspaceId,
     shortcode,
     reelUrl,
     source,

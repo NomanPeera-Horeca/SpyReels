@@ -77,16 +77,15 @@ import {
   getTelegramConnectionByUserId,
   updateTelegramConnection,
   deleteTelegramConnection,
-  getCollectedReelsByUser,
+  getCollectedReelsByWorkspace,
   collectedReelsColumnsForQuery,
   getCollectedReelById,
   deleteCollectedReel,
-  deleteFailedCollectedReelsByUser,
+  deleteFailedCollectedReelsByWorkspace,
   createCollectedReel,
-  getCollectedReelByShortcode,
   updateCollectedReel,
   createScriptIdea,
-  getScriptIdeasByUser,
+  getScriptIdeasByWorkspace,
   getScriptIdeaById,
   updateScriptIdea,
   deleteScriptIdea,
@@ -119,6 +118,9 @@ import {
   getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { assertScriptInWorkspace } from "./assertScriptInWorkspace";
+import { assertCollectedReelInWorkspace } from "./assertCollectedReelInWorkspace";
+import { assertIdeaInWorkspace } from "./assertIdeaInWorkspace";
+import { assertTagInWorkspace } from "./assertTagInWorkspace";
 import {
   scrapeReels,
   fetchReelByShortcode,
@@ -3462,6 +3464,7 @@ The hook MUST be 7-10 words. Count them.`),
       .mutation(async ({ ctx, input }) => {
         const id = await createScriptTag({
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           name: input.name,
           color: input.color,
           isDefault: 0,
@@ -3473,7 +3476,8 @@ The hook MUST be 7-10 words. Count them.`),
     /** Update a tag */
     update: protectedProcedure
       .input(z.object({ id: z.number(), name: z.string().optional(), color: z.string().optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertTagInWorkspace(input.id, ctx);
         const updateData: Parameters<typeof updateScriptTag>[1] = {};
         if (input.name) updateData.name = input.name;
         if (input.color) updateData.color = input.color;
@@ -3484,7 +3488,8 @@ The hook MUST be 7-10 words. Count them.`),
     /** Delete a custom tag */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertTagInWorkspace(input.id, ctx);
         await deleteScriptTag(input.id);
         return { success: true };
       }),
@@ -3963,7 +3968,7 @@ The hook MUST be 7-10 words. Count them.`),
     list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) {
-        const bare = await getCollectedReelsByUser(ctx.user.id);
+        const bare = await getCollectedReelsByWorkspace(ctx.workspaceId);
         return bare.map((r) => ({
           ...r,
           transcriptionReelId: r.transcriptionReelId ?? null,
@@ -3994,7 +3999,7 @@ The hook MUST be 7-10 words. Count them.`),
         })
         .from(collectedReels)
         .leftJoin(reelsTable, eq(collectedReels.transcriptionReelId, reelsTable.id))
-        .where(eq(collectedReels.userId, ctx.user.id))
+        .where(eq(collectedReels.workspaceId, ctx.workspaceId))
         .orderBy(desc(collectedReels.createdAt));
 
       const reels = joined.map((row) => {
@@ -4137,10 +4142,7 @@ The hook MUST be 7-10 words. Count them.`),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const reel = await getCollectedReelById(input.id);
-        if (!reel || reel.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertCollectedReelInWorkspace(input.id, ctx);
         await deleteCollectedReel(input.id);
         return { success: true };
       }),
@@ -4161,6 +4163,7 @@ The hook MUST be 7-10 words. Count them.`),
         const reelUrl = canonicalInstagramReelUrl(shortcode, input.url);
         const ingest = await ingestCollectedReelByShortcode({
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           shortcode,
           reelUrl,
           source: "url_paste",
@@ -4175,7 +4178,7 @@ The hook MUST be 7-10 words. Count them.`),
 
     /** Remove all failed collected reels (ghost rows that block Telegram re-add) */
     deleteFailed: protectedProcedure.mutation(async ({ ctx }) => {
-      const deleted = await deleteFailedCollectedReelsByUser(ctx.user.id);
+      const deleted = await deleteFailedCollectedReelsByWorkspace(ctx.workspaceId);
       return { deleted };
     }),
 
@@ -4183,10 +4186,7 @@ The hook MUST be 7-10 words. Count them.`),
     retry: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const reel = await getCollectedReelById(input.id);
-        if (!reel || reel.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        await assertCollectedReelInWorkspace(input.id, ctx);
         await updateCollectedReel(input.id, {
           status: "pending",
           errorMessage: null,
@@ -4201,7 +4201,7 @@ The hook MUST be 7-10 words. Count them.`),
     /** Refresh all reels - re-fetch latest stats (views, likes, comments) for all ready reels */
     refreshAll: protectedProcedure
       .mutation(async ({ ctx }) => {
-        const allReels = await getCollectedReelsByUser(ctx.user.id);
+        const allReels = await getCollectedReelsByWorkspace(ctx.workspaceId);
         // Refresh ALL reels: pending/failed ones need retry, ready ones need stat updates
         const needsRefresh = allReels.filter(
           (r) => r.status === "pending" || r.status === "failed" || r.status === "ready"
@@ -4233,10 +4233,7 @@ The hook MUST be 7-10 words. Count them.`),
     transcribe: protectedProcedure
       .input(z.object({ collectedReelId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const reel = await getCollectedReelById(input.collectedReelId);
-        if (!reel || reel.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Collected reel not found" });
-        }
+        const reel = await assertCollectedReelInWorkspace(input.collectedReelId, ctx);
         if (reel.status !== "ready") {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Reel metadata not ready yet" });
         }
@@ -4351,6 +4348,7 @@ The hook MUST be 7-10 words. Count them.`),
       .mutation(async ({ ctx, input }) => {
         const ideaId = await createScriptIdea({
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           idea: input.idea,
           niche: input.niche || null,
           tone: input.tone,
@@ -4408,10 +4406,7 @@ The hook MUST be 7-10 words. Count them.`),
         editedIdea: z.string().optional(), // only when action is "edit"
       }))
       .mutation(async ({ ctx, input }) => {
-        const idea = await getScriptIdeaById(input.ideaId);
-        if (!idea || idea.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
-        }
+        const idea = await assertIdeaInWorkspace(input.ideaId, ctx);
         if (idea.status !== "awaiting_approval") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Idea is not awaiting approval" });
         }
@@ -4502,6 +4497,7 @@ The hook MUST be 7-10 words. Count them.`),
           await incrementUsage(ctx.user.id, "recreateCount");
           const ideaId = await createScriptIdea({
             userId: ctx.user.id,
+            workspaceId: ctx.workspaceId,
             idea: item.idea,
             niche: item.niche || null,
             tone: input.tone,
@@ -4520,28 +4516,21 @@ The hook MUST be 7-10 words. Count them.`),
 
     /** Get all ideas for the current user */
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getScriptIdeasByUser(ctx.user.id);
+      return getScriptIdeasByWorkspace(ctx.workspaceId);
     }),
 
     /** Get a single idea by ID */
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
-        const idea = await getScriptIdeaById(input.id);
-        if (!idea || idea.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
-        }
-        return idea;
+        return assertIdeaInWorkspace(input.id, ctx);
       }),
 
     /** Save a completed idea's script to My Scripts */
     saveToScripts: protectedProcedure
       .input(z.object({ ideaId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const idea = await getScriptIdeaById(input.ideaId);
-        if (!idea || idea.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
-        }
+        const idea = await assertIdeaInWorkspace(input.ideaId, ctx);
         if (idea.status !== "completed" || !idea.generatedScript) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Script not ready yet" });
         }
@@ -4554,8 +4543,10 @@ The hook MUST be 7-10 words. Count them.`),
         const content = idea.generatedScript;
         const wordCount = content.split(/\s+/).filter(Boolean).length;
 
+        await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
         const savedScriptId = await createSavedScript({
           userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
           title,
           content,
           originalContent: content,
@@ -4584,10 +4575,7 @@ The hook MUST be 7-10 words. Count them.`),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const idea = await getScriptIdeaById(input.id);
-        if (!idea || idea.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
-        }
+        await assertIdeaInWorkspace(input.id, ctx);
         await deleteScriptIdea(input.id);
         return { success: true };
       }),
@@ -4596,10 +4584,7 @@ The hook MUST be 7-10 words. Count them.`),
     retry: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const idea = await getScriptIdeaById(input.id);
-        if (!idea || idea.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Idea not found" });
-        }
+        const idea = await assertIdeaInWorkspace(input.id, ctx);
         if (idea.status !== "failed") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Only failed ideas can be retried" });
         }
@@ -4630,7 +4615,7 @@ The hook MUST be 7-10 words. Count them.`),
       }).optional())
       .query(async ({ ctx, input }) => {
         const opts = input || {};
-        return getLibraryTranscripts(ctx.user.id, opts);
+        return getLibraryTranscripts(ctx.workspaceId, opts);
       }),
 
     scripts: protectedProcedure
@@ -4643,7 +4628,7 @@ The hook MUST be 7-10 words. Count them.`),
       }).optional())
       .query(async ({ ctx, input }) => {
         const opts = input || {};
-        return getLibraryScripts(ctx.user.id, opts);
+        return getLibraryScripts(ctx.workspaceId, opts);
       }),
   }),
 

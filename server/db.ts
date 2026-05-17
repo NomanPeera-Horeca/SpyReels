@@ -1156,6 +1156,13 @@ export async function getScriptTagsByWorkspace(workspaceId: string): Promise<Scr
     .orderBy(asc(scriptTags.sortOrder));
 }
 
+export async function getScriptTagById(id: number): Promise<ScriptTag | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(scriptTags).where(eq(scriptTags.id, id)).limit(1);
+  return result[0];
+}
+
 export async function updateScriptTag(id: number, data: Partial<Pick<ScriptTag, "name" | "color" | "sortOrder">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -1575,14 +1582,14 @@ export async function createCollectedReel(
   return result[0].insertId;
 }
 
-export async function getCollectedReelsByUser(userId: number): Promise<CollectedReel[]> {
+export async function getCollectedReelsByWorkspace(workspaceId: string): Promise<CollectedReel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
   const rows = await db
     .select(collectedReelsSelectColumns(includeIngest))
     .from(collectedReels)
-    .where(eq(collectedReels.userId, userId))
+    .where(eq(collectedReels.workspaceId, workspaceId))
     .orderBy(desc(collectedReels.createdAt));
   return includeIngest ? (rows as CollectedReel[]) : rows.map((r) => withIngestDefaults(r));
 }
@@ -1616,13 +1623,13 @@ export async function deleteCollectedReel(id: number): Promise<void> {
   await db.delete(collectedReels).where(eq(collectedReels.id, id));
 }
 
-export async function deleteFailedCollectedReelsByUser(userId: number): Promise<number> {
+export async function deleteFailedCollectedReelsByWorkspace(workspaceId: string): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const rows = await db
     .select({ id: collectedReels.id })
     .from(collectedReels)
-    .where(and(eq(collectedReels.userId, userId), eq(collectedReels.status, "failed")));
+    .where(and(eq(collectedReels.workspaceId, workspaceId), eq(collectedReels.status, "failed")));
   if (rows.length === 0) return 0;
   await db.delete(collectedReels).where(
     inArray(
@@ -1633,14 +1640,17 @@ export async function deleteFailedCollectedReelsByUser(userId: number): Promise<
   return rows.length;
 }
 
-export async function getCollectedReelByShortcode(userId: number, shortcode: string): Promise<CollectedReel | undefined> {
+export async function getCollectedReelByShortcode(
+  workspaceId: string,
+  shortcode: string
+): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
   const result = await db
     .select(collectedReelsSelectColumns(includeIngest))
     .from(collectedReels)
-    .where(and(eq(collectedReels.userId, userId), eq(collectedReels.shortcode, shortcode)))
+    .where(and(eq(collectedReels.workspaceId, workspaceId), eq(collectedReels.shortcode, shortcode)))
     .limit(1);
   const row = result[0];
   if (!row) return undefined;
@@ -1691,11 +1701,13 @@ export async function createScriptIdea(
   return Number(result[0].insertId);
 }
 
-export async function getScriptIdeasByUser(userId: number): Promise<ScriptIdea[]> {
+export async function getScriptIdeasByWorkspace(workspaceId: string): Promise<ScriptIdea[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(scriptIdeas)
-    .where(eq(scriptIdeas.userId, userId))
+  return db
+    .select()
+    .from(scriptIdeas)
+    .where(eq(scriptIdeas.workspaceId, workspaceId))
     .orderBy(desc(scriptIdeas.createdAt));
 }
 
@@ -1729,13 +1741,19 @@ export async function getQueuedScriptIdeas(): Promise<ScriptIdea[]> {
 
 // ── Library: Aggregated Transcripts & Scripts ──
 
-export async function getLibraryTranscripts(userId: number, opts: { search?: string; source?: string; limit?: number; offset?: number } = {}) {
+export async function getLibraryTranscripts(
+  workspaceId: string,
+  opts: { search?: string; source?: string; limit?: number; offset?: number } = {}
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { search, source, limit = 50, offset = 0 } = opts;
 
-  // 1. Transcripts from scraped reels (via scrape_jobs owned by user)
-  const userJobs = await db.select({ id: scrapeJobs.id, handle: scrapeJobs.handle }).from(scrapeJobs).where(eq(scrapeJobs.userId, userId));
+  // 1. Transcripts from scraped reels (via scrape_jobs in workspace)
+  const userJobs = await db
+    .select({ id: scrapeJobs.id, handle: scrapeJobs.handle })
+    .from(scrapeJobs)
+    .where(eq(scrapeJobs.workspaceId, workspaceId));
   const jobIds = userJobs.map(j => j.id);
   const jobHandleMap = Object.fromEntries(userJobs.map(j => [j.id, j.handle]));
 
@@ -1777,7 +1795,10 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
   // 2. Transcripts from collected reels (via reels.shortcode → transcriptions.reelId)
   let collectedTranscripts: typeof scrapedTranscripts = [];
   if (!source || source === "collected") {
-    const collected = await db.select().from(collectedReels).where(eq(collectedReels.userId, userId));
+    const collected = await db
+      .select()
+      .from(collectedReels)
+      .where(eq(collectedReels.workspaceId, workspaceId));
     if (collected.length > 0) {
       const shortcodes = [...new Set(collected.map((c) => c.shortcode).filter(Boolean))] as string[];
       if (shortcodes.length > 0) {
@@ -1846,7 +1867,10 @@ export async function getLibraryTranscripts(userId: number, opts: { search?: str
   return { items, total };
 }
 
-export async function getLibraryScripts(userId: number, opts: { search?: string; source?: string; status?: string; limit?: number; offset?: number } = {}) {
+export async function getLibraryScripts(
+  workspaceId: string,
+  opts: { search?: string; source?: string; status?: string; limit?: number; offset?: number } = {}
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { search, source, status, limit = 50, offset = 0 } = opts;
@@ -1859,7 +1883,11 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
   }> = [];
 
   if (!source || source === "saved") {
-    const saved = await db.select().from(savedScripts).where(eq(savedScripts.userId, userId)).orderBy(desc(savedScripts.createdAt));
+    const saved = await db
+      .select()
+      .from(savedScripts)
+      .where(eq(savedScripts.workspaceId, workspaceId))
+      .orderBy(desc(savedScripts.createdAt));
     for (const s of saved) {
       scripts.push({
         id: s.id, title: s.title, content: s.content, sourceHandle: s.sourceHandle,
@@ -1871,12 +1899,19 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
 
   // 2. Recreated scripts not yet saved
   if (!source || source === "recreated") {
-    const recreated = await db.select().from(recreatedScripts).where(
-      and(eq(recreatedScripts.userId, userId), eq(recreatedScripts.status, "completed"))
-    ).orderBy(desc(recreatedScripts.createdAt));
+    const recreated = await db
+      .select()
+      .from(recreatedScripts)
+      .where(
+        and(eq(recreatedScripts.workspaceId, workspaceId), eq(recreatedScripts.status, "completed"))
+      )
+      .orderBy(desc(recreatedScripts.createdAt));
 
     // Get saved script recreatedScriptIds to exclude already-saved ones
-    const savedWithRecreated = await db.select({ recreatedScriptId: savedScripts.recreatedScriptId }).from(savedScripts).where(eq(savedScripts.userId, userId));
+    const savedWithRecreated = await db
+      .select({ recreatedScriptId: savedScripts.recreatedScriptId })
+      .from(savedScripts)
+      .where(eq(savedScripts.workspaceId, workspaceId));
     const savedRecreatedIds = new Set(savedWithRecreated.map(s => s.recreatedScriptId).filter(Boolean));
 
     const recreatedNeedingReel = recreated.filter(
@@ -1915,13 +1950,19 @@ export async function getLibraryScripts(userId: number, opts: { search?: string;
 
   // 3. Idea-generated scripts not yet saved
   if (!source || source === "idea") {
-    const ideas = await db.select().from(scriptIdeas).where(
-      and(eq(scriptIdeas.userId, userId), eq(scriptIdeas.status, "completed"))
-    ).orderBy(desc(scriptIdeas.createdAt));
+    const ideas = await db
+      .select()
+      .from(scriptIdeas)
+      .where(and(eq(scriptIdeas.workspaceId, workspaceId), eq(scriptIdeas.status, "completed")))
+      .orderBy(desc(scriptIdeas.createdAt));
 
     const savedIdeaIds = new Set(
-      (await db.select({ id: savedScripts.id }).from(savedScripts).where(eq(savedScripts.userId, userId)))
-        .map(s => s.id)
+      (
+        await db
+          .select({ id: savedScripts.id })
+          .from(savedScripts)
+          .where(eq(savedScripts.workspaceId, workspaceId))
+      ).map((s) => s.id)
     );
 
     for (const idea of ideas) {

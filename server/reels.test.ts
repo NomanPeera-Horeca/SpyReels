@@ -226,6 +226,16 @@ vi.mock("./db", () => ({
   getLatestVersionNumber: vi.fn().mockResolvedValue(1),
   ensureDefaultTags: vi.fn().mockResolvedValue(undefined),
   updateScriptTag: vi.fn().mockResolvedValue(undefined),
+  getScriptTagById: vi.fn().mockResolvedValue({
+    id: 1,
+    userId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    name: "Scripting",
+    color: "#6366f1",
+    isDefault: 1,
+    sortOrder: 1,
+    createdAt: new Date(),
+  }),
   getScriptTagsByWorkspace: vi.fn().mockResolvedValue([
     { id: 1, userId: 1, name: "Scripting", color: "#6366f1", createdAt: new Date() },
     { id: 2, userId: 1, name: "Filming", color: "#22c55e", createdAt: new Date() },

@@ -34,7 +34,9 @@ vi.mock("./db", () => ({
   createTelegramConnection: (...args: any[]) => mockCreateTelegramConnection(...args),
   updateTelegramConnection: (...args: any[]) => mockUpdateTelegramConnection(...args),
   deleteTelegramConnection: (...args: any[]) => mockDeleteTelegramConnection(...args),
-  getCollectedReelsByUser: (...args: any[]) => mockGetCollectedReelsByUser(...args),
+  getCollectedReelsByWorkspace: (...args: any[]) => mockGetCollectedReelsByUser(...args),
+  deleteFailedCollectedReelsByWorkspace: vi.fn().mockResolvedValue(0),
+  getScriptIdeasByWorkspace: vi.fn().mockResolvedValue([]),
   getCollectedReelById: (...args: any[]) => mockGetCollectedReelById(...args),
   deleteCollectedReel: (...args: any[]) => mockDeleteCollectedReel(...args),
   createCollectedReel: (...args: any[]) => mockCreateCollectedReel(...args),
@@ -279,13 +281,31 @@ describe("collected.list", () => {
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.collected.list();
     expect(result).toEqual([]);
-    expect(mockGetCollectedReelsByUser).toHaveBeenCalledWith(1);
+    expect(mockGetCollectedReelsByUser).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001"
+    );
   });
 
   it("returns collected reels for the user", async () => {
     const reels = [
-      { id: 1, userId: 1, shortcode: "ABC123", status: "ready", source: "telegram", createdAt: new Date() },
-      { id: 2, userId: 1, shortcode: "DEF456", status: "pending", source: "url_paste", createdAt: new Date() },
+      {
+        id: 1,
+        userId: 1,
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        shortcode: "ABC123",
+        status: "ready",
+        source: "telegram",
+        createdAt: new Date(),
+      },
+      {
+        id: 2,
+        userId: 1,
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        shortcode: "DEF456",
+        status: "pending",
+        source: "url_paste",
+        createdAt: new Date(),
+      },
     ];
     mockGetCollectedReelsByUser.mockResolvedValue(reels);
     const caller = appRouter.createCaller(createAuthContext());
@@ -296,7 +316,11 @@ describe("collected.list", () => {
 
 describe("collected.delete", () => {
   it("deletes a collected reel owned by the user", async () => {
-    mockGetCollectedReelById.mockResolvedValue({ id: 1, userId: 1 });
+    mockGetCollectedReelById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    });
     mockDeleteCollectedReel.mockResolvedValue(undefined);
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.collected.delete({ id: 1 });
@@ -304,8 +328,12 @@ describe("collected.delete", () => {
     expect(mockDeleteCollectedReel).toHaveBeenCalledWith(1);
   });
 
-  it("throws NOT_FOUND when reel does not belong to user", async () => {
-    mockGetCollectedReelById.mockResolvedValue({ id: 1, userId: 999 });
+  it("throws NOT_FOUND when reel is in another workspace", async () => {
+    mockGetCollectedReelById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000099",
+    });
     const caller = appRouter.createCaller(createAuthContext());
     await expect(caller.collected.delete({ id: 1 })).rejects.toThrow();
   });
@@ -327,6 +355,7 @@ describe("collected.addByUrl", () => {
     expect(result.duplicate).toBe(false);
     expect(mockCreateCollectedReel).toHaveBeenCalledWith(expect.objectContaining({
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       shortcode: "ABC123",
       source: "url_paste",
       status: "pending",
@@ -337,6 +366,7 @@ describe("collected.addByUrl", () => {
     mockGetCollectedReelByShortcode.mockResolvedValue({
       id: 10,
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       shortcode: "ABC123",
       status: "ready",
     });
@@ -353,6 +383,7 @@ describe("collected.addByUrl", () => {
     mockGetCollectedReelByShortcode.mockResolvedValue({
       id: 10,
       userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       shortcode: "ABC123",
       status: "failed",
     });
@@ -408,7 +439,13 @@ describe("collected.addByUrl", () => {
 
 describe("collected.retry", () => {
   it("retries fetching metadata for a failed reel", async () => {
-    mockGetCollectedReelById.mockResolvedValue({ id: 1, userId: 1, shortcode: "ABC123", status: "failed" });
+    mockGetCollectedReelById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      shortcode: "ABC123",
+      status: "failed",
+    });
     mockUpdateCollectedReel.mockResolvedValue(undefined);
     const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.collected.retry({ id: 1 });
@@ -423,8 +460,12 @@ describe("collected.retry", () => {
     );
   });
 
-  it("throws NOT_FOUND when reel does not belong to user", async () => {
-    mockGetCollectedReelById.mockResolvedValue({ id: 1, userId: 999 });
+  it("throws NOT_FOUND when reel is in another workspace", async () => {
+    mockGetCollectedReelById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      workspaceId: "00000000-0000-4000-8000-000000000099",
+    });
     const caller = appRouter.createCaller(createAuthContext());
     await expect(caller.collected.retry({ id: 1 })).rejects.toThrow();
   });
