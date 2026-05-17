@@ -51,6 +51,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
+import { CreateWorkspaceModal } from "@/components/CreateWorkspaceModal";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { Button } from "./ui/button";
 import {
@@ -198,6 +199,7 @@ function DashboardLayoutContent({
 
   return (
     <>
+      <CreateWorkspaceModal />
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"

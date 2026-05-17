@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "@/components/ui/sidebar";
+import { OPEN_CREATE_WORKSPACE_MODAL_EVENT } from "@/components/CreateWorkspaceModal";
 import {
   getCurrentWorkspaceId,
   setCurrentWorkspaceId,
@@ -86,7 +87,7 @@ export function WorkspaceSwitcher() {
   };
 
   const handleOpenCreateModal = () => {
-    window.dispatchEvent(new Event("open-create-workspace-modal"));
+    window.dispatchEvent(new Event(OPEN_CREATE_WORKSPACE_MODAL_EVENT));
   };
 
   const triggerButton = (
