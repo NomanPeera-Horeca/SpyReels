@@ -34,6 +34,7 @@ import PasteScript from "./pages/PasteScript";
 import Interests from "./pages/Interests";
 import AdminEntry from "./admin/AdminEntry";
 import ResetPassword from "./pages/ResetPassword";
+import AcceptInvitation from "./pages/AcceptInvitation";
 
 function DashboardRouter() {
   return (
@@ -85,6 +86,7 @@ function Router() {
       <Route path="/blog/:slug" component={BlogPost} />
       {/* <Route path="/extension" component={Extension} /> */}
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/invitations/accept/:token" component={AcceptInvitation} />
       <Route path="/onboarding" component={OnboardingPage} />
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
       <Route>

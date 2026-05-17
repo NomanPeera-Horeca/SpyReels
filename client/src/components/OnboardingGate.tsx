@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PENDING_INVITATION_KEY } from "@/pages/AcceptInvitation";
 import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useMemo } from "react";
@@ -40,6 +41,27 @@ export default function OnboardingGate({
     const onboarding = onboardingStateQuery.data;
     return !onboarding.onboardingCompletedAt && !onboarding.onboardingSkippedAt;
   }, [user, isPostLaunchUser, onboardingStateQuery.isLoading, onboardingStateQuery.data]);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    if (location.startsWith("/invitations/accept")) return;
+
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem(PENDING_INVITATION_KEY);
+    } catch {
+      pending = null;
+    }
+    const trimmed = pending?.trim();
+    if (!trimmed) return;
+
+    try {
+      sessionStorage.removeItem(PENDING_INVITATION_KEY);
+    } catch {
+      // ignore
+    }
+    setLocation(`/invitations/accept/${encodeURIComponent(trimmed)}`);
+  }, [loading, user, location, setLocation]);
 
   useEffect(() => {
     if (!shouldRedirectToOnboarding) return;
