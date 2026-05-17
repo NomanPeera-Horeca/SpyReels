@@ -14,8 +14,9 @@ import {
   trpc,
 } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Building2, Check, ChevronDown, Plus } from "lucide-react";
+import { Building2, Check, ChevronDown, Plus, Settings } from "lucide-react";
 import { useMemo } from "react";
+import { useLocation } from "wouter";
 
 type WorkspaceRow = {
   id: string;
@@ -51,6 +52,7 @@ function resolveCurrentWorkspaceId(
 
 export function WorkspaceSwitcher() {
   const { state } = useSidebar();
+  const [, setLocation] = useLocation();
   const isCollapsed = state === "collapsed";
   const storedWorkspaceId = getCurrentWorkspaceId();
 
@@ -172,6 +174,13 @@ export function WorkspaceSwitcher() {
             })
           )}
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="cursor-pointer gap-2"
+            onSelect={() => setLocation("/workspace/settings")}
+          >
+            <Settings className="h-4 w-4" />
+            <span>Workspace settings</span>
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer gap-2"
             onSelect={event => {

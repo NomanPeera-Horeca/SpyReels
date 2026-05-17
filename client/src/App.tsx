@@ -16,6 +16,7 @@ import SavedReels from "./pages/SavedReels";
 import MyScripts from "./pages/MyScripts";
 import ScriptEditor from "./pages/ScriptEditor";
 import Settings from "./pages/Settings";
+import WorkspaceSettings from "./pages/WorkspaceSettings";
 import Pricing from "./pages/Pricing";
 import Billing from "./pages/Billing";
 import TermsOfService from "./pages/TermsOfService";
@@ -52,6 +53,7 @@ function DashboardRouter() {
         <Route path="/paste" component={PasteScript} />
         <Route path="/history" component={History} />
         <Route path="/settings" component={Settings} />
+        <Route path="/workspace/settings" component={WorkspaceSettings} />
         <Route path="/billing" component={Billing} />
         <Route path="/admin/traffic" component={AdminEntry} />
         <Route path="/admin/blogs/:slug?" component={AdminEntry} />
