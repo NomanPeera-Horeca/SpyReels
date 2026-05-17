@@ -10,7 +10,6 @@
  */
 
 import * as dotenv from "dotenv";
-import { randomUUID } from "crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   collectedReels,
@@ -184,18 +183,6 @@ async function countTagAssignmentsForUser(
   return Number(row?.c ?? 0);
 }
 
-async function resolveUserPlan(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  userId: number
-): Promise<string> {
-  const [sub] = await db
-    .select({ plan: subscriptions.plan })
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, userId))
-    .limit(1);
-  return sub?.plan ?? "free";
-}
-
 async function processUser(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   userId: number,
@@ -214,23 +201,10 @@ async function processUser(
     workspaceId = existing.id;
     stats.usersSkippedExistingWorkspace++;
   } else {
-    workspaceId = randomUUID();
     if (mode === "real-run") {
-      const plan = await resolveUserPlan(db, userId);
-      await db.insert(workspaces).values({
-        id: workspaceId,
-        name: "Personal",
-        ownerUserId: userId,
-        plan,
-        isPersonal: true,
-        includedSeats: 1,
-      });
-      await db.insert(workspaceMembers).values({
-        id: randomUUID(),
-        workspaceId,
-        userId,
-        role: "owner",
-      });
+      workspaceId = await createPersonalWorkspaceForUser(userId);
+    } else {
+      workspaceId = "00000000-0000-4000-8000-000000000000";
     }
     stats.workspacesCreated++;
     stats.membersCreated++;

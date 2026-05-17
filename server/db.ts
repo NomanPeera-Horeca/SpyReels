@@ -18,6 +18,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import {
+  createPersonalWorkspaceForUser,
   getPersonalWorkspaceId,
   getSavedScriptWorkspaceId,
   getScrapeJobWorkspaceId,
@@ -77,6 +78,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
+    const existingBefore = await getUserByOpenId(user.openId);
+
     const values: InsertUser = {
       openId: user.openId,
     };
@@ -118,6 +121,20 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     await db.insert(users).values(values).onDuplicateKeyUpdate({
       set: updateSet,
     });
+
+    if (!existingBefore) {
+      const created = await getUserByOpenId(user.openId);
+      if (created) {
+        try {
+          await createPersonalWorkspaceForUser(created.id);
+        } catch (workspaceErr) {
+          console.error(
+            `[Workspaces] Failed to create personal workspace for new user ${created.id}:`,
+            workspaceErr
+          );
+        }
+      }
+    }
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
