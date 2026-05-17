@@ -172,6 +172,8 @@ function createAuthContext(userId = 1): TrpcContext {
 
   return {
     user,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    workspaceRole: "owner",
     req: {
       protocol: "https",
       headers: { origin: "https://spyreels.ai" },

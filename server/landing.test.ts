@@ -16,6 +16,8 @@ import type { TrpcContext } from "./_core/context";
 function createUnauthenticatedContext(): TrpcContext {
   return {
     user: null,
+    workspaceId: null,
+    workspaceRole: null,
     req: {
       protocol: "https",
       headers: {},
@@ -39,6 +41,8 @@ function createAuthenticatedContext(): TrpcContext {
       updatedAt: new Date(),
       lastSignedIn: new Date(),
     },
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    workspaceRole: "owner",
     req: {
       protocol: "https",
       headers: {},

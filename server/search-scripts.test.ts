@@ -274,6 +274,8 @@ function createAuthContext(): TrpcContext {
 
   return {
     user,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    workspaceRole: "owner",
     req: {
       protocol: "https",
       headers: {},
@@ -287,6 +289,8 @@ function createAuthContext(): TrpcContext {
 function createUnauthContext(): TrpcContext {
   return {
     user: null,
+    workspaceId: null,
+    workspaceRole: null,
     req: {
       protocol: "https",
       headers: {},

@@ -182,6 +182,8 @@ function createOwnerContext(): TrpcContext {
   };
   return {
     user,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    workspaceRole: "owner",
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
@@ -201,6 +203,8 @@ function createRegularUserContext(): TrpcContext {
   };
   return {
     user,
+    workspaceId: "00000000-0000-4000-8000-000000000002",
+    workspaceRole: "owner",
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
@@ -209,6 +213,8 @@ function createRegularUserContext(): TrpcContext {
 function createPublicContext(): TrpcContext {
   return {
     user: null,
+    workspaceId: null,
+    workspaceRole: null,
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };

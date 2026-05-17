@@ -27,6 +27,8 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const ctx: TrpcContext = {
     user,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    workspaceRole: "owner",
     req: {
       protocol: "https",
       headers: {},

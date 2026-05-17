@@ -18,10 +18,19 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  if (!ctx.workspaceId || !ctx.workspaceRole) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Workspace context is missing for this user.",
+    });
+  }
+
   return next({
     ctx: {
       ...ctx,
       user: ctx.user,
+      workspaceId: ctx.workspaceId,
+      workspaceRole: ctx.workspaceRole,
     },
   });
 });
