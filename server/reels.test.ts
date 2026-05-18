@@ -65,7 +65,7 @@ vi.mock("./db", () => ({
       id: 1,
       jobId: 1,
       shortcode: "ABC123",
-      caption: "Test reel caption",
+      caption: "Test reel caption #fitness #growth",
       viewCount: 10000,
       likeCount: 500,
       commentCount: 25,
@@ -99,7 +99,7 @@ vi.mock("./db", () => ({
     jobId: 1,
     workspaceId: "00000000-0000-4000-8000-000000000001",
     shortcode: "ABC123",
-    caption: "Test reel caption",
+    caption: "Test reel caption #fitness #growth",
     viewCount: 10000,
     likeCount: 500,
     commentCount: 25,
@@ -860,6 +860,17 @@ describe("scripts.get", () => {
     expect(result).toHaveProperty("content", "Test script content here.");
     expect(result).toHaveProperty("tags");
     expect(result).toHaveProperty("versions");
+    expect(result).toHaveProperty("sourceReel");
+    expect(result.sourceReel).toMatchObject({
+      id: 1,
+      shortcode: "ABC123",
+      ownerHandle: "testuser",
+      viewCount: 10000,
+      likeCount: 500,
+    });
+    expect(result.sourceReel?.hashtags).toEqual(
+      expect.arrayContaining(["fitness", "growth"])
+    );
   });
 });
 

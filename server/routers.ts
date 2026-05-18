@@ -118,6 +118,7 @@ import {
   getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { assertScriptInWorkspace } from "./assertScriptInWorkspace";
+import { toSourceReel } from "./sourceReel";
 import {
   enrichScriptsWithSendMeta,
   sendScriptToWorkspace,
@@ -2545,7 +2546,14 @@ Return JSON only:
         const tags = await getTagsForScript(input.id);
         const versions = await getScriptVersions(input.id);
         const [enriched] = await enrichScriptsWithSendMeta([script]);
-        return { ...enriched, tags, versions };
+        let sourceReel = null;
+        if (script.reelId != null) {
+          const reel = await getReelById(script.reelId);
+          if (reel) {
+            sourceReel = toSourceReel(reel);
+          }
+        }
+        return { ...enriched, tags, versions, sourceReel };
       }),
 
     /** List all scripts for the user */

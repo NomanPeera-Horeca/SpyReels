@@ -71,6 +71,7 @@ import { TeleprompterMode } from "./TeleprompterMode";
 import { ScriptExport } from "@/components/ScriptExport";
 import { ShareScript } from "@/components/ShareScript";
 import { PostDateTimePicker } from "@/components/PostDateTimePicker";
+import { ScriptEditorSourceReel } from "@/components/ScriptEditorSourceReel";
 
 /** Parse a date string/Date to a Date object for the calendar picker */
 function parseDateValue(
@@ -129,6 +130,8 @@ export default function ScriptEditor() {
   const utils = trpc.useUtils();
 
   const script = scriptQuery.data;
+  const sourceReel = script?.sourceReel ?? null;
+  const showSourceReel = Boolean(script?.reelId && sourceReel);
 
   useEffect(() => {
     if (script && !hasUnsavedChanges) {
@@ -464,6 +467,12 @@ export default function ScriptEditor() {
         <div className="flex-1 flex overflow-hidden">
           {/* Editor Panel */}
           <div className="flex-1 flex flex-col overflow-hidden">
+            {showSourceReel && sourceReel ? (
+              <div className="lg:hidden border-b shrink-0 p-3">
+                <ScriptEditorSourceReel sourceReel={sourceReel} />
+              </div>
+            ) : null}
+
             {/* AI Editing Toolbar */}
             <div className="px-2 sm:px-4 py-2 border-b shrink-0">
               <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
@@ -1469,20 +1478,6 @@ export default function ScriptEditor() {
               )}
             </div>
 
-            {/* Original Script */}
-            {script.originalContent &&
-              script.originalContent !== script.content && (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                    Original AI Script
-                  </h4>
-                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto leading-relaxed">
-                    {script.originalContent.slice(0, 500)}
-                    {script.originalContent.length > 500 ? "..." : ""}
-                  </div>
-                </div>
-              )}
-
             {/* Timing */}
             <div>
               <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -1504,6 +1499,26 @@ export default function ScriptEditor() {
                 </div>
               </div>
             </div>
+
+            {showSourceReel && sourceReel ? (
+              <div className="hidden lg:block">
+                <ScriptEditorSourceReel sourceReel={sourceReel} />
+              </div>
+            ) : null}
+
+            {/* Original Script */}
+            {script.originalContent &&
+              script.originalContent !== script.content && (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+                    Original AI Script
+                  </h4>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto leading-relaxed">
+                    {script.originalContent.slice(0, 500)}
+                    {script.originalContent.length > 500 ? "..." : ""}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
 
