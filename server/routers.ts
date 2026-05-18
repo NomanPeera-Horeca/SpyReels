@@ -118,6 +118,10 @@ import {
   getSavedFeaturedReelsWithDetails,
 } from "./db";
 import { assertScriptInWorkspace } from "./assertScriptInWorkspace";
+import {
+  enrichScriptsWithSendMeta,
+  sendScriptToWorkspace,
+} from "./scriptsSendToWorkspace";
 import { assertCollectedReelInWorkspace } from "./assertCollectedReelInWorkspace";
 import { assertIdeaInWorkspace } from "./assertIdeaInWorkspace";
 import { assertTagInWorkspace } from "./assertTagInWorkspace";
@@ -2535,7 +2539,8 @@ Return JSON only:
         const script = await assertScriptInWorkspace(input.id, ctx);
         const tags = await getTagsForScript(input.id);
         const versions = await getScriptVersions(input.id);
-        return { ...script, tags, versions };
+        const [enriched] = await enrichScriptsWithSendMeta([script]);
+        return { ...enriched, tags, versions };
       }),
 
     /** List all scripts for the user */
@@ -2560,7 +2565,7 @@ Return JSON only:
           const tags = await getTagsForScript(s.id);
           return { ...s, tags };
         }));
-        return result;
+        return enrichScriptsWithSendMeta(result);
       }),
 
     /** Update a script (content, title, postDate, notes, status) */
@@ -3125,6 +3130,19 @@ The hook MUST be 7-10 words. Count them.`),
         });
         await updateSavedScript(input.scriptId, { content: version.content, wordCount });
         return { content: version.content };
+      }),
+
+    /** Copy a script into another workspace the user belongs to */
+    sendToWorkspace: protectedProcedure
+      .input(
+        z.object({
+          scriptId: z.number().int().positive(),
+          targetWorkspaceId: z.string().uuid(),
+          note: z.string().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return sendScriptToWorkspace(ctx, input);
       }),
   }),
 

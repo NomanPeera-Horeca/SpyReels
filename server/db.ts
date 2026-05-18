@@ -1305,6 +1305,73 @@ export async function getTagsForScript(scriptId: number): Promise<ScriptTag[]> {
   return db.select().from(scriptTags).where(inArray(scriptTags.id, tagIds));
 }
 
+/** Find a tag by name in a workspace, or create a non-default tag with the same styling. */
+export async function findOrCreateScriptTagInWorkspace(
+  workspaceId: string,
+  userId: number,
+  name: string,
+  color: string
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [existing] = await db
+    .select()
+    .from(scriptTags)
+    .where(and(eq(scriptTags.workspaceId, workspaceId), eq(scriptTags.name, name)))
+    .limit(1);
+  if (existing) return existing.id;
+  return createScriptTag({
+    userId,
+    workspaceId,
+    name,
+    color,
+    sortOrder: 99,
+    isDefault: 0,
+  });
+}
+
+export async function workspaceHasScriptForReel(
+  workspaceId: string,
+  userId: number,
+  reelId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .select({ id: savedScripts.id })
+    .from(savedScripts)
+    .where(
+      and(
+        eq(savedScripts.workspaceId, workspaceId),
+        eq(savedScripts.userId, userId),
+        eq(savedScripts.reelId, reelId)
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function workspaceHasScriptForRecreated(
+  workspaceId: string,
+  userId: number,
+  recreatedScriptId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .select({ id: savedScripts.id })
+    .from(savedScripts)
+    .where(
+      and(
+        eq(savedScripts.workspaceId, workspaceId),
+        eq(savedScripts.userId, userId),
+        eq(savedScripts.recreatedScriptId, recreatedScriptId)
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function getScriptsByTag(
   workspaceId: string,
   tagId: number

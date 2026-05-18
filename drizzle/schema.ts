@@ -399,11 +399,19 @@ export const savedScripts = mysqlTable(
   generatedCaption: text("generatedCaption"),
   generatedHashtags: text("generatedHashtags"),
   captionStyle: varchar("captionStyle", { length: 32 }),
+  sourceWorkspaceId: varchar("sourceWorkspaceId", { length: 36 }),
+  sourceScriptId: int("sourceScriptId"),
+  sentByUserId: int("sentByUserId"),
+  sentAt: timestamp("sentAt"),
+  senderNote: text("senderNote"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => ({
     workspaceIdx: index("idx_saved_scripts_workspace").on(table.workspaceId),
+    sourceWorkspaceIdx: index("idx_saved_scripts_source_workspace").on(
+      table.sourceWorkspaceId
+    ),
     workspaceUserReelUnique: uniqueIndex("uniq_saved_scripts_workspace_user_reel").on(
       table.workspaceId,
       table.userId,

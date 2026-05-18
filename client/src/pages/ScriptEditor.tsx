@@ -34,7 +34,10 @@ import {
   Maximize2,
   Pencil,
   Check,
+  Send,
 } from "lucide-react";
+import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { SentFromBadge } from "@/components/SentFromBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -385,6 +388,15 @@ export default function ScriptEditor() {
                 Draft
               </Badge>
             )}
+            {script.sourceWorkspaceId &&
+            script.sentFromWorkspaceName &&
+            script.sentByUserName ? (
+              <SentFromBadge
+                workspaceName={script.sentFromWorkspaceName}
+                senderName={script.sentByUserName}
+                sentAt={script.sentAt}
+              />
+            ) : null}
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {hasUnsavedChanges && (
@@ -410,6 +422,19 @@ export default function ScriptEditor() {
               <span className="hidden sm:inline">
                 {script.status === "approved" ? "Unapprove" : "Approve"}
               </span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openSendToWorkspaceModal({
+                  scriptId: script.id,
+                  scriptTitle: editedTitle || script.title,
+                })
+              }
+            >
+              <Send className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Send to workspace...</span>
             </Button>
             <ShareScript
               title={editedTitle}

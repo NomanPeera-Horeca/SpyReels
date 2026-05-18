@@ -29,7 +29,10 @@ import {
   Columns3,
   GripVertical,
   Lock,
+  Send,
 } from "lucide-react";
+import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { SentFromBadge } from "@/components/SentFromBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -752,6 +755,18 @@ function ScriptCard({
                 {script.status === "approved" ? "Mark as Draft" : "Approve"}
               </DropdownMenuItem>
               <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSendToWorkspaceModal({
+                    scriptId: script.id,
+                    scriptTitle: script.title,
+                  });
+                }}
+              >
+                <Send className="w-3.5 h-3.5 mr-2" />
+                Send to workspace...
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 className="text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -773,6 +788,18 @@ function ScriptCard({
         <p className="text-xs text-muted-foreground line-clamp-3 mb-3 leading-relaxed">
           {script.content.slice(0, 200)}
         </p>
+
+        {script.sourceWorkspaceId &&
+        script.sentFromWorkspaceName &&
+        script.sentByUserName ? (
+          <div className="mb-2">
+            <SentFromBadge
+              workspaceName={script.sentFromWorkspaceName}
+              senderName={script.sentByUserName}
+              sentAt={script.sentAt}
+            />
+          </div>
+        ) : null}
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1 mb-3">
