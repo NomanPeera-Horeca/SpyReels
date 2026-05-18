@@ -35,8 +35,10 @@ import {
   Pencil,
   Check,
   Send,
+  Link2,
 } from "lucide-react";
 import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { openShareLinkModal } from "@/components/ShareLinkModal";
 import { SentFromBadge } from "@/components/SentFromBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -422,6 +424,19 @@ export default function ScriptEditor() {
               <span className="hidden sm:inline">
                 {script.status === "approved" ? "Unapprove" : "Approve"}
               </span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openShareLinkModal({
+                  scriptId: script.id,
+                  scriptTitle: editedTitle || script.title,
+                })
+              }
+            >
+              <Link2 className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Share link</span>
             </Button>
             <Button
               variant="outline"

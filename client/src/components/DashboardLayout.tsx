@@ -53,6 +53,7 @@ import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { CreateWorkspaceModal } from "@/components/CreateWorkspaceModal";
 import { SendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { ShareLinkModal } from "@/components/ShareLinkModal";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { Button } from "./ui/button";
 import {
@@ -202,6 +203,7 @@ function DashboardLayoutContent({
     <>
       <CreateWorkspaceModal />
       <SendToWorkspaceModal />
+      <ShareLinkModal />
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"

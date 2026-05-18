@@ -30,8 +30,10 @@ import {
   GripVertical,
   Lock,
   Send,
+  Link2,
 } from "lucide-react";
 import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { openShareLinkModal } from "@/components/ShareLinkModal";
 import { SentFromBadge } from "@/components/SentFromBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -753,6 +755,18 @@ function ScriptCard({
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-2" />
                 {script.status === "approved" ? "Mark as Draft" : "Approve"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openShareLinkModal({
+                    scriptId: script.id,
+                    scriptTitle: script.title,
+                  });
+                }}
+              >
+                <Link2 className="w-3.5 h-3.5 mr-2" />
+                Share link
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={(e) => {

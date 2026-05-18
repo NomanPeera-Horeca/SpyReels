@@ -122,6 +122,11 @@ import {
   enrichScriptsWithSendMeta,
   sendScriptToWorkspace,
 } from "./scriptsSendToWorkspace";
+import {
+  createShareLinkForScript,
+  getShareLinkInfoForScript,
+  revokeShareLinkForScript,
+} from "./scriptShareLinks";
 import { assertCollectedReelInWorkspace } from "./assertCollectedReelInWorkspace";
 import { assertIdeaInWorkspace } from "./assertIdeaInWorkspace";
 import { assertTagInWorkspace } from "./assertTagInWorkspace";
@@ -3143,6 +3148,24 @@ The hook MUST be 7-10 words. Count them.`),
       )
       .mutation(async ({ ctx, input }) => {
         return sendScriptToWorkspace(ctx, input);
+      }),
+
+    createShareLink: protectedProcedure
+      .input(z.object({ scriptId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        return createShareLinkForScript(ctx, input.scriptId);
+      }),
+
+    revokeShareLink: protectedProcedure
+      .input(z.object({ scriptId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        return revokeShareLinkForScript(ctx, input.scriptId);
+      }),
+
+    getShareLinkInfo: protectedProcedure
+      .input(z.object({ scriptId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        return getShareLinkInfoForScript(ctx, input.scriptId);
       }),
   }),
 

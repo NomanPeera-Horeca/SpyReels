@@ -1296,3 +1296,32 @@ export const workspaceInvitations = mysqlTable(
 
 export type WorkspaceInvitation = typeof workspaceInvitations.$inferSelect;
 export type InsertWorkspaceInvitation = typeof workspaceInvitations.$inferInsert;
+
+export const scriptShareLinks = mysqlTable(
+  "script_share_links",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    token: varchar("token", { length: 32 }).notNull(),
+    scriptId: int("scriptId")
+      .notNull()
+      .references(() => savedScripts.id, { onDelete: "cascade" }),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdByUserId: int("createdByUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    revokedAt: timestamp("revokedAt"),
+    viewCount: int("viewCount").default(0).notNull(),
+    lastViewedAt: timestamp("lastViewedAt"),
+  },
+  (table) => ({
+    tokenUnique: uniqueIndex("uniq_script_share_token").on(table.token),
+    tokenIdx: index("idx_script_share_token").on(table.token),
+    scriptIdx: index("idx_script_share_script").on(table.scriptId),
+  })
+);
+
+export type ScriptShareLink = typeof scriptShareLinks.$inferSelect;
+export type InsertScriptShareLink = typeof scriptShareLinks.$inferInsert;

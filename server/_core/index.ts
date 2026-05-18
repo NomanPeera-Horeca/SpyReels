@@ -12,6 +12,7 @@ import { createExtensionRouter } from "../extensionApi";
 import { handleTelegramUpdate, setupTelegramWebhook } from "../telegramBot";
 import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
+import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -120,6 +121,8 @@ async function startServer() {
       res.status(500).send("Error generating sitemap");
     }
   });
+
+  registerPublicScriptShareRoutes(app);
 
   // tRPC API
   app.use(
