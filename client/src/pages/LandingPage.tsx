@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCanonical } from "@/hooks/useCanonical";
 import { getLoginUrl } from "@/const";
 import { signupAttributionBody } from "@/utils/utm-capture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -146,6 +147,7 @@ const FAQ = [
 // Landing Page
 // ═══════════════════════════════════════════════════════════════
 export default function LandingPage() {
+  useCanonical("/");
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const handleGetStarted = () => {

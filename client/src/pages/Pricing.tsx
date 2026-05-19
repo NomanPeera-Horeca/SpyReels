@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -634,6 +635,7 @@ function renderFeatureValue(value: FeatureValue) {
 }
 
 export default function Pricing() {
+  useCanonical("/pricing");
   const { user } = useAuth();
   const posthog = usePostHog();
   const [isAnnual, setIsAnnual] = useState(true);

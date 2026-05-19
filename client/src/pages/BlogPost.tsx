@@ -2,6 +2,7 @@ import { ArrowLeft, Calendar, Clock3, Copy, Film, Linkedin, Mail, MessageCircle,
 import { Link, useParams } from "wouter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useCanonical } from "@/hooks/useCanonical";
 import { useEffect, useMemo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -114,6 +115,7 @@ function extractToc(markdown: string): TocItem[] {
 
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
+  useCanonical(slug ? `/blog/${slug}` : undefined);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState("");
   const [shareOpen, setShareOpen] = useState(false);

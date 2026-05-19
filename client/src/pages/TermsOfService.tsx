@@ -1,8 +1,10 @@
+import { useCanonical } from "@/hooks/useCanonical";
 import { Link } from "wouter";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 
 export default function TermsOfService() {
+  useCanonical("/terms");
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />

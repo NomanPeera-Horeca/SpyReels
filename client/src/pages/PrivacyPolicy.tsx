@@ -1,7 +1,9 @@
+import { useCanonical } from "@/hooks/useCanonical";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 
 export default function PrivacyPolicy() {
+  useCanonical("/privacy");
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />

@@ -1,3 +1,4 @@
+import { useCanonical } from "@/hooks/useCanonical";
 import { Calendar, Tag, ArrowRight, Sparkles, Film } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -7,6 +8,7 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 
 export default function BlogList() {
+  useCanonical("/blog");
   const { data: posts, isLoading } = trpc.blog.published.useQuery();
 
   return (
