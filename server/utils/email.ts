@@ -67,6 +67,55 @@ export async function sendPasswordResetEmail(toEmail: string, resetLink: string)
   });
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export async function sendHookGeneratorHooksEmail(
+  toEmail: string,
+  niche: string,
+  hooks: Array<{ hook: string; pattern: string; reasoning: string }>
+) {
+  const hooksHtml = hooks
+    .map(
+      (h, i) => `
+        <li style="margin: 0 0 20px; padding: 0 0 20px; border-bottom: 1px solid #e5e7eb; list-style: none;">
+          <p style="margin: 0 0 6px; font-size: 14px; color: #7c3aed; font-weight: 600;">${i + 1}.</p>
+          <p style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #111827; line-height: 1.4;">${escapeHtml(h.hook)}</p>
+          <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;"><strong>Pattern:</strong> ${escapeHtml(h.pattern)}</p>
+          <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">${escapeHtml(h.reasoning)}</p>
+        </li>`
+    )
+    .join("");
+
+  await getResend().emails.send({
+    from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    to: toEmail,
+    subject: `Your 10 viral hooks for ${niche}`,
+    tags: [{ name: "template", value: "hook_generator_unlock" }],
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
+        <h1 style="margin: 0 0 8px; font-size: 24px;">Your 10 Viral Hooks</h1>
+        <p style="margin: 0 0 24px; font-size: 14px; color: #6b7280;">For: ${escapeHtml(niche)}</p>
+        <ol style="margin: 0 0 32px; padding: 0;">${hooksHtml}</ol>
+        <a
+          href="https://spyreels.ai/?utm_source=hook-generator&utm_medium=email&utm_campaign=welcome"
+          style="display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-bottom: 24px;"
+        >
+          Try SpyReels Free
+        </a>
+        <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
+          You received this because you used the SpyReels Hook Generator. We will not spam you.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendPaymentConfirmationEmail(
   toEmail: string,
   firstName: string,

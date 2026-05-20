@@ -12,6 +12,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import ScrapingProgress from "./pages/ScrapingProgress";
 import History from "./pages/History";
+import HookGenerator from "@/pages/HookGenerator";
 import SavedReels from "./pages/SavedReels";
 import MyScripts from "./pages/MyScripts";
 import ScriptEditor from "./pages/ScriptEditor";
@@ -90,6 +91,7 @@ function Router() {
       <Route path="/invitations/accept/:token" component={AcceptInvitation} />
       <Route path="/s/:token" component={PublicScriptView} />
       <Route path="/onboarding" component={OnboardingPage} />
+      <Route path="/hooks" component={HookGenerator} />
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
       <Route>
         <OnboardingGate>
