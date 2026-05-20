@@ -1323,5 +1323,24 @@ export const scriptShareLinks = mysqlTable(
   })
 );
 
+export const hookGeneratorLeads = mysqlTable("hook_generator_leads", {
+  id: int("id").primaryKey().autoincrement(),
+  email: varchar("email", { length: 255 }).notNull(),
+  niche: varchar("niche", { length: 500 }).notNull(),
+  hooksGenerated: json("hooks_generated").$type<Array<{ hook: string; pattern: string; reasoning: string }>>(),
+  source: varchar("source", { length: 100 }).default("organic"),
+  utmSource: varchar("utm_source", { length: 100 }),
+  utmMedium: varchar("utm_medium", { length: 100 }),
+  utmCampaign: varchar("utm_campaign", { length: 100 }),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  emailedAt: timestamp("emailed_at"),
+  convertedToSignup: boolean("converted_to_signup").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  emailIdx: index("idx_hook_leads_email").on(table.email),
+  createdIdx: index("idx_hook_leads_created").on(table.createdAt),
+}));
+
 export type ScriptShareLink = typeof scriptShareLinks.$inferSelect;
 export type InsertScriptShareLink = typeof scriptShareLinks.$inferInsert;
