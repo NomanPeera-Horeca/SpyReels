@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,39 +17,103 @@ import { Loader2, Lock, Check, Sparkles, ArrowRight } from "lucide-react";
 
 type Hook = { hook: string; pattern: string; reasoning: string };
 
+const HOOKS_CANONICAL = `${SPYREELS_SITE_URL}/free-tools/viral-hooks`;
+const HOOKS_TITLE = "Free Instagram Viral Hook Generator | SpyReels";
+const HOOKS_DESCRIPTION =
+  "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.";
+
+const HOOKS_FAQ_ITEMS = [
+  {
+    q: "Is this really free?",
+    a: "Yes. You get a preview of generated hooks with no signup. To unlock the full set, we ask for your email to send them to you. No credit card, no subscription required.",
+  },
+  {
+    q: "Do I need to sign up for SpyReels?",
+    a: "No signup needed to use the hook generator. If you want to find viral Reels in your niche, transcribe them, or generate full scripts, that is the SpyReels product. The hook generator is a free standalone tool.",
+  },
+  {
+    q: "How accurate are these hooks?",
+    a: "Our AI is trained on viral Instagram Reels patterns. It cannot guarantee that any specific hook will go viral, but it generates options that follow proven structures used by creators who consistently get high views. You should adapt and test.",
+  },
+  {
+    q: "Can I use these hooks on TikTok or YouTube Shorts?",
+    a: "Yes. The hook patterns work across all short-form video platforms because they are based on attention psychology, not platform-specific tricks. Optimize the delivery for each platform.",
+  },
+  {
+    q: "What makes SpyReels' hook generator different from Copy.ai or Ahrefs?",
+    a: "Most hook generators give generic AI output. We focus specifically on Instagram Reels for nano and micro creators. The hook patterns are tuned for vertical video and short attention spans. We also let you specify your target audience so the hooks fit your actual viewer.",
+  },
+];
+
 export default function HookGenerator() {
   useCanonical("/free-tools/viral-hooks");
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    applyStandardPageMeta({
+      title: HOOKS_TITLE,
+      description: HOOKS_DESCRIPTION,
+      canonicalUrl: HOOKS_CANONICAL,
+    });
 
-    const prevTitle = document.title;
-    document.title = "Free Instagram Viral Hook Generator | SpyReels";
+    injectSchemaScript("hooks-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Free Tools",
+          item: `${SPYREELS_SITE_URL}/free-tools`,
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: "Viral Hook Generator",
+          item: HOOKS_CANONICAL,
+        },
+      ],
+    });
 
-    const setMeta = (name: string, content: string, isProperty = false) => {
-      const attr = isProperty ? "property" : "name";
-      let tag = document.querySelector(`meta[${attr}="${name}"]`);
-      if (!tag) {
-        tag = document.createElement("meta");
-        tag.setAttribute(attr, name);
-        document.head.appendChild(tag);
-      }
-      tag.setAttribute("content", content);
-    };
+    injectSchemaScript("hooks-software-schema", {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "Free Instagram Viral Hook Generator",
+      applicationCategory: "MultimediaApplication",
+      operatingSystem: "Web Browser",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      description:
+        "Free tool that generates viral Instagram Reels hooks tailored to your niche and audience using AI.",
+    });
 
-    const description = "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.";
-
-    setMeta("description", description);
-    setMeta("og:title", "Free Instagram Viral Hook Generator | SpyReels", true);
-    setMeta("og:description", description, true);
-    setMeta("og:url", "https://spyreels.ai/free-tools/viral-hooks", true);
-    setMeta("og:type", "website", true);
-    setMeta("twitter:card", "summary_large_image");
-    setMeta("twitter:title", "Free Instagram Viral Hook Generator | SpyReels");
-    setMeta("twitter:description", description);
+    injectSchemaScript("hooks-faq-schema", {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: HOOKS_FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    });
 
     return () => {
-      document.title = prevTitle;
+      cleanupSchemaScripts([
+        "hooks-breadcrumb-schema",
+        "hooks-software-schema",
+        "hooks-faq-schema",
+      ]);
     };
   }, []);
 
@@ -438,6 +508,20 @@ export default function HookGenerator() {
             </div>
           </div>
         </section>
+
+        <p className="max-w-3xl mx-auto mt-8 mb-4 px-4 text-sm text-muted-foreground text-center">
+          <Link href="/pricing" className="text-primary hover:underline">
+            See SpyReels pricing
+          </Link>
+          {" · "}
+          <Link href="/blog" className="text-primary hover:underline">
+            Read the Instagram growth blog
+          </Link>
+          {" · "}
+          <Link href="/" className="text-primary hover:underline">
+            Back to SpyReels home
+          </Link>
+        </p>
       </main>
 
       <PublicFooter />
