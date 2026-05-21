@@ -111,6 +111,7 @@ async function startServer() {
         { loc: "/blog", priority: "0.8", changefreq: "daily" },
         { loc: "/affiliate", priority: "0.6", changefreq: "monthly" },
         { loc: "/contact", priority: "0.5", changefreq: "monthly" },
+        { loc: "/about", priority: "0.6", changefreq: "monthly" },
         { loc: "/terms", priority: "0.3", changefreq: "yearly" },
         { loc: "/privacy", priority: "0.3", changefreq: "yearly" },
       ];
