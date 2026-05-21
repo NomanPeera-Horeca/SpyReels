@@ -25,6 +25,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Contact from "./pages/Contact";
 import Affiliate from "./pages/Affiliate";
 import About from "./pages/About";
+import ViralReelFinder from "./pages/ViralReelFinder";
 import BlogList from "./pages/BlogList";
 import BlogPost from "./pages/BlogPost";
 import BlogEditor from "./pages/BlogEditor";
@@ -94,6 +95,7 @@ function Router() {
       <Route path="/s/:token" component={PublicScriptView} />
       <Route path="/onboarding" component={OnboardingPage} />
       <Route path="/free-tools/viral-hooks" component={HookGenerator} />
+      <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
       <Route path="/hooks">
         {() => {
           if (typeof window !== "undefined") {
