@@ -95,11 +95,11 @@ export async function sendHookGeneratorHooksEmail(
   await getResend().emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
-    subject: `Your 10 viral hooks for ${niche}`,
+    subject: `Your viral hooks for ${niche}`,
     tags: [{ name: "template", value: "hook_generator_unlock" }],
     html: `
       <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
-        <h1 style="margin: 0 0 8px; font-size: 24px;">Your 10 Viral Hooks</h1>
+        <h1 style="margin: 0 0 8px; font-size: 24px;">Your Viral Hooks</h1>
         <p style="margin: 0 0 24px; font-size: 14px; color: #6b7280;">For: ${escapeHtml(niche)}</p>
         <ol style="margin: 0 0 32px; padding: 0;">${hooksHtml}</ol>
         <a

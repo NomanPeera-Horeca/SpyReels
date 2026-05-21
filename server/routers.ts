@@ -260,33 +260,61 @@ const hookGeneratorRouter = router({
           {
             role: "system",
             content: withAiFormattingRules(
-              "You are a viral Instagram Reels hook strategist. You generate hook lines for nano and micro creators. Respond with valid JSON only, no prose, no markdown, no code fences."
+              "You are a viral Instagram Reels hook strategist working with nano and micro creators under 50K followers. You write hooks that stop the scroll in the first 2 seconds. You understand what works on Reels specifically: high specificity, personal stakes, counter-intuitive truths, and emotional triggers. You reject generic AI-sounding language and clichés. Respond with valid JSON only, no prose, no markdown, no code fences."
             ),
           },
           {
             role: "user",
-            content: `Generate exactly 10 viral hook lines for this Instagram Reels niche: "${input.niche}"
+            content: `Write viral Instagram Reels hooks for this video idea: "${input.niche}"
 
-Use these proven hook patterns, mix them across the 10 hooks:
-1. Cost reveal ("I was paying $X for Y until I found Z")
-2. Mistake call-out ("Stop doing X if you want Y")
-3. Result-first ("I did X for 30 days, here is what happened")
-4. Curiosity loop ("The reason most people fail at X is not what you think")
-5. Contrarian ("Everyone says X, here is why they are wrong")
-6. Specific number ("3 things I wish I knew before X")
-7. Personal stake ("If you are stuck at X, this is for you")
-8. Time-bound ("I tried X for a week and...")
-9. Authority flip ("I am a [credential] and here is what nobody tells you about X")
-10. Question hook ("Why does [common thing in niche] never work for me?")
+INPUT INTERPRETATION:
+The user described what their video is about. It might be a topic, an audience description, or a full video idea. Extract:
+- WHAT they're making content about
+- WHO their likely audience is
+- WHAT specific angle or hook would resonate
+
+CRITICAL RULES:
+- Each hook is 6 to 14 words. Vary the length across the set.
+- Use specific numbers, dollar amounts, or time frames where natural.
+- Each hook must work as the FIRST sentence spoken or shown on screen.
+- Optimize for the 2-second scroll-stop, not engagement throughout.
+- No em dashes anywhere.
+- No clichés: avoid "Did you know", "Here is the thing", "Get ready", "Wait until you see", "POV:", "Tell me why", "Imagine if", "What if I told you".
+- Each hook should feel like a real creator wrote it, not AI.
+- Match the language and jargon real creators in this space use.
+
+PATTERN MIX (use these as inspiration, not a strict checklist):
+
+Cost reveal: "I was paying $4,000 a month on X until I changed this"
+Mistake call-out: "Stop doing X if you actually want Y"
+Result-first: "I cut my X by 40 percent in 30 days, here is what I did"
+Curiosity loop: "The real reason your X is failing is not what you think"
+Contrarian: "Everyone says X. They are wrong. Here is why."
+Specific number: "3 things I wish I knew before starting X"
+Personal stake: "If you are stuck at X, this changed everything for me"
+Time-bound: "I tried X for 30 days. The results shocked me."
+Authority flip: "I am a [credential]. Here is what your [field] will not tell you about X"
+Question hook: "Why does X never work the way they promise?"
+
+QUALITY CHECK before outputting:
+- Would a real creator making this video actually say this on camera?
+- Are the first 3 words attention-grabbing?
+- Does it promise a specific payoff or reveal?
+- Is it meaningfully different from the other hooks?
+- Does it avoid sounding like AI?
 
 Return JSON with this exact structure:
 {
   "hooks": [
-    { "hook": "<the actual hook line, max 15 words, no quotes, no em dashes>", "pattern": "<which of the 10 patterns above by name>", "reasoning": "<1 short sentence why this works for this niche>" }
+    {
+      "hook": "<the hook line, 6 to 14 words, no quotes, no em dashes>",
+      "pattern": "<one of: cost_reveal | mistake_callout | result_first | curiosity_loop | contrarian | specific_number | personal_stake | time_bound | authority_flip | question_hook>",
+      "reasoning": "<one short sentence explaining why this works for this specific video>"
+    }
   ]
 }
 
-The hooks array must contain exactly 10 items. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
+The hooks array must contain exactly 10 unique items. No two hooks should sound similar in structure or wording. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
           },
         ],
         response_format: { type: "json_object" },

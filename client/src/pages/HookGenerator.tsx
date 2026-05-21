@@ -74,12 +74,12 @@ export default function HookGenerator() {
             Free tool
           </div>
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-4">
-            10 Viral Reel Hooks
+            Viral Reel Hooks
             <br />
             <span className="text-primary">For Your Niche</span>
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
-            AI generates 10 proven hook patterns tailored to your content. No credit card. No signup wall.
+            AI generates proven hook patterns tailored to your content. No credit card. No signup wall.
           </p>
         </div>
 
@@ -90,20 +90,20 @@ export default function HookGenerator() {
               <form onSubmit={handleGenerate} className="space-y-4">
                 <div>
                   <label htmlFor="niche-input" className="text-sm font-medium block mb-2">
-                    What is your niche?
+                    What's your video about?
                   </label>
                   <Input
                     id="niche-input"
                     value={niche}
                     onChange={(e) => setNiche(e.target.value)}
-                    placeholder="e.g. fashion for busy moms, wildlife photography, home renovation DIY"
+                    placeholder="How I cut my food costs by 40% in 30 days"
                     className="text-base"
                     disabled={generateMutation.isPending}
                     autoFocus
                     maxLength={500}
                   />
                   <p className="text-xs text-muted-foreground mt-2">
-                    Be specific. "Fashion" is too broad. "Modest workwear for petite women" gets better hooks.
+                    Describe your video idea or topic. The more specific, the better. Real example: Beginner ab workout for women over 40 with bad knees
                   </p>
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
@@ -120,7 +120,7 @@ export default function HookGenerator() {
                     </>
                   ) : (
                     <>
-                      Generate 10 Viral Hooks
+                      Generate Viral Hooks
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
@@ -137,7 +137,7 @@ export default function HookGenerator() {
               <h2 className="text-xl sm:text-2xl font-semibold mb-2">
                 Your hooks for <span className="text-primary">"{niche}"</span>
               </h2>
-              <p className="text-sm text-muted-foreground">2 of 10 unlocked. Enter your email to see the rest.</p>
+              <p className="text-sm text-muted-foreground">Preview unlocked. Enter your email to see the rest.</p>
             </div>
 
             <div className="space-y-3">
@@ -182,7 +182,7 @@ export default function HookGenerator() {
               <CardContent className="p-6">
                 <form onSubmit={handleUnlock} className="space-y-3">
                   <div>
-                    <h3 className="font-semibold text-base mb-1">Unlock all 10 hooks</h3>
+                    <h3 className="font-semibold text-base mb-1">Unlock all hooks</h3>
                     <p className="text-sm text-muted-foreground">
                       Enter your email. We will also send a copy to your inbox.
                     </p>
@@ -210,7 +210,7 @@ export default function HookGenerator() {
                       </>
                     ) : (
                       <>
-                        Unlock All 10 Hooks
+                        Unlock All Hooks
                         <Lock className="ml-2 h-4 w-4" />
                       </>
                     )}
@@ -231,7 +231,7 @@ export default function HookGenerator() {
               <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium text-green-700 dark:text-green-400">
-                  All 10 hooks unlocked.
+                  All hooks unlocked.
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   We also sent a copy to your inbox. Check spam if you don't see it in a few minutes.
@@ -241,7 +241,7 @@ export default function HookGenerator() {
 
             <div>
               <h2 className="text-xl sm:text-2xl font-semibold mb-1">
-                Your 10 hooks for <span className="text-primary">"{niche}"</span>
+                Your hooks for <span className="text-primary">"{niche}"</span>
               </h2>
               <p className="text-sm text-muted-foreground">Each hook uses a proven viral pattern. Mix and adapt them to your voice.</p>
             </div>
