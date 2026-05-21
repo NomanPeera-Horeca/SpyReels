@@ -24,6 +24,7 @@ import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Contact from "./pages/Contact";
 import Affiliate from "./pages/Affiliate";
+import About from "./pages/About";
 import BlogList from "./pages/BlogList";
 import BlogPost from "./pages/BlogPost";
 import BlogEditor from "./pages/BlogEditor";
@@ -82,6 +83,7 @@ function Router() {
       <Route path="/terms" component={TermsOfService} />
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/contact" component={Contact} />
+      <Route path="/about" component={About} />
       <Route path="/affiliate" component={Affiliate} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/blog" component={BlogList} />
