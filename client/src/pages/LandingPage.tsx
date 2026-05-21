@@ -1,5 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_LOGO_URL,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import { getLoginUrl } from "@/const";
 import { signupAttributionBody } from "@/utils/utm-capture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -146,9 +154,81 @@ const FAQ = [
 // ═══════════════════════════════════════════════════════════════
 // Landing Page
 // ═══════════════════════════════════════════════════════════════
+const HOME_TITLE =
+  "SpyReels - Find Viral Instagram Reels and Generate Scripts for Nano Creators";
+const HOME_DESCRIPTION =
+  "Find viral Instagram Reels, transcribe them, and generate scripts in your voice. Built for nano and micro creators under 50K followers. Try free.";
+
 export default function LandingPage() {
   useCanonical("/");
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: HOME_TITLE,
+      description: HOME_DESCRIPTION,
+      canonicalUrl: `${SPYREELS_SITE_URL}/`,
+    });
+
+    injectSchemaScript("home-organization-schema", {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "SpyReels",
+      url: SPYREELS_SITE_URL,
+      logo: SPYREELS_LOGO_URL,
+      sameAs: [],
+    });
+
+    injectSchemaScript("home-website-schema", {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "SpyReels",
+      url: SPYREELS_SITE_URL,
+      potentialAction: {
+        "@type": "SearchAction",
+        target: `${SPYREELS_SITE_URL}/blog?q={search_term_string}`,
+        "query-input": "required name=search_term_string",
+      },
+    });
+
+    injectSchemaScript("home-software-schema", {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "SpyReels",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web Browser",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        description: "Free tier available",
+      },
+      description:
+        "AI-powered Instagram Reels analytics and script generation for nano and micro creators.",
+    });
+
+    injectSchemaScript("home-faq-schema", {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    });
+
+    return () => {
+      cleanupSchemaScripts([
+        "home-organization-schema",
+        "home-website-schema",
+        "home-software-schema",
+        "home-faq-schema",
+      ]);
+    };
+  }, []);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const handleGetStarted = () => {
     setShowLoginModal(true);
@@ -326,6 +406,23 @@ export default function LandingPage() {
                 </a>
               </div>
               <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                <Link href="/pricing" className="text-primary hover:underline">
+                  See SpyReels pricing
+                </Link>
+                {" · "}
+                <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
+                  Try our free viral hook generator
+                </Link>
+                {" · "}
+                <Link href="/blog" className="text-primary hover:underline">
+                  Read our Instagram growth blog
+                </Link>
+                {" · "}
+                <Link href="/affiliate" className="text-primary hover:underline">
+                  Join the SpyReels affiliate program
+                </Link>
+              </p>
             </div>
 
             {/* Right: Hero demo video (9:16 vertical) */}
