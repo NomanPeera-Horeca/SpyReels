@@ -90,7 +90,8 @@ function formatHookPatternLabel(pattern: string): string {
 }
 
 function buildHookGeneratorEmailBodies(
-  hooks: Array<{ hook: string; pattern: string; reasoning: string }>
+  hooks: Array<{ hook: string; pattern: string; reasoning: string }>,
+  targetAudience: string
 ): { text: string; html: string } {
   const hooksBlock = hooks
     .map((h, i) => {
@@ -102,6 +103,8 @@ function buildHookGeneratorEmailBodies(
   const text = `Hi,
 
 Here are the viral hook ideas from your spyreels.ai search.
+
+Generated for ${targetAudience}
 
 ${hooksBlock}
 
@@ -124,6 +127,7 @@ SpyReels.ai`;
   const html = `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.5; color: #111;">
 <p style="margin: 0 0 16px;">Hi,</p>
 <p style="margin: 0 0 16px;">Here are the viral hook ideas from your spyreels.ai search.</p>
+<p style="margin: 0 0 16px; color: #555;">Generated for ${escapeHtml(targetAudience)}</p>
 ${hooksHtml}
 <p style="margin: 16px 0;">These are AI-generated based on viral Reels patterns we've analyzed. If you want to save these or generate more, you can do that on your dashboard:</p>
 <p style="margin: 0 0 16px;"><a href="https://spyreels.ai/dashboard" style="color: #111;">https://spyreels.ai/dashboard</a></p>
@@ -136,11 +140,12 @@ ${hooksHtml}
 export async function sendHookGeneratorHooksEmail(
   toEmail: string,
   niche: string,
-  hooks: Array<{ hook: string; pattern: string; reasoning: string }>
+  hooks: Array<{ hook: string; pattern: string; reasoning: string }>,
+  targetAudience: string
 ) {
   const subjectPreview = hookEmailSubjectNiche(niche);
-  const subject = `Hooks for "${subjectPreview}"`;
-  const { text, html } = buildHookGeneratorEmailBodies(hooks);
+  const subject = `Viral hooks for "${subjectPreview}"`;
+  const { text, html } = buildHookGeneratorEmailBodies(hooks, targetAudience);
 
   await getResend().emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",

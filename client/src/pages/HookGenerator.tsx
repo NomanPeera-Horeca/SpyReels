@@ -49,6 +49,7 @@ export default function HookGenerator() {
 
   const [stage, setStage] = useState<"input" | "preview" | "unlocked">("input");
   const [niche, setNiche] = useState("");
+  const [audience, setAudience] = useState("");
   const [email, setEmail] = useState("");
   const [freeHooks, setFreeHooks] = useState<Hook[]>([]);
   const [allHooks, setAllHooks] = useState<Hook[]>([]);
@@ -76,9 +77,12 @@ export default function HookGenerator() {
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!niche.trim()) return;
+    if (niche.trim().length < 2 || audience.trim().length < 2) return;
     setError("");
-    generateMutation.mutate({ niche: niche.trim() });
+    generateMutation.mutate({
+      niche: niche.trim(),
+      targetAudience: audience.trim(),
+    });
   };
 
   const handleUnlock = (e: React.FormEvent) => {
@@ -137,12 +141,33 @@ export default function HookGenerator() {
                     Describe your video idea or topic. The more specific, the better. Real example: Beginner ab workout for women over 40 with bad knees
                   </p>
                 </div>
+                <div>
+                  <label htmlFor="audience-input" className="text-sm font-medium block mb-2">
+                    Who&apos;s your target audience?
+                  </label>
+                  <Input
+                    id="audience-input"
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                    placeholder="Restaurant owners struggling with food costs"
+                    className="text-base"
+                    disabled={generateMutation.isPending}
+                    maxLength={500}
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Be specific about who would watch this. The hooks adapt to your audience.
+                  </p>
+                </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
                 <Button
                   type="submit"
                   size="lg"
                   className="w-full"
-                  disabled={generateMutation.isPending || !niche.trim()}
+                  disabled={
+                    generateMutation.isPending ||
+                    niche.trim().length < 2 ||
+                    audience.trim().length < 2
+                  }
                 >
                   {generateMutation.isPending ? (
                     <>
@@ -315,6 +340,104 @@ export default function HookGenerator() {
             </Card>
           </div>
         )}
+
+        <section className="max-w-3xl mx-auto mt-16 mb-12 px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-foreground">
+            How our AI generates viral Instagram Reel hooks
+          </h2>
+          <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
+            <p>
+              Most hook generators give you generic copy. We do it differently. When you describe your video idea and audience, our AI considers the specific language, jargon, and pain points of real creators in your space. It generates hooks using 10 proven viral patterns including cost reveals, mistake call-outs, curiosity loops, and contrarian takes. Each hook is tuned to stop the scroll in the first 2 seconds, which is when 65% of Instagram Reels viewers decide whether to keep watching.
+            </p>
+          </div>
+        </section>
+
+        <section className="max-w-3xl mx-auto mt-16 mb-12 px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-foreground">
+            10 proven viral hook patterns for Instagram Reels
+          </h2>
+          <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Cost reveal</h3>
+              <p>Open with a surprising number. &quot;I was paying $4,000 a month on X...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Mistake call-out</h3>
+              <p>Challenge a common behavior. &quot;Stop doing X if you actually want Y...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Result-first</h3>
+              <p>Lead with the outcome. &quot;I cut my X by 40 percent in 30 days...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Curiosity loop</h3>
+              <p>Tease without revealing. &quot;The real reason your X is failing is not what you think...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Contrarian</h3>
+              <p>Take the opposite stance. &quot;Everyone says X. They are wrong...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Specific number</h3>
+              <p>List structure with promise. &quot;3 things I wish I knew before starting X...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Personal stake</h3>
+              <p>Create immediate relevance. &quot;If you are stuck at X, this changed everything...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Time-bound</h3>
+              <p>Compress urgency. &quot;I tried X for 30 days. The results shocked me...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Authority flip</h3>
+              <p>Combine credentials with secrets. &quot;I am a doctor. Here is what your dentist will not tell you...&quot;</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Question hook</h3>
+              <p>Frame the pain. &quot;Why does X never work the way they promise?&quot;</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="max-w-3xl mx-auto mt-16 mb-12 px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-foreground">
+            Why hooks make or break Instagram Reels
+          </h2>
+          <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
+            <p>
+              Instagram Reels lives or dies on the first 2 seconds. The algorithm measures retention starting from frame one, and if viewers scroll past, your content never reaches a wider audience. Strong hooks change this. They promise a payoff, raise a question, or challenge an assumption. Your hook is not just the first line of your script. It is the entire reason your Reel gets distributed. Get the hook right and Instagram does the rest.
+            </p>
+          </div>
+        </section>
+
+        <section className="max-w-3xl mx-auto mt-16 mb-12 px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-foreground">
+            Frequently asked questions
+          </h2>
+          <div className="space-y-6 text-base leading-relaxed text-muted-foreground">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Is this really free?</h3>
+              <p>Yes. You get a preview of generated hooks with no signup. To unlock the full set, we ask for your email to send them to you. No credit card, no subscription required.</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Do I need to sign up for SpyReels?</h3>
+              <p>No signup needed to use the hook generator. If you want to find viral Reels in your niche, transcribe them, or generate full scripts, that is the SpyReels product. The hook generator is a free standalone tool.</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">How accurate are these hooks?</h3>
+              <p>Our AI is trained on viral Instagram Reels patterns. It cannot guarantee that any specific hook will go viral, but it generates options that follow proven structures used by creators who consistently get high views. You should adapt and test.</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Can I use these hooks on TikTok or YouTube Shorts?</h3>
+              <p>Yes. The hook patterns work across all short-form video platforms because they are based on attention psychology, not platform-specific tricks. Optimize the delivery for each platform.</p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">What makes SpyReels&apos; hook generator different from Copy.ai or Ahrefs?</h3>
+              <p>Most hook generators give generic AI output. We focus specifically on Instagram Reels for nano and micro creators. The hook patterns are tuned for vertical video and short attention spans. We also let you specify your target audience so the hooks fit your actual viewer.</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <PublicFooter />

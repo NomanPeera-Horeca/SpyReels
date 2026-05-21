@@ -91,7 +91,15 @@ function Router() {
       <Route path="/invitations/accept/:token" component={AcceptInvitation} />
       <Route path="/s/:token" component={PublicScriptView} />
       <Route path="/onboarding" component={OnboardingPage} />
-      <Route path="/hooks" component={HookGenerator} />
+      <Route path="/free-tools/viral-hooks" component={HookGenerator} />
+      <Route path="/hooks">
+        {() => {
+          if (typeof window !== "undefined") {
+            window.location.replace("/free-tools/viral-hooks");
+          }
+          return null;
+        }}
+      </Route>
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
       <Route>
         <OnboardingGate>

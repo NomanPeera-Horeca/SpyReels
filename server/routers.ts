@@ -253,6 +253,7 @@ const hookGeneratorRouter = router({
   generate: publicProcedure
     .input(z.object({
       niche: z.string().min(2).max(500),
+      targetAudience: z.string().min(2).max(500),
     }))
     .mutation(async ({ input }) => {
       const response = await invokeLLM({
@@ -265,13 +266,16 @@ const hookGeneratorRouter = router({
           },
           {
             role: "user",
-            content: `Write viral Instagram Reels hooks for this video idea: "${input.niche}"
+            content: `Write viral Instagram Reels hooks.
+
+Video idea: "${input.niche}"
+Target audience: "${input.targetAudience}"
 
 INPUT INTERPRETATION:
-The user described what their video is about. It might be a topic, an audience description, or a full video idea. Extract:
-- WHAT they're making content about
-- WHO their likely audience is
-- WHAT specific angle or hook would resonate
+The user gave a video idea and a target audience. Use both:
+- WHAT they're making content about → the video idea above
+- WHO their likely audience is → the target audience above
+- WHAT specific angle or hook would resonate with that audience watching that video
 
 CRITICAL RULES:
 - Each hook is 6 to 14 words. Vary the length across the set.
@@ -281,7 +285,7 @@ CRITICAL RULES:
 - No em dashes anywhere.
 - No clichés: avoid "Did you know", "Here is the thing", "Get ready", "Wait until you see", "POV:", "Tell me why", "Imagine if", "What if I told you".
 - Each hook should feel like a real creator wrote it, not AI.
-- Match the language and jargon real creators in this space use.
+- Match the language, jargon, and pain points of "${input.targetAudience}".
 
 PATTERN MIX (use these as inspiration, not a strict checklist):
 
@@ -298,6 +302,7 @@ Question hook: "Why does X never work the way they promise?"
 
 QUALITY CHECK before outputting:
 - Would a real creator making this video actually say this on camera?
+- Would this resonate with ${input.targetAudience}?
 - Are the first 3 words attention-grabbing?
 - Does it promise a specific payoff or reveal?
 - Is it meaningfully different from the other hooks?
@@ -346,7 +351,12 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
       }));
 
       const sessionToken = Buffer.from(
-        JSON.stringify({ niche: input.niche, hooks, ts: Date.now() })
+        JSON.stringify({
+          niche: input.niche,
+          targetAudience: input.targetAudience,
+          hooks,
+          ts: Date.now(),
+        })
       ).toString("base64");
 
       return {
@@ -365,7 +375,12 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
       utmCampaign: z.string().max(100).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      let session: { niche?: string; hooks?: Array<{ hook: string; pattern: string; reasoning: string }>; ts?: number };
+      let session: {
+        niche?: string;
+        targetAudience?: string;
+        hooks?: Array<{ hook: string; pattern: string; reasoning: string }>;
+        ts?: number;
+      };
       try {
         session = JSON.parse(Buffer.from(input.sessionToken, "base64").toString());
       } catch {
@@ -374,6 +389,11 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
           message: "Invalid session. Please regenerate your hooks.",
         });
       }
+
+      const targetAudience =
+        typeof session.targetAudience === "string" && session.targetAudience.trim()
+          ? session.targetAudience.trim()
+          : "Instagram audience";
 
       if (!session.niche || !session.hooks || !session.ts || Date.now() - session.ts > 1000 * 60 * 30) {
         throw new TRPCError({
@@ -399,6 +419,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
       const insertResult = await db.insert(hookGeneratorLeads).values({
         email: input.email,
         niche: session.niche,
+        targetAudience,
         hooksGenerated: session.hooks,
         utmSource: input.utmSource ?? null,
         utmMedium: input.utmMedium ?? null,
@@ -412,7 +433,8 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         await sendHookGeneratorHooksEmail(
           input.email,
           session.niche,
-          session.hooks
+          session.hooks,
+          targetAudience
         );
         await db
           .update(hookGeneratorLeads)

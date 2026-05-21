@@ -82,10 +82,14 @@ async function startServer() {
       res.json({ ok: true }); // Always return 200 to Telegram
     }
   });
+  app.get("/hooks", (_req, res) => {
+    res.redirect(301, "/free-tools/viral-hooks");
+  });
+
   // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
     res.type("text/plain").send(
-      `User-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /affiliate\nAllow: /contact\nAllow: /hooks\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
+      `User-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /affiliate\nAllow: /contact\nAllow: /free-tools\nAllow: /free-tools/*\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
     );
   });
 
@@ -101,7 +105,8 @@ async function startServer() {
       // Static pages
       const staticPages = [
         { loc: "/", priority: "1.0", changefreq: "weekly" },
-        { loc: "/hooks", priority: "0.9", changefreq: "weekly" },
+        { loc: "/free-tools", priority: "0.8", changefreq: "weekly" },
+        { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
         { loc: "/pricing", priority: "0.8", changefreq: "monthly" },
         { loc: "/blog", priority: "0.8", changefreq: "daily" },
         { loc: "/affiliate", priority: "0.6", changefreq: "monthly" },

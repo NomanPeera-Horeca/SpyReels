@@ -1327,6 +1327,7 @@ export const hookGeneratorLeads = mysqlTable("hook_generator_leads", {
   id: int("id").primaryKey().autoincrement(),
   email: varchar("email", { length: 255 }).notNull(),
   niche: varchar("niche", { length: 500 }).notNull(),
+  targetAudience: text("target_audience").default("").notNull(),
   hooksGenerated: json("hooks_generated").$type<Array<{ hook: string; pattern: string; reasoning: string }>>(),
   source: varchar("source", { length: 100 }).default("organic"),
   utmSource: varchar("utm_source", { length: 100 }),
