@@ -75,44 +75,79 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Short preview for transactional subject lines (e.g. Hooks for "How I cut my food..."). */
+function hookEmailSubjectNiche(niche: string, maxLen = 40): string {
+  const trimmed = niche.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen).trim()}...`;
+}
+
+function formatHookPatternLabel(pattern: string): string {
+  return pattern
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function buildHookGeneratorEmailBodies(
+  hooks: Array<{ hook: string; pattern: string; reasoning: string }>
+): { text: string; html: string } {
+  const hooksBlock = hooks
+    .map((h, i) => {
+      const patternLabel = formatHookPatternLabel(h.pattern);
+      return `${i + 1}. ${h.hook}\n   Pattern: ${patternLabel} — ${h.reasoning}`;
+    })
+    .join("\n\n");
+
+  const text = `Hi,
+
+Here are the viral hook ideas from your spyreels.ai search.
+
+${hooksBlock}
+
+These are AI-generated based on viral Reels patterns we've analyzed. If you want to save these or generate more, you can do that on your dashboard:
+
+https://spyreels.ai/dashboard
+
+Cheers,
+Noah
+SpyReels.ai`;
+
+  const hooksHtml = hooks
+    .map((h, i) => {
+      const patternLabel = formatHookPatternLabel(h.pattern);
+      return `<p style="margin: 0 0 16px; line-height: 1.5;">${i + 1}. ${escapeHtml(h.hook)}<br>
+<span style="color: #555;">Pattern: ${escapeHtml(patternLabel)} — ${escapeHtml(h.reasoning)}</span></p>`;
+    })
+    .join("");
+
+  const html = `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.5; color: #111;">
+<p style="margin: 0 0 16px;">Hi,</p>
+<p style="margin: 0 0 16px;">Here are the viral hook ideas from your spyreels.ai search.</p>
+${hooksHtml}
+<p style="margin: 16px 0;">These are AI-generated based on viral Reels patterns we've analyzed. If you want to save these or generate more, you can do that on your dashboard:</p>
+<p style="margin: 0 0 16px;"><a href="https://spyreels.ai/dashboard" style="color: #111;">https://spyreels.ai/dashboard</a></p>
+<p style="margin: 0;">Cheers,<br>Noah<br>SpyReels.ai</p>
+</div>`;
+
+  return { text, html };
+}
+
 export async function sendHookGeneratorHooksEmail(
   toEmail: string,
   niche: string,
   hooks: Array<{ hook: string; pattern: string; reasoning: string }>
 ) {
-  const hooksHtml = hooks
-    .map(
-      (h, i) => `
-        <li style="margin: 0 0 20px; padding: 0 0 20px; border-bottom: 1px solid #e5e7eb; list-style: none;">
-          <p style="margin: 0 0 6px; font-size: 14px; color: #7c3aed; font-weight: 600;">${i + 1}.</p>
-          <p style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #111827; line-height: 1.4;">${escapeHtml(h.hook)}</p>
-          <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;"><strong>Pattern:</strong> ${escapeHtml(h.pattern)}</p>
-          <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">${escapeHtml(h.reasoning)}</p>
-        </li>`
-    )
-    .join("");
+  const subjectPreview = hookEmailSubjectNiche(niche);
+  const subject = `Hooks for "${subjectPreview}"`;
+  const { text, html } = buildHookGeneratorEmailBodies(hooks);
 
   await getResend().emails.send({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     to: toEmail,
-    subject: `Your viral hooks for ${niche}`,
-    tags: [{ name: "template", value: "hook_generator_unlock" }],
-    html: `
-      <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
-        <h1 style="margin: 0 0 8px; font-size: 24px;">Your Viral Hooks</h1>
-        <p style="margin: 0 0 24px; font-size: 14px; color: #6b7280;">For: ${escapeHtml(niche)}</p>
-        <ol style="margin: 0 0 32px; padding: 0;">${hooksHtml}</ol>
-        <a
-          href="https://spyreels.ai/?utm_source=hook-generator&utm_medium=email&utm_campaign=welcome"
-          style="display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-bottom: 24px;"
-        >
-          Try SpyReels Free
-        </a>
-        <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
-          You received this because you used the SpyReels Hook Generator. We will not spam you.
-        </p>
-      </div>
-    `,
+    subject,
+    text,
+    html,
   });
 }
 

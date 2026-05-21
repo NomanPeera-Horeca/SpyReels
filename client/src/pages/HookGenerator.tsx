@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,40 @@ import { Loader2, Lock, Check, Sparkles, ArrowRight } from "lucide-react";
 type Hook = { hook: string; pattern: string; reasoning: string };
 
 export default function HookGenerator() {
-  useCanonical("/hooks");
+  useCanonical("/free-tools/viral-hooks");
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const prevTitle = document.title;
+    document.title = "Free Instagram Viral Hook Generator | SpyReels";
+
+    const setMeta = (name: string, content: string, isProperty = false) => {
+      const attr = isProperty ? "property" : "name";
+      let tag = document.querySelector(`meta[${attr}="${name}"]`);
+      if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute(attr, name);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute("content", content);
+    };
+
+    const description = "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.";
+
+    setMeta("description", description);
+    setMeta("og:title", "Free Instagram Viral Hook Generator | SpyReels", true);
+    setMeta("og:description", description, true);
+    setMeta("og:url", "https://spyreels.ai/free-tools/viral-hooks", true);
+    setMeta("og:type", "website", true);
+    setMeta("twitter:card", "summary_large_image");
+    setMeta("twitter:title", "Free Instagram Viral Hook Generator | SpyReels");
+    setMeta("twitter:description", description);
+
+    return () => {
+      document.title = prevTitle;
+    };
+  }, []);
 
   const [stage, setStage] = useState<"input" | "preview" | "unlocked">("input");
   const [niche, setNiche] = useState("");
@@ -74,12 +107,10 @@ export default function HookGenerator() {
             Free tool
           </div>
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-4">
-            Viral Reel Hooks
-            <br />
-            <span className="text-primary">For Your Niche</span>
+            Free Instagram Viral Hook Generator
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
-            AI generates proven hook patterns tailored to your content. No credit card. No signup wall.
+            Get scroll-stopping hooks for your Instagram Reels in seconds. We analyze viral reels to find patterns that actually work.
           </p>
         </div>
 
