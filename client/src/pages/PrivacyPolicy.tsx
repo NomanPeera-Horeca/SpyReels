@@ -1,9 +1,52 @@
+import { useEffect } from "react";
+import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { PublicHeader } from "@/components/PublicHeader";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import { PublicFooter } from "@/components/PublicFooter";
+
+const PRIVACY_CANONICAL = `${SPYREELS_SITE_URL}/privacy`;
 
 export default function PrivacyPolicy() {
   useCanonical("/privacy");
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: "Privacy Policy - SpyReels",
+      description:
+        "SpyReels Privacy Policy. How we collect, use, and protect your data when you use our Instagram Reels tools.",
+      canonicalUrl: PRIVACY_CANONICAL,
+    });
+
+    injectSchemaScript("privacy-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Privacy Policy",
+          item: PRIVACY_CANONICAL,
+        },
+      ],
+    });
+
+    return () => {
+      cleanupSchemaScripts(["privacy-breadcrumb-schema"]);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />
@@ -141,7 +184,13 @@ export default function PrivacyPolicy() {
 
           <section>
             <h2>12. Contact</h2>
-            <p>If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us through the in-app support channel. We aim to respond to all privacy-related inquiries within 30 days.</p>
+            <p>
+              If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us through the in-app support channel. We aim to respond to all privacy-related inquiries within 30 days. See our{" "}
+              <Link href="/terms" className="text-primary underline">
+                Terms of Service
+              </Link>
+              .
+            </p>
           </section>
         </div>
       </article>
