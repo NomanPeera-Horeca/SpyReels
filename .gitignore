@@ -115,3 +115,6 @@ temp/
 scripts/check-staging-migrations.mjs
 scripts/apply-0027-staging.mjs
 scripts/backfill-profile-pics-r2.ts
+
+# AI eval outputs (non-deterministic, re-run to regenerate)
+scripts/eval-results.json
