@@ -387,6 +387,436 @@ async function runOneAdversarialCase(
   }
 }
 
+interface PrecisionCase {
+  id: string;
+  label: string;
+  businessDescription: string;
+  whatToCheck: string;
+  expectedPrimaryNicheHint: string;
+  expectedKeywordsShouldInclude: string[];
+  expectedKeywordsShouldNotInclude: string[];
+  shouldAskClarifyingQuestion: boolean;
+}
+
+const PRECISION_CASES: PrecisionCase[] = [
+  // ===== AMBIGUITY TESTS (should ask clarifying_question) =====
+  {
+    id: "precision-01-fashion-one-word",
+    label: "One word: Fashion",
+    businessDescription: "Fashion",
+    whatToCheck: "One word input. Must ask clarifying question. Fashion is too broad (men/women, luxury/thrift, streetwear/formal).",
+    expectedPrimaryNicheHint: "Fashion & Style",
+    expectedKeywordsShouldInclude: [],
+    expectedKeywordsShouldNotInclude: [],
+    shouldAskClarifyingQuestion: true,
+  },
+  {
+    id: "precision-02-crochet-one-word",
+    label: "One word: Crochet",
+    businessDescription: "My niche is crochet",
+    whatToCheck: "Very short, vague. Sells what? Patterns? Finished goods? Tutorials? Should ask.",
+    expectedPrimaryNicheHint: "Tutorials & How-To",
+    expectedKeywordsShouldInclude: [],
+    expectedKeywordsShouldNotInclude: [],
+    shouldAskClarifyingQuestion: true,
+  },
+  {
+    id: "precision-03-make-money-on-instagram",
+    label: "I help people make money on Instagram (original failure case)",
+    businessDescription: "I help people make money on Instagram",
+    whatToCheck: "This case FAILED in run 4 with the old prompt. The new semantic ambiguity rule must catch it now. Should ask clarifying question.",
+    expectedPrimaryNicheHint: "Make Money Online",
+    expectedKeywordsShouldInclude: [],
+    expectedKeywordsShouldNotInclude: [],
+    shouldAskClarifyingQuestion: true,
+  },
+  {
+    id: "precision-04-healing-and-growth-theme-page",
+    label: "Theme page, healing and growth",
+    businessDescription: "Theme page, healing and growth",
+    whatToCheck: "What kind of healing? Trauma, physical, spiritual? Should ask.",
+    expectedPrimaryNicheHint: "Mental Health & Mindfulness",
+    expectedKeywordsShouldInclude: [],
+    expectedKeywordsShouldNotInclude: [],
+    shouldAskClarifyingQuestion: true,
+  },
+  {
+    id: "precision-05-just-quitting-job-starting-company",
+    label: "Quitting my job and starting a company",
+    businessDescription: "Quitting my job and starting a company",
+    whatToCheck: "Topic of one reel, not a business niche. Should ask what the business actually is.",
+    expectedPrimaryNicheHint: "Business & Entrepreneurship",
+    expectedKeywordsShouldInclude: [],
+    expectedKeywordsShouldNotInclude: [],
+    shouldAskClarifyingQuestion: true,
+  },
+
+  // ===== SPECIFIC NICHES (should NOT ask clarifying, must produce sharp keywords) =====
+  {
+    id: "precision-06-lyrical-hip-hop-artist",
+    label: "Lyrical soulful hip hop artist",
+    businessDescription: "I am a lyrical soulful hip hop artist. I make music focused on bars and storytelling, not commercial rap. I want to grow on Instagram to get more streams on Spotify and Apple Music.",
+    whatToCheck: "Specific enough. Should route to Music & Musicians with hip hop / lyrical keywords. Audience is hip hop fans who care about bars, not casual listeners.",
+    expectedPrimaryNicheHint: "Music & Musicians",
+    expectedKeywordsShouldInclude: ["hip hop", "lyrical", "bars"],
+    expectedKeywordsShouldNotInclude: ["pop music", "edm"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-07-elden-ring-twitch-clips",
+    label: "Twitch clips and Elden Ring satire scripts",
+    businessDescription: "I post Elden Ring twitch clips and satire scripts about the game. I am building a fresh account around gaming content for Souls-game players who enjoy both highlight clips and comedy.",
+    whatToCheck: "Gaming niche. Should pick up Elden Ring, Souls game, gaming. Audience is gamers, specifically Souls-game players.",
+    expectedPrimaryNicheHint: "Comedy & Memes",
+    expectedKeywordsShouldInclude: ["gamer", "souls", "elden ring"],
+    expectedKeywordsShouldNotInclude: ["esports professional", "mobile gamer"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-08-prank-content",
+    label: "Pranking strangers with fart toy or being socially awkward with strangers",
+    businessDescription: "I do prank content. I prank strangers in public with a fart toy and also do videos where I pretend to be socially awkward with strangers to film their reactions.",
+    whatToCheck: "Comedy/prank niche. Audience is comedy/prank viewers, not the strangers themselves.",
+    expectedPrimaryNicheHint: "Comedy & Memes",
+    expectedKeywordsShouldInclude: ["prank", "comedy", "reaction"],
+    expectedKeywordsShouldNotInclude: ["pranked stranger"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-09-freight-railroad-photography",
+    label: "Freight and railroad photography and video",
+    businessDescription: "I do freight train and railroad photography and video. I sell wall calendars and prints featuring my photography through an Etsy shop. My audience is train enthusiasts, railfans, and railroad workers.",
+    whatToCheck: "Ultra-narrow niche (railfans). Audience is railfans, not photographers. Should NOT confuse user with buyer.",
+    expectedPrimaryNicheHint: "Photography & Videography",
+    expectedKeywordsShouldInclude: ["railfan", "train enthusiast"],
+    expectedKeywordsShouldNotInclude: ["photographer career", "photography student"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-10-animal-artist-pet-portraits",
+    label: "Animal artist painting realistic pet portraits",
+    businessDescription: "I am an animal artist who paints realistic pet portraits on commission. My style is not hyper-realistic. I sell commissioned pet portraits to pet owners who want a painting of their dog or cat.",
+    whatToCheck: "Audience is PET OWNERS commissioning art, NOT other artists. Critical buyer identification test.",
+    expectedPrimaryNicheHint: "Pets & Animals",
+    expectedKeywordsShouldInclude: ["pet owner", "dog owner", "cat owner"],
+    expectedKeywordsShouldNotInclude: ["artist career", "art student", "fine art"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-11-psychology-solopreneur",
+    label: "Psychology content solopreneur",
+    businessDescription: "I create psychology content as a solopreneur. I post about attachment styles, trauma responses, people pleasing patterns, and how childhood family dynamics show up in adult relationships.",
+    whatToCheck: "Mental Health & Mindfulness primary. Audience is people interested in self-understanding and psychology.",
+    expectedPrimaryNicheHint: "Mental Health & Mindfulness",
+    expectedKeywordsShouldInclude: ["self-awareness", "psychology", "trauma"],
+    expectedKeywordsShouldNotInclude: ["licensed therapist career"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-12-fencing-landscaping-local",
+    label: "Fencing and landscaping company in small county",
+    businessDescription: "I run a fencing and landscaping company in a small county. My customers are local homeowners and small businesses in my area who need fencing installed or landscaping done. I want to grow beyond my immediate area.",
+    whatToCheck: "Local services B2C. Audience is HOMEOWNERS, not other contractors. Buyer identification test.",
+    expectedPrimaryNicheHint: "Home & Interior Design",
+    expectedKeywordsShouldInclude: ["homeowner", "local", "landscaping"],
+    expectedKeywordsShouldNotInclude: ["fencing contractor", "landscaping business owner"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-13-wildlife-photography-cellphone",
+    label: "Wildlife photography on cellphone",
+    businessDescription: "I do wildlife photography on my cellphone. It is a niche within a niche. I show people that they do not need expensive DSLR cameras to take great wildlife photos.",
+    whatToCheck: "Audience is amateur photographers / phone users curious about wildlife, NOT pro photographers.",
+    expectedPrimaryNicheHint: "Photography & Videography",
+    expectedKeywordsShouldInclude: ["iphone photography", "phone photography", "amateur"],
+    expectedKeywordsShouldNotInclude: ["professional photographer", "dslr"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-14-travel-neurodivergent-multigen",
+    label: "Travel for neurodivergent and multi-generational families",
+    businessDescription: "I create travel content for neurodivergent travelers and multi-generational families. I cover how to fly with ADHD, traveling with elderly parents and young kids together, and reducing sensory overload on trips.",
+    whatToCheck: "Specific travel sub-niche. Audience is parents with ADHD/neurodivergent kids or grown adults caring for elderly parents.",
+    expectedPrimaryNicheHint: "Travel",
+    expectedKeywordsShouldInclude: ["neurodivergent", "multi-generational", "adhd"],
+    expectedKeywordsShouldNotInclude: ["budget backpacker", "solo female traveler"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-15-homesteading-self-build",
+    label: "Homesteading and self-building our home",
+    businessDescription: "We are documenting our journey homesteading and self-building our home. We post about land clearing, building structures, growing food, raising animals, and living off grid.",
+    whatToCheck: "Audience is people interested in homesteading lifestyle, off-grid living, sustainable life. NOT other construction professionals.",
+    expectedPrimaryNicheHint: "Home & Interior Design",
+    expectedKeywordsShouldInclude: ["homesteading", "off-grid", "self-build"],
+    expectedKeywordsShouldNotInclude: ["general contractor", "construction career"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-16-waist-trainer-transformation-system",
+    label: "Waist trainer with diet and workout plan",
+    businessDescription: "I sell a transformation system that is a waist trainer paired with a diet and workout plan. My customers are women who want to lose weight and reshape their bodies. They follow the diet and workout while wearing the waist trainer.",
+    whatToCheck: "Audience is women seeking weight loss / body transformation. Product is B2C physical.",
+    expectedPrimaryNicheHint: "Health & Fitness",
+    expectedKeywordsShouldInclude: ["weight loss", "body transformation", "women"],
+    expectedKeywordsShouldNotInclude: ["bodybuilder", "athlete performance"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-17-stationery-budget-planner",
+    label: "Stationery design and low-budget planner decoration",
+    businessDescription: "I design stationery and teach low-budget ways to make planners look good. My audience is people who use paper planners and want their planner to look aesthetic without spending a lot of money on washi tape and stickers.",
+    whatToCheck: "Niche audience. People interested in planner aesthetic + budget conscious. NOT professional designers.",
+    expectedPrimaryNicheHint: "Tutorials & How-To",
+    expectedKeywordsShouldInclude: ["planner", "stationery", "budget"],
+    expectedKeywordsShouldNotInclude: ["graphic designer career"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-18-tattoo-artist-clients",
+    label: "Tattoo artist building client base",
+    businessDescription: "I am a tattoo artist. I post my work and process videos on Instagram to attract new clients. I do mostly fine line and illustrative style tattoos.",
+    whatToCheck: "Audience is potential CLIENTS looking for a tattoo artist, NOT other tattoo artists.",
+    expectedPrimaryNicheHint: "Beauty & Skincare",
+    expectedKeywordsShouldInclude: ["fine line", "tattoo", "client"],
+    expectedKeywordsShouldNotInclude: ["tattoo artist career", "tattoo apprentice"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-19-fashion-beauty-mom-focus",
+    label: "Fashion and beauty with motherhood subfocus",
+    businessDescription: "I create fashion and beauty content with a subfocus on motherhood. I share the products and outfits I swear by as a busy mom. My audience is moms who still want to feel put-together but have limited time and energy.",
+    whatToCheck: "Sub-niche: mom fashion/beauty. Audience is moms specifically, not general fashion audience.",
+    expectedPrimaryNicheHint: "Fashion & Style",
+    expectedKeywordsShouldInclude: ["mom", "busy mom"],
+    expectedKeywordsShouldNotInclude: ["luxury fashion", "runway"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-20-piano-cinematic",
+    label: "Piano content, cinematic and movie themes",
+    businessDescription: "I make piano content, mostly emotional and cinematic pieces, movie themes, improvisations, and some classical. I also mix in guitar, harmonica, and flute occasionally.",
+    whatToCheck: "Music niche, specific to cinematic/instrumental. Audience is film music fans, instrument enthusiasts.",
+    expectedPrimaryNicheHint: "Music & Musicians",
+    expectedKeywordsShouldInclude: ["piano", "cinematic", "film music"],
+    expectedKeywordsShouldNotInclude: ["pop singer", "rapper"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-21-boutique-soft-feminine-fashion",
+    label: "Soft feminine boutique fashion",
+    businessDescription: "I just launched a boutique selling soft feminine fashion with a neutral, effortless, and elevated everyday style. My audience is women who want elevated basics for everyday wear without trendy fast fashion.",
+    whatToCheck: "B2C ecommerce fashion. Audience is women seeking elevated minimalist style.",
+    expectedPrimaryNicheHint: "Fashion & Style",
+    expectedKeywordsShouldInclude: ["elevated", "minimalist", "everyday style"],
+    expectedKeywordsShouldNotInclude: ["streetwear", "fast fashion"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-22-nutrition-postpartum-weightloss",
+    label: "Nutrition and postpartum weight loss",
+    businessDescription: "I am a nutritionist focused on postpartum weight loss. I work with moms 3 to 12 months postpartum who want to lose weight while still breastfeeding and managing a baby.",
+    whatToCheck: "Specific sub-niche: postpartum nutrition. Audience is postpartum moms, narrow window.",
+    expectedPrimaryNicheHint: "Health & Fitness",
+    expectedKeywordsShouldInclude: ["postpartum", "breastfeeding", "new mom"],
+    expectedKeywordsShouldNotInclude: ["bodybuilder", "general fitness"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-23-financial-education-german-moms",
+    label: "Financial education for kids and German moms (in German)",
+    businessDescription: "I am a children's book author teaching financial education for kids and part-time working moms in Germany. I publish in German. My audience is German-speaking moms who want to teach their kids about money.",
+    whatToCheck: "Geography + audience specificity matter. Moms in Germany, German language, financial education for kids.",
+    expectedPrimaryNicheHint: "Personal Finance",
+    expectedKeywordsShouldInclude: ["mom", "kids", "german"],
+    expectedKeywordsShouldNotInclude: ["wealthy investor", "stock trader"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-24-b2b-makeup-brushes-china",
+    label: "B2B makeup brush manufacturing in China",
+    businessDescription: "I run a B2B makeup brush manufacturing company in China. We sell to beauty brands and retailers who want to private label or wholesale our brushes. Buyers are usually beauty brand owners or store buyers looking to source product.",
+    whatToCheck: "B2B critical test. Audience is BEAUTY BRAND OWNERS / BUYERS, not end consumers. Should NOT be Beauty & Skincare consumer audience.",
+    expectedPrimaryNicheHint: "Business & Entrepreneurship",
+    expectedKeywordsShouldInclude: ["beauty brand owner", "wholesale", "private label"],
+    expectedKeywordsShouldNotInclude: ["makeup user", "beauty enthusiast"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-25-poker-content-creator",
+    label: "Poker player content",
+    businessDescription: "I play poker for a living and create poker content. I share hand analyses, big pots, and lessons learned from playing cash games and tournaments. My audience is recreational and serious poker players.",
+    whatToCheck: "Specific niche: poker. Audience is poker players, not general gambling.",
+    expectedPrimaryNicheHint: "Sports & Athletes",
+    expectedKeywordsShouldInclude: ["poker", "cash game", "tournament"],
+    expectedKeywordsShouldNotInclude: ["sports betting", "casino"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-26-travel-packing-gear",
+    label: "Travel packing and gear",
+    businessDescription: "I create content about travel packing and gear. I review luggage, packing cubes, travel tech, and share efficient packing strategies. My audience is frequent travelers and people who want to travel carry-on only.",
+    whatToCheck: "Travel sub-niche: packing/gear. Audience is frequent travelers, minimalists, carry-on enthusiasts.",
+    expectedPrimaryNicheHint: "Travel",
+    expectedKeywordsShouldInclude: ["packing", "carry-on", "travel gear"],
+    expectedKeywordsShouldNotInclude: ["luxury hotel", "all inclusive resort"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-27-makeup-tutorials-drugstore",
+    label: "Drugstore makeup tutorials and reviews",
+    businessDescription: "I create makeup tutorials and product reviews focused on drugstore makeup that performs as well as luxury brands. My audience is women who want professional-looking makeup without paying high-end prices.",
+    whatToCheck: "Niche: drugstore makeup. Audience is budget-conscious makeup users.",
+    expectedPrimaryNicheHint: "Beauty & Skincare",
+    expectedKeywordsShouldInclude: ["drugstore", "budget makeup", "dupe"],
+    expectedKeywordsShouldNotInclude: ["luxury beauty"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-28-roman-republic-musical",
+    label: "Musical about the Roman Republic",
+    businessDescription: "I am developing a musical about the Roman Republic. I want to build an audience while writing it. The overlap is between Roman history enthusiasts and musical theatre lovers.",
+    whatToCheck: "Cross-niche audience: history + musical theatre. Should reflect both, not just one.",
+    expectedPrimaryNicheHint: "Music & Musicians",
+    expectedKeywordsShouldInclude: ["history", "musical theatre", "roman"],
+    expectedKeywordsShouldNotInclude: ["pop concert"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-29-crochet-pattern-seller",
+    label: "Crochet pattern seller (clarified version)",
+    businessDescription: "I design crochet patterns and sell them as PDF downloads. My patterns are mostly amigurumi animals and beginner-friendly. My customers are crocheters who want unique designs to make themselves.",
+    whatToCheck: "Clarified version of the one-word 'Crochet' case. Should now confidently route. Audience is crocheters making things for themselves.",
+    expectedPrimaryNicheHint: "Tutorials & How-To",
+    expectedKeywordsShouldInclude: ["crochet", "amigurumi", "pattern"],
+    expectedKeywordsShouldNotInclude: ["fashion designer"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-30-restaurant-owner-personal-brand",
+    label: "Restaurant owner building personal brand",
+    businessDescription: "I own a restaurant and I am trying to grow my Instagram to build a personal brand. I want to share what it is like running a restaurant, lessons learned, and behind the scenes content for other restaurant owners and aspiring ones.",
+    whatToCheck: "Audience is OTHER restaurant owners and aspiring restaurant owners, not diners. B2B-ish personal brand.",
+    expectedPrimaryNicheHint: "Business & Entrepreneurship",
+    expectedKeywordsShouldInclude: ["restaurant owner", "restaurateur", "behind the scenes"],
+    expectedKeywordsShouldNotInclude: ["diner", "food blogger"],
+    shouldAskClarifyingQuestion: false,
+  },
+
+  // ===== KEEPING ORIGINAL BUYER-IDENTIFICATION CASES =====
+  {
+    id: "precision-31-daycare-houston",
+    label: "Daycare in Houston (buyer is parents, not operators)",
+    businessDescription: "I run a daycare in Houston. We serve children ages 1 to 5 and we have 40 spots across two locations. Most of our enrollment comes from referrals and Google searches.",
+    whatToCheck: "Critical buyer test. Should target PARENTS, not other daycare operators.",
+    expectedPrimaryNicheHint: "Parenting & Family",
+    expectedKeywordsShouldInclude: ["parent", "mom", "houston"],
+    expectedKeywordsShouldNotInclude: ["daycare operator", "childcare business"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-32-hr-software-small-business",
+    label: "HR software for small businesses 5-25 employees",
+    businessDescription: "I sell HR software to small business owners with 5 to 25 employees. My customers handle hiring, payroll, onboarding, and time tracking themselves and want to stop using spreadsheets.",
+    whatToCheck: "B2B. Buyer is small business owner, not HR professional.",
+    expectedPrimaryNicheHint: "Business & Entrepreneurship",
+    expectedKeywordsShouldInclude: ["small business owner", "5-25 employees"],
+    expectedKeywordsShouldNotInclude: ["HR professional", "HR manager"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-33-bjj-mouthguards",
+    label: "Custom mouthguards for jiu jitsu competitors",
+    businessDescription: "I sell custom-fitted mouthguards for jiu jitsu competitors. My customers are mostly no-gi BJJ practitioners competing at brown and black belt level who want better fit and protection than store-bought options.",
+    whatToCheck: "Ultra-narrow. Should produce BJJ-specific keywords.",
+    expectedPrimaryNicheHint: "Sports & Athletes",
+    expectedKeywordsShouldInclude: ["bjj", "jiu jitsu", "grappler"],
+    expectedKeywordsShouldNotInclude: ["general fitness"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-34-women-over-40-supplements",
+    label: "Pre-workout supplements for women over 40 with hormonal goals",
+    businessDescription: "I sell pre-workout supplements designed for women over 40 with hormonal weight loss goals. My customers are perimenopausal and menopausal women who lift weights and want to manage weight gain caused by hormonal changes.",
+    whatToCheck: "Sharp audience required. Should include menopause/perimenopause keywords.",
+    expectedPrimaryNicheHint: "Health & Fitness",
+    expectedKeywordsShouldInclude: ["women over 40", "perimenopause", "menopause"],
+    expectedKeywordsShouldNotInclude: ["bodybuilder", "athlete performance"],
+    shouldAskClarifyingQuestion: false,
+  },
+  {
+    id: "precision-35-doctor-finance-california",
+    label: "Financial advisor for California doctors",
+    businessDescription: "I am a financial advisor helping doctors in California with student loan refinancing and tax strategy. My clients are residents, fellows, and attending physicians who have 200k to 500k in medical school debt.",
+    whatToCheck: "Geography + buyer specificity. Should be physician finance specific.",
+    expectedPrimaryNicheHint: "Personal Finance",
+    expectedKeywordsShouldInclude: ["physician", "doctor", "medical school debt"],
+    expectedKeywordsShouldNotInclude: ["budgeting basics"],
+    shouldAskClarifyingQuestion: false,
+  },
+];
+
+interface PrecisionResult {
+  caseId: string;
+  caseLabel: string;
+  output: NicheRoutingOutput | { error: string };
+  durationMs: number;
+  manualCheckHints: {
+    expectedPrimaryNicheHint: string;
+    expectedKeywordsShouldInclude: string[];
+    expectedKeywordsShouldNotInclude: string[];
+    shouldAskClarifyingQuestion: boolean;
+  };
+}
+
+async function runOnePrecisionCase(
+  precisionCase: PrecisionCase,
+): Promise<PrecisionResult> {
+  const startedAt = Date.now();
+  console.log(separator(`PRECISION TEST: ${precisionCase.label}`));
+  console.log(`Business description:\n${precisionCase.businessDescription}\n`);
+  console.log(`What to check: ${precisionCase.whatToCheck}\n`);
+  console.log(`Expected primary niche hint: ${precisionCase.expectedPrimaryNicheHint}`);
+  console.log(`Keywords SHOULD include any of: ${precisionCase.expectedKeywordsShouldInclude.join(", ") || "n/a"}`);
+  console.log(`Keywords SHOULD NOT include: ${precisionCase.expectedKeywordsShouldNotInclude.join(", ") || "n/a"}`);
+  console.log(`Should ask clarifying question: ${precisionCase.shouldAskClarifyingQuestion}`);
+  console.log(subSeparator("NICHE ROUTING OUTPUT"));
+
+  try {
+    const output = await routeNiche({
+      businessDescription: precisionCase.businessDescription,
+    });
+    console.log(JSON.stringify(output, null, 2));
+    return {
+      caseId: precisionCase.id,
+      caseLabel: precisionCase.label,
+      output,
+      durationMs: Date.now() - startedAt,
+      manualCheckHints: {
+        expectedPrimaryNicheHint: precisionCase.expectedPrimaryNicheHint,
+        expectedKeywordsShouldInclude: precisionCase.expectedKeywordsShouldInclude,
+        expectedKeywordsShouldNotInclude: precisionCase.expectedKeywordsShouldNotInclude,
+        shouldAskClarifyingQuestion: precisionCase.shouldAskClarifyingQuestion,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`ERROR: ${message}`);
+    return {
+      caseId: precisionCase.id,
+      caseLabel: precisionCase.label,
+      output: { error: message },
+      durationMs: Date.now() - startedAt,
+      manualCheckHints: {
+        expectedPrimaryNicheHint: precisionCase.expectedPrimaryNicheHint,
+        expectedKeywordsShouldInclude: precisionCase.expectedKeywordsShouldInclude,
+        expectedKeywordsShouldNotInclude: precisionCase.expectedKeywordsShouldNotInclude,
+        shouldAskClarifyingQuestion: precisionCase.shouldAskClarifyingQuestion,
+      },
+    };
+  }
+}
+
 async function main() {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("ERROR: ANTHROPIC_API_KEY is not set. Run with: ANTHROPIC_API_KEY=sk-ant-... pnpm tsx scripts/eval-ai-prompts.ts");
@@ -411,11 +841,22 @@ async function main() {
     adversarialResults.push(result);
   }
 
+  console.log(separator("PRECISION CASES (niche routing edge cases)"));
+  const precisionResults: PrecisionResult[] = [];
+  for (const precisionCase of PRECISION_CASES) {
+    const result = await runOnePrecisionCase(precisionCase);
+    precisionResults.push(result);
+  }
+
   // Save results to file
   const outputPath = resolve(__dirname, "eval-results.json");
   writeFileSync(
     outputPath,
-    JSON.stringify({ results, adversarialResults }, null, 2),
+    JSON.stringify(
+      { results, adversarialResults, precisionResults },
+      null,
+      2,
+    ),
     "utf-8",
   );
 
@@ -456,6 +897,22 @@ async function main() {
     console.log(
       `  ${advResult.caseId}: judge=${judgeDecision} score=${overallScore} (${expected}) -> ${verdict}`,
     );
+  }
+
+  console.log("\nPrecision niche routing cases (manual review needed):");
+  for (const pResult of precisionResults) {
+    const hasError = "error" in pResult.output;
+    if (hasError) {
+      console.log(`  ${pResult.caseId}: ERROR`);
+      continue;
+    }
+    const output = pResult.output as NicheRoutingOutput;
+    const keywords = output.audience.audience_persona_keywords.join(", ");
+    const askedClarifying = output.clarifying_question !== null;
+    console.log(
+      `  ${pResult.caseId}: primary=${output.primary_niche} confidence=${output.confidence} clarifying=${askedClarifying}`,
+    );
+    console.log(`    keywords: ${keywords}`);
   }
 
   console.log(`\nFull results saved to: ${outputPath}`);
