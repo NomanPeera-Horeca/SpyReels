@@ -118,3 +118,4 @@ scripts/backfill-profile-pics-r2.ts
 
 # AI eval outputs (non-deterministic, re-run to regenerate)
 scripts/eval-results.json
+scripts/apify-test-results.json
