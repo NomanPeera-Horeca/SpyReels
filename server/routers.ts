@@ -26,8 +26,15 @@ import {
   incrementUsage,
   decrementUsage,
 } from "./stripe/stripe-service";
-import { PLANS, getPlanLimits } from "./stripe/products";
+import { PLANS, getPlanLimits, isUnlimited } from "./stripe/products";
 import type { PlanId, BillingInterval } from "./stripe/products";
+import {
+  countSucceededSearchesThisMonth,
+  createDiscoverySearch,
+  createDiscoveryResults,
+} from "./discovery/db";
+import { runDiscoveryPipeline } from "./discovery/pipeline";
+import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
 import {
   createScrapeJob,
   getScrapeJob,
@@ -448,8 +455,15 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         hooks: session.hooks,
         niche: session.niche,
       };
-    }),
+      }),
 });
+
+function firstDayOfNextMonthUtc(): string {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  return new Date(Date.UTC(year, month + 1, 1)).toISOString();
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -2010,6 +2024,104 @@ Return JSON only:
             : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
+  }),
+
+  // ── Discovery (Creator Radar) ──
+  discovery: router({
+    routeNiche: protectedProcedure
+      .input(z.object({ description: z.string().min(10).max(500) }))
+      .mutation(async ({ input }) => {
+        const result = await routeNichePrompt({
+          businessDescription: input.description,
+        });
+        return {
+          routedNiche: result.primary_niche,
+          confidence: result.confidence,
+          clarifyingQuestion: result.clarifying_question ?? null,
+        };
+      }),
+
+    clarifyRouting: protectedProcedure
+      .input(
+        z.object({
+          description: z.string().min(10).max(500),
+          clarification: z.enum(["peers", "audience"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // TODO: pass clarification into niche routing prompt once Step 2 lands
+        void input.clarification;
+        const result = await routeNichePrompt({
+          businessDescription: input.description,
+        });
+        return {
+          routedNiche: result.primary_niche,
+          confidence: result.confidence,
+          clarifyingQuestion: result.clarifying_question ?? null,
+        };
+      }),
+
+    runFullPipeline: protectedProcedure
+      .input(z.object({ description: z.string().min(10).max(500) }))
+      .mutation(async ({ input, ctx }) => {
+        const sub = await getUserSubscription(ctx.user.id);
+        const limits = getPlanLimits(sub.plan as PlanId);
+        const used = await countSucceededSearchesThisMonth(ctx.user.id);
+
+        if (
+          !isUnlimited(limits.discoverySearches) &&
+          used >= limits.discoverySearches
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Monthly discovery search limit reached",
+          });
+        }
+
+        const result = await runDiscoveryPipeline({
+          description: input.description,
+        });
+
+        const searchId = await createDiscoverySearch({
+          userId: ctx.user.id,
+          descriptionText: input.description,
+          routedNiche: result.routedNiche,
+          routingConfidence: result.routingConfidence,
+          clarified: false,
+          resultCount: result.creators.length,
+          apifyCostUsd: result.costs.apifyUsd,
+          claudeCostUsd: result.costs.claudeUsd,
+          succeeded: true,
+        });
+
+        await createDiscoveryResults(searchId, result.creators);
+
+        const resetsAt = firstDayOfNextMonthUtc();
+
+        return {
+          searchId,
+          routedNiche: result.routedNiche,
+          routingConfidence: result.routingConfidence,
+          creators: result.creators,
+          quota: {
+            used: used + 1,
+            limit: limits.discoverySearches,
+            resetsAt,
+          },
+        };
+      }),
+
+    getQuota: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await getUserSubscription(ctx.user.id);
+      const limits = getPlanLimits(sub.plan as PlanId);
+      const used = await countSucceededSearchesThisMonth(ctx.user.id);
+      const resetsAt = firstDayOfNextMonthUtc();
+      return {
+        used,
+        limit: limits.discoverySearches,
+        resetsAt,
+      };
+    }),
   }),
 
   // ── Export ──
