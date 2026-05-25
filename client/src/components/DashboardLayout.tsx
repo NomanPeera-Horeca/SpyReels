@@ -41,6 +41,7 @@ import {
   Library,
   Search,
   ClipboardPaste,
+  Compass,
   Shield,
   Radar,
   Sun,
@@ -66,6 +67,7 @@ const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 /** Verbatim `data-tip` strings from docs/build-spec/spyreels-research-mockup-v2-2.html sidebar nav */
 const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/dashboard": "See past research results and saved reel data",
+  "/discovery": "Describe your niche, find 10 creators worth studying",
   "/research": "Spy on any public Instagram creator",
   "/collected": "Individual reels you've saved from past research",
   "/history":
@@ -151,6 +153,7 @@ function DashboardLayoutContent({
   }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: Compass, label: "Discovery", path: "/discovery" },
     { icon: Search, label: "Spy Viral Reels", path: "/research" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
     { icon: Radar, label: "Creator Radar", path: "/history" },

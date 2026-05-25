@@ -31,6 +31,7 @@ import BlogPost from "./pages/BlogPost";
 import BlogEditor from "./pages/BlogEditor";
 import Extension from "./pages/Extension";
 import CollectedReels from "./pages/CollectedReels";
+import Discovery from "./pages/Discovery";
 import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
@@ -49,6 +50,7 @@ function DashboardRouter() {
         <Route path="/interests" component={Interests} />
         <Route path="/scraping" component={ScrapingProgress} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/discovery" component={Discovery} />
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />
         <Route path="/scripts/:id" component={ScriptEditor} />
