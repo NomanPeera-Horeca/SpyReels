@@ -26,8 +26,15 @@ import {
   incrementUsage,
   decrementUsage,
 } from "./stripe/stripe-service";
-import { PLANS, getPlanLimits } from "./stripe/products";
+import { PLANS, getPlanLimits, isUnlimited } from "./stripe/products";
 import type { PlanId, BillingInterval } from "./stripe/products";
+import {
+  countSucceededSearchesThisMonth,
+  createDiscoverySearch,
+  createDiscoveryResults,
+} from "./discovery/db";
+import { runDiscoveryPipeline } from "./discovery/pipeline";
+import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
 import {
   createScrapeJob,
   getScrapeJob,
@@ -149,6 +156,7 @@ import {
   canonicalInstagramReelUrl,
   parseInstagramReelShortcode,
 } from "./instagramUrl";
+import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
@@ -177,6 +185,7 @@ import {
   nicheViewEvents,
   emailEvents,
   emailTemplates,
+  hookGeneratorLeads,
 } from "../drizzle/schema";
 import type { Transcription, Reel } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, getTableColumns, isNotNull, or, like } from "drizzle-orm";
@@ -245,6 +254,215 @@ function inferPanelTestAccount(u: (typeof users.$inferSelect)): boolean {
   if (e.includes("+test") || e.endsWith("@example.com") || e.endsWith("@example.org")) return true;
   if (o.includes("test_") || o.startsWith("demo_")) return true;
   return false;
+}
+
+const hookGeneratorRouter = router({
+  generate: publicProcedure
+    .input(z.object({
+      niche: z.string().min(2).max(500),
+      targetAudience: z.string().min(2).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: withAiFormattingRules(
+              "You are a viral Instagram Reels hook strategist working with nano and micro creators under 50K followers. You write hooks that stop the scroll in the first 2 seconds. You understand what works on Reels specifically: high specificity, personal stakes, counter-intuitive truths, and emotional triggers. You reject generic AI-sounding language and clichés. Respond with valid JSON only, no prose, no markdown, no code fences."
+            ),
+          },
+          {
+            role: "user",
+            content: `Write viral Instagram Reels hooks.
+
+Video idea: "${input.niche}"
+Target audience: "${input.targetAudience}"
+
+INPUT INTERPRETATION:
+The user gave a video idea and a target audience. Use both:
+- WHAT they're making content about → the video idea above
+- WHO their likely audience is → the target audience above
+- WHAT specific angle or hook would resonate with that audience watching that video
+
+CRITICAL RULES:
+- Each hook is 6 to 14 words. Vary the length across the set.
+- Use specific numbers, dollar amounts, or time frames where natural.
+- Each hook must work as the FIRST sentence spoken or shown on screen.
+- Optimize for the 2-second scroll-stop, not engagement throughout.
+- No em dashes anywhere.
+- No clichés: avoid "Did you know", "Here is the thing", "Get ready", "Wait until you see", "POV:", "Tell me why", "Imagine if", "What if I told you".
+- Each hook should feel like a real creator wrote it, not AI.
+- Match the language, jargon, and pain points of "${input.targetAudience}".
+
+PATTERN MIX (use these as inspiration, not a strict checklist):
+
+Cost reveal: "I was paying $4,000 a month on X until I changed this"
+Mistake call-out: "Stop doing X if you actually want Y"
+Result-first: "I cut my X by 40 percent in 30 days, here is what I did"
+Curiosity loop: "The real reason your X is failing is not what you think"
+Contrarian: "Everyone says X. They are wrong. Here is why."
+Specific number: "3 things I wish I knew before starting X"
+Personal stake: "If you are stuck at X, this changed everything for me"
+Time-bound: "I tried X for 30 days. The results shocked me."
+Authority flip: "I am a [credential]. Here is what your [field] will not tell you about X"
+Question hook: "Why does X never work the way they promise?"
+
+QUALITY CHECK before outputting:
+- Would a real creator making this video actually say this on camera?
+- Would this resonate with ${input.targetAudience}?
+- Are the first 3 words attention-grabbing?
+- Does it promise a specific payoff or reveal?
+- Is it meaningfully different from the other hooks?
+- Does it avoid sounding like AI?
+
+Return JSON with this exact structure:
+{
+  "hooks": [
+    {
+      "hook": "<the hook line, 6 to 14 words, no quotes, no em dashes>",
+      "pattern": "<one of: cost_reveal | mistake_callout | result_first | curiosity_loop | contrarian | specific_number | personal_stake | time_bound | authority_flip | question_hook>",
+      "reasoning": "<one short sentence explaining why this works for this specific video>"
+    }
+  ]
+}
+
+The hooks array must contain exactly 10 unique items. No two hooks should sound similar in structure or wording. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const raw = String(response.choices[0]?.message?.content ?? "").trim();
+
+      let parsed: { hooks?: Array<{ hook?: unknown; pattern?: unknown; reasoning?: unknown }> };
+      try {
+        parsed = sanitizeAiOutputDeep(JSON.parse(raw));
+      } catch {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Hook generation returned non-JSON output. Please try again.",
+        });
+      }
+
+      if (!parsed.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length < 10) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Hook generation incomplete. Please try again.",
+        });
+      }
+
+      const hooks = parsed.hooks.slice(0, 10).map(h => ({
+        hook: String(h.hook ?? "").trim(),
+        pattern: String(h.pattern ?? "").trim(),
+        reasoning: String(h.reasoning ?? "").trim(),
+      }));
+
+      const sessionToken = Buffer.from(
+        JSON.stringify({
+          niche: input.niche,
+          targetAudience: input.targetAudience,
+          hooks,
+          ts: Date.now(),
+        })
+      ).toString("base64");
+
+      return {
+        free: hooks.slice(0, 2),
+        lockedCount: 8,
+        sessionToken,
+      };
+    }),
+
+  unlock: publicProcedure
+    .input(z.object({
+      email: z.string().email().max(255),
+      sessionToken: z.string(),
+      utmSource: z.string().max(100).optional(),
+      utmMedium: z.string().max(100).optional(),
+      utmCampaign: z.string().max(100).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      let session: {
+        niche?: string;
+        targetAudience?: string;
+        hooks?: Array<{ hook: string; pattern: string; reasoning: string }>;
+        ts?: number;
+      };
+      try {
+        session = JSON.parse(Buffer.from(input.sessionToken, "base64").toString());
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid session. Please regenerate your hooks.",
+        });
+      }
+
+      const targetAudience =
+        typeof session.targetAudience === "string" && session.targetAudience.trim()
+          ? session.targetAudience.trim()
+          : "Instagram audience";
+
+      if (!session.niche || !session.hooks || !session.ts || Date.now() - session.ts > 1000 * 60 * 30) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session expired. Please regenerate your hooks.",
+        });
+      }
+
+      const xff = ctx.req?.headers?.["x-forwarded-for"];
+      const ipFromXff = Array.isArray(xff) ? xff[0] : (typeof xff === "string" ? xff.split(",")[0]?.trim() : null);
+      const ip = ipFromXff || ctx.req?.socket?.remoteAddress || null;
+      const ua = ctx.req?.headers?.["user-agent"];
+      const uaString = typeof ua === "string" ? ua.slice(0, 500) : null;
+
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database unavailable",
+        });
+      }
+
+      const insertResult = await db.insert(hookGeneratorLeads).values({
+        email: input.email,
+        niche: session.niche,
+        targetAudience,
+        hooksGenerated: session.hooks,
+        utmSource: input.utmSource ?? null,
+        utmMedium: input.utmMedium ?? null,
+        utmCampaign: input.utmCampaign ?? null,
+        ipAddress: ip,
+        userAgent: uaString,
+      });
+      const insertId = insertResult[0].insertId;
+
+      try {
+        await sendHookGeneratorHooksEmail(
+          input.email,
+          session.niche,
+          session.hooks,
+          targetAudience
+        );
+        await db
+          .update(hookGeneratorLeads)
+          .set({ emailedAt: new Date() })
+          .where(eq(hookGeneratorLeads.id, insertId));
+      } catch (err) {
+        console.error("[Hook generator] Failed to send unlock email:", err);
+      }
+
+      return {
+        hooks: session.hooks,
+        niche: session.niche,
+      };
+      }),
+});
+
+function firstDayOfNextMonthUtc(): string {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  return new Date(Date.UTC(year, month + 1, 1)).toISOString();
 }
 
 export const appRouter = router({
@@ -1806,6 +2024,104 @@ Return JSON only:
             : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
+  }),
+
+  // ── Discovery (Creator Radar) ──
+  discovery: router({
+    routeNiche: protectedProcedure
+      .input(z.object({ description: z.string().min(10).max(500) }))
+      .mutation(async ({ input }) => {
+        const result = await routeNichePrompt({
+          businessDescription: input.description,
+        });
+        return {
+          routedNiche: result.primary_niche,
+          confidence: result.confidence,
+          clarifyingQuestion: result.clarifying_question ?? null,
+        };
+      }),
+
+    clarifyRouting: protectedProcedure
+      .input(
+        z.object({
+          description: z.string().min(10).max(500),
+          clarification: z.enum(["peers", "audience"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // TODO: pass clarification into niche routing prompt once Step 2 lands
+        void input.clarification;
+        const result = await routeNichePrompt({
+          businessDescription: input.description,
+        });
+        return {
+          routedNiche: result.primary_niche,
+          confidence: result.confidence,
+          clarifyingQuestion: result.clarifying_question ?? null,
+        };
+      }),
+
+    runFullPipeline: protectedProcedure
+      .input(z.object({ description: z.string().min(10).max(500) }))
+      .mutation(async ({ input, ctx }) => {
+        const sub = await getUserSubscription(ctx.user.id);
+        const limits = getPlanLimits(sub.plan as PlanId);
+        const used = await countSucceededSearchesThisMonth(ctx.user.id);
+
+        if (
+          !isUnlimited(limits.discoverySearches) &&
+          used >= limits.discoverySearches
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Monthly discovery search limit reached",
+          });
+        }
+
+        const result = await runDiscoveryPipeline({
+          description: input.description,
+        });
+
+        const searchId = await createDiscoverySearch({
+          userId: ctx.user.id,
+          descriptionText: input.description,
+          routedNiche: result.routedNiche,
+          routingConfidence: result.routingConfidence,
+          clarified: false,
+          resultCount: result.creators.length,
+          apifyCostUsd: result.costs.apifyUsd,
+          claudeCostUsd: result.costs.claudeUsd,
+          succeeded: true,
+        });
+
+        await createDiscoveryResults(searchId, result.creators);
+
+        const resetsAt = firstDayOfNextMonthUtc();
+
+        return {
+          searchId,
+          routedNiche: result.routedNiche,
+          routingConfidence: result.routingConfidence,
+          creators: result.creators,
+          quota: {
+            used: used + 1,
+            limit: limits.discoverySearches,
+            resetsAt,
+          },
+        };
+      }),
+
+    getQuota: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await getUserSubscription(ctx.user.id);
+      const limits = getPlanLimits(sub.plan as PlanId);
+      const used = await countSucceededSearchesThisMonth(ctx.user.id);
+      const resetsAt = firstDayOfNextMonthUtc();
+      return {
+        used,
+        limit: limits.discoverySearches,
+        resetsAt,
+      };
+    }),
   }),
 
   // ── Export ──
@@ -4376,6 +4692,8 @@ The hook MUST be 7-10 words. Count them.`),
         return transcription;
       }),
   }),
+
+  hookGenerator: hookGeneratorRouter,
 
   // ── Script Ideas (Idea to Script Factory) ──
   ideas: router({

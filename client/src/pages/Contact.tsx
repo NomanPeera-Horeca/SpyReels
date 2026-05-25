@@ -1,7 +1,16 @@
+import { useEffect } from "react";
+import { Link } from "wouter";
 import { Bug, Handshake, Mail, MessageCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 
 const CONTACT_EMAIL = "noah.perry@spyreels.ai";
 
@@ -32,7 +41,58 @@ const contactSections = [
   },
 ];
 
+const CONTACT_TITLE = "Contact SpyReels";
+const CONTACT_DESCRIPTION =
+  "Contact SpyReels for product support, press, partnerships, or bug reports. We typically respond within 24 hours.";
+const CONTACT_CANONICAL = `${SPYREELS_SITE_URL}/contact`;
+
 export default function Contact() {
+  useCanonical("/contact");
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: CONTACT_TITLE,
+      description: CONTACT_DESCRIPTION,
+      canonicalUrl: CONTACT_CANONICAL,
+    });
+
+    injectSchemaScript("contact-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Contact",
+          item: CONTACT_CANONICAL,
+        },
+      ],
+    });
+
+    injectSchemaScript("contact-organization-schema", {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "SpyReels",
+      url: SPYREELS_SITE_URL,
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "customer support",
+        email: CONTACT_EMAIL,
+        availableLanguage: "English",
+      },
+    });
+
+    return () => {
+      cleanupSchemaScripts(["contact-breadcrumb-schema", "contact-organization-schema"]);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />
@@ -91,7 +151,10 @@ export default function Contact() {
 
         <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-muted-foreground">
           SpyReels is an AI-powered Instagram Reels analytics tool for nano and
-          micro creators.
+          micro creators.{" "}
+          <Link href="/about" className="text-primary hover:underline">
+            About SpyReels and Noah Perry
+          </Link>
         </p>
       </main>
 

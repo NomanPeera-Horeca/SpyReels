@@ -49,6 +49,12 @@ export function PublicHeader() {
               >
                 Features
               </a>
+              <Link
+                href="/free-tools/viral-hooks"
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Free Tools
+              </Link>
               <a
                 href="/#how-it-works"
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"

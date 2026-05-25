@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -634,6 +640,11 @@ function renderFeatureValue(value: FeatureValue) {
   return <span>{value}</span>;
 }
 
+const PRICING_TITLE = "SpyReels Pricing - Plans for Nano and Micro Instagram Creators";
+const PRICING_DESCRIPTION =
+  "Simple pricing for SpyReels. Free tier, Starter, and Pro plans. No credits, no surprises. Built for creators under 50K followers.";
+const PRICING_CANONICAL = `${SPYREELS_SITE_URL}/pricing`;
+
 export default function Pricing() {
   useCanonical("/pricing");
   const { user } = useAuth();
@@ -661,6 +672,98 @@ export default function Pricing() {
     );
     return PLAN_ORDER.map(id => byId.get(id)).filter(Boolean);
   }, [plansQuery.data]);
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: PRICING_TITLE,
+      description: PRICING_DESCRIPTION,
+      canonicalUrl: PRICING_CANONICAL,
+    });
+
+    injectSchemaScript("pricing-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Pricing",
+          item: PRICING_CANONICAL,
+        },
+      ],
+    });
+
+    injectSchemaScript("pricing-product-schema", {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: "SpyReels",
+      description: "AI-powered Instagram Reels analytics and script generation",
+      brand: {
+        "@type": "Brand",
+        name: "SpyReels",
+      },
+      offers: {
+        "@type": "AggregateOffer",
+        lowPrice: "0",
+        highPrice: "99",
+        priceCurrency: "USD",
+        offerCount: "4",
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Free",
+            price: "0",
+            priceCurrency: "USD",
+          },
+          {
+            "@type": "Offer",
+            name: "Starter",
+            price: "19",
+            priceCurrency: "USD",
+          },
+          {
+            "@type": "Offer",
+            name: "Pro",
+            price: "49",
+            priceCurrency: "USD",
+          },
+          {
+            "@type": "Offer",
+            name: "Business",
+            price: "99",
+            priceCurrency: "USD",
+          },
+        ],
+      },
+    });
+
+    injectSchemaScript("pricing-faq-schema", {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    });
+
+    return () => {
+      cleanupSchemaScripts([
+        "pricing-breadcrumb-schema",
+        "pricing-product-schema",
+        "pricing-faq-schema",
+      ]);
+    };
+  }, []);
 
   // Re-run the browser's anchor scroll AFTER the plans query lands so a
   // /pricing#plans deep link reliably parks on the price cards (the
@@ -1330,6 +1433,22 @@ export default function Pricing() {
             </Card>
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 pb-6 text-center sm:px-6 lg:px-8">
+        <p className="text-sm text-muted-foreground">
+          <Link href="/" className="text-primary hover:underline">
+            SpyReels home
+          </Link>
+          {" · "}
+          <Link href="/blog" className="text-primary hover:underline">
+            Instagram growth blog
+          </Link>
+          {" · "}
+          <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
+            Free viral hook generator
+          </Link>
+        </p>
       </section>
 
       <section className="mx-auto max-w-4xl px-4 pb-20 text-center sm:px-6 lg:px-8">

@@ -113,9 +113,105 @@ function extractToc(markdown: string): TocItem[] {
     });
 }
 
+const SPYREELS_SITE_URL = "https://spyreels.ai";
+
+function formatBlogDate(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function toCanonicalHref(pathname: string): string {
+  if (pathname === "/") {
+    return `${SPYREELS_SITE_URL}/`;
+  }
+  return `${SPYREELS_SITE_URL}${pathname}`;
+}
+
+type FaqItem = { question: string; answer: string };
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/~~(.+?)~~/g, "$1")
+    .trim();
+}
+
+function parseFaqFromContent(content: string): FaqItem[] | null {
+  if (!/##\s+(frequently asked questions|faq)\b/i.test(content)) {
+    return null;
+  }
+
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  let faqStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (/^##\s+(frequently asked questions|faq)\s*$/i.test(trimmed)) {
+      faqStart = i + 1;
+      break;
+    }
+  }
+  if (faqStart < 0) {
+    return null;
+  }
+
+  const items: FaqItem[] = [];
+  let currentQuestion: string | null = null;
+  let answerParts: string[] = [];
+
+  const flush = () => {
+    const answer = answerParts.join("\n\n").trim();
+    if (currentQuestion && answer) {
+      items.push({ question: currentQuestion, answer });
+    }
+    currentQuestion = null;
+    answerParts = [];
+  };
+
+  for (let i = faqStart; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (/^##\s+/.test(trimmed)) {
+      break;
+    }
+    if (/^###\s+/.test(trimmed)) {
+      flush();
+      currentQuestion = stripMarkdown(trimmed.replace(/^###\s+/, ""));
+      continue;
+    }
+    if (currentQuestion && trimmed) {
+      answerParts.push(stripMarkdown(trimmed));
+    }
+  }
+  flush();
+
+  return items.length > 0 ? items : null;
+}
+
+function resolveCanonicalPath(canonicalUrl: string | null | undefined, slug: string | undefined): string | undefined {
+  if (!canonicalUrl?.trim()) {
+    return slug ? `/blog/${slug}` : undefined;
+  }
+  const trimmed = canonicalUrl.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      return new URL(trimmed).pathname;
+    } catch {
+      return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    }
+  }
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
-  useCanonical(slug ? `/blog/${slug}` : undefined);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
@@ -125,6 +221,12 @@ export default function BlogPost() {
     { enabled: !!slug }
   );
   const { data: allPublished } = trpc.blog.published.useQuery();
+
+  const canonicalPath = useMemo(() => {
+    if (!slug) return undefined;
+    return resolveCanonicalPath(post?.canonicalUrl, slug);
+  }, [post?.canonicalUrl, slug]);
+  useCanonical(canonicalPath);
 
   const ctaConfig = useMemo(() => {
     if (!slug) return { midCta: "default" as const, leadMagnet: "template" as const };
@@ -138,6 +240,11 @@ export default function BlogPost() {
     const words = markdown.replace(/[#>*_`[\]()!-]/g, " ").split(/\s+/).filter(Boolean).length;
     return Math.max(1, Math.ceil(words / 200));
   }, [markdown]);
+
+  const bylineReadMinutes = useMemo(() => {
+    const wordCount = (post?.content || "").split(/\s+/).length;
+    return Math.max(1, Math.round(wordCount / 200));
+  }, [post?.content]);
 
   const contentParts = useMemo(() => {
     if (!markdown) return { first: "", second: "" };
@@ -283,10 +390,12 @@ export default function BlogPost() {
       el.setAttribute("content", val);
     };
 
+    const ogImage = post.ogImageUrl || post.coverImageUrl || "";
+
     // Open Graph
     setMeta("og:title", post.metaTitle || post.title);
     setMeta("og:description", post.metaDescription || post.excerpt || "");
-    setMeta("og:image", post.coverImageUrl || "");
+    setMeta("og:image", ogImage);
     setMeta("og:url", window.location.href);
     setMeta("og:type", "article");
 
@@ -294,12 +403,24 @@ export default function BlogPost() {
     setMeta("twitter:card", "summary_large_image", "name");
     setMeta("twitter:title", post.metaTitle || post.title, "name");
     setMeta("twitter:description", post.metaDescription || post.excerpt || "", "name");
-    setMeta("twitter:image", post.coverImageUrl || "", "name");
+    setMeta("twitter:image", ogImage, "name");
+
+    setMeta("robots", post.noIndex ? "noindex, nofollow" : "index, follow", "name");
 
     // JSON-LD Schema
-    const existing = document.querySelector('script[type="application/ld+json"]');
-    if (existing) existing.remove();
+    const removeSchemaScript = (id: string) => {
+      document.getElementById(id)?.remove();
+    };
+    removeSchemaScript("blog-posting-schema");
+    removeSchemaScript("blog-breadcrumb-schema");
+    removeSchemaScript("blog-faq-schema");
+
+    const schemaPath = resolveCanonicalPath(post.canonicalUrl, post.slug);
+    const canonicalHref = schemaPath ? toCanonicalHref(schemaPath) : window.location.href;
+    const dateModified = post.updatedAt || post.publishedAt || new Date().toISOString();
+    const wordCount = post.content.split(/\s+/).length;
     const schema = document.createElement("script");
+    schema.id = "blog-posting-schema";
     schema.type = "application/ld+json";
     schema.text = JSON.stringify({
       "@context": "https://schema.org",
@@ -307,12 +428,14 @@ export default function BlogPost() {
       "headline": post.title,
       "description": post.metaDescription || post.excerpt || "",
       "image": post.coverImageUrl || "",
-      "url": window.location.href,
+      "url": canonicalHref,
       "datePublished": post.publishedAt || new Date().toISOString(),
+      "dateModified": dateModified,
+      "wordCount": wordCount,
       "author": {
         "@type": "Person",
         "name": "Noah Perry",
-        "url": "https://spyreels.ai"
+        "url": "https://spyreels.ai/about"
       },
       "publisher": {
         "@type": "Organization",
@@ -321,9 +444,68 @@ export default function BlogPost() {
           "@type": "ImageObject",
           "url": "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
         }
+      },
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": canonicalHref
       }
     });
     document.head.appendChild(schema);
+
+    const breadcrumb = document.createElement("script");
+    breadcrumb.id = "blog-breadcrumb-schema";
+    breadcrumb.type = "application/ld+json";
+    breadcrumb.text = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": `${SPYREELS_SITE_URL}/blog`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": post.title,
+          "item": canonicalHref,
+        },
+      ],
+    });
+    document.head.appendChild(breadcrumb);
+
+    const faqItems = parseFaqFromContent(post.content);
+    if (faqItems) {
+      const faqSchema = document.createElement("script");
+      faqSchema.id = "blog-faq-schema";
+      faqSchema.type = "application/ld+json";
+      faqSchema.text = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqItems.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.answer,
+          },
+        })),
+      });
+      document.head.appendChild(faqSchema);
+    }
+
+    return () => {
+      removeSchemaScript("blog-posting-schema");
+      removeSchemaScript("blog-breadcrumb-schema");
+      removeSchemaScript("blog-faq-schema");
+    };
   }, [post]);
 
   useEffect(() => {
@@ -488,6 +670,26 @@ export default function BlogPost() {
               ))}
             </div>
           )}
+
+          <div className="text-sm text-muted-foreground mb-6">
+            <span>By Noah Perry</span>
+            {post.publishedAt && (
+              <>
+                <span> · </span>
+                <span>Published {formatBlogDate(post.publishedAt)}</span>
+              </>
+            )}
+            {post.publishedAt &&
+              post.updatedAt &&
+              new Date(post.updatedAt).getTime() !== new Date(post.publishedAt).getTime() && (
+                <>
+                  <span> · </span>
+                  <span>Updated {formatBlogDate(post.updatedAt)}</span>
+                </>
+              )}
+            <span> · </span>
+            <span>{bylineReadMinutes} min read</span>
+          </div>
 
           <h1 className="text-[36px] sm:text-[42px] leading-tight font-semibold mb-4">{post.title}</h1>
 

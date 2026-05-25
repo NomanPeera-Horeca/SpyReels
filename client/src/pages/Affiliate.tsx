@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import {
   ArrowRight,
   BadgeCheck,
@@ -260,7 +268,59 @@ const FAQ_ITEMS = [
   },
 ];
 
+const AFFILIATE_TITLE =
+  "SpyReels Affiliate Program - 20% Recurring Commission for 12 Months";
+const AFFILIATE_DESCRIPTION =
+  "Join the SpyReels affiliate program. Earn 20 percent recurring commission for 12 months on every signup. 60-day cookie. Free to join.";
+const AFFILIATE_CANONICAL = `${SPYREELS_SITE_URL}/affiliate`;
+
 export default function Affiliate() {
+  useCanonical("/affiliate");
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: AFFILIATE_TITLE,
+      description: AFFILIATE_DESCRIPTION,
+      canonicalUrl: AFFILIATE_CANONICAL,
+    });
+
+    injectSchemaScript("affiliate-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Affiliate",
+          item: AFFILIATE_CANONICAL,
+        },
+      ],
+    });
+
+    injectSchemaScript("affiliate-faq-schema", {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    });
+
+    return () => {
+      cleanupSchemaScripts(["affiliate-breadcrumb-schema", "affiliate-faq-schema"]);
+    };
+  }, []);
+
   const [referrals, setReferrals] = useState<number>(10);
   const [planId, setPlanId] = useState<PlanId>("pro");
   const [monthsStaying, setMonthsStaying] = useState<number>(8);
@@ -305,10 +365,7 @@ export default function Affiliate() {
               SpyReels Partner Program
             </Badge>
             <h1 className="mb-6 text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
-              Your audience already wants this.{" "}
-              <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
-                Now get paid every time they buy.
-              </span>
+              SpyReels Affiliate Program - 20 Percent Recurring Commission
             </h1>
             <p className="mb-8 text-lg leading-relaxed text-muted-foreground sm:text-xl">
               20% recurring commission for 12 months. 60-day cookie window. Two
@@ -806,6 +863,22 @@ export default function Affiliate() {
             </CardContent>
           </Card>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 pb-6 text-center sm:px-6 lg:px-8">
+        <p className="text-sm text-muted-foreground">
+          <Link href="/" className="text-primary hover:underline">
+            SpyReels home
+          </Link>
+          {" · "}
+          <Link href="/pricing" className="text-primary hover:underline">
+            See pricing
+          </Link>
+          {" · "}
+          <Link href="/blog" className="text-primary hover:underline">
+            Read the blog
+          </Link>
+        </p>
       </section>
 
       {/* ─── 10. Final CTA ─── */}

@@ -1,10 +1,52 @@
+import { useEffect } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { Link } from "wouter";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 
+const TERMS_CANONICAL = `${SPYREELS_SITE_URL}/terms`;
+
 export default function TermsOfService() {
   useCanonical("/terms");
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: "Terms of Service - SpyReels",
+      description:
+        "SpyReels Terms of Service. Rules for using our Instagram Reels analytics, transcription, and AI script tools.",
+      canonicalUrl: TERMS_CANONICAL,
+    });
+
+    injectSchemaScript("terms-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Terms of Service",
+          item: TERMS_CANONICAL,
+        },
+      ],
+    });
+
+    return () => {
+      cleanupSchemaScripts(["terms-breadcrumb-schema"]);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />
@@ -133,7 +175,13 @@ export default function TermsOfService() {
 
           <section>
             <h2>14. Contact</h2>
-            <p>If you have questions about these Terms, billing issues, or need to request a refund, please contact us through the in-app support channel or email. We aim to respond to all inquiries within 48 hours.</p>
+            <p>
+              If you have questions about these Terms, billing issues, or need to request a refund, please contact us through the in-app support channel or email. We aim to respond to all inquiries within 48 hours. See also our{" "}
+              <Link href="/privacy" className="text-primary underline">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </section>
         </div>
       </article>

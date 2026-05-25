@@ -12,6 +12,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import ScrapingProgress from "./pages/ScrapingProgress";
 import History from "./pages/History";
+import HookGenerator from "@/pages/HookGenerator";
 import SavedReels from "./pages/SavedReels";
 import MyScripts from "./pages/MyScripts";
 import ScriptEditor from "./pages/ScriptEditor";
@@ -23,11 +24,14 @@ import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Contact from "./pages/Contact";
 import Affiliate from "./pages/Affiliate";
+import About from "./pages/About";
+import ViralReelFinder from "./pages/ViralReelFinder";
 import BlogList from "./pages/BlogList";
 import BlogPost from "./pages/BlogPost";
 import BlogEditor from "./pages/BlogEditor";
 import Extension from "./pages/Extension";
 import CollectedReels from "./pages/CollectedReels";
+import Discovery from "./pages/Discovery";
 import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
@@ -46,6 +50,7 @@ function DashboardRouter() {
         <Route path="/interests" component={Interests} />
         <Route path="/scraping" component={ScrapingProgress} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/discovery" component={Discovery} />
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />
         <Route path="/scripts/:id" component={ScriptEditor} />
@@ -81,6 +86,7 @@ function Router() {
       <Route path="/terms" component={TermsOfService} />
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/contact" component={Contact} />
+      <Route path="/about" component={About} />
       <Route path="/affiliate" component={Affiliate} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/blog" component={BlogList} />
@@ -90,6 +96,16 @@ function Router() {
       <Route path="/invitations/accept/:token" component={AcceptInvitation} />
       <Route path="/s/:token" component={PublicScriptView} />
       <Route path="/onboarding" component={OnboardingPage} />
+      <Route path="/free-tools/viral-hooks" component={HookGenerator} />
+      <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
+      <Route path="/hooks">
+        {() => {
+          if (typeof window !== "undefined") {
+            window.location.replace("/free-tools/viral-hooks");
+          }
+          return null;
+        }}
+      </Route>
       {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
       <Route>
         <OnboardingGate>

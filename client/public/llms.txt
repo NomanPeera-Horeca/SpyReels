@@ -1,26 +1,88 @@
 # SpyReels
 
-> SpyReels is an AI-powered Instagram Reels intelligence and script generation platform built for nano and micro creators under 50K followers.
+> SpyReels is an AI-powered Instagram Reels intelligence and script generation platform for nano and micro creators under 50,000 followers. We prioritize curated, high-signal viral examples over endless competitor dumps so you spend time on Reels worth studying, not scrolling through noise.
 
 ## What SpyReels Does
-- Analyzes any public Instagram account and surfaces all Reels with view counts, likes, and comments
-- Transcribes Reels audio into full text using proprietary AI
-- Breaks down the viral hook and content structure of any Reel
-- Generates new Reels scripts based on proven viral structures using advanced AI
-- Built-in script editor with 8 AI tools: grammar check, tone adjustment, simplify, shorten, rewrite, phrase swap, and more
-- Generates SEO-optimized Instagram captions and hashtags
-- Full-screen teleprompter for confident filming
-- Chrome extension for collecting Reels while browsing Instagram
-- Telegram bot for saving Reels directly from your phone
+
+SpyReels helps you find what is actually working in your niche, understand why it works, and turn that into scripts you can film. Instead of chasing volume from every account in your space, SpyReels surfaces the Reels that matter: strong hooks, clear structure, and proof in the metrics.
+
+You can research public Instagram accounts, transcribe Reels with high-accuracy speech-to-text (powered by Deepgram), analyze hooks and pacing, and generate new scripts that follow proven patterns while still sounding like you.
+
+## Key Features
+
+- Research any public Instagram account and see Reels with views, likes, comments, and engagement context
+- Curated viral discovery focused on quality signals, not unlimited low-value scraping
+- Full Reels transcription with Deepgram for accurate, usable scripts
+- Hook and structure breakdown so you know what to copy as a pattern, not word for word
+- AI script generation based on what is already winning in your niche
+- Script editor with rewrite, tone, simplify, shorten, grammar, and phrase tools
+- SEO-friendly caption and hashtag suggestions for Instagram posts
+- Full-screen teleprompter for confident recording
+- Chrome extension to save Reels while browsing Instagram
+- Telegram bot to send Reels to your workspace from your phone
 
 ## Who It Is For
-Instagram creators with under 50,000 followers who want to grow faster by studying what works in their niche and creating better content with AI assistance.
 
-## Pricing
-Free plan available. Paid plans start at $19/month across five tiers: Free, Starter, Pro, Business, and Agency.
+Instagram creators with under 50,000 followers who want to grow faster without guessing. If you are tired of generic AI output and shallow competitor dashboards, SpyReels is built for research-first creators who need clarity, transcripts, and scripts they can actually use.
 
-## Website
-https://spyreels.ai
+## Differentiators
+
+Many Instagram Reels research tools optimize for volume: more accounts, more rows, more tabs. SpyReels optimizes for **curated quality over volume**. You get fewer distractions and more decisions you can act on this week.
+
+**Transcription you can trust.** SpyReels uses Deepgram for speech-to-text so hooks, phrases, and pacing are captured accurately enough to rewrite and film, not just skim.
+
+**Scripts in your voice.** Generation is anchored to real viral structures in your niche, then shaped with editing tools so the final script sounds like you, not a template factory.
+
+**Built for nano and micro creators.** Workflows, limits, and positioning target creators under 50K who need leverage, not enterprise analytics they will never use.
+
+Compared with typical Instagram Reels spy and discovery tools, SpyReels is a stronger fit when you want: curated winners, accurate transcripts, and an end-to-end path from research to teleprompter-ready script.
+
+## Free Tools
+
+- **Free Instagram Viral Hook Generator:** https://spyreels.ai/free-tools/viral-hooks  
+  Generate scroll-stopping hooks for your niche and target audience. Preview free hooks instantly; unlock the full set via email. No SpyReels account required to try the generator.
 
 ## Blog
-https://spyreels.ai/blog
+
+Read growth guides, hook formulas, and Instagram Reels strategy on the SpyReels blog: https://spyreels.ai/blog
+
+Articles cover competitor research, scripting, transcription workflows, and tactics for nano and micro creators.
+
+## Comparison
+
+SpyReels is a viable alternative to other Instagram Reels research and "spy" tools when you care about:
+
+- Quality of viral examples over the size of a raw scrape
+- Accurate transcription for real script workflows
+- AI scripts tied to proven Reels, not generic captions
+- A focused product for creators under 50K, not a bloated analytics suite
+
+If your goal is to **know what to film next** based on what the market already rewards, SpyReels combines research, Deepgram transcription, and script generation in one place.
+
+## Author
+
+**Noah Perry** is the founder of SpyReels. He builds tools for nano and micro Instagram creators who need to compete with bigger accounts without bigger teams.
+
+Noah started SpyReels after seeing creators waste hours scrolling for "inspiration" while still posting blind. The product reflects his belief that curated viral intelligence beats volume, that transcripts should be production-ready, and that AI should amplify a creator's voice instead of replacing it.
+
+Learn more: https://spyreels.ai/about
+
+## Pricing
+
+Free plan available. Paid plans start at $19/month. Tiers include Free, Starter, Pro, Business, and Agency. See current plans at https://spyreels.ai/pricing
+
+## Key URLs
+
+- Home: https://spyreels.ai/
+- About (Noah Perry and SpyReels): https://spyreels.ai/about
+- Pricing: https://spyreels.ai/pricing
+- Blog: https://spyreels.ai/blog
+- Free viral hook generator: https://spyreels.ai/free-tools/viral-hooks
+- Affiliate program: https://spyreels.ai/affiliate
+- Contact: https://spyreels.ai/contact
+- Terms: https://spyreels.ai/terms
+- Privacy: https://spyreels.ai/privacy
+
+## Website
+
+https://spyreels.ai

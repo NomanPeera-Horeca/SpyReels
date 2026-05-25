@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { Calendar, Tag, ArrowRight, Sparkles, Film } from "lucide-react";
 import { Link } from "wouter";
@@ -6,10 +7,87 @@ import { getLoginUrl } from "@/const";
 import { StickySignupBar } from "@/components/BlogConversion";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import {
+  applyStandardPageMeta,
+  cleanupSchemaScripts,
+  injectSchemaScript,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
+
+const BLOG_TITLE = "Instagram Reels Growth Blog - SpyReels";
+const BLOG_DESCRIPTION =
+  "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.";
+const BLOG_CANONICAL = `${SPYREELS_SITE_URL}/blog`;
 
 export default function BlogList() {
   useCanonical("/blog");
   const { data: posts, isLoading } = trpc.blog.published.useQuery();
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: BLOG_TITLE,
+      description: BLOG_DESCRIPTION,
+      canonicalUrl: BLOG_CANONICAL,
+    });
+
+    injectSchemaScript("blog-breadcrumb-schema", {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${SPYREELS_SITE_URL}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Blog",
+          item: BLOG_CANONICAL,
+        },
+      ],
+    });
+
+    injectSchemaScript("blog-collection-schema", {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: BLOG_TITLE,
+      description: BLOG_DESCRIPTION,
+      url: BLOG_CANONICAL,
+      isPartOf: {
+        "@type": "WebSite",
+        name: "SpyReels",
+        url: SPYREELS_SITE_URL,
+      },
+    });
+
+    return () => {
+      cleanupSchemaScripts(["blog-breadcrumb-schema", "blog-collection-schema", "blog-itemlist-schema"]);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!posts?.length) {
+      cleanupSchemaScripts(["blog-itemlist-schema"]);
+      return;
+    }
+
+    injectSchemaScript("blog-itemlist-schema", {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListElement: posts.map((post, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${SPYREELS_SITE_URL}/blog/${post.slug}`,
+        name: post.title,
+      })),
+    });
+
+    return () => {
+      cleanupSchemaScripts(["blog-itemlist-schema"]);
+    };
+  }, [posts]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -27,7 +105,7 @@ export default function BlogList() {
                 <span>SPYREELS AI</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-                Spy on any Instagram account's Reels
+                Spy on any Instagram account&apos;s Reels
               </h2>
               <p className="text-muted-foreground max-w-lg">
                 Analyze competitor Reels, get full transcripts, review engagement metrics, and generate your own viral scripts with AI. Free to start.
@@ -43,9 +121,11 @@ export default function BlogList() {
         </div>
 
         <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">Blog</h1>
-          <p className="text-lg text-muted-foreground max-w-2xl">
-            Industry insights, product updates, and tips for Instagram content creators.
+          <h1 className="text-3xl sm:text-4xl font-bold mb-3">
+            Instagram Reels Growth Blog by SpyReels
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mb-4">
+            Read the latest from SpyReels on growing on Instagram Reels. We cover viral hooks, scripting, transcription, and competitor research for nano and micro creators.
           </p>
         </div>
 

@@ -15,6 +15,7 @@ export interface PlanLimits {
   urlIngestionLimit: number;
   transcriptionsPerMonth: number;
   recreatesPerMonth: number;
+  discoverySearches: number;
   rewritesPerScript: number;
   savedScripts: number;
   customTags: number;
@@ -70,6 +71,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 5,
       transcriptionsPerMonth: 3,
       recreatesPerMonth: 3,
+      discoverySearches: 1,
       rewritesPerScript: 3,
       savedScripts: 5,
       customTags: 2,
@@ -118,6 +120,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 30,
       recreatesPerMonth: 15,
+      discoverySearches: 5,
       rewritesPerScript: 2,
       savedScripts: 50,
       customTags: 10,
@@ -169,6 +172,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 200,
       recreatesPerMonth: 100,
+      discoverySearches: 20,
       rewritesPerScript: 10,
       savedScripts: 500,
       customTags: 999999,
@@ -222,6 +226,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 1000,
       recreatesPerMonth: 500,
+      discoverySearches: 20,
       rewritesPerScript: 999999,
       savedScripts: 999999,
       customTags: 999999,
@@ -273,6 +278,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 999999,
       recreatesPerMonth: 999999,
+      discoverySearches: 20,
       rewritesPerScript: 999999,
       savedScripts: 999999,
       customTags: 999999,

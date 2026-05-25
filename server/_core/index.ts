@@ -82,10 +82,14 @@ async function startServer() {
       res.json({ ok: true }); // Always return 200 to Telegram
     }
   });
+  app.get("/hooks", (_req, res) => {
+    res.redirect(301, "/free-tools/viral-hooks");
+  });
+
   // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
     res.type("text/plain").send(
-      `User-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
+      `User-agent: GPTBot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: anthropic-ai\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\n\nUser-agent: Bytespider\nAllow: /\n\nUser-agent: FacebookBot\nAllow: /\n\nUser-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /affiliate\nAllow: /contact\nAllow: /about\nAllow: /free-tools\nAllow: /free-tools/*\nAllow: /features\nAllow: /features/*\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
     );
   });
 
@@ -101,8 +105,14 @@ async function startServer() {
       // Static pages
       const staticPages = [
         { loc: "/", priority: "1.0", changefreq: "weekly" },
-        { loc: "/blog", priority: "0.8", changefreq: "daily" },
+        { loc: "/free-tools", priority: "0.8", changefreq: "weekly" },
+        { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
+        { loc: "/features/viral-reel-finder", priority: "0.8", changefreq: "weekly" },
         { loc: "/pricing", priority: "0.8", changefreq: "monthly" },
+        { loc: "/blog", priority: "0.8", changefreq: "daily" },
+        { loc: "/affiliate", priority: "0.6", changefreq: "monthly" },
+        { loc: "/contact", priority: "0.5", changefreq: "monthly" },
+        { loc: "/about", priority: "0.6", changefreq: "monthly" },
         { loc: "/terms", priority: "0.3", changefreq: "yearly" },
         { loc: "/privacy", priority: "0.3", changefreq: "yearly" },
       ];

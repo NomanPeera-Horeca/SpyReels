@@ -1,0 +1,26 @@
+# SpyReels Cursor Rules
+
+## SEO + GEO Golden Standard (NEVER VIOLATE)
+
+Before generating any new page, blog post, free tool page, feature page, comparison page, or landing page:
+
+1. Read docs/SEO_GEO_GOLDEN_STANDARD.md FIRST.
+2. Apply every rule in that document to the page being built.
+3. Run the pre-ship checklist mentally before showing me the diff.
+4. If any item is missing, flag it BEFORE generating code.
+
+## Code rules
+
+- pnpm only, never npm
+- No em dashes anywhere in code, comments, strings, copy, emails, or output
+- One change at a time, show diff, wait for approval
+- After every change run: npx tsc --noEmit
+- Exact file paths, no guessing
+- Commit only when explicitly told
+
+## File creation policy
+
+- New pages: client/src/pages/[PageName].tsx
+- New routes: register in client/src/App.tsx
+- New blog posts: insert into blog_posts MySQL table via admin or seed script
+- Never create files in client/public/ without asking
