@@ -1343,5 +1343,44 @@ export const hookGeneratorLeads = mysqlTable("hook_generator_leads", {
   createdIdx: index("idx_hook_leads_created").on(table.createdAt),
 }));
 
+export const discoverySearches = mysqlTable("discovery_searches", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  descriptionText: varchar("descriptionText", { length: 500 }).notNull(),
+  routedNiche: varchar("routedNiche", { length: 255 }),
+  routingConfidence: decimal("routingConfidence", { precision: 3, scale: 2 }),
+  clarified: boolean("clarified").default(false).notNull(),
+  resultCount: int("resultCount"),
+  apifyCostUsd: decimal("apifyCostUsd", { precision: 6, scale: 2 }),
+  claudeCostUsd: decimal("claudeCostUsd", { precision: 6, scale: 2 }),
+  succeeded: boolean("succeeded").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userMonthIdx: index("idx_discovery_user_month").on(table.userId, table.createdAt),
+}));
+
+export type DiscoverySearch = typeof discoverySearches.$inferSelect;
+export type InsertDiscoverySearch = typeof discoverySearches.$inferInsert;
+
+export const discoveryResults = mysqlTable("discovery_results", {
+  id: int("id").primaryKey().autoincrement(),
+  searchId: int("searchId")
+    .notNull()
+    .references(() => discoverySearches.id, { onDelete: "cascade" }),
+  rankPosition: int("rankPosition").notNull(),
+  instagramHandle: varchar("instagramHandle", { length: 255 }).notNull(),
+  followerCount: int("followerCount"),
+  engagementRate: decimal("engagementRate", { precision: 5, scale: 2 }),
+  nicheFitScore: decimal("nicheFitScore", { precision: 3, scale: 2 }),
+  whyMatchSummary: varchar("whyMatchSummary", { length: 500 }),
+}, (table) => ({
+  searchIdx: index("idx_discovery_results_search").on(table.searchId),
+}));
+
+export type DiscoveryResult = typeof discoveryResults.$inferSelect;
+export type InsertDiscoveryResult = typeof discoveryResults.$inferInsert;
+
 export type ScriptShareLink = typeof scriptShareLinks.$inferSelect;
 export type InsertScriptShareLink = typeof scriptShareLinks.$inferInsert;
