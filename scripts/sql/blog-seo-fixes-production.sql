@@ -1,6 +1,8 @@
 -- Blog SEO fixes for production (maglev). Run in Railway MySQL UI, one statement at a time if needed.
 -- Consolidate legacy how-to posts (301 targets are in app code; DB marks noindex + canonical).
 
+UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-grow-instagram-reels-under-10k', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2024';
+
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-grow-instagram-reels-under-10k', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2026';
 
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-spy-on-competitor-instagram-reels', updatedAt = NOW() WHERE slug = 'how-to-spy-on-viral-instagram-reels';
@@ -10,6 +12,8 @@ UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guid
 UPDATE blog_posts SET metaTitle = 'Best Instagram Reels Tools 2026 | SpyReels', metaDescription = 'Best Instagram Reels tools in 2026 compared: SpyReels, Meedro, ViralFindr, and Descript. See pricing, features, and which fits script-first creators.', updatedAt = NOW() WHERE slug = 'best-instagram-reels-tools-2026';
 
 UPDATE blog_posts SET metaDescription = 'SpyReels vs ViralFindr for Instagram Reels in 2026: discovery vs spy, transcribe, and AI scripts. Compare features, pricing, and who each tool fits.', updatedAt = NOW() WHERE slug = 'spyreels-vs-viralfindr';
+
+UPDATE blog_posts SET sourceKeyword = 'how to go viral on instagram reels', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2024' AND (sourceKeyword IS NULL OR sourceKeyword = '');
 
 UPDATE blog_posts SET sourceKeyword = 'how to go viral on instagram reels', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2026' AND (sourceKeyword IS NULL OR sourceKeyword = '');
 

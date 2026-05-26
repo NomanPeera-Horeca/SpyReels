@@ -1,5 +1,6 @@
 /** Legacy how-to slugs consolidated into guide posts (301 + noindex in DB). */
 export const BLOG_SLUG_REDIRECTS: Record<string, string> = {
+  "how-to-go-viral-on-instagram-reels-2024": "guide-grow-instagram-reels-under-10k",
   "how-to-go-viral-on-instagram-reels-2026": "guide-grow-instagram-reels-under-10k",
   "how-to-spy-on-viral-instagram-reels": "guide-spy-on-competitor-instagram-reels",
   "how-to-write-instagram-reels-scripts-that-go-viral":
