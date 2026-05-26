@@ -80,7 +80,7 @@ export function buildBehaviorNotes(input: {
   utmSource: string | null;
 }): string {
   const parts: string[] = [];
-  parts.push(`${input.scrapeJobsRun} scrape jobs, ${input.scriptsCreated} saved scripts`);
+  parts.push(`${input.scrapeJobsRun} spy sessions, ${input.scriptsCreated} saved scripts`);
   if (input.reelsCollected > 0) {
     parts.push(`${input.reelsCollected} collected reels`);
   }
@@ -89,7 +89,7 @@ export function buildBehaviorNotes(input: {
     parts.push(`Arrived via ${input.utmSource}`);
   }
   if (input.recentFailedReason) {
-    parts.push(`Recent scrape issue: ${input.recentFailedReason}`);
+    parts.push(`Recent spy issue: ${input.recentFailedReason}`);
   }
   return parts.join(". ");
 }

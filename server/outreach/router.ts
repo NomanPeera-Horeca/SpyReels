@@ -213,6 +213,38 @@ async function generateDraftForUser(userId: number): Promise<{
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   }
 
+  const [existingDraft] = await db
+    .select()
+    .from(outreachEmails)
+    .where(eq(outreachEmails.userId, userId))
+    .orderBy(desc(outreachEmails.id))
+    .limit(1);
+
+  const canOverwrite =
+    existingDraft &&
+    (existingDraft.status === "draft" || existingDraft.status === "failed");
+
+  if (canOverwrite) {
+    await db
+      .update(outreachEmails)
+      .set({
+        subject,
+        body,
+        status: "draft",
+        draftedAt: new Date(),
+        sentAt: null,
+        resendMessageId: null,
+        errorMessage: null,
+      })
+      .where(eq(outreachEmails.id, existingDraft.id));
+
+    return {
+      draftId: existingDraft.id,
+      subject,
+      body,
+    };
+  }
+
   const insertResult = await db.insert(outreachEmails).values({
     userId,
     subject,

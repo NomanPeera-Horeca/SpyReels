@@ -73,9 +73,17 @@ export default function AdminOutreach() {
   const list = trpc.outreach.listUsers.useQuery();
 
   const generateDraft = trpc.outreach.generateDraft.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
       await utils.outreach.listUsers.invalidate();
-      toast.success("Draft generated");
+      if (reviewUser?.id === variables.userId) {
+        setSubject(data.subject);
+        setBody(data.body);
+        setSendError(null);
+        setConfirmSend(false);
+      }
+      toast.success(
+        reviewUser?.id === variables.userId ? "Draft regenerated" : "Draft generated"
+      );
     },
     onError: (err) => toast.error(err.message),
   });
@@ -415,6 +423,17 @@ export default function AdminOutreach() {
             </Button>
             {canEdit ? (
               <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={generateDraft.isPending || !reviewUser}
+                  onClick={() => {
+                    if (!reviewUser) return;
+                    generateDraft.mutate({ userId: reviewUser.id });
+                  }}
+                >
+                  {generateDraft.isPending ? "Regenerating…" : "Regenerate draft"}
+                </Button>
                 <Button
                   type="button"
                   variant="secondary"
