@@ -4,13 +4,19 @@
  * Usage:
  *   pnpm tsx scripts/apply-blog-seo-fixes.ts --dry-run
  *   pnpm tsx scripts/apply-blog-seo-fixes.ts
+ *
+ * DATABASE_URL: copy fresh from Railway (production maglev) into .env, then:
+ *   export DATABASE_URL='mysql://...'
+ *   pnpm tsx scripts/apply-blog-seo-fixes.ts
+ *
+ * If CLI access fails, run scripts/sql/blog-seo-fixes-production.sql in Railway UI.
  */
 import { config } from "dotenv";
+import { existsSync } from "fs";
 import { resolve } from "path";
 import mysql from "mysql2/promise";
 import { BLOG_SLUG_REDIRECTS } from "../shared/blogRedirects";
 
-const PRODUCTION_ENV_FILE = ".env.had-rotated-creds";
 const PRODUCTION_HOST = "maglev.proxy.rlwy.net:16621";
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -53,16 +59,28 @@ const META_UPDATES: Record<
   },
 };
 
-config({
-  path: resolve(process.cwd(), PRODUCTION_ENV_FILE),
-  override: true,
-});
+function loadEnv(): void {
+  const envFileArg = process.argv.find((a) => a.startsWith("--env-file="));
+  const envPath = envFileArg
+    ? resolve(process.cwd(), envFileArg.slice("--env-file=".length))
+    : resolve(process.cwd(), ".env");
+
+  if (existsSync(envPath)) {
+    config({ path: envPath });
+  }
+
+  if (!process.env.DATABASE_URL && existsSync(resolve(process.cwd(), ".env.had-rotated-creds"))) {
+    config({ path: resolve(process.cwd(), ".env.had-rotated-creds") });
+  }
+}
 
 function assertProductionDatabase(): string {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL?.trim();
   if (!url) {
     throw new Error(
-      `DATABASE_URL is not set after loading ${PRODUCTION_ENV_FILE}.`
+      "DATABASE_URL is not set. Copy the current URL from Railway (maglev production) into .env or run:\n" +
+        "  export DATABASE_URL='mysql://...'\n" +
+        "Or apply scripts/sql/blog-seo-fixes-production.sql in Railway MySQL UI."
     );
   }
   if (!url.includes(PRODUCTION_HOST)) {
@@ -74,12 +92,29 @@ function assertProductionDatabase(): string {
 }
 
 async function main() {
+  loadEnv();
   const databaseUrl = assertProductionDatabase();
   console.log(
     `Blog SEO fixes on production (${PRODUCTION_HOST})${DRY_RUN ? " [DRY RUN]" : ""}\n`
   );
 
-  const conn = await mysql.createConnection(databaseUrl);
+  let conn: mysql.Connection;
+  try {
+    conn = await mysql.createConnection(databaseUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("ER_ACCESS_DENIED")) {
+      console.error(
+        "MySQL rejected the password in DATABASE_URL (often stale after Railway rotation).\n\n" +
+          "Fix:\n" +
+          "  1. Railway -> production MySQL (maglev) -> Connect -> copy DATABASE_URL\n" +
+          "  2. Put it in .env (do not use .env.had-rotated-creds if it is old)\n" +
+          "  3. Re-run this script\n\n" +
+          "Or run scripts/sql/blog-seo-fixes-production.sql in Railway Query tab (one line at a time).\n"
+      );
+    }
+    throw err;
+  }
 
   try {
     for (const [fromSlug, toSlug] of Object.entries(BLOG_SLUG_REDIRECTS)) {
