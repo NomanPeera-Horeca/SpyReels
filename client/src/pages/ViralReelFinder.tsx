@@ -298,7 +298,7 @@ export default function ViralReelFinder() {
             Instagram growth blog
           </Link>
           {" · "}
-          <Link href="/blog/how-to-find-viral-instagram-reels" className="text-primary hover:underline">
+          <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">
             How to find viral Instagram Reels
           </Link>
           {" · "}

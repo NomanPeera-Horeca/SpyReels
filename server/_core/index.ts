@@ -13,6 +13,7 @@ import { handleTelegramUpdate, setupTelegramWebhook } from "../telegramBot";
 import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
+import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -86,6 +87,12 @@ async function startServer() {
     res.redirect(301, "/free-tools/viral-hooks");
   });
 
+  for (const [fromSlug, toSlug] of Object.entries(BLOG_SLUG_REDIRECTS)) {
+    app.get(`/blog/${fromSlug}`, (_req, res) => {
+      res.redirect(301, `/blog/${toSlug}`);
+    });
+  }
+
   // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
     res.type("text/plain").send(
@@ -96,8 +103,8 @@ async function startServer() {
   // SEO: sitemap.xml
   app.get("/sitemap.xml", async (_req, res) => {
     try {
-      const { getPublishedBlogPosts } = await import("../db");
-      const posts = await getPublishedBlogPosts();
+      const { getPublishedIndexableBlogPosts } = await import("../db");
+      const posts = await getPublishedIndexableBlogPosts();
       const baseUrl = "https://spyreels.ai";
       const now = new Date().toISOString().split("T")[0];
 

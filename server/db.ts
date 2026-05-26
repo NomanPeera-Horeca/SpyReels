@@ -1552,6 +1552,17 @@ export async function getPublishedBlogPosts(): Promise<BlogPost[]> {
     .orderBy(desc(blogPosts.publishedAt));
 }
 
+/** Published posts that should appear in sitemap and public blog index. */
+export async function getPublishedIndexableBlogPosts(): Promise<BlogPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(blogPosts)
+    .where(and(eq(blogPosts.status, "published"), eq(blogPosts.noIndex, false)))
+    .orderBy(desc(blogPosts.publishedAt));
+}
+
 export async function getAllBlogPosts(): Promise<BlogPost[]> {
   const db = await getDb();
   if (!db) return [];

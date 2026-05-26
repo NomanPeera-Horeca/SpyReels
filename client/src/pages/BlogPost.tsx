@@ -1,5 +1,9 @@
 import { ArrowLeft, Calendar, Clock3, Copy, Film, Linkedin, Mail, MessageCircle, Share2, Tag } from "lucide-react";
-import { Link, useParams } from "wouter";
+import { Link, Redirect, useParams } from "wouter";
+import {
+  BLOG_RELATED_SLUGS,
+  getBlogRedirectTarget,
+} from "@shared/blogRedirects";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useCanonical } from "@/hooks/useCanonical";
@@ -212,14 +216,22 @@ function resolveCanonicalPath(canonicalUrl: string | null | undefined, slug: str
 
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
+  const redirectTarget = slug ? getBlogRedirectTarget(slug) : undefined;
+  if (redirectTarget) {
+    return <Redirect to={`/blog/${redirectTarget}`} />;
+  }
+  if (!slug) {
+    return null;
+  }
+  return <BlogPostView slug={slug} />;
+}
+
+function BlogPostView({ slug }: { slug: string }) {
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
 
-  const { data: post, isLoading, error } = trpc.blog.bySlug.useQuery(
-    { slug: slug || "" },
-    { enabled: !!slug }
-  );
+  const { data: post, isLoading, error } = trpc.blog.bySlug.useQuery({ slug });
   const { data: allPublished } = trpc.blog.published.useQuery();
 
   const canonicalPath = useMemo(() => {
@@ -258,7 +270,14 @@ export default function BlogPost() {
 
   const relatedPosts = useMemo(() => {
     if (!allPublished || !post) return [];
-    return allPublished.filter((p) => p.slug !== post.slug).slice(0, 2);
+    const preferred = BLOG_RELATED_SLUGS[post.slug];
+    if (preferred?.length) {
+      return preferred
+        .map((s) => allPublished.find((p) => p.slug === s))
+        .filter((p): p is NonNullable<typeof p> => Boolean(p))
+        .slice(0, 3);
+    }
+    return allPublished.filter((p) => p.slug !== post.slug).slice(0, 3);
   }, [allPublished, post]);
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
@@ -771,15 +790,52 @@ export default function BlogPost() {
             <div className="mt-8 p-8 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 text-center">
               <h3 className="text-xl font-semibold mb-2">Ready to grow your Reels?</h3>
               <p className="text-muted-foreground mb-4">
-                Start analyzing top-performing content and creating viral scripts today.
+                Spy on viral creators in your niche and turn winning Reels into scripts in under a minute.
               </p>
-              <a
-                href={getLoginUrl()}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-              >
-                Try SpyReels Free
-              </a>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a
+                  href={getLoginUrl()}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                >
+                  Try SpyReels Free
+                </a>
+                <Link
+                  href="/free-tools/viral-hooks"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg border border-primary/30 text-foreground font-medium hover:bg-primary/10 transition-colors"
+                >
+                  Free hook generator
+                </Link>
+              </div>
             </div>
+
+            <nav
+              className="mt-8 rounded-xl border border-border/50 bg-muted/20 p-5"
+              aria-label="SpyReels tools"
+            >
+              <p className="text-sm font-medium text-foreground mb-3">Try SpyReels</p>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
+                    Free viral hook generator
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/features/viral-reel-finder" className="text-primary hover:underline">
+                    Viral Reel Finder feature
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/blog/best-instagram-reels-tools-2026" className="text-primary hover:underline">
+                    Best Instagram Reels tools (2026)
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className="text-primary hover:underline">
+                    Pricing and plans
+                  </Link>
+                </li>
+              </ul>
+            </nav>
 
             {relatedPosts.length > 0 && (
               <section className="mt-14">

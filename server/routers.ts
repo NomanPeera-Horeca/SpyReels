@@ -76,6 +76,7 @@ import {
   getUserPreferences,
   upsertUserPreferences,
   getPublishedBlogPosts,
+  getPublishedIndexableBlogPosts,
   getBlogPostBySlug,
   getAllBlogPosts,
   getBlogPostById,
@@ -4164,7 +4165,7 @@ The hook MUST be 7-10 words. Count them.`),
   blog: router({
     // Public: list published posts
     published: publicProcedure.query(async () => {
-      return getPublishedBlogPosts();
+      return getPublishedIndexableBlogPosts();
     }),
 
     // Public: get single post by slug
