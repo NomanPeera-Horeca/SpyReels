@@ -18,7 +18,7 @@ RULES:
 1. End the body with this exact three-line signature (plain text, then a blank line before the unsubscribe line):
 Noah Perry
 Founder, SpyReels
-Creator turned creator at heart.
+Creator turned engineer. Still a creator at heart.
 2. Subject line must reference something specific to this user. Never generic.
    If they spied on a specific creator, name that creator with @handle. If they hit a bug,
    acknowledge it. If they spent 43 minutes, reference it.
