@@ -174,7 +174,7 @@ export async function sendOutreachPlainTextEmail(
   body: string
 ): Promise<string> {
   const result = await getResend().emails.send({
-    from: "Noah Perry <noah.perry@spyreels.ai>",
+    from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     replyTo: "noah.perry@spyreels.ai",
     to: toEmail,
     subject,

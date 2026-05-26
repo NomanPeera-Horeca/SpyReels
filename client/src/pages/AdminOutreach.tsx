@@ -369,7 +369,7 @@ export default function AdminOutreach() {
               </div>
               <div>
                 <span className="text-muted-foreground">From: </span>
-                <span className="font-medium">noah.perry@spyreels.ai</span>
+                <span className="font-medium">noah.perry@mail.spyreels.ai</span>
               </div>
 
               <div className="space-y-1.5">
