@@ -34,6 +34,7 @@ import {
   createDiscoveryResults,
 } from "./discovery/db";
 import { runDiscoveryPipeline } from "./discovery/pipeline";
+import { outreachRouter } from "./outreach/router";
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
 import {
   createScrapeJob,
@@ -5557,6 +5558,8 @@ The hook MUST be 7-10 words. Count them.`),
         };
       }),
   }),
+
+  outreach: outreachRouter,
 });
 
 export type AppRouter = typeof appRouter;

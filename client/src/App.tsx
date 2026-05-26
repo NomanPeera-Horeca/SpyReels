@@ -67,6 +67,7 @@ function DashboardRouter() {
         <Route path="/admin/creators/:segment?" component={AdminEntry} />
         <Route path="/admin/users/:userId" component={AdminEntry} />
         <Route path="/admin/emails" component={AdminEntry} />
+        <Route path="/admin/outreach" component={AdminEntry} />
         <Route path="/admin/users" component={AdminEntry} />
         <Route path="/admin/seo/:tab?" component={AdminEntry} />
         <Route path="/admin" component={AdminEntry} />

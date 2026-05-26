@@ -11,6 +11,7 @@ import TrafficPage from "./pages/TrafficPage";
 import SeoHubPage, { type SeoHubSub } from "./pages/seo/SeoHubPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import UsersPage from "./pages/UsersPage";
+import AdminOutreach from "@/pages/AdminOutreach";
 
 const SEO_SUBS: SeoHubSub[] = ["health", "gsc", "bing", "ai-mentions", "bots", "sitemap"];
 
@@ -29,6 +30,7 @@ function adminTabFromPath(loc: string): string | null {
   if (loc.startsWith("/admin/creators")) return "creators";
   if (loc.startsWith("/admin/emails")) return "emails";
   if (loc.startsWith("/admin/users")) return "users";
+  if (loc.startsWith("/admin/outreach")) return "outreach";
   if (loc.startsWith("/admin/seo")) return "seo";
   return null;
 }
@@ -102,6 +104,8 @@ export default function AdminEntry() {
       ) : (
         <UsersPage />
       )
+    ) : tab === "outreach" ? (
+      <AdminOutreach />
     ) : tab === "seo" && seoParse != null && seoParse !== "redirect" && seoParse !== "invalid" ? (
       <SeoHubPage activeSub={seoParse} />
     ) : null;

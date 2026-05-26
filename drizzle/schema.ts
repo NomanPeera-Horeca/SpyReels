@@ -1382,5 +1382,24 @@ export const discoveryResults = mysqlTable("discovery_results", {
 export type DiscoveryResult = typeof discoveryResults.$inferSelect;
 export type InsertDiscoveryResult = typeof discoveryResults.$inferInsert;
 
+export const outreachEmails = mysqlTable("outreach_emails", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  subject: text("subject"),
+  body: text("body"),
+  status: varchar("status", { length: 20 }).default("draft"),
+  draftedAt: datetime("draftedAt", { mode: "date" }),
+  sentAt: datetime("sentAt", { mode: "date" }),
+  resendMessageId: varchar("resendMessageId", { length: 255 }),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type OutreachEmail = typeof outreachEmails.$inferSelect;
+export type InsertOutreachEmail = typeof outreachEmails.$inferInsert;
+
 export type ScriptShareLink = typeof scriptShareLinks.$inferSelect;
 export type InsertScriptShareLink = typeof scriptShareLinks.$inferInsert;

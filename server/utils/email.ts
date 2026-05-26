@@ -166,3 +166,25 @@ export async function sendPaymentConfirmationEmail(
   const { sendPaymentConfirmationEmail: sendEmail } = await import("./email.js");
   return sendEmail(toEmail, firstName, planName, planPrice, nextBillingDate);
 }
+
+/** Founder outreach (admin panel). Plain text only. */
+export async function sendOutreachPlainTextEmail(
+  toEmail: string,
+  subject: string,
+  body: string
+): Promise<string> {
+  const result = await getResend().emails.send({
+    from: "Noah Perry <noah.perry@spyreels.ai>",
+    replyTo: "noah.perry@spyreels.ai",
+    to: toEmail,
+    subject,
+    text: body,
+    tags: [{ name: "template", value: "admin_outreach" }],
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return result.data?.id ?? "";
+}

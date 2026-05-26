@@ -7,6 +7,7 @@ const TABS: { id: string; label: string; href: string }[] = [
   { id: "creators", label: "Creators", href: "/admin/creators" },
   { id: "emails", label: "Emails", href: "/admin/emails" },
   { id: "users", label: "Users", href: "/admin/users" },
+  { id: "outreach", label: "Outreach", href: "/admin/outreach" },
   { id: "seo", label: "SEO Hub", href: "/admin/seo/health" },
 ];
 
