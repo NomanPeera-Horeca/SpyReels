@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 
 type DiscoveryCreator =
   inferRouterOutputs<AppRouter>["discovery"]["runFullPipeline"]["creators"][number];
@@ -36,7 +37,9 @@ function formatQuotaResetDate(iso: string): string {
 }
 
 function QuotaCounter() {
-  const quotaQuery = trpc.discovery.getQuota.useQuery();
+  const quotaQuery = trpc.discovery.getQuota.useQuery(undefined, {
+    enabled: isDiscoveryV1Enabled,
+  });
 
   if (quotaQuery.isLoading) {
     return <Skeleton className="h-4 w-72 max-w-full" />;
@@ -109,8 +112,14 @@ function DiscoveryResultCard({ creator }: { creator: DiscoveryCreator }) {
 }
 
 export default function Discovery() {
+  if (!isDiscoveryV1Enabled) {
+    return null;
+  }
+
   const utils = trpc.useUtils();
-  const quotaQuery = trpc.discovery.getQuota.useQuery();
+  const quotaQuery = trpc.discovery.getQuota.useQuery(undefined, {
+    enabled: isDiscoveryV1Enabled,
+  });
 
   const [description, setDescription] = useState("");
   const [results, setResults] = useState<DiscoveryCreator[] | null>(null);

@@ -34,6 +34,7 @@ import {
   createDiscoveryResults,
 } from "./discovery/db";
 import { runDiscoveryPipeline } from "./discovery/pipeline";
+import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
 import {
@@ -2029,7 +2030,7 @@ Return JSON only:
 
   // ── Discovery (Creator Radar) ──
   discovery: router({
-    routeNiche: protectedProcedure
+    routeNiche: discoveryProcedure
       .input(z.object({ description: z.string().min(10).max(500) }))
       .mutation(async ({ input }) => {
         const result = await routeNichePrompt({
@@ -2042,7 +2043,7 @@ Return JSON only:
         };
       }),
 
-    clarifyRouting: protectedProcedure
+    clarifyRouting: discoveryProcedure
       .input(
         z.object({
           description: z.string().min(10).max(500),
@@ -2062,7 +2063,7 @@ Return JSON only:
         };
       }),
 
-    runFullPipeline: protectedProcedure
+    runFullPipeline: discoveryProcedure
       .input(z.object({ description: z.string().min(10).max(500) }))
       .mutation(async ({ input, ctx }) => {
         const sub = await getUserSubscription(ctx.user.id);
@@ -2112,7 +2113,7 @@ Return JSON only:
         };
       }),
 
-    getQuota: protectedProcedure.query(async ({ ctx }) => {
+    getQuota: discoveryProcedure.query(async ({ ctx }) => {
       const sub = await getUserSubscription(ctx.user.id);
       const limits = getPlanLimits(sub.plan as PlanId);
       const used = await countSucceededSearchesThisMonth(ctx.user.id);

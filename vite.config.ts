@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { parseDiscoveryV1Enabled } from "./shared/discoveryFeatureFlag";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -152,8 +153,16 @@ function vitePluginManusDebugCollector(): Plugin {
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
 
+const discoveryV1EnabledForClient = parseDiscoveryV1Enabled(
+  process.env.DISCOVERY_V1_ENABLED ?? process.env.VITE_DISCOVERY_V1_ENABLED,
+  process.env.NODE_ENV
+);
+
 export default defineConfig({
   plugins,
+  define: {
+    __DISCOVERY_V1_ENABLED__: discoveryV1EnabledForClient,
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

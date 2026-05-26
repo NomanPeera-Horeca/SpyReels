@@ -61,6 +61,7 @@ import {
   type ThemePreference,
   useTheme,
 } from "@/contexts/ThemeContext";
+import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
@@ -153,7 +154,9 @@ function DashboardLayoutContent({
   }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    { icon: Compass, label: "Discovery", path: "/discovery" },
+    ...(isDiscoveryV1Enabled
+      ? [{ icon: Compass, label: "Discovery", path: "/discovery" as const }]
+      : []),
     { icon: Search, label: "Spy Viral Reels", path: "/research" },
     { icon: Inbox, label: "Collected Reels", path: "/collected" },
     { icon: Radar, label: "Creator Radar", path: "/history" },

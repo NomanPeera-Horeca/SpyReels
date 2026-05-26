@@ -4,7 +4,8 @@ import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
 import NotFound from "@/pages/NotFound";
 import OnboardingPage from "@/pages/onboarding";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
+import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -50,7 +51,9 @@ function DashboardRouter() {
         <Route path="/interests" component={Interests} />
         <Route path="/scraping" component={ScrapingProgress} />
         <Route path="/dashboard" component={Dashboard} />
-        <Route path="/discovery" component={Discovery} />
+        <Route path="/discovery">
+          {isDiscoveryV1Enabled ? <Discovery /> : <Redirect to="/dashboard" />}
+        </Route>
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />
         <Route path="/scripts/:id" component={ScriptEditor} />
