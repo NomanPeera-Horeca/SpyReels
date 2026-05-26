@@ -20,8 +20,36 @@ import {
   Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
   Sparkles, Eye, EyeOff, BarChart3, Download, Bot, Layers,
-  Check, X, Crown, Rocket, Building2, Star
+  Check, X, Crown, Rocket, Building2, Star, BookOpen
 } from "lucide-react";
+
+const POPULAR_GUIDES = [
+  {
+    href: "/blog/guide-find-viral-reels-your-niche",
+    title: "How to find viral Reels in your niche",
+    description: "Research methods to spot winning Reels before you film.",
+  },
+  {
+    href: "/blog/guide-spy-on-competitor-instagram-reels",
+    title: "How to spy on competitor Instagram Reels",
+    description: "Study rivals without guessing what is working.",
+  },
+  {
+    href: "/blog/guide-instagram-reels-script-generator",
+    title: "Instagram Reels script generator guide",
+    description: "Turn viral patterns into scripts you can film today.",
+  },
+  {
+    href: "/blog/guide-grow-instagram-reels-under-10k",
+    title: "Grow Instagram Reels under 10K followers",
+    description: "A realistic plan for small accounts still building reach.",
+  },
+  {
+    href: "/blog/best-instagram-reels-tools-2026",
+    title: "Best Instagram Reels tools in 2026",
+    description: "Compare SpyReels, Meedro, ViralFindr, and Descript.",
+  },
+] as const;
 
 const HERO_VIDEO_URL = "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
 const WORKFLOW_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
@@ -491,6 +519,46 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Popular guides (internal links for blog hub pages) */}
+      <section id="popular-guides" className="py-16 sm:py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 text-primary mb-3">
+              <BookOpen className="h-5 w-5" />
+              <span className="text-sm font-medium uppercase tracking-wider">Free guides</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">
+              Popular Instagram Reels guides
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Step-by-step playbooks on finding viral Reels, writing scripts, and growing under 10K followers.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+            {POPULAR_GUIDES.map((guide) => (
+              <Link key={guide.href} href={guide.href} className="group block h-full">
+                <Card className="h-full bg-card/50 border-border/50 hover:border-primary/30 transition-colors">
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors mb-2 leading-snug">
+                      {guide.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{guide.description}</p>
+                    <span className="text-xs text-primary mt-3 inline-flex items-center gap-1">
+                      Read guide <ArrowRight className="h-3 w-3" />
+                    </span>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+          <p className="text-center mt-8 text-sm text-muted-foreground">
+            <Link href="/blog" className="text-primary hover:underline">
+              View all blog posts
+            </Link>
+          </p>
         </div>
       </section>
 
