@@ -24,3 +24,7 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - New routes: register in client/src/App.tsx
 - New blog posts: insert into blog_posts MySQL table via admin or seed script
 - Never create files in client/public/ without asking
+
+## New blog publish (always follow)
+
+When publishing or updating a blog post, follow `docs/BLOG_PUBLISH_CHECKLIST.md` end to end: cannibalization check, Golden Standard content, DB fields (`sourceKeyword`, meta, `noIndex`/canonical), `blogRedirects.ts` / `BLOG_RELATED_SLUGS` / homepage `POPULAR_GUIDES` if needed, deploy verify, then GSC request indexing on the canonical URL only.

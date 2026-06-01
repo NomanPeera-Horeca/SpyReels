@@ -1,0 +1,21 @@
+---
+description: SEO/GEO and GSC steps whenever publishing or updating a blog post
+globs: client/src/pages/Blog*.tsx,shared/blogRedirects.ts,scripts/sql/*blog*,docs/blog-audit.md
+alwaysApply: true
+---
+
+# Blog publish workflow
+
+Before shipping any new or updated blog post, read and follow `docs/BLOG_PUBLISH_CHECKLIST.md` and `docs/SEO_GEO_GOLDEN_STANDARD.md`.
+
+Proactively flag missing items before the user ships.
+
+## Quick checklist
+
+1. **Cannibalization**: one keyword, one canonical URL. Overlap with existing slug → 301 + noindex + `blogRedirects.ts`, not a second indexable post.
+2. **Content**: H1, H2/H3, direct answer in first 100 words, `## Frequently asked questions` with 5+ FAQs, table/bullets, 3+ internal links.
+3. **DB**: `sourceKeyword`, meta title/description, `publishedAt`, `noIndex=0` only on canonical, `coverImageUrl`/`ogImageUrl`.
+4. **Code** (if hub): `BLOG_RELATED_SLUGS`, optional `POPULAR_GUIDES` on `LandingPage.tsx`, redirect map for legacy slugs.
+5. **After deploy**: verify sitemap includes URL, 301s work, then GSC **Request indexing** on canonical only (and homepage if hub links changed).
+
+Never request GSC indexing on noindexed legacy duplicates.

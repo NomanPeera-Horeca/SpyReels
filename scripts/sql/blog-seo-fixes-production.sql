@@ -46,3 +46,13 @@ UPDATE blog_posts SET sourceKeyword = 'spyreels vs meedro', updatedAt = NOW() WH
 UPDATE blog_posts SET sourceKeyword = 'spyreels vs viralfindr', updatedAt = NOW() WHERE slug = 'spyreels-vs-viralfindr' AND (sourceKeyword IS NULL OR sourceKeyword = '');
 
 UPDATE blog_posts SET sourceKeyword = 'best instagram reels tools', updatedAt = NOW() WHERE slug = 'best-instagram-reels-tools-2026' AND (sourceKeyword IS NULL OR sourceKeyword = '');
+
+UPDATE blog_posts SET sourceKeyword = 'meedro alternative', updatedAt = NOW() WHERE slug = 'guide-meedro-alternative' AND (sourceKeyword IS NULL OR sourceKeyword = '');
+
+UPDATE blog_posts SET sourceKeyword = 'viralfindr alternative', updatedAt = NOW() WHERE slug = 'guide-viralfindr-alternative' AND (sourceKeyword IS NULL OR sourceKeyword = '');
+
+UPDATE blog_posts SET sourceKeyword = 'meedro review', updatedAt = NOW() WHERE slug = 'meedro-review-2026' AND (sourceKeyword IS NULL OR sourceKeyword = '');
+
+UPDATE blog_posts SET sourceKeyword = 'viralfindr review', updatedAt = NOW() WHERE slug = 'viralfindr-review-2026' AND (sourceKeyword IS NULL OR sourceKeyword = '');
+
+UPDATE blog_posts SET sourceKeyword = 'instagram reels spy tool', updatedAt = NOW() WHERE slug = 'guide-instagram-reels-spy-tool' AND (sourceKeyword IS NULL OR sourceKeyword = '');

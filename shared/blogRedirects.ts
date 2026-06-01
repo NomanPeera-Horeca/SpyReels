@@ -64,18 +64,43 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "best-instagram-reels-tools-2026",
   ],
   "spyreels-vs-meedro": [
-    "spyreels-vs-viralfindr",
+    "guide-meedro-alternative",
+    "meedro-review-2026",
     "best-instagram-reels-tools-2026",
-    "guide-instagram-reels-script-generator",
   ],
   "spyreels-vs-viralfindr": [
+    "guide-viralfindr-alternative",
+    "viralfindr-review-2026",
     "best-instagram-reels-tools-2026",
-    "guide-find-viral-reels-your-niche",
-    "spyreels-vs-meedro",
   ],
   "best-instagram-reels-tools-2026": [
+    "guide-meedro-alternative",
+    "guide-viralfindr-alternative",
+    "guide-instagram-reels-spy-tool",
+  ],
+  "guide-meedro-alternative": [
+    "spyreels-vs-meedro",
+    "meedro-review-2026",
+    "guide-instagram-reels-spy-tool",
+  ],
+  "guide-viralfindr-alternative": [
     "spyreels-vs-viralfindr",
-    "guide-instagram-reels-script-generator",
-    "guide-find-viral-reels-your-niche",
+    "viralfindr-review-2026",
+    "guide-instagram-reels-spy-tool",
+  ],
+  "meedro-review-2026": [
+    "guide-meedro-alternative",
+    "spyreels-vs-meedro",
+    "best-instagram-reels-tools-2026",
+  ],
+  "viralfindr-review-2026": [
+    "guide-viralfindr-alternative",
+    "spyreels-vs-viralfindr",
+    "best-instagram-reels-tools-2026",
+  ],
+  "guide-instagram-reels-spy-tool": [
+    "guide-spy-on-competitor-instagram-reels",
+    "guide-meedro-alternative",
+    "guide-viralfindr-alternative",
   ],
 };
