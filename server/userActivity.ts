@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { users } from "../drizzle/schema";
+import { userActivityDaily, users } from "../drizzle/schema";
 import { getDb, getUserByOpenId } from "./db";
 
 const PAID_PLANS = ["starter", "pro", "business", "agency"] as const;
@@ -30,6 +30,37 @@ export function computeRetentionStatus(
   return "active";
 }
 
+async function bumpDailyActivity(
+  userId: number,
+  opts: { countVisit?: boolean; addSeconds?: number }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const activityDate = utcDateKey();
+  const addSeconds = opts.addSeconds
+    ? Math.min(Math.max(0, Math.floor(opts.addSeconds)), 120)
+    : 0;
+
+  const updateSet: Record<string, unknown> = { updatedAt: new Date() };
+  if (opts.countVisit) {
+    updateSet.visitDay = sql`GREATEST(${userActivityDaily.visitDay}, 1)`;
+  }
+  if (addSeconds > 0) {
+    updateSet.activeSeconds = sql`${userActivityDaily.activeSeconds} + ${addSeconds}`;
+  }
+
+  await db
+    .insert(userActivityDaily)
+    .values({
+      userId,
+      activityDate,
+      visitDay: opts.countVisit ? 1 : 0,
+      activeSeconds: addSeconds,
+    })
+    .onDuplicateKeyUpdate({ set: updateSet });
+}
+
 /** Bump last seen and count at most one visit per UTC calendar day. */
 export async function recordUserActivity(openId: string): Promise<void> {
   const db = await getDb();
@@ -55,6 +86,8 @@ export async function recordUserActivity(openId: string): Promise<void> {
         : {}),
     })
     .where(eq(users.openId, openId));
+
+  await bumpDailyActivity(user.id, { countVisit: true });
 }
 
 /** Add foreground seconds from the client heartbeat (capped per request). */
@@ -76,4 +109,6 @@ export async function addUserActiveSeconds(
       lastActiveAt: now,
     })
     .where(eq(users.id, userId));
+
+  await bumpDailyActivity(userId, { addSeconds: capped, countVisit: true });
 }

@@ -39,8 +39,11 @@ export default function UserDetailPage({ userId }: { userId: number }) {
           <p className="mt-1 font-medium">{user.isPaid ? "Yes" : "No"}</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-sm">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Visits (days)</p>
-          <p className="mt-1 font-medium tabular-nums">{user.visitCount}</p>
+          <p className="text-xs font-medium uppercase text-muted-foreground">
+            Visits ({q.data.dateRange?.label ?? "30d"})
+          </p>
+          <p className="mt-1 font-medium tabular-nums">{user.periodVisits ?? 0}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Lifetime: {user.visitCount}</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-sm">
           <p className="text-xs font-medium uppercase text-muted-foreground">Last active</p>
@@ -52,8 +55,15 @@ export default function UserDetailPage({ userId }: { userId: number }) {
           </p>
         </div>
         <div className="rounded-lg border border-border p-3 text-sm">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Time in app</p>
-          <p className="mt-1 font-medium">{formatActiveDuration(user.totalActiveSeconds)}</p>
+          <p className="text-xs font-medium uppercase text-muted-foreground">
+            Time in app ({q.data.dateRange?.label ?? "30d"})
+          </p>
+          <p className="mt-1 font-medium">
+            {formatActiveDuration(user.periodActiveSeconds ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Lifetime: {formatActiveDuration(user.totalActiveSeconds)}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground capitalize">
             Retention: {user.retentionStatus} · {user.daysSinceActive}d idle
           </p>

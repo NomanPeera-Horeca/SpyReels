@@ -75,6 +75,29 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+/** Per-user daily visits and foreground time (UTC date keys). */
+export const userActivityDaily = mysqlTable(
+  "user_activity_daily",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    activityDate: varchar("activityDate", { length: 10 }).notNull(),
+    visitDay: int("visitDay").default(0).notNull(),
+    activeSeconds: int("activeSeconds").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userDateUnique: uniqueIndex("user_activity_daily_user_date").on(
+      table.userId,
+      table.activityDate
+    ),
+    dateIdx: index("user_activity_daily_date").on(table.activityDate),
+  })
+);
+
+export type UserActivityDaily = typeof userActivityDaily.$inferSelect;
+
 /**
  * Scrape jobs track each scraping request for an Instagram handle.
  */

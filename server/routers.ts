@@ -36,6 +36,17 @@ import {
 import { runDiscoveryPipeline } from "./discovery/pipeline";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
+import {
+  buildPanelUserReport,
+  panelUserFiltersSchema,
+} from "./adminUserMetrics";
+
+const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
+  limit: true,
+  offset: true,
+  sortBy: true,
+  sortOrder: true,
+});
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
 import {
   createScrapeJob,
@@ -5424,159 +5435,66 @@ The hook MUST be 7-10 words. Count them.`),
       }),
 
     panelUserList: adminPanelProcedure
-      .input(z.object({
-        search: z.string().optional(),
-        plan: z.string().optional(),
-        testOnly: z.boolean().optional(),
-        paidOnly: z.boolean().optional(),
-        freeOnly: z.boolean().optional(),
-        retentionStatus: z.enum(["active", "at_risk", "churned"]).optional(),
-        subscriptionStatus: z.enum(["active", "canceled", "past_due", "trialing"]).optional(),
-        minVisits: z.number().min(0).optional(),
-        maxDaysSinceActive: z.number().min(0).optional(),
-        sortBy: z
-          .enum([
-            "createdAt",
-            "lastSignedIn",
-            "lastActiveAt",
-            "visitCount",
-            "totalActiveSeconds",
-            "name",
-          ])
-          .default("lastActiveAt"),
-        sortOrder: z.enum(["asc", "desc"]).default("desc"),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-      }).optional())
+      .input(panelUserFiltersSchema.optional())
       .query(async ({ input }) => {
-        const { computeRetentionStatus, isPaidPlan } = await import("./userActivity");
-        const db = await getDb();
-        if (!db) return { items: [], total: 0 };
-        const opts = input || {
-          sortBy: "lastActiveAt" as const,
-          sortOrder: "desc" as const,
-          limit: 50,
-          offset: 0,
+        const opts = panelUserFiltersSchema.parse(input ?? {});
+        const report = await buildPanelUserReport(opts);
+        return {
+          items: report.items,
+          total: report.total,
+          summary: report.summary,
+          dateRange: report.dateRange,
         };
-        const sortColumn = users[opts.sortBy];
-        const allUsers = await db.select().from(users).orderBy(
-          opts.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
-        );
-        const allSubs = await db.select().from(subscriptions);
-        const subMap = new Map(allSubs.map(s => [s.userId, s]));
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const allUsage = await db.select().from(monthlyUsage).where(eq(monthlyUsage.usageMonth, currentMonth));
-        const usageMap = new Map(allUsage.map(u => [u.userId, u]));
+      }),
 
-        const scriptCounts = await db.select({
-          userId: savedScripts.userId,
-          count: sql<number>`count(*)`,
-        }).from(savedScripts).groupBy(savedScripts.userId);
-        const scriptMap = new Map(scriptCounts.map(s => [s.userId, s.count]));
-
-        const scrapeCounts = await db.select({
-          userId: scrapeJobs.userId,
-          count: sql<number>`count(*)`,
-        }).from(scrapeJobs).groupBy(scrapeJobs.userId);
-        const scrapeMap = new Map(scrapeCounts.map(s => [s.userId, s.count]));
-
-        const collectedCounts = await db.select({
-          userId: collectedReels.userId,
-          count: sql<number>`count(*)`,
-        }).from(collectedReels).groupBy(collectedReels.userId);
-        const collectedMap = new Map(collectedCounts.map(s => [s.userId, s.count]));
-
-        let enriched = allUsers.map(u => {
-          const sub = subMap.get(u.id);
-          const usage = usageMap.get(u.id);
-          const plan = sub?.plan || "free";
-          const subscriptionStatus = sub?.status ?? null;
-          const lastActiveAt = u.lastActiveAt ?? u.lastSignedIn;
-          const now = new Date();
-          const daysSinceActive = Math.floor(
-            (now.getTime() - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          const retentionStatus = computeRetentionStatus(lastActiveAt, now);
-          return {
-            id: u.id,
-            name: u.name || "Unknown",
-            email: u.email || "No email",
-            loginMethod: u.loginMethod || "unknown",
-            role: u.role,
-            plan,
-            subscriptionStatus,
-            isPaid: isPaidPlan(plan, sub?.stripeSubscriptionId),
-            stripeCustomerId: sub?.stripeCustomerId || null,
-            createdAt: u.createdAt,
-            lastSignedIn: u.lastSignedIn,
-            lastActiveAt,
-            visitCount: u.visitCount ?? 0,
-            totalActiveSeconds: u.totalActiveSeconds ?? 0,
-            daysSinceActive,
-            retentionStatus,
-            scriptsCreated: scriptMap.get(u.id) || 0,
-            scrapeJobsRun: scrapeMap.get(u.id) || 0,
-            reelsCollected: collectedMap.get(u.id) || 0,
-            isTestAccount: u.isTestAccount,
-            inferredTestAccount: inferPanelTestAccount(u),
-            monthlyUsage: usage ? {
-              scrapes: usage.scrapeCount,
-              transcriptions: usage.transcribeCount,
-              recreates: usage.recreateCount,
-              rewrites: usage.rewriteCount,
-              searches: usage.searchCount,
-            } : { scrapes: 0, transcriptions: 0, recreates: 0, rewrites: 0, searches: 0 },
-          };
+    panelUserSummary: adminPanelProcedure
+      .input(panelUserSummaryFiltersSchema.optional())
+      .query(async ({ input }) => {
+        const opts = panelUserFiltersSchema.parse({
+          ...(input ?? {}),
+          limit: 1,
+          offset: 0,
         });
-
-        if (opts.search) {
-          const lower = opts.search.toLowerCase();
-          enriched = enriched.filter(u =>
-            u.name.toLowerCase().includes(lower) ||
-            u.email.toLowerCase().includes(lower)
-          );
-        }
-        if (opts.plan) {
-          enriched = enriched.filter(u => u.plan === opts.plan);
-        }
-        if (opts.paidOnly) {
-          enriched = enriched.filter(u => u.isPaid);
-        }
-        if (opts.freeOnly) {
-          enriched = enriched.filter(u => !u.isPaid);
-        }
-        if (opts.retentionStatus) {
-          enriched = enriched.filter(u => u.retentionStatus === opts.retentionStatus);
-        }
-        if (opts.subscriptionStatus) {
-          enriched = enriched.filter(
-            u => u.subscriptionStatus === opts.subscriptionStatus
-          );
-        }
-        if (opts.minVisits !== undefined) {
-          enriched = enriched.filter(u => u.visitCount >= opts.minVisits!);
-        }
-        if (opts.maxDaysSinceActive !== undefined) {
-          enriched = enriched.filter(
-            u => u.daysSinceActive <= opts.maxDaysSinceActive!
-          );
-        }
-        if (opts.testOnly) {
-          enriched = enriched.filter(u => u.inferredTestAccount || u.isTestAccount);
-        }
-
-        const total = enriched.length;
-        const items = enriched.slice(opts.offset, opts.offset + opts.limit);
-        return { items, total };
+        const report = await buildPanelUserReport(opts);
+        return { summary: report.summary, dateRange: report.dateRange };
       }),
 
     panelUserDetail: adminPanelProcedure
-      .input(z.object({ userId: z.number() }))
+      .input(
+        z.object({
+          userId: z.number(),
+          dateRangePreset: z.enum([
+            "today",
+            "7d",
+            "14d",
+            "30d",
+            "60d",
+            "90d",
+            "365d",
+            "custom",
+          ]).default("30d"),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        })
+      )
       .query(async ({ input }) => {
+        const { resolveDateRange } = await import("./adminUserMetrics");
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
         const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+
+        const dateRange = resolveDateRange(input);
+        const report = await buildPanelUserReport(
+          panelUserFiltersSchema.parse({
+            dateRangePreset: input.dateRangePreset,
+            startDate: input.startDate,
+            endDate: input.endDate,
+            limit: 500,
+            offset: 0,
+          })
+        );
+        const row = report.items.find((r) => r.id === input.userId);
 
         const usageHistory = await db.select().from(monthlyUsage)
           .where(eq(monthlyUsage.userId, input.userId))
@@ -5605,6 +5523,7 @@ The hook MUST be 7-10 words. Count them.`),
         const plan = sub?.plan ?? "free";
 
         return {
+          dateRange,
           user: {
             id: user.id,
             name: user.name,
@@ -5616,6 +5535,8 @@ The hook MUST be 7-10 words. Count them.`),
             lastActiveAt,
             visitCount: user.visitCount ?? 0,
             totalActiveSeconds: user.totalActiveSeconds ?? 0,
+            periodVisits: row?.periodVisits ?? 0,
+            periodActiveSeconds: row?.periodActiveSeconds ?? 0,
             daysSinceActive: Math.floor(
               (Date.now() - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24)
             ),

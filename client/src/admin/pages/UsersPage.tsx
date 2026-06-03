@@ -18,7 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DATE_RANGE_PRESET_OPTIONS, type DateRangePresetValue } from "@/lib/adminDateRange";
 import { formatActiveDuration, formatRelativeActive } from "@/lib/formatActivity";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { useMemo, useState } from "react";
 
@@ -32,10 +34,13 @@ type FilterState = {
   subscriptionStatus: "" | "active" | "canceled" | "past_due" | "trialing";
   minVisits: string;
   maxDaysSinceActive: string;
+  dateRangePreset: DateRangePresetValue;
+  startDate: string;
+  endDate: string;
   sortBy:
     | "lastActiveAt"
-    | "visitCount"
-    | "totalActiveSeconds"
+    | "periodVisits"
+    | "periodActiveSeconds"
     | "createdAt"
     | "name";
   sortOrder: "asc" | "desc";
@@ -51,9 +56,30 @@ const defaultFilters: FilterState = {
   subscriptionStatus: "",
   minVisits: "",
   maxDaysSinceActive: "",
+  dateRangePreset: "30d",
+  startDate: "",
+  endDate: "",
   sortBy: "lastActiveAt",
   sortOrder: "desc",
 };
+
+function SummaryCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
 
 export default function UsersPage() {
   const [, navigate] = useLocation();
@@ -73,6 +99,15 @@ export default function UsersPage() {
       subscriptionStatus: applied.subscriptionStatus || undefined,
       minVisits: minVisits ? Number(minVisits) : undefined,
       maxDaysSinceActive: maxDays ? Number(maxDays) : undefined,
+      dateRangePreset: applied.dateRangePreset,
+      startDate:
+        applied.dateRangePreset === "custom" && applied.startDate
+          ? applied.startDate
+          : undefined,
+      endDate:
+        applied.dateRangePreset === "custom" && applied.endDate
+          ? applied.endDate
+          : undefined,
       sortBy: applied.sortBy,
       sortOrder: applied.sortOrder,
       limit: 100,
@@ -86,17 +121,67 @@ export default function UsersPage() {
     setDraft((prev) => ({ ...prev, [key]: value }));
   };
 
+  const summary = list.data?.summary;
+  const rangeLabel = list.data?.dateRange?.label ?? "Last 30 days";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold">Users</h2>
         <p className="text-sm text-muted-foreground">
-          Visit days, last active, time in app, plan, and subscription status. Visits count once per
-          UTC day; time updates while the dashboard is open (about every 60s).
+          Metrics below use the selected date range. Visits count active days (logins or product
+          use). Time in app uses live heartbeat tracking plus historical scrape days as visit
+          proxy.
         </p>
       </div>
 
       <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+        <div>
+          <Label className="text-xs uppercase text-muted-foreground">Date range</Label>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {DATE_RANGE_PRESET_OPTIONS.map((opt) => (
+              <Button
+                key={opt.value}
+                type="button"
+                size="sm"
+                variant={draft.dateRangePreset === opt.value ? "default" : "outline"}
+                className={cn("h-8 text-xs")}
+                onClick={() => setField("dateRangePreset", opt.value)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+          {draft.dateRangePreset === "custom" ? (
+            <div className="mt-3 flex flex-wrap gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="admin-range-start" className="text-xs">
+                  From
+                </Label>
+                <Input
+                  id="admin-range-start"
+                  type="date"
+                  value={draft.startDate}
+                  onChange={(e) => setField("startDate", e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="admin-range-end" className="text-xs">
+                  To
+                </Label>
+                <Input
+                  id="admin-range-end"
+                  type="date"
+                  value={draft.endDate}
+                  onChange={(e) => setField("endDate", e.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="flex-1 min-w-[200px] space-y-1.5">
             <Label htmlFor="admin-user-search">Search</Label>
@@ -194,8 +279,8 @@ export default function UsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="lastActiveAt">Last active</SelectItem>
-                <SelectItem value="visitCount">Visits</SelectItem>
-                <SelectItem value="totalActiveSeconds">Time in app</SelectItem>
+                <SelectItem value="periodVisits">Visits in range</SelectItem>
+                <SelectItem value="periodActiveSeconds">Time in range</SelectItem>
                 <SelectItem value="createdAt">Signed up</SelectItem>
                 <SelectItem value="name">Name</SelectItem>
               </SelectContent>
@@ -211,8 +296,8 @@ export default function UsersPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="desc">Newest first</SelectItem>
-                <SelectItem value="asc">Oldest first</SelectItem>
+                <SelectItem value="desc">Highest first</SelectItem>
+                <SelectItem value="asc">Lowest first</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -280,6 +365,40 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {list.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading summary…</p>
+      ) : summary ? (
+        <div>
+          <p className="mb-3 text-xs font-medium text-muted-foreground">
+            Overview · {rangeLabel}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <SummaryCard label="Users" value={String(summary.totalUsers)} hint="After filters" />
+            <SummaryCard
+              label="Active in period"
+              value={String(summary.activeInPeriod)}
+              hint="Had visits or time"
+            />
+            <SummaryCard
+              label="Visit days"
+              value={String(summary.totalPeriodVisits)}
+              hint="Sum across users"
+            />
+            <SummaryCard
+              label="Time in app"
+              value={formatActiveDuration(summary.totalPeriodActiveSeconds)}
+            />
+            <SummaryCard label="Paid" value={String(summary.paidUsers)} />
+            <SummaryCard label="New signups" value={String(summary.newSignupsInPeriod)} />
+            <SummaryCard
+              label="Avg / active user"
+              value={`${summary.avgVisitsPerActive}d · ${formatActiveDuration(summary.avgSecondsPerActive)}`}
+              hint="Visits and time"
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto rounded-lg border border-border">
         <Table>
           <TableHeader>
@@ -288,9 +407,19 @@ export default function UsersPage() {
               <TableHead>Paid</TableHead>
               <TableHead>Package</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Visits</TableHead>
+              <TableHead className="text-right">
+                Visits
+                <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                  {rangeLabel}
+                </span>
+              </TableHead>
               <TableHead>Last active</TableHead>
-              <TableHead className="text-right">Time in app</TableHead>
+              <TableHead className="text-right">
+                Time in app
+                <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                  {rangeLabel}
+                </span>
+              </TableHead>
               <TableHead>Retention</TableHead>
               <TableHead className="text-right">Open</TableHead>
             </TableRow>
@@ -320,14 +449,14 @@ export default function UsersPage() {
                   <TableCell className="text-xs capitalize">
                     {u.subscriptionStatus ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right text-sm tabular-nums">{u.visitCount}</TableCell>
+                  <TableCell className="text-right text-sm tabular-nums">{u.periodVisits}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">
                     <span title={new Date(u.lastActiveAt).toLocaleString()}>
                       {formatRelativeActive(new Date(u.lastActiveAt))}
                     </span>
                   </TableCell>
                   <TableCell className="text-right text-xs tabular-nums">
-                    {formatActiveDuration(u.totalActiveSeconds)}
+                    {formatActiveDuration(u.periodActiveSeconds)}
                   </TableCell>
                   <TableCell className="text-xs capitalize">{u.retentionStatus}</TableCell>
                   <TableCell className="text-right">
@@ -347,7 +476,7 @@ export default function UsersPage() {
       </div>
       {list.data ? (
         <p className="text-xs text-muted-foreground">
-          Showing {list.data.items.length} of {list.data.total} matching users
+          Showing {list.data.items.length} of {list.data.total} matching users · {rangeLabel}
         </p>
       ) : null}
     </div>

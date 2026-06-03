@@ -20,6 +20,7 @@ export function useActivityHeartbeat(enabled: boolean) {
       heartbeat.mutate({ seconds: HEARTBEAT_SECONDS });
     };
 
+    send();
     const id = window.setInterval(send, HEARTBEAT_INTERVAL_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") send();
