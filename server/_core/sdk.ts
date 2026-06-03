@@ -120,12 +120,11 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    const { recordUserActivity } = await import("../userActivity");
+    await recordUserActivity(user.openId);
 
-    return user;
+    const refreshed = await db.getUserByOpenId(session.openId);
+    return refreshed ?? user;
   }
 }
 

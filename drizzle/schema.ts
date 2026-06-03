@@ -30,6 +30,14 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  /** Last authenticated request or client heartbeat. */
+  lastActiveAt: timestamp("lastActiveAt").defaultNow().notNull(),
+  /** Distinct calendar days (UTC) with at least one authenticated visit. */
+  visitCount: int("visitCount").default(0).notNull(),
+  /** YYYY-MM-DD (UTC) of the last day that incremented visitCount. */
+  lastVisitCountedOn: varchar("lastVisitCountedOn", { length: 10 }),
+  /** Cumulative foreground time reported by the client heartbeat. */
+  totalActiveSeconds: int("totalActiveSeconds").default(0).notNull(),
   passwordHash: varchar("password_hash", { length: 255 }),
   // Onboarding state — first-run experience flags (welcome modal,
   // 3-step hint card, completed first spy, demo banner). `demoSeededAt`

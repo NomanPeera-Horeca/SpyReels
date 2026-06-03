@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { formatActiveDuration, formatRelativeActive } from "@/lib/formatActivity";
 import { useLocation } from "wouter";
 
 export default function UserDetailPage({ userId }: { userId: number }) {
@@ -32,6 +33,33 @@ export default function UserDetailPage({ userId }: { userId: number }) {
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-border p-3 text-sm">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Paid account</p>
+          <p className="mt-1 font-medium">{user.isPaid ? "Yes" : "No"}</p>
+        </div>
+        <div className="rounded-lg border border-border p-3 text-sm">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Visits (days)</p>
+          <p className="mt-1 font-medium tabular-nums">{user.visitCount}</p>
+        </div>
+        <div className="rounded-lg border border-border p-3 text-sm">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Last active</p>
+          <p className="mt-1 font-medium">
+            {formatRelativeActive(new Date(user.lastActiveAt))}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {new Date(user.lastActiveAt).toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border p-3 text-sm">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Time in app</p>
+          <p className="mt-1 font-medium">{formatActiveDuration(user.totalActiveSeconds)}</p>
+          <p className="mt-1 text-xs text-muted-foreground capitalize">
+            Retention: {user.retentionStatus} · {user.daysSinceActive}d idle
+          </p>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-border p-3 text-sm">
           <p className="text-xs font-medium uppercase text-muted-foreground">Login</p>
@@ -52,28 +80,36 @@ export default function UserDetailPage({ userId }: { userId: number }) {
 
       {subscription ? (
         <div className="rounded-lg border border-border p-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Subscription</h3>
-          <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Subscription
+          </h3>
+          <div className="mt-2 grid gap-2 text-sm sm:grid-cols-4">
             <div>
-              <span className="text-muted-foreground">Plan</span>
+              <span className="text-muted-foreground">Package</span>
               <p className="font-medium capitalize">{subscription.plan}</p>
             </div>
             <div>
               <span className="text-muted-foreground">Status</span>
-              <p className="font-medium">{subscription.status}</p>
+              <p className="font-medium capitalize">{subscription.status}</p>
             </div>
             <div>
               <span className="text-muted-foreground">Billing</span>
               <p className="font-medium">{subscription.billingInterval || "monthly"}</p>
             </div>
+            <div>
+              <span className="text-muted-foreground">Signed up</span>
+              <p className="font-medium">{new Date(user.createdAt).toLocaleDateString()}</p>
+            </div>
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">No active subscription row.</p>
+        <p className="text-sm text-muted-foreground">No active subscription row (free).</p>
       )}
 
       <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Monthly usage</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Monthly usage
+        </h3>
         <div className="mt-2 overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -100,7 +136,9 @@ export default function UserDetailPage({ userId }: { userId: number }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent scrapes</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Recent scrapes
+          </h3>
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {(recentJobs ?? []).map((j) => (
               <li key={j.id}>
@@ -110,7 +148,9 @@ export default function UserDetailPage({ userId }: { userId: number }) {
           </ul>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent scripts</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Recent scripts
+          </h3>
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {(recentScripts ?? []).map((s) => (
               <li key={s.id}>

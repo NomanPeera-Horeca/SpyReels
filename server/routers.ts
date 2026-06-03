@@ -473,6 +473,16 @@ export const appRouter = router({
 
   workspaces: workspacesRouter,
 
+  activity: router({
+    recordHeartbeat: protectedProcedure
+      .input(z.object({ seconds: z.number().min(1).max(120).default(60) }))
+      .mutation(async ({ ctx, input }) => {
+        const { addUserActiveSeconds } = await import("./userActivity");
+        await addUserActiveSeconds(ctx.user.id, input.seconds);
+        return { ok: true as const };
+      }),
+  }),
+
   // ── Billing & Subscription ──
   billing: router({
     subscription: protectedProcedure.query(async ({ ctx }) => {
@@ -5418,17 +5428,39 @@ The hook MUST be 7-10 words. Count them.`),
         search: z.string().optional(),
         plan: z.string().optional(),
         testOnly: z.boolean().optional(),
-        sortBy: z.enum(["createdAt", "lastSignedIn", "name"]).default("createdAt"),
+        paidOnly: z.boolean().optional(),
+        freeOnly: z.boolean().optional(),
+        retentionStatus: z.enum(["active", "at_risk", "churned"]).optional(),
+        subscriptionStatus: z.enum(["active", "canceled", "past_due", "trialing"]).optional(),
+        minVisits: z.number().min(0).optional(),
+        maxDaysSinceActive: z.number().min(0).optional(),
+        sortBy: z
+          .enum([
+            "createdAt",
+            "lastSignedIn",
+            "lastActiveAt",
+            "visitCount",
+            "totalActiveSeconds",
+            "name",
+          ])
+          .default("lastActiveAt"),
         sortOrder: z.enum(["asc", "desc"]).default("desc"),
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
       }).optional())
       .query(async ({ input }) => {
+        const { computeRetentionStatus, isPaidPlan } = await import("./userActivity");
         const db = await getDb();
         if (!db) return { items: [], total: 0 };
-        const opts = input || { sortBy: "createdAt" as const, sortOrder: "desc" as const, limit: 50, offset: 0 };
+        const opts = input || {
+          sortBy: "lastActiveAt" as const,
+          sortOrder: "desc" as const,
+          limit: 50,
+          offset: 0,
+        };
+        const sortColumn = users[opts.sortBy];
         const allUsers = await db.select().from(users).orderBy(
-          opts.sortOrder === "asc" ? asc(users[opts.sortBy]) : desc(users[opts.sortBy])
+          opts.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
         );
         const allSubs = await db.select().from(subscriptions);
         const subMap = new Map(allSubs.map(s => [s.userId, s]));
@@ -5457,21 +5489,29 @@ The hook MUST be 7-10 words. Count them.`),
         let enriched = allUsers.map(u => {
           const sub = subMap.get(u.id);
           const usage = usageMap.get(u.id);
+          const plan = sub?.plan || "free";
+          const subscriptionStatus = sub?.status ?? null;
+          const lastActiveAt = u.lastActiveAt ?? u.lastSignedIn;
           const now = new Date();
-          const daysSinceActive = Math.floor((now.getTime() - u.lastSignedIn.getTime()) / (1000 * 60 * 60 * 24));
-          let retentionStatus: "active" | "at_risk" | "churned" = "active";
-          if (daysSinceActive > 30) retentionStatus = "churned";
-          else if (daysSinceActive > 7) retentionStatus = "at_risk";
+          const daysSinceActive = Math.floor(
+            (now.getTime() - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          const retentionStatus = computeRetentionStatus(lastActiveAt, now);
           return {
             id: u.id,
             name: u.name || "Unknown",
             email: u.email || "No email",
             loginMethod: u.loginMethod || "unknown",
             role: u.role,
-            plan: sub?.plan || "free",
+            plan,
+            subscriptionStatus,
+            isPaid: isPaidPlan(plan, sub?.stripeSubscriptionId),
             stripeCustomerId: sub?.stripeCustomerId || null,
             createdAt: u.createdAt,
             lastSignedIn: u.lastSignedIn,
+            lastActiveAt,
+            visitCount: u.visitCount ?? 0,
+            totalActiveSeconds: u.totalActiveSeconds ?? 0,
             daysSinceActive,
             retentionStatus,
             scriptsCreated: scriptMap.get(u.id) || 0,
@@ -5498,6 +5538,28 @@ The hook MUST be 7-10 words. Count them.`),
         }
         if (opts.plan) {
           enriched = enriched.filter(u => u.plan === opts.plan);
+        }
+        if (opts.paidOnly) {
+          enriched = enriched.filter(u => u.isPaid);
+        }
+        if (opts.freeOnly) {
+          enriched = enriched.filter(u => !u.isPaid);
+        }
+        if (opts.retentionStatus) {
+          enriched = enriched.filter(u => u.retentionStatus === opts.retentionStatus);
+        }
+        if (opts.subscriptionStatus) {
+          enriched = enriched.filter(
+            u => u.subscriptionStatus === opts.subscriptionStatus
+          );
+        }
+        if (opts.minVisits !== undefined) {
+          enriched = enriched.filter(u => u.visitCount >= opts.minVisits!);
+        }
+        if (opts.maxDaysSinceActive !== undefined) {
+          enriched = enriched.filter(
+            u => u.daysSinceActive <= opts.maxDaysSinceActive!
+          );
         }
         if (opts.testOnly) {
           enriched = enriched.filter(u => u.inferredTestAccount || u.isTestAccount);
@@ -5538,6 +5600,10 @@ The hook MUST be 7-10 words. Count them.`),
 
         const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, input.userId)).limit(1);
 
+        const { computeRetentionStatus, isPaidPlan } = await import("./userActivity");
+        const lastActiveAt = user.lastActiveAt ?? user.lastSignedIn;
+        const plan = sub?.plan ?? "free";
+
         return {
           user: {
             id: user.id,
@@ -5547,6 +5613,14 @@ The hook MUST be 7-10 words. Count them.`),
             role: user.role,
             createdAt: user.createdAt,
             lastSignedIn: user.lastSignedIn,
+            lastActiveAt,
+            visitCount: user.visitCount ?? 0,
+            totalActiveSeconds: user.totalActiveSeconds ?? 0,
+            daysSinceActive: Math.floor(
+              (Date.now() - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24)
+            ),
+            retentionStatus: computeRetentionStatus(lastActiveAt),
+            isPaid: isPaidPlan(plan, sub?.stripeSubscriptionId),
             utmSource: user.utmSource,
             utmMedium: user.utmMedium,
             utmCampaign: user.utmCampaign,

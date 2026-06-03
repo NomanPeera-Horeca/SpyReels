@@ -27,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard,
@@ -135,6 +136,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  useActivityHeartbeat(Boolean(user));
   const posthog = usePostHog();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
