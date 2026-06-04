@@ -462,7 +462,19 @@ export async function runDiscoveryPipeline(
   }
 
   const allReels = [...byCreatorHashtag.values()];
-  const scored = allReels
+
+  // Collapse the same reel surfaced under multiple hashtags (same shortcode,
+  // possibly different like/view snapshots). Keep the highest-view copy.
+  const byShortcode = new Map<string, ParsedReel>();
+  for (const reel of allReels) {
+    const existing = byShortcode.get(reel.shortcode);
+    if (!existing || reel.views > existing.views) {
+      byShortcode.set(reel.shortcode, reel);
+    }
+  }
+  const uniqueReels = [...byShortcode.values()];
+
+  const scored = uniqueReels
     .map(scoreReel)
     .filter((r): r is ScoredReel => r !== null);
 
@@ -473,7 +485,7 @@ export async function runDiscoveryPipeline(
     .slice(0, TOP_N);
 
   console.log(
-    `  pipeline total: ${allReels.length} reels after dedupe, ${scored.length} after viral filter, top ${topReels.length} selected`
+    `  pipeline total: ${allReels.length} after creator-hashtag dedupe, ${uniqueReels.length} unique reels, ${topReels.length} selected`
   );
 
   return {
