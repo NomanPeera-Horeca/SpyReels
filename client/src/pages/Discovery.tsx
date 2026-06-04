@@ -1,10 +1,8 @@
 import { useState, useCallback } from "react";
-import type { inferRouterOutputs } from "@trpc/server";
 import { Compass, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import type { AppRouter } from "../../../server/routers";
 import { formatNumber } from "@/components/InlineWorkflow";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,8 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 
-type DiscoveryCreator =
-  inferRouterOutputs<AppRouter>["discovery"]["runFullPipeline"]["creators"][number];
+type DiscoveryCreator = {
+  rankPosition: number;
+  instagramHandle: string;
+  followerCount: number;
+  engagementRate: number;
+  nicheFitScore: number;
+  whyMatchSummary: string;
+};
 
 type FlowState = "idle" | "routing" | "running-pipeline" | "success";
 
@@ -125,13 +129,13 @@ export default function Discovery() {
   const [results, setResults] = useState<DiscoveryCreator[] | null>(null);
   const [flowState, setFlowState] = useState<FlowState>("idle");
 
-  const runPipeline = trpc.discovery.runFullPipeline.useMutation({
-    onSuccess: (data) => {
-      setResults(data.creators);
+  const runPipeline = trpc.discovery.search.useMutation({
+    onSuccess: () => {
+      setResults([]);
       setFlowState("success");
       void utils.discovery.getQuota.invalidate();
     },
-    onError: (err) => {
+    onError: (err: { message: string }) => {
       toast.error(err.message);
       setFlowState("idle");
     },
@@ -148,7 +152,7 @@ export default function Discovery() {
     (desc: string) => {
       setResults(null);
       setFlowState("running-pipeline");
-      runPipeline.mutate({ description: desc });
+      runPipeline.mutate({ businessDescription: desc });
     },
     [runPipeline]
   );

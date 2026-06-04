@@ -58,6 +58,56 @@ async function scGet(
   return { status: res.status, data };
 }
 
+export interface HashtagReelsSearchResult {
+  hashtag: string;
+  success: boolean;
+  httpStatus: number | null;
+  error: string | null;
+  data: unknown;
+}
+
+/** Hashtag reel search via ScrapeCreators (1 credit per request). */
+export async function searchHashtagReels(
+  hashtag: string
+): Promise<HashtagReelsSearchResult> {
+  const cleanTag = hashtag.replace(/^#/, "").trim();
+  try {
+    const { status, data } = await scGet("/v1/instagram/search/hashtag", {
+      hashtag: cleanTag,
+      media_type: "reels",
+      date_posted: "last-month",
+    });
+    if (status >= 200 && status < 300) {
+      return {
+        hashtag: cleanTag,
+        success: true,
+        httpStatus: status,
+        error: null,
+        data,
+      };
+    }
+    const errBody =
+      typeof data === "object" && data && "error" in data
+        ? String((data as { error: unknown }).error)
+        : "";
+    return {
+      hashtag: cleanTag,
+      success: false,
+      httpStatus: status,
+      error: `HTTP ${status}${errBody ? `: ${errBody}` : ""}`,
+      data,
+    };
+  } catch (err) {
+    return {
+      hashtag: cleanTag,
+      success: false,
+      httpStatus: null,
+      error: err instanceof Error ? err.message : String(err),
+      data: null,
+    };
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

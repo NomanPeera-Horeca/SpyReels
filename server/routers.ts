@@ -28,12 +28,7 @@ import {
 } from "./stripe/stripe-service";
 import { PLANS, getPlanLimits, isUnlimited } from "./stripe/products";
 import type { PlanId, BillingInterval } from "./stripe/products";
-import {
-  countSucceededSearchesThisMonth,
-  createDiscoverySearch,
-  createDiscoveryResults,
-} from "./discovery/db";
-import { runDiscoveryPipeline } from "./discovery/pipeline";
+import { countSucceededSearchesThisMonth } from "./discovery/db";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import {
@@ -2085,54 +2080,15 @@ Return JSON only:
         };
       }),
 
-    runFullPipeline: discoveryProcedure
-      .input(z.object({ description: z.string().min(10).max(500) }))
-      .mutation(async ({ input, ctx }) => {
-        const sub = await getUserSubscription(ctx.user.id);
-        const limits = getPlanLimits(sub.plan as PlanId);
-        const used = await countSucceededSearchesThisMonth(ctx.user.id);
-
-        if (
-          !isUnlimited(limits.discoverySearches) &&
-          used >= limits.discoverySearches
-        ) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Monthly discovery search limit reached",
-          });
-        }
-
-        const result = await runDiscoveryPipeline({
-          description: input.description,
-        });
-
-        const searchId = await createDiscoverySearch({
-          userId: ctx.user.id,
-          descriptionText: input.description,
-          routedNiche: result.routedNiche,
-          routingConfidence: result.routingConfidence,
-          clarified: false,
-          resultCount: result.creators.length,
-          apifyCostUsd: result.costs.apifyUsd,
-          claudeCostUsd: result.costs.claudeUsd,
-          succeeded: true,
-        });
-
-        await createDiscoveryResults(searchId, result.creators);
-
-        const resetsAt = firstDayOfNextMonthUtc();
-
-        return {
-          searchId,
-          routedNiche: result.routedNiche,
-          routingConfidence: result.routingConfidence,
-          creators: result.creators,
-          quota: {
-            used: used + 1,
-            limit: limits.discoverySearches,
-            resetsAt,
-          },
-        };
+    search: discoveryProcedure
+      .input(
+        z.object({
+          businessDescription: z.string().min(20).max(1000),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { runDiscoveryPipeline } = await import("./discovery/pipeline");
+        return await runDiscoveryPipeline(input.businessDescription);
       }),
 
     getQuota: discoveryProcedure.query(async ({ ctx }) => {
