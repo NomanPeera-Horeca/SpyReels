@@ -2086,9 +2086,42 @@ Return JSON only:
           businessDescription: z.string().min(20).max(1000),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { runDiscoveryPipeline } = await import("./discovery/pipeline");
-        return await runDiscoveryPipeline(input.businessDescription);
+        const result = await runDiscoveryPipeline(input.businessDescription);
+
+        try {
+          const db = await getDb();
+          const routedName = result.routedNiche?.trim();
+          if (db && routedName) {
+            const nicheRows = await db
+              .select({ slug: niches.slug })
+              .from(niches)
+              .where(eq(niches.name, routedName))
+              .limit(1);
+            const slug = nicheRows[0]?.slug;
+            if (slug) {
+              const userRows = await db
+                .select({ selectedNicheSlugs: users.selectedNicheSlugs })
+                .from(users)
+                .where(eq(users.id, ctx.user.id))
+                .limit(1);
+              const existing = Array.isArray(userRows[0]?.selectedNicheSlugs)
+                ? (userRows[0].selectedNicheSlugs as string[])
+                : [];
+              if (!existing.includes(slug) && existing.length < 5) {
+                await db
+                  .update(users)
+                  .set({ selectedNicheSlugs: [...existing, slug] })
+                  .where(eq(users.id, ctx.user.id));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[discovery.search] niche save failed:", err);
+        }
+
+        return result;
       }),
 
     getQuota: discoveryProcedure.query(async ({ ctx }) => {
