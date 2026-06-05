@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import {
   BadgeCheck,
@@ -77,18 +77,36 @@ function shouldShowViralTierBadge(reel: ViralReel): boolean {
   return reel.viralTier === "Healthy" || reel.viralTier === "Strong";
 }
 
+/** Same formula as server/accountEngagementRate.ts (likes+comments)/followers*100. */
+function accountEngagementRatePercent(
+  likes: number,
+  comments: number,
+  followers: number
+): number {
+  if (!followers || followers <= 0) return 0;
+  const raw = ((likes + comments) / followers) * 100;
+  return Math.round(raw * 100) / 100;
+}
+
 function DiscoverReelCard({
   reel,
+  rank,
   isPlaying,
   onPlayChange,
 }: {
   reel: ViralReel;
+  rank: number;
   isPlaying: boolean;
   onPlayChange: (playing: boolean) => void;
 }) {
   const captionPreview =
     reel.caption.trim().length > 0 ? reel.caption.trim() : null;
   const showTierBadge = shouldShowViralTierBadge(reel);
+  const accountEngagement = accountEngagementRatePercent(
+    reel.likes,
+    reel.comments,
+    reel.owner.followers
+  );
 
   return (
     <div className="group relative rounded-lg border border-border/40 bg-card transition-colors hover:border-border/70">
@@ -101,16 +119,30 @@ function DiscoverReelCard({
           onPlayingChange={onPlayChange}
           fallbackLabel={`@${reel.owner.username}`}
         />
+        <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white pointer-events-none">
+          #{rank}
+        </div>
         {showTierBadge ? (
-          <div className="absolute left-2 top-2 z-10 pointer-events-none">
+          <div className="absolute left-2 top-10 z-10 pointer-events-none">
             <span
               className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
                 tierBadgeClass(reel.viralTier)
               )}
             >
               {reel.viralTier}
+              <span className="font-mono opacity-90">
+                {reel.viralScore.toFixed(1)}
+              </span>
             </span>
+          </div>
+        ) : null}
+        {accountEngagement > 0 ? (
+          <div
+            className="absolute left-2 bottom-2 z-10 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950 pointer-events-none"
+            title="Account engagement rate"
+          >
+            {accountEngagement.toFixed(2)}% eng
           </div>
         ) : null}
         <a
@@ -127,22 +159,6 @@ function DiscoverReelCard({
       </div>
 
       <div className="space-y-2 p-2.5">
-        <div className="flex min-w-0 items-center gap-1">
-          <p className="truncate text-xs font-semibold text-foreground">
-            @{reel.owner.username}
-          </p>
-          {reel.owner.isVerified ? (
-            <BadgeCheck
-              className="h-3.5 w-3.5 shrink-0 text-sky-400"
-              aria-label="Verified"
-            />
-          ) : null}
-        </div>
-        {reel.owner.fullName ? (
-          <p className="truncate text-[10px] text-muted-foreground">
-            {reel.owner.fullName}
-          </p>
-        ) : null}
         <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
           {captionPreview ?? (
             <span className="italic text-muted-foreground">No caption</span>
@@ -154,6 +170,14 @@ function DiscoverReelCard({
           <span>{formatNumber(reel.likes)} likes</span>
           <span aria-hidden>·</span>
           <span>{formatNumber(reel.comments)} comments</span>
+          {accountEngagement > 0 ? (
+            <>
+              <span aria-hidden>·</span>
+              <span className="font-medium text-emerald-400">
+                {accountEngagement.toFixed(2)}% engagement
+              </span>
+            </>
+          ) : null}
         </div>
         <a
           href={reel.reelUrl}
@@ -271,10 +295,12 @@ function CreatorBehindReelCard({
 
 function ReelGrid({
   reels,
+  rankForReel,
   playingShortcode,
   onPlayShortcodeChange,
 }: {
   reels: ViralReel[];
+  rankForReel: (reel: ViralReel) => number;
   playingShortcode: string | null;
   onPlayShortcodeChange: (shortcode: string | null) => void;
 }) {
@@ -286,6 +312,7 @@ function ReelGrid({
         <DiscoverReelCard
           key={reel.shortcode}
           reel={reel}
+          rank={rankForReel(reel)}
           isPlaying={playingShortcode === reel.shortcode}
           onPlayChange={(playing) =>
             onPlayShortcodeChange(playing ? reel.shortcode : null)
@@ -621,6 +648,14 @@ export default function Discovery() {
     [paginatedReels]
   );
 
+  const rankForReel = useCallback(
+    (reel: ViralReel) => {
+      const idx = orderedReels.findIndex((r) => r.shortcode === reel.shortcode);
+      return idx >= 0 ? idx + 1 : 0;
+    },
+    [orderedReels]
+  );
+
   const stopPollingForUser = (userKey: string) => {
     const intervalId = pollIntervalsRef.current.get(userKey);
     if (intervalId) clearInterval(intervalId);
@@ -847,6 +882,7 @@ export default function Discovery() {
                 {paginatedTier1.length > 0 ? (
                   <ReelGrid
                     reels={paginatedTier1}
+                    rankForReel={rankForReel}
                     playingShortcode={playingShortcode}
                     onPlayShortcodeChange={setPlayingShortcode}
                   />
@@ -864,6 +900,7 @@ export default function Discovery() {
                     </h3>
                     <ReelGrid
                       reels={paginatedTier2}
+                      rankForReel={rankForReel}
                       playingShortcode={playingShortcode}
                       onPlayShortcodeChange={setPlayingShortcode}
                     />

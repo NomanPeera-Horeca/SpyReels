@@ -18,6 +18,8 @@ import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const TOP_N = 100;
+const RELEVANCE_CANDIDATE_LIMIT = 150;
+const RELEVANCE_BATCH_SIZE = 15;
 const DISCOVERY_MAX_SC_CALLS = 300;
 const DEFAULT_USD_PER_CREDIT = 0.002;
 const MIN_VIEWS = 5_000;
@@ -72,6 +74,27 @@ RULES:
 
 Do not use em dashes anywhere.
 Return ONLY the JSON object, no preamble, no code fences.`;
+
+/** Haiku batch relevance filter for top discovery candidates. */
+const RELEVANCE_SCORING_PROMPT = `You score Instagram Reels for relevance to a user's business discovery search on SpyReels.
+
+Given the user's business description, routed niche label, and a batch of Reels (shortcode, caption, creator username and display name), return a relevance verdict per Reel.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "reels": [
+    { "shortcode": "AbC123", "relevant": true, "score": 85 }
+  ]
+}
+
+RULES:
+1. Judge relevance to the USER'S BUSINESS INTENT (what they sell and who they serve), not just whether the caption mentions the niche label.
+2. Mark relevant false ONLY when the reel is CLEARLY about a different topic or audience than the user's search. Example: a burger review reel for a search about AI tools for restaurants; a gaming reel for wedding photography coaching.
+3. When in doubt, set relevant true. Borderline or tangential content stays relevant.
+4. score is 0 to 100: how well this reel's topic and angle match what the user is looking for. Higher means stronger fit.
+5. Return exactly one entry per input shortcode. Use the exact shortcode strings from the input.
+6. Do not use em dashes anywhere.
+7. Return ONLY the JSON object, no preamble, no code fences.`;
 
 export type ViralTier = "Trending" | "Healthy" | "Strong" | "Viral" | "Explosive";
 
@@ -586,6 +609,9 @@ function dedupeReelsByShortcode(reels: ParsedReel[]): ParsedReel[] {
 function selectTopScoredReels(reels: ParsedReel[]): {
   uniqueReels: ParsedReel[];
   scored: ScoredReel[];
+  tier1Reels: ScoredReel[];
+  tier2Reels: ScoredReel[];
+  candidates: ScoredReel[];
   topReels: ScoredReel[];
 } {
   const uniqueReels = dedupeReelsByShortcode(reels);
@@ -598,8 +624,194 @@ function selectTopScoredReels(reels: ParsedReel[]): {
   const tier2Reels = scored
     .filter((reel) => reel.tier === 2)
     .sort((a, b) => b.viralScore - a.viralScore);
-  const topReels = [...tier1Reels, ...tier2Reels].slice(0, TOP_N);
-  return { uniqueReels, scored, topReels };
+  const candidates = [...tier1Reels, ...tier2Reels].slice(
+    0,
+    RELEVANCE_CANDIDATE_LIMIT
+  );
+  const topReels = candidates.slice(0, TOP_N);
+  return {
+    uniqueReels,
+    scored,
+    tier1Reels,
+    tier2Reels,
+    candidates,
+    topReels,
+  };
+}
+
+interface RelevanceVerdict {
+  shortcode: string;
+  relevant: boolean;
+  score: number;
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
+async function scoreRelevanceBatch(
+  client: Anthropic,
+  businessDescription: string,
+  routedNiche: string,
+  batch: ScoredReel[]
+): Promise<RelevanceVerdict[] | null> {
+  const reelLines = batch
+    .map((reel) => {
+      const caption = reel.caption.trim().slice(0, 280) || "(no caption)";
+      return `- shortcode: ${reel.shortcode}\n  username: @${reel.owner.username}\n  name: ${reel.owner.fullName || "(unknown)"}\n  caption: ${caption}`;
+    })
+    .join("\n\n");
+
+  const userMessage = `Business description:
+"""
+${businessDescription}
+"""
+
+Routed niche: ${routedNiche || "(unknown)"}
+
+Reels to score:
+${reelLines}
+
+Return relevance JSON for every shortcode listed above.`;
+
+  const response = await client.messages.create({
+    model: HAIKU_MODEL,
+    max_tokens: 1024,
+    temperature: 0.1,
+    system: RELEVANCE_SCORING_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
+  });
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    return null;
+  }
+
+  const parsed = JSON.parse(stripCodeFences(textBlock.text)) as {
+    reels?: Array<{
+      shortcode?: string;
+      relevant?: boolean;
+      score?: number;
+    }>;
+  };
+
+  if (!Array.isArray(parsed.reels)) {
+    return null;
+  }
+
+  const out: RelevanceVerdict[] = [];
+  for (const row of parsed.reels) {
+    const shortcode = String(row.shortcode ?? "").trim();
+    if (!shortcode) continue;
+    const scoreRaw = Number(row.score);
+    const score = Number.isFinite(scoreRaw)
+      ? Math.min(100, Math.max(0, Math.round(scoreRaw)))
+      : 50;
+    out.push({
+      shortcode,
+      relevant: row.relevant !== false,
+      score,
+    });
+  }
+  return out;
+}
+
+async function applyRelevanceFilter(
+  client: Anthropic,
+  businessDescription: string,
+  routedNiche: string,
+  candidates: ScoredReel[],
+  onProgress?: (update: DiscoveryProgressUpdate) => void | Promise<void>
+): Promise<{ topReels: ScoredReel[]; haikuCalls: number }> {
+  if (candidates.length === 0) {
+    return { topReels: [], haikuCalls: 0 };
+  }
+
+  await safeProgress(onProgress, { phase: "scoring_relevance" });
+
+  const relevanceByShortcode = new Map<string, number>();
+  let haikuCalls = 0;
+
+  try {
+    for (const batch of chunkArray(candidates, RELEVANCE_BATCH_SIZE)) {
+      let verdicts: RelevanceVerdict[] | null = null;
+      try {
+        verdicts = await scoreRelevanceBatch(
+          client,
+          businessDescription,
+          routedNiche,
+          batch
+        );
+        haikuCalls++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(
+          `[discovery] relevance batch FAILED (${batch.length} reels): ${message}`
+        );
+      }
+
+      if (!verdicts) {
+        for (const reel of batch) {
+          if (!relevanceByShortcode.has(reel.shortcode)) {
+            relevanceByShortcode.set(reel.shortcode, 50);
+          }
+        }
+        continue;
+      }
+
+      const returned = new Set<string>();
+      for (const verdict of verdicts) {
+        returned.add(verdict.shortcode);
+        if (verdict.relevant === false) {
+          relevanceByShortcode.set(verdict.shortcode, -1);
+        } else {
+          relevanceByShortcode.set(verdict.shortcode, verdict.score);
+        }
+      }
+
+      for (const reel of batch) {
+        if (!returned.has(reel.shortcode)) {
+          relevanceByShortcode.set(reel.shortcode, 50);
+        }
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`[discovery] relevance filter skipped entirely: ${message}`);
+    return { topReels: candidates.slice(0, TOP_N), haikuCalls };
+  }
+
+  const surviving = candidates.filter(
+    (reel) => (relevanceByShortcode.get(reel.shortcode) ?? 50) >= 0
+  );
+
+  const tier1 = surviving
+    .filter((reel) => reel.tier === 1)
+    .sort((a, b) => {
+      const scoreDiff =
+        (relevanceByShortcode.get(b.shortcode) ?? 50) -
+        (relevanceByShortcode.get(a.shortcode) ?? 50);
+      return scoreDiff !== 0 ? scoreDiff : b.viralScore - a.viralScore;
+    });
+  const tier2 = surviving
+    .filter((reel) => reel.tier === 2)
+    .sort((a, b) => {
+      const scoreDiff =
+        (relevanceByShortcode.get(b.shortcode) ?? 50) -
+        (relevanceByShortcode.get(a.shortcode) ?? 50);
+      return scoreDiff !== 0 ? scoreDiff : b.viralScore - a.viralScore;
+    });
+
+  const dropped = candidates.length - surviving.length;
+  console.log(
+    `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped, ${haikuCalls} Haiku calls`
+  );
+
+  return { topReels: [...tier1, ...tier2].slice(0, TOP_N), haikuCalls };
 }
 
 function topReelsToViralOutput(
@@ -647,10 +859,12 @@ function buildDiscoveryResultFromReels(params: {
   usdPerCredit: number;
   stableThumbs?: Map<string, string>;
   stableProfilePics?: Map<string, string>;
+  topReelsOverride?: ScoredReel[];
 }): DiscoveryResult {
-  const { uniqueReels, scored, topReels } = selectTopScoredReels(
+  const { uniqueReels, scored, topReels: defaultTop } = selectTopScoredReels(
     params.combinedReels
   );
+  const topReels = params.topReelsOverride ?? defaultTop;
   return {
     businessDescription: params.businessDescription,
     routedNiche: params.routedNiche,
@@ -968,15 +1182,24 @@ export async function runDiscoveryPipeline(
 
   const allReels = [...hashtagReels, ...drilledReels];
 
-  const { uniqueReels, scored, topReels } = selectTopScoredReels(allReels);
+  const { uniqueReels, scored, candidates } = selectTopScoredReels(allReels);
 
   logFilterBreakdown(totalRaw, allReels);
+
+  const { topReels, haikuCalls: relevanceHaikuCalls } =
+    await applyRelevanceFilter(
+      anthropic,
+      businessDescription,
+      routedNiche,
+      candidates,
+      onProgress
+    );
 
   const tier1Reels = scored.filter((reel) => reel.tier === 1);
   const tier2Reels = scored.filter((reel) => reel.tier === 2);
 
   console.log(
-    `  pipeline total: ${allReels.length} combined reels, ${uniqueReels.length} unique by shortcode, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length}), scCalls=${tracker.count}`
+    `  pipeline total: ${allReels.length} combined reels, ${uniqueReels.length} unique by shortcode, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length}), scCalls=${tracker.count}, relevanceHaikuCalls=${relevanceHaikuCalls}`
   );
 
   // Mirror thumbnails to R2 for the displayed reels only (max TOP_N). Deliberate cost tradeoff: we mirror at search time for UI consistency with the scrape grid; revisit to lazy-mirror-on-click if R2 writes become significant.
@@ -1012,6 +1235,7 @@ export async function runDiscoveryPipeline(
     usdPerCredit,
     stableThumbs,
     stableProfilePics,
+    topReelsOverride: topReels,
   });
   });
 }
