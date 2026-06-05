@@ -9,21 +9,27 @@ import {
   ExternalLink,
   Lightbulb,
   Loader2,
+  Wand2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import type { AppRouter } from "../../../server/routers";
-import { formatNumber } from "@/components/InlineWorkflow";
+import { formatNumber, InlineWorkflow } from "@/components/InlineWorkflow";
+import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import Tooltip from "@/components/Tooltip";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { LOADING_TIPS } from "@/data/loadingTips";
 import { formatRelativeActive } from "@/lib/formatActivity";
 import { cn } from "@/lib/utils";
+import {
+  type DiscoverRemakeState,
+  remakeButtonLabel,
+  useDiscoverRemakeChain,
+} from "@/hooks/useDiscoverRemakeChain";
 
 type DiscoveryResultPayload =
   inferRouterOutputs<AppRouter>["discovery"]["getSearch"];
@@ -88,16 +94,92 @@ function accountEngagementRatePercent(
   return Math.round(raw * 100) / 100;
 }
 
+function DiscoverRemakeButton({
+  remakeState,
+  onStart,
+  onOpenScript,
+  onRetry,
+}: {
+  remakeState: DiscoverRemakeState;
+  onStart: () => void;
+  onOpenScript: () => void;
+  onRetry: () => void;
+}) {
+  const { stage, progressPercent } = remakeState;
+  const isBusy =
+    stage === "ingesting" || stage === "transcribing" || stage === "generating";
+  const isReady = stage === "ready";
+  const isError = stage === "error";
+  const fillWidth = isReady ? 100 : isError ? 0 : progressPercent;
+  const label = remakeButtonLabel(remakeState);
+
+  const handleClick = () => {
+    if (isBusy) return;
+    if (isReady) {
+      onOpenScript();
+      return;
+    }
+    if (isError) {
+      onRetry();
+      return;
+    }
+    onStart();
+  };
+
+  return (
+    <Button
+      type="button"
+      variant={isReady ? "default" : isError ? "destructive" : "secondary"}
+      size="sm"
+      className={cn(
+        "relative w-full overflow-hidden",
+        isReady && "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+      )}
+      disabled={isBusy}
+      onClick={handleClick}
+    >
+      <span
+        className={cn(
+          "pointer-events-none absolute inset-y-0 left-0 transition-[width] duration-500 ease-out",
+          isReady
+            ? "bg-emerald-500/25"
+            : isError
+              ? "bg-destructive/15"
+              : "bg-primary/25"
+        )}
+        style={{ width: `${fillWidth}%` }}
+        aria-hidden
+      />
+      <span className="relative z-10 inline-flex items-center justify-center gap-1.5">
+        {isBusy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+        ) : (
+          <Wand2 className="h-3.5 w-3.5 shrink-0" />
+        )}
+        {label}
+      </span>
+    </Button>
+  );
+}
+
 function DiscoverReelCard({
   reel,
   rank,
   isPlaying,
   onPlayChange,
+  remakeState,
+  onRemakeStart,
+  onRemakeOpenScript,
+  onRemakeRetry,
 }: {
   reel: ViralReel;
   rank: number;
   isPlaying: boolean;
   onPlayChange: (playing: boolean) => void;
+  remakeState: DiscoverRemakeState;
+  onRemakeStart: () => void;
+  onRemakeOpenScript: () => void;
+  onRemakeRetry: () => void;
 }) {
   const captionPreview =
     reel.caption.trim().length > 0 ? reel.caption.trim() : null;
@@ -188,13 +270,12 @@ function DiscoverReelCard({
           Open on Instagram
           <ExternalLink className="h-3 w-3" />
         </a>
-        <Tooltip content="Coming next">
-          <span className="inline-block w-full">
-            <Button type="button" variant="secondary" size="sm" className="w-full" disabled>
-              Remake in my voice
-            </Button>
-          </span>
-        </Tooltip>
+        <DiscoverRemakeButton
+          remakeState={remakeState}
+          onStart={onRemakeStart}
+          onOpenScript={onRemakeOpenScript}
+          onRetry={onRemakeRetry}
+        />
       </div>
     </div>
   );
@@ -298,11 +379,19 @@ function ReelGrid({
   rankForReel,
   playingShortcode,
   onPlayShortcodeChange,
+  getRemakeState,
+  onRemakeStart,
+  onRemakeOpenScript,
+  onRemakeRetry,
 }: {
   reels: ViralReel[];
   rankForReel: (reel: ViralReel) => number;
   playingShortcode: string | null;
   onPlayShortcodeChange: (shortcode: string | null) => void;
+  getRemakeState: (shortcode: string) => DiscoverRemakeState;
+  onRemakeStart: (reel: ViralReel) => void;
+  onRemakeOpenScript: (reel: ViralReel) => void;
+  onRemakeRetry: (reel: ViralReel) => void;
 }) {
   if (reels.length === 0) return null;
 
@@ -317,6 +406,10 @@ function ReelGrid({
           onPlayChange={(playing) =>
             onPlayShortcodeChange(playing ? reel.shortcode : null)
           }
+          remakeState={getRemakeState(reel.shortcode)}
+          onRemakeStart={() => onRemakeStart(reel)}
+          onRemakeOpenScript={() => onRemakeOpenScript(reel)}
+          onRemakeRetry={() => onRemakeRetry(reel)}
         />
       ))}
     </div>
@@ -532,6 +625,17 @@ export default function Discovery() {
   const [addStateByUsername, setAddStateByUsername] = useState<
     Record<string, AddToLibraryState>
   >({});
+  const [gridModalReelId, setGridModalReelId] = useState<number | null>(null);
+  const [modalDiscoverReel, setModalDiscoverReel] = useState<ViralReel | null>(null);
+  const [recreatePulse, setRecreatePulse] = useState<{
+    reelId: number;
+    nonce: number;
+    openScriptId?: number;
+  } | null>(null);
+
+  const { getRemakeState, startRemake, retryRemake } = useDiscoverRemakeChain();
+  const prefsQuery = trpc.preferences.get.useQuery();
+  const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
 
   const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
   const jobStatusQuery = trpc.discovery.jobStatus.useQuery(
@@ -755,6 +859,55 @@ export default function Discovery() {
     setPlayingShortcode(null);
   };
 
+  const triggerOpenDiscoverScript = useCallback(
+    (reel: ViralReel, reelId: number, scriptId: number) => {
+      setModalDiscoverReel(reel);
+      setGridModalReelId(reelId);
+      setRecreatePulse((prev) => ({
+        reelId,
+        openScriptId: scriptId,
+        nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+      }));
+    },
+    []
+  );
+
+  const handleRemakeOpenScript = useCallback(
+    (reel: ViralReel) => {
+      const state = getRemakeState(reel.shortcode);
+      if (
+        state.stage !== "ready" ||
+        state.reelId == null ||
+        state.scriptId == null
+      ) {
+        return;
+      }
+      triggerOpenDiscoverScript(reel, state.reelId, state.scriptId);
+    },
+    [getRemakeState, triggerOpenDiscoverScript]
+  );
+
+  const modalReelPreview = useMemo(() => {
+    if (gridModalReelId == null || modalDiscoverReel == null) return null;
+    const reel = modalDiscoverReel;
+    return {
+      id: gridModalReelId,
+      caption: reel.caption,
+      thumbnailUrl: reel.thumbnailUrl,
+      videoUrl: reel.videoUrl,
+      viewCount: reel.views,
+      likeCount: reel.likes,
+      commentCount: reel.comments,
+      engagementRate: reel.engagementRate,
+      postedAt: new Date(),
+      duration: null as number | null,
+      niche: null as string | null,
+      hookPattern: null as string | null,
+      viralFlag: null as boolean | null,
+      confidence: null as number | null,
+    };
+  }, [gridModalReelId, modalDiscoverReel]);
+
   const showResults = result != null && !isReplayLoading;
   const showInitialLoading =
     (searchMutation.isPending || (isJobRunning && result == null)) &&
@@ -885,6 +1038,10 @@ export default function Discovery() {
                     rankForReel={rankForReel}
                     playingShortcode={playingShortcode}
                     onPlayShortcodeChange={setPlayingShortcode}
+                    getRemakeState={getRemakeState}
+                    onRemakeStart={startRemake}
+                    onRemakeOpenScript={handleRemakeOpenScript}
+                    onRemakeRetry={retryRemake}
                   />
                 ) : null}
 
@@ -903,6 +1060,10 @@ export default function Discovery() {
                       rankForReel={rankForReel}
                       playingShortcode={playingShortcode}
                       onPlayShortcodeChange={setPlayingShortcode}
+                      getRemakeState={getRemakeState}
+                      onRemakeStart={startRemake}
+                      onRemakeOpenScript={handleRemakeOpenScript}
+                      onRemakeRetry={retryRemake}
                     />
                   </div>
                 ) : null}
@@ -936,6 +1097,41 @@ export default function Discovery() {
           ) : null}
         </div>
       ) : null}
+
+      <GridReelWorkflowDialog
+        open={modalReelPreview != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setGridModalReelId(null);
+            setModalDiscoverReel(null);
+          }
+        }}
+        reel={modalReelPreview}
+        userTimezone={userTimezone}
+      >
+        {modalReelPreview && modalDiscoverReel && gridModalReelId != null ? (
+          <InlineWorkflow
+            reelSource="user_job"
+            reelId={gridModalReelId}
+            handle={modalDiscoverReel.owner.username}
+            hasTranscription
+            isProcessing={false}
+            isTranscriptionQueued={false}
+            isNoSpeech={false}
+            onTranscribe={() => {}}
+            userTimezone={userTimezone}
+            postedAt={new Date()}
+            recreateEntrySignal={
+              recreatePulse?.reelId === gridModalReelId
+                ? {
+                    nonce: recreatePulse.nonce,
+                    openScriptId: recreatePulse.openScriptId,
+                  }
+                : undefined
+            }
+          />
+        ) : null}
+      </GridReelWorkflowDialog>
     </div>
   );
 }
