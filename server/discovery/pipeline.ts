@@ -27,6 +27,7 @@ const MIN_REACH_MULTIPLIER = 3;
 const MIN_VIRAL_SCORE = 1;
 const TIER2_MIN_VIEWS = 1_000;
 const TIER2_MIN_REACH_MULTIPLIER = 1.5;
+const MIN_RELEVANCE_SCORE = 55;
 
 /** Same prompt as scripts/test-scrapecreators-discovery.ts */
 const HASHTAG_EXPANSION_PROMPT = `You generate Instagram-native hashtags for creator discovery on SpyReels.
@@ -88,13 +89,15 @@ Return ONLY valid JSON in this exact shape:
 }
 
 RULES:
-1. Judge relevance to the USER'S BUSINESS INTENT (what they sell and who they serve), not just whether the caption mentions the niche label.
-2. Mark relevant false ONLY when the reel is CLEARLY about a different topic or audience than the user's search. Example: a burger review reel for a search about AI tools for restaurants; a gaming reel for wedding photography coaching.
-3. When in doubt, set relevant true. Borderline or tangential content stays relevant.
-4. score is 0 to 100: how well this reel's topic and angle match what the user is looking for. Higher means stronger fit.
-5. Return exactly one entry per input shortcode. Use the exact shortcode strings from the input.
-6. Do not use em dashes anywhere.
-7. Return ONLY the JSON object, no preamble, no code fences.`;
+1. A reel is relevant ONLY if its topic genuinely matches the SUBJECT of what the user is looking for (what the content is ABOUT), not merely because the creator is also a small business or works in a broad related industry.
+2. Judge the reel caption and implied topic against the USER'S BUSINESS INTENT (what they sell, who they serve, and what kind of content they want to emulate).
+3. Mark relevant false when the reel topic does not match the search subject, even if the creator is an entrepreneur or small business owner talking about their own unrelated trade.
+4. EXAMPLE: For a search like "AI and automation for small business", a reel teaching AI tools, business systems, or automation IS relevant. A reel where a car detailing shop owner, florist, or woodworker talks about their trade is NOT relevant, even though they are a small business.
+5. Mark relevant false for clearly off-topic content: burger reviews for restaurant SaaS, gaming for wedding photography coaching, unrelated hobby or trade content for a niche-specific search.
+6. score is 0 to 100: how well this reel's topic and angle match what the user is looking for. Score below 55 means weak or tangential fit. Be honest with low scores for borderline content.
+7. Return exactly one entry per input shortcode. Use the exact shortcode strings from the input.
+8. Do not use em dashes anywhere.
+9. Return ONLY the JSON object, no preamble, no code fences.`;
 
 export type ViralTier = "Trending" | "Healthy" | "Strong" | "Viral" | "Explosive";
 
@@ -645,6 +648,25 @@ interface RelevanceVerdict {
   score: number;
 }
 
+interface RelevanceEntry {
+  keep: boolean;
+  score: number;
+}
+
+function shouldKeepRelevanceVerdict(verdict: RelevanceVerdict): RelevanceEntry {
+  if (verdict.relevant === false) {
+    return { keep: false, score: verdict.score };
+  }
+  if (verdict.score < MIN_RELEVANCE_SCORE) {
+    return { keep: false, score: verdict.score };
+  }
+  return { keep: true, score: verdict.score };
+}
+
+function failOpenRelevanceEntry(): RelevanceEntry {
+  return { keep: true, score: 50 };
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -733,7 +755,7 @@ async function applyRelevanceFilter(
 
   await safeProgress(onProgress, { phase: "scoring_relevance" });
 
-  const relevanceByShortcode = new Map<string, number>();
+  const relevanceByShortcode = new Map<string, RelevanceEntry>();
   let haikuCalls = 0;
 
   try {
@@ -757,7 +779,7 @@ async function applyRelevanceFilter(
       if (!verdicts) {
         for (const reel of batch) {
           if (!relevanceByShortcode.has(reel.shortcode)) {
-            relevanceByShortcode.set(reel.shortcode, 50);
+            relevanceByShortcode.set(reel.shortcode, failOpenRelevanceEntry());
           }
         }
         continue;
@@ -766,16 +788,15 @@ async function applyRelevanceFilter(
       const returned = new Set<string>();
       for (const verdict of verdicts) {
         returned.add(verdict.shortcode);
-        if (verdict.relevant === false) {
-          relevanceByShortcode.set(verdict.shortcode, -1);
-        } else {
-          relevanceByShortcode.set(verdict.shortcode, verdict.score);
-        }
+        relevanceByShortcode.set(
+          verdict.shortcode,
+          shouldKeepRelevanceVerdict(verdict)
+        );
       }
 
       for (const reel of batch) {
         if (!returned.has(reel.shortcode)) {
-          relevanceByShortcode.set(reel.shortcode, 50);
+          relevanceByShortcode.set(reel.shortcode, failOpenRelevanceEntry());
         }
       }
     }
@@ -786,29 +807,29 @@ async function applyRelevanceFilter(
   }
 
   const surviving = candidates.filter(
-    (reel) => (relevanceByShortcode.get(reel.shortcode) ?? 50) >= 0
+    (reel) => relevanceByShortcode.get(reel.shortcode)?.keep !== false
   );
 
   const tier1 = surviving
     .filter((reel) => reel.tier === 1)
     .sort((a, b) => {
       const scoreDiff =
-        (relevanceByShortcode.get(b.shortcode) ?? 50) -
-        (relevanceByShortcode.get(a.shortcode) ?? 50);
+        (relevanceByShortcode.get(b.shortcode)?.score ?? 50) -
+        (relevanceByShortcode.get(a.shortcode)?.score ?? 50);
       return scoreDiff !== 0 ? scoreDiff : b.viralScore - a.viralScore;
     });
   const tier2 = surviving
     .filter((reel) => reel.tier === 2)
     .sort((a, b) => {
       const scoreDiff =
-        (relevanceByShortcode.get(b.shortcode) ?? 50) -
-        (relevanceByShortcode.get(a.shortcode) ?? 50);
+        (relevanceByShortcode.get(b.shortcode)?.score ?? 50) -
+        (relevanceByShortcode.get(a.shortcode)?.score ?? 50);
       return scoreDiff !== 0 ? scoreDiff : b.viralScore - a.viralScore;
     });
 
   const dropped = candidates.length - surviving.length;
   console.log(
-    `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped, ${haikuCalls} Haiku calls`
+    `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped (minScore=${MIN_RELEVANCE_SCORE}), ${haikuCalls} Haiku calls`
   );
 
   return { topReels: [...tier1, ...tier2].slice(0, TOP_N), haikuCalls };
