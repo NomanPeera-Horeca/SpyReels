@@ -83,15 +83,14 @@ function shouldShowViralTierBadge(reel: ViralReel): boolean {
   return reel.viralTier === "Healthy" || reel.viralTier === "Strong";
 }
 
-/** Same formula as server/accountEngagementRate.ts (likes+comments)/followers*100. */
-function accountEngagementRatePercent(
-  likes: number,
-  comments: number,
-  followers: number
-): number {
-  if (!followers || followers <= 0) return 0;
-  const raw = ((likes + comments) / followers) * 100;
-  return Math.round(raw * 100) / 100;
+/** Pipeline engagementRate is (likes+comments)/views as a ratio; display as percent. */
+function perViewEngagementPercent(reel: ViralReel): number | null {
+  if (!reel.views || reel.views <= 0) return null;
+  const rate = reel.engagementRate;
+  if (rate == null || Number.isNaN(Number(rate))) return null;
+  const pct = Number(rate) * 100;
+  if (!Number.isFinite(pct) || pct <= 0) return null;
+  return pct;
 }
 
 function DiscoverRemakeButton({
@@ -111,7 +110,7 @@ function DiscoverRemakeButton({
   const isReady = stage === "ready";
   const isError = stage === "error";
   const fillWidth = isReady ? 100 : isError ? 0 : progressPercent;
-  const label = remakeButtonLabel(remakeState);
+  const label = isReady ? "Your script is ready →" : remakeButtonLabel(remakeState);
 
   const handleClick = () => {
     if (isBusy) return;
@@ -133,23 +132,22 @@ function DiscoverRemakeButton({
       size="sm"
       className={cn(
         "relative w-full overflow-hidden",
-        isReady && "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+        isReady &&
+          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
       )}
       disabled={isBusy}
       onClick={handleClick}
     >
-      <span
-        className={cn(
-          "pointer-events-none absolute inset-y-0 left-0 transition-[width] duration-500 ease-out",
-          isReady
-            ? "bg-emerald-500/25"
-            : isError
-              ? "bg-destructive/15"
-              : "bg-primary/25"
-        )}
-        style={{ width: `${fillWidth}%` }}
-        aria-hidden
-      />
+      {!isReady ? (
+        <span
+          className={cn(
+            "pointer-events-none absolute inset-y-0 left-0 transition-[width] duration-500 ease-out",
+            isError ? "bg-destructive/15" : "bg-primary/25"
+          )}
+          style={{ width: `${fillWidth}%` }}
+          aria-hidden
+        />
+      ) : null}
       <span className="relative z-10 inline-flex items-center justify-center gap-1.5">
         {isBusy ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
@@ -184,11 +182,7 @@ function DiscoverReelCard({
   const captionPreview =
     reel.caption.trim().length > 0 ? reel.caption.trim() : null;
   const showTierBadge = shouldShowViralTierBadge(reel);
-  const accountEngagement = accountEngagementRatePercent(
-    reel.likes,
-    reel.comments,
-    reel.owner.followers
-  );
+  const engagementPct = perViewEngagementPercent(reel);
 
   return (
     <div className="group relative rounded-lg border border-border/40 bg-card transition-colors hover:border-border/70">
@@ -219,12 +213,12 @@ function DiscoverReelCard({
             </span>
           </div>
         ) : null}
-        {accountEngagement > 0 ? (
+        {engagementPct != null ? (
           <div
             className="absolute left-2 bottom-2 z-10 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950 pointer-events-none"
-            title="Account engagement rate"
+            title="Engagement rate (per view)"
           >
-            {accountEngagement.toFixed(2)}% eng
+            {engagementPct.toFixed(1)}% eng
           </div>
         ) : null}
         <a
@@ -252,11 +246,11 @@ function DiscoverReelCard({
           <span>{formatNumber(reel.likes)} likes</span>
           <span aria-hidden>·</span>
           <span>{formatNumber(reel.comments)} comments</span>
-          {accountEngagement > 0 ? (
+          {engagementPct != null ? (
             <>
               <span aria-hidden>·</span>
               <span className="font-medium text-emerald-400">
-                {accountEngagement.toFixed(2)}% engagement
+                {engagementPct.toFixed(1)}% engagement
               </span>
             </>
           ) : null}
@@ -890,6 +884,7 @@ export default function Discovery() {
   const modalReelPreview = useMemo(() => {
     if (gridModalReelId == null || modalDiscoverReel == null) return null;
     const reel = modalDiscoverReel;
+    const engagementPct = perViewEngagementPercent(reel);
     return {
       id: gridModalReelId,
       caption: reel.caption,
@@ -898,7 +893,7 @@ export default function Discovery() {
       viewCount: reel.views,
       likeCount: reel.likes,
       commentCount: reel.comments,
-      engagementRate: reel.engagementRate,
+      engagementRate: engagementPct ?? 0,
       postedAt: new Date(),
       duration: null as number | null,
       niche: null as string | null,
