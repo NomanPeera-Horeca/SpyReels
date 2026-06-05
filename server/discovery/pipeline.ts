@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import { searchHashtagReels } from "../instagram";
+import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
@@ -425,6 +426,31 @@ async function mirrorReelThumbnailsBounded(
   return out;
 }
 
+/** Mirror profile avatars to R2 with bounded concurrency (mirrors scrape job). */
+async function mirrorProfilePicsBounded(
+  items: Array<{ username: string; profilePicUrl: string }>,
+  concurrency = 5
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (items.length === 0) return out;
+
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        const item = items[i]!;
+        const stable = await ensureProfilePicOnR2(
+          item.username,
+          item.profilePicUrl ?? ""
+        );
+        out.set(item.username.toLowerCase(), stable);
+      }
+    })
+  );
+  return out;
+}
+
 /** Dedupe: keep highest-view reel per creator-and-hashtag combo. */
 function mergeReelsFromSearch(
   byCreatorHashtag: Map<string, ParsedReel>,
@@ -550,34 +576,54 @@ export async function runDiscoveryPipeline(
     }))
   );
 
+  // Mirror profile pics to R2 for unique owners in the result set only. Deliberate cost tradeoff: stable avatars in the sidebar at search time; revisit lazy-mirror if R2 writes become significant.
+  const ownersByUsername = new Map<string, ParsedReel["owner"]>();
+  for (const reel of topReels) {
+    const key = reel.owner.username.toLowerCase();
+    if (!ownersByUsername.has(key)) {
+      ownersByUsername.set(key, reel.owner);
+    }
+  }
+  const stableProfilePics = await mirrorProfilePicsBounded(
+    [...ownersByUsername.values()].map((owner) => ({
+      username: owner.username,
+      profilePicUrl: owner.profilePicUrl,
+    }))
+  );
+
   return {
     businessDescription,
     routedNiche,
     hashtagsUsed: hashtags,
     hashtagFailures,
-    viralReels: topReels.map((reel) => ({
-      shortcode: reel.shortcode,
-      reelUrl: reel.reelUrl,
-      thumbnailUrl: stableThumbs.get(reel.shortcode) ?? reel.thumbnailUrl,
-      videoUrl: reel.videoUrl,
-      caption: reel.caption,
-      views: reel.views,
-      likes: reel.likes,
-      comments: reel.comments,
-      viralScore: reel.viralScore,
-      viralTier: reel.viralTier,
-      reachMultiplier: reel.reachMultiplier,
-      engagementRate: reel.engagementRate,
-      tier: reel.tier,
-      owner: {
-        username: reel.owner.username,
-        fullName: reel.owner.fullName,
-        followers: reel.owner.followers,
-        isVerified: reel.owner.isVerified,
-        biography: reel.owner.biography,
-        profilePicUrl: reel.owner.profilePicUrl,
-      },
-    })),
+    viralReels: topReels.map((reel) => {
+      const ownerKey = reel.owner.username.toLowerCase();
+      const mirroredPic = stableProfilePics.get(ownerKey) ?? "";
+      const profilePicUrl = mirroredPic || reel.owner.profilePicUrl;
+      return {
+        shortcode: reel.shortcode,
+        reelUrl: reel.reelUrl,
+        thumbnailUrl: stableThumbs.get(reel.shortcode) ?? reel.thumbnailUrl,
+        videoUrl: reel.videoUrl,
+        caption: reel.caption,
+        views: reel.views,
+        likes: reel.likes,
+        comments: reel.comments,
+        viralScore: reel.viralScore,
+        viralTier: reel.viralTier,
+        reachMultiplier: reel.reachMultiplier,
+        engagementRate: reel.engagementRate,
+        tier: reel.tier,
+        owner: {
+          username: reel.owner.username,
+          fullName: reel.owner.fullName,
+          followers: reel.owner.followers,
+          isVerified: reel.owner.isVerified,
+          biography: reel.owner.biography,
+          profilePicUrl,
+        },
+      };
+    }),
     totalCandidatesBeforeFilter: allReels.length,
     totalCandidatesAfterFilter: scored.length,
     costEstimateUsd: hashtags.length * usdPerCredit,

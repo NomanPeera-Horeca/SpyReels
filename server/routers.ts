@@ -2207,6 +2207,42 @@ Return JSON only:
         return rows[0].resultJson;
       }),
 
+    deleteSearch: discoveryProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const existing = await db
+          .select({ id: discoverySearches.id })
+          .from(discoverySearches)
+          .where(
+            and(
+              eq(discoverySearches.id, input.id),
+              eq(discoverySearches.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+
+        if (!existing[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Search not found",
+          });
+        }
+
+        await db
+          .delete(discoverySearches)
+          .where(eq(discoverySearches.id, input.id));
+
+        return { ok: true as const };
+      }),
+
     getQuota: discoveryProcedure.query(async ({ ctx }) => {
       const sub = await getUserSubscription(ctx.user.id);
       const limits = getPlanLimits(sub.plan as PlanId);

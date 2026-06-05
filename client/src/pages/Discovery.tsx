@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import {
   BadgeCheck,
+  Check,
   ChevronLeft,
   ChevronRight,
   Compass,
   ExternalLink,
   Lightbulb,
   Loader2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import type { AppRouter } from "../../../server/routers";
 import { formatNumber } from "@/components/InlineWorkflow";
@@ -174,6 +175,7 @@ function DiscoverReelCard({
 }
 
 type DerivedCreator = ViralReel["owner"];
+type AddToLibraryState = "idle" | "adding" | "added" | "error";
 
 function deriveUniqueCreators(reels: ViralReel[]): DerivedCreator[] {
   const byUsername = new Map<string, DerivedCreator>();
@@ -186,63 +188,82 @@ function deriveUniqueCreators(reels: ViralReel[]): DerivedCreator[] {
   return [...byUsername.values()];
 }
 
+function creatorInitials(owner: DerivedCreator): string {
+  const base = (owner.fullName || owner.username).replace(/^@/, "").trim();
+  if (!base) return "?";
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+  }
+  return base.slice(0, 2).toUpperCase();
+}
+
 function CreatorBehindReelCard({
   owner,
+  routedNiche,
+  addState,
   onAddToLibrary,
-  isPending,
 }: {
   owner: DerivedCreator;
+  routedNiche: string;
+  addState: AddToLibraryState;
   onAddToLibrary: (handle: string) => void;
-  isPending: boolean;
 }) {
   const avatarSrc = owner.profilePicUrl?.trim() || null;
+  const displayName = owner.fullName.trim() || `@${owner.username}`;
+  const nicheLabel = routedNiche.trim() || "your niche";
+  const isAdding = addState === "adding";
+  const isAdded = addState === "added";
 
   return (
-    <Card>
-      <CardContent className="p-3 flex items-center gap-3">
-        <div className="h-12 w-12 shrink-0 rounded-full overflow-hidden bg-muted border border-border">
-          {avatarSrc ? (
-            <img
-              src={avatarSrc}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
-              @
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <p className="font-medium text-sm truncate">@{owner.username}</p>
-            {owner.isVerified ? (
-              <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" />
-            ) : null}
-          </div>
-          {owner.fullName ? (
-            <p className="text-xs text-muted-foreground truncate">{owner.fullName}</p>
+    <div className="flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-background/50 p-2">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary/60 to-fuchsia-500/50 text-[10px] font-semibold text-white">
+        {avatarSrc ? (
+          <img
+            src={avatarSrc}
+            alt=""
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          creatorInitials(owner)
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <p className="truncate text-xs font-medium text-foreground">{displayName}</p>
+          {owner.isVerified ? (
+            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" aria-label="Verified" />
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            {formatNumber(owner.followers)} followers
-          </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          disabled={isPending}
-          onClick={() => onAddToLibrary(owner.username)}
-        >
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Add to library"
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+          @{owner.username} · {formatNumber(owner.followers)} · {nicheLabel}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant={isAdded ? "secondary" : "outline"}
+        size="sm"
+        className="h-8 shrink-0 px-2.5 text-xs"
+        disabled={isAdding || isAdded}
+        onClick={() => onAddToLibrary(owner.username)}
+      >
+        {isAdding ? (
+          <>
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            Adding...
+          </>
+        ) : isAdded ? (
+          <>
+            <Check className="mr-1 h-3.5 w-3.5" />
+            Added
+          </>
+        ) : (
+          "Add to library"
+        )}
+      </Button>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+    </div>
   );
 }
 
@@ -319,53 +340,80 @@ function truncateText(text: string, maxLen: number): string {
   return `${trimmed.slice(0, maxLen - 1)}…`;
 }
 
-function searchedAgo(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const relative = formatRelativeActive(d);
-  if (relative === "just now") return "searched just now";
-  return `searched ${relative}`;
-}
-
-function RecentSearchesList({
+function RecentSearchesDropdown({
+  open,
   items,
   onSelect,
+  onDeleted,
   loadingId,
 }: {
+  open: boolean;
   items: RecentDiscoverySearch[];
   onSelect: (item: RecentDiscoverySearch) => void;
+  onDeleted: () => void;
   loadingId: number | null;
 }) {
-  if (items.length === 0) return null;
+  const deleteSearch = trpc.discovery.deleteSearch.useMutation({
+    onSuccess: () => {
+      void onDeleted();
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  if (!open || items.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-foreground">Recent searches</h2>
-      <div className="flex flex-col gap-1.5">
+    <div
+      className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-lg"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <ul className="max-h-64 overflow-y-auto py-1">
         {items.map((item) => {
           const isLoading = loadingId === item.id;
+          const isDeleting =
+            deleteSearch.isPending && deleteSearch.variables?.id === item.id;
           return (
-            <button
-              key={item.id}
-              type="button"
-              disabled={isLoading}
-              onClick={() => onSelect(item)}
-              className={cn(
-                "rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-left transition-colors",
-                "hover:border-border hover:bg-muted/40 disabled:opacity-60"
-              )}
-            >
-              <p className="text-xs font-medium text-foreground line-clamp-2">
-                {truncateText(item.businessDescription, 120)}
-              </p>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {item.routedNiche ? `${item.routedNiche} · ` : ""}
-                {item.reelCount} reel{item.reelCount === 1 ? "" : "s"} ·{" "}
-                {searchedAgo(item.createdAt)}
-              </p>
-            </button>
+            <li key={item.id} className="flex items-stretch">
+              <button
+                type="button"
+                disabled={isLoading || isDeleting}
+                onClick={() => onSelect(item)}
+                className={cn(
+                  "min-w-0 flex-1 px-3 py-2 text-left transition-colors",
+                  "hover:bg-muted/50 disabled:opacity-60"
+                )}
+              >
+                <p className="text-xs font-medium text-foreground line-clamp-2">
+                  {truncateText(item.businessDescription, 100)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {item.routedNiche ? `${item.routedNiche} · ` : ""}
+                  {item.reelCount} reel{item.reelCount === 1 ? "" : "s"} ·{" "}
+                  {formatRelativeActive(item.createdAt)}
+                </p>
+              </button>
+              <button
+                type="button"
+                aria-label="Remove saved search"
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteSearch.mutate({ id: item.id });
+                }}
+                className="shrink-0 px-2.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <X className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -424,17 +472,34 @@ export default function Discovery() {
     return null;
   }
 
-  const [, setLocation] = useLocation();
   const [description, setDescription] = useState("");
   const [result, setResult] = useState<DiscoverySearchResult | null>(null);
-  const [pendingHandle, setPendingHandle] = useState<string | null>(null);
   const [reelPage, setReelPage] = useState(1);
   const [playingShortcode, setPlayingShortcode] = useState<string | null>(null);
   const [replayedAt, setReplayedAt] = useState<Date | null>(null);
   const [loadingReplayId, setLoadingReplayId] = useState<number | null>(null);
+  const [textareaFocused, setTextareaFocused] = useState(false);
+  const [hideRecentDropdown, setHideRecentDropdown] = useState(false);
+  const [addStateByUsername, setAddStateByUsername] = useState<
+    Record<string, AddToLibraryState>
+  >({});
 
   const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
   const trpcUtils = trpc.useUtils();
+  const pollIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(
+    new Map()
+  );
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      for (const id of pollIntervalsRef.current.values()) {
+        clearInterval(id);
+      }
+      pollIntervalsRef.current.clear();
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   const searchMutation = trpc.discovery.search.useMutation({
     onSuccess: (data) => {
@@ -442,6 +507,8 @@ export default function Discovery() {
       setReelPage(1);
       setPlayingShortcode(null);
       setReplayedAt(null);
+      setHideRecentDropdown(true);
+      setTextareaFocused(false);
       void recentSearchesQuery.refetch();
     },
     onError: (err) => {
@@ -451,22 +518,7 @@ export default function Discovery() {
     },
   });
 
-  const startScrape = trpc.scrape.start.useMutation({
-    onSuccess: (data) => {
-      setPendingHandle(null);
-      if ("redirect" in data && data.redirect === "featured") {
-        setLocation(
-          `/dashboard?featuredAccountId=${data.featuredAccountId}&from=discovery`
-        );
-        return;
-      }
-      setLocation(`/scraping?jobId=${data.jobId}`);
-    },
-    onError: (err) => {
-      setPendingHandle(null);
-      toast.error(err.message);
-    },
-  });
+  const startScrape = trpc.scrape.start.useMutation();
 
   const trimmed = description.trim();
   const isSearching = searchMutation.isPending;
@@ -507,6 +559,40 @@ export default function Discovery() {
     [paginatedReels]
   );
 
+  const stopPollingForUser = (userKey: string) => {
+    const intervalId = pollIntervalsRef.current.get(userKey);
+    if (intervalId) clearInterval(intervalId);
+    pollIntervalsRef.current.delete(userKey);
+  };
+
+  const startPollingScrapeJob = (username: string, jobId: number) => {
+    const userKey = username.toLowerCase();
+    stopPollingForUser(userKey);
+
+    const pollOnce = async () => {
+      try {
+        const progress = await trpcUtils.scrape.progress.fetch({ jobId });
+        if (progress.status === "completed") {
+          stopPollingForUser(userKey);
+          setAddStateByUsername((prev) => ({ ...prev, [userKey]: "added" }));
+          toast.success(`@${username} added`);
+        } else if (progress.status === "failed") {
+          stopPollingForUser(userKey);
+          setAddStateByUsername((prev) => ({ ...prev, [userKey]: "error" }));
+          toast.error(
+            progress.errorMessage?.trim() || `Failed to add @${username} to your library`
+          );
+        }
+      } catch {
+        // Keep polling until terminal status or user leaves the page.
+      }
+    };
+
+    void pollOnce();
+    const intervalId = setInterval(() => void pollOnce(), 3000);
+    pollIntervalsRef.current.set(userKey, intervalId);
+  };
+
   const handleSubmit = () => {
     if (!submitEnabled) return;
     setResult(null);
@@ -514,12 +600,15 @@ export default function Discovery() {
     setPlayingShortcode(null);
     setReplayedAt(null);
     setLoadingReplayId(null);
+    setHideRecentDropdown(true);
     searchMutation.mutate({ businessDescription: trimmed });
   };
 
   const handleReplaySearch = async (item: RecentDiscoverySearch) => {
     setLoadingReplayId(item.id);
     setReplayedAt(new Date(item.createdAt));
+    setHideRecentDropdown(true);
+    setTextareaFocused(false);
     try {
       const data = await trpcUtils.discovery.getSearch.fetch({ id: item.id });
       setResult(data);
@@ -536,8 +625,30 @@ export default function Discovery() {
   const handleAddToLibrary = (username: string) => {
     const handle = username.replace(/^@/, "").trim();
     if (!handle) return;
-    setPendingHandle(handle);
-    startScrape.mutate({ handle, timeframeDays: 90 });
+    const userKey = handle.toLowerCase();
+    const current = addStateByUsername[userKey] ?? "idle";
+    if (current === "adding" || current === "added") return;
+
+    setAddStateByUsername((prev) => ({ ...prev, [userKey]: "adding" }));
+    toast(`Adding @${handle} to your library`);
+
+    startScrape.mutate(
+      { handle, timeframeDays: 90 },
+      {
+        onSuccess: (data) => {
+          if ("redirect" in data && data.redirect === "featured") {
+            setAddStateByUsername((prev) => ({ ...prev, [userKey]: "added" }));
+            toast(`@${handle} is already in your library`);
+            return;
+          }
+          startPollingScrapeJob(handle, data.jobId);
+        },
+        onError: (err) => {
+          setAddStateByUsername((prev) => ({ ...prev, [userKey]: "error" }));
+          toast.error(err.message);
+        },
+      }
+    );
   };
 
   const handlePageChange = (page: number) => {
@@ -548,6 +659,12 @@ export default function Discovery() {
   const showResults = result != null && !isSearching && !isReplayLoading;
   const reelCount = result?.viralReels.length ?? 0;
   const recentSearches = recentSearchesQuery.data ?? [];
+  const showRecentDropdown =
+    textareaFocused &&
+    !hideRecentDropdown &&
+    trimmed.length === 0 &&
+    recentSearches.length > 0 &&
+    !isSearching;
 
   return (
     <div className="container max-w-6xl py-8 space-y-8">
@@ -564,24 +681,38 @@ export default function Discovery() {
         </p>
       </div>
 
-      <RecentSearchesList
-        items={recentSearches}
-        onSelect={handleReplaySearch}
-        loadingId={loadingReplayId}
-      />
-
       <div className="space-y-4">
-        <div className="space-y-2">
+        <div className="relative space-y-2">
           <Textarea
             value={description}
             onChange={(e) =>
               setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
             }
+            onFocus={() => {
+              if (blurTimerRef.current) {
+                clearTimeout(blurTimerRef.current);
+                blurTimerRef.current = null;
+              }
+              setTextareaFocused(true);
+              if (trimmed.length === 0) setHideRecentDropdown(false);
+            }}
+            onBlur={() => {
+              blurTimerRef.current = setTimeout(() => {
+                setTextareaFocused(false);
+              }, 200);
+            }}
             placeholder="What do you make or sell, and who is it for? Be specific so we can route your niche."
             rows={5}
             maxLength={MAX_DESCRIPTION_LENGTH}
             disabled={isSearching}
             className="resize-y min-h-[120px]"
+          />
+          <RecentSearchesDropdown
+            open={showRecentDropdown}
+            items={recentSearches}
+            onSelect={handleReplaySearch}
+            onDeleted={() => void recentSearchesQuery.refetch()}
+            loadingId={loadingReplayId}
           />
           <p className="text-xs text-muted-foreground text-right">
             {description.length}/{MAX_DESCRIPTION_LENGTH}
@@ -686,10 +817,11 @@ export default function Discovery() {
                   <CreatorBehindReelCard
                     key={owner.username}
                     owner={owner}
-                    onAddToLibrary={handleAddToLibrary}
-                    isPending={
-                      startScrape.isPending && pendingHandle === owner.username
+                    routedNiche={result.routedNiche || "your niche"}
+                    addState={
+                      addStateByUsername[owner.username.toLowerCase()] ?? "idle"
                     }
+                    onAddToLibrary={handleAddToLibrary}
                   />
                 ))}
               </div>
