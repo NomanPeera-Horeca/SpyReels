@@ -81,79 +81,92 @@ function DiscoverReelCard({
   onPlayChange: (playing: boolean) => void;
 }) {
   const captionPreview =
-    reel.caption.trim().length > 0 ? reel.caption.trim() : "(no caption)";
+    reel.caption.trim().length > 0 ? reel.caption.trim() : null;
   const showTierBadge = shouldShowViralTierBadge(reel);
 
   return (
-    <Card className="h-full overflow-hidden">
-      <CardContent className="p-0 flex flex-col h-full">
-        <div className="relative aspect-[9/16] max-h-[320px] w-full bg-black">
-          <DashboardReelGridMedia
-            thumbnailUrl={reel.thumbnailUrl}
-            videoUrl={reel.videoUrl}
-            className="absolute inset-0 h-full w-full"
-            size="compact"
-            playing={isPlaying}
-            onPlayingChange={onPlayChange}
-            fallbackLabel={`@${reel.owner.username}`}
-          />
-          {showTierBadge ? (
-            <div className="absolute top-2 left-2 z-10 pointer-events-none">
-              <span
-                className={cn(
-                  "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold",
-                  tierBadgeClass(reel.viralTier)
-                )}
-              >
-                {reel.viralTier}
-              </span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="p-3 flex flex-col gap-2 flex-1">
-          <div className="flex items-center gap-1 min-w-0">
-            <p className="font-semibold truncate text-sm">@{reel.owner.username}</p>
-            {reel.owner.isVerified ? (
-              <BadgeCheck
-                className="h-4 w-4 shrink-0 text-sky-400"
-                aria-label="Verified"
-              />
-            ) : null}
-          </div>
-          {reel.owner.fullName ? (
-            <p className="text-xs text-muted-foreground truncate">
-              {reel.owner.fullName}
-            </p>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            {formatNumber(reel.views)} views · {formatNumber(reel.likes)} likes ·{" "}
-            {formatNumber(reel.comments)} comments
-          </p>
-          <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line">
-            {captionPreview}
-          </p>
-          <div className="mt-auto flex flex-col gap-2 pt-1">
-            <a
-              href={reel.reelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+    <div className="group relative rounded-lg border border-border/40 bg-card transition-colors hover:border-border/70">
+      <div className="relative aspect-[9/14] overflow-hidden">
+        <DashboardReelGridMedia
+          thumbnailUrl={reel.thumbnailUrl}
+          videoUrl={reel.videoUrl}
+          className="relative h-full w-full"
+          playing={isPlaying}
+          onPlayingChange={onPlayChange}
+          fallbackLabel={`@${reel.owner.username}`}
+        />
+        {showTierBadge ? (
+          <div className="absolute left-2 top-2 z-10 pointer-events-none">
+            <span
+              className={cn(
+                "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                tierBadgeClass(reel.viralTier)
+              )}
             >
-              Open on Instagram
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            <Tooltip content="Coming next">
-              <span className="inline-block w-full">
-                <Button type="button" variant="secondary" className="w-full" disabled>
-                  Remake in my voice
-                </Button>
-              </span>
-            </Tooltip>
+              {reel.viralTier}
+            </span>
           </div>
+        ) : null}
+        <a
+          href={reel.reelUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-2 bottom-2 z-10 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
+          title="Open on Instagram"
+          aria-label="Open on Instagram"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+
+      <div className="space-y-2 p-2.5">
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="truncate text-xs font-semibold text-foreground">
+            @{reel.owner.username}
+          </p>
+          {reel.owner.isVerified ? (
+            <BadgeCheck
+              className="h-3.5 w-3.5 shrink-0 text-sky-400"
+              aria-label="Verified"
+            />
+          ) : null}
         </div>
-      </CardContent>
-    </Card>
+        {reel.owner.fullName ? (
+          <p className="truncate text-[10px] text-muted-foreground">
+            {reel.owner.fullName}
+          </p>
+        ) : null}
+        <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+          {captionPreview ?? (
+            <span className="italic text-muted-foreground">No caption</span>
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+          <span>{formatNumber(reel.views)} views</span>
+          <span aria-hidden>·</span>
+          <span>{formatNumber(reel.likes)} likes</span>
+          <span aria-hidden>·</span>
+          <span>{formatNumber(reel.comments)} comments</span>
+        </div>
+        <a
+          href={reel.reelUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+        >
+          Open on Instagram
+          <ExternalLink className="h-3 w-3" />
+        </a>
+        <Tooltip content="Coming next">
+          <span className="inline-block w-full">
+            <Button type="button" variant="secondary" size="sm" className="w-full" disabled>
+              Remake in my voice
+            </Button>
+          </span>
+        </Tooltip>
+      </div>
+    </div>
   );
 }
 
@@ -242,7 +255,7 @@ function ReelGrid({
   if (reels.length === 0) return null;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {reels.map((reel) => (
         <DiscoverReelCard
           key={reel.shortcode}

@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import { searchHashtagReels } from "../instagram";
+import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const TOP_N = 25;
@@ -399,6 +400,31 @@ async function searchHashtag(hashtag: string): Promise<HashtagSearchResult> {
   };
 }
 
+/** Upload reel thumbnails to R2 with bounded concurrency (mirrors scrape job). */
+async function mirrorReelThumbnailsBounded(
+  items: Array<{ shortcode: string; thumbnailUrl: string }>,
+  concurrency = 5
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (items.length === 0) return out;
+
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        const item = items[i]!;
+        const stable = await ensureReelThumbnailOnR2(
+          item.shortcode,
+          item.thumbnailUrl ?? ""
+        );
+        out.set(item.shortcode, stable);
+      }
+    })
+  );
+  return out;
+}
+
 /** Dedupe: keep highest-view reel per creator-and-hashtag combo. */
 function mergeReelsFromSearch(
   byCreatorHashtag: Map<string, ParsedReel>,
@@ -516,6 +542,14 @@ export async function runDiscoveryPipeline(
     `  pipeline total: ${allReels.length} after creator-hashtag dedupe, ${uniqueReels.length} unique reels, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length})`
   );
 
+  // Mirror thumbnails to R2 for the displayed reels only (max TOP_N). Deliberate cost tradeoff: we mirror at search time for UI consistency with the scrape grid; revisit to lazy-mirror-on-click if R2 writes become significant.
+  const stableThumbs = await mirrorReelThumbnailsBounded(
+    topReels.map((reel) => ({
+      shortcode: reel.shortcode,
+      thumbnailUrl: reel.thumbnailUrl,
+    }))
+  );
+
   return {
     businessDescription,
     routedNiche,
@@ -524,7 +558,7 @@ export async function runDiscoveryPipeline(
     viralReels: topReels.map((reel) => ({
       shortcode: reel.shortcode,
       reelUrl: reel.reelUrl,
-      thumbnailUrl: reel.thumbnailUrl,
+      thumbnailUrl: stableThumbs.get(reel.shortcode) ?? reel.thumbnailUrl,
       videoUrl: reel.videoUrl,
       caption: reel.caption,
       views: reel.views,
