@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   getTableColumns,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -1129,7 +1130,8 @@ export async function getSavedReelsWithDetails(
       and(
         eq(savedReels.workspaceId, workspaceId),
         isNotNull(savedReels.reelId),
-        isNotNull(savedReels.jobId)
+        isNotNull(savedReels.jobId),
+        gt(savedReels.jobId, 0)
       )
     )
     .orderBy(desc(savedReels.createdAt));
@@ -1159,6 +1161,93 @@ export async function getSavedReelsWithDetails(
       featuredReelId: null,
       reel,
       job,
+      transcription: txByReelId.get(reel.id),
+    });
+  }
+
+  return results;
+}
+
+/** Discover/collected saves: saved_reels with jobId 0, no scrape_jobs row. */
+type SavedReelDiscover = Omit<SavedReel, "reelId" | "jobId" | "featuredReelId"> & {
+  reelId: number;
+  jobId: 0;
+  featuredReelId: null;
+};
+
+export type SavedDiscoverSyntheticJob = {
+  id: 0;
+  handle: string;
+  followerCount: 0;
+  featuredAccountId: null;
+};
+
+export async function getSavedDiscoverReelsWithDetails(
+  workspaceId: string
+): Promise<
+  Array<
+    SavedReelDiscover & {
+      reel: Reel;
+      job: SavedDiscoverSyntheticJob;
+      transcription?: Transcription;
+    }
+  >
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const joined = await db
+    .select({
+      saved: savedReels,
+      reel: reels,
+    })
+    .from(savedReels)
+    .innerJoin(reels, eq(savedReels.reelId, reels.id))
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        isNotNull(savedReels.reelId),
+        eq(savedReels.jobId, 0)
+      )
+    )
+    .orderBy(desc(savedReels.createdAt));
+
+  if (joined.length === 0) return [];
+
+  const reelIds = [...new Set(joined.map((row) => row.reel.id))];
+  const txByReelId = new Map<number, Transcription>();
+  for (let i = 0; i < reelIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = reelIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const txs = await db.select().from(transcriptions).where(inArray(transcriptions.reelId, chunk));
+    for (const t of txs) {
+      if (t.reelId == null) continue;
+      const prev = txByReelId.get(t.reelId);
+      if (!prev || t.id > prev.id) txByReelId.set(t.reelId, t);
+    }
+  }
+
+  const results: Array<
+    SavedReelDiscover & {
+      reel: Reel;
+      job: SavedDiscoverSyntheticJob;
+      transcription?: Transcription;
+    }
+  > = [];
+
+  for (const { saved: s, reel } of joined) {
+    const handle = (reel.ownerUsername ?? "").replace(/^@/, "").trim() || "unknown";
+    results.push({
+      ...s,
+      reelId: s.reelId as number,
+      jobId: 0,
+      featuredReelId: null,
+      reel,
+      job: {
+        id: 0,
+        handle,
+        followerCount: 0,
+        featuredAccountId: null,
+      },
       transcription: txByReelId.get(reel.id),
     });
   }

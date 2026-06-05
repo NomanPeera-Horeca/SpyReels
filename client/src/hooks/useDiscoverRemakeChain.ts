@@ -18,7 +18,9 @@ export type DiscoverRemakeState = {
   scriptId?: number;
 };
 
-type ViralReelLike = {
+export type DiscoverSaveState = "idle" | "saved" | "error";
+
+export type ViralReelLike = {
   shortcode: string;
   reelUrl: string;
 };
@@ -59,15 +61,114 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type IngestTranscribeDeps = {
+  addByUrl: (url: string) => Promise<{ id: number; duplicate: boolean }>;
+  transcribe: (collectedReelId: number) => Promise<{
+    reelId: number;
+    status: "completed" | "processing";
+  }>;
+  fetchCollectedList: () => Promise<Array<{ id: number; status: string }>>;
+  fetchTranscribeStatus: (reelId: number) => Promise<{ status: string } | null>;
+  isCancelled: () => boolean;
+  onProgress?: (patch: Partial<DiscoverRemakeState> & { stage: RemakeStage }) => void;
+};
+
+async function pollTranscriptionComplete(
+  reelId: number,
+  deps: Pick<IngestTranscribeDeps, "fetchTranscribeStatus" | "isCancelled">
+): Promise<void> {
+  for (let attempt = 1; attempt <= TRANSCRIBE_MAX; attempt++) {
+    if (deps.isCancelled()) return;
+    const txStatus = await deps.fetchTranscribeStatus(reelId);
+    if (txStatus?.status === "completed") return;
+    if (txStatus?.status === "failed") {
+      throw new Error("Transcription failed. Try again.");
+    }
+    if (attempt < TRANSCRIBE_MAX) await sleep(POLL_MS);
+  }
+  throw new Error("Transcription timed out. Try again.");
+}
+
+/** Ingest via collected.addByUrl, then transcribe; returns DB reelId. */
+export async function runDiscoverIngestAndTranscribe(
+  reel: ViralReelLike,
+  deps: IngestTranscribeDeps
+): Promise<number> {
+  deps.onProgress?.({ stage: "ingesting", progressPercent: 5, errorMessage: undefined });
+
+  const addResult = await deps.addByUrl(reel.reelUrl);
+  if (deps.isCancelled()) throw new Error("Cancelled");
+
+  const collectedReelId = addResult.id;
+
+  let ingestReady = false;
+  for (let attempt = 1; attempt <= INGEST_MAX; attempt++) {
+    if (deps.isCancelled()) throw new Error("Cancelled");
+    deps.onProgress?.({
+      stage: "ingesting",
+      progressPercent: easedPercent("ingesting", attempt, INGEST_MAX),
+    });
+
+    const list = await deps.fetchCollectedList();
+    const row = list.find((r) => r.id === collectedReelId);
+    if (row?.status === "ready") {
+      ingestReady = true;
+      break;
+    }
+    if (row?.status === "failed") {
+      throw new Error("Reel ingest failed. Try again.");
+    }
+    if (attempt < INGEST_MAX) await sleep(POLL_MS);
+  }
+
+  if (!ingestReady) {
+    throw new Error("Reel ingest timed out. Try again.");
+  }
+
+  deps.onProgress?.({ stage: "transcribing", progressPercent: 25 });
+
+  const transcribeResult = await deps.transcribe(collectedReelId);
+  if (deps.isCancelled()) throw new Error("Cancelled");
+
+  const reelId = transcribeResult.reelId;
+  if (transcribeResult.status !== "completed") {
+    for (let attempt = 1; attempt <= TRANSCRIBE_MAX; attempt++) {
+      if (deps.isCancelled()) throw new Error("Cancelled");
+      deps.onProgress?.({
+        stage: "transcribing",
+        progressPercent: easedPercent("transcribing", attempt, TRANSCRIBE_MAX),
+        reelId,
+      });
+      const txStatus = await deps.fetchTranscribeStatus(reelId);
+      if (txStatus?.status === "completed") break;
+      if (txStatus?.status === "failed") {
+        throw new Error("Transcription failed. Try again.");
+      }
+      if (attempt === TRANSCRIBE_MAX) {
+        throw new Error("Transcription timed out. Try again.");
+      }
+      await sleep(POLL_MS);
+    }
+  }
+
+  deps.onProgress?.({ stage: "transcribing", progressPercent: 64, reelId });
+  return reelId;
+}
+
 export function useDiscoverRemakeChain() {
   const trpcUtils = trpc.useUtils();
   const addByUrlMutation = trpc.collected.addByUrl.useMutation();
   const transcribeMutation = trpc.collected.transcribe.useMutation();
   const generateMutation = trpc.recreate.generate.useMutation();
+  const toggleSaveMutation = trpc.saved.toggle.useMutation();
   const [stateByShortcode, setStateByShortcode] = useState<
     Record<string, DiscoverRemakeState>
   >({});
+  const [saveStateByShortcode, setSaveStateByShortcode] = useState<
+    Record<string, DiscoverSaveState>
+  >({});
   const runningRef = useRef<Set<string>>(new Set());
+  const saveRunningRef = useRef<Set<string>>(new Set());
   const cancelledRef = useRef<Set<string>>(new Set());
 
   const patchState = useCallback(
@@ -96,6 +197,37 @@ export function useDiscoverRemakeChain() {
     [patchState]
   );
 
+  const buildIngestDeps = useCallback(
+    (shortcode: string): IngestTranscribeDeps => ({
+      addByUrl: (url) => addByUrlMutation.mutateAsync({ url }),
+      transcribe: (collectedReelId) => transcribeMutation.mutateAsync({ collectedReelId }),
+      fetchCollectedList: () => trpcUtils.collected.list.fetch(),
+      fetchTranscribeStatus: (reelId) => trpcUtils.transcribe.status.fetch({ reelId }),
+      isCancelled: () => cancelledRef.current.has(shortcode),
+      onProgress: (patch) => patchState(shortcode, patch),
+    }),
+    [addByUrlMutation, patchState, transcribeMutation, trpcUtils]
+  );
+
+  const resolveReelIdForSave = useCallback(
+    async (reel: ViralReelLike, remakeState: DiscoverRemakeState | undefined): Promise<number> => {
+      const shortcode = reel.shortcode;
+      const deps = buildIngestDeps(shortcode);
+
+      if (remakeState?.reelId != null) {
+        const tx = await deps.fetchTranscribeStatus(remakeState.reelId);
+        if (tx?.status === "completed") return remakeState.reelId;
+        if (tx?.status === "processing") {
+          await pollTranscriptionComplete(remakeState.reelId, deps);
+          return remakeState.reelId;
+        }
+      }
+
+      return runDiscoverIngestAndTranscribe(reel, deps);
+    },
+    [buildIngestDeps]
+  );
+
   const runChain = useCallback(
     async (reel: ViralReelLike) => {
       const shortcode = reel.shortcode;
@@ -104,73 +236,9 @@ export function useDiscoverRemakeChain() {
       runningRef.current.add(shortcode);
       cancelledRef.current.delete(shortcode);
 
-      patchState(shortcode, { stage: "ingesting", progressPercent: 5, errorMessage: undefined });
-
       try {
-        const addResult = await addByUrlMutation.mutateAsync({ url: reel.reelUrl });
+        const reelId = await runDiscoverIngestAndTranscribe(reel, buildIngestDeps(shortcode));
         if (cancelledRef.current.has(shortcode)) return;
-
-        const collectedReelId = addResult.id;
-        if (addResult.duplicate) {
-          // Proceed with existing collected row.
-        }
-
-        let ingestReady = false;
-        for (let attempt = 1; attempt <= INGEST_MAX; attempt++) {
-          if (cancelledRef.current.has(shortcode)) return;
-          patchState(shortcode, {
-            stage: "ingesting",
-            progressPercent: easedPercent("ingesting", attempt, INGEST_MAX),
-          });
-
-          const list = await trpcUtils.collected.list.fetch();
-          const row = list.find((r) => r.id === collectedReelId);
-          if (row?.status === "ready") {
-            ingestReady = true;
-            break;
-          }
-          if (row?.status === "failed") {
-            throw new Error("Reel ingest failed. Try again.");
-          }
-          if (attempt < INGEST_MAX) await sleep(POLL_MS);
-        }
-
-        if (!ingestReady) {
-          throw new Error("Reel ingest timed out. Try again.");
-        }
-
-        patchState(shortcode, { stage: "transcribing", progressPercent: 25 });
-
-        const transcribeResult = await transcribeMutation.mutateAsync({
-          collectedReelId,
-        });
-        if (cancelledRef.current.has(shortcode)) return;
-
-        const reelId = transcribeResult.reelId;
-        let transcriptionDone = transcribeResult.status === "completed";
-
-        for (let attempt = 1; !transcriptionDone && attempt <= TRANSCRIBE_MAX; attempt++) {
-          if (cancelledRef.current.has(shortcode)) return;
-          patchState(shortcode, {
-            stage: "transcribing",
-            progressPercent: easedPercent("transcribing", attempt, TRANSCRIBE_MAX),
-            reelId,
-          });
-
-          const txStatus = await trpcUtils.transcribe.status.fetch({ reelId });
-          if (txStatus?.status === "completed") {
-            transcriptionDone = true;
-            break;
-          }
-          if (txStatus?.status === "failed") {
-            throw new Error("Transcription failed. Try again.");
-          }
-          if (attempt < TRANSCRIBE_MAX) await sleep(POLL_MS);
-        }
-
-        if (!transcriptionDone) {
-          throw new Error("Transcription timed out. Try again.");
-        }
 
         patchState(shortcode, { stage: "generating", progressPercent: 65, reelId });
 
@@ -223,7 +291,7 @@ export function useDiscoverRemakeChain() {
         failRemake(shortcode, message);
       }
     },
-    [addByUrlMutation, failRemake, generateMutation, patchState, transcribeMutation, trpcUtils]
+    [buildIngestDeps, failRemake, generateMutation, patchState, trpcUtils]
   );
 
   const startRemake = useCallback(
@@ -252,6 +320,45 @@ export function useDiscoverRemakeChain() {
     [runChain]
   );
 
+  const startSave = useCallback(
+    async (reel: ViralReelLike) => {
+      const shortcode = reel.shortcode;
+      if (saveStateByShortcode[shortcode] === "saved") return;
+      if (saveRunningRef.current.has(shortcode)) return;
+
+      saveRunningRef.current.add(shortcode);
+      setSaveStateByShortcode((prev) => ({ ...prev, [shortcode]: "saved" }));
+
+      try {
+        const remakeState = stateByShortcode[shortcode];
+        const reelId = await resolveReelIdForSave(reel, remakeState);
+        const existing = await trpcUtils.saved.check.fetch({ reelId });
+        if (!existing.saved) {
+          const result = await toggleSaveMutation.mutateAsync({ reelId, jobId: 0 });
+          if (!result.saved) {
+            throw new Error("Could not save reel. Try again.");
+          }
+        }
+        void trpcUtils.saved.list.invalidate();
+        setSaveStateByShortcode((prev) => ({ ...prev, [shortcode]: "saved" }));
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not save reel. Try again.";
+        setSaveStateByShortcode((prev) => ({ ...prev, [shortcode]: "error" }));
+        toast.error(message);
+      } finally {
+        saveRunningRef.current.delete(shortcode);
+      }
+    },
+    [
+      resolveReelIdForSave,
+      saveStateByShortcode,
+      stateByShortcode,
+      toggleSaveMutation,
+      trpcUtils,
+    ]
+  );
+
   const getRemakeState = useCallback(
     (shortcode: string): DiscoverRemakeState => {
       return (
@@ -262,6 +369,13 @@ export function useDiscoverRemakeChain() {
       );
     },
     [stateByShortcode]
+  );
+
+  const getSaveState = useCallback(
+    (shortcode: string): DiscoverSaveState => {
+      return saveStateByShortcode[shortcode] ?? "idle";
+    },
+    [saveStateByShortcode]
   );
 
   useEffect(() => {
@@ -275,8 +389,10 @@ export function useDiscoverRemakeChain() {
 
   return {
     getRemakeState,
+    getSaveState,
     startRemake,
     retryRemake,
+    startSave,
   };
 }
 

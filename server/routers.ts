@@ -63,6 +63,7 @@ import {
   unsaveReel,
   isReelSaved,
   getSavedReelsWithDetails,
+  getSavedDiscoverReelsWithDetails,
   createScriptTag,
   getScriptTagsByWorkspace,
   updateScriptTag,
@@ -2819,12 +2820,13 @@ Return JSON only:
     list: protectedProcedure.query(async ({ ctx }) => {
       const scraped = await getSavedReelsWithDetails(ctx.workspaceId);
       const featured = await getSavedFeaturedReelsWithDetails(ctx.workspaceId);
+      const discover = await getSavedDiscoverReelsWithDetails(ctx.workspaceId);
 
       type ListedSaved = {
         id: number;
         userId: number;
         createdAt: Date;
-        source: "scraped" | "featured";
+        source: "scraped" | "featured" | "discover";
         reelId: number | null;
         jobId: number | null;
         featuredReelId: number | null;
@@ -2928,7 +2930,43 @@ Return JSON only:
         transcription: f.transcription,
       }));
 
-      const combined = [...scrapedItems, ...featuredItems].sort(
+      const discoverItems: ListedSaved[] = discover.map((d) => ({
+        id: d.id,
+        userId: d.userId,
+        createdAt: d.createdAt,
+        source: "discover" as const,
+        reelId: d.reelId,
+        jobId: d.jobId,
+        featuredReelId: null,
+        reel: {
+          id: d.reel.id,
+          shortcode: d.reel.shortcode,
+          thumbnailUrl: d.reel.thumbnailUrl,
+          videoUrl: d.reel.videoUrl,
+          caption: d.reel.caption,
+          viewCount: d.reel.viewCount ?? 0,
+          likeCount: d.reel.likeCount ?? 0,
+          commentCount: d.reel.commentCount ?? 0,
+          duration: d.reel.duration,
+          postedAt: d.reel.postedAt,
+          reelUrl: d.reel.reelUrl,
+          ownerUsername: d.reel.ownerUsername,
+          contentType: d.reel.contentType ?? null,
+          remakeabilityScore: d.reel.remakeabilityScore ?? null,
+          suggestedAction: d.reel.suggestedAction ?? null,
+          classificationReason: d.reel.classificationReason ?? null,
+          classifiedAt: d.reel.classifiedAt ?? null,
+        },
+        job: {
+          id: d.job.id,
+          handle: d.job.handle,
+          followerCount: d.job.followerCount,
+          featuredAccountId: d.job.featuredAccountId,
+        },
+        transcription: d.transcription,
+      }));
+
+      const combined = [...scrapedItems, ...featuredItems, ...discoverItems].sort(
         (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
       );
       return combined;

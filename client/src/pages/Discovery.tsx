@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import {
   BadgeCheck,
+  Bookmark,
+  BookmarkCheck,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -27,6 +29,7 @@ import { formatRelativeActive } from "@/lib/formatActivity";
 import { cn } from "@/lib/utils";
 import {
   type DiscoverRemakeState,
+  type DiscoverSaveState,
   remakeButtonLabel,
   useDiscoverRemakeChain,
 } from "@/hooks/useDiscoverRemakeChain";
@@ -91,6 +94,38 @@ function perViewEngagementPercent(reel: ViralReel): number | null {
   const pct = Number(rate) * 100;
   if (!Number.isFinite(pct) || pct <= 0) return null;
   return pct;
+}
+
+function DiscoverSaveButton({
+  saveState,
+  onSave,
+}: {
+  saveState: DiscoverSaveState;
+  onSave: () => void;
+}) {
+  const isSaved = saveState === "saved";
+  return (
+    <Button
+      type="button"
+      variant={isSaved ? "secondary" : "outline"}
+      size="sm"
+      className="w-full"
+      disabled={isSaved}
+      onClick={onSave}
+    >
+      {isSaved ? (
+        <>
+          <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
+          Saved
+        </>
+      ) : (
+        <>
+          <Bookmark className="mr-1.5 h-3.5 w-3.5" />
+          Save
+        </>
+      )}
+    </Button>
+  );
 }
 
 function DiscoverRemakeButton({
@@ -166,18 +201,22 @@ function DiscoverReelCard({
   isPlaying,
   onPlayChange,
   remakeState,
+  saveState,
   onRemakeStart,
   onRemakeOpenScript,
   onRemakeRetry,
+  onSave,
 }: {
   reel: ViralReel;
   rank: number;
   isPlaying: boolean;
   onPlayChange: (playing: boolean) => void;
   remakeState: DiscoverRemakeState;
+  saveState: DiscoverSaveState;
   onRemakeStart: () => void;
   onRemakeOpenScript: () => void;
   onRemakeRetry: () => void;
+  onSave: () => void;
 }) {
   const captionPreview =
     reel.caption.trim().length > 0 ? reel.caption.trim() : null;
@@ -264,12 +303,15 @@ function DiscoverReelCard({
           Open on Instagram
           <ExternalLink className="h-3 w-3" />
         </a>
-        <DiscoverRemakeButton
-          remakeState={remakeState}
-          onStart={onRemakeStart}
-          onOpenScript={onRemakeOpenScript}
-          onRetry={onRemakeRetry}
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <DiscoverSaveButton saveState={saveState} onSave={onSave} />
+          <DiscoverRemakeButton
+            remakeState={remakeState}
+            onStart={onRemakeStart}
+            onOpenScript={onRemakeOpenScript}
+            onRetry={onRemakeRetry}
+          />
+        </div>
       </div>
     </div>
   );
@@ -374,18 +416,22 @@ function ReelGrid({
   playingShortcode,
   onPlayShortcodeChange,
   getRemakeState,
+  getSaveState,
   onRemakeStart,
   onRemakeOpenScript,
   onRemakeRetry,
+  onSave,
 }: {
   reels: ViralReel[];
   rankForReel: (reel: ViralReel) => number;
   playingShortcode: string | null;
   onPlayShortcodeChange: (shortcode: string | null) => void;
   getRemakeState: (shortcode: string) => DiscoverRemakeState;
+  getSaveState: (shortcode: string) => DiscoverSaveState;
   onRemakeStart: (reel: ViralReel) => void;
   onRemakeOpenScript: (reel: ViralReel) => void;
   onRemakeRetry: (reel: ViralReel) => void;
+  onSave: (reel: ViralReel) => void;
 }) {
   if (reels.length === 0) return null;
 
@@ -401,9 +447,11 @@ function ReelGrid({
             onPlayShortcodeChange(playing ? reel.shortcode : null)
           }
           remakeState={getRemakeState(reel.shortcode)}
+          saveState={getSaveState(reel.shortcode)}
           onRemakeStart={() => onRemakeStart(reel)}
           onRemakeOpenScript={() => onRemakeOpenScript(reel)}
           onRemakeRetry={() => onRemakeRetry(reel)}
+          onSave={() => onSave(reel)}
         />
       ))}
     </div>
@@ -627,7 +675,8 @@ export default function Discovery() {
     openScriptId?: number;
   } | null>(null);
 
-  const { getRemakeState, startRemake, retryRemake } = useDiscoverRemakeChain();
+  const { getRemakeState, getSaveState, startRemake, retryRemake, startSave } =
+    useDiscoverRemakeChain();
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
 
@@ -1034,9 +1083,11 @@ export default function Discovery() {
                     playingShortcode={playingShortcode}
                     onPlayShortcodeChange={setPlayingShortcode}
                     getRemakeState={getRemakeState}
+                    getSaveState={getSaveState}
                     onRemakeStart={startRemake}
                     onRemakeOpenScript={handleRemakeOpenScript}
                     onRemakeRetry={retryRemake}
+                    onSave={startSave}
                   />
                 ) : null}
 
@@ -1056,9 +1107,11 @@ export default function Discovery() {
                       playingShortcode={playingShortcode}
                       onPlayShortcodeChange={setPlayingShortcode}
                       getRemakeState={getRemakeState}
+                      getSaveState={getSaveState}
                       onRemakeStart={startRemake}
                       onRemakeOpenScript={handleRemakeOpenScript}
                       onRemakeRetry={retryRemake}
+                      onSave={startSave}
                     />
                   </div>
                 ) : null}

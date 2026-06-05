@@ -72,9 +72,14 @@ function transcriptionIsNoSpeech(
 }
 
 function engagementPercent(item: SavedItem): number {
+  if (item.source === "discover") return 0;
   const fc = item.job.followerCount;
   if (!fc) return 0;
   return ((item.reel.likeCount || 0) + (item.reel.commentCount || 0)) / fc * 100;
+}
+
+function isUserJobSavedItem(item: SavedItem): boolean {
+  return (item.source === "scraped" || item.source === "discover") && item.reelId != null;
 }
 
 /** Avoid id collisions between featured_reels.id and reels.id in mixed saved lists. */
@@ -204,7 +209,11 @@ export default function SavedReels() {
 
   const scrapedReelIds = useMemo(
     () =>
-      [...new Set(savedReels.filter((i) => i.source === "scraped" && i.reelId != null).map((i) => i.reelId!))],
+      [
+        ...new Set(
+          savedReels.filter((i) => isUserJobSavedItem(i)).map((i) => i.reelId!)
+        ),
+      ],
     [savedReels]
   );
   const featuredReelIds = useMemo(
@@ -484,13 +493,15 @@ export default function SavedReels() {
   const reelActionSource = (item: SavedItem): ReelActionSource =>
     item.source === "featured" && item.featuredReelId != null
       ? { source: "featured", featuredReelId: item.featuredReelId }
-      : { source: "user_job", reelId: item.reelId!, jobId: item.jobId! };
+      : { source: "user_job", reelId: item.reelId!, jobId: item.jobId ?? 0 };
 
   const onToggleSave = (item: SavedItem) => {
     if (item.source === "featured" && item.featuredReelId != null) {
       toggleSave.mutate({ featuredReelId: item.featuredReelId });
     } else if (item.reelId != null && item.jobId != null) {
       toggleSave.mutate({ reelId: item.reelId, jobId: item.jobId });
+    } else if (item.source === "discover" && item.reelId != null) {
+      toggleSave.mutate({ reelId: item.reelId, jobId: 0 });
     }
   };
 
@@ -601,29 +612,40 @@ export default function SavedReels() {
         Object.entries(groupedByHandle).map(([groupKey, items]) => {
           const handle = groupKey.split(":").slice(1).join(":");
           const headerHref =
-            items[0].source === "featured" && items[0].job.featuredAccountId != null
-              ? `/dashboard?featuredAccountId=${items[0].job.featuredAccountId}`
-              : items[0].jobId != null
-                ? `/dashboard?jobId=${items[0].jobId}`
-                : null;
+            items[0].source === "discover"
+              ? null
+              : items[0].source === "featured" && items[0].job.featuredAccountId != null
+                ? `/dashboard?featuredAccountId=${items[0].job.featuredAccountId}`
+                : items[0].jobId != null && items[0].jobId > 0
+                  ? `/dashboard?jobId=${items[0].jobId}`
+                  : null;
 
           return (
             <div key={groupKey} className="mb-8">
               <div className="mb-3 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => headerHref && setLocation(headerHref)}
-                  disabled={!headerHref}
-                  className="text-lg font-semibold text-foreground transition-colors hover:text-primary disabled:opacity-60"
-                >
-                  @{handle}
-                </button>
+                {items[0].source === "discover" ? (
+                  <span className="text-lg font-semibold text-foreground">@{handle}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => headerHref && setLocation(headerHref)}
+                    disabled={!headerHref}
+                    className="text-lg font-semibold text-foreground transition-colors hover:text-primary disabled:opacity-60"
+                  >
+                    @{handle}
+                  </button>
+                )}
                 <Badge variant="outline" className="text-xs">
                   {items.length} saved
                 </Badge>
                 {items[0].source === "featured" && (
                   <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
                     Featured
+                  </Badge>
+                )}
+                {items[0].source === "discover" && (
+                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                    Discover
                   </Badge>
                 )}
                 {items[0].job.followerCount ? (
@@ -648,7 +670,7 @@ export default function SavedReels() {
                       item.transcription?.status === "failed" && !(pKey && pendingTranscriptions.has(pKey));
                     const isTxQueued =
                       isProcessing &&
-                      item.source === "scraped" &&
+                      (item.source === "scraped" || item.source === "discover") &&
                       (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
                     const transcribeAtCap = transcribeInFlightRef.current >= 5;
                     const recreateSt = reelRecreateState(
@@ -815,7 +837,7 @@ export default function SavedReels() {
                             }
                           />
                         )}
-                        {isExpanded && item.source === "scraped" && item.reelId != null && (
+                        {isExpanded && isUserJobSavedItem(item) && item.reelId != null && (
                           <InlineWorkflow
                             reelSource="user_job"
                             reelId={item.reelId}
@@ -861,7 +883,7 @@ export default function SavedReels() {
                       item.transcription?.status === "failed" && !(pKey && pendingTranscriptions.has(pKey));
                     const isTxQueued =
                       isProcessing &&
-                      item.source === "scraped" &&
+                      (item.source === "scraped" || item.source === "discover") &&
                       (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
                     const transcribeAtCap = transcribeInFlightRef.current >= 5;
                     const recreateSt = reelRecreateState(
@@ -1040,7 +1062,7 @@ export default function SavedReels() {
                 item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
               const isTxQueued =
                 isProcessing &&
-                item.source === "scraped" &&
+                (item.source === "scraped" || item.source === "discover") &&
                 (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
 
               return item.source === "featured" && item.featuredReelId != null ? (
