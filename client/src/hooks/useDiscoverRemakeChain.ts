@@ -68,20 +68,35 @@ type IngestTranscribeDeps = {
     status: "completed" | "processing";
   }>;
   fetchCollectedList: () => Promise<Array<{ id: number; status: string }>>;
-  fetchTranscribeStatus: (reelId: number) => Promise<{ status: string } | null>;
+  fetchTranscribeStatus: (
+    reelId: number
+  ) => Promise<{ status: string; transcript?: string | null } | null>;
   isCancelled: () => boolean;
   onProgress?: (patch: Partial<DiscoverRemakeState> & { stage: RemakeStage }) => void;
 };
 
-async function pollTranscriptionComplete(
+function isTranscriptionReadyForRecreate(
+  tx: { status: string; transcript?: string | null } | null | undefined
+): boolean {
+  return tx?.status === "completed" && Boolean(String(tx.transcript ?? "").trim());
+}
+
+async function waitForTranscriptionReady(
   reelId: number,
-  deps: Pick<IngestTranscribeDeps, "fetchTranscribeStatus" | "isCancelled">
+  deps: Pick<IngestTranscribeDeps, "fetchTranscribeStatus" | "isCancelled">,
+  onProgress?: (attempt: number) => void
 ): Promise<void> {
   for (let attempt = 1; attempt <= TRANSCRIBE_MAX; attempt++) {
     if (deps.isCancelled()) return;
-    const txStatus = await deps.fetchTranscribeStatus(reelId);
-    if (txStatus?.status === "completed") return;
-    if (txStatus?.status === "failed") {
+    onProgress?.(attempt);
+    const tx = await deps.fetchTranscribeStatus(reelId);
+    if (isTranscriptionReadyForRecreate(tx)) return;
+    if (tx?.status === "completed" && !String(tx.transcript ?? "").trim()) {
+      throw new Error(
+        "No voice detected on this reel. Pick one with narration to remake."
+      );
+    }
+    if (tx?.status === "failed") {
       throw new Error("Transcription failed. Try again.");
     }
     if (attempt < TRANSCRIBE_MAX) await sleep(POLL_MS);
@@ -131,25 +146,13 @@ export async function runDiscoverIngestAndTranscribe(
   if (deps.isCancelled()) throw new Error("Cancelled");
 
   const reelId = transcribeResult.reelId;
-  if (transcribeResult.status !== "completed") {
-    for (let attempt = 1; attempt <= TRANSCRIBE_MAX; attempt++) {
-      if (deps.isCancelled()) throw new Error("Cancelled");
-      deps.onProgress?.({
-        stage: "transcribing",
-        progressPercent: easedPercent("transcribing", attempt, TRANSCRIBE_MAX),
-        reelId,
-      });
-      const txStatus = await deps.fetchTranscribeStatus(reelId);
-      if (txStatus?.status === "completed") break;
-      if (txStatus?.status === "failed") {
-        throw new Error("Transcription failed. Try again.");
-      }
-      if (attempt === TRANSCRIBE_MAX) {
-        throw new Error("Transcription timed out. Try again.");
-      }
-      await sleep(POLL_MS);
-    }
-  }
+  await waitForTranscriptionReady(reelId, deps, (attempt) => {
+    deps.onProgress?.({
+      stage: "transcribing",
+      progressPercent: easedPercent("transcribing", attempt, TRANSCRIBE_MAX),
+      reelId,
+    });
+  });
 
   deps.onProgress?.({ stage: "transcribing", progressPercent: 64, reelId });
   return reelId;
@@ -216,9 +219,9 @@ export function useDiscoverRemakeChain() {
 
       if (remakeState?.reelId != null) {
         const tx = await deps.fetchTranscribeStatus(remakeState.reelId);
-        if (tx?.status === "completed") return remakeState.reelId;
+        if (isTranscriptionReadyForRecreate(tx)) return remakeState.reelId;
         if (tx?.status === "processing") {
-          await pollTranscriptionComplete(remakeState.reelId, deps);
+          await waitForTranscriptionReady(remakeState.reelId, deps);
           return remakeState.reelId;
         }
       }
