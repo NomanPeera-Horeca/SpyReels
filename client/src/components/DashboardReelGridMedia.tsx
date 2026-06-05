@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Film, Play, X } from "lucide-react";
+import { Play, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Size = "default" | "compact";
@@ -10,20 +10,44 @@ export function DashboardReelGridMedia({
   videoUrl,
   className,
   size = "default",
+  playing: playingControlled,
+  onPlayingChange,
+  fallbackLabel,
 }: {
   thumbnailUrl: string | null | undefined;
   videoUrl: string | null | undefined;
   className?: string;
   /** Smaller play/close controls for narrow list rows. */
   size?: Size;
+  /** When set, parent controls play state (for one-at-a-time grids). */
+  playing?: boolean;
+  onPlayingChange?: (playing: boolean) => void;
+  /** Shown on placeholder when thumbnail is missing or failed to load. */
+  fallbackLabel?: string;
 }) {
-  const [playing, setPlaying] = useState(false);
+  const [playingLocal, setPlayingLocal] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isCompact = size === "compact";
+  const isControlled = playingControlled !== undefined;
+  const playing = isControlled ? playingControlled : playingLocal;
+
+  const setPlaying = (next: boolean) => {
+    if (isControlled) {
+      onPlayingChange?.(next);
+    } else {
+      setPlayingLocal(next);
+    }
+  };
 
   const src = (videoUrl ?? "").trim();
   const hasVideo = src.length > 0;
   const thumb = (thumbnailUrl ?? "").trim();
+  const showThumb = thumb.length > 0 && !thumbFailed;
+
+  useEffect(() => {
+    setThumbFailed(false);
+  }, [thumb]);
 
   useEffect(() => {
     if (!playing) return;
@@ -43,6 +67,7 @@ export function DashboardReelGridMedia({
             poster={thumb || undefined}
             controls
             playsInline
+            autoPlay
             preload="metadata"
             className="h-full w-full object-cover"
           />
@@ -61,16 +86,27 @@ export function DashboardReelGridMedia({
         </div>
       ) : (
         <>
-          {thumb ? (
+          {showThumb ? (
             <img
               src={thumb}
               alt=""
               className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
               loading="lazy"
+              onError={() => setThumbFailed(true)}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-muted/40">
-              <Film className={cn("text-muted-foreground/60", isCompact ? "h-4 w-4" : "h-5 w-5")} />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900 text-zinc-400">
+              <Play
+                className={cn(
+                  "fill-current text-zinc-500",
+                  isCompact ? "h-6 w-6" : "h-8 w-8"
+                )}
+              />
+              {fallbackLabel ? (
+                <span className="max-w-[90%] truncate px-2 text-xs font-medium text-zinc-400">
+                  {fallbackLabel}
+                </span>
+              ) : null}
             </div>
           )}
           {hasVideo ? (

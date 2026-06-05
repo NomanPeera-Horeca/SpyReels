@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import {
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   ExternalLink,
   Lightbulb,
@@ -28,6 +30,7 @@ type ViralTier = ViralReel["viralTier"];
 
 const MAX_DESCRIPTION_LENGTH = 500;
 const MIN_DESCRIPTION_LENGTH = 20;
+const REELS_PER_PAGE = 9;
 
 const DISCOVERY_SEARCH_TIPS: readonly string[] = [
   "We map your description to a niche, then search real Instagram hashtags for recent Reels.",
@@ -63,9 +66,23 @@ function tierBadgeClass(tier: ViralTier): string {
   }
 }
 
-function DiscoverReelCard({ reel }: { reel: ViralReel }) {
+function shouldShowViralTierBadge(reel: ViralReel): boolean {
+  if (reel.tier === 1) return true;
+  return reel.viralTier === "Healthy" || reel.viralTier === "Strong";
+}
+
+function DiscoverReelCard({
+  reel,
+  isPlaying,
+  onPlayChange,
+}: {
+  reel: ViralReel;
+  isPlaying: boolean;
+  onPlayChange: (playing: boolean) => void;
+}) {
   const captionPreview =
     reel.caption.trim().length > 0 ? reel.caption.trim() : "(no caption)";
+  const showTierBadge = shouldShowViralTierBadge(reel);
 
   return (
     <Card className="h-full overflow-hidden">
@@ -76,17 +93,22 @@ function DiscoverReelCard({ reel }: { reel: ViralReel }) {
             videoUrl={reel.videoUrl}
             className="absolute inset-0 h-full w-full"
             size="compact"
+            playing={isPlaying}
+            onPlayingChange={onPlayChange}
+            fallbackLabel={`@${reel.owner.username}`}
           />
-          <div className="absolute top-2 left-2 z-10">
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold",
-                tierBadgeClass(reel.viralTier)
-              )}
-            >
-              {reel.viralTier}
-            </span>
-          </div>
+          {showTierBadge ? (
+            <div className="absolute top-2 left-2 z-10 pointer-events-none">
+              <span
+                className={cn(
+                  "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold",
+                  tierBadgeClass(reel.viralTier)
+                )}
+              >
+                {reel.viralTier}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className="p-3 flex flex-col gap-2 flex-1">
@@ -208,6 +230,73 @@ function CreatorBehindReelCard({
   );
 }
 
+function ReelGrid({
+  reels,
+  playingShortcode,
+  onPlayShortcodeChange,
+}: {
+  reels: ViralReel[];
+  playingShortcode: string | null;
+  onPlayShortcodeChange: (shortcode: string | null) => void;
+}) {
+  if (reels.length === 0) return null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {reels.map((reel) => (
+        <DiscoverReelCard
+          key={reel.shortcode}
+          reel={reel}
+          isPlaying={playingShortcode === reel.shortcode}
+          onPlayChange={(playing) =>
+            onPlayShortcodeChange(playing ? reel.shortcode : null)
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReelPagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-center gap-3 pt-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={page <= 1}
+        onClick={() => onPageChange(page - 1)}
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+        Previous
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {page} of {totalPages}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={page >= totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
+        Next
+        <ChevronRight className="h-4 w-4 ml-1" />
+      </Button>
+    </div>
+  );
+}
+
 function DiscoverySearchLoading() {
   const tips = useMemo(() => shuffle(DISCOVERY_SEARCH_TIPS), []);
   const [tipIndex, setTipIndex] = useState(0);
@@ -266,10 +355,14 @@ export default function Discovery() {
   const [description, setDescription] = useState("");
   const [result, setResult] = useState<DiscoverySearchResult | null>(null);
   const [pendingHandle, setPendingHandle] = useState<string | null>(null);
+  const [reelPage, setReelPage] = useState(1);
+  const [playingShortcode, setPlayingShortcode] = useState<string | null>(null);
 
   const searchMutation = trpc.discovery.search.useMutation({
     onSuccess: (data) => {
       setResult(data);
+      setReelPage(1);
+      setPlayingShortcode(null);
     },
     onError: (err) => {
       toast.error(err.message);
@@ -299,14 +392,44 @@ export default function Discovery() {
   const submitEnabled =
     trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching;
 
+  const tier1Reels = useMemo(
+    () => (result ? result.viralReels.filter((r) => r.tier === 1) : []),
+    [result]
+  );
+  const tier2Reels = useMemo(
+    () => (result ? result.viralReels.filter((r) => r.tier === 2) : []),
+    [result]
+  );
+  const orderedReels = useMemo(
+    () => [...tier1Reels, ...tier2Reels],
+    [tier1Reels, tier2Reels]
+  );
+
   const uniqueCreators = useMemo(
     () => (result ? deriveUniqueCreators(result.viralReels) : []),
     [result]
   );
 
+  const totalPages = Math.ceil(orderedReels.length / REELS_PER_PAGE);
+  const paginatedReels = useMemo(() => {
+    const start = (reelPage - 1) * REELS_PER_PAGE;
+    return orderedReels.slice(start, start + REELS_PER_PAGE);
+  }, [orderedReels, reelPage]);
+
+  const paginatedTier1 = useMemo(
+    () => paginatedReels.filter((r) => r.tier === 1),
+    [paginatedReels]
+  );
+  const paginatedTier2 = useMemo(
+    () => paginatedReels.filter((r) => r.tier === 2),
+    [paginatedReels]
+  );
+
   const handleSubmit = () => {
     if (!submitEnabled) return;
     setResult(null);
+    setReelPage(1);
+    setPlayingShortcode(null);
     searchMutation.mutate({ businessDescription: trimmed });
   };
 
@@ -317,11 +440,16 @@ export default function Discovery() {
     startScrape.mutate({ handle, timeframeDays: 90 });
   };
 
+  const handlePageChange = (page: number) => {
+    setReelPage(page);
+    setPlayingShortcode(null);
+  };
+
   const showResults = result != null && !isSearching;
   const reelCount = result?.viralReels.length ?? 0;
 
   return (
-    <div className="container max-w-5xl py-8 space-y-8">
+    <div className="container max-w-6xl py-8 space-y-8">
       <div className="space-y-2">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 rounded-lg bg-gradient-to-br from-sky-500/20 to-indigo-500/20">
@@ -371,50 +499,76 @@ export default function Discovery() {
       {isSearching ? <DiscoverySearchLoading /> : null}
 
       {showResults ? (
-        <div className="space-y-8">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold">
-              Viral reels in {result.routedNiche || "your niche"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {reelCount} reel{reelCount === 1 ? "" : "s"} found
-            </p>
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
+          <div className="min-w-0 flex-1 lg:w-[70%] space-y-6">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">
+                Viral reels in {result.routedNiche || "your niche"}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {reelCount} reel{reelCount === 1 ? "" : "s"} found
+                {tier1Reels.length > 0 && tier2Reels.length > 0
+                  ? ` (${tier1Reels.length} viral, ${tier2Reels.length} more)`
+                  : ""}
+              </p>
+            </div>
+
+            {reelCount === 0 ? (
+              <Card>
+                <CardContent className="p-6 space-y-3 text-center">
+                  <p className="text-sm text-foreground/90">
+                    No reels passed our viral filters this time. Try a more specific
+                    description or a slightly different angle on your audience.
+                  </p>
+                  {result.hashtagFailures.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Some hashtags returned no results:{" "}
+                      {result.hashtagFailures.map((h) => `#${h}`).join(", ")}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {paginatedTier1.length > 0 ? (
+                  <ReelGrid
+                    reels={paginatedTier1}
+                    playingShortcode={playingShortcode}
+                    onPlayShortcodeChange={setPlayingShortcode}
+                  />
+                ) : null}
+
+                {paginatedTier2.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3
+                      className={cn(
+                        "text-base font-semibold",
+                        paginatedTier1.length > 0 && "pt-2 border-t border-border/60"
+                      )}
+                    >
+                      More in this niche
+                    </h3>
+                    <ReelGrid
+                      reels={paginatedTier2}
+                      playingShortcode={playingShortcode}
+                      onPlayShortcodeChange={setPlayingShortcode}
+                    />
+                  </div>
+                ) : null}
+
+                <ReelPagination
+                  page={reelPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </>
+            )}
           </div>
 
-          {reelCount === 0 ? (
-            <Card>
-              <CardContent className="p-6 space-y-3 text-center">
-                <p className="text-sm text-foreground/90">
-                  No reels passed our viral filters this time. Try a more specific
-                  description or a slightly different angle on your audience.
-                </p>
-                {result.hashtagFailures.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Some hashtags returned no results:{" "}
-                    {result.hashtagFailures.map((h) => `#${h}`).join(", ")}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
-            <div
-              className={cn(
-                "grid gap-4",
-                reelCount <= 3
-                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-                  : "sm:grid-cols-2 lg:grid-cols-3"
-              )}
-            >
-              {result.viralReels.map((reel) => (
-                <DiscoverReelCard key={reel.shortcode} reel={reel} />
-              ))}
-            </div>
-          )}
-
           {uniqueCreators.length > 0 ? (
-            <div className="space-y-3">
+            <aside className="w-full lg:w-[30%] lg:sticky lg:top-6 lg:self-start space-y-3">
               <h3 className="text-base font-semibold">Creators behind these reels</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
                 {uniqueCreators.map((owner) => (
                   <CreatorBehindReelCard
                     key={owner.username}
@@ -426,7 +580,7 @@ export default function Discovery() {
                   />
                 ))}
               </div>
-            </div>
+            </aside>
           ) : null}
         </div>
       ) : null}

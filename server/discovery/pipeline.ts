@@ -8,11 +8,13 @@ import { routeNiche } from "../ai/prompts/niche-routing";
 import { searchHashtagReels } from "../instagram";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
-const TOP_N = 10;
+const TOP_N = 25;
 const DEFAULT_USD_PER_CREDIT = 0.002;
 const MIN_VIEWS = 5_000;
 const MIN_REACH_MULTIPLIER = 3;
 const MIN_VIRAL_SCORE = 1;
+const TIER2_MIN_VIEWS = 1_000;
+const TIER2_MIN_REACH_MULTIPLIER = 1.5;
 
 /** Same prompt as scripts/test-scrapecreators-discovery.ts */
 const HASHTAG_EXPANSION_PROMPT = `You generate Instagram-native hashtags for creator discovery on SpyReels.
@@ -70,6 +72,7 @@ export interface DiscoveryResult {
     viralTier: ViralTier;
     reachMultiplier: number;
     engagementRate: number;
+    tier: 1 | 2;
     owner: {
       username: string;
       fullName: string;
@@ -119,6 +122,7 @@ interface ScoredReel extends ParsedReel {
   reachMultiplier: number;
   engagementRate: number;
   reelUrl: string;
+  tier: 1 | 2;
 }
 
 function stripCodeFences(text: string): string {
@@ -300,22 +304,38 @@ function passesPrivacyAndFollowers(reel: ParsedReel): boolean {
   return !reel.owner.isPrivate && reel.owner.followers > 0;
 }
 
-function passesReachFilter(reel: ParsedReel): boolean {
-  return reel.views / reel.owner.followers >= MIN_REACH_MULTIPLIER;
+function passesTier1Thresholds(reel: ParsedReel): boolean {
+  const reach = reel.views / reel.owner.followers;
+  return (
+    reach >= MIN_REACH_MULTIPLIER &&
+    reel.views >= MIN_VIEWS &&
+    computeViralScore(reel) >= MIN_VIRAL_SCORE
+  );
+}
+
+function passesTier2Thresholds(reel: ParsedReel): boolean {
+  const reach = reel.views / reel.owner.followers;
+  return reach >= TIER2_MIN_REACH_MULTIPLIER && reel.views >= TIER2_MIN_VIEWS;
+}
+
+function classifyTier(reel: ParsedReel): 1 | 2 | null {
+  if (!passesPrivacyAndFollowers(reel)) return null;
+  if (passesTier1Thresholds(reel)) return 1;
+  if (passesTier2Thresholds(reel)) return 2;
+  return null;
 }
 
 function scoreReel(reel: ParsedReel): ScoredReel | null {
-  if (!passesPrivacyAndFollowers(reel)) return null;
-  if (!passesReachFilter(reel)) return null;
-  if (reel.views < MIN_VIEWS) return null;
+  const tier = classifyTier(reel);
+  if (tier === null) return null;
 
   const reachMultiplier = reel.views / reel.owner.followers;
   const engagementRate = (reel.likes + reel.comments) / reel.views;
   const viralScore = reachMultiplier * engagementRate * 100;
-  if (viralScore < MIN_VIRAL_SCORE) return null;
 
   return {
     ...reel,
+    tier,
     reachMultiplier,
     engagementRate,
     viralScore,
@@ -328,16 +348,20 @@ function logFilterBreakdown(totalRaw: number, allReels: ParsedReel[]): void {
   const afterDedupe = allReels.length;
   const privacyPass = allReels.filter(passesPrivacyAndFollowers);
   const afterPrivacyFilter = privacyPass.length;
-  const reachPass = privacyPass.filter(passesReachFilter);
+  const reachPass = privacyPass.filter(
+    (reel) => reel.views / reel.owner.followers >= MIN_REACH_MULTIPLIER
+  );
   const afterReachFilter = reachPass.length;
   const viewPass = reachPass.filter((reel) => reel.views >= MIN_VIEWS);
   const afterViewFilter = viewPass.length;
   const afterScoreFilter = viewPass.filter(
     (reel) => computeViralScore(reel) >= MIN_VIRAL_SCORE
   ).length;
+  const tier1Count = privacyPass.filter((reel) => classifyTier(reel) === 1).length;
+  const tier2Count = privacyPass.filter((reel) => classifyTier(reel) === 2).length;
 
   console.log(
-    `  pipeline filter breakdown: ${totalRaw} total, ${afterDedupe} after dedupe, ${afterPrivacyFilter} after privacy/follower filter, ${afterReachFilter} after reach>=3, ${afterViewFilter} after views>=5000, ${afterScoreFilter} after viralScore>=1`
+    `  pipeline filter breakdown: ${totalRaw} total, ${afterDedupe} after dedupe, ${afterPrivacyFilter} after privacy/follower filter, ${afterReachFilter} after reach>=3, ${afterViewFilter} after views>=5000, ${afterScoreFilter} after viralScore>=1, tier1=${tier1Count} tier2=${tier2Count}`
   );
 }
 
@@ -480,12 +504,16 @@ export async function runDiscoveryPipeline(
 
   logFilterBreakdown(totalRaw, allReels);
 
-  const topReels = scored
-    .sort((a, b) => b.viralScore - a.viralScore)
-    .slice(0, TOP_N);
+  const tier1Reels = scored
+    .filter((reel) => reel.tier === 1)
+    .sort((a, b) => b.viralScore - a.viralScore);
+  const tier2Reels = scored
+    .filter((reel) => reel.tier === 2)
+    .sort((a, b) => b.viralScore - a.viralScore);
+  const topReels = [...tier1Reels, ...tier2Reels].slice(0, TOP_N);
 
   console.log(
-    `  pipeline total: ${allReels.length} after creator-hashtag dedupe, ${uniqueReels.length} unique reels, ${topReels.length} selected`
+    `  pipeline total: ${allReels.length} after creator-hashtag dedupe, ${uniqueReels.length} unique reels, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length})`
   );
 
   return {
@@ -506,6 +534,7 @@ export async function runDiscoveryPipeline(
       viralTier: reel.viralTier,
       reachMultiplier: reel.reachMultiplier,
       engagementRate: reel.engagementRate,
+      tier: reel.tier,
       owner: {
         username: reel.owner.username,
         fullName: reel.owner.fullName,
