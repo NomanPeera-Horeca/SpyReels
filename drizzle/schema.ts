@@ -1374,23 +1374,28 @@ export const hookGeneratorLeads = mysqlTable("hook_generator_leads", {
   createdIdx: index("idx_hook_leads_created").on(table.createdAt),
 }));
 
-export const discoverySearches = mysqlTable("discovery_searches", {
-  id: int("id").primaryKey().autoincrement(),
-  userId: int("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  descriptionText: varchar("descriptionText", { length: 500 }).notNull(),
-  routedNiche: varchar("routedNiche", { length: 255 }),
-  routingConfidence: decimal("routingConfidence", { precision: 3, scale: 2 }),
-  clarified: boolean("clarified").default(false).notNull(),
-  resultCount: int("resultCount"),
-  apifyCostUsd: decimal("apifyCostUsd", { precision: 6, scale: 2 }),
-  claudeCostUsd: decimal("claudeCostUsd", { precision: 6, scale: 2 }),
-  succeeded: boolean("succeeded").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  userMonthIdx: index("idx_discovery_user_month").on(table.userId, table.createdAt),
-}));
+import type { DiscoveryResult as DiscoveryPipelineResult } from "../server/discovery/pipeline";
+
+export const discoverySearches = mysqlTable(
+  "discovery_searches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessDescription: varchar("businessDescription", { length: 1000 }).notNull(),
+    routedNiche: varchar("routedNiche", { length: 128 }),
+    reelCount: int("reelCount").default(0).notNull(),
+    resultJson: json("resultJson").$type<DiscoveryPipelineResult>().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_discovery_searches_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
 
 export type DiscoverySearch = typeof discoverySearches.$inferSelect;
 export type InsertDiscoverySearch = typeof discoverySearches.$inferInsert;

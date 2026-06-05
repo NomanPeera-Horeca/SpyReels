@@ -21,10 +21,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import Tooltip from "@/components/Tooltip";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { LOADING_TIPS } from "@/data/loadingTips";
+import { formatRelativeActive } from "@/lib/formatActivity";
 import { cn } from "@/lib/utils";
 
 type DiscoverySearchResult =
   inferRouterOutputs<AppRouter>["discovery"]["search"];
+type RecentDiscoverySearch =
+  inferRouterOutputs<AppRouter>["discovery"]["recentSearches"][number];
 type ViralReel = DiscoverySearchResult["viralReels"][number];
 type ViralTier = ViralReel["viralTier"];
 
@@ -310,6 +313,63 @@ function ReelPagination({
   );
 }
 
+function truncateText(text: string, maxLen: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1)}…`;
+}
+
+function searchedAgo(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const relative = formatRelativeActive(d);
+  if (relative === "just now") return "searched just now";
+  return `searched ${relative}`;
+}
+
+function RecentSearchesList({
+  items,
+  onSelect,
+  loadingId,
+}: {
+  items: RecentDiscoverySearch[];
+  onSelect: (item: RecentDiscoverySearch) => void;
+  loadingId: number | null;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold text-foreground">Recent searches</h2>
+      <div className="flex flex-col gap-1.5">
+        {items.map((item) => {
+          const isLoading = loadingId === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              disabled={isLoading}
+              onClick={() => onSelect(item)}
+              className={cn(
+                "rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-left transition-colors",
+                "hover:border-border hover:bg-muted/40 disabled:opacity-60"
+              )}
+            >
+              <p className="text-xs font-medium text-foreground line-clamp-2">
+                {truncateText(item.businessDescription, 120)}
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {item.routedNiche ? `${item.routedNiche} · ` : ""}
+                {item.reelCount} reel{item.reelCount === 1 ? "" : "s"} ·{" "}
+                {searchedAgo(item.createdAt)}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DiscoverySearchLoading() {
   const tips = useMemo(() => shuffle(DISCOVERY_SEARCH_TIPS), []);
   const [tipIndex, setTipIndex] = useState(0);
@@ -370,16 +430,24 @@ export default function Discovery() {
   const [pendingHandle, setPendingHandle] = useState<string | null>(null);
   const [reelPage, setReelPage] = useState(1);
   const [playingShortcode, setPlayingShortcode] = useState<string | null>(null);
+  const [replayedAt, setReplayedAt] = useState<Date | null>(null);
+  const [loadingReplayId, setLoadingReplayId] = useState<number | null>(null);
+
+  const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
+  const trpcUtils = trpc.useUtils();
 
   const searchMutation = trpc.discovery.search.useMutation({
     onSuccess: (data) => {
       setResult(data);
       setReelPage(1);
       setPlayingShortcode(null);
+      setReplayedAt(null);
+      void recentSearchesQuery.refetch();
     },
     onError: (err) => {
       toast.error(err.message);
       setResult(null);
+      setReplayedAt(null);
     },
   });
 
@@ -402,8 +470,9 @@ export default function Discovery() {
 
   const trimmed = description.trim();
   const isSearching = searchMutation.isPending;
+  const isReplayLoading = loadingReplayId != null;
   const submitEnabled =
-    trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching;
+    trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching && !isReplayLoading;
 
   const tier1Reels = useMemo(
     () => (result ? result.viralReels.filter((r) => r.tier === 1) : []),
@@ -443,7 +512,25 @@ export default function Discovery() {
     setResult(null);
     setReelPage(1);
     setPlayingShortcode(null);
+    setReplayedAt(null);
+    setLoadingReplayId(null);
     searchMutation.mutate({ businessDescription: trimmed });
+  };
+
+  const handleReplaySearch = async (item: RecentDiscoverySearch) => {
+    setLoadingReplayId(item.id);
+    setReplayedAt(new Date(item.createdAt));
+    try {
+      const data = await trpcUtils.discovery.getSearch.fetch({ id: item.id });
+      setResult(data);
+      setReelPage(1);
+      setPlayingShortcode(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load saved search");
+      setReplayedAt(null);
+    } finally {
+      setLoadingReplayId(null);
+    }
   };
 
   const handleAddToLibrary = (username: string) => {
@@ -458,8 +545,9 @@ export default function Discovery() {
     setPlayingShortcode(null);
   };
 
-  const showResults = result != null && !isSearching;
+  const showResults = result != null && !isSearching && !isReplayLoading;
   const reelCount = result?.viralReels.length ?? 0;
+  const recentSearches = recentSearchesQuery.data ?? [];
 
   return (
     <div className="container max-w-6xl py-8 space-y-8">
@@ -475,6 +563,12 @@ export default function Discovery() {
           and the creators behind them.
         </p>
       </div>
+
+      <RecentSearchesList
+        items={recentSearches}
+        onSelect={handleReplaySearch}
+        loadingId={loadingReplayId}
+      />
 
       <div className="space-y-4">
         <div className="space-y-2">
@@ -509,11 +603,17 @@ export default function Discovery() {
         </Button>
       </div>
 
-      {isSearching ? <DiscoverySearchLoading /> : null}
+      {isSearching || isReplayLoading ? <DiscoverySearchLoading /> : null}
 
       {showResults ? (
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
           <div className="min-w-0 flex-1 lg:w-[70%] space-y-6">
+            {replayedAt ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
+                Showing saved results from {formatRelativeActive(replayedAt)}. Run a
+                new search for fresh data.
+              </div>
+            ) : null}
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">
                 Viral reels in {result.routedNiche || "your niche"}

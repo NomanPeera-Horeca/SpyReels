@@ -195,9 +195,10 @@ import {
   emailEvents,
   emailTemplates,
   hookGeneratorLeads,
+  discoverySearches,
 } from "../drizzle/schema";
 import type { Transcription, Reel } from "../drizzle/schema";
-import { eq, ne, desc, asc, sql, and, inArray, getTableColumns, isNotNull, or, like } from "drizzle-orm";
+import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import { classifyReelsByIds } from "./services/classifyReels.js";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
@@ -2121,7 +2122,89 @@ Return JSON only:
           console.warn("[discovery.search] niche save failed:", err);
         }
 
+        try {
+          const db = await getDb();
+          if (db) {
+            await db.insert(discoverySearches).values({
+              userId: ctx.user.id,
+              businessDescription: input.businessDescription,
+              routedNiche: result.routedNiche || null,
+              reelCount: result.viralReels.length,
+              resultJson: result,
+            });
+
+            const kept = await db
+              .select({ id: discoverySearches.id })
+              .from(discoverySearches)
+              .where(eq(discoverySearches.userId, ctx.user.id))
+              .orderBy(desc(discoverySearches.createdAt))
+              .limit(10);
+
+            const keepIds = kept.map((row) => row.id);
+            if (keepIds.length > 0) {
+              await db.delete(discoverySearches).where(
+                and(
+                  eq(discoverySearches.userId, ctx.user.id),
+                  not(inArray(discoverySearches.id, keepIds))
+                )
+              );
+            }
+          }
+        } catch (err) {
+          console.warn("[discovery.search] history save failed:", err);
+        }
+
         return result;
+      }),
+
+    recentSearches: discoveryProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      return db
+        .select({
+          id: discoverySearches.id,
+          businessDescription: discoverySearches.businessDescription,
+          routedNiche: discoverySearches.routedNiche,
+          reelCount: discoverySearches.reelCount,
+          createdAt: discoverySearches.createdAt,
+        })
+        .from(discoverySearches)
+        .where(eq(discoverySearches.userId, ctx.user.id))
+        .orderBy(desc(discoverySearches.createdAt))
+        .limit(10);
+    }),
+
+    getSearch: discoveryProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const rows = await db
+          .select({ resultJson: discoverySearches.resultJson })
+          .from(discoverySearches)
+          .where(
+            and(
+              eq(discoverySearches.id, input.id),
+              eq(discoverySearches.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+
+        if (!rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Search not found",
+          });
+        }
+
+        return rows[0].resultJson;
       }),
 
     getQuota: discoveryProcedure.query(async ({ ctx }) => {
