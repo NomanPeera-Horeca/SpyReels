@@ -118,6 +118,14 @@ export interface DiscoveryResult {
   costEstimateUsd: number;
 }
 
+export type DiscoveryProgressUpdate = {
+  phase: string;
+  creatorsTotal?: number;
+  creatorsDrilled?: number;
+  reelsFound?: number;
+  partial?: DiscoveryResult;
+};
+
 interface HashtagSearchResult {
   hashtag: string;
   success: boolean;
@@ -301,12 +309,17 @@ function collectUniqueCreators(
 
 async function drillCreatorsBounded(
   creators: ParsedReel["owner"][],
-  tracker: DiscoveryScCallTracker
+  tracker: DiscoveryScCallTracker,
+  onCreatorDone?: (ctx: {
+    creatorsDrilled: number;
+    drilledReels: ParsedReel[];
+  }) => void | Promise<void>
 ): Promise<ParsedReel[]> {
   if (creators.length === 0) return [];
 
   const drilled: ParsedReel[] = [];
   let next = 0;
+  let creatorsDrilled = 0;
   const concurrency = 5;
 
   await Promise.all(
@@ -349,6 +362,18 @@ async function drillCreatorsBounded(
           console.log(
             `[discovery] profile drill FAILED @${creator.username}: ${message}`
           );
+        }
+
+        creatorsDrilled++;
+        if (onCreatorDone) {
+          try {
+            await onCreatorDone({
+              creatorsDrilled,
+              drilledReels: [...drilled],
+            });
+          } catch {
+            // best-effort progress reporting
+          }
         }
       }
     })
@@ -533,6 +558,115 @@ function scoreReel(reel: ParsedReel): ScoredReel | null {
   };
 }
 
+async function safeProgress(
+  onProgress:
+    | ((update: DiscoveryProgressUpdate) => void | Promise<void>)
+    | undefined,
+  update: DiscoveryProgressUpdate
+): Promise<void> {
+  if (!onProgress) return;
+  try {
+    await onProgress(update);
+  } catch {
+    // best-effort: progress failures must not break the pipeline
+  }
+}
+
+function dedupeReelsByShortcode(reels: ParsedReel[]): ParsedReel[] {
+  const byShortcode = new Map<string, ParsedReel>();
+  for (const reel of reels) {
+    const existing = byShortcode.get(reel.shortcode);
+    if (!existing || reel.views > existing.views) {
+      byShortcode.set(reel.shortcode, reel);
+    }
+  }
+  return [...byShortcode.values()];
+}
+
+function selectTopScoredReels(reels: ParsedReel[]): {
+  uniqueReels: ParsedReel[];
+  scored: ScoredReel[];
+  topReels: ScoredReel[];
+} {
+  const uniqueReels = dedupeReelsByShortcode(reels);
+  const scored = uniqueReels
+    .map(scoreReel)
+    .filter((r): r is ScoredReel => r !== null);
+  const tier1Reels = scored
+    .filter((reel) => reel.tier === 1)
+    .sort((a, b) => b.viralScore - a.viralScore);
+  const tier2Reels = scored
+    .filter((reel) => reel.tier === 2)
+    .sort((a, b) => b.viralScore - a.viralScore);
+  const topReels = [...tier1Reels, ...tier2Reels].slice(0, TOP_N);
+  return { uniqueReels, scored, topReels };
+}
+
+function topReelsToViralOutput(
+  topReels: ScoredReel[],
+  stableThumbs?: Map<string, string>,
+  stableProfilePics?: Map<string, string>
+): DiscoveryResult["viralReels"] {
+  return topReels.map((reel) => {
+    const ownerKey = reel.owner.username.toLowerCase();
+    const mirroredPic = stableProfilePics?.get(ownerKey) ?? "";
+    const profilePicUrl = mirroredPic || reel.owner.profilePicUrl;
+    return {
+      shortcode: reel.shortcode,
+      reelUrl: reel.reelUrl,
+      thumbnailUrl: stableThumbs?.get(reel.shortcode) ?? reel.thumbnailUrl,
+      videoUrl: reel.videoUrl,
+      caption: reel.caption,
+      views: reel.views,
+      likes: reel.likes,
+      comments: reel.comments,
+      viralScore: reel.viralScore,
+      viralTier: reel.viralTier,
+      reachMultiplier: reel.reachMultiplier,
+      engagementRate: reel.engagementRate,
+      tier: reel.tier,
+      owner: {
+        username: reel.owner.username,
+        fullName: reel.owner.fullName,
+        followers: reel.owner.followers,
+        isVerified: reel.owner.isVerified,
+        biography: reel.owner.biography,
+        profilePicUrl,
+      },
+    };
+  });
+}
+
+function buildDiscoveryResultFromReels(params: {
+  businessDescription: string;
+  routedNiche: string;
+  hashtagsUsed: string[];
+  hashtagFailures: string[];
+  combinedReels: ParsedReel[];
+  scCallCount: number;
+  usdPerCredit: number;
+  stableThumbs?: Map<string, string>;
+  stableProfilePics?: Map<string, string>;
+}): DiscoveryResult {
+  const { uniqueReels, scored, topReels } = selectTopScoredReels(
+    params.combinedReels
+  );
+  return {
+    businessDescription: params.businessDescription,
+    routedNiche: params.routedNiche,
+    hashtagsUsed: params.hashtagsUsed,
+    hashtagFailures: params.hashtagFailures,
+    viralReels: topReelsToViralOutput(
+      topReels,
+      params.stableThumbs,
+      params.stableProfilePics
+    ),
+    totalCandidatesBeforeFilter: params.combinedReels.length,
+    totalCandidatesAfterFilter: scored.length,
+    costEstimateUsd: params.scCallCount * params.usdPerCredit,
+  };
+}
+
 function logFilterBreakdown(totalRaw: number, allReels: ParsedReel[]): void {
   const afterDedupe = allReels.length;
   const privacyPass = allReels.filter(passesPrivacyAndFollowers);
@@ -659,7 +793,8 @@ function mergeReelsFromSearch(
 }
 
 export async function runDiscoveryPipeline(
-  businessDescription: string
+  businessDescription: string,
+  onProgress?: (update: DiscoveryProgressUpdate) => void | Promise<void>
 ): Promise<DiscoveryResult> {
   const tracker = createDiscoveryScCallTracker(DISCOVERY_MAX_SC_CALLS);
 
@@ -671,7 +806,35 @@ export async function runDiscoveryPipeline(
   let routedNiche = "";
   let narrowHashtags: string[] = [];
   let wideHashtags: string[] = [];
+  let hashtags: string[] = [];
   const hashtagFailures: string[] = [];
+
+  const emitPartial = async (
+    phase: string,
+    combinedReels: ParsedReel[],
+    extra?: Pick<
+      DiscoveryProgressUpdate,
+      "creatorsTotal" | "creatorsDrilled" | "reelsFound"
+    >
+  ) => {
+    const partial = buildDiscoveryResultFromReels({
+      businessDescription,
+      routedNiche,
+      hashtagsUsed: hashtags,
+      hashtagFailures,
+      combinedReels,
+      scCallCount: tracker.count,
+      usdPerCredit,
+    });
+    await safeProgress(onProgress, {
+      phase,
+      reelsFound: extra?.reelsFound ?? partial.viralReels.length,
+      creatorsTotal: extra?.creatorsTotal,
+      creatorsDrilled: extra?.creatorsDrilled,
+      partial,
+    });
+  };
+
   console.log("Step 1: Niche routing...");
   try {
     const raw = await routeNiche({ businessDescription });
@@ -717,7 +880,7 @@ export async function runDiscoveryPipeline(
     console.log(`  routing FAILED: ${message}`);
   }
 
-  const hashtags = dedupeHashtagList([...narrowHashtags, ...wideHashtags]);
+  hashtags = dedupeHashtagList([...narrowHashtags, ...wideHashtags]);
 
   const byCreatorHashtag = new Map<string, ParsedReel>();
   let totalRaw = 0;
@@ -752,42 +915,65 @@ export async function runDiscoveryPipeline(
   }
 
   const hashtagReels = [...byCreatorHashtag.values()];
+
+  await emitPartial("hashtags", hashtagReels);
+
   const creators = [...collectUniqueCreators(hashtagReels).values()];
+
+  await safeProgress(onProgress, {
+    phase: "drilling",
+    creatorsTotal: creators.length,
+    creatorsDrilled: 0,
+    reelsFound: selectTopScoredReels(hashtagReels).topReels.length,
+    partial: buildDiscoveryResultFromReels({
+      businessDescription,
+      routedNiche,
+      hashtagsUsed: hashtags,
+      hashtagFailures,
+      combinedReels: hashtagReels,
+      scCallCount: tracker.count,
+      usdPerCredit,
+    }),
+  });
 
   console.log(
     `Step 3: Profile drilling ${creators.length} creators (6mo reels, concurrency 5)...`
   );
-  const drilledReels = await drillCreatorsBounded(creators, tracker);
+  const drilledReels = await drillCreatorsBounded(
+    creators,
+    tracker,
+    async ({ creatorsDrilled, drilledReels: drilledSoFar }) => {
+      const combined = [...hashtagReels, ...drilledSoFar];
+      const { topReels } = selectTopScoredReels(combined);
+      await safeProgress(onProgress, {
+        phase: "drilling",
+        creatorsTotal: creators.length,
+        creatorsDrilled,
+        reelsFound: topReels.length,
+        partial: buildDiscoveryResultFromReels({
+          businessDescription,
+          routedNiche,
+          hashtagsUsed: hashtags,
+          hashtagFailures,
+          combinedReels: combined,
+          scCallCount: tracker.count,
+          usdPerCredit,
+        }),
+      });
+    }
+  );
   console.log(
     `  drilled ${drilledReels.length} reels from profile passes (scCalls=${tracker.count})`
   );
 
   const allReels = [...hashtagReels, ...drilledReels];
 
-  // Collapse the same reel surfaced under multiple hashtags (same shortcode,
-  // possibly different like/view snapshots). Keep the highest-view copy.
-  const byShortcode = new Map<string, ParsedReel>();
-  for (const reel of allReels) {
-    const existing = byShortcode.get(reel.shortcode);
-    if (!existing || reel.views > existing.views) {
-      byShortcode.set(reel.shortcode, reel);
-    }
-  }
-  const uniqueReels = [...byShortcode.values()];
-
-  const scored = uniqueReels
-    .map(scoreReel)
-    .filter((r): r is ScoredReel => r !== null);
+  const { uniqueReels, scored, topReels } = selectTopScoredReels(allReels);
 
   logFilterBreakdown(totalRaw, allReels);
 
-  const tier1Reels = scored
-    .filter((reel) => reel.tier === 1)
-    .sort((a, b) => b.viralScore - a.viralScore);
-  const tier2Reels = scored
-    .filter((reel) => reel.tier === 2)
-    .sort((a, b) => b.viralScore - a.viralScore);
-  const topReels = [...tier1Reels, ...tier2Reels].slice(0, TOP_N);
+  const tier1Reels = scored.filter((reel) => reel.tier === 1);
+  const tier2Reels = scored.filter((reel) => reel.tier === 2);
 
   console.log(
     `  pipeline total: ${allReels.length} combined reels, ${uniqueReels.length} unique by shortcode, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length}), scCalls=${tracker.count}`
@@ -816,42 +1002,16 @@ export async function runDiscoveryPipeline(
     }))
   );
 
-  return {
+  return buildDiscoveryResultFromReels({
     businessDescription,
     routedNiche,
     hashtagsUsed: hashtags,
     hashtagFailures,
-    viralReels: topReels.map((reel) => {
-      const ownerKey = reel.owner.username.toLowerCase();
-      const mirroredPic = stableProfilePics.get(ownerKey) ?? "";
-      const profilePicUrl = mirroredPic || reel.owner.profilePicUrl;
-      return {
-        shortcode: reel.shortcode,
-        reelUrl: reel.reelUrl,
-        thumbnailUrl: stableThumbs.get(reel.shortcode) ?? reel.thumbnailUrl,
-        videoUrl: reel.videoUrl,
-        caption: reel.caption,
-        views: reel.views,
-        likes: reel.likes,
-        comments: reel.comments,
-        viralScore: reel.viralScore,
-        viralTier: reel.viralTier,
-        reachMultiplier: reel.reachMultiplier,
-        engagementRate: reel.engagementRate,
-        tier: reel.tier,
-        owner: {
-          username: reel.owner.username,
-          fullName: reel.owner.fullName,
-          followers: reel.owner.followers,
-          isVerified: reel.owner.isVerified,
-          biography: reel.owner.biography,
-          profilePicUrl,
-        },
-      };
-    }),
-    totalCandidatesBeforeFilter: allReels.length,
-    totalCandidatesAfterFilter: scored.length,
-    costEstimateUsd: tracker.count * usdPerCredit,
-  };
+    combinedReels: allReels,
+    scCallCount: tracker.count,
+    usdPerCredit,
+    stableThumbs,
+    stableProfilePics,
+  });
   });
 }

@@ -196,6 +196,7 @@ import {
   emailTemplates,
   hookGeneratorLeads,
   discoverySearches,
+  discoveryJobs,
 } from "../drizzle/schema";
 import type { Transcription, Reel } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
@@ -2088,73 +2089,74 @@ Return JSON only:
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const { runDiscoveryPipeline } = await import("./discovery/pipeline");
-        const result = await runDiscoveryPipeline(input.businessDescription);
-
-        try {
-          const db = await getDb();
-          const routedName = result.routedNiche?.trim();
-          if (db && routedName) {
-            const nicheRows = await db
-              .select({ slug: niches.slug })
-              .from(niches)
-              .where(eq(niches.name, routedName))
-              .limit(1);
-            const slug = nicheRows[0]?.slug;
-            if (slug) {
-              const userRows = await db
-                .select({ selectedNicheSlugs: users.selectedNicheSlugs })
-                .from(users)
-                .where(eq(users.id, ctx.user.id))
-                .limit(1);
-              const existing = Array.isArray(userRows[0]?.selectedNicheSlugs)
-                ? (userRows[0].selectedNicheSlugs as string[])
-                : [];
-              if (!existing.includes(slug) && existing.length < 5) {
-                await db
-                  .update(users)
-                  .set({ selectedNicheSlugs: [...existing, slug] })
-                  .where(eq(users.id, ctx.user.id));
-              }
-            }
-          }
-        } catch (err) {
-          console.warn("[discovery.search] niche save failed:", err);
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
         }
 
-        try {
-          const db = await getDb();
-          if (db) {
-            await db.insert(discoverySearches).values({
-              userId: ctx.user.id,
-              businessDescription: input.businessDescription,
-              routedNiche: result.routedNiche || null,
-              reelCount: result.viralReels.length,
-              resultJson: result,
-            });
-
-            const kept = await db
-              .select({ id: discoverySearches.id })
-              .from(discoverySearches)
-              .where(eq(discoverySearches.userId, ctx.user.id))
-              .orderBy(desc(discoverySearches.createdAt))
-              .limit(10);
-
-            const keepIds = kept.map((row) => row.id);
-            if (keepIds.length > 0) {
-              await db.delete(discoverySearches).where(
-                and(
-                  eq(discoverySearches.userId, ctx.user.id),
-                  not(inArray(discoverySearches.id, keepIds))
-                )
-              );
-            }
-          }
-        } catch (err) {
-          console.warn("[discovery.search] history save failed:", err);
+        const insertResult = await db.insert(discoveryJobs).values({
+          userId: ctx.user.id,
+          businessDescription: input.businessDescription,
+          status: "pending",
+        });
+        const jobId = insertResult[0].insertId;
+        if (!jobId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create discovery job",
+          });
         }
 
-        return result;
+        runDiscoveryJob(jobId, ctx.user.id, input.businessDescription).catch(
+          (err) => {
+            console.error(`Discovery job ${jobId} failed:`, err);
+          }
+        );
+
+        return { jobId };
+      }),
+
+    jobStatus: discoveryProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const rows = await db
+          .select({
+            status: discoveryJobs.status,
+            routedNiche: discoveryJobs.routedNiche,
+            creatorsTotal: discoveryJobs.creatorsTotal,
+            creatorsDrilled: discoveryJobs.creatorsDrilled,
+            reelsFound: discoveryJobs.reelsFound,
+            partialJson: discoveryJobs.partialJson,
+            errorMessage: discoveryJobs.errorMessage,
+          })
+          .from(discoveryJobs)
+          .where(
+            and(
+              eq(discoveryJobs.id, input.jobId),
+              eq(discoveryJobs.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+
+        if (!rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Job not found",
+          });
+        }
+
+        return rows[0];
       }),
 
     recentSearches: discoveryProcedure.query(async ({ ctx }) => {
@@ -5788,6 +5790,149 @@ async function uploadReelThumbnailsBounded(
     })
   );
   return out;
+}
+
+/** Background discovery job runner (async poll flow). */
+async function runDiscoveryJob(
+  jobId: number,
+  userId: number,
+  businessDescription: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    await db
+      .update(discoveryJobs)
+      .set({ status: "running" })
+      .where(eq(discoveryJobs.id, jobId));
+
+    const { runDiscoveryPipeline } = await import("./discovery/pipeline");
+    const result = await runDiscoveryPipeline(
+      businessDescription,
+      async (update) => {
+        const row: {
+          routedNiche?: string | null;
+          creatorsTotal?: number;
+          creatorsDrilled?: number;
+          reelsFound?: number;
+          partialJson?: typeof update.partial;
+        } = {};
+
+        if (update.partial?.routedNiche) {
+          row.routedNiche = update.partial.routedNiche;
+        }
+        if (update.creatorsTotal !== undefined) {
+          row.creatorsTotal = update.creatorsTotal;
+        }
+        if (update.creatorsDrilled !== undefined) {
+          row.creatorsDrilled = update.creatorsDrilled;
+        }
+        if (update.reelsFound !== undefined) {
+          row.reelsFound = update.reelsFound;
+        }
+        if (update.partial) {
+          row.partialJson = update.partial;
+        }
+
+        if (Object.keys(row).length === 0) return;
+
+        try {
+          await db
+            .update(discoveryJobs)
+            .set(row)
+            .where(eq(discoveryJobs.id, jobId));
+        } catch (err) {
+          console.warn(`[runDiscoveryJob ${jobId}] progress update failed:`, err);
+        }
+      }
+    );
+
+    await db
+      .update(discoveryJobs)
+      .set({
+        status: "completed",
+        routedNiche: result.routedNiche || null,
+        reelsFound: result.viralReels.length,
+        partialJson: result,
+      })
+      .where(eq(discoveryJobs.id, jobId));
+
+    try {
+      const routedName = result.routedNiche?.trim();
+      if (routedName) {
+        const nicheRows = await db
+          .select({ slug: niches.slug })
+          .from(niches)
+          .where(eq(niches.name, routedName))
+          .limit(1);
+        const slug = nicheRows[0]?.slug;
+        if (slug) {
+          const userRows = await db
+            .select({ selectedNicheSlugs: users.selectedNicheSlugs })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          const existing = Array.isArray(userRows[0]?.selectedNicheSlugs)
+            ? (userRows[0].selectedNicheSlugs as string[])
+            : [];
+          if (!existing.includes(slug) && existing.length < 5) {
+            await db
+              .update(users)
+              .set({ selectedNicheSlugs: [...existing, slug] })
+              .where(eq(users.id, userId));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[runDiscoveryJob ${jobId}] niche save failed:`, err);
+    }
+
+    try {
+      await db.insert(discoverySearches).values({
+        userId,
+        businessDescription,
+        routedNiche: result.routedNiche || null,
+        reelCount: result.viralReels.length,
+        resultJson: result,
+      });
+
+      const kept = await db
+        .select({ id: discoverySearches.id })
+        .from(discoverySearches)
+        .where(eq(discoverySearches.userId, userId))
+        .orderBy(desc(discoverySearches.createdAt))
+        .limit(10);
+
+      const keepIds = kept.map((row) => row.id);
+      if (keepIds.length > 0) {
+        await db.delete(discoverySearches).where(
+          and(
+            eq(discoverySearches.userId, userId),
+            not(inArray(discoverySearches.id, keepIds))
+          )
+        );
+      }
+    } catch (err) {
+      console.warn(`[runDiscoveryJob ${jobId}] history save failed:`, err);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      await db
+        .update(discoveryJobs)
+        .set({
+          status: "failed",
+          errorMessage: message.slice(0, 2000),
+        })
+        .where(eq(discoveryJobs.id, jobId));
+    } catch (updateErr) {
+      console.error(
+        `[runDiscoveryJob ${jobId}] failed to mark job failed:`,
+        updateErr
+      );
+    }
+  }
 }
 
 /** Background scrape job runner */

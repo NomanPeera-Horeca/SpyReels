@@ -25,11 +25,13 @@ import { LOADING_TIPS } from "@/data/loadingTips";
 import { formatRelativeActive } from "@/lib/formatActivity";
 import { cn } from "@/lib/utils";
 
-type DiscoverySearchResult =
-  inferRouterOutputs<AppRouter>["discovery"]["search"];
+type DiscoveryResultPayload =
+  inferRouterOutputs<AppRouter>["discovery"]["getSearch"];
+type DiscoveryJobStatus =
+  inferRouterOutputs<AppRouter>["discovery"]["jobStatus"];
 type RecentDiscoverySearch =
   inferRouterOutputs<AppRouter>["discovery"]["recentSearches"][number];
-type ViralReel = DiscoverySearchResult["viralReels"][number];
+type ViralReel = DiscoveryResultPayload["viralReels"][number];
 type ViralTier = ViralReel["viralTier"];
 
 const MAX_DESCRIPTION_LENGTH = 500;
@@ -467,13 +469,33 @@ function DiscoverySearchLoading() {
   );
 }
 
+function DiscoveryJobProgress({ job }: { job: DiscoveryJobStatus }) {
+  if (job.status === "pending" || job.creatorsTotal === 0) {
+    return (
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        Finding creators...
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-sm text-muted-foreground flex items-center gap-2">
+      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+      Drilling {job.creatorsDrilled}/{job.creatorsTotal} creators · {job.reelsFound}{" "}
+      reels so far
+    </p>
+  );
+}
+
 export default function Discovery() {
   if (!isDiscoveryV1Enabled) {
     return null;
   }
 
   const [description, setDescription] = useState("");
-  const [result, setResult] = useState<DiscoverySearchResult | null>(null);
+  const [result, setResult] = useState<DiscoveryResultPayload | null>(null);
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [reelPage, setReelPage] = useState(1);
   const [playingShortcode, setPlayingShortcode] = useState<string | null>(null);
   const [replayedAt, setReplayedAt] = useState<Date | null>(null);
@@ -485,6 +507,17 @@ export default function Discovery() {
   >({});
 
   const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
+  const jobStatusQuery = trpc.discovery.jobStatus.useQuery(
+    { jobId: activeJobId! },
+    {
+      enabled: activeJobId != null,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "completed" || status === "failed") return false;
+        return 2500;
+      },
+    }
+  );
   const trpcUtils = trpc.useUtils();
   const pollIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(
     new Map()
@@ -501,18 +534,42 @@ export default function Discovery() {
     };
   }, []);
 
+  useEffect(() => {
+    const job = jobStatusQuery.data;
+    if (!job || activeJobId == null) return;
+
+    if (job.partialJson) {
+      setResult(job.partialJson);
+    }
+
+    if (job.status === "completed") {
+      setActiveJobId(null);
+      setReelPage(1);
+      setPlayingShortcode(null);
+      setReplayedAt(null);
+      setHideRecentDropdown(true);
+      void recentSearchesQuery.refetch();
+    } else if (job.status === "failed") {
+      setActiveJobId(null);
+      setResult(null);
+      setReplayedAt(null);
+      toast.error(job.errorMessage?.trim() || "Discovery search failed");
+    }
+  }, [jobStatusQuery.data, activeJobId]);
+
   const searchMutation = trpc.discovery.search.useMutation({
     onSuccess: (data) => {
-      setResult(data);
+      setActiveJobId(data.jobId);
+      setResult(null);
       setReelPage(1);
       setPlayingShortcode(null);
       setReplayedAt(null);
       setHideRecentDropdown(true);
       setTextareaFocused(false);
-      void recentSearchesQuery.refetch();
     },
     onError: (err) => {
       toast.error(err.message);
+      setActiveJobId(null);
       setResult(null);
       setReplayedAt(null);
     },
@@ -521,7 +578,12 @@ export default function Discovery() {
   const startScrape = trpc.scrape.start.useMutation();
 
   const trimmed = description.trim();
-  const isSearching = searchMutation.isPending;
+  const jobStatus = jobStatusQuery.data;
+  const isJobRunning =
+    activeJobId != null &&
+    jobStatus?.status !== "completed" &&
+    jobStatus?.status !== "failed";
+  const isSearching = searchMutation.isPending || isJobRunning;
   const isReplayLoading = loadingReplayId != null;
   const submitEnabled =
     trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching && !isReplayLoading;
@@ -595,6 +657,7 @@ export default function Discovery() {
 
   const handleSubmit = () => {
     if (!submitEnabled) return;
+    setActiveJobId(null);
     setResult(null);
     setReelPage(1);
     setPlayingShortcode(null);
@@ -605,6 +668,7 @@ export default function Discovery() {
   };
 
   const handleReplaySearch = async (item: RecentDiscoverySearch) => {
+    setActiveJobId(null);
     setLoadingReplayId(item.id);
     setReplayedAt(new Date(item.createdAt));
     setHideRecentDropdown(true);
@@ -656,7 +720,10 @@ export default function Discovery() {
     setPlayingShortcode(null);
   };
 
-  const showResults = result != null && !isSearching && !isReplayLoading;
+  const showResults = result != null && !isReplayLoading;
+  const showInitialLoading =
+    (searchMutation.isPending || (isJobRunning && result == null)) &&
+    !isReplayLoading;
   const reelCount = result?.viralReels.length ?? 0;
   const recentSearches = recentSearchesQuery.data ?? [];
   const showRecentDropdown =
@@ -734,11 +801,14 @@ export default function Discovery() {
         </Button>
       </div>
 
-      {isSearching || isReplayLoading ? <DiscoverySearchLoading /> : null}
+      {showInitialLoading || isReplayLoading ? <DiscoverySearchLoading /> : null}
 
       {showResults ? (
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
           <div className="min-w-0 flex-1 lg:w-[70%] space-y-6">
+            {isJobRunning && jobStatus ? (
+              <DiscoveryJobProgress job={jobStatus} />
+            ) : null}
             {replayedAt ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
                 Showing saved results from {formatRelativeActive(replayedAt)}. Run a

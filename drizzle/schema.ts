@@ -1400,6 +1400,35 @@ export const discoverySearches = mysqlTable(
 export type DiscoverySearch = typeof discoverySearches.$inferSelect;
 export type InsertDiscoverySearch = typeof discoverySearches.$inferInsert;
 
+export const discoveryJobs = mysqlTable(
+  "discovery_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessDescription: varchar("businessDescription", { length: 1000 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    routedNiche: varchar("routedNiche", { length: 128 }),
+    creatorsTotal: int("creatorsTotal").default(0).notNull(),
+    creatorsDrilled: int("creatorsDrilled").default(0).notNull(),
+    reelsFound: int("reelsFound").default(0).notNull(),
+    partialJson: json("partialJson").$type<DiscoveryPipelineResult>(),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_discovery_jobs_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type DiscoveryJob = typeof discoveryJobs.$inferSelect;
+export type InsertDiscoveryJob = typeof discoveryJobs.$inferInsert;
+
 export const discoveryResults = mysqlTable("discovery_results", {
   id: int("id").primaryKey().autoincrement(),
   searchId: int("searchId")
