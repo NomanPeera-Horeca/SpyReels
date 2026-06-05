@@ -17,10 +17,70 @@ function requireApiKey(): string {
 
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
+/** HTTP status returned when discovery pipeline ScrapeCreators call fuse trips. */
+export const DISCOVERY_SC_CALL_FUSE_STATUS = 499;
+
+export interface DiscoveryScCallTracker {
+  count: number;
+  readonly maxCalls: number;
+  fuseLogged: boolean;
+}
+
+export function createDiscoveryScCallTracker(
+  maxCalls: number
+): DiscoveryScCallTracker {
+  return { count: 0, maxCalls, fuseLogged: false };
+}
+
+let activeDiscoveryScCallTracker: DiscoveryScCallTracker | null = null;
+
+/** Count every scGet during discovery toward the hard call fuse. */
+export async function runWithDiscoveryScCallTracker<T>(
+  tracker: DiscoveryScCallTracker,
+  fn: () => Promise<T>
+): Promise<T> {
+  activeDiscoveryScCallTracker = tracker;
+  try {
+    return await fn();
+  } finally {
+    activeDiscoveryScCallTracker = null;
+  }
+}
+
+function logDiscoveryFuseIfNeeded(tracker: DiscoveryScCallTracker): void {
+  if (tracker.count >= tracker.maxCalls && !tracker.fuseLogged) {
+    tracker.fuseLogged = true;
+    console.log(
+      `[discovery] call fuse hit at ${tracker.count} calls, stopping drills`
+    );
+  }
+}
+
+function discoveryScFuseTripped(
+  tracker: DiscoveryScCallTracker | null
+): boolean {
+  return tracker !== null && tracker.count >= tracker.maxCalls;
+}
+
 async function scGet(
   path: string,
   query: Record<string, string | undefined>
 ): Promise<{ status: number; data: any }> {
+  const tracker = activeDiscoveryScCallTracker;
+  if (tracker && discoveryScFuseTripped(tracker)) {
+    logDiscoveryFuseIfNeeded(tracker);
+    return {
+      status: DISCOVERY_SC_CALL_FUSE_STATUS,
+      data: { error: "discovery_call_fuse" },
+    };
+  }
+  if (tracker) {
+    tracker.count++;
+    if (tracker.count >= tracker.maxCalls) {
+      logDiscoveryFuseIfNeeded(tracker);
+    }
+  }
+
   const url = new URL(`${API_BASE}${path}`);
   for (const [k, v] of Object.entries(query)) {
     if (v !== undefined && v !== "") {
@@ -556,6 +616,11 @@ export async function scrapeReels(
   let mostRecentItemAt: Date | null = null;
 
   while (hasMore && pageCount < maxPages) {
+    if (discoveryScFuseTripped(activeDiscoveryScCallTracker)) {
+      stoppedReason = "discovery call fuse";
+      break;
+    }
+
     if (Date.now() - startTime > timeoutMs) {
       stoppedReason = `timeout after ${Math.round((Date.now() - startTime) / 1000)}s`;
       console.warn(

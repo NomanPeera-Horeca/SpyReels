@@ -5,12 +5,20 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
-import { searchHashtagReels } from "../instagram";
+import {
+  createDiscoveryScCallTracker,
+  runWithDiscoveryScCallTracker,
+  scrapeReels,
+  searchHashtagReels,
+  type DiscoveryScCallTracker,
+  type ReelData,
+} from "../instagram";
 import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
-const TOP_N = 25;
+const TOP_N = 100;
+const DISCOVERY_MAX_SC_CALLS = 300;
 const DEFAULT_USD_PER_CREDIT = 0.002;
 const MIN_VIEWS = 5_000;
 const MIN_REACH_MULTIPLIER = 3;
@@ -40,6 +48,27 @@ EXAMPLE:
 Niche: Sports & Athletes
 Keywords: BJJ competitor, no-gi practitioner
 Good output: ["bjjcompetitor", "nogi", "bjjathlete", "ibjjf", "jiujitsulifestyle"]
+
+Do not use em dashes anywhere.
+Return ONLY the JSON object, no preamble, no code fences.`;
+
+/** Second-round Haiku prompt: broader/adjacent tags, no overlap with round one. */
+const HASHTAG_WIDEN_EXPANSION_PROMPT = `You generate Instagram-native hashtags for creator discovery on SpyReels.
+
+Given a niche label, audience persona keywords, optional secondary niches and content angles, return 5 to 8 BROADER or ADJACENT hashtags that still surface relevant creators but cast a wider net than the first hashtag set.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+}
+
+RULES:
+- Lowercase only, no # prefix, no spaces, no punctuation except letters and numbers
+- Tags must look like real Instagram hashtags creators would actually tag
+- BROADEN the niche: adjacent subcultures, parent categories, and common community tags
+- Do NOT repeat or lightly rephrase any hashtag listed in "Avoid these tags"
+- Avoid generic hashtags like sport, fitness, business, love, instagood
+- Avoid overly long hashtags (keep under 25 characters)
 
 Do not use em dashes anywhere.
 Return ONLY the JSON object, no preamble, no code fences.`;
@@ -168,6 +197,164 @@ Return 5 to 8 Instagram-native hashtags as JSON.`;
     .map((tag) => tag.replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, ""))
     .filter((tag) => tag.length > 0 && tag.length <= 25)
     .slice(0, 8);
+}
+
+async function expandToHashtagsWider(
+  client: Anthropic,
+  niche: string,
+  audienceKeywords: string[],
+  avoidTags: string[],
+  secondaryNiches: string[],
+  contentAngles: string[]
+): Promise<string[]> {
+  const secondaryLine =
+    secondaryNiches.length > 0
+      ? `Secondary niches: ${secondaryNiches.join(", ")}\n`
+      : "";
+  const anglesLine =
+    contentAngles.length > 0
+      ? `Content angles: ${contentAngles.join("; ")}\n`
+      : "";
+  const userMessage = `Niche: ${niche}
+Audience keywords: ${audienceKeywords.join(", ")}
+${secondaryLine}${anglesLine}Avoid these tags (do not overlap): ${avoidTags.join(", ")}
+
+Return 5 to 8 broader Instagram-native hashtags as JSON.`;
+
+  const response = await client.messages.create({
+    model: HAIKU_MODEL,
+    max_tokens: 500,
+    temperature: 0.15,
+    system: HASHTAG_WIDEN_EXPANSION_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
+  });
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text block in widen hashtag expansion response");
+  }
+
+  const parsed = JSON.parse(stripCodeFences(textBlock.text)) as {
+    hashtags?: string[];
+  };
+
+  const avoid = new Set(avoidTags.map((t) => t.toLowerCase()));
+  return (parsed.hashtags ?? [])
+    .map((tag) => tag.replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, ""))
+    .filter(
+      (tag) =>
+        tag.length > 0 && tag.length <= 25 && !avoid.has(tag.toLowerCase())
+    )
+    .slice(0, 8);
+}
+
+function dedupeHashtagList(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of tags) {
+    const clean = tag.replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "");
+    if (clean.length > 0 && clean.length <= 25 && !seen.has(clean)) {
+      seen.add(clean);
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+function reelDataToParsedReel(
+  reel: ReelData,
+  owner: ParsedReel["owner"]
+): ParsedReel {
+  return {
+    shortcode: reel.shortcode,
+    caption: reel.caption,
+    views: reel.viewCount,
+    likes: reel.likeCount,
+    comments: reel.commentCount,
+    videoUrl: reel.videoUrl,
+    thumbnailUrl: reel.thumbnailUrl,
+    owner: {
+      username: owner.username,
+      fullName: owner.fullName,
+      followers: owner.followers,
+      isVerified: owner.isVerified,
+      isPrivate: owner.isPrivate,
+      biography: owner.biography,
+      profilePicUrl: owner.profilePicUrl,
+    },
+  };
+}
+
+function collectUniqueCreators(
+  reels: Iterable<ParsedReel>
+): Map<string, ParsedReel["owner"]> {
+  const byUsername = new Map<string, ParsedReel["owner"]>();
+  for (const reel of reels) {
+    const key = reel.owner.username.toLowerCase();
+    const existing = byUsername.get(key);
+    if (!existing || reel.owner.followers > existing.followers) {
+      byUsername.set(key, reel.owner);
+    }
+  }
+  return byUsername;
+}
+
+async function drillCreatorsBounded(
+  creators: ParsedReel["owner"][],
+  tracker: DiscoveryScCallTracker
+): Promise<ParsedReel[]> {
+  if (creators.length === 0) return [];
+
+  const drilled: ParsedReel[] = [];
+  let next = 0;
+  const concurrency = 5;
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, creators.length) }, async () => {
+      while (true) {
+        if (tracker.count >= tracker.maxCalls) break;
+
+        const i = next++;
+        if (i >= creators.length) break;
+
+        const creator = creators[i]!;
+
+        try {
+          const scraped = await scrapeReels(
+            creator.username,
+            180,
+            undefined,
+            { maxReels: 500, timeoutMs: 60_000 }
+          );
+
+          const owner: ParsedReel["owner"] = {
+            username: creator.username,
+            fullName: creator.fullName,
+            followers: scraped.followerCount || creator.followers,
+            isVerified: creator.isVerified,
+            isPrivate: false,
+            biography: creator.biography,
+            profilePicUrl: scraped.profilePicUrl || creator.profilePicUrl,
+          };
+
+          for (const reel of scraped.reels) {
+            drilled.push(reelDataToParsedReel(reel, owner));
+          }
+
+          console.log(
+            `[discovery] drilled @${creator.username}: ${scraped.reels.length} reels (6mo window)`
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.log(
+            `[discovery] profile drill FAILED @${creator.username}: ${message}`
+          );
+        }
+      }
+    })
+  );
+
+  return drilled;
 }
 
 function readFollowerCount(owner: Record<string, unknown>): number {
@@ -474,14 +661,17 @@ function mergeReelsFromSearch(
 export async function runDiscoveryPipeline(
   businessDescription: string
 ): Promise<DiscoveryResult> {
+  const tracker = createDiscoveryScCallTracker(DISCOVERY_MAX_SC_CALLS);
+
+  return runWithDiscoveryScCallTracker(tracker, async () => {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_USD_PER_CREDIT;
 
   let routedNiche = "";
-  let hashtags: string[] = [];
+  let narrowHashtags: string[] = [];
+  let wideHashtags: string[] = [];
   const hashtagFailures: string[] = [];
-
   console.log("Step 1: Niche routing...");
   try {
     const raw = await routeNiche({ businessDescription });
@@ -490,22 +680,44 @@ export async function runDiscoveryPipeline(
       `  primary=${routedNiche}, confidence=${raw.confidence}, keywords=[${raw.audience.audience_persona_keywords.join(", ")}]`
     );
 
-    console.log("Step 2: Hashtag expansion...");
+    console.log("Step 2: Hashtag expansion (narrow)...");
     try {
-      hashtags = await expandToHashtags(
+      narrowHashtags = await expandToHashtags(
         anthropic,
         routedNiche,
         raw.audience.audience_persona_keywords
       );
-      console.log(`  hashtags: ${hashtags.map((h) => `#${h}`).join(", ")}`);
+      console.log(
+        `  narrow hashtags: ${narrowHashtags.map((h) => `#${h}`).join(", ")}`
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.log(`  hashtag expansion FAILED: ${message}`);
+      console.log(`  narrow hashtag expansion FAILED: ${message}`);
+    }
+
+    console.log("Step 2b: Hashtag expansion (widen)...");
+    try {
+      wideHashtags = await expandToHashtagsWider(
+        anthropic,
+        routedNiche,
+        raw.audience.audience_persona_keywords,
+        narrowHashtags,
+        raw.secondary_niches ?? [],
+        raw.content_angles ?? []
+      );
+      console.log(
+        `  wide hashtags: ${wideHashtags.map((h) => `#${h}`).join(", ")}`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  widen hashtag expansion FAILED: ${message}`);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.log(`  routing FAILED: ${message}`);
   }
+
+  const hashtags = dedupeHashtagList([...narrowHashtags, ...wideHashtags]);
 
   const byCreatorHashtag = new Map<string, ParsedReel>();
   let totalRaw = 0;
@@ -515,6 +727,8 @@ export async function runDiscoveryPipeline(
   }
 
   for (const hashtag of hashtags) {
+    if (tracker.count >= tracker.maxCalls) break;
+
     try {
       const result = await searchHashtag(hashtag);
       if (result.success) {
@@ -537,7 +751,18 @@ export async function runDiscoveryPipeline(
     }
   }
 
-  const allReels = [...byCreatorHashtag.values()];
+  const hashtagReels = [...byCreatorHashtag.values()];
+  const creators = [...collectUniqueCreators(hashtagReels).values()];
+
+  console.log(
+    `Step 3: Profile drilling ${creators.length} creators (6mo reels, concurrency 5)...`
+  );
+  const drilledReels = await drillCreatorsBounded(creators, tracker);
+  console.log(
+    `  drilled ${drilledReels.length} reels from profile passes (scCalls=${tracker.count})`
+  );
+
+  const allReels = [...hashtagReels, ...drilledReels];
 
   // Collapse the same reel surfaced under multiple hashtags (same shortcode,
   // possibly different like/view snapshots). Keep the highest-view copy.
@@ -565,7 +790,7 @@ export async function runDiscoveryPipeline(
   const topReels = [...tier1Reels, ...tier2Reels].slice(0, TOP_N);
 
   console.log(
-    `  pipeline total: ${allReels.length} after creator-hashtag dedupe, ${uniqueReels.length} unique reels, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length})`
+    `  pipeline total: ${allReels.length} combined reels, ${uniqueReels.length} unique by shortcode, tier1=${tier1Reels.length} tier2=${tier2Reels.length} selected=${topReels.length} (tier1=${topReels.filter((r) => r.tier === 1).length} tier2=${topReels.filter((r) => r.tier === 2).length}), scCalls=${tracker.count}`
   );
 
   // Mirror thumbnails to R2 for the displayed reels only (max TOP_N). Deliberate cost tradeoff: we mirror at search time for UI consistency with the scrape grid; revisit to lazy-mirror-on-click if R2 writes become significant.
@@ -626,6 +851,7 @@ export async function runDiscoveryPipeline(
     }),
     totalCandidatesBeforeFilter: allReels.length,
     totalCandidatesAfterFilter: scored.length,
-    costEstimateUsd: hashtags.length * usdPerCredit,
+    costEstimateUsd: tracker.count * usdPerCredit,
   };
+  });
 }
