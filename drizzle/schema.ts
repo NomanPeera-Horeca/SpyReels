@@ -59,6 +59,8 @@ export const users = mysqlTable("users", {
   selectedNicheSlugs: json("selectedNicheSlugs").$type<string[]>(),
   /** Up to 5 creator handles (Step 2 multi-select) for personalization; demo job seeds the first only. */
   selectedCreatorHandles: json("selectedCreatorHandles").$type<string[] | null>(),
+  businessDescription: varchar("businessDescription", { length: 1000 }),
+  targetAudience: varchar("targetAudience", { length: 1000 }),
   onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
   onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
   /** First-touch marketing attribution (set once on signup). */

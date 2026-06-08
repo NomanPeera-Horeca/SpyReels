@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { InterestsEditorSection } from "@/components/InterestsEditorSection";
+import { BusinessPersonalizationSection } from "@/components/BusinessPersonalizationSection";
 import {
   Select,
   SelectContent,
@@ -181,6 +182,8 @@ export default function Settings() {
       </div>
 
       <InterestsEditorSection variant="settings" />
+
+      <BusinessPersonalizationSection />
 
       {/* Telegram Connection Section */}
       <div className="rounded-lg border border-border/50 bg-card p-6">

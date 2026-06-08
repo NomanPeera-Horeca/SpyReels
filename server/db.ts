@@ -182,6 +182,8 @@ export async function getOnboardingState(userId: number) {
       demoSeededAt: users.demoSeededAt,
       selectedNicheSlugs: users.selectedNicheSlugs,
       selectedCreatorHandles: users.selectedCreatorHandles,
+      businessDescription: users.businessDescription,
+      targetAudience: users.targetAudience,
       onboardingCompletedAt: users.onboardingCompletedAt,
       onboardingSkippedAt: users.onboardingSkippedAt,
     })
@@ -189,6 +191,20 @@ export async function getOnboardingState(userId: number) {
     .where(eq(users.id, userId))
     .limit(1);
   return result[0];
+}
+
+/**
+ * Partial update for user personalization text on `users`.
+ * Mirrors `updateOnboardingState` — scoped by userId only.
+ */
+export async function updateUserPersonalization(
+  userId: number,
+  data: Partial<Pick<User, "businessDescription" | "targetAudience">>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (Object.keys(data).length === 0) return;
+  await db.update(users).set(data).where(eq(users.id, userId));
 }
 
 /**

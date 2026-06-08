@@ -115,6 +115,7 @@ import {
   countReelsForJob,
   getOnboardingState,
   updateOnboardingState,
+  updateUserPersonalization,
   seedDemoScrape,
   markOnboardingComplete,
   markOnboardingSkipped,
@@ -199,7 +200,7 @@ import {
   discoverySearches,
   discoveryJobs,
 } from "../drizzle/schema";
-import type { Transcription, Reel } from "../drizzle/schema";
+import type { Transcription, Reel, User } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import { classifyReelsByIds } from "./services/classifyReels.js";
@@ -4089,11 +4090,63 @@ The hook MUST be 7-10 words. Count them.`),
       const prefs = await getUserPreferences(ctx.user.id);
       return prefs || { timezone: "America/Chicago" };
     }),
+    latestDiscoveryBusinessDescription: protectedProcedure.query(
+      async ({ ctx }) => {
+        const db = await getDb();
+        if (!db) return null;
+
+        const rows = await db
+          .select({
+            businessDescription: discoverySearches.businessDescription,
+          })
+          .from(discoverySearches)
+          .where(eq(discoverySearches.userId, ctx.user.id))
+          .orderBy(desc(discoverySearches.createdAt))
+          .limit(1);
+
+        const text = rows[0]?.businessDescription?.trim();
+        return text && text.length > 0 ? text : null;
+      }
+    ),
     update: protectedProcedure
       .input(z.object({ timezone: z.string().min(1).max(64) }))
       .mutation(async ({ ctx, input }) => {
         await upsertUserPreferences(ctx.user.id, { timezone: input.timezone });
         return { success: true };
+      }),
+    updateProfile: protectedProcedure
+      .input(
+        z.object({
+          businessDescription: z.string().max(1000).nullable().optional(),
+          targetAudience: z.string().max(1000).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const normalize = (
+          value: string | null | undefined
+        ): string | null | undefined => {
+          if (value === undefined) return undefined;
+          if (value === null) return null;
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : null;
+        };
+
+        const patch: Partial<Pick<User, "businessDescription" | "targetAudience">> =
+          {};
+        const businessDescription = normalize(input.businessDescription);
+        const targetAudience = normalize(input.targetAudience);
+        if (businessDescription !== undefined) {
+          patch.businessDescription = businessDescription;
+        }
+        if (targetAudience !== undefined) {
+          patch.targetAudience = targetAudience;
+        }
+        if (Object.keys(patch).length === 0) {
+          return { success: true as const };
+        }
+
+        await updateUserPersonalization(ctx.user.id, patch);
+        return { success: true as const };
       }),
   }),
 
@@ -4124,6 +4177,8 @@ The hook MUST be 7-10 words. Count them.`),
         demoSeededAt: state.demoSeededAt,
         selectedNicheSlugs: state.selectedNicheSlugs ?? [],
         selectedCreatorHandles: state.selectedCreatorHandles ?? null,
+        businessDescription: state.businessDescription ?? null,
+        targetAudience: state.targetAudience ?? null,
         onboardingCompletedAt: state.onboardingCompletedAt,
         onboardingSkippedAt: state.onboardingSkippedAt,
       };
