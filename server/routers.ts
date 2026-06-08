@@ -2414,8 +2414,25 @@ Return JSON only:
           });
         }
 
-        // If no topic provided, use "same topic" mode
-        const effectiveTopic = input.topic.trim() || "SAME_TOPIC";
+        const typed = input.topic.trim();
+        const biz = (ctx.user.businessDescription ?? "").trim();
+        const aud = (ctx.user.targetAudience ?? "").trim();
+
+        // promptAngle = what runScriptGeneration receives (drives the prompt)
+        let promptAngle: string;
+        if (typed && aud) promptAngle = `Write about: ${typed}. Adapt it for ${aud}.`;
+        else if (typed) promptAngle = typed;
+        else if (aud && biz)
+          promptAngle = `Adapt this script for ${aud}, from the perspective of ${biz}.`;
+        else if (aud) promptAngle = `Adapt this script for ${aud}.`;
+        else if (biz) promptAngle = `From the perspective of ${biz}.`;
+        else promptAngle = "SAME_TOPIC";
+
+        // storedTopic = what we persist to recreated_scripts.topic (for display, NOT the prompt)
+        let storedTopic: string;
+        if (typed) storedTopic = typed;
+        else if (promptAngle === "SAME_TOPIC") storedTopic = "SAME_TOPIC";
+        else storedTopic = "Personalized";
 
         // Track usage
         await incrementUsage(ctx.user.id, "recreateCount");
@@ -2425,7 +2442,7 @@ Return JSON only:
           featuredReelId: source === "featured" ? input.featuredReelId! : null,
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
-          topic: effectiveTopic,
+          topic: storedTopic,
           gradeLevel: input.gradeLevel,
           status: "processing",
         });
@@ -2441,7 +2458,7 @@ Return JSON only:
           transcription.segments,
           caption,
           reelForGeneration,
-          effectiveTopic,
+          promptAngle,
           input.gradeLevel,
           effectiveAddCues
         ).catch((err: unknown) => {
