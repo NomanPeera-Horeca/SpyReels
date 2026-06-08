@@ -133,16 +133,19 @@ function DiscoverRemakeButton({
   onStart,
   onOpenScript,
   onRetry,
+  onInspirationSave,
 }: {
   remakeState: DiscoverRemakeState;
   onStart: () => void;
   onOpenScript: () => void;
   onRetry: () => void;
+  onInspirationSave: () => void;
 }) {
   const { stage, progressPercent } = remakeState;
   const isBusy =
     stage === "ingesting" || stage === "transcribing" || stage === "generating";
   const isReady = stage === "ready";
+  const isInspiration = stage === "inspiration";
   const isError = stage === "error";
   const fillWidth = isReady ? 100 : isError ? 0 : progressPercent;
   const label = isReady ? "Your script is ready →" : remakeButtonLabel(remakeState);
@@ -151,6 +154,10 @@ function DiscoverRemakeButton({
     if (isBusy) return;
     if (isReady) {
       onOpenScript();
+      return;
+    }
+    if (isInspiration) {
+      onInspirationSave();
       return;
     }
     if (isError) {
@@ -163,12 +170,21 @@ function DiscoverRemakeButton({
   return (
     <Button
       type="button"
-      variant={isReady ? "default" : isError ? "destructive" : "secondary"}
+      variant={
+        isReady
+          ? "default"
+          : isError
+            ? "destructive"
+            : isInspiration
+              ? "outline"
+              : "secondary"
+      }
       size="sm"
       className={cn(
-        "relative w-full overflow-hidden",
+        "relative min-w-0 w-full overflow-hidden",
         isReady &&
-          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white",
+        isInspiration && "border-primary/30 text-primary hover:bg-primary/10"
       )}
       disabled={isBusy}
       onClick={handleClick}
@@ -183,13 +199,15 @@ function DiscoverRemakeButton({
           aria-hidden
         />
       ) : null}
-      <span className="relative z-10 inline-flex items-center justify-center gap-1.5">
+      <span className="relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5">
         {isBusy ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+        ) : isInspiration ? (
+          <Bookmark className="h-3.5 w-3.5 shrink-0" />
         ) : (
           <Wand2 className="h-3.5 w-3.5 shrink-0" />
         )}
-        {label}
+        <span className="truncate">{label}</span>
       </span>
     </Button>
   );
@@ -279,12 +297,23 @@ function DiscoverReelCard({
             <span className="italic text-muted-foreground">No caption</span>
           )}
         </p>
+        <p className="text-[10px] text-muted-foreground">
+          <span className="font-medium text-foreground/90">@{reel.owner.username}</span>
+          <span aria-hidden> · </span>
+          <span>{formatNumber(reel.owner.followers)} followers</span>
+        </p>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
           <span>{formatNumber(reel.views)} views</span>
           <span aria-hidden>·</span>
           <span>{formatNumber(reel.likes)} likes</span>
           <span aria-hidden>·</span>
           <span>{formatNumber(reel.comments)} comments</span>
+          {reel.postedAt ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>{formatRelativeActive(new Date(reel.postedAt))}</span>
+            </>
+          ) : null}
           {engagementPct != null ? (
             <>
               <span aria-hidden>·</span>
@@ -310,6 +339,7 @@ function DiscoverReelCard({
             onStart={onRemakeStart}
             onOpenScript={onRemakeOpenScript}
             onRetry={onRemakeRetry}
+            onInspirationSave={onSave}
           />
         </div>
       </div>
@@ -379,9 +409,17 @@ function CreatorBehindReelCard({
             <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-400" aria-label="Verified" />
           ) : null}
         </div>
-        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-          @{owner.username} · {formatNumber(owner.followers)} · {nicheLabel}
-        </p>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="min-w-0 truncate">@{owner.username}</span>
+          <span className="shrink-0" aria-hidden>
+            ·
+          </span>
+          <span className="shrink-0">{formatNumber(owner.followers)}</span>
+          <span className="shrink-0" aria-hidden>
+            ·
+          </span>
+          <span className="min-w-0 truncate">{nicheLabel}</span>
+        </div>
       </div>
       <Button
         type="button"
@@ -943,7 +981,7 @@ export default function Discovery() {
       likeCount: reel.likes,
       commentCount: reel.comments,
       engagementRate: engagementPct ?? 0,
-      postedAt: new Date(),
+      postedAt: reel.postedAt ? new Date(reel.postedAt) : new Date(),
       duration: null as number | null,
       niche: null as string | null,
       hookPattern: null as string | null,
@@ -1168,7 +1206,11 @@ export default function Discovery() {
             isNoSpeech={false}
             onTranscribe={() => {}}
             userTimezone={userTimezone}
-            postedAt={new Date()}
+            postedAt={
+              modalDiscoverReel.postedAt
+                ? new Date(modalDiscoverReel.postedAt)
+                : new Date()
+            }
             recreateEntrySignal={
               recreatePulse?.reelId === gridModalReelId
                 ? {

@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import {
+  coerceInstagramTakenAtRaw,
   createDiscoveryScCallTracker,
   runWithDiscoveryScCallTracker,
   scrapeReels,
@@ -130,6 +131,7 @@ export interface DiscoveryResult {
     reachMultiplier: number;
     engagementRate: number;
     tier: 1 | 2;
+    postedAt: string | null;
     owner: {
       username: string;
       fullName: string;
@@ -170,6 +172,7 @@ interface ParsedReel {
   comments: number;
   videoUrl: string;
   thumbnailUrl: string;
+  postedAt: Date | null;
   owner: {
     username: string;
     fullName: string;
@@ -295,6 +298,16 @@ function dedupeHashtagList(tags: string[]): string[] {
   return out;
 }
 
+function readPostedAtFromPost(post: Record<string, unknown>): Date | null {
+  return (
+    coerceInstagramTakenAtRaw(post.taken_at_timestamp) ??
+    coerceInstagramTakenAtRaw(post.taken_at) ??
+    coerceInstagramTakenAtRaw(post.timestamp) ??
+    coerceInstagramTakenAtRaw(post.device_timestamp) ??
+    null
+  );
+}
+
 function reelDataToParsedReel(
   reel: ReelData,
   owner: ParsedReel["owner"]
@@ -307,6 +320,7 @@ function reelDataToParsedReel(
     comments: reel.commentCount,
     videoUrl: reel.videoUrl,
     thumbnailUrl: reel.thumbnailUrl,
+    postedAt: reel.postedAt ?? null,
     owner: {
       username: owner.username,
       fullName: owner.fullName,
@@ -512,6 +526,7 @@ function reelFromPost(item: unknown): ParsedReel | null {
     comments,
     videoUrl,
     thumbnailUrl,
+    postedAt: readPostedAtFromPost(post),
     owner: {
       username,
       fullName: String(ownerRaw.full_name ?? ownerRaw.fullName ?? "").trim(),
@@ -858,6 +873,7 @@ function topReelsToViralOutput(
       reachMultiplier: reel.reachMultiplier,
       engagementRate: reel.engagementRate,
       tier: reel.tier,
+      postedAt: reel.postedAt ? reel.postedAt.toISOString() : null,
       owner: {
         username: reel.owner.username,
         fullName: reel.owner.fullName,

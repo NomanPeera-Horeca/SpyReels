@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { mergeRemakeability } from "@/lib/remakeability";
 import { trpc } from "@/lib/trpc";
 
 export type RemakeStage =
@@ -8,6 +9,7 @@ export type RemakeStage =
   | "transcribing"
   | "generating"
   | "ready"
+  | "inspiration"
   | "error";
 
 export type DiscoverRemakeState = {
@@ -36,6 +38,7 @@ const STAGE_FLOOR: Record<RemakeStage, number> = {
   transcribing: 25,
   generating: 65,
   ready: 100,
+  inspiration: 100,
   error: 0,
 };
 
@@ -45,6 +48,7 @@ const STAGE_CEILING: Record<RemakeStage, number> = {
   transcribing: 65,
   generating: 95,
   ready: 100,
+  inspiration: 100,
   error: 0,
 };
 
@@ -70,7 +74,11 @@ type IngestTranscribeDeps = {
   fetchCollectedList: () => Promise<Array<{ id: number; status: string }>>;
   fetchTranscribeStatus: (
     reelId: number
-  ) => Promise<{ status: string; transcript?: string | null } | null>;
+  ) => Promise<{
+    status: string;
+    transcript?: string | null;
+    segments?: unknown;
+  } | null>;
   isCancelled: () => boolean;
   onProgress?: (patch: Partial<DiscoverRemakeState> & { stage: RemakeStage }) => void;
 };
@@ -243,6 +251,26 @@ export function useDiscoverRemakeChain() {
         const reelId = await runDiscoverIngestAndTranscribe(reel, buildIngestDeps(shortcode));
         if (cancelledRef.current.has(shortcode)) return;
 
+        const tx = await trpcUtils.transcribe.status.fetch({ reelId });
+        const remakeCheck = mergeRemakeability(
+          tx
+            ? {
+                status: tx.status,
+                transcript: tx.transcript,
+                segments: tx.segments,
+              }
+            : null
+        );
+        if (remakeCheck.notRemakeable) {
+          runningRef.current.delete(shortcode);
+          patchState(shortcode, {
+            stage: "inspiration",
+            progressPercent: 100,
+            reelId,
+          });
+          return;
+        }
+
         patchState(shortcode, { stage: "generating", progressPercent: 65, reelId });
 
         const generateResult = await generateMutation.mutateAsync({
@@ -308,6 +336,7 @@ export function useDiscoverRemakeChain() {
       ) {
         return;
       }
+      if (current?.stage === "inspiration") return;
       if (current?.stage === "ready" && current.reelId != null && current.scriptId != null) {
         return;
       }
@@ -408,6 +437,8 @@ export function remakeButtonLabel(state: DiscoverRemakeState): string {
       return `Transcribing… ${pct}%`;
     case "generating":
       return `Generating… ${pct}%`;
+    case "inspiration":
+      return "Save for inspiration";
     case "ready":
       return "Open script";
     case "error":
