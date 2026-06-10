@@ -271,8 +271,8 @@ function reelClassificationFromRow(reel: {
   };
 }
 
-/** Module scope: shared user-job + featured dashboard grid strips. */
-function dashboardGridOneClickRemake(args: {
+/** Module scope: shared user-job + featured dashboard list + grid strips. */
+function dashboardOneClickRemake(args: {
   /** Dashboard row id for triggerOpenMyScript (user reelId or featuredReelId). */
   openScriptReelId: number;
   jobId?: number;
@@ -2339,7 +2339,6 @@ export default function Dashboard() {
                   isProcessing &&
                   !isFeaturedView &&
                   (reel.transcription?.status !== "processing" || !reel.transcription?.startedAt);
-                const transcribeAtCap = transcribeInFlightRef.current >= 5;
                 const recreateSt = reelRecreateState(
                   recreateMap[reel.id as keyof typeof recreateMap] as RecreateBatchEntry | undefined
                 );
@@ -2348,6 +2347,42 @@ export default function Dashboard() {
                   hasTranscription &&
                   !isNoSpeech &&
                   recreateSt === "none";
+
+                const librarySource: LibraryRemakeSource | null = isFeaturedView
+                  ? { source: "featured", featuredReelId: reel.id }
+                  : jobId != null
+                    ? { source: "user", reelId: reel.id, jobId: jobId }
+                    : null;
+                const hookState =
+                  librarySource != null
+                    ? getRemakeState(libraryRemakeKey(librarySource))
+                    : null;
+                const isProcessingForStrip =
+                  isProcessing || hookState?.stage === "transcribing";
+                const batchEntry = recreateMap[reel.id as keyof typeof recreateMap] as
+                  | RecreateBatchEntry
+                  | undefined;
+                const alreadyTranscribed = hasTranscription && !isNoSpeech;
+                const oneClickRemake =
+                  librarySource != null && hookState != null
+                    ? dashboardOneClickRemake({
+                        openScriptReelId: reel.id,
+                        jobId: librarySource.source === "user" ? jobId! : undefined,
+                        isNoSpeech,
+                        alreadyTranscribed,
+                        idleNotRemakeable,
+                        classificationReason: reel.classificationReason ?? undefined,
+                        classification: reelClassificationFromRow(reel),
+                        batchRecreateSt: recreateSt,
+                        batchEntry,
+                        hookState,
+                        librarySource,
+                        startRemake,
+                        retryRemake,
+                        startInspirationSave,
+                        triggerOpenMyScript,
+                      })
+                    : undefined;
 
                 return (
                   <div
@@ -2464,15 +2499,13 @@ export default function Dashboard() {
                           reelUrl={reel.reelUrl}
                           isSaved={isSaved}
                           hasTranscription={hasTranscription}
-                          isProcessing={isProcessing}
+                          isProcessing={isProcessingForStrip}
                           isFailed={isFailed}
                           recreateState={recreateSt}
-                          idleNotRemakeable={idleNotRemakeable}
                           saveBusy={toggleSave.isPending}
-                          transcribeDisabled={transcribeAtCap}
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
-                          classificationReason={reel.classificationReason ?? undefined}
+                          oneClickRemake={oneClickRemake}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -2480,20 +2513,10 @@ export default function Dashboard() {
                               toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
                             }
                           }}
-                          onTranscribe={() =>
-                            runTranscribeClick(reel.id, {
-                              mode: isFeaturedView ? "featured" : "user",
-                              expand: true,
-                            })
-                          }
+                          onTranscribe={() => {}}
                           onExpand={() => setExpandedReelId(reel.id)}
-                          onMakeVersion={() => triggerRecreatePulse(reel.id)}
-                          onOpenMyScript={() => {
-                            const e = recreateMap[reel.id as keyof typeof recreateMap] as
-                              | RecreateBatchEntry
-                              | undefined;
-                            if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
-                          }}
+                          onMakeVersion={() => {}}
+                          onOpenMyScript={() => {}}
                         />
                         <Button
                           variant="ghost"
@@ -2630,7 +2653,7 @@ export default function Dashboard() {
                   const alreadyTranscribed = hasTranscription && !isNoSpeech;
                   const oneClickRemake =
                     librarySource != null && hookState != null
-                      ? dashboardGridOneClickRemake({
+                      ? dashboardOneClickRemake({
                           openScriptReelId: reel.id,
                           jobId: librarySource.source === "user" ? jobId! : undefined,
                           isNoSpeech,
