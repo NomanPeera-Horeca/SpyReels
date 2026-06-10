@@ -34,8 +34,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function useLibraryRemakeChain() {
+export type UseLibraryRemakeChainOptions = {
+  /**
+   * Fired when a reel's remake stage changes. Parents use this for
+   * surface-specific cache refresh (e.g. Dashboard invalidates reels.list
+   * after transcribe completes) without baking query keys into the hook.
+   */
+  onStageChange?: (
+    source: LibraryRemakeSource,
+    stage: LibraryRemakeStage,
+    prevStage: LibraryRemakeStage | undefined
+  ) => void;
+};
+
+export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}) {
   const trpcUtils = trpc.useUtils();
+  const onStageChangeRef = useRef(options.onStageChange);
+  onStageChangeRef.current = options.onStageChange;
   const transcribeStartMutation = trpc.transcribe.start.useMutation();
   const collectedTranscribeMutation = trpc.collected.transcribe.useMutation();
   const generateMutation = trpc.recreate.generate.useMutation();
@@ -48,22 +63,31 @@ export function useLibraryRemakeChain() {
   const cancelledRef = useRef<Set<string>>(new Set());
 
   const patchState = useCallback(
-    (key: string, patch: Partial<LibraryRemakeState> & { stage: LibraryRemakeStage }) => {
-      setStateByKey((prev) => ({
-        ...prev,
-        [key]: {
+    (
+      source: LibraryRemakeSource,
+      patch: Partial<LibraryRemakeState> & { stage: LibraryRemakeStage }
+    ) => {
+      const key = libraryRemakeKey(source);
+      setStateByKey((prev) => {
+        const prevStage = prev[key]?.stage ?? ("idle" as LibraryRemakeStage);
+        const nextState: LibraryRemakeState = {
           ...(prev[key] ?? { stage: "idle" as LibraryRemakeStage, progressPercent: 0 }),
           ...patch,
-        },
-      }));
+        };
+        if (prevStage !== patch.stage) {
+          onStageChangeRef.current?.(source, patch.stage, prevStage);
+        }
+        return { ...prev, [key]: nextState };
+      });
     },
     []
   );
 
   const failRemake = useCallback(
-    (key: string, message: string) => {
+    (source: LibraryRemakeSource, message: string) => {
+      const key = libraryRemakeKey(source);
       runningRef.current.delete(key);
-      patchState(key, { stage: "error", progressPercent: 0, errorMessage: message });
+      patchState(source, { stage: "error", progressPercent: 0, errorMessage: message });
       toast.error(message);
     },
     [patchState]
@@ -100,7 +124,7 @@ export function useLibraryRemakeChain() {
           await assertLibraryTranscriptionReadyOnce(fetchTranscribeStatus, statusInput);
           if (cancelledRef.current.has(key)) return;
         } else {
-          patchState(key, {
+          patchState(source, {
             stage: "transcribing",
             progressPercent: 25,
             ...resolveLibraryIds(source, reelId),
@@ -112,7 +136,7 @@ export function useLibraryRemakeChain() {
             });
             if (cancelledRef.current.has(key)) return;
             reelId = result.reelId;
-            patchState(key, {
+            patchState(source, {
               stage: "transcribing",
               progressPercent: 25,
               ...resolveLibraryIds(source, reelId),
@@ -124,7 +148,7 @@ export function useLibraryRemakeChain() {
                 {
                   isCancelled: () => cancelledRef.current.has(key),
                   onAttempt: (attempt) =>
-                    patchState(key, {
+                    patchState(source, {
                       stage: "transcribing",
                       progressPercent: libraryEasedPercent(
                         "transcribing",
@@ -149,7 +173,7 @@ export function useLibraryRemakeChain() {
                 {
                   isCancelled: () => cancelledRef.current.has(key),
                   onAttempt: (attempt) =>
-                    patchState(key, {
+                    patchState(source, {
                       stage: "transcribing",
                       progressPercent: libraryEasedPercent(
                         "transcribing",
@@ -174,7 +198,7 @@ export function useLibraryRemakeChain() {
                 {
                   isCancelled: () => cancelledRef.current.has(key),
                   onAttempt: (attempt) =>
-                    patchState(key, {
+                    patchState(source, {
                       stage: "transcribing",
                       progressPercent: libraryEasedPercent(
                         "transcribing",
@@ -202,7 +226,7 @@ export function useLibraryRemakeChain() {
 
         if (!gate.proceed) {
           runningRef.current.delete(key);
-          patchState(key, {
+          patchState(source, {
             stage: "inspiration",
             progressPercent: 100,
             classificationReason: gate.classificationReason,
@@ -211,7 +235,7 @@ export function useLibraryRemakeChain() {
           return;
         }
 
-        patchState(key, {
+        patchState(source, {
           stage: "generating",
           progressPercent: 65,
           ...resolveLibraryIds(source, reelId),
@@ -238,7 +262,7 @@ export function useLibraryRemakeChain() {
 
         for (let attempt = 1; !scriptDone && attempt <= LIBRARY_GENERATE_MAX; attempt++) {
           if (cancelledRef.current.has(key)) return;
-          patchState(key, {
+          patchState(source, {
             stage: "generating",
             progressPercent: libraryEasedPercent("generating", attempt, LIBRARY_GENERATE_MAX),
             scriptId,
@@ -263,7 +287,7 @@ export function useLibraryRemakeChain() {
         }
 
         runningRef.current.delete(key);
-        patchState(key, {
+        patchState(source, {
           stage: "ready",
           progressPercent: 100,
           scriptId,
@@ -272,7 +296,7 @@ export function useLibraryRemakeChain() {
       } catch (err) {
         if (cancelledRef.current.has(key)) return;
         const message = err instanceof Error ? err.message : "Remake failed. Try again.";
-        failRemake(key, message);
+        failRemake(source, message);
       }
     },
     [

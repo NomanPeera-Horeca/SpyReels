@@ -94,7 +94,23 @@ export interface ReelActionButtonsProps {
   collectionMode?: boolean;
   onRemoveFromCollection?: () => void;
   removeFromCollectionBusy?: boolean;
+
+  /**
+   * One-click remake strip: hides Transcript/Transcribe + Make My Version;
+   * single primary CTA from parent (Dashboard grid user-job).
+   */
+  oneClickRemake?: OneClickRemakeAction;
 }
+
+export type OneClickRemakeAction = {
+  label: string;
+  disabled?: boolean;
+  loading?: boolean;
+  tooltip?: string;
+  /** default | ready (emerald) | inspiration (primary outline) */
+  tone?: "default" | "ready" | "inspiration";
+  onClick: () => void;
+};
 
 /**
  * Shared action buttons used by List + Grid. Keeping a single component
@@ -127,6 +143,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     collectionMode = false,
     onRemoveFromCollection,
     removeFromCollectionBusy,
+    oneClickRemake,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
@@ -153,6 +170,37 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         </Button>
       )}
 
+      {oneClickRemake ? (
+        <Tooltip content={oneClickRemake.tooltip ?? oneClickRemake.label}>
+          <span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={`h-7 text-xs px-2 ${
+                oneClickRemake.tone === "ready"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+                  : oneClickRemake.tone === "inspiration"
+                    ? "border-primary/30 text-primary hover:bg-primary/10"
+                    : "border-primary/30 text-primary hover:bg-primary/10"
+              }`}
+              disabled={oneClickRemake.disabled}
+              onClick={oneClickRemake.onClick}
+              title={oneClickRemake.tooltip ?? oneClickRemake.label}
+            >
+              {oneClickRemake.loading ? (
+                <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+              ) : oneClickRemake.tone === "inspiration" ? (
+                <Bookmark className="h-3 w-3 sm:mr-1" />
+              ) : (
+                <Wand2 className="h-3 w-3 sm:mr-1" />
+              )}
+              <span className={labelClass}>{oneClickRemake.label}</span>
+            </Button>
+          </span>
+        </Tooltip>
+      ) : (
+        <>
       {hasTranscription ? (
         isNoSpeech ? (
           <Tooltip content="No transcript available">
@@ -317,7 +365,10 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         )
       )}
 
-      {!hideExternalLink && (
+        </>
+      )}
+
+      {!oneClickRemake && !hideExternalLink && (
         <Button
           variant="ghost"
           size="sm"
