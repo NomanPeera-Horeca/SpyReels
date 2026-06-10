@@ -16,6 +16,7 @@ import {
 } from "../instagram";
 import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
+import { DISCOVERY_REELS_PER_PAGE } from "../../shared/const";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const TOP_N = 100;
@@ -29,6 +30,7 @@ const MIN_VIRAL_SCORE = 1;
 const TIER2_MIN_VIEWS = 1_000;
 const TIER2_MIN_REACH_MULTIPLIER = 1.5;
 const MIN_RELEVANCE_SCORE = 55;
+const MAX_REELS_PER_CREATOR_PER_WINDOW = 3;
 
 /** Same prompt as scripts/test-scrapecreators-discovery.ts */
 const HASHTAG_EXPANSION_PROMPT = `You generate Instagram-native hashtags for creator discovery on SpyReels.
@@ -757,6 +759,97 @@ Return relevance JSON for every shortcode listed above.`;
   return out;
 }
 
+function ownerUsernameKey(reel: ScoredReel): string {
+  return reel.owner.username.toLowerCase();
+}
+
+function pickNextReelForWindow(
+  remaining: ScoredReel[],
+  windowCounts: Map<string, number>
+): ScoredReel | null {
+  const eligible = remaining.filter(
+    (reel) =>
+      (windowCounts.get(ownerUsernameKey(reel)) ?? 0) <
+      MAX_REELS_PER_CREATOR_PER_WINDOW
+  );
+  if (eligible.length === 0) return null;
+
+  const tier1StillUnplaced = remaining.some((reel) => reel.tier === 1);
+  const tier1Eligible = eligible.filter((reel) => reel.tier === 1);
+
+  let pool: ScoredReel[];
+  if (tier1Eligible.length > 0) {
+    pool = tier1Eligible;
+  } else if (!tier1StillUnplaced) {
+    pool = eligible.filter((reel) => reel.tier === 2);
+  } else {
+    return null;
+  }
+
+  if (pool.length === 0) return null;
+
+  const bestByOwner = new Map<string, ScoredReel>();
+  for (const reel of pool) {
+    const key = ownerUsernameKey(reel);
+    const prev = bestByOwner.get(key);
+    if (!prev || reel.viralScore > prev.viralScore) {
+      bestByOwner.set(key, reel);
+    }
+  }
+
+  let best: ScoredReel | null = null;
+  let bestIdx = Infinity;
+  for (const reel of bestByOwner.values()) {
+    const idx = remaining.indexOf(reel);
+    if (idx >= 0 && idx < bestIdx) {
+      bestIdx = idx;
+      best = reel;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Reorder reels into page windows so no creator appears more than
+ * MAX_REELS_PER_CREATOR_PER_WINDOW times per DISCOVERY_REELS_PER_PAGE slot block.
+ * Deferred reels carry to the next window in original relative order.
+ * Tier-1 reels never yield slots to tier-2 while any tier-1 remain unplaced.
+ */
+export function applyPerCreatorWindowCap(
+  ordered: ScoredReel[],
+  topN: number = TOP_N
+): ScoredReel[] {
+  if (ordered.length === 0) return [];
+
+  const remaining = [...ordered];
+  const output: ScoredReel[] = [];
+
+  while (remaining.length > 0 && output.length < topN) {
+    const windowCounts = new Map<string, number>();
+    let slotsFilled = 0;
+
+    while (
+      slotsFilled < DISCOVERY_REELS_PER_PAGE &&
+      remaining.length > 0 &&
+      output.length < topN
+    ) {
+      const pick = pickNextReelForWindow(remaining, windowCounts);
+      if (!pick) break;
+
+      const idx = remaining.indexOf(pick);
+      remaining.splice(idx, 1);
+      output.push(pick);
+
+      const key = ownerUsernameKey(pick);
+      windowCounts.set(key, (windowCounts.get(key) ?? 0) + 1);
+      slotsFilled++;
+    }
+  }
+
+  return output.slice(0, topN);
+}
+
 async function applyRelevanceFilter(
   client: Anthropic,
   businessDescription: string,
@@ -847,7 +940,8 @@ async function applyRelevanceFilter(
     `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped (minScore=${MIN_RELEVANCE_SCORE}), ${haikuCalls} Haiku calls`
   );
 
-  return { topReels: [...tier1, ...tier2].slice(0, TOP_N), haikuCalls };
+  const diversified = applyPerCreatorWindowCap([...tier1, ...tier2], TOP_N);
+  return { topReels: diversified, haikuCalls };
 }
 
 function topReelsToViralOutput(

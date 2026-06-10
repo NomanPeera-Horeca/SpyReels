@@ -33,6 +33,7 @@ import {
   remakeButtonLabel,
   useDiscoverRemakeChain,
 } from "@/hooks/useDiscoverRemakeChain";
+import { DISCOVERY_REELS_PER_PAGE } from "@shared/const";
 
 type DiscoveryResultPayload =
   inferRouterOutputs<AppRouter>["discovery"]["getSearch"];
@@ -45,7 +46,6 @@ type ViralTier = ViralReel["viralTier"];
 
 const MAX_DESCRIPTION_LENGTH = 500;
 const MIN_DESCRIPTION_LENGTH = 20;
-const REELS_PER_PAGE = 9;
 
 const DISCOVERY_SEARCH_TIPS: readonly string[] = [
   "We map your description to a niche, then search real Instagram hashtags for recent Reels.",
@@ -818,10 +818,10 @@ export default function Discovery() {
     [result]
   );
 
-  const totalPages = Math.ceil(orderedReels.length / REELS_PER_PAGE);
+  const totalPages = Math.ceil(orderedReels.length / DISCOVERY_REELS_PER_PAGE);
   const paginatedReels = useMemo(() => {
-    const start = (reelPage - 1) * REELS_PER_PAGE;
-    return orderedReels.slice(start, start + REELS_PER_PAGE);
+    const start = (reelPage - 1) * DISCOVERY_REELS_PER_PAGE;
+    return orderedReels.slice(start, start + DISCOVERY_REELS_PER_PAGE);
   }, [orderedReels, reelPage]);
 
   const paginatedTier1 = useMemo(
