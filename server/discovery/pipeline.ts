@@ -30,6 +30,7 @@ const MIN_VIRAL_SCORE = 1;
 const TIER2_MIN_VIEWS = 1_000;
 const TIER2_MIN_REACH_MULTIPLIER = 1.5;
 const MIN_RELEVANCE_SCORE = 55;
+const LANGUAGE_MISMATCH_PENALTY = 35;
 const MAX_REELS_PER_CREATOR_PER_WINDOW = 3;
 
 /** Same prompt as scripts/test-scrapecreators-discovery.ts */
@@ -87,7 +88,7 @@ Given the user's business description, routed niche label, and a batch of Reels 
 Return ONLY valid JSON in this exact shape:
 {
   "reels": [
-    { "shortcode": "AbC123", "relevant": true, "score": 85 }
+    { "shortcode": "AbC123", "relevant": true, "score": 85, "languageMismatch": false }
   ]
 }
 
@@ -98,9 +99,12 @@ RULES:
 4. EXAMPLE: For a search like "AI and automation for small business", a reel teaching AI tools, business systems, or automation IS relevant. A reel where a car detailing shop owner, florist, or woodworker talks about their trade is NOT relevant, even though they are a small business.
 5. Mark relevant false for clearly off-topic content: burger reviews for restaurant SaaS, gaming for wedding photography coaching, unrelated hobby or trade content for a niche-specific search.
 6. score is 0 to 100: how well this reel's topic and angle match what the user is looking for. Score below 55 means weak or tangential fit. Be honest with low scores for borderline content.
-7. Return exactly one entry per input shortcode. Use the exact shortcode strings from the input.
-8. Do not use em dashes anywhere.
-9. Return ONLY the JSON object, no preamble, no code fences.`;
+7. LANGUAGE (separate from score): Determine the dominant language of the business description and the dominant language of each reel caption. Set languageMismatch true ONLY when the caption is clearly and dominantly in a DIFFERENT language than the business description. Set languageMismatch false when the caption matches the description language, contains meaningful content in that language (mixed or code-switched captions count as match), or is too short, emoji-only, or hashtag-only to tell.
+8. Do NOT lower score because of language. Score only topical relevance. languageMismatch is a separate boolean flag.
+9. Include languageMismatch (boolean) on every reel entry.
+10. Return exactly one entry per input shortcode. Use the exact shortcode strings from the input.
+11. Do not use em dashes anywhere.
+12. Return ONLY the JSON object, no preamble, no code fences.`;
 
 export type ViralTier = "Trending" | "Healthy" | "Strong" | "Viral" | "Explosive";
 
@@ -659,29 +663,54 @@ function selectTopScoredReels(reels: ParsedReel[]): {
   };
 }
 
-interface RelevanceVerdict {
+export interface RelevanceVerdict {
   shortcode: string;
   relevant: boolean;
   score: number;
+  languageMismatch: boolean;
 }
 
 interface RelevanceEntry {
   keep: boolean;
   score: number;
+  rawScore: number;
+  languageMismatch: boolean;
 }
 
-function shouldKeepRelevanceVerdict(verdict: RelevanceVerdict): RelevanceEntry {
+export function effectiveRelevanceScore(verdict: RelevanceVerdict): number {
+  const raw = verdict.score;
+  if (!verdict.languageMismatch) return raw;
+  return Math.max(0, raw - LANGUAGE_MISMATCH_PENALTY);
+}
+
+export function shouldKeepRelevanceVerdict(verdict: RelevanceVerdict): RelevanceEntry {
+  const effectiveScore = effectiveRelevanceScore(verdict);
   if (verdict.relevant === false) {
-    return { keep: false, score: verdict.score };
+    return {
+      keep: false,
+      score: effectiveScore,
+      rawScore: verdict.score,
+      languageMismatch: verdict.languageMismatch,
+    };
   }
-  if (verdict.score < MIN_RELEVANCE_SCORE) {
-    return { keep: false, score: verdict.score };
+  if (effectiveScore < MIN_RELEVANCE_SCORE) {
+    return {
+      keep: false,
+      score: effectiveScore,
+      rawScore: verdict.score,
+      languageMismatch: verdict.languageMismatch,
+    };
   }
-  return { keep: true, score: verdict.score };
+  return {
+    keep: true,
+    score: effectiveScore,
+    rawScore: verdict.score,
+    languageMismatch: verdict.languageMismatch,
+  };
 }
 
-function failOpenRelevanceEntry(): RelevanceEntry {
-  return { keep: true, score: 50 };
+export function failOpenRelevanceEntry(): RelevanceEntry {
+  return { keep: true, score: 50, rawScore: 50, languageMismatch: false };
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -735,6 +764,7 @@ Return relevance JSON for every shortcode listed above.`;
       shortcode?: string;
       relevant?: boolean;
       score?: number;
+      languageMismatch?: boolean;
     }>;
   };
 
@@ -754,6 +784,7 @@ Return relevance JSON for every shortcode listed above.`;
       shortcode,
       relevant: row.relevant !== false,
       score,
+      languageMismatch: row.languageMismatch === true,
     });
   }
   return out;
@@ -936,8 +967,12 @@ async function applyRelevanceFilter(
     });
 
   const dropped = candidates.length - surviving.length;
+  const languageMismatchDropped = candidates.filter((reel) => {
+    const entry = relevanceByShortcode.get(reel.shortcode);
+    return entry?.languageMismatch === true && entry.keep === false;
+  }).length;
   console.log(
-    `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped (minScore=${MIN_RELEVANCE_SCORE}), ${haikuCalls} Haiku calls`
+    `[discovery] relevance filter: ${candidates.length} candidates, ${surviving.length} kept, ${dropped} dropped (minScore=${MIN_RELEVANCE_SCORE}, languageMismatchDropped=${languageMismatchDropped}), ${haikuCalls} Haiku calls`
   );
 
   const diversified = applyPerCreatorWindowCap([...tier1, ...tier2], TOP_N);
