@@ -271,10 +271,11 @@ function reelClassificationFromRow(reel: {
   };
 }
 
-/** Module scope: grid map calls this per reel; not recreated each render. */
-function userJobGridOneClickRemake(args: {
-  reelId: number;
-  jobId: number;
+/** Module scope: shared user-job + featured dashboard grid strips. */
+function dashboardGridOneClickRemake(args: {
+  /** Dashboard row id for triggerOpenMyScript (user reelId or featuredReelId). */
+  openScriptReelId: number;
+  jobId?: number;
   isNoSpeech: boolean;
   alreadyTranscribed: boolean;
   idleNotRemakeable: boolean;
@@ -292,11 +293,17 @@ function userJobGridOneClickRemake(args: {
   ) => void;
   triggerOpenMyScript: (reelId: number, scriptId: number) => void;
 }): OneClickRemakeAction {
-  const opts: StartRemakeOptions = {
+  const startOpts: StartRemakeOptions = {
     alreadyTranscribed: args.alreadyTranscribed,
     classification: args.classification,
-    jobId: args.jobId,
+    ...(args.librarySource.source === "user" && args.jobId != null
+      ? { jobId: args.jobId }
+      : {}),
   };
+  const inspirationSaveOpts =
+    args.librarySource.source === "user" && args.jobId != null
+      ? { jobId: args.jobId }
+      : undefined;
   const { hookState, librarySource } = args;
 
   if (hookState.stage === "transcribing" || hookState.stage === "generating") {
@@ -316,7 +323,7 @@ function userJobGridOneClickRemake(args: {
       label: "Save for Inspiration",
       tone: "inspiration",
       tooltip: tip,
-      onClick: () => void args.startInspirationSave(librarySource, { jobId: args.jobId }),
+      onClick: () => void args.startInspirationSave(librarySource, inspirationSaveOpts),
     };
   }
   if (hookState.stage === "ready" && hookState.scriptId != null) {
@@ -324,13 +331,13 @@ function userJobGridOneClickRemake(args: {
       label: "Open script",
       tone: "ready",
       tooltip: "Open your script in the panel below",
-      onClick: () => args.triggerOpenMyScript(args.reelId, hookState.scriptId!),
+      onClick: () => args.triggerOpenMyScript(args.openScriptReelId, hookState.scriptId!),
     };
   }
   if (hookState.stage === "error") {
     return {
       label: "Retry",
-      onClick: () => void args.retryRemake(librarySource, opts),
+      onClick: () => void args.retryRemake(librarySource, startOpts),
     };
   }
 
@@ -343,7 +350,7 @@ function userJobGridOneClickRemake(args: {
       tone: "ready",
       tooltip: "Open your script in the panel below",
       onClick: () =>
-        args.triggerOpenMyScript(args.reelId, args.batchEntry!.latestScriptId),
+        args.triggerOpenMyScript(args.openScriptReelId, args.batchEntry!.latestScriptId),
     };
   }
   if (args.isNoSpeech) {
@@ -360,12 +367,12 @@ function userJobGridOneClickRemake(args: {
       label: "Save for Inspiration",
       tone: "inspiration",
       tooltip: tip,
-      onClick: () => void args.startInspirationSave(librarySource, { jobId: args.jobId }),
+      onClick: () => void args.startInspirationSave(librarySource, inspirationSaveOpts),
     };
   }
   return {
     label: "Remake now",
-    onClick: () => void args.startRemake(librarySource, opts),
+    onClick: () => void args.startRemake(librarySource, startOpts),
   };
 }
 
@@ -864,15 +871,21 @@ export default function Dashboard() {
       stage: LibraryRemakeStage,
       prevStage: LibraryRemakeStage | undefined
     ) => {
-      if (source.source !== "user") return;
       if (
-        prevStage === "transcribing" &&
-        (stage === "generating" || stage === "inspiration")
+        prevStage !== "transcribing" ||
+        (stage !== "generating" && stage !== "inspiration")
       ) {
+        return;
+      }
+      if (source.source === "user") {
         void utils.reels.list.invalidate();
+        return;
+      }
+      if (source.source === "featured" && featuredAccountId != null) {
+        void utils.featured.getDashboardData.invalidate({ featuredAccountId });
       }
     },
-    [utils]
+    [utils, featuredAccountId]
   );
 
   const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
@@ -2600,10 +2613,11 @@ export default function Dashboard() {
                     ? { source: "featured", featuredReelId: reel.id }
                     : { source: "user_job", reelId: reel.id, jobId: jobId! };
 
-                  const isUserJobGrid = !isFeaturedView && jobId != null;
-                  const librarySource: LibraryRemakeSource | null = isUserJobGrid
-                    ? { source: "user", reelId: reel.id, jobId: jobId }
-                    : null;
+                  const librarySource: LibraryRemakeSource | null = isFeaturedView
+                    ? { source: "featured", featuredReelId: reel.id }
+                    : jobId != null
+                      ? { source: "user", reelId: reel.id, jobId: jobId }
+                      : null;
                   const hookState =
                     librarySource != null
                       ? getRemakeState(libraryRemakeKey(librarySource))
@@ -2616,9 +2630,9 @@ export default function Dashboard() {
                   const alreadyTranscribed = hasTranscription && !isNoSpeech;
                   const oneClickRemake =
                     librarySource != null && hookState != null
-                      ? userJobGridOneClickRemake({
-                          reelId: reel.id,
-                          jobId: jobId!,
+                      ? dashboardGridOneClickRemake({
+                          openScriptReelId: reel.id,
+                          jobId: librarySource.source === "user" ? jobId! : undefined,
                           isNoSpeech,
                           alreadyTranscribed,
                           idleNotRemakeable,
@@ -2772,7 +2786,7 @@ export default function Dashboard() {
                             </span>
                           </div>
                         </div>
-                        {isUserJobGrid && oneClickRemake ? (
+                        {oneClickRemake ? (
                           <ReelActionButtons
                             source={source}
                             reelId={reel.id}
@@ -2788,54 +2802,16 @@ export default function Dashboard() {
                             hideExternalLink
                             oneClickRemake={oneClickRemake}
                             onToggleSave={() =>
-                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                              isFeaturedView
+                                ? toggleSave.mutate({ featuredReelId: reel.id })
+                                : toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
                             }
                             onTranscribe={() => {}}
                             onExpand={() => setGridModalReelId(reel.id)}
                             onMakeVersion={() => {}}
                             onOpenMyScript={() => {}}
                           />
-                        ) : (
-                          <ReelActionButtons
-                            source={source}
-                            reelId={reel.id}
-                            reelUrl={reel.reelUrl}
-                            isSaved={isSaved}
-                            hasTranscription={hasTranscription}
-                            isProcessing={isProcessing}
-                            isFailed={isFailed}
-                            recreateState={recreateSt}
-                            idleNotRemakeable={idleNotRemakeable}
-                            saveBusy={toggleSave.isPending}
-                            transcribeDisabled={transcribeAtCap}
-                            isQueued={isTxQueued}
-                            isNoSpeech={isNoSpeech}
-                            classificationReason={reel.classificationReason ?? undefined}
-                            hideBookmark
-                            hideExternalLink
-                            onToggleSave={() => {
-                              if (isFeaturedView) {
-                                toggleSave.mutate({ featuredReelId: reel.id });
-                              } else {
-                                toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
-                              }
-                            }}
-                            onTranscribe={() =>
-                              runTranscribeClick(reel.id, {
-                                mode: isFeaturedView ? "featured" : "user",
-                                expand: false,
-                              })
-                            }
-                            onExpand={() => setGridModalReelId(reel.id)}
-                            onMakeVersion={() =>
-                              runGridMakeVersion(reel.id, isFeaturedView ? "featured" : "user")
-                            }
-                            onOpenMyScript={() => {
-                              const e = batchEntry;
-                              if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
-                            }}
-                          />
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
