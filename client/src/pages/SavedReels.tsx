@@ -32,6 +32,15 @@ import {
 } from "lucide-react";
 import { mergeRemakeability } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
+import {
+  useLibraryRemakeChain,
+  type LibraryRemakeSource,
+  type LibraryRemakeStage,
+} from "@/hooks/useLibraryRemakeChain";
+import {
+  buildLibraryOneClickRemake,
+  reelClassificationFromRow,
+} from "@/lib/oneClickRemakeAction";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import {
@@ -105,6 +114,16 @@ function recreateEntryForItem(
 ): RecreateBatchEntry | undefined {
   if (item.source === "featured") return featuredMap[item.reel.id];
   return scrapedMap[item.reel.id];
+}
+
+function savedItemToLibraryRemakeSource(item: SavedItem): LibraryRemakeSource | null {
+  if (item.source === "featured" && item.featuredReelId != null) {
+    return { source: "featured", featuredReelId: item.featuredReelId };
+  }
+  if ((item.source === "scraped" || item.source === "discover") && item.reelId != null) {
+    return { source: "user", reelId: item.reelId, jobId: item.jobId ?? 0 };
+  }
+  return null;
 }
 
 const RECREATE_BATCH_STALE_MS = 300_000;
@@ -265,6 +284,27 @@ export default function SavedReels() {
 
   const scrapedRecreateMap = recreateScrapedQuery.data || {};
   const featuredRecreateMap = recreateFeaturedQuery.data || {};
+
+  const libraryRemakeOnStageChange = useCallback(
+    (
+      _source: LibraryRemakeSource,
+      stage: LibraryRemakeStage,
+      prevStage: LibraryRemakeStage | undefined
+    ) => {
+      if (
+        prevStage !== "transcribing" ||
+        (stage !== "generating" && stage !== "inspiration")
+      ) {
+        return;
+      }
+      void utils.saved.list.invalidate();
+      void utils.recreate.checkBatch.invalidate();
+    },
+    [utils]
+  );
+
+  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
+    useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
 
   const invalidateTranscriptionFollowUp = useCallback(
     (variables: { reelId?: number; featuredReelId?: number } | undefined) => {
@@ -672,7 +712,6 @@ export default function SavedReels() {
                       isProcessing &&
                       (item.source === "scraped" || item.source === "discover") &&
                       (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
-                    const transcribeAtCap = transcribeInFlightRef.current >= 5;
                     const recreateSt = reelRecreateState(
                       recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
                     );
@@ -681,6 +720,40 @@ export default function SavedReels() {
                       hasTranscription &&
                       !isNoSpeech &&
                       recreateSt === "none";
+
+                    const librarySource = savedItemToLibraryRemakeSource(item);
+                    const hookState =
+                      librarySource != null
+                        ? getRemakeState(libraryRemakeKey(librarySource))
+                        : null;
+                    const isProcessingForStrip =
+                      isProcessing || hookState?.stage === "transcribing";
+                    const batchEntry = recreateEntryForItem(
+                      item,
+                      scrapedRecreateMap,
+                      featuredRecreateMap
+                    );
+                    const alreadyTranscribed = hasTranscription && !isNoSpeech;
+                    const oneClickRemake =
+                      librarySource != null && hookState != null
+                        ? buildLibraryOneClickRemake({
+                            openScriptReelId: reel.id,
+                            jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
+                            isNoSpeech,
+                            alreadyTranscribed,
+                            idleNotRemakeable,
+                            classificationReason: reel.classificationReason ?? undefined,
+                            classification: reelClassificationFromRow(reel),
+                            batchRecreateSt: recreateSt,
+                            batchEntry,
+                            hookState,
+                            librarySource,
+                            startRemake,
+                            retryRemake,
+                            startInspirationSave,
+                            triggerOpenMyScript,
+                          })
+                        : undefined;
 
                     return (
                       <div key={item.id} className="overflow-hidden rounded-lg border border-border/30">
@@ -776,23 +849,18 @@ export default function SavedReels() {
                               reelUrl={reel.reelUrl}
                               isSaved
                               hasTranscription={hasTranscription}
-                              isProcessing={isProcessing}
+                              isProcessing={isProcessingForStrip}
                               isFailed={isFailed}
                               recreateState={recreateSt}
-                              idleNotRemakeable={idleNotRemakeable}
                               saveBusy={toggleSave.isPending}
-                              transcribeDisabled={transcribeAtCap}
                               isQueued={isTxQueued}
                               isNoSpeech={isNoSpeech}
-                              classificationReason={reel.classificationReason ?? undefined}
+                              oneClickRemake={oneClickRemake}
                               onToggleSave={() => onToggleSave(item)}
-                              onTranscribe={() => runTranscribeClick(item, { expand: true })}
+                              onTranscribe={() => {}}
                               onExpand={() => setExpandedSavedId(item.id)}
-                              onMakeVersion={() => triggerRecreatePulse(reel.id)}
-                              onOpenMyScript={() => {
-                                const e = recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap);
-                                if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
-                              }}
+                              onMakeVersion={() => {}}
+                              onOpenMyScript={() => {}}
                             />
                             <Button
                               variant="ghost"
@@ -885,7 +953,6 @@ export default function SavedReels() {
                       isProcessing &&
                       (item.source === "scraped" || item.source === "discover") &&
                       (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
-                    const transcribeAtCap = transcribeInFlightRef.current >= 5;
                     const recreateSt = reelRecreateState(
                       recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
                     );
@@ -894,6 +961,40 @@ export default function SavedReels() {
                       hasTranscription &&
                       !isNoSpeech &&
                       recreateSt === "none";
+
+                    const librarySource = savedItemToLibraryRemakeSource(item);
+                    const hookState =
+                      librarySource != null
+                        ? getRemakeState(libraryRemakeKey(librarySource))
+                        : null;
+                    const isProcessingForStrip =
+                      isProcessing || hookState?.stage === "transcribing";
+                    const batchEntry = recreateEntryForItem(
+                      item,
+                      scrapedRecreateMap,
+                      featuredRecreateMap
+                    );
+                    const alreadyTranscribed = hasTranscription && !isNoSpeech;
+                    const oneClickRemake =
+                      librarySource != null && hookState != null
+                        ? buildLibraryOneClickRemake({
+                            openScriptReelId: reel.id,
+                            jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
+                            isNoSpeech,
+                            alreadyTranscribed,
+                            idleNotRemakeable,
+                            classificationReason: reel.classificationReason ?? undefined,
+                            classification: reelClassificationFromRow(reel),
+                            batchRecreateSt: recreateSt,
+                            batchEntry,
+                            hookState,
+                            librarySource,
+                            startRemake,
+                            retryRemake,
+                            startInspirationSave,
+                            triggerOpenMyScript,
+                          })
+                        : undefined;
 
                     return (
                       <div
@@ -996,26 +1097,21 @@ export default function SavedReels() {
                             reelUrl={reel.reelUrl}
                             isSaved
                             hasTranscription={hasTranscription}
-                            isProcessing={isProcessing}
+                            isProcessing={isProcessingForStrip}
                             isFailed={isFailed}
                             recreateState={recreateSt}
-                            idleNotRemakeable={idleNotRemakeable}
                             saveBusy={toggleSave.isPending}
-                            transcribeDisabled={transcribeAtCap}
                             isQueued={isTxQueued}
                             isNoSpeech={isNoSpeech}
-                            classificationReason={reel.classificationReason ?? undefined}
+                            oneClickRemake={oneClickRemake}
                             compact
                             hideBookmark
                             hideExternalLink
                             onToggleSave={() => onToggleSave(item)}
-                            onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                            onTranscribe={() => {}}
                             onExpand={() => setGridModalSavedId(item.id)}
-                            onMakeVersion={() => runGridMakeVersion(item)}
-                            onOpenMyScript={() => {
-                              const e = recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap);
-                              if (e?.latestScriptId) triggerOpenMyScript(reel.id, e.latestScriptId);
-                            }}
+                            onMakeVersion={() => {}}
+                            onOpenMyScript={() => {}}
                           />
                         </div>
                       </div>

@@ -54,14 +54,12 @@ import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   ReelActionButtons,
-  type OneClickRemakeAction,
   type ReelActionSource,
 } from "@/components/ReelActionButtons";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import {
   useLibraryRemakeChain,
   type LibraryRemakeSource,
-  type StartRemakeOptions,
   type LibraryRemakeStage,
 } from "@/hooks/useLibraryRemakeChain";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -70,11 +68,11 @@ import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
-import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
+import { mergeRemakeability } from "@/lib/remakeability";
 import {
-  libraryRemakeButtonLabel as libraryRemakeButtonLabelFn,
-  type LibraryRemakeState,
-} from "@/lib/libraryRemakeChainCore";
+  buildLibraryOneClickRemake,
+  reelClassificationFromRow,
+} from "@/lib/oneClickRemakeAction";
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { REEL_NICHE_VALUES, formatReelTaxonomyLabel } from "@shared/reelNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
@@ -253,127 +251,6 @@ function reelRecreateState(
   if (entry.status === "pending" || entry.status === "processing") return "generating";
   if (entry.status === "completed") return "ready";
   return "failed";
-}
-
-function reelClassificationFromRow(reel: {
-  classifiedAt?: Date | string | null;
-  suggestedAction?: string | null;
-  contentType?: string | null;
-  remakeabilityScore?: number | null;
-  classificationReason?: string | null;
-}): ReelClassificationLike {
-  return {
-    classifiedAt: reel.classifiedAt ?? null,
-    suggestedAction: reel.suggestedAction ?? null,
-    contentType: reel.contentType ?? null,
-    remakeabilityScore: reel.remakeabilityScore ?? null,
-    classificationReason: reel.classificationReason ?? null,
-  };
-}
-
-/** Module scope: shared user-job + featured dashboard list + grid strips. */
-function dashboardOneClickRemake(args: {
-  /** Dashboard row id for triggerOpenMyScript (user reelId or featuredReelId). */
-  openScriptReelId: number;
-  jobId?: number;
-  isNoSpeech: boolean;
-  alreadyTranscribed: boolean;
-  idleNotRemakeable: boolean;
-  classificationReason?: string | null;
-  classification: ReelClassificationLike;
-  batchRecreateSt: ReturnType<typeof reelRecreateState>;
-  batchEntry: RecreateBatchEntry | undefined;
-  hookState: LibraryRemakeState;
-  librarySource: LibraryRemakeSource;
-  startRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
-  retryRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
-  startInspirationSave: (
-    source: LibraryRemakeSource,
-    opts?: Pick<StartRemakeOptions, "jobId">
-  ) => void;
-  triggerOpenMyScript: (reelId: number, scriptId: number) => void;
-}): OneClickRemakeAction {
-  const startOpts: StartRemakeOptions = {
-    alreadyTranscribed: args.alreadyTranscribed,
-    classification: args.classification,
-    ...(args.librarySource.source === "user" && args.jobId != null
-      ? { jobId: args.jobId }
-      : {}),
-  };
-  const inspirationSaveOpts =
-    args.librarySource.source === "user" && args.jobId != null
-      ? { jobId: args.jobId }
-      : undefined;
-  const { hookState, librarySource } = args;
-
-  if (hookState.stage === "transcribing" || hookState.stage === "generating") {
-    return {
-      label: libraryRemakeButtonLabelFn(hookState),
-      disabled: true,
-      loading: true,
-      onClick: () => {},
-    };
-  }
-  if (hookState.stage === "inspiration") {
-    const tip =
-      hookState.classificationReason?.trim() ||
-      args.classificationReason?.trim() ||
-      "Save for Inspiration";
-    return {
-      label: "Save for Inspiration",
-      tone: "inspiration",
-      tooltip: tip,
-      onClick: () => void args.startInspirationSave(librarySource, inspirationSaveOpts),
-    };
-  }
-  if (hookState.stage === "ready" && hookState.scriptId != null) {
-    return {
-      label: "Open script",
-      tone: "ready",
-      tooltip: "Open your script in the panel below",
-      onClick: () => args.triggerOpenMyScript(args.openScriptReelId, hookState.scriptId!),
-    };
-  }
-  if (hookState.stage === "error") {
-    return {
-      label: "Retry",
-      onClick: () => void args.retryRemake(librarySource, startOpts),
-    };
-  }
-
-  if (args.batchRecreateSt === "generating") {
-    return { label: "Generating...", disabled: true, loading: true, onClick: () => {} };
-  }
-  if (args.batchRecreateSt === "ready" && args.batchEntry?.latestScriptId) {
-    return {
-      label: "Open script",
-      tone: "ready",
-      tooltip: "Open your script in the panel below",
-      onClick: () =>
-        args.triggerOpenMyScript(args.openScriptReelId, args.batchEntry!.latestScriptId),
-    };
-  }
-  if (args.isNoSpeech) {
-    return {
-      label: "No voice",
-      disabled: true,
-      tooltip: "No transcript available. Click the reel to view details.",
-      onClick: () => {},
-    };
-  }
-  if (args.idleNotRemakeable) {
-    const tip = args.classificationReason?.trim() || "Save for Inspiration";
-    return {
-      label: "Save for Inspiration",
-      tone: "inspiration",
-      tooltip: tip,
-      onClick: () => void args.startInspirationSave(librarySource, inspirationSaveOpts),
-    };
-  }
-  return {
-    label: "Remake now",
-    onClick: () => void args.startRemake(librarySource, startOpts),
-  };
 }
 
 /** Bug #20: scroll a reel card/row into view and pulse, matching InlineWorkflow + index.css. */
@@ -2365,7 +2242,7 @@ export default function Dashboard() {
                 const alreadyTranscribed = hasTranscription && !isNoSpeech;
                 const oneClickRemake =
                   librarySource != null && hookState != null
-                    ? dashboardOneClickRemake({
+                    ? buildLibraryOneClickRemake({
                         openScriptReelId: reel.id,
                         jobId: librarySource.source === "user" ? jobId! : undefined,
                         isNoSpeech,
@@ -2653,7 +2530,7 @@ export default function Dashboard() {
                   const alreadyTranscribed = hasTranscription && !isNoSpeech;
                   const oneClickRemake =
                     librarySource != null && hookState != null
-                      ? dashboardOneClickRemake({
+                      ? buildLibraryOneClickRemake({
                           openScriptReelId: reel.id,
                           jobId: librarySource.source === "user" ? jobId! : undefined,
                           isNoSpeech,
