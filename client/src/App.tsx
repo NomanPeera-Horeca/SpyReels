@@ -33,6 +33,7 @@ import BlogEditor from "./pages/BlogEditor";
 import Extension from "./pages/Extension";
 import CollectedReels from "./pages/CollectedReels";
 import Discovery from "./pages/Discovery";
+import CreatorDiscovery from "./pages/CreatorDiscovery";
 import IdeaToScript from "./pages/IdeaToScript";
 import Library from "./pages/Library";
 import PasteScript from "./pages/PasteScript";
@@ -53,6 +54,13 @@ function DashboardRouter() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/discovery">
           {isDiscoveryV1Enabled ? <Discovery /> : <Redirect to="/dashboard" />}
+        </Route>
+        <Route path="/discover-creators">
+          {isDiscoveryV1Enabled ? (
+            <CreatorDiscovery />
+          ) : (
+            <Redirect to="/dashboard" />
+          )}
         </Route>
         <Route path="/saved" component={SavedReels} />
         <Route path="/scripts" component={MyScripts} />
