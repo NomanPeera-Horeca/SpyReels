@@ -25,14 +25,20 @@ describe("isTranscriptionReadyForRecreate", () => {
     ).toBe(true);
   });
 
-  it("accepts completed with segment text only", () => {
+  it("rejects completed with segment text only (no transcript field)", () => {
     expect(
       isTranscriptionReadyForRecreate({
         status: "completed",
         transcript: "",
         segments: [{ text: "spoken words here" }],
       })
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("rejects whitespace-only transcript", () => {
+    expect(
+      isTranscriptionReadyForRecreate({ status: "completed", transcript: "   ", segments: [] })
+    ).toBe(false);
   });
 
   it("rejects completed with empty transcript and no segments", () => {
@@ -71,6 +77,18 @@ describe("assertLibraryTranscriptionReadyOnce", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("throws no-voice on completed segments-only without transcript", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      status: "completed",
+      transcript: "",
+      segments: [{ text: "spoken words here" }],
+    });
+    await expect(assertLibraryTranscriptionReadyOnce(fetch, { reelId: 1 })).rejects.toThrow(
+      /No voice detected/
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("waitForLibraryTranscriptionReady", () => {
@@ -86,6 +104,17 @@ describe("waitForLibraryTranscriptionReady", () => {
 
   it("throws no-voice on terminal completed empty after poll", async () => {
     const fetch = vi.fn().mockResolvedValue({ status: "completed", transcript: "", segments: [] });
+    await expect(
+      waitForLibraryTranscriptionReady(fetch, { reelId: 1 }, { pollMs: 0, maxAttempts: 2 })
+    ).rejects.toThrow(/No voice detected/);
+  });
+
+  it("throws no-voice on completed segments-only without transcript", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      status: "completed",
+      transcript: "",
+      segments: [{ text: "spoken words here" }],
+    });
     await expect(
       waitForLibraryTranscriptionReady(fetch, { reelId: 1 }, { pollMs: 0, maxAttempts: 2 })
     ).rejects.toThrow(/No voice detected/);

@@ -80,11 +80,8 @@ export function libraryEasedPercent(
 export function isTranscriptionReadyForRecreate(
   tx: { status: string; transcript?: string | null; segments?: unknown } | null | undefined
 ): boolean {
-  if (tx?.status !== "completed") return false;
-  const text = String(tx.transcript ?? "").trim();
-  if (text) return true;
-  const segs = Array.isArray(tx.segments) ? tx.segments : [];
-  return segs.some((s) => String((s as { text?: string })?.text ?? "").trim());
+  // Match recreate.generate: status completed AND non-empty transcript field.
+  return tx?.status === "completed" && Boolean(String(tx.transcript ?? "").trim());
 }
 
 export type TranscribeStatusFetch = (

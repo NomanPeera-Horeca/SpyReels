@@ -372,7 +372,11 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       runRecreateScrollPulse();
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [props.recreateEntrySignal?.nonce, runRecreateScrollPulse]);
+  }, [
+    props.recreateEntrySignal?.nonce,
+    props.recreateEntrySignal?.openScriptId,
+    runRecreateScrollPulse,
+  ]);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
@@ -510,11 +514,18 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const showCompletedRewrite =
     activeScriptId != null && script?.status === "completed";
 
+  /** Open script clicked but recreate.status not resolved yet (not generate idle). */
+  const isOpeningExistingScript =
+    activeScriptId != null &&
+    script == null &&
+    (scriptQuery.isLoading || scriptQuery.isFetching);
+
   const showInspirePanel =
     inspirationPanelVariant != null &&
     mergedRemake.notRemakeable &&
     !blockingRecreate &&
     !showCompletedRewrite &&
+    !isOpeningExistingScript &&
     !effectiveIsNoSpeech;
 
   useEffect(() => {
@@ -799,6 +810,14 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             isSaving={saveMutation.isPending}
             userTimezone={userTimezone}
           />
+        ) : isOpeningExistingScript ? (
+          <div
+            ref={recreateSectionRef}
+            className="flex flex-col items-center justify-center gap-2 py-6"
+          >
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading your script...</p>
+          </div>
         ) : showInspirePanel ? (
           <InspirationOnlyPanel
             sectionRef={recreateSectionRef}
