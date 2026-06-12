@@ -1376,6 +1376,7 @@ export const hookGeneratorLeads = mysqlTable("hook_generator_leads", {
   createdIdx: index("idx_hook_leads_created").on(table.createdAt),
 }));
 
+import type { CreatorDiscoveryResult } from "../server/discovery/creatorPipeline";
 import type { DiscoveryResult as DiscoveryPipelineResult } from "../server/discovery/pipeline";
 
 export const discoverySearches = mysqlTable(
@@ -1430,6 +1431,60 @@ export const discoveryJobs = mysqlTable(
 
 export type DiscoveryJob = typeof discoveryJobs.$inferSelect;
 export type InsertDiscoveryJob = typeof discoveryJobs.$inferInsert;
+
+export const creatorDiscoverySearches = mysqlTable(
+  "creator_discovery_searches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessDescription: varchar("businessDescription", { length: 1000 }).notNull(),
+    routedNiche: varchar("routedNiche", { length: 128 }),
+    creatorCount: int("creatorCount").default(0).notNull(),
+    resultJson: json("resultJson").$type<CreatorDiscoveryResult>().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_creator_discovery_searches_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type CreatorDiscoverySearch = typeof creatorDiscoverySearches.$inferSelect;
+export type InsertCreatorDiscoverySearch =
+  typeof creatorDiscoverySearches.$inferInsert;
+
+export const creatorDiscoveryJobs = mysqlTable(
+  "creator_discovery_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessDescription: varchar("businessDescription", { length: 1000 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    routedNiche: varchar("routedNiche", { length: 128 }),
+    topicsTotal: int("topicsTotal").default(0).notNull(),
+    topicsSearched: int("topicsSearched").default(0).notNull(),
+    creatorsFound: int("creatorsFound").default(0).notNull(),
+    partialJson: json("partialJson").$type<CreatorDiscoveryResult>(),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_creator_discovery_jobs_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type CreatorDiscoveryJob = typeof creatorDiscoveryJobs.$inferSelect;
+export type InsertCreatorDiscoveryJob = typeof creatorDiscoveryJobs.$inferInsert;
 
 export const discoveryResults = mysqlTable("discovery_results", {
   id: int("id").primaryKey().autoincrement(),
