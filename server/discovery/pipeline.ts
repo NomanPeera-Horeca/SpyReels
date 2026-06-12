@@ -17,6 +17,20 @@ import {
 import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
 import { DISCOVERY_REELS_PER_PAGE } from "../../shared/const";
+import {
+  type ParsedReel,
+  type ScoredReel,
+  type ViralTier,
+  MIN_REACH_MULTIPLIER,
+  MIN_VIEWS,
+  MIN_VIRAL_SCORE,
+  classifyTier,
+  computeViralScore,
+  passesPrivacyAndFollowers,
+  scoreReel,
+} from "./scoring";
+
+export type { ViralTier } from "./scoring";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const TOP_N = 100;
@@ -24,11 +38,6 @@ const RELEVANCE_CANDIDATE_LIMIT = 150;
 const RELEVANCE_BATCH_SIZE = 15;
 const DISCOVERY_MAX_SC_CALLS = 300;
 const DEFAULT_USD_PER_CREDIT = 0.002;
-const MIN_VIEWS = 5_000;
-const MIN_REACH_MULTIPLIER = 3;
-const MIN_VIRAL_SCORE = 1;
-const TIER2_MIN_VIEWS = 1_000;
-const TIER2_MIN_REACH_MULTIPLIER = 1.5;
 const MIN_RELEVANCE_SCORE = 55;
 const LANGUAGE_MISMATCH_PENALTY = 35;
 const MAX_REELS_PER_CREATOR_PER_WINDOW = 3;
@@ -106,8 +115,6 @@ RULES:
 11. Do not use em dashes anywhere.
 12. Return ONLY the JSON object, no preamble, no code fences.`;
 
-export type ViralTier = "Trending" | "Healthy" | "Strong" | "Viral" | "Explosive";
-
 /** Legacy shape for discovery DB persistence (Apify era). */
 export interface ScoredCreator {
   rankPosition: number;
@@ -168,35 +175,6 @@ interface HashtagSearchResult {
   uniqueCreatorsAfterDedupe: number;
   error: string | null;
   rawResponse: unknown;
-}
-
-interface ParsedReel {
-  shortcode: string;
-  caption: string;
-  views: number;
-  likes: number;
-  comments: number;
-  videoUrl: string;
-  thumbnailUrl: string;
-  postedAt: Date | null;
-  owner: {
-    username: string;
-    fullName: string;
-    followers: number;
-    isVerified: boolean;
-    isPrivate: boolean;
-    biography: string;
-    profilePicUrl: string;
-  };
-}
-
-interface ScoredReel extends ParsedReel {
-  viralScore: number;
-  viralTier: ViralTier;
-  reachMultiplier: number;
-  engagementRate: number;
-  reelUrl: string;
-  tier: 1 | 2;
 }
 
 function stripCodeFences(text: string): string {
@@ -544,64 +522,6 @@ function reelFromPost(item: unknown): ParsedReel | null {
         ownerRaw.profile_pic_url ?? ownerRaw.profilePicUrl ?? ""
       ).trim(),
     },
-  };
-}
-
-function viralTierForScore(score: number): ViralTier {
-  if (score >= 500) return "Explosive";
-  if (score >= 100) return "Viral";
-  if (score >= 25) return "Strong";
-  if (score >= 5) return "Healthy";
-  return "Trending";
-}
-
-function computeViralScore(reel: ParsedReel): number {
-  const reachMultiplier = reel.views / reel.owner.followers;
-  const engagementRate = (reel.likes + reel.comments) / reel.views;
-  return reachMultiplier * engagementRate * 100;
-}
-
-function passesPrivacyAndFollowers(reel: ParsedReel): boolean {
-  return !reel.owner.isPrivate && reel.owner.followers > 0;
-}
-
-function passesTier1Thresholds(reel: ParsedReel): boolean {
-  const reach = reel.views / reel.owner.followers;
-  return (
-    reach >= MIN_REACH_MULTIPLIER &&
-    reel.views >= MIN_VIEWS &&
-    computeViralScore(reel) >= MIN_VIRAL_SCORE
-  );
-}
-
-function passesTier2Thresholds(reel: ParsedReel): boolean {
-  const reach = reel.views / reel.owner.followers;
-  return reach >= TIER2_MIN_REACH_MULTIPLIER && reel.views >= TIER2_MIN_VIEWS;
-}
-
-function classifyTier(reel: ParsedReel): 1 | 2 | null {
-  if (!passesPrivacyAndFollowers(reel)) return null;
-  if (passesTier1Thresholds(reel)) return 1;
-  if (passesTier2Thresholds(reel)) return 2;
-  return null;
-}
-
-function scoreReel(reel: ParsedReel): ScoredReel | null {
-  const tier = classifyTier(reel);
-  if (tier === null) return null;
-
-  const reachMultiplier = reel.views / reel.owner.followers;
-  const engagementRate = (reel.likes + reel.comments) / reel.views;
-  const viralScore = reachMultiplier * engagementRate * 100;
-
-  return {
-    ...reel,
-    tier,
-    reachMultiplier,
-    engagementRate,
-    viralScore,
-    viralTier: viralTierForScore(viralScore),
-    reelUrl: `https://www.instagram.com/reel/${reel.shortcode}/`,
   };
 }
 
