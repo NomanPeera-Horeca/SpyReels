@@ -38,6 +38,16 @@ import {
 } from "lucide-react";
 import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
+import {
+  useLibraryRemakeChain,
+  type LibraryRemakeSource,
+  type LibraryRemakeStage,
+} from "@/hooks/useLibraryRemakeChain";
+import { libraryRemakeKey } from "@/lib/libraryRemakeChainCore";
+import {
+  buildLibraryOneClickRemake,
+  reelClassificationFromRow,
+} from "@/lib/oneClickRemakeAction";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   InlineWorkflow,
@@ -91,6 +101,17 @@ function sourceBadge(reel: CollectedRow): string {
     : reel.source === "extension"
       ? "EXT"
       : "URL";
+}
+
+function collectedRowToLibraryRemakeSource(
+  reel: CollectedRow,
+  mappedReelId: number | null
+): LibraryRemakeSource {
+  return {
+    source: "collected",
+    collectedReelId: reel.id,
+    transcriptionReelId: mappedReelId ?? undefined,
+  };
 }
 
 export default function CollectedReels() {
@@ -414,6 +435,27 @@ export default function CollectedReels() {
 
   const recreateMap = recreateBatchQuery.data || {};
 
+  const libraryRemakeOnStageChange = useCallback(
+    (
+      _source: LibraryRemakeSource,
+      stage: LibraryRemakeStage,
+      prevStage: LibraryRemakeStage | undefined
+    ) => {
+      if (
+        prevStage !== "transcribing" ||
+        (stage !== "generating" && stage !== "inspiration")
+      ) {
+        return;
+      }
+      void utils.collected.list.invalidate();
+      void utils.recreate.checkBatch.invalidate();
+    },
+    [utils]
+  );
+
+  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
+    useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
+
   const currentSortOption = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[4];
 
   const gridModalRow = useMemo(
@@ -511,7 +553,6 @@ export default function CollectedReels() {
       isProcessing &&
       (reel.transcriptionStatus !== "processing" ||
         reel.transcriptionStartedAt == null);
-    const transcribeAtCap = transcribeInFlightRef.current >= 5;
 
     const recreateSt =
       mappedReelId != null
@@ -529,6 +570,37 @@ export default function CollectedReels() {
     const listRemakeHint = mergeRemakeability(transcriptionShape, reel as ReelClassificationLike);
     const idleNotRemakeable =
       listRemakeHint.notRemakeable && hasTranscription && !isNoSpeech && recreateSt === "none";
+
+    const librarySource = collectedRowToLibraryRemakeSource(reel, mappedReelId);
+    const hookState = getRemakeState(libraryRemakeKey(librarySource));
+    const isProcessingForStrip =
+      isProcessing || hookState?.stage === "transcribing";
+    const batchEntry =
+      mappedReelId != null
+        ? (recreateMap[mappedReelId as keyof typeof recreateMap] as RecreateBatchEntry | undefined)
+        : undefined;
+    const alreadyTranscribed = mappedReelId != null && hasTranscription && !isNoSpeech;
+    const resolvedOpenReelId = mappedReelId ?? hookState.reelId ?? null;
+    const oneClickRemake = buildLibraryOneClickRemake({
+      // TS requires number; open-script uses resolvedOpenReelId via wrapper only.
+      openScriptReelId: resolvedOpenReelId ?? 1,
+      isNoSpeech,
+      alreadyTranscribed,
+      idleNotRemakeable,
+      classificationReason: reel.classificationReason ?? undefined,
+      classification: reelClassificationFromRow(reel),
+      batchRecreateSt: recreateSt,
+      batchEntry,
+      hookState,
+      librarySource,
+      startRemake,
+      retryRemake,
+      startInspirationSave,
+      triggerOpenMyScript: (_reelId, scriptId) => {
+        if (resolvedOpenReelId == null) return;
+        triggerOpenMyScript(resolvedOpenReelId, scriptId);
+      },
+    });
 
     const actionReelId = mappedReelId ?? reel.id;
     const hasIg = !!(reel.reelUrl ?? "").trim();
@@ -560,45 +632,24 @@ export default function CollectedReels() {
           reelUrl={hasIg ? reel.reelUrl! : "https://www.instagram.com/"}
           isSaved={false}
           hasTranscription={hasTranscription}
-          isProcessing={isProcessing}
+          isProcessing={isProcessingForStrip}
           isFailed={transcriptionFailed}
           recreateState={recreateSt}
-          idleNotRemakeable={idleNotRemakeable}
-          transcribeDisabled={transcribeAtCap}
           isQueued={isTxQueued}
           isNoSpeech={isNoSpeech}
-          classificationReason={reel.classificationReason ?? undefined}
+          oneClickRemake={oneClickRemake}
           compact={compact}
           hideExternalLink={hideExternal || !hasIg}
           onToggleSave={noopSave}
           saveBusy={false}
-          onTranscribe={() => runCollectTranscribe(reel, { expand: true })}
+          onTranscribe={() => {}}
           onExpand={() => {
             if (mappedReelId == null || isNoSpeech) return;
             if (viewModeRef.current === "grid") setGridModalCollectedId(reel.id);
             else setExpandedCollectedId(reel.id);
           }}
-          onMakeVersion={() => {
-            if (mappedReelId == null) return;
-            if (viewModeRef.current === "grid") {
-              gridRecreateGenerate.mutate({
-                reelId: mappedReelId,
-                topic: "",
-                gradeLevel: "auto",
-              });
-            } else {
-              triggerRecreatePulse(mappedReelId);
-            }
-          }}
-          onOpenMyScript={() => {
-            const e =
-              mappedReelId != null
-                ? (recreateMap[mappedReelId as keyof typeof recreateMap] as RecreateBatchEntry | undefined)
-                : undefined;
-            if (e?.latestScriptId && mappedReelId != null) {
-              triggerOpenMyScript(mappedReelId, e.latestScriptId);
-            }
-          }}
+          onMakeVersion={() => {}}
+          onOpenMyScript={() => {}}
           onRemoveFromCollection={() => deleteMutation.mutate({ id: reel.id })}
           removeFromCollectionBusy={deleteMutation.isPending}
         />
