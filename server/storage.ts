@@ -89,6 +89,18 @@ export async function storagePut(
   return { key, url };
 }
 
+export async function storageReadBuffer(relKey: string): Promise<Buffer> {
+  const client = getS3Client();
+  const bucket = getBucket();
+  const key = normalizeKey(relKey);
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const bytes = await res.Body?.transformToByteArray();
+  if (!bytes || bytes.length === 0) {
+    throw new Error(`R2 object empty or missing: ${key}`);
+  }
+  return Buffer.from(bytes);
+}
+
 /** @returns true if the object exists in the bucket, false if missing, throws on other S3 errors. */
 export async function storageHead(relKey: string): Promise<boolean> {
   const client = getS3Client();

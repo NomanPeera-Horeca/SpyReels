@@ -16,7 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, exportJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertExportJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, ExportJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import {
   createPersonalWorkspaceForUser,
@@ -621,6 +621,92 @@ export async function updateScrapeJob(id: number, data: Partial<Pick<ScrapeJob, 
         }
       : data;
   await db.update(scrapeJobs).set(payload).where(eq(scrapeJobs.id, id));
+}
+
+export async function createExportJob(
+  data: Omit<InsertExportJob, "workspaceId"> & Partial<Pick<InsertExportJob, "workspaceId">>
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const workspaceId =
+    data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
+  const result = await db.insert(exportJobs).values({ ...data, workspaceId });
+  return result[0].insertId;
+}
+
+export async function getExportJobById(id: number): Promise<ExportJob | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db.select().from(exportJobs).where(eq(exportJobs.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function updateExportJob(
+  id: number,
+  data: Partial<
+    Pick<
+      ExportJob,
+      | "status"
+      | "currentStep"
+      | "progressPercent"
+      | "stepDone"
+      | "stepTotal"
+      | "progressLabel"
+      | "fileR2Key"
+      | "filename"
+      | "fileSizeBytes"
+      | "reelCountAtExport"
+      | "errorMessage"
+      | "expiresAt"
+      | "completedAt"
+    >
+  >
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(exportJobs).set(data).where(eq(exportJobs.id, id));
+}
+
+export async function getActiveExportJobForScrapeJob(
+  scrapeJobId: number,
+  workspaceId: string
+): Promise<ExportJob | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(exportJobs)
+    .where(
+      and(
+        eq(exportJobs.scrapeJobId, scrapeJobId),
+        eq(exportJobs.workspaceId, workspaceId),
+        inArray(exportJobs.status, ["pending", "processing"])
+      )
+    )
+    .orderBy(desc(exportJobs.id))
+    .limit(1);
+  return rows[0];
+}
+
+export async function getLatestCompletedExportForScrapeJob(
+  scrapeJobId: number,
+  workspaceId: string
+): Promise<ExportJob | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select()
+    .from(exportJobs)
+    .where(
+      and(
+        eq(exportJobs.scrapeJobId, scrapeJobId),
+        eq(exportJobs.workspaceId, workspaceId),
+        eq(exportJobs.status, "completed")
+      )
+    )
+    .orderBy(desc(exportJobs.id))
+    .limit(1);
+  return rows[0];
 }
 
 export async function getScrapeJobsByWorkspace(workspaceId: string): Promise<ScrapeJob[]> {

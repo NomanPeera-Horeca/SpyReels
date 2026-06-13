@@ -159,6 +159,55 @@ export type ScrapeJob = typeof scrapeJobs.$inferSelect;
 export type InsertScrapeJob = typeof scrapeJobs.$inferInsert;
 
 /**
+ * Background Excel export jobs for a scrape session. Files are cached on R2
+ * so users can re-download without re-running transcription or export credits.
+ */
+export const exportJobs = mysqlTable(
+  "export_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    scrapeJobId: int("scrapeJobId").notNull(),
+    status: mysqlEnum("status", ["pending", "processing", "completed", "failed"])
+      .default("pending")
+      .notNull(),
+    currentStep: mysqlEnum("currentStep", [
+      "pending",
+      "transcribing",
+      "analyzing",
+      "building_excel",
+      "complete",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    progressPercent: int("progressPercent").default(0).notNull(),
+    stepDone: int("stepDone").default(0).notNull(),
+    stepTotal: int("stepTotal").default(0).notNull(),
+    progressLabel: varchar("progressLabel", { length: 255 }),
+    fileR2Key: text("fileR2Key"),
+    filename: varchar("filename", { length: 255 }),
+    fileSizeBytes: int("fileSizeBytes"),
+    reelCountAtExport: int("reelCountAtExport"),
+    errorMessage: text("errorMessage"),
+    expiresAt: timestamp("expiresAt"),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    scrapeJobIdx: index("idx_export_jobs_scrape_job").on(table.scrapeJobId),
+    workspaceIdx: index("idx_export_jobs_workspace").on(table.workspaceId),
+  })
+);
+
+export type ExportJob = typeof exportJobs.$inferSelect;
+export type InsertExportJob = typeof exportJobs.$inferInsert;
+
+/**
  * Individual reels collected from a scrape job.
  */
 export const reels = mysqlTable(

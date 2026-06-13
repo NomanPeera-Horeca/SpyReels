@@ -27,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import ExportJobTracker from "@/components/ExportJobTracker";
 import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -222,6 +223,7 @@ function DashboardLayoutContent({
       <CreateWorkspaceModal />
       <SendToWorkspaceModal />
       <ShareLinkModal />
+      {user ? <ExportJobTracker /> : null}
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"

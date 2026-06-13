@@ -280,6 +280,12 @@ vi.mock("./db", () => ({
     ],
     total: 3,
   }),
+  countReelsForJob: vi.fn().mockResolvedValue(2),
+  createExportJob: vi.fn().mockResolvedValue(99),
+  getExportJobById: vi.fn().mockResolvedValue(null),
+  updateExportJob: vi.fn().mockResolvedValue(undefined),
+  getActiveExportJobForScrapeJob: vi.fn().mockResolvedValue(undefined),
+  getLatestCompletedExportForScrapeJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock the instagram module
@@ -334,6 +340,14 @@ vi.mock("./exportExcel", () => ({
   fetchThumbnailBuffer: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("./exportJobRunner.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./exportJobRunner.js")>();
+  return {
+    ...actual,
+    runExportJob: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 // Mock the LLM module
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn().mockResolvedValue({
@@ -348,6 +362,7 @@ vi.mock("./storage", () => ({
     url: "https://storage.example.com/test.mp4",
   }),
   storageHead: vi.fn().mockResolvedValue(true),
+  storageReadBuffer: vi.fn().mockResolvedValue(Buffer.from("fake-xlsx")),
   r2ObjectPublicUrl: (key: string) => `https://storage.example.com/bucket/${key}`,
 }));
 
@@ -523,68 +538,80 @@ describe("transcribe.status", () => {
   });
 });
 
-describe("export.csv", () => {
-  const completedTranscription = (reelId: number) => ({
-    id: reelId,
-    reelId,
+describe("export jobs", () => {
+  const completedExportRow = {
+    id: 99,
+    userId: 1,
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    scrapeJobId: 1,
     status: "completed" as const,
-    transcript: "Hello world hook text",
-    segments: [{ start: 0, end: 3, text: "Hello world" }],
-    hookAnalysis: "Strong question hook",
-  });
+    currentStep: "complete",
+    progressPercent: 100,
+    stepDone: 0,
+    stepTotal: 0,
+    progressLabel: "Ready to download",
+    fileR2Key: "exports/ws/1/99.xlsx",
+    filename: "reels_testuser_2026-06-09.xlsx",
+    fileSizeBytes: 1024,
+    reelCountAtExport: 2,
+    errorMessage: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    completedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   beforeEach(async () => {
-    const { getTranscriptionByReelId, getTranscriptionsByJobId } = await import("./db");
-    vi.mocked(getTranscriptionByReelId).mockImplementation(async (reelId: number) =>
-      completedTranscription(reelId)
-    );
-    vi.mocked(getTranscriptionsByJobId).mockResolvedValue([
-      completedTranscription(1),
-      completedTranscription(2),
-    ]);
+    const {
+      getActiveExportJobForScrapeJob,
+      getLatestCompletedExportForScrapeJob,
+      getExportJobById,
+      createExportJob,
+    } = await import("./db");
+    vi.mocked(getActiveExportJobForScrapeJob).mockResolvedValue(undefined);
+    vi.mocked(getLatestCompletedExportForScrapeJob).mockResolvedValue(undefined);
+    vi.mocked(getExportJobById).mockResolvedValue(completedExportRow);
+    vi.mocked(createExportJob).mockResolvedValue(99);
   });
 
-  it("generates Excel export with embedded thumbnail support and analysis columns", async () => {
+  it("starts a background export when no cache exists", async () => {
+    const { runExportJob } = await import("./exportJobRunner.js");
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.export.csv({ jobId: 1 });
+    const result = await caller.export.start({ jobId: 1, regenerate: false });
+
+    expect(result.started).toBe(true);
+    expect(result.exportJobId).toBe(99);
+    expect(result.cached).toBe(false);
+    expect(runExportJob).toHaveBeenCalled();
+  });
+
+  it("returns cached export without starting a new job", async () => {
+    const { getLatestCompletedExportForScrapeJob } = await import("./db");
+    vi.mocked(getLatestCompletedExportForScrapeJob).mockResolvedValue(
+      completedExportRow
+    );
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.export.start({ jobId: 1, regenerate: false });
+
+    expect(result.cached).toBe(true);
+    expect(result.status).toBe("completed");
+    expect(result.started).toBe(false);
+  });
+
+  it("downloads a completed export file", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.export.download({ exportJobId: 99 });
 
     expect(result).toHaveProperty("fileBase64");
-    expect(result).toHaveProperty("filename");
-    expect(result).toHaveProperty("mimeType");
     expect(result.filename).toContain(".xlsx");
-    expect(result.filename).toContain("reels_testuser");
     expect(result.mimeType).toContain("spreadsheetml");
-  });
-
-  it("prepares export for a single reel without column parse errors", async () => {
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const singleReel = {
-      id: 1,
-      jobId: 1,
-      shortcode: "XY",
-      caption: "Eat, pray, love, scale",
-      viewCount: 1,
-      likeCount: 1,
-      commentCount: 1,
-      thumbnailUrl: "https://cdn.example.com/t.jpg?w=1,h=2",
-      videoUrl: "https://example.com/v.mp4",
-      reelUrl: "https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test",
-      duration: 10,
-      postedAt: new Date("2025-01-01"),
-      ownerUsername: "u",
-      createdAt: new Date(),
-    };
-    vi.mocked(getReelsByJobId)
-      .mockResolvedValueOnce([singleReel])
-      .mockResolvedValueOnce([singleReel])
-      .mockResolvedValueOnce([singleReel]);
-
-    const result = await caller.export.csv({ jobId: 1 });
-    expect(result.fileBase64).toBeTruthy();
-    expect(result.filename).toContain(".xlsx");
   });
 });
 

@@ -70,6 +70,11 @@ import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
 import { mergeRemakeability } from "@/lib/remakeability";
 import {
+  downloadExportFile,
+  trackExportJob,
+  untrackExportJob,
+} from "@/lib/exportJobs";
+import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
@@ -399,6 +404,105 @@ export default function Dashboard() {
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
 
+  /** Path B: featured catalog dashboard (no scrape_job). */
+  const isFeaturedView = !!featuredAccountId && !jobId;
+
+  const exportLatestQuery = trpc.export.latestForScrapeJob.useQuery(
+    { jobId: jobId! },
+    {
+      enabled: !!jobId && !isFeaturedView,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        return d.status === "pending" || d.status === "processing" ? 2500 : false;
+      },
+    }
+  );
+
+  const [activeExportJobId, setActiveExportJobId] = useState<number | null>(null);
+
+  const exportStatusQuery = trpc.export.status.useQuery(
+    { exportJobId: activeExportJobId! },
+    {
+      enabled: activeExportJobId != null,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return 2500;
+        return d.status === "pending" || d.status === "processing" ? 2500 : false;
+      },
+    }
+  );
+
+  const exportDownload = trpc.export.download.useMutation({
+    onSuccess: (data) => {
+      downloadExportFile(data);
+      toast.success("Export downloaded!", { description: `Saved as ${data.filename}` });
+    },
+    onError: (error) => {
+      toast.error("Download failed", { description: error.message });
+    },
+  });
+
+  const exportStart = trpc.export.start.useMutation({
+    onSuccess: (data) => {
+      if (data.cached && data.status === "completed") {
+        exportDownload.mutate({ exportJobId: data.exportJobId });
+        return;
+      }
+      setActiveExportJobId(data.exportJobId);
+      trackExportJob({
+        exportJobId: data.exportJobId,
+        scrapeJobId: jobId!,
+        handle: stripAtHandle(jobQuery.data?.handle ?? "") || "export",
+      });
+      toast.info("Export started", {
+        description: "You can leave this page. We will notify you when it is ready.",
+      });
+      void exportLatestQuery.refetch();
+    },
+    onError: (error) => {
+      toast.error("Export failed", { description: error.message });
+    },
+  });
+
+  useEffect(() => {
+    const latest = exportLatestQuery.data;
+    if (latest && (latest.status === "pending" || latest.status === "processing")) {
+      setActiveExportJobId(latest.exportJobId);
+    }
+  }, [exportLatestQuery.data]);
+
+  useEffect(() => {
+    const status = exportStatusQuery.data;
+    if (!status || status.status !== "completed" || !activeExportJobId) return;
+    void exportLatestQuery.refetch();
+    untrackExportJob(activeExportJobId);
+    if (document.visibilityState === "visible") {
+      exportDownload.mutate({ exportJobId: activeExportJobId });
+    }
+    setActiveExportJobId(null);
+  }, [exportStatusQuery.data, activeExportJobId, exportDownload, exportLatestQuery]);
+
+  const exportInProgress =
+    exportStart.isPending ||
+    exportLatestQuery.data?.status === "pending" ||
+    exportLatestQuery.data?.status === "processing" ||
+    exportStatusQuery.data?.status === "pending" ||
+    exportStatusQuery.data?.status === "processing";
+
+  const exportProgressLabel = (() => {
+    const s = exportStatusQuery.data ?? exportLatestQuery.data;
+    if (!s) return "Preparing export…";
+    if (s.progressLabel) return `${s.progressLabel} (${s.progressPercent}%)`;
+    return `Preparing export… (${s.progressPercent}%)`;
+  })();
+
+  const cachedExportReady =
+    exportLatestQuery.data?.cached === true &&
+    exportLatestQuery.data.status === "completed";
+
+  const exportIsStale = exportLatestQuery.data?.isStale === true;
+
   const sheetsAvailable = trpc.export.sheetsAvailable.useQuery();
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
@@ -411,9 +515,6 @@ export default function Dashboard() {
       : cachedJobForStale.status === "pending" || cachedJobForStale.status === "running"
         ? 0
         : DASHBOARD_SNAPSHOT_STALE_MS;
-  /** `isFeaturedView` is the Path B branch: read-only catalog dashboard
-   * served directly from `featured_*` tables. No scrape_job is created. */
-  const isFeaturedView = !!featuredAccountId && !jobId;
   const billingSubscriptionQuery = trpc.billing.subscription.useQuery(undefined, {
     enabled: !!jobId || isFeaturedView,
   });
@@ -1085,27 +1186,6 @@ export default function Dashboard() {
       startTranscription,
     ]
   );
-
-  const exportCsv = trpc.export.csv.useMutation({
-    onSuccess: (data) => {
-      const binary = atob(data.fileBase64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: data.mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = data.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("Export downloaded!", { description: `Saved as ${data.filename}` });
-    },
-    onError: (error) => {
-      toast.error("Export failed", { description: error.message });
-    },
-  });
 
   const exportSheets = trpc.export.googleSheets.useMutation({
     onSuccess: (data) => {
@@ -2086,7 +2166,15 @@ export default function Dashboard() {
                       view until the catalog is wired into export. */}
                   {!isFeaturedView && (
                     <>
-                      <Tooltip content="Download all reels data as a CSV file">
+                      <Tooltip
+                        content={
+                          cachedExportReady
+                            ? "Download your saved Excel file (no credits)"
+                            : exportIsStale
+                              ? "New reels since last export. Regenerate uses 1 export credit."
+                              : "Export reels to Excel with transcripts and filming tips"
+                        }
+                      >
                         <Button
                           variant="outline"
                           size="sm"
@@ -2096,6 +2184,12 @@ export default function Dashboard() {
                               csvLock.requireUpgrade();
                               return;
                             }
+                            if (cachedExportReady && exportLatestQuery.data) {
+                              exportDownload.mutate({
+                                exportJobId: exportLatestQuery.data.exportJobId,
+                              });
+                              return;
+                            }
                             if (!exportGate.allowed) {
                               toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
                                 description: "Upgrade your plan for more exports.",
@@ -2103,14 +2197,19 @@ export default function Dashboard() {
                               });
                               return;
                             }
-                            exportCsv.mutate({ jobId: jobId! });
+                            exportStart.mutate({ jobId: jobId!, regenerate: false });
                           }}
-                          disabled={exportCsv.isPending}
+                          disabled={exportInProgress || exportDownload.isPending}
                         >
-                          {exportCsv.isPending ? (
+                          {exportInProgress ? (
                             <>
                               <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                              <span className="hidden sm:inline">Preparing export...</span>
+                              <span className="hidden sm:inline">{exportProgressLabel}</span>
+                            </>
+                          ) : cachedExportReady ? (
+                            <>
+                              <Download className="h-3.5 w-3.5 sm:mr-2" />
+                              <span className="hidden sm:inline">Download Excel</span>
                             </>
                           ) : (
                             <>
@@ -2120,6 +2219,25 @@ export default function Dashboard() {
                           )}
                         </Button>
                       </Tooltip>
+
+                      {(cachedExportReady || exportIsStale) && !exportInProgress ? (
+                        <Tooltip content="Create a fresh export (uses 1 export credit)">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 text-xs"
+                            onClick={() => {
+                              if (!exportGate.allowed) {
+                                toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`);
+                                return;
+                              }
+                              exportStart.mutate({ jobId: jobId!, regenerate: true });
+                            }}
+                          >
+                            Regenerate
+                          </Button>
+                        </Tooltip>
+                      ) : null}
 
                       {/*
                       Connect to Sheets (UI disabled; re-enable when integration ships)

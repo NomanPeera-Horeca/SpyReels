@@ -118,6 +118,10 @@ import {
   updateScrapeJobResync,
   deleteScrapeJob,
   countReelsForJob,
+  createExportJob,
+  getExportJobById,
+  getActiveExportJobForScrapeJob,
+  getLatestCompletedExportForScrapeJob,
   getOnboardingState,
   updateOnboardingState,
   updateUserPersonalization,
@@ -213,13 +217,10 @@ import type { Transcription, Reel, User } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import { classifyReelsByIds, ensureThumbnailTextForReels } from "./services/classifyReels.js";
-import { buildExcelExportBuffer, fetchThumbnailBuffer } from "./exportExcel";
-import {
-  formatProductionFormatLabel,
-  productionFormatFilmingTip,
-} from "../shared/productionFormats";
+import { buildExportRows, prepareReelsForExport } from "./exportPipeline";
+import { runExportJob, getExportJobIfAccessible } from "./exportJobRunner";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
-import type { ReelExportRow } from "./exportTypes";
+import { storageReadBuffer } from "./storage";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
@@ -2475,17 +2476,155 @@ Return JSON only:
 
   // ── Export ──
   export: router({
-    /** Check if Google Sheets is configured */
     sheetsAvailable: protectedProcedure.query(() => {
       return { available: isGoogleSheetsConfigured() };
     }),
 
-    /** Generate Excel export with embedded thumbnails */
-    csv: protectedProcedure
+    /** Latest cached Excel export for a scrape job (free re-download if valid). */
+    latestForScrapeJob: protectedProcedure
       .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const active = await getActiveExportJobForScrapeJob(input.jobId, ctx.workspaceId);
+        const currentReelCount = await countReelsForJob(input.jobId);
+        if (active) {
+          return {
+            exportJobId: active.id,
+            status: active.status,
+            currentStep: active.currentStep,
+            progressPercent: active.progressPercent,
+            stepDone: active.stepDone,
+            stepTotal: active.stepTotal,
+            progressLabel: active.progressLabel,
+            filename: active.filename,
+            isStale: false,
+            isExpired: false,
+            cached: false,
+          };
+        }
+
+        const cached = await getLatestCompletedExportForScrapeJob(
+          input.jobId,
+          ctx.workspaceId
+        );
+        if (!cached) {
+          return null;
+        }
+
+        const isExpired =
+          cached.expiresAt != null && new Date(cached.expiresAt) < new Date();
+        const isStale =
+          cached.reelCountAtExport != null &&
+          cached.reelCountAtExport < currentReelCount;
+
+        return {
+          exportJobId: cached.id,
+          status: cached.status,
+          currentStep: cached.currentStep,
+          progressPercent: cached.progressPercent,
+          stepDone: cached.stepDone,
+          stepTotal: cached.stepTotal,
+          progressLabel: cached.progressLabel,
+          filename: cached.filename,
+          completedAt: cached.completedAt,
+          reelCountAtExport: cached.reelCountAtExport,
+          currentReelCount,
+          isStale,
+          isExpired,
+          cached: !isExpired && !isStale,
+        };
+      }),
+
+    /** Poll export job progress. */
+    status: protectedProcedure
+      .input(z.object({ exportJobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const row = await getExportJobIfAccessible(input.exportJobId, ctx.workspaceId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Export not found" });
+
+        const currentReelCount = await countReelsForJob(row.scrapeJobId);
+        const isExpired =
+          row.expiresAt != null && new Date(row.expiresAt) < new Date();
+        const isStale =
+          row.reelCountAtExport != null &&
+          row.reelCountAtExport < currentReelCount;
+
+        return {
+          exportJobId: row.id,
+          scrapeJobId: row.scrapeJobId,
+          status: row.status,
+          currentStep: row.currentStep,
+          progressPercent: row.progressPercent,
+          stepDone: row.stepDone,
+          stepTotal: row.stepTotal,
+          progressLabel: row.progressLabel,
+          filename: row.filename,
+          errorMessage: row.errorMessage,
+          completedAt: row.completedAt,
+          isStale,
+          isExpired,
+          cached: row.status === "completed" && !isExpired && !isStale,
+        };
+      }),
+
+    /** Start background export (or return existing in-flight job). */
+    start: protectedProcedure
+      .input(
+        z.object({
+          jobId: z.number(),
+          regenerate: z.boolean().optional().default(false),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        // Check usage limit
-        const usageCheck = await checkUsageLimit(ctx.user.id, "exportCount", ctx.user.openId);
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const currentReelCount = await countReelsForJob(input.jobId);
+
+        if (!input.regenerate) {
+          const active = await getActiveExportJobForScrapeJob(
+            input.jobId,
+            ctx.workspaceId
+          );
+          if (active) {
+            return {
+              exportJobId: active.id,
+              status: active.status as "pending" | "processing",
+              started: false,
+              cached: false,
+            };
+          }
+
+          const cached = await getLatestCompletedExportForScrapeJob(
+            input.jobId,
+            ctx.workspaceId
+          );
+          if (cached) {
+            const isExpired =
+              cached.expiresAt != null && new Date(cached.expiresAt) < new Date();
+            const isStale =
+              cached.reelCountAtExport != null &&
+              cached.reelCountAtExport < currentReelCount;
+            if (!isExpired && !isStale) {
+              return {
+                exportJobId: cached.id,
+                status: "completed" as const,
+                started: false,
+                cached: true,
+              };
+            }
+          }
+        }
+
+        const usageCheck = await checkUsageLimit(
+          ctx.user.id,
+          "exportCount",
+          ctx.user.openId
+        );
         if (!usageCheck.allowed) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -2493,30 +2632,94 @@ Return JSON only:
           });
         }
         await incrementUsage(ctx.user.id, "exportCount");
-        const job = await getScrapeJob(input.jobId);
-        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
-        await prepareReelsForExport(input.jobId, ctx.user.id, ctx.user.openId);
-        const { rows, job: exportJob } = await buildExportRows(input.jobId);
 
-        const thumbnailBuffers = new Map<number, Buffer>();
-        for (const row of rows) {
-          let url = row.thumbnailUrl;
-          if (url) {
-            url = await ensureReelThumbnailOnR2(row.shortcode, url);
-          }
-          const buf = url ? await fetchThumbnailBuffer(url) : null;
-          if (buf) thumbnailBuffers.set(row.reelId, buf);
+        const exportJobId = await createExportJob({
+          userId: ctx.user.id,
+          scrapeJobId: input.jobId,
+          status: "pending",
+          currentStep: "pending",
+          progressPercent: 0,
+          progressLabel: "Queued…",
+        });
+
+        runExportJob(
+          exportJobId,
+          ctx.user.id,
+          ctx.user.openId,
+          input.jobId,
+          ctx.workspaceId
+        ).catch((err) => {
+          console.error(`[export.start] background job ${exportJobId} failed:`, err);
+        });
+
+        return {
+          exportJobId,
+          status: "pending" as const,
+          started: true,
+          cached: false,
+        };
+      }),
+
+    /** Download a completed export (no credits). */
+    download: protectedProcedure
+      .input(z.object({ exportJobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const row = await getExportJobIfAccessible(input.exportJobId, ctx.workspaceId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Export not found" });
+        if (row.status !== "completed" || !row.fileR2Key || !row.filename) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Export is not ready yet.",
+          });
+        }
+        if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "This export expired. Regenerate to create a new file.",
+          });
         }
 
-        const xlsxBuffer = await buildExcelExportBuffer(rows, thumbnailBuffers);
-        const filename = `reels_${exportJob?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const buffer = await storageReadBuffer(row.fileR2Key);
         return {
-          fileBase64: xlsxBuffer.toString("base64"),
-          filename,
+          fileBase64: buffer.toString("base64"),
+          filename: row.filename,
           mimeType:
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         };
+      }),
+
+    /** @deprecated Use export.start + export.download */
+    csv: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const cached = await getLatestCompletedExportForScrapeJob(
+          input.jobId,
+          ctx.workspaceId
+        );
+        const currentReelCount = await countReelsForJob(input.jobId);
+        if (
+          cached?.fileR2Key &&
+          cached.filename &&
+          cached.reelCountAtExport === currentReelCount &&
+          (!cached.expiresAt || new Date(cached.expiresAt) >= new Date())
+        ) {
+          const buffer = await storageReadBuffer(cached.fileR2Key);
+          return {
+            fileBase64: buffer.toString("base64"),
+            filename: cached.filename,
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          };
+        }
+
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Use export.start for background exports.",
+        });
       }),
 
     /** Export to Google Sheets */
@@ -5990,187 +6193,6 @@ export type AppRouter = typeof appRouter;
 
 // ── Helper functions ──
 
-function sortReelsForExport(reelsList: Reel[], followerCount: number): Reel[] {
-  return [...reelsList].sort((a, b) => {
-    const erA = accountEngagementRatePercent(a.likeCount, a.commentCount, followerCount);
-    const erB = accountEngagementRatePercent(b.likeCount, b.commentCount, followerCount);
-    if (erB !== erA) return erB - erA;
-    return b.viewCount - a.viewCount;
-  });
-}
-
-function postedDayAndHourUtc(postedAt: Date | string | null | undefined): {
-  postedDay: string;
-  postedHourUtc: number | "";
-} {
-  if (!postedAt) return { postedDay: "", postedHourUtc: "" };
-  const d = new Date(postedAt);
-  if (Number.isNaN(d.getTime())) return { postedDay: "", postedHourUtc: "" };
-  const postedDay = d.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
-  return { postedDay, postedHourUtc: d.getUTCHours() };
-}
-
-function hookTextForExport(t: Transcription | undefined): string {
-  const fromSegments = extractHookTextFromSegments(t?.segments ?? null);
-  if (fromSegments) return fromSegments;
-  const transcript = t?.transcript?.trim();
-  if (!transcript) return "";
-  return transcript.slice(0, 200);
-}
-
-function buildReelExportRow(
-  r: Reel,
-  followerCount: number,
-  t: Transcription | undefined
-): ReelExportRow {
-  const { postedDay, postedHourUtc } = postedDayAndHourUtc(r.postedAt);
-  const productionFormat = r.productionFormat || "";
-  return {
-    reelId: r.id,
-    reelUrl: r.reelUrl,
-    shortcode: r.shortcode,
-    caption: r.caption || "",
-    viewCount: r.viewCount,
-    likeCount: r.likeCount,
-    commentCount: r.commentCount,
-    engagementRate: accountEngagementRatePercent(
-      r.likeCount,
-      r.commentCount,
-      followerCount
-    ),
-    duration: r.duration || 0,
-    postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
-    postedDay,
-    postedHourUtc,
-    hookText: hookTextForExport(t),
-    productionFormat,
-    productionFormatLabel: formatProductionFormatLabel(productionFormat),
-    filmingTip: productionFormatFilmingTip(productionFormat),
-    thumbnailText: r.thumbnailText || "",
-    hookPattern: r.hookPattern || "",
-    contentType: r.contentType || "",
-    remakeabilityScore: r.remakeabilityScore ?? "",
-    suggestedAction: r.suggestedAction || "",
-    classificationReason: r.classificationReason || "",
-    niche: r.niche || "",
-    viralFlag: Boolean(r.viralFlag),
-    transcript: t?.transcript || "",
-    hookAnalysis: t?.hookAnalysis || "",
-    thumbnailUrl: r.thumbnailUrl || "",
-  };
-}
-
-async function buildExportRows(jobId: number): Promise<{
-  rows: ReelExportRow[];
-  job: Awaited<ReturnType<typeof getScrapeJob>>;
-}> {
-  const job = await getScrapeJob(jobId);
-  const reelsList = await getReelsByJobId(jobId);
-  const transcriptionsList = await getTranscriptionsByJobId(jobId);
-  const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
-  const followerCount = job?.followerCount || 0;
-  const sorted = sortReelsForExport(reelsList, followerCount);
-  const rows = sorted.map((r) =>
-    buildReelExportRow(r, followerCount, transcriptionMap.get(r.id))
-  );
-  return { rows, job };
-}
-
-async function waitForTranscriptionComplete(
-  reelId: number,
-  maxMs = 180_000
-): Promise<Awaited<ReturnType<typeof getTranscriptionByReelId>>> {
-  const started = Date.now();
-  while (Date.now() - started < maxMs) {
-    const t = await getTranscriptionByReelId(reelId);
-    if (t?.status === "completed" || t?.status === "failed") return t;
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  return getTranscriptionByReelId(reelId);
-}
-
-/** Transcribe, classify, and fill visual export fields before download. */
-async function prepareReelsForExport(
-  jobId: number,
-  userId: number,
-  openId: string
-): Promise<void> {
-  const reelsList = await getReelsByJobId(jobId);
-
-  for (const reel of reelsList) {
-    let existing = await getTranscriptionByReelId(reel.id);
-
-    if (existing?.status === "completed") continue;
-
-    if (existing?.status === "processing") {
-      await waitForTranscriptionComplete(reel.id);
-      continue;
-    }
-
-    const usageCheck = await checkUsageLimit(userId, "transcribeCount", openId);
-    if (!usageCheck.allowed) break;
-
-    if (existing?.status === "failed") {
-      const { getDb } = await import("./db");
-      const db = await getDb();
-      if (db) {
-        const { transcriptions: transcriptionsTable } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
-        await db.delete(transcriptionsTable).where(eq(transcriptionsTable.id, existing.id));
-      }
-    }
-
-    const transcriptionId = await createTranscription({
-      reelId: reel.id,
-      featuredReelId: null,
-      status: "processing",
-      queuedAt: new Date(),
-    });
-
-    await incrementUsage(userId, "transcribeCount");
-
-    await runTranscription(transcriptionId, {
-      id: reel.id,
-      shortcode: reel.shortcode,
-      videoUrl: reel.videoUrl,
-      caption: reel.caption,
-      thumbnailUrl: reel.thumbnailUrl,
-    });
-  }
-
-  let refreshedReels = await getReelsByJobId(jobId);
-  const transcriptionsList = await getTranscriptionsByJobId(jobId);
-  const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
-  const needsClassifyIds = refreshedReels
-    .filter((r) => {
-      if (!r.classifiedAt) {
-        const t = transcriptionMap.get(r.id);
-        return t?.status === "completed";
-      }
-      return !r.productionFormat;
-    })
-    .map((r) => r.id);
-
-  if (needsClassifyIds.length > 0) {
-    await classifyReelsByIds(needsClassifyIds);
-  }
-
-  refreshedReels = await getReelsByJobId(jobId);
-  const thumbItems = await Promise.all(
-    refreshedReels.map(async (r) => {
-      const stableThumb = r.thumbnailUrl
-        ? await ensureReelThumbnailOnR2(r.shortcode, r.thumbnailUrl)
-        : "";
-      return {
-        id: r.id,
-        thumbnailUrl: stableThumb || r.thumbnailUrl,
-        thumbnailText: r.thumbnailText,
-      };
-    })
-  );
-  await ensureThumbnailTextForReels(thumbItems);
-}
-
 /**
  * Flip `hasCompletedFirstSpy` exactly once for a user's first successful
  * non-demo scrape completion. Guard rails:
@@ -7042,7 +7064,7 @@ async function runResyncJob(
 }
 
 /** Background transcription runner */
-async function runTranscription(
+export async function runTranscription(
   transcriptionId: number,
   reel: {
     id: number;
