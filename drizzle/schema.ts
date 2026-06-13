@@ -250,6 +250,19 @@ export const reels = mysqlTable(
   completionRate: decimal("completionRate", { precision: 5, scale: 2 }),
   engagementRate: decimal("engagementRate", { precision: 5, scale: 4 }),
   viralFlag: boolean("viralFlag").default(false).notNull(),
+  /** How the reel was filmed (talking head, b-roll, etc.). Set by classifier. */
+  productionFormat: mysqlEnum("productionFormat", [
+    "talking_head",
+    "b_roll_voiceover",
+    "text_on_screen",
+    "screen_recording",
+    "montage",
+    "skit_multi_person",
+    "music_dance",
+    "other",
+  ]),
+  /** Visible text on the cover thumbnail (vision/OCR). */
+  thumbnailText: varchar("thumbnailText", { length: 512 }),
   },
   (table) => ({
     workspaceIdx: index("idx_reels_workspace").on(table.workspaceId),
@@ -930,6 +943,17 @@ export const featuredReels = mysqlTable(
     ]),
     confidence: tinyint("confidence", { unsigned: true }),
     viralFlag: boolean("viralFlag").default(false).notNull(),
+    productionFormat: mysqlEnum("productionFormat", [
+      "talking_head",
+      "b_roll_voiceover",
+      "text_on_screen",
+      "screen_recording",
+      "montage",
+      "skit_multi_person",
+      "music_dance",
+      "other",
+    ]),
+    thumbnailText: varchar("thumbnailText", { length: 512 }),
   },
   (table) => ({
     reelPerAccountUnique: uniqueIndex("featured_reels_account_shortcode_unique").on(

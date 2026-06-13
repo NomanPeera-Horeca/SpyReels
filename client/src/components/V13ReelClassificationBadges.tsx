@@ -1,7 +1,11 @@
 import type { MouseEvent } from "react";
 import Tooltip from "@/components/Tooltip";
 import { formatReelTaxonomyLabel } from "@shared/reelNiches";
-import { Flame, HelpCircle } from "lucide-react";
+import {
+  formatProductionFormatLabel,
+  productionFormatTooltip,
+} from "@shared/productionFormats";
+import { Flame, HelpCircle, Video } from "lucide-react";
 
 const badgeBase =
   "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium shrink-0";
@@ -13,6 +17,7 @@ function isViralFlagOn(v: boolean | number | null | undefined): boolean {
 export function V13ReelClassificationBadges({
   niche,
   hookPattern,
+  productionFormat,
   viralFlag,
   confidence,
   className,
@@ -20,6 +25,7 @@ export function V13ReelClassificationBadges({
 }: {
   niche?: string | null;
   hookPattern?: string | null;
+  productionFormat?: string | null;
   viralFlag?: boolean | number | null;
   confidence?: number | null;
   className?: string;
@@ -61,6 +67,16 @@ export function V13ReelClassificationBadges({
         >
           {formatReelTaxonomyLabel(hookPattern)}
         </span>
+      ) : null}
+      {productionFormat ? (
+        <Tooltip content={productionFormatTooltip(productionFormat)}>
+          <span
+            className={`${badgeBase} bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-help`}
+          >
+            <Video className="h-3 w-3 shrink-0" aria-hidden />
+            {formatProductionFormatLabel(productionFormat)}
+          </span>
+        </Tooltip>
       ) : null}
       {isViralFlagOn(viralFlag) ? (
         <span

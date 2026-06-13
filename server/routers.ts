@@ -212,8 +212,14 @@ import {
 import type { Transcription, Reel, User } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
-import { classifyReelsByIds } from "./services/classifyReels.js";
+import { classifyReelsByIds, ensureThumbnailTextForReels } from "./services/classifyReels.js";
+import { buildExcelExportBuffer, fetchThumbnailBuffer } from "./exportExcel";
+import {
+  formatProductionFormatLabel,
+  productionFormatFilmingTip,
+} from "../shared/productionFormats";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
+import type { ReelExportRow } from "./exportTypes";
 import { isGoogleDocsConfigured, exportToGoogleDocs } from "./googleDocs";
 import { getTelegramBotInfo, setupTelegramWebhook } from "./telegramBot";
 import crypto from "crypto";
@@ -1089,6 +1095,8 @@ export const appRouter = router({
           classifiedAt: r.classifiedAt ?? null,
           niche: r.niche ?? null,
           hookPattern: r.hookPattern ?? null,
+          productionFormat: r.productionFormat ?? null,
+          thumbnailText: r.thumbnailText ?? null,
           viralFlag: r.viralFlag ?? false,
           confidence: r.confidence ?? null,
         }));
@@ -2472,7 +2480,7 @@ Return JSON only:
       return { available: isGoogleSheetsConfigured() };
     }),
 
-    /** Generate CSV data for download */
+    /** Generate Excel export with embedded thumbnails */
     csv: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -2488,8 +2496,27 @@ Return JSON only:
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
         if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
-        const { csvContent, filename } = await buildExportData(input.jobId);
-        return { csv: csvContent, filename };
+        await prepareReelsForExport(input.jobId, ctx.user.id, ctx.user.openId);
+        const { rows, job: exportJob } = await buildExportRows(input.jobId);
+
+        const thumbnailBuffers = new Map<number, Buffer>();
+        for (const row of rows) {
+          let url = row.thumbnailUrl;
+          if (url) {
+            url = await ensureReelThumbnailOnR2(row.shortcode, url);
+          }
+          const buf = url ? await fetchThumbnailBuffer(url) : null;
+          if (buf) thumbnailBuffers.set(row.reelId, buf);
+        }
+
+        const xlsxBuffer = await buildExcelExportBuffer(rows, thumbnailBuffers);
+        const filename = `reels_${exportJob?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        return {
+          fileBase64: xlsxBuffer.toString("base64"),
+          filename,
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        };
       }),
 
     /** Export to Google Sheets */
@@ -2523,33 +2550,8 @@ Return JSON only:
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
         if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
 
-        const reelsList = await getReelsByJobId(input.jobId);
-        const transcriptionsList = await getTranscriptionsByJobId(input.jobId);
-        const transcriptionMap = new Map(
-          transcriptionsList.map((t) => [t.reelId, t])
-        );
-
-        const followerCount = job.followerCount || 0;
-
-        const rows = reelsList.map((r) => {
-          const t = transcriptionMap.get(r.id);
-          return {
-            reelUrl: r.reelUrl,
-            caption: r.caption || "",
-            viewCount: r.viewCount,
-            likeCount: r.likeCount,
-            commentCount: r.commentCount,
-            engagementRate: accountEngagementRatePercent(
-              r.likeCount,
-              r.commentCount,
-              followerCount
-            ),
-            duration: r.duration || 0,
-            postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
-            transcript: t?.transcript || "",
-            hookAnalysis: t?.hookAnalysis || "",
-          };
-        });
+        await prepareReelsForExport(input.jobId, ctx.user.id, ctx.user.openId);
+        const { rows } = await buildExportRows(input.jobId);
 
         const title = `Reels - @${job.handle || "export"} - ${new Date().toLocaleDateString()}`;
 
@@ -5988,62 +5990,185 @@ export type AppRouter = typeof appRouter;
 
 // ── Helper functions ──
 
-/** RFC 4180: every field double-quoted; internal " escaped as "". */
-function formatCsvField(value: string | number | boolean | null | undefined): string {
-  const s = value === null || value === undefined ? "" : String(value);
-  return `"${s.replace(/"/g, '""')}"`;
+function sortReelsForExport(reelsList: Reel[], followerCount: number): Reel[] {
+  return [...reelsList].sort((a, b) => {
+    const erA = accountEngagementRatePercent(a.likeCount, a.commentCount, followerCount);
+    const erB = accountEngagementRatePercent(b.likeCount, b.commentCount, followerCount);
+    if (erB !== erA) return erB - erA;
+    return b.viewCount - a.viewCount;
+  });
 }
 
-async function buildExportData(jobId: number) {
-  const reelsList = await getReelsByJobId(jobId);
-  const transcriptionsList = await getTranscriptionsByJobId(jobId);
-  const transcriptionMap = new Map(
-    transcriptionsList.map((t) => [t.reelId, t])
-  );
-  const job = await getScrapeJob(jobId);
-  const followerCount = job?.followerCount || 0;
+function postedDayAndHourUtc(postedAt: Date | string | null | undefined): {
+  postedDay: string;
+  postedHourUtc: number | "";
+} {
+  if (!postedAt) return { postedDay: "", postedHourUtc: "" };
+  const d = new Date(postedAt);
+  if (Number.isNaN(d.getTime())) return { postedDay: "", postedHourUtc: "" };
+  const postedDay = d.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  return { postedDay, postedHourUtc: d.getUTCHours() };
+}
 
-  const headers = [
-    "Reel URL",
-    "Caption",
-    "Views",
-    "Likes",
-    "Comments",
-    "Engagement Rate (%)",
-    "Duration (s)",
-    "Posted At",
-    "Transcript",
-    "Hook Analysis",
-  ];
+function hookTextForExport(t: Transcription | undefined): string {
+  const fromSegments = extractHookTextFromSegments(t?.segments ?? null);
+  if (fromSegments) return fromSegments;
+  const transcript = t?.transcript?.trim();
+  if (!transcript) return "";
+  return transcript.slice(0, 200);
+}
 
-  const headerLine = headers.map((h) => formatCsvField(h)).join(",");
-
-  const bodyLines = reelsList.map((r) => {
-    const t = transcriptionMap.get(r.id);
-    const er = accountEngagementRatePercent(
+function buildReelExportRow(
+  r: Reel,
+  followerCount: number,
+  t: Transcription | undefined
+): ReelExportRow {
+  const { postedDay, postedHourUtc } = postedDayAndHourUtc(r.postedAt);
+  const productionFormat = r.productionFormat || "";
+  return {
+    reelId: r.id,
+    reelUrl: r.reelUrl,
+    shortcode: r.shortcode,
+    caption: r.caption || "",
+    viewCount: r.viewCount,
+    likeCount: r.likeCount,
+    commentCount: r.commentCount,
+    engagementRate: accountEngagementRatePercent(
       r.likeCount,
       r.commentCount,
       followerCount
-    );
-    return [
-      formatCsvField(r.reelUrl),
-      formatCsvField(r.caption || ""),
-      formatCsvField(r.viewCount),
-      formatCsvField(r.likeCount),
-      formatCsvField(r.commentCount),
-      formatCsvField(er),
-      formatCsvField(r.duration || 0),
-      formatCsvField(r.postedAt ? new Date(r.postedAt).toISOString() : ""),
-      formatCsvField(t?.transcript || ""),
-      formatCsvField(t?.hookAnalysis || ""),
-    ].join(",");
-  });
+    ),
+    duration: r.duration || 0,
+    postedAt: r.postedAt ? new Date(r.postedAt).toISOString() : "",
+    postedDay,
+    postedHourUtc,
+    hookText: hookTextForExport(t),
+    productionFormat,
+    productionFormatLabel: formatProductionFormatLabel(productionFormat),
+    filmingTip: productionFormatFilmingTip(productionFormat),
+    thumbnailText: r.thumbnailText || "",
+    hookPattern: r.hookPattern || "",
+    contentType: r.contentType || "",
+    remakeabilityScore: r.remakeabilityScore ?? "",
+    suggestedAction: r.suggestedAction || "",
+    classificationReason: r.classificationReason || "",
+    niche: r.niche || "",
+    viralFlag: Boolean(r.viralFlag),
+    transcript: t?.transcript || "",
+    hookAnalysis: t?.hookAnalysis || "",
+    thumbnailUrl: r.thumbnailUrl || "",
+  };
+}
 
-  const csvContent = headerLine + (bodyLines.length ? "\n" + bodyLines.join("\n") : "");
+async function buildExportRows(jobId: number): Promise<{
+  rows: ReelExportRow[];
+  job: Awaited<ReturnType<typeof getScrapeJob>>;
+}> {
+  const job = await getScrapeJob(jobId);
+  const reelsList = await getReelsByJobId(jobId);
+  const transcriptionsList = await getTranscriptionsByJobId(jobId);
+  const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
+  const followerCount = job?.followerCount || 0;
+  const sorted = sortReelsForExport(reelsList, followerCount);
+  const rows = sorted.map((r) =>
+    buildReelExportRow(r, followerCount, transcriptionMap.get(r.id))
+  );
+  return { rows, job };
+}
 
-  const filename = `reels_${job?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.csv`;
+async function waitForTranscriptionComplete(
+  reelId: number,
+  maxMs = 180_000
+): Promise<Awaited<ReturnType<typeof getTranscriptionByReelId>>> {
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    const t = await getTranscriptionByReelId(reelId);
+    if (t?.status === "completed" || t?.status === "failed") return t;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return getTranscriptionByReelId(reelId);
+}
 
-  return { csvContent, filename };
+/** Transcribe, classify, and fill visual export fields before download. */
+async function prepareReelsForExport(
+  jobId: number,
+  userId: number,
+  openId: string
+): Promise<void> {
+  const reelsList = await getReelsByJobId(jobId);
+
+  for (const reel of reelsList) {
+    let existing = await getTranscriptionByReelId(reel.id);
+
+    if (existing?.status === "completed") continue;
+
+    if (existing?.status === "processing") {
+      await waitForTranscriptionComplete(reel.id);
+      continue;
+    }
+
+    const usageCheck = await checkUsageLimit(userId, "transcribeCount", openId);
+    if (!usageCheck.allowed) break;
+
+    if (existing?.status === "failed") {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (db) {
+        const { transcriptions: transcriptionsTable } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        await db.delete(transcriptionsTable).where(eq(transcriptionsTable.id, existing.id));
+      }
+    }
+
+    const transcriptionId = await createTranscription({
+      reelId: reel.id,
+      featuredReelId: null,
+      status: "processing",
+      queuedAt: new Date(),
+    });
+
+    await incrementUsage(userId, "transcribeCount");
+
+    await runTranscription(transcriptionId, {
+      id: reel.id,
+      shortcode: reel.shortcode,
+      videoUrl: reel.videoUrl,
+      caption: reel.caption,
+      thumbnailUrl: reel.thumbnailUrl,
+    });
+  }
+
+  let refreshedReels = await getReelsByJobId(jobId);
+  const transcriptionsList = await getTranscriptionsByJobId(jobId);
+  const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
+  const needsClassifyIds = refreshedReels
+    .filter((r) => {
+      if (!r.classifiedAt) {
+        const t = transcriptionMap.get(r.id);
+        return t?.status === "completed";
+      }
+      return !r.productionFormat;
+    })
+    .map((r) => r.id);
+
+  if (needsClassifyIds.length > 0) {
+    await classifyReelsByIds(needsClassifyIds);
+  }
+
+  refreshedReels = await getReelsByJobId(jobId);
+  const thumbItems = await Promise.all(
+    refreshedReels.map(async (r) => {
+      const stableThumb = r.thumbnailUrl
+        ? await ensureReelThumbnailOnR2(r.shortcode, r.thumbnailUrl)
+        : "";
+      return {
+        id: r.id,
+        thumbnailUrl: stableThumb || r.thumbnailUrl,
+        thumbnailText: r.thumbnailText,
+      };
+    })
+  );
+  await ensureThumbnailTextForReels(thumbItems);
 }
 
 /**

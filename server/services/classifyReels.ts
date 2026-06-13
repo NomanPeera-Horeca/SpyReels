@@ -3,12 +3,14 @@
  * Logic duplicated from scripts/classify-reels.ts — keep in sync manually when changing prompts/validation.
  */
 
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
 import { getDb } from "../db";
 import { reels, transcriptions } from "../../drizzle/schema";
+import { PRODUCTION_FORMAT_VALUES } from "../../shared/productionFormats";
+import { extractThumbnailText } from "./extractThumbnailText";
 
 const BATCH_SIZE = 5;
 
@@ -71,7 +73,7 @@ const NICHE_SET = new Set<string>(NICHE_VALUES);
 
 const SYSTEM_PROMPT = `You are a viral Instagram Reels classifier for SpyReels, a tool that helps creators understand what makes content go viral.
 
-For each reel, read the transcript and metadata, then output a JSON object with exactly these 8 fields:
+For each reel, read the transcript and metadata, then output a JSON object with exactly these 9 fields:
 
 {
   "niche": one of ["real_estate", "fitness", "food", "beauty", "business", "finance", "marketing", "parenting", "travel", "fashion", "tech", "education", "lifestyle", "spirituality", "hospitality"],
@@ -79,10 +81,21 @@ For each reel, read the transcript and metadata, then output a JSON object with 
   "hookPattern": one of ["question", "stat", "contrarian", "story", "direct_promise", "pov", "confession", "listicle", "comparison", "mistake_reveal"],
   "retentionTactics": array of 0 to 3 values from ["cliffhanger", "pattern_interrupt", "specific_numbers", "personal_stake", "callback", "rapid_pacing", "contrast", "list_promise", "direct_address", "proof_artifact"],
   "contentType": one of ["educational", "story", "opinion", "personal", "reaction", "skit", "music", "other"],
+  "productionFormat": one of ["talking_head", "b_roll_voiceover", "text_on_screen", "screen_recording", "montage", "skit_multi_person", "music_dance", "other"],
   "remakeabilityScore": integer 0 to 10 (10 = perfectly remakeable in another creator's voice, 0 = impossible to remake),
   "confidence": integer 0 to 100 (your confidence in this classification),
   "classificationReason": string max 200 chars, plain English, one sentence
 }
+
+productionFormat definitions (how it was filmed):
+- talking_head: person speaks straight to camera, usually one person, chest-up
+- b_roll_voiceover: voiceover over clips of the subject (not face to camera the whole time)
+- text_on_screen: main message is big on-screen text, often with music or simple background
+- screen_recording: shows phone or computer screen (tutorials, app demos)
+- montage: many fast cuts synced to music, lifestyle or aesthetic
+- skit_multi_person: acting, characters, or multiple people performing
+- music_dance: dance, lip-sync, or movement-led with little spoken teaching
+- other: mixed or unclear filming style
 
 RULES:
 - niche must always be set (never null). If unclear, pick the closest fit.
@@ -167,6 +180,7 @@ interface TargetRow {
   likeCount: number;
   commentCount: number;
   transcript: string | null;
+  thumbnailUrl: string | null;
 }
 
 interface ValidClassification {
@@ -175,6 +189,7 @@ interface ValidClassification {
   hookPattern: (typeof HOOK_PATTERN_VALUES)[number];
   retentionTactics: string[];
   contentType: (typeof CONTENT_TYPE_VALUES)[number];
+  productionFormat: (typeof PRODUCTION_FORMAT_VALUES)[number];
   remakeabilityScore: number;
   confidence: number;
   classificationReason: string;
@@ -263,6 +278,17 @@ function validateClassification(
     return null;
   }
 
+  const productionFormat = o.productionFormat;
+  if (
+    typeof productionFormat !== "string" ||
+    !(PRODUCTION_FORMAT_VALUES as readonly string[]).includes(productionFormat)
+  ) {
+    console.warn(
+      `[classify-reels] id=${reelId} validation failed: productionFormat. raw (first 500): ${rawForLog.slice(0, 500)}`
+    );
+    return null;
+  }
+
   const rt = o.retentionTactics;
   if (!Array.isArray(rt)) {
     console.warn(
@@ -338,6 +364,7 @@ function validateClassification(
     hookPattern: hookPattern as ValidClassification["hookPattern"],
     retentionTactics: rtSlice,
     contentType: contentType as ValidClassification["contentType"],
+    productionFormat: productionFormat as ValidClassification["productionFormat"],
     remakeabilityScore: remake,
     confidence: conf,
     classificationReason,
@@ -382,6 +409,7 @@ async function writeClassification(
         hookPattern: v.hookPattern,
         retentionTactics: v.retentionTactics,
         contentType: v.contentType,
+        productionFormat: v.productionFormat,
         remakeabilityScore: v.remakeabilityScore,
         confidence: v.confidence,
         classificationReason: v.classificationReason,
@@ -438,6 +466,20 @@ async function processRow(
   if (!ok) {
     stats.failed++;
     return;
+  }
+
+  const thumbUrl = (row.thumbnailUrl ?? "").trim();
+  if (thumbUrl) {
+    const thumbnailText = await extractThumbnailText(thumbUrl);
+    if (thumbnailText) {
+      const db = await getDb();
+      if (db) {
+        await db
+          .update(reels)
+          .set({ thumbnailText })
+          .where(eq(reels.id, row.id));
+      }
+    }
   }
 
   stats.successful++;
@@ -497,13 +539,19 @@ export async function classifyReelsByIds(
       likeCount: reels.likeCount,
       commentCount: reels.commentCount,
       transcript: transcriptions.transcript,
+      thumbnailUrl: reels.thumbnailUrl,
     })
     .from(reels)
     .leftJoin(
       transcriptions,
       and(eq(transcriptions.reelId, reels.id), eq(transcriptions.status, "completed"))
     )
-    .where(and(inArray(reels.id, uniqueIds), isNull(reels.classifiedAt)))
+    .where(
+      and(
+        inArray(reels.id, uniqueIds),
+        or(isNull(reels.classifiedAt), isNull(reels.productionFormat))
+      )
+    )
     .orderBy(asc(reels.id));
 
   const slice = dedupeTargets(rawRows as TargetRow[]);
@@ -523,4 +571,27 @@ export async function classifyReelsByIds(
   );
 
   return { ok: stats.successful, failed: stats.failed };
+}
+
+/** Fill missing thumbnail text before export (vision on cover image). */
+export async function ensureThumbnailTextForReels(
+  items: Array<{
+    id: number;
+    thumbnailUrl: string | null;
+    thumbnailText: string | null;
+  }>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  for (const item of items) {
+    if (item.thumbnailText?.trim()) continue;
+    const url = (item.thumbnailUrl ?? "").trim();
+    if (!url) continue;
+    const text = await extractThumbnailText(url);
+    await db
+      .update(reels)
+      .set({ thumbnailText: text || null })
+      .where(eq(reels.id, item.id));
+  }
 }

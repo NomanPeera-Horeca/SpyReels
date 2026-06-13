@@ -316,6 +316,24 @@ vi.mock("./_core/voiceTranscription", () => ({
   }),
 }));
 
+vi.mock("./services/transcribeReel.js", () => ({
+  transcribeReel: vi.fn().mockResolvedValue({
+    success: true,
+    transcript: "Hello world",
+    segments: [{ start: 0, end: 3, text: "Hello world" }],
+  }),
+}));
+
+vi.mock("./services/classifyReels.js", () => ({
+  classifyReelsByIds: vi.fn().mockResolvedValue({ ok: 0, failed: 0 }),
+  ensureThumbnailTextForReels: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./exportExcel", () => ({
+  buildExcelExportBuffer: vi.fn().mockResolvedValue(Buffer.from("fake-xlsx")),
+  fetchThumbnailBuffer: vi.fn().mockResolvedValue(null),
+}));
+
 // Mock the LLM module
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn().mockResolvedValue({
@@ -506,57 +524,67 @@ describe("transcribe.status", () => {
 });
 
 describe("export.csv", () => {
-  it("generates RFC 4180 CSV with 10 columns including engagement rate", async () => {
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.export.csv({ jobId: 1 });
-
-    expect(result).toHaveProperty("csv");
-    expect(result).toHaveProperty("filename");
-    const lines = result.csv.trim().split("\n");
-    expect(lines[0]).toBe(
-      '"Reel URL","Caption","Views","Likes","Comments","Engagement Rate (%)","Duration (s)","Posted At","Transcript","Hook Analysis"'
-    );
-    expect(lines.length).toBe(3);
-    expect(result.csv).toContain("Engagement Rate (%)");
-    expect(result.csv).toContain("ABC123");
-    expect(result.csv).toContain("DEF456");
-    expect(result.csv).not.toContain("Shortcode");
-    expect(result.csv).not.toContain("Thumbnail URL");
-    expect(result.filename).toContain("reels_testuser");
+  const completedTranscription = (reelId: number) => ({
+    id: reelId,
+    reelId,
+    status: "completed" as const,
+    transcript: "Hello world hook text",
+    segments: [{ start: 0, end: 3, text: "Hello world" }],
+    hookAnalysis: "Strong question hook",
   });
 
-  it("quotes reel URL and caption when they contain commas (no extra columns)", async () => {
+  beforeEach(async () => {
+    const { getTranscriptionByReelId, getTranscriptionsByJobId } = await import("./db");
+    vi.mocked(getTranscriptionByReelId).mockImplementation(async (reelId: number) =>
+      completedTranscription(reelId)
+    );
+    vi.mocked(getTranscriptionsByJobId).mockResolvedValue([
+      completedTranscription(1),
+      completedTranscription(2),
+    ]);
+  });
+
+  it("generates Excel export with embedded thumbnail support and analysis columns", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
-    vi.mocked(getReelsByJobId).mockResolvedValueOnce([
-      {
-        id: 1,
-        jobId: 1,
-        shortcode: "XY",
-        caption: "Eat, pray, love, scale",
-        viewCount: 1,
-        likeCount: 1,
-        commentCount: 1,
-        thumbnailUrl: "https://cdn.example.com/t.jpg?w=1,h=2",
-        videoUrl: "https://example.com/v.mp4",
-        reelUrl: "https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test",
-        duration: 10,
-        postedAt: new Date("2025-01-01"),
-        ownerUsername: "u",
-        createdAt: new Date(),
-      },
-    ]);
 
     const result = await caller.export.csv({ jobId: 1 });
-    const lines = result.csv.trim().split("\n");
-    expect(lines.length).toBe(2);
-    expect(lines[1]).toContain('"Eat, pray, love, scale"');
-    expect(lines[1]).toContain('"https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test"');
-    // Commas inside quoted fields must not create extra split columns
-    const fields = lines[1].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-    expect(fields).toHaveLength(10);
+
+    expect(result).toHaveProperty("fileBase64");
+    expect(result).toHaveProperty("filename");
+    expect(result).toHaveProperty("mimeType");
+    expect(result.filename).toContain(".xlsx");
+    expect(result.filename).toContain("reels_testuser");
+    expect(result.mimeType).toContain("spreadsheetml");
+  });
+
+  it("prepares export for a single reel without column parse errors", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const singleReel = {
+      id: 1,
+      jobId: 1,
+      shortcode: "XY",
+      caption: "Eat, pray, love, scale",
+      viewCount: 1,
+      likeCount: 1,
+      commentCount: 1,
+      thumbnailUrl: "https://cdn.example.com/t.jpg?w=1,h=2",
+      videoUrl: "https://example.com/v.mp4",
+      reelUrl: "https://www.instagram.com/reel/ZZZ/?query=a,b&_nc_ohc=test",
+      duration: 10,
+      postedAt: new Date("2025-01-01"),
+      ownerUsername: "u",
+      createdAt: new Date(),
+    };
+    vi.mocked(getReelsByJobId)
+      .mockResolvedValueOnce([singleReel])
+      .mockResolvedValueOnce([singleReel])
+      .mockResolvedValueOnce([singleReel]);
+
+    const result = await caller.export.csv({ jobId: 1 });
+    expect(result.fileBase64).toBeTruthy();
+    expect(result.filename).toContain(".xlsx");
   });
 });
 

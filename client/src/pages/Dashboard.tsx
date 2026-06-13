@@ -1088,7 +1088,10 @@ export default function Dashboard() {
 
   const exportCsv = trpc.export.csv.useMutation({
     onSuccess: (data) => {
-      const blob = new Blob([data.csv], { type: "text/csv" });
+      const binary = atob(data.fileBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: data.mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -2105,11 +2108,16 @@ export default function Dashboard() {
                           disabled={exportCsv.isPending}
                         >
                           {exportCsv.isPending ? (
-                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                            <>
+                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              <span className="hidden sm:inline">Preparing export...</span>
+                            </>
                           ) : (
-                            <Download className="h-3.5 w-3.5 sm:mr-2" />
+                            <>
+                              <Download className="h-3.5 w-3.5 sm:mr-2" />
+                              <span className="hidden sm:inline">Export Excel</span>
+                            </>
                           )}
-                          <span className="hidden sm:inline">Export CSV</span>
                         </Button>
                       </Tooltip>
 
@@ -2359,6 +2367,9 @@ export default function Dashboard() {
                           <V13ReelClassificationBadges
                             niche={reel.niche}
                             hookPattern={reel.hookPattern}
+                            productionFormat={
+                              "productionFormat" in reel ? reel.productionFormat : null
+                            }
                             viralFlag={reel.viralFlag}
                             confidence={reel.confidence}
                           />
@@ -2677,6 +2688,9 @@ export default function Dashboard() {
                           <V13ReelClassificationBadges
                             niche={reel.niche}
                             hookPattern={reel.hookPattern}
+                            productionFormat={
+                              "productionFormat" in reel ? reel.productionFormat : null
+                            }
                             viralFlag={reel.viralFlag}
                             confidence={reel.confidence}
                           />

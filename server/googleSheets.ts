@@ -4,19 +4,7 @@
  * Falls back to CSV download if Google credentials are not configured.
  */
 import { google } from "googleapis";
-
-interface ReelExportRow {
-  reelUrl: string;
-  caption: string;
-  viewCount: number;
-  likeCount: number;
-  commentCount: number;
-  engagementRate: number;
-  duration: number;
-  postedAt: string;
-  transcript: string;
-  hookAnalysis: string;
-}
+import type { ReelExportRow } from "./exportTypes";
 
 /**
  * Check if Google Sheets credentials are configured.
@@ -46,7 +34,6 @@ export async function exportToGoogleSheets(
     );
   }
 
-  // Authenticate with service account
   const auth = new google.auth.JWT({
     email: serviceAccountEmail,
     key: privateKey.replace(/\\n/g, "\n"),
@@ -56,19 +43,14 @@ export async function exportToGoogleSheets(
   const sheets = google.sheets({ version: "v4", auth });
   const drive = google.drive({ version: "v3", auth });
 
-  // Create a new spreadsheet
   const spreadsheet = await sheets.spreadsheets.create({
     requestBody: {
-      properties: {
-        title,
-      },
+      properties: { title },
       sheets: [
         {
           properties: {
             title: "Reels Data",
-            gridProperties: {
-              frozenRowCount: 1,
-            },
+            gridProperties: { frozenRowCount: 1 },
           },
         },
       ],
@@ -78,9 +60,9 @@ export async function exportToGoogleSheets(
   const spreadsheetId = spreadsheet.data.spreadsheetId!;
   const spreadsheetUrl = spreadsheet.data.spreadsheetUrl!;
 
-  // Prepare header row and data rows (same 10 columns as CSV export)
   const headers = [
     "Reel URL",
+    "Shortcode",
     "Caption",
     "Views",
     "Likes",
@@ -88,12 +70,26 @@ export async function exportToGoogleSheets(
     "Engagement Rate (%)",
     "Duration (s)",
     "Posted At",
+    "Posted Day",
+    "Posted Hour (UTC)",
+    "Hook Text",
+    "Production Format",
+    "How To Film",
+    "Thumbnail Text",
+    "Hook Pattern",
+    "Content Type",
+    "Remakeability Score",
+    "Suggested Action",
+    "Classification Reason",
+    "Niche",
+    "Viral Flag",
     "Transcript",
     "Hook Analysis",
   ];
 
   const dataRows = rows.map((r) => [
     r.reelUrl,
+    r.shortcode,
     r.caption,
     r.viewCount,
     r.likeCount,
@@ -101,34 +97,37 @@ export async function exportToGoogleSheets(
     r.engagementRate,
     r.duration,
     r.postedAt,
+    r.postedDay,
+    r.postedHourUtc,
+    r.hookText,
+    r.productionFormatLabel,
+    r.filmingTip,
+    r.thumbnailText,
+    r.hookPattern,
+    r.contentType,
+    r.remakeabilityScore,
+    r.suggestedAction,
+    r.classificationReason,
+    r.niche,
+    r.viralFlag,
     r.transcript,
     r.hookAnalysis,
   ]);
 
-  const allRows = [headers, ...dataRows];
-
-  // Write data to the sheet
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: "Reels Data!A1",
     valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: allRows,
-    },
+    requestBody: { values: [headers, ...dataRows] },
   });
 
-  // Format the header row (bold, background color)
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
       requests: [
         {
           repeatCell: {
-            range: {
-              sheetId: 0,
-              startRowIndex: 0,
-              endRowIndex: 1,
-            },
+            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
             cell: {
               userEnteredFormat: {
                 backgroundColor: { red: 0.2, green: 0.2, blue: 0.3 },
@@ -147,7 +146,7 @@ export async function exportToGoogleSheets(
               sheetId: 0,
               dimension: "COLUMNS",
               startIndex: 0,
-              endIndex: 10,
+              endIndex: headers.length,
             },
           },
         },
@@ -155,7 +154,6 @@ export async function exportToGoogleSheets(
     },
   });
 
-  // Share the spreadsheet with the user if email provided
   if (shareWithEmail) {
     try {
       await drive.permissions.create({
@@ -167,24 +165,16 @@ export async function exportToGoogleSheets(
         },
         sendNotificationEmail: false,
       });
-    } catch (err) {
-      // If sharing fails (e.g., invalid email), make it accessible via link
+    } catch {
       await drive.permissions.create({
         fileId: spreadsheetId,
-        requestBody: {
-          type: "anyone",
-          role: "writer",
-        },
+        requestBody: { type: "anyone", role: "writer" },
       });
     }
   } else {
-    // Make accessible via link
     await drive.permissions.create({
       fileId: spreadsheetId,
-      requestBody: {
-        type: "anyone",
-        role: "writer",
-      },
+      requestBody: { type: "anyone", role: "writer" },
     });
   }
 
