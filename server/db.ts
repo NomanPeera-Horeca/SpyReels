@@ -653,28 +653,74 @@ export async function insertReels(
   const jobId = data[0]!.jobId;
   const defaultWorkspaceId = await getScrapeJobWorkspaceId(jobId);
 
-  /** On duplicate `shortcode`: refresh live scrape fields only; preserve classifications & immutable columns. */
-  const onDupSet = {
-    jobId: sql`VALUES(${reels.jobId})`,
-    caption: sql`VALUES(${reels.caption})`,
-    viewCount: sql`VALUES(${reels.viewCount})`,
-    likeCount: sql`VALUES(${reels.likeCount})`,
-    commentCount: sql`VALUES(${reels.commentCount})`,
-    thumbnailUrl: sql`VALUES(${reels.thumbnailUrl})`,
-    videoUrl: sql`VALUES(${reels.videoUrl})`,
-    duration: sql`VALUES(${reels.duration})`,
-  };
+  // reels has no (jobId, shortcode) unique key — skip rows already stored
+  // for this job so seed + incremental + final passes cannot duplicate.
+  const existing = new Set(await getExistingShortcodes(jobId));
+  const toInsert = data.filter((row) => !existing.has(row.shortcode));
+  if (toInsert.length === 0) return;
 
   // Insert in batches of 50 to avoid query size limits
-  for (let i = 0; i < data.length; i += 50) {
-    const batch = data.slice(i, i + 50).map((row) => ({
+  for (let i = 0; i < toInsert.length; i += 50) {
+    const batch = toInsert.slice(i, i + 50).map((row) => ({
       ...row,
       workspaceId: row.workspaceId ?? defaultWorkspaceId,
     }));
-    await db.insert(reels).values(batch).onDuplicateKeyUpdate({
-      set: onDupSet,
-    });
+    await db.insert(reels).values(batch);
   }
+}
+
+/** Refresh live-scrape fields on reels already stored for this job. */
+export async function updateReelsForJobFromScrape(
+  jobId: number,
+  data: Array<{
+    shortcode: string;
+    caption: string | null;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    thumbnailUrl: string | null;
+    videoUrl: string;
+    reelUrl: string;
+    duration: number | null;
+    postedAt: Date;
+    ownerUsername: string | null;
+  }>
+): Promise<void> {
+  const db = await getDb();
+  if (!db || data.length === 0) return;
+
+  for (const r of data) {
+    await db
+      .update(reels)
+      .set({
+        caption: r.caption,
+        viewCount: r.viewCount,
+        likeCount: r.likeCount,
+        commentCount: r.commentCount,
+        thumbnailUrl: r.thumbnailUrl,
+        videoUrl: r.videoUrl,
+        duration: r.duration,
+        postedAt: r.postedAt,
+        ownerUsername: r.ownerUsername,
+      })
+      .where(and(eq(reels.jobId, jobId), eq(reels.shortcode, r.shortcode)));
+  }
+}
+
+/** Drop duplicate shortcodes within a job, keeping the newest row (highest id). */
+export async function dedupeReelsForJob(jobId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.execute(sql`
+    DELETE r1 FROM reels r1
+    INNER JOIN reels r2
+      ON r1.jobId = r2.jobId
+      AND r1.shortcode = r2.shortcode
+      AND r1.id < r2.id
+    WHERE r1.jobId = ${jobId}
+  `);
+  const raw = (result as { affectedRows?: number }[])[0]?.affectedRows;
+  return typeof raw === "number" ? raw : 0;
 }
 
 export async function getReelsByJobId(
@@ -683,14 +729,24 @@ export async function getReelsByJobId(
 ): Promise<Reel[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db
+  const rows = await db
     .select()
     .from(reels)
     .where(
       niche != null
         ? and(eq(reels.jobId, jobId), eq(reels.niche, niche))
         : eq(reels.jobId, jobId)
-    );
+    )
+    .orderBy(desc(reels.id));
+
+  const seen = new Set<string>();
+  const deduped: Reel[] = [];
+  for (const row of rows) {
+    if (seen.has(row.shortcode)) continue;
+    seen.add(row.shortcode);
+    deduped.push(row);
+  }
+  return deduped;
 }
 
 export async function getExistingShortcodes(jobId: number): Promise<string[]> {

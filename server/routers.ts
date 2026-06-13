@@ -113,6 +113,8 @@ import {
   getLibraryTranscripts,
   getLibraryScripts,
   getExistingShortcodes,
+  updateReelsForJobFromScrape,
+  dedupeReelsForJob,
   updateScrapeJobResync,
   deleteScrapeJob,
   countReelsForJob,
@@ -6564,6 +6566,7 @@ async function runScrapeJob(
     );
 
     if (reelData.length === 0) {
+      await dedupeReelsForJob(jobId);
       const seededReelCount = await countReelsForJob(jobId);
       if (seededReelCount > 0) {
         const priorJob = await getScrapeJob(jobId);
@@ -6679,42 +6682,41 @@ async function runScrapeJob(
     const stableThumbs = await uploadReelThumbnailsBounded(
       reelData.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
     );
-    // Do not mirror every reel MP4 to R2 here: each download is huge and concurrency
-    // is capped low, so dozens of reels already mean tens of minutes. Store the
-    // scraped CDN URL (short-lived); transcribe / other paths refresh by shortcode
-    // via fetchReelByShortcode, and callers can lazily mirror to R2 where needed.
 
-    await insertReels(
-      reelData.map((r) => ({
-        jobId,
-        shortcode: r.shortcode,
-        caption: r.caption,
-        viewCount: r.viewCount,
-        likeCount: r.likeCount,
-        commentCount: r.commentCount,
-        thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
-        videoUrl: r.videoUrl ?? "",
-        reelUrl: r.reelUrl,
-        duration: r.duration,
-        postedAt: r.postedAt,
-        ownerUsername: r.ownerUsername,
-      }))
-    );
+    const mappedReels = reelData.map((r) => ({
+      jobId,
+      shortcode: r.shortcode,
+      caption: r.caption,
+      viewCount: r.viewCount,
+      likeCount: r.likeCount,
+      commentCount: r.commentCount,
+      thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
+      videoUrl: r.videoUrl ?? "",
+      reelUrl: r.reelUrl,
+      duration: r.duration,
+      postedAt: r.postedAt,
+      ownerUsername: r.ownerUsername,
+    }));
+
+    await updateReelsForJobFromScrape(jobId, mappedReels);
+    await insertReels(mappedReels);
+    await dedupeReelsForJob(jobId);
+    const finalReelCount = await countReelsForJob(jobId);
 
     await updateScrapeJob(jobId, {
       status: "completed",
-      totalReels: reelData.length,
+      totalReels: finalReelCount,
       followerCount,
       profilePicUrl: proxiedPicUrl || undefined,
       currentStep: "complete",
-      reelsFound: reelData.length,
+      reelsFound: finalReelCount,
       progressPercent: 100,
       errorMessage: null,
       failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
     console.log(
-      `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${reelData.length} followers=${followerCount}`
+      `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${finalReelCount} followers=${followerCount}`
     );
 
     const classifyDb = await getDb();
