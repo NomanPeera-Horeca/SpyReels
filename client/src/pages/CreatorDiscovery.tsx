@@ -6,6 +6,7 @@ import {
   Lightbulb,
   Loader2,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -19,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import { formatRelativeActive } from "@/lib/formatActivity";
 import { LOADING_TIPS } from "@/data/loadingTips";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +76,91 @@ function creatorInitials(creator: RankedCreator): string {
     return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
   }
   return base.slice(0, 2).toUpperCase();
+}
+
+function truncateText(text: string, maxLen: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1)}…`;
+}
+
+function RecentSearchesDropdown({
+  open,
+  items,
+  onSelect,
+  onDeleted,
+  loadingId,
+}: {
+  open: boolean;
+  items: RecentCreatorDiscoverySearch[];
+  onSelect: (item: RecentCreatorDiscoverySearch) => void;
+  onDeleted: () => void;
+  loadingId: number | null;
+}) {
+  const deleteSearch = trpc.creatorDiscovery.deleteSearch.useMutation({
+    onSuccess: () => {
+      void onDeleted();
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  if (!open || items.length === 0) return null;
+
+  return (
+    <div
+      className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-lg"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <ul className="max-h-64 overflow-y-auto py-1">
+        {items.map((item) => {
+          const isLoading = loadingId === item.id;
+          const isDeleting =
+            deleteSearch.isPending && deleteSearch.variables?.id === item.id;
+          return (
+            <li key={item.id} className="flex items-stretch">
+              <button
+                type="button"
+                disabled={isLoading || isDeleting}
+                onClick={() => onSelect(item)}
+                className={cn(
+                  "min-w-0 flex-1 px-3 py-2 text-left transition-colors",
+                  "hover:bg-muted/50 disabled:opacity-60"
+                )}
+              >
+                <p className="text-xs font-medium text-foreground line-clamp-2">
+                  {truncateText(item.businessDescription, 100)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {item.routedNiche ? `${item.routedNiche} · ` : ""}
+                  {item.creatorCount} creator
+                  {item.creatorCount === 1 ? "" : "s"} ·{" "}
+                  {formatRelativeActive(item.createdAt)}
+                </p>
+              </button>
+              <button
+                type="button"
+                aria-label="Remove saved search"
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteSearch.mutate({ id: item.id });
+                }}
+                className="shrink-0 px-2.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <X className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 function isPrePeer(result: CreatorDiscoveryResult | null): boolean {
@@ -391,9 +478,21 @@ export default function CreatorDiscovery() {
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [creatorPage, setCreatorPage] = useState(1);
   const [preFilterCount, setPreFilterCount] = useState<number | null>(null);
+  const [replayedAt, setReplayedAt] = useState<Date | null>(null);
+  const [loadingReplayId, setLoadingReplayId] = useState<number | null>(null);
+  const [textareaFocused, setTextareaFocused] = useState(false);
+  const [hideRecentDropdown, setHideRecentDropdown] = useState(false);
   const preFilterCountRef = useRef<number | null>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recentSearchesQuery = trpc.creatorDiscovery.recentSearches.useQuery();
+  const trpcUtils = trpc.useUtils();
+
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
   const jobStatusQuery = trpc.creatorDiscovery.jobStatus.useQuery(
     { jobId: activeJobId! },
     {
@@ -427,6 +526,8 @@ export default function CreatorDiscovery() {
     if (job.status === "completed") {
       setActiveJobId(null);
       setCreatorPage(1);
+      setReplayedAt(null);
+      setHideRecentDropdown(true);
       if (preFilterCountRef.current != null) {
         setPreFilterCount(preFilterCountRef.current);
       }
@@ -434,6 +535,7 @@ export default function CreatorDiscovery() {
     } else if (job.status === "failed") {
       setActiveJobId(null);
       setResult(null);
+      setReplayedAt(null);
       setPreFilterCount(null);
       preFilterCountRef.current = null;
       toast.error(job.errorMessage?.trim() || "Creator discovery search failed");
@@ -445,13 +547,17 @@ export default function CreatorDiscovery() {
       setActiveJobId(data.jobId);
       setResult(null);
       setCreatorPage(1);
+      setReplayedAt(null);
       setPreFilterCount(null);
       preFilterCountRef.current = null;
+      setHideRecentDropdown(true);
+      setTextareaFocused(false);
     },
     onError: (err) => {
       toast.error(err.message);
       setActiveJobId(null);
       setResult(null);
+      setReplayedAt(null);
       setPreFilterCount(null);
       preFilterCountRef.current = null;
     },
@@ -464,9 +570,18 @@ export default function CreatorDiscovery() {
     jobStatus?.status !== "completed" &&
     jobStatus?.status !== "failed";
   const isSearching = searchMutation.isPending || isJobRunning;
-  const submitEnabled = trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching;
+  const isReplayLoading = loadingReplayId != null;
+  const submitEnabled =
+    trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching && !isReplayLoading;
 
   const rankedCreators = result?.rankedCreators ?? [];
+  const recentSearches = recentSearchesQuery.data ?? [];
+  const showRecentDropdown =
+    textareaFocused &&
+    !hideRecentDropdown &&
+    trimmed.length === 0 &&
+    recentSearches.length > 0 &&
+    !isSearching;
   const totalPages = Math.ceil(
     rankedCreators.length / DISCOVERY_CREATORS_PER_PAGE
   );
@@ -477,17 +592,45 @@ export default function CreatorDiscovery() {
 
   const showInitialLoading =
     (searchMutation.isPending || (isJobRunning && result == null)) &&
-    rankedCreators.length === 0;
-  const showResults = result != null && rankedCreators.length > 0;
+    !isReplayLoading;
+  const showResults =
+    result != null && rankedCreators.length > 0 && !isReplayLoading;
 
   const handleSubmit = () => {
     if (!submitEnabled) return;
     setActiveJobId(null);
     setResult(null);
     setCreatorPage(1);
+    setReplayedAt(null);
+    setLoadingReplayId(null);
     setPreFilterCount(null);
     preFilterCountRef.current = null;
+    setHideRecentDropdown(true);
     searchMutation.mutate({ businessDescription: trimmed });
+  };
+
+  const handleReplaySearch = async (item: RecentCreatorDiscoverySearch) => {
+    setActiveJobId(null);
+    setLoadingReplayId(item.id);
+    setReplayedAt(new Date(item.createdAt));
+    setHideRecentDropdown(true);
+    setTextareaFocused(false);
+    try {
+      const data = await trpcUtils.creatorDiscovery.getSearch.fetch({
+        id: item.id,
+      });
+      setResult(data);
+      setCreatorPage(1);
+      setPreFilterCount(null);
+      preFilterCountRef.current = null;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to load saved search"
+      );
+      setReplayedAt(null);
+    } finally {
+      setLoadingReplayId(null);
+    }
   };
 
   const handlePageChange = useCallback((page: number) => {
@@ -510,17 +653,37 @@ export default function CreatorDiscovery() {
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-2">
+        <div className="relative space-y-2">
           <Textarea
             value={description}
             onChange={(e) =>
               setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
             }
+            onFocus={() => {
+              if (blurTimerRef.current) {
+                clearTimeout(blurTimerRef.current);
+                blurTimerRef.current = null;
+              }
+              setTextareaFocused(true);
+              if (trimmed.length === 0) setHideRecentDropdown(false);
+            }}
+            onBlur={() => {
+              blurTimerRef.current = setTimeout(() => {
+                setTextareaFocused(false);
+              }, 200);
+            }}
             placeholder="What do you make or sell, and who is it for? Be specific so we can route your niche."
             rows={5}
             maxLength={MAX_DESCRIPTION_LENGTH}
             disabled={isSearching}
             className="resize-y min-h-[120px]"
+          />
+          <RecentSearchesDropdown
+            open={showRecentDropdown}
+            items={recentSearches}
+            onSelect={handleReplaySearch}
+            onDeleted={() => void recentSearchesQuery.refetch()}
+            loadingId={loadingReplayId}
           />
           <p className="text-xs text-muted-foreground text-right">
             {description.length}/{MAX_DESCRIPTION_LENGTH}
@@ -542,10 +705,11 @@ export default function CreatorDiscovery() {
         </Button>
       </div>
 
-      {showInitialLoading ? <CreatorDiscoverySearchLoading /> : null}
+      {showInitialLoading || isReplayLoading ? (
+        <CreatorDiscoverySearchLoading />
+      ) : null}
 
-      {(showResults || isJobRunning || searchMutation.isPending) &&
-      !showInitialLoading ? (
+      {showResults || isJobRunning || searchMutation.isPending ? (
         <div className="space-y-6">
           <CreatorDiscoveryProgress
             job={jobStatus}
@@ -554,6 +718,12 @@ export default function CreatorDiscovery() {
             isSearchStarting={searchMutation.isPending}
             preFilterCount={preFilterCount}
           />
+          {replayedAt ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
+              Showing saved results from {formatRelativeActive(replayedAt)}. Run a
+              new search for fresh data.
+            </div>
+          ) : null}
           {showResults ? (
             <>
               <CreatorGrid creators={paginatedCreators} />
