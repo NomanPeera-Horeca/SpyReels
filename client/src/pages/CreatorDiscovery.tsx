@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
+import { TRPCClientError } from "@trpc/client";
 import {
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   Lightbulb,
   Loader2,
   Users,
@@ -64,6 +66,56 @@ function creatorTierBadgeClass(tier: 1 | 2): string {
 
 function creatorTierLabel(tier: 1 | 2): string {
   return tier === 1 ? "Tier 1" : "Tier 2";
+}
+
+function formatQuotaResetDate(resetsAt: string): string {
+  const d = new Date(resetsAt);
+  if (Number.isNaN(d.getTime())) return resetsAt;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function isValidEngagementCount(value: number | null | undefined): boolean {
+  return value != null && value >= 0;
+}
+
+function formatReelStatsOverlay(views: number, likes: number): string {
+  const viewsPart = `${formatNumber(views)} views`;
+  if (!isValidEngagementCount(likes)) {
+    return viewsPart;
+  }
+  return `${viewsPart} · ${formatNumber(likes)} likes`;
+}
+
+function ReelThumbnailPlaceholder() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-muted/90 via-muted/50 to-muted/30">
+      <Clapperboard className="h-8 w-8 text-muted-foreground/45" aria-hidden />
+      <span className="text-[10px] text-muted-foreground/70">No preview</span>
+    </div>
+  );
+}
+
+function ReelThumbnail({ src }: { src: string | null }) {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const trimmed = src?.trim() ?? "";
+
+  if (!trimmed || loadFailed) {
+    return <ReelThumbnailPlaceholder />;
+  }
+
+  return (
+    <img
+      src={trimmed}
+      alt=""
+      className="h-full w-full object-cover"
+      referrerPolicy="no-referrer"
+      onError={() => setLoadFailed(true)}
+    />
+  );
 }
 
 function creatorInitials(creator: RankedCreator): string {
@@ -336,34 +388,25 @@ function CreatorDiscoveryCard({ creator }: { creator: RankedCreator }) {
       </div>
 
       <div className="relative aspect-[9/14] overflow-hidden bg-muted/30">
-        {thumbSrc ? (
-          <img
-            src={thumbSrc}
-            alt=""
-            className="h-full w-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-            No thumbnail
-          </div>
-        )}
-        <div className="absolute left-2 top-2 z-10 pointer-events-none">
+        <ReelThumbnail src={thumbSrc} />
+        <div className="absolute left-3 top-3 z-10 pointer-events-none max-w-[calc(100%-1.5rem)]">
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-md backdrop-blur-[2px]",
               creatorTierBadgeClass(creator.bestReel.tier)
             )}
           >
             {creatorTierLabel(creator.bestReel.tier)}
-            <span className="font-mono opacity-90">
+            <span className="font-mono tabular-nums opacity-95">
               {creator.bestReel.viralScore.toFixed(1)}
             </span>
           </span>
         </div>
-        <div className="absolute bottom-2 left-2 right-2 z-10 rounded bg-black/65 px-2 py-1 text-[10px] text-white pointer-events-none">
-          {formatNumber(creator.bestReel.views)} views ·{" "}
-          {formatNumber(creator.bestReel.likes)} likes
+        <div className="absolute bottom-2.5 left-2.5 right-2.5 z-10 rounded-md bg-black/70 px-2 py-1 text-[10px] leading-snug text-white pointer-events-none">
+          {formatReelStatsOverlay(
+            creator.bestReel.views,
+            creator.bestReel.likes
+          )}
         </div>
       </div>
 
@@ -486,6 +529,7 @@ export default function CreatorDiscovery() {
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recentSearchesQuery = trpc.creatorDiscovery.recentSearches.useQuery();
+  const quotaQuery = trpc.creatorDiscovery.getQuota.useQuery();
   const trpcUtils = trpc.useUtils();
 
   useEffect(() => {
@@ -532,6 +576,7 @@ export default function CreatorDiscovery() {
         setPreFilterCount(preFilterCountRef.current);
       }
       void recentSearchesQuery.refetch();
+      void quotaQuery.refetch();
     } else if (job.status === "failed") {
       setActiveJobId(null);
       setResult(null);
@@ -540,7 +585,7 @@ export default function CreatorDiscovery() {
       preFilterCountRef.current = null;
       toast.error(job.errorMessage?.trim() || "Creator discovery search failed");
     }
-  }, [jobStatusQuery.data, activeJobId, recentSearchesQuery]);
+  }, [jobStatusQuery.data, activeJobId, recentSearchesQuery, quotaQuery]);
 
   const searchMutation = trpc.creatorDiscovery.search.useMutation({
     onSuccess: (data) => {
@@ -554,7 +599,12 @@ export default function CreatorDiscovery() {
       setTextareaFocused(false);
     },
     onError: (err) => {
-      toast.error(err.message);
+      if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {
+        toast.error("Monthly search limit reached.");
+        void quotaQuery.refetch();
+      } else {
+        toast.error(err.message);
+      }
       setActiveJobId(null);
       setResult(null);
       setReplayedAt(null);
@@ -565,6 +615,16 @@ export default function CreatorDiscovery() {
 
   const trimmed = description.trim();
   const jobStatus = jobStatusQuery.data;
+  const quotaUsed = quotaQuery.data?.used ?? 0;
+  const quotaLimit = quotaQuery.data?.limit ?? 0;
+  const quotaResetsAt = quotaQuery.data?.resetsAt;
+  const quotaAtLimit =
+    quotaQuery.data != null && quotaUsed >= quotaLimit && quotaLimit > 0;
+  const quotaNearLimit =
+    quotaQuery.data != null &&
+    quotaLimit > 0 &&
+    quotaUsed >= quotaLimit - 1 &&
+    !quotaAtLimit;
   const isJobRunning =
     activeJobId != null &&
     jobStatus?.status !== "completed" &&
@@ -572,7 +632,10 @@ export default function CreatorDiscovery() {
   const isSearching = searchMutation.isPending || isJobRunning;
   const isReplayLoading = loadingReplayId != null;
   const submitEnabled =
-    trimmed.length >= MIN_DESCRIPTION_LENGTH && !isSearching && !isReplayLoading;
+    trimmed.length >= MIN_DESCRIPTION_LENGTH &&
+    !isSearching &&
+    !isReplayLoading &&
+    !quotaAtLimit;
 
   const rankedCreators = result?.rankedCreators ?? [];
   const recentSearches = recentSearchesQuery.data ?? [];
@@ -693,16 +756,35 @@ export default function CreatorDiscovery() {
           </p>
         </div>
 
-        <Button type="button" onClick={handleSubmit} disabled={!submitEnabled}>
-          {isSearching ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Searching...
-            </>
-          ) : (
-            "Find peer creators"
-          )}
-        </Button>
+        <div className="space-y-2">
+          <Button type="button" onClick={handleSubmit} disabled={!submitEnabled}>
+            {isSearching ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Searching...
+              </>
+            ) : (
+              "Find peer creators"
+            )}
+          </Button>
+          {quotaQuery.data ? (
+            <p className="text-xs text-muted-foreground">
+              {quotaUsed} / {quotaLimit} discovery searches used this month
+              {(quotaAtLimit || quotaNearLimit) && quotaResetsAt ? (
+                <>
+                  {" "}
+                  · Resets {formatQuotaResetDate(quotaResetsAt)}
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          {quotaAtLimit && quotaResetsAt ? (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              You&apos;ve used all {quotaLimit} discovery searches this month.
+              Resets {formatQuotaResetDate(quotaResetsAt)}.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {showInitialLoading || isReplayLoading ? (

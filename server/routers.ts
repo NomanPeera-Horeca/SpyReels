@@ -6240,6 +6240,32 @@ async function runDiscoveryJob(
   }
 }
 
+/** Map provider errors to safe user-facing job failure messages. */
+function userFacingCreatorDiscoveryJobError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("credit balance") ||
+    lower.includes("billing") ||
+    lower.includes("insufficient credit") ||
+    lower.includes("purchase credits") ||
+    lower.includes("payment required")
+  ) {
+    return "Search temporarily unavailable. Please try again shortly.";
+  }
+
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("429") ||
+    lower.includes("too many requests")
+  ) {
+    return "Search is busy right now. Please try again in a few minutes.";
+  }
+
+  return "Search failed. Please try again.";
+}
+
 /** Background creator-first discovery job runner (async poll flow). */
 async function runCreatorDiscoveryJob(
   jobId: number,
@@ -6381,13 +6407,14 @@ async function runCreatorDiscoveryJob(
       );
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[runCreatorDiscoveryJob ${jobId}] failed:`, err);
+    const userMessage = userFacingCreatorDiscoveryJobError(err);
     try {
       await db
         .update(creatorDiscoveryJobs)
         .set({
           status: "failed",
-          errorMessage: message.slice(0, 2000),
+          errorMessage: userMessage.slice(0, 2000),
         })
         .where(eq(creatorDiscoveryJobs.id, jobId));
     } catch (updateErr) {
