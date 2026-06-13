@@ -120,6 +120,7 @@ import {
   updateOnboardingState,
   updateUserPersonalization,
   seedDemoScrape,
+  seedFeaturedReelsIntoJob,
   markOnboardingComplete,
   markOnboardingSkipped,
   getFeaturedReelById,
@@ -160,6 +161,7 @@ import {
   fetchProfile,
   searchReelsByKeyword,
   searchReelsByHandle,
+  runWithScrapeCallContext,
 } from "./instagram";
 import {
   enqueueCollectedReelIngest,
@@ -619,10 +621,9 @@ export const appRouter = router({
           });
         }
 
-        // Search-to-featured shortcut: if the requested handle is already
-        // a featured creator we show the instant Path-B dashboard instead
-        // of burning a scrape quota on a duplicate pull. Case-insensitive,
-        // @ already stripped via `normalizedHandle`.
+        // Featured handles: seed cached catalog reels into the user's job
+        // for instant dashboard display, then pull live reels in background.
+        let featuredAccountId: number | undefined;
         const db = await getDb();
         if (db) {
           const featuredMatch = await db
@@ -636,10 +637,7 @@ export const appRouter = router({
             )
             .limit(1);
           if (featuredMatch.length > 0) {
-            return {
-              redirect: "featured" as const,
-              featuredAccountId: featuredMatch[0].id,
-            };
+            featuredAccountId = featuredMatch[0].id;
           }
         }
 
@@ -665,12 +663,22 @@ export const appRouter = router({
         // don't burn the user's monthly quota.
         await incrementUsage(ctx.user.id, "scrapeCount");
 
+        let seededFromFeatured = false;
+        if (featuredAccountId != null) {
+          await seedFeaturedReelsIntoJob(
+            jobId,
+            featuredAccountId,
+            input.timeframeDays
+          );
+          seededFromFeatured = true;
+        }
+
         // Run scraping in background
         runScrapeJob(jobId, ctx.user.id, normalizedHandle, input.timeframeDays).catch((err) => {
           console.error(`Scrape job ${jobId} failed:`, err);
         });
 
-        return { jobId };
+        return seededFromFeatured ? { jobId, seededFromFeatured: true as const } : { jobId };
       }),
 
     status: protectedProcedure
@@ -6472,6 +6480,11 @@ async function runScrapeJob(
   };
 
   try {
+    const cleanHandleForLog = handle.replace(/^@/, "").trim().toLowerCase();
+    console.log(
+      `[runScrapeJob ${jobId}] start handle=@${cleanHandleForLog} timeframeDays=${timeframeDays}`
+    );
+
     // Stage 1: connecting → about to call Instagram for the profile.
     await updateScrapeJob(jobId, {
       status: "running",
@@ -6493,20 +6506,48 @@ async function runScrapeJob(
       profilePicUrl,
       totalParsedItems,
       mostRecentItemAt,
-    } = await scrapeReels(
-      handle,
-      timeframeDays,
-      (count) => {
-        // Stage 3: pulling_reels → scales 20→80 against a visual baseline
-        // of 30 reels; caps at 80 so we always leave headroom for ranking.
-        updateScrapeJob(jobId, {
-          currentStep: "pulling_reels",
-          totalReels: count,
-          reelsFound: count,
-          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
-        }).catch(() => {});
-      },
-      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+    } = await runWithScrapeCallContext(
+      { source: "scrape_job", jobId, handle: cleanHandleForLog },
+      () =>
+        scrapeReels(
+          handle,
+          timeframeDays,
+          (count, pageBatch) => {
+            // Stage 3: pulling_reels → scales 20→80 against a visual baseline
+            // of 30 reels; caps at 80 so we always leave headroom for ranking.
+            updateScrapeJob(jobId, {
+              currentStep: "pulling_reels",
+              totalReels: count,
+              reelsFound: count,
+              progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+            }).catch(() => {});
+
+            if (pageBatch && pageBatch.length > 0) {
+              insertReels(
+                pageBatch.map((r) => ({
+                  jobId,
+                  shortcode: r.shortcode,
+                  caption: r.caption,
+                  viewCount: r.viewCount,
+                  likeCount: r.likeCount,
+                  commentCount: r.commentCount,
+                  thumbnailUrl: r.thumbnailUrl,
+                  videoUrl: r.videoUrl ?? "",
+                  reelUrl: r.reelUrl,
+                  duration: r.duration,
+                  postedAt: r.postedAt,
+                  ownerUsername: r.ownerUsername,
+                }))
+              ).catch((err) => {
+                console.error(
+                  `[runScrapeJob ${jobId}] incremental insert failed:`,
+                  err
+                );
+              });
+            }
+          },
+          { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+        )
     );
 
     // Stage 4: ranking → insert + finalize. Set before pic proxy so the UI
@@ -6523,6 +6564,27 @@ async function runScrapeJob(
     );
 
     if (reelData.length === 0) {
+      const seededReelCount = await countReelsForJob(jobId);
+      if (seededReelCount > 0) {
+        const priorJob = await getScrapeJob(jobId);
+        await updateScrapeJob(jobId, {
+          status: "completed",
+          totalReels: seededReelCount,
+          followerCount: followerCount || priorJob?.followerCount || 0,
+          profilePicUrl: proxiedPicUrl || undefined,
+          currentStep: "complete",
+          reelsFound: seededReelCount,
+          progressPercent: 100,
+          errorMessage: null,
+          failureReason: null,
+        });
+        await maybeMarkFirstSpyCompleted(jobId);
+        console.log(
+          `[runScrapeJob ${jobId}] completed with seeded catalog (live pull returned 0) handle=@${cleanHandleForLog} reels=${seededReelCount}`
+        );
+        return;
+      }
+
       if (followerCount > 0) {
         // Two distinct sub-cases land here:
         //
@@ -6566,6 +6628,9 @@ async function runScrapeJob(
           });
           await refundScrapeQuota("no_reels_in_window");
           scheduleFailedJobCleanup("no_reels_in_window");
+          console.warn(
+            `[runScrapeJob ${jobId}] failed handle=@${cleanHandleForLog} reason=no_reels_in_window followers=${followerCount}`
+          );
           return;
         }
 
@@ -6582,6 +6647,9 @@ async function runScrapeJob(
         });
         await refundScrapeQuota("zero_reels_with_followers");
         scheduleFailedJobCleanup("zero_reels_with_followers");
+        console.warn(
+          `[runScrapeJob ${jobId}] failed handle=@${cleanHandleForLog} reason=zero_reels_with_followers followers=${followerCount} totalParsedItems=${totalParsedItems}`
+        );
         return;
       }
 
@@ -6596,6 +6664,9 @@ async function runScrapeJob(
         failureReason: null,
       });
       await maybeMarkFirstSpyCompleted(jobId);
+      console.log(
+        `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=0 followers=${followerCount}`
+      );
       return;
     }
 
@@ -6642,6 +6713,9 @@ async function runScrapeJob(
       failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
+    console.log(
+      `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${reelData.length} followers=${followerCount}`
+    );
 
     const classifyDb = await getDb();
     if (classifyDb) {
@@ -6674,6 +6748,9 @@ async function runScrapeJob(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const failureReason = classifyScrapeFailureMessage(message);
+    console.warn(
+      `[runScrapeJob ${jobId}] failed handle=@${handle.replace(/^@/, "").trim().toLowerCase()} reason=${failureReason}: ${message}`
+    );
     // Failure preserves the last progressPercent the UI saw — just flip the
     // terminal flags so the client can show the error state.
     await updateScrapeJob(jobId, {
@@ -6704,7 +6781,11 @@ async function runResyncJob(
   handle: string,
   daysSinceSync: number
 ): Promise<void> {
+  const cleanHandleForLog = handle.replace(/^@/, "").trim().toLowerCase();
   try {
+    console.log(
+      `[runResyncJob ${jobId}] start handle=@${cleanHandleForLog} daysSinceSync=${daysSinceSync}`
+    );
     await updateScrapeJob(jobId, {
       currentStep: "connecting",
       progressPercent: 5,
@@ -6714,19 +6795,24 @@ async function runResyncJob(
       progressPercent: 15,
     });
 
-    const { reels: reelData, followerCount, profilePicUrl } = await scrapeReels(
-      handle,
-      daysSinceSync,
-      (count) => {
-        updateScrapeJob(jobId, {
-          currentStep: "pulling_reels",
-          totalReels: count,
-          reelsFound: count,
-          progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
-        }).catch(() => {});
-      },
-      { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
-    );
+    const { reels: reelData, followerCount, profilePicUrl } =
+      await runWithScrapeCallContext(
+        { source: "resync_job", jobId, handle: cleanHandleForLog },
+        () =>
+          scrapeReels(
+            handle,
+            daysSinceSync,
+            (count) => {
+              updateScrapeJob(jobId, {
+                currentStep: "pulling_reels",
+                totalReels: count,
+                reelsFound: count,
+                progressPercent: Math.min(20 + Math.floor((count / 30) * 60), 80),
+              }).catch(() => {});
+            },
+            { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+          )
+      );
 
     await updateScrapeJob(jobId, {
       currentStep: "ranking",

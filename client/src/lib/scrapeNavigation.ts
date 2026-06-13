@@ -8,10 +8,8 @@ export function navigateAfterScrapeStart(
   setLocation: (to: string) => void,
   from: string
 ): void {
-  if ("redirect" in data && data.redirect === "featured") {
-    setLocation(
-      `/dashboard?featuredAccountId=${data.featuredAccountId}&from=${from}`
-    );
+  if ("seededFromFeatured" in data && data.seededFromFeatured) {
+    setLocation(`/dashboard?jobId=${data.jobId}&from=${from}`);
     return;
   }
   setLocation(`/scraping?jobId=${data.jobId}&from=${from}`);

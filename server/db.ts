@@ -447,6 +447,85 @@ export async function seedDemoScrape(
 }
 
 /**
+ * Copy cached featured_reels into a user's scrape job so the dashboard
+ * can show catalog reels instantly while runScrapeJob pulls live data.
+ */
+export async function seedFeaturedReelsIntoJob(
+  jobId: number,
+  featuredAccountId: number,
+  timeframeDays: number
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const accountRows = await db
+    .select({
+      id: featuredAccounts.id,
+      handle: featuredAccounts.handle,
+      followerCount: featuredAccounts.followerCount,
+      profilePicUrl: featuredAccounts.profilePicUrl,
+    })
+    .from(featuredAccounts)
+    .where(
+      and(
+        eq(featuredAccounts.id, featuredAccountId),
+        eq(featuredAccounts.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (accountRows.length === 0) return 0;
+  const acc = accountRows[0]!;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - timeframeDays);
+
+  const sourceReels = await db
+    .select()
+    .from(featuredReels)
+    .where(
+      and(
+        eq(featuredReels.featuredAccountId, featuredAccountId),
+        gte(featuredReels.postedAt, cutoff)
+      )
+    )
+    .orderBy(asc(featuredReels.rank));
+
+  if (sourceReels.length > 0) {
+    await insertReels(
+      sourceReels.map((r) => ({
+        jobId,
+        shortcode: r.reelShortcode,
+        caption: r.caption,
+        viewCount: r.viewCount,
+        likeCount: r.likeCount,
+        commentCount: r.commentCount,
+        thumbnailUrl: r.thumbnailUrl,
+        videoUrl: r.videoUrl,
+        reelUrl: `https://www.instagram.com/reel/${r.reelShortcode}/`,
+        duration: r.duration,
+        postedAt: r.postedAt,
+        ownerUsername: acc.handle,
+      }))
+    );
+  }
+
+  await updateScrapeJob(jobId, {
+    followerCount: acc.followerCount,
+    profilePicUrl: acc.profilePicUrl ?? undefined,
+    reelsFound: sourceReels.length,
+    totalReels: sourceReels.length,
+    currentStep: sourceReels.length > 0 ? "pulling_reels" : "fetching_profile",
+    progressPercent: sourceReels.length > 0 ? 20 : 15,
+  });
+
+  console.log(
+    `[seedFeaturedReelsIntoJob] jobId=${jobId} @${acc.handle} seeded=${sourceReels.length} timeframeDays=${timeframeDays}`
+  );
+  return sourceReels.length;
+}
+
+/**
  * Stamps the user as having completed onboarding. Writes the niche
  * selection (assumed already deduped by the caller), optional multi-
  * creator handle picks, the completion timestamp, and optionally

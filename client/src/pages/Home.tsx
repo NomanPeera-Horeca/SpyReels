@@ -355,10 +355,10 @@ export default function Home() {
       // Search-to-featured shortcut (Commit 2.5): backend detected the
       // handle already exists as a featured creator, so jump straight to
       // the instant Path-B dashboard instead of scraping.
-      if ("redirect" in data && data.redirect === "featured") {
-        posthog?.capture("search_routed_to_featured", {
+      if ("seededFromFeatured" in data && data.seededFromFeatured) {
+        posthog?.capture("featured_spy_started", {
           handle: handle.replace(/^@/, "").trim().toLowerCase(),
-          featured_account_id: data.featuredAccountId,
+          job_id: data.jobId,
         });
       }
       navigateAfterScrapeStart(data, setLocation, "research");

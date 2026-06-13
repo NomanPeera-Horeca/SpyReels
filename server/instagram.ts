@@ -34,6 +34,39 @@ export function createDiscoveryScCallTracker(
 
 let activeDiscoveryScCallTracker: DiscoveryScCallTracker | null = null;
 
+/** Optional caller context attached to [Bug #64 diag] scGet lines. */
+export interface ScrapeCallContext {
+  source: string;
+  jobId?: number;
+  handle?: string;
+}
+
+let activeScrapeCallContext: ScrapeCallContext | null = null;
+
+/** Tag ScrapeCreators calls with job/handle so Render logs are searchable. */
+export async function runWithScrapeCallContext<T>(
+  context: ScrapeCallContext,
+  fn: () => Promise<T>
+): Promise<T> {
+  activeScrapeCallContext = context;
+  try {
+    return await fn();
+  } finally {
+    activeScrapeCallContext = null;
+  }
+}
+
+function formatScrapeCallContextLogSuffix(): string {
+  const ctx = activeScrapeCallContext;
+  if (!ctx) return "";
+  const parts = [`source=${ctx.source}`];
+  if (ctx.jobId != null) parts.push(`jobId=${ctx.jobId}`);
+  if (ctx.handle) {
+    parts.push(`handle=@${ctx.handle.replace(/^@/, "").trim().toLowerCase()}`);
+  }
+  return ` ${parts.join(" ")}`;
+}
+
 /** Count every scGet during discovery toward the hard call fuse. */
 export async function runWithDiscoveryScCallTracker<T>(
   tracker: DiscoveryScCallTracker,
@@ -113,7 +146,7 @@ async function scGet(
     }
   }
   console.log(
-    `[Bug #64 diag] scGet path=${path} status=${res.status} bodyLength=${text.length}`
+    `[Bug #64 diag] scGet path=${path} status=${res.status} bodyLength=${text.length}${formatScrapeCallContextLogSuffix()}`
   );
   return { status: res.status, data };
 }
@@ -580,7 +613,7 @@ export interface ScrapeResult {
 export async function scrapeReels(
   handle: string,
   timeframeDays: number,
-  onProgress?: (count: number) => void,
+  onProgress?: (count: number, pageBatch?: ReelData[]) => void,
   options?: { maxReels?: number; timeoutMs?: number }
 ): Promise<ScrapeResult> {
   const maxReels = options?.maxReels || 500;
@@ -656,6 +689,7 @@ export async function scrapeReels(
 
     let foundInRangeThisPage = false;
     let parsedThisPage = 0;
+    const pageInRangeReels: ReelData[] = [];
 
     for (const item of page.items) {
       const reel = parseClipItem(item, profile.username);
@@ -673,6 +707,7 @@ export async function scrapeReels(
 
       if (reel.postedAt >= cutoffDate) {
         allReels.push(reel);
+        pageInRangeReels.push(reel);
         foundInRangeThisPage = true;
 
         if (allReels.length >= maxReels) break;
@@ -701,7 +736,7 @@ export async function scrapeReels(
     }
 
     if (onProgress) {
-      onProgress(allReels.length);
+      onProgress(allReels.length, pageInRangeReels);
     }
 
     if (!page.moreAvailable || !page.maxId || consecutiveEmptyPages >= 3) {

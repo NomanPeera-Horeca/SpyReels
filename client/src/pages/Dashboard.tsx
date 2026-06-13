@@ -570,9 +570,14 @@ export default function Dashboard() {
           : (nicheFilter as (typeof REEL_NICHE_VALUES)[number]),
     },
     {
-      enabled: !!jobId && jobQuery.data?.status === "completed",
+      enabled:
+        !!jobId &&
+        (jobQuery.data?.status === "completed" ||
+          jobQuery.data?.status === "running"),
       staleTime: DASHBOARD_SNAPSHOT_STALE_MS,
       refetchInterval: (query) => {
+        if (scrapeJobData?.status === "running") return 3000;
+
         const data = query.state.data;
         if (!data?.reels?.length) return false;
         const list = data.reels as Array<{ transcription?: { status?: string | null } | null; niche?: string | null }>;
@@ -1702,6 +1707,16 @@ export default function Dashboard() {
   }
 
   const isLoading = job?.status === "running" || job?.status === "pending";
+  /** User job reels: completed jobs, or running jobs that already have seeded/live rows. */
+  const canDisplayJobReels =
+    !isFeaturedView &&
+    (job?.status === "completed" ||
+      ((job?.status === "running" || job?.status === "pending") &&
+        reelsData.length > 0));
+  const showUpdatingReelsBanner =
+    !isFeaturedView &&
+    job?.status === "running" &&
+    reelsData.length > 0;
   /* Demo banner removed from UI; re-enable by uncommenting this block.
   const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
   */
@@ -1982,7 +1997,7 @@ export default function Dashboard() {
             )}
 
             <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
-              {job?.status === "completed" && reelsData.length > 0 && (
+              {canDisplayJobReels && reelsData.length > 0 && (
                 <>
                   <Tooltip content="Filter reels by date posted">
                     <div>
@@ -2127,8 +2142,24 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Loading state */}
-          {isLoading && (
+          {showUpdatingReelsBanner && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  Updating with latest reels
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {typeof job?.timeframeDays === "number"
+                    ? `Showing what we have while we pull your last ${job.timeframeDays} days. New posts will appear automatically.`
+                    : "Showing what we have while we pull the latest posts. New reels will appear automatically."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Loading state (no reels yet) */}
+          {isLoading && reelsData.length === 0 && (
             <div className="border border-border/50 bg-card rounded-lg p-8">
               <div className="flex flex-col items-center justify-center gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -2207,7 +2238,7 @@ export default function Dashboard() {
           )}
 
           {/* Reels list */}
-          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "list" && (
+          {canDisplayJobReels && sortedReels.length > 0 && viewMode === "list" && (
             <div className="space-y-1">
               {sortedReels.map((reel, index) => {
                 const isExpanded = expandedReelId === reel.id;
@@ -2488,7 +2519,7 @@ export default function Dashboard() {
           )}
 
           {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
-          {job?.status === "completed" && sortedReels.length > 0 && viewMode === "grid" && (
+          {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {sortedReels.map((reel, index) => {
