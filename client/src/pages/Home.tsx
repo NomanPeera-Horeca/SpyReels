@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
 import {
   normalizeInstagramHandle,
   isValidInstagramHandleNormalized,
@@ -359,14 +360,8 @@ export default function Home() {
           handle: handle.replace(/^@/, "").trim().toLowerCase(),
           featured_account_id: data.featuredAccountId,
         });
-        setLocation(
-          `/dashboard?featuredAccountId=${data.featuredAccountId}&from=research`
-        );
-        return;
       }
-      // Route to the dedicated scraping progress page; the toast would be
-      // redundant on top of the full-page experience there.
-      setLocation(`/scraping?jobId=${data.jobId}`);
+      navigateAfterScrapeStart(data, setLocation, "research");
     },
     onError: error => {
       const msg = error.message ?? "";

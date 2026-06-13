@@ -11,16 +11,15 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import type { AppRouter } from "../../../server/routers";
 import { formatNumber } from "@/components/InlineWorkflow";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { useUsageGate } from "@/hooks/useUsageGate";
+import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { formatRelativeActive } from "@/lib/formatActivity";
 import { LOADING_TIPS } from "@/data/loadingTips";
@@ -345,7 +344,17 @@ function CreatorDiscoveryProgress({
   );
 }
 
-function CreatorDiscoveryCard({ creator }: { creator: RankedCreator }) {
+function CreatorDiscoveryCard({
+  creator,
+  onSeeReels,
+  seeReelsDisabled,
+  isStarting,
+}: {
+  creator: RankedCreator;
+  onSeeReels: (username: string) => void;
+  seeReelsDisabled: boolean;
+  isStarting: boolean;
+}) {
   const rank = creator.rank ?? 0;
   const avatarSrc = creator.owner.profilePicUrl?.trim() || null;
   const displayName =
@@ -428,45 +437,66 @@ function CreatorDiscoveryCard({ creator }: { creator: RankedCreator }) {
             </>
           ) : null}
         </p>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="mt-auto inline-flex w-full cursor-not-allowed">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="pointer-events-none w-full opacity-60"
-                disabled
-                tabIndex={-1}
-                aria-disabled="true"
-              >
-                See their reels
-                <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                  Coming soon
-                </span>
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            Dive into a creator&apos;s full reel library in a future update.
-          </TooltipContent>
-        </Tooltip>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-auto w-full"
+          disabled={seeReelsDisabled}
+          onClick={() => onSeeReels(creator.owner.username)}
+        >
+          {isStarting ? (
+            <>
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              Starting...
+            </>
+          ) : (
+            "See their reels"
+          )}
+        </Button>
       </div>
     </div>
   );
 }
 
-function CreatorGrid({ creators }: { creators: RankedCreator[] }) {
+function CreatorGrid({
+  creators,
+  onSeeReels,
+  scrapingUsername,
+  scrapeBusy,
+  scrapeGateAllowed,
+  scrapeGateLoading,
+}: {
+  creators: RankedCreator[];
+  onSeeReels: (username: string) => void;
+  scrapingUsername: string | null;
+  scrapeBusy: boolean;
+  scrapeGateAllowed: boolean;
+  scrapeGateLoading: boolean;
+}) {
   if (creators.length === 0) return null;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {creators.map((creator) => (
-        <CreatorDiscoveryCard
-          key={creator.owner.username.toLowerCase()}
-          creator={creator}
-        />
-      ))}
+      {creators.map((creator) => {
+        const handleKey = creator.owner.username.toLowerCase();
+        const isStarting =
+          scrapeBusy && scrapingUsername?.toLowerCase() === handleKey;
+        const seeReelsDisabled =
+          !scrapeGateAllowed ||
+          scrapeGateLoading ||
+          (scrapeBusy && !isStarting);
+
+        return (
+          <CreatorDiscoveryCard
+            key={handleKey}
+            creator={creator}
+            onSeeReels={onSeeReels}
+            seeReelsDisabled={seeReelsDisabled}
+            isStarting={isStarting}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -525,8 +555,12 @@ export default function CreatorDiscovery() {
   const [loadingReplayId, setLoadingReplayId] = useState<number | null>(null);
   const [textareaFocused, setTextareaFocused] = useState(false);
   const [hideRecentDropdown, setHideRecentDropdown] = useState(false);
+  const [scrapingUsername, setScrapingUsername] = useState<string | null>(null);
   const preFilterCountRef = useRef<number | null>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [, setLocation] = useLocation();
+  const scrapeGate = useUsageGate("scrapeCount");
 
   const recentSearchesQuery = trpc.creatorDiscovery.recentSearches.useQuery();
   const quotaQuery = trpc.creatorDiscovery.getQuota.useQuery();
@@ -586,6 +620,35 @@ export default function CreatorDiscovery() {
       toast.error(job.errorMessage?.trim() || "Creator discovery search failed");
     }
   }, [jobStatusQuery.data, activeJobId, recentSearchesQuery, quotaQuery]);
+
+  const startScrape = trpc.scrape.start.useMutation({
+    onSuccess: (data) => {
+      navigateAfterScrapeStart(data, setLocation, "discover-creators");
+    },
+    onError: (err) => {
+      setScrapingUsername(null);
+      if (err instanceof TRPCClientError) {
+        if (err.data?.code === "CONFLICT") {
+          toast.error(err.message);
+          return;
+        }
+        if (err.data?.code === "FORBIDDEN") {
+          toast.error(
+            `Account research limit reached (${scrapeGate.used}/${scrapeGate.limit})`,
+            {
+              description: "Upgrade your plan for more account research.",
+              action: {
+                label: "Upgrade",
+                onClick: () => setLocation("/pricing"),
+              },
+            }
+          );
+          return;
+        }
+      }
+      toast.error(err.message);
+    },
+  });
 
   const searchMutation = trpc.creatorDiscovery.search.useMutation({
     onSuccess: (data) => {
@@ -700,6 +763,27 @@ export default function CreatorDiscovery() {
     setCreatorPage(page);
   }, []);
 
+  const handleSeeReels = useCallback(
+    (username: string) => {
+      const handle = username.replace(/^@/, "").trim();
+      if (
+        !handle ||
+        !scrapeGate.allowed ||
+        scrapeGate.isLoading ||
+        startScrape.isPending
+      ) {
+        return;
+      }
+      setScrapingUsername(handle);
+      startScrape.mutate({ handle, timeframeDays: 90 });
+    },
+    [
+      scrapeGate.allowed,
+      scrapeGate.isLoading,
+      startScrape,
+    ]
+  );
+
   return (
     <div className="container max-w-6xl py-8 space-y-8">
       <div className="space-y-2">
@@ -808,7 +892,31 @@ export default function CreatorDiscovery() {
           ) : null}
           {showResults ? (
             <>
-              <CreatorGrid creators={paginatedCreators} />
+              {!scrapeGate.isLoading && !scrapeGate.allowed ? (
+                <UpgradePrompt
+                  action="scrapeCount"
+                  used={scrapeGate.used}
+                  limit={scrapeGate.limit}
+                  planRequired={scrapeGate.planRequired}
+                  variant="inline"
+                />
+              ) : null}
+              {!scrapeGate.isLoading &&
+              scrapeGate.allowed &&
+              scrapeGate.limit > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {scrapeGate.used}/{scrapeGate.limit} account research sessions
+                  this month (used when you open a creator&apos;s reels)
+                </p>
+              ) : null}
+              <CreatorGrid
+                creators={paginatedCreators}
+                onSeeReels={handleSeeReels}
+                scrapingUsername={scrapingUsername}
+                scrapeBusy={startScrape.isPending}
+                scrapeGateAllowed={scrapeGate.allowed}
+                scrapeGateLoading={scrapeGate.isLoading}
+              />
               <CreatorPagination
                 page={creatorPage}
                 totalPages={totalPages}

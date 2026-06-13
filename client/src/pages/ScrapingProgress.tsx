@@ -68,6 +68,10 @@ export default function ScrapingProgress() {
     const id = params.get("jobId");
     return id ? parseInt(id, 10) : null;
   }, [searchString]);
+  const fromParam = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("from") ?? "research";
+  }, [searchString]);
 
   // If someone lands here without a jobId, bounce them to /research.
   useEffect(() => {
@@ -100,10 +104,13 @@ export default function ScrapingProgress() {
   // Redirect on success.
   useEffect(() => {
     if (status === "completed") {
-      const t = setTimeout(() => setLocation(`/dashboard?jobId=${jobId}&from=research`), 400);
+      const t = setTimeout(
+        () => setLocation(`/dashboard?jobId=${jobId}&from=${fromParam}`),
+        400
+      );
       return () => clearTimeout(t);
     }
-  }, [status, jobId, setLocation]);
+  }, [status, jobId, fromParam, setLocation]);
 
   // Elapsed-seconds timer for the "About X seconds remaining" copy.
   const [elapsedSec, setElapsedSec] = useState(0);

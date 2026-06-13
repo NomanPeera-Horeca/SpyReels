@@ -1770,6 +1770,8 @@ export default function Dashboard() {
                       if (fromPage === "history") setLocation("/history");
                       else if (fromPage === "research") setLocation("/");
                       else if (fromPage === "dashboard") setLocation("/dashboard");
+                      else if (fromPage === "discover-creators")
+                        setLocation("/discover-creators");
                       else setLocation("/history");
                     }}
                   >
@@ -1903,6 +1905,8 @@ export default function Dashboard() {
                         setLocation("/");
                       } else if (fromPage === "dashboard") {
                         setLocation("/dashboard");
+                      } else if (fromPage === "discover-creators") {
+                        setLocation("/discover-creators");
                       } else {
                         setLocation("/history");
                       }
