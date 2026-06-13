@@ -4,6 +4,7 @@ import { subscriptions, monthlyUsage } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY, STRIPE_INTERVAL_METADATA_KEY } from "./products";
 import { sendPaymentConfirmationEmail } from "../utils/email.js";
+import { hasUnlimitedUsage, unlimitedUsageResult } from "../usageBypass";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-02-24.acacia" as any,
@@ -381,6 +382,10 @@ type UsageField =
   | "extensionTranscribeCount" | "extensionRecreateCount";
 
 export async function incrementUsage(userId: number, field: UsageField, amount: number = 1): Promise<void> {
+  const { getUserById } = await import("../db");
+  const user = await getUserById(userId);
+  if (user && hasUnlimitedUsage(user)) return;
+
   const db = await getDb();
   if (!db) return;
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -486,12 +491,17 @@ export async function getUserSubscription(userId: number) {
 export async function checkUsageLimit(
   userId: number, 
   action: UsageField,
-  userOpenId?: string
+  userOpenId?: string,
+  hints?: { email?: string | null; role?: string | null }
 ): Promise<{ allowed: boolean; limit: number; used: number; planRequired?: PlanId }> {
-  // Owner/admin bypass — unlimited access
-  const ownerOpenId = process.env.OWNER_OPEN_ID;
-  if (ownerOpenId && userOpenId === ownerOpenId) {
-    return { allowed: true, limit: 999999, used: 0 };
+  if (hasUnlimitedUsage({ openId: userOpenId, email: hints?.email, role: hints?.role })) {
+    return unlimitedUsageResult();
+  }
+
+  const { getUserById } = await import("../db");
+  const user = await getUserById(userId);
+  if (user && hasUnlimitedUsage(user)) {
+    return unlimitedUsageResult();
   }
 
   const sub = await getUserSubscription(userId);

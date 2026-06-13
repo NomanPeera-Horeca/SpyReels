@@ -570,7 +570,10 @@ export const appRouter = router({
         ]),
       }))
       .query(async ({ ctx, input }) => {
-        return checkUsageLimit(ctx.user.id, input.action as any, ctx.user.openId);
+        return checkUsageLimit(ctx.user.id, input.action as any, ctx.user.openId, {
+          email: ctx.user.email,
+          role: ctx.user.role,
+        });
       }),
 
     trackUsage: protectedProcedure

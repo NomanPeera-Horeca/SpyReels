@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 
 export type UsageAction =
   | "scrapeCount"
@@ -71,6 +72,23 @@ export function useUsageGate(action: UsageAction): UsageGateResult {
       limit: 0,
       isLoading: false,
       currentPlan: "free",
+      trackUsage: () => {},
+    };
+  }
+
+  const isUnlimitedUser =
+    user.role === "admin" ||
+    isAdminPanelClient(user) ||
+    (import.meta.env.VITE_OWNER_OPEN_ID &&
+      user.openId === import.meta.env.VITE_OWNER_OPEN_ID);
+
+  if (isUnlimitedUser) {
+    return {
+      allowed: true,
+      used: 0,
+      limit: 999999,
+      isLoading: false,
+      currentPlan: subQuery.data?.plan || "pro",
       trackUsage: () => {},
     };
   }
