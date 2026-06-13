@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { EXPORT_SCOPES, resolveExportScope } from "@shared/exportScope";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
@@ -2482,18 +2483,26 @@ Return JSON only:
 
     /** Latest cached Excel export for a scrape job (free re-download if valid). */
     latestForScrapeJob: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
+      .input(
+        z.object({
+          jobId: z.number(),
+          scope: z.enum(EXPORT_SCOPES).optional().default("top_viral_30"),
+        })
+      )
       .query(async ({ ctx, input }) => {
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
         if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
 
-        const active = await getActiveExportJobForScrapeJob(input.jobId, ctx.workspaceId);
         const currentReelCount = await countReelsForJob(input.jobId);
+        const effectiveScope = resolveExportScope(currentReelCount, input.scope);
+
+        const active = await getActiveExportJobForScrapeJob(input.jobId, ctx.workspaceId);
         if (active) {
           return {
             exportJobId: active.id,
             status: active.status,
+            exportScope: active.exportScope,
             currentStep: active.currentStep,
             progressPercent: active.progressPercent,
             stepDone: active.stepDone,
@@ -2508,7 +2517,8 @@ Return JSON only:
 
         const cached = await getLatestCompletedExportForScrapeJob(
           input.jobId,
-          ctx.workspaceId
+          ctx.workspaceId,
+          effectiveScope
         );
         if (!cached) {
           return null;
@@ -2523,6 +2533,7 @@ Return JSON only:
         return {
           exportJobId: cached.id,
           status: cached.status,
+          exportScope: cached.exportScope,
           currentStep: cached.currentStep,
           progressPercent: cached.progressPercent,
           stepDone: cached.stepDone,
@@ -2556,6 +2567,7 @@ Return JSON only:
           exportJobId: row.id,
           scrapeJobId: row.scrapeJobId,
           status: row.status,
+          exportScope: row.exportScope,
           currentStep: row.currentStep,
           progressPercent: row.progressPercent,
           stepDone: row.stepDone,
@@ -2576,6 +2588,7 @@ Return JSON only:
         z.object({
           jobId: z.number(),
           regenerate: z.boolean().optional().default(false),
+          scope: z.enum(EXPORT_SCOPES).optional().default("top_viral_30"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2584,6 +2597,7 @@ Return JSON only:
         if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
 
         const currentReelCount = await countReelsForJob(input.jobId);
+        const effectiveScope = resolveExportScope(currentReelCount, input.scope);
 
         if (!input.regenerate) {
           const active = await getActiveExportJobForScrapeJob(
@@ -2594,6 +2608,7 @@ Return JSON only:
             return {
               exportJobId: active.id,
               status: active.status as "pending" | "processing",
+              exportScope: active.exportScope,
               started: false,
               cached: false,
             };
@@ -2601,7 +2616,8 @@ Return JSON only:
 
           const cached = await getLatestCompletedExportForScrapeJob(
             input.jobId,
-            ctx.workspaceId
+            ctx.workspaceId,
+            effectiveScope
           );
           if (cached) {
             const isExpired =
@@ -2613,6 +2629,7 @@ Return JSON only:
               return {
                 exportJobId: cached.id,
                 status: "completed" as const,
+                exportScope: cached.exportScope,
                 started: false,
                 cached: true,
               };
@@ -2636,6 +2653,7 @@ Return JSON only:
         const exportJobId = await createExportJob({
           userId: ctx.user.id,
           scrapeJobId: input.jobId,
+          exportScope: effectiveScope,
           status: "pending",
           currentStep: "pending",
           progressPercent: 0,
@@ -2655,6 +2673,7 @@ Return JSON only:
         return {
           exportJobId,
           status: "pending" as const,
+          exportScope: effectiveScope,
           started: true,
           cached: false,
         };

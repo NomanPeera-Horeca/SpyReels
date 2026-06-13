@@ -7,6 +7,7 @@ import { buildExcelExportBuffer, fetchThumbnailBuffer } from "./exportExcel";
 import { buildExportRows, prepareReelsForExport } from "./exportPipeline";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import { storagePut } from "./storage";
+import type { ExportScope } from "../shared/exportScope";
 
 export const EXPORT_FILE_TTL_DAYS = 7;
 
@@ -25,6 +26,9 @@ export async function runExportJob(
   scrapeJobId: number,
   workspaceId: string
 ): Promise<void> {
+  const exportJobRow = await getExportJobById(exportJobId);
+  const scope: ExportScope = exportJobRow?.exportScope ?? "all";
+
   const report = async (
     update: Parameters<typeof updateExportJob>[1]
   ): Promise<void> => {
@@ -39,7 +43,7 @@ export async function runExportJob(
       progressLabel: "Starting export…",
     });
 
-    await prepareReelsForExport(scrapeJobId, userId, openId, async (p) => {
+    await prepareReelsForExport(scrapeJobId, userId, openId, scope, async (p) => {
       await report({
         currentStep: p.currentStep,
         progressPercent: p.progressPercent,
@@ -55,7 +59,7 @@ export async function runExportJob(
       progressLabel: "Building Excel file…",
     });
 
-    const { rows, job } = await buildExportRows(scrapeJobId);
+    const { rows, job } = await buildExportRows(scrapeJobId, scope);
     const thumbnailBuffers = new Map<number, Buffer>();
 
     let thumbIndex = 0;
@@ -85,7 +89,8 @@ export async function runExportJob(
     });
 
     const xlsxBuffer = await buildExcelExportBuffer(rows, thumbnailBuffers);
-    const filename = `reels_${job?.handle || "export"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const scopeTag = scope === "top_viral_30" ? "_top30" : "";
+    const filename = `reels_${job?.handle || "export"}${scopeTag}_${new Date().toISOString().slice(0, 10)}.xlsx`;
     const r2Key = exportFileR2Key(workspaceId, scrapeJobId, exportJobId);
 
     await storagePut(

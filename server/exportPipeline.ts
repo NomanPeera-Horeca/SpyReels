@@ -22,6 +22,10 @@ import {
   formatProductionFormatLabel,
   productionFormatFilmingTip,
 } from "../shared/productionFormats";
+import {
+  EXPORT_TOP_VIRAL_COUNT,
+  type ExportScope,
+} from "../shared/exportScope";
 
 export type ExportProgressUpdate = {
   currentStep: "transcribing" | "analyzing" | "building_excel" | "complete";
@@ -61,6 +65,19 @@ function sortReelsForExport(reelsList: Reel[], followerCount: number): Reel[] {
     if (erB !== erA) return erB - erA;
     return b.viewCount - a.viewCount;
   });
+}
+
+/** Account-wide top performers for export (not dashboard filter/sort). */
+export function selectReelsForExport(
+  reelsList: Reel[],
+  followerCount: number,
+  scope: ExportScope
+): Reel[] {
+  const sorted = sortReelsForExport(reelsList, followerCount);
+  if (scope === "top_viral_30") {
+    return sorted.slice(0, EXPORT_TOP_VIRAL_COUNT);
+  }
+  return sorted;
 }
 
 function postedDayAndHourUtc(postedAt: Date | string | null | undefined): {
@@ -124,7 +141,10 @@ function buildReelExportRow(
   };
 }
 
-export async function buildExportRows(jobId: number): Promise<{
+export async function buildExportRows(
+  jobId: number,
+  scope: ExportScope = "all"
+): Promise<{
   rows: ReelExportRow[];
   job: Awaited<ReturnType<typeof getScrapeJob>>;
 }> {
@@ -133,8 +153,8 @@ export async function buildExportRows(jobId: number): Promise<{
   const transcriptionsList = await getTranscriptionsByJobId(jobId);
   const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
   const followerCount = job?.followerCount || 0;
-  const sorted = sortReelsForExport(reelsList, followerCount);
-  const rows = sorted.map((r) =>
+  const selected = selectReelsForExport(reelsList, followerCount, scope);
+  const rows = selected.map((r) =>
     buildReelExportRow(r, followerCount, transcriptionMap.get(r.id))
   );
   return { rows, job };
@@ -158,13 +178,17 @@ export async function prepareReelsForExport(
   jobId: number,
   userId: number,
   openId: string,
+  scope: ExportScope = "all",
   onProgress?: ExportProgressCallback
 ): Promise<void> {
   const { runTranscription } = await import("./routers.js");
+  const job = await getScrapeJob(jobId);
   const reelsList = await getReelsByJobId(jobId);
+  const followerCount = job?.followerCount || 0;
+  const exportReels = selectReelsForExport(reelsList, followerCount, scope);
 
   const needsTranscribe: Reel[] = [];
-  for (const reel of reelsList) {
+  for (const reel of exportReels) {
     const existing = await getTranscriptionByReelId(reel.id);
     if (existing?.status === "completed") continue;
     if (existing?.status === "processing") {
@@ -188,7 +212,7 @@ export async function prepareReelsForExport(
         : "Transcriptions ready",
   });
 
-  for (const reel of reelsList) {
+  for (const reel of exportReels) {
     let existing = await getTranscriptionByReelId(reel.id);
 
     if (existing?.status === "completed") continue;
@@ -255,7 +279,11 @@ export async function prepareReelsForExport(
     progressLabel: "Analyzing filming style…",
   });
 
-  let refreshedReels = await getReelsByJobId(jobId);
+  let refreshedReels = selectReelsForExport(
+    await getReelsByJobId(jobId),
+    followerCount,
+    scope
+  );
   const transcriptionsList = await getTranscriptionsByJobId(jobId);
   const transcriptionMap = new Map(transcriptionsList.map((t) => [t.reelId, t]));
   const needsClassifyIds = refreshedReels
@@ -278,7 +306,11 @@ export async function prepareReelsForExport(
     progressLabel: "Reading thumbnail text…",
   });
 
-  refreshedReels = await getReelsByJobId(jobId);
+  refreshedReels = selectReelsForExport(
+    await getReelsByJobId(jobId),
+    followerCount,
+    scope
+  );
   const thumbItems = await Promise.all(
     refreshedReels.map(async (r) => {
       const stableThumb = r.thumbnailUrl

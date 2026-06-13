@@ -3,7 +3,7 @@
 CREATE TABLE `export_jobs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `userId` int NOT NULL,
-  `workspaceId` varchar(36) NOT NULL,
+  `workspaceId` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `scrapeJobId` int NOT NULL,
   `status` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
   `currentStep` enum('pending','transcribing','analyzing','building_excel','complete','failed') NOT NULL DEFAULT 'pending',
@@ -24,4 +24,4 @@ CREATE TABLE `export_jobs` (
   KEY `idx_export_jobs_scrape_job` (`scrapeJobId`),
   KEY `idx_export_jobs_workspace` (`workspaceId`),
   CONSTRAINT `export_jobs_workspaceId_workspaces_id_fk` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

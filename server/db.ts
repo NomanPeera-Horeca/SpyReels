@@ -24,6 +24,7 @@ import {
   getSavedScriptWorkspaceId,
   getScrapeJobWorkspaceId,
 } from "./personalWorkspace";
+import type { ExportScope } from "../shared/exportScope";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -690,20 +691,23 @@ export async function getActiveExportJobForScrapeJob(
 
 export async function getLatestCompletedExportForScrapeJob(
   scrapeJobId: number,
-  workspaceId: string
+  workspaceId: string,
+  exportScope?: ExportScope
 ): Promise<ExportJob | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const conditions = [
+    eq(exportJobs.scrapeJobId, scrapeJobId),
+    eq(exportJobs.workspaceId, workspaceId),
+    eq(exportJobs.status, "completed"),
+  ];
+  if (exportScope) {
+    conditions.push(eq(exportJobs.exportScope, exportScope));
+  }
   const rows = await db
     .select()
     .from(exportJobs)
-    .where(
-      and(
-        eq(exportJobs.scrapeJobId, scrapeJobId),
-        eq(exportJobs.workspaceId, workspaceId),
-        eq(exportJobs.status, "completed")
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(exportJobs.id))
     .limit(1);
   return rows[0];

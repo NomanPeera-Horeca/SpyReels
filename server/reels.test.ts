@@ -545,6 +545,7 @@ describe("export jobs", () => {
     workspaceId: "00000000-0000-4000-8000-000000000001",
     scrapeJobId: 1,
     status: "completed" as const,
+    exportScope: "top_viral_30" as const,
     currentStep: "complete",
     progressPercent: 100,
     stepDone: 0,
@@ -579,7 +580,11 @@ describe("export jobs", () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.export.start({ jobId: 1, regenerate: false });
+    const result = await caller.export.start({
+      jobId: 1,
+      regenerate: false,
+      scope: "top_viral_30",
+    });
 
     expect(result.started).toBe(true);
     expect(result.exportJobId).toBe(99);
@@ -596,10 +601,15 @@ describe("export jobs", () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.export.start({ jobId: 1, regenerate: false });
+    const result = await caller.export.start({
+      jobId: 1,
+      regenerate: false,
+      scope: "top_viral_30",
+    });
 
     expect(result.cached).toBe(true);
     expect(result.status).toBe("completed");
+    expect(result.exportScope).toBe("top_viral_30");
     expect(result.started).toBe(false);
   });
 

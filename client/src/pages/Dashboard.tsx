@@ -74,6 +74,12 @@ import {
   trackExportJob,
   untrackExportJob,
 } from "@/lib/exportJobs";
+import { ExportScopeDialog } from "@/components/ExportScopeDialog";
+import {
+  exportScopeNeedsPrompt,
+  resolveExportScope,
+  type ExportScope,
+} from "@shared/exportScope";
 import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
@@ -403,12 +409,16 @@ export default function Dashboard() {
   }, []);
   const [showSheetsDialog, setShowSheetsDialog] = useState(false);
   const [sheetsEmail, setSheetsEmail] = useState("");
+  const [showExportScopeDialog, setShowExportScopeDialog] = useState(false);
+  const [exportScopeRegenerate, setExportScopeRegenerate] = useState(false);
+  const [exportScopePreference, setExportScopePreference] =
+    useState<ExportScope>("top_viral_30");
 
   /** Path B: featured catalog dashboard (no scrape_job). */
   const isFeaturedView = !!featuredAccountId && !jobId;
 
   const exportLatestQuery = trpc.export.latestForScrapeJob.useQuery(
-    { jobId: jobId! },
+    { jobId: jobId!, scope: exportScopePreference },
     {
       enabled: !!jobId && !isFeaturedView,
       refetchInterval: (query) => {
@@ -710,6 +720,47 @@ export default function Dashboard() {
   const reelsLoading = isFeaturedView
     ? featuredDataQuery.isPending
     : reelsQuery.isLoading;
+
+  const accountExportReelCount = Math.max(job?.totalReels ?? 0, reelsData.length);
+
+  const beginExportJob = useCallback(
+    (regenerate: boolean, scope: ExportScope) => {
+      if (!jobId) return;
+      const effectiveScope = resolveExportScope(accountExportReelCount, scope);
+      setExportScopePreference(effectiveScope);
+      setShowExportScopeDialog(false);
+      exportStart.mutate({ jobId, regenerate, scope: effectiveScope });
+    },
+    [jobId, accountExportReelCount, exportStart]
+  );
+
+  const requestExport = useCallback(
+    (regenerate: boolean) => {
+      if (!jobId) return;
+      if (!exportGate.allowed) {
+        toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
+          description: "Upgrade your plan for more exports.",
+          action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
+        });
+        return;
+      }
+      if (exportScopeNeedsPrompt(accountExportReelCount)) {
+        setExportScopeRegenerate(regenerate);
+        setShowExportScopeDialog(true);
+        return;
+      }
+      beginExportJob(regenerate, "all");
+    },
+    [
+      jobId,
+      exportGate.allowed,
+      exportGate.used,
+      exportGate.limit,
+      accountExportReelCount,
+      beginExportJob,
+      setLocation,
+    ]
+  );
 
   /** Real IG handle for display; if job.handle is a bad placeholder, use first reel's owner. */
   const displayScrapeHandle = useMemo(() => {
@@ -2169,10 +2220,14 @@ export default function Dashboard() {
                       <Tooltip
                         content={
                           cachedExportReady
-                            ? "Download your saved Excel file (no credits)"
+                            ? exportScopePreference === "top_viral_30"
+                              ? "Download your saved Top 30 Excel file (no credits)"
+                              : "Download your saved Excel file (no credits)"
                             : exportIsStale
                               ? "New reels since last export. Regenerate uses 1 export credit."
-                              : "Export reels to Excel with transcripts and filming tips"
+                              : exportScopeNeedsPrompt(accountExportReelCount)
+                                ? "Export top viral reels or full account to Excel"
+                                : "Export reels to Excel with transcripts and filming tips"
                         }
                       >
                         <Button
@@ -2190,14 +2245,7 @@ export default function Dashboard() {
                               });
                               return;
                             }
-                            if (!exportGate.allowed) {
-                              toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`, {
-                                description: "Upgrade your plan for more exports.",
-                                action: { label: "Upgrade", onClick: () => setLocation("/pricing") },
-                              });
-                              return;
-                            }
-                            exportStart.mutate({ jobId: jobId!, regenerate: false });
+                            requestExport(false);
                           }}
                           disabled={exportInProgress || exportDownload.isPending}
                         >
@@ -2227,11 +2275,7 @@ export default function Dashboard() {
                             size="sm"
                             className="h-9 text-xs"
                             onClick={() => {
-                              if (!exportGate.allowed) {
-                                toast.error(`Export limit reached (${exportGate.used}/${exportGate.limit})`);
-                                return;
-                              }
-                              exportStart.mutate({ jobId: jobId!, regenerate: true });
+                              requestExport(true);
                             }}
                           >
                             Regenerate
@@ -3268,6 +3312,17 @@ export default function Dashboard() {
             })()
           : null}
       </GridReelWorkflowDialog>
+
+      {!isFeaturedView && jobId != null ? (
+        <ExportScopeDialog
+          open={showExportScopeDialog}
+          onOpenChange={setShowExportScopeDialog}
+          reelCount={accountExportReelCount}
+          isRegenerate={exportScopeRegenerate}
+          isPending={exportStart.isPending}
+          onConfirm={(scope) => beginExportJob(exportScopeRegenerate, scope)}
+        />
+      ) : null}
 
       {/*
       Export to Google Sheets dialog (UI disabled; re-enable when integration ships)

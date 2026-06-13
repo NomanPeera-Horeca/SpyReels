@@ -192,6 +192,9 @@ export const exportJobs = mysqlTable(
     filename: varchar("filename", { length: 255 }),
     fileSizeBytes: int("fileSizeBytes"),
     reelCountAtExport: int("reelCountAtExport"),
+    exportScope: mysqlEnum("exportScope", ["all", "top_viral_30"])
+      .default("all")
+      .notNull(),
     errorMessage: text("errorMessage"),
     expiresAt: timestamp("expiresAt"),
     completedAt: timestamp("completedAt"),
