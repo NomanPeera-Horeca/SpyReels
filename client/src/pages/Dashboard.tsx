@@ -628,11 +628,18 @@ export default function Dashboard() {
     return scrapeJobData;
   }, [isFeaturedView, featuredData, scrapeJobData]);
 
+  const jobRunning = !isFeaturedView && scrapeJobData?.status === "running";
+  const hasPersistedNiche = Boolean(scrapeJobData?.classifiedNicheSlug);
+
   const featuredHandleContext = trpc.featured.accountContextByHandle.useQuery(
     { handle: scrapeJobData?.handle ?? "" },
     {
       enabled: Boolean(
-        jobId && scrapeJobData?.handle && scrapeJobData.status === "completed"
+        jobId &&
+          scrapeJobData?.handle &&
+          (scrapeJobData.status === "completed" ||
+            (scrapeJobData.status === "running" &&
+              (scrapeJobData.classifiedNicheSlug || scrapeJobData.isDemo)))
       ),
       staleTime: DASHBOARD_SIDEBAR_STALE_MS,
     }
@@ -642,7 +649,11 @@ export default function Dashboard() {
     if (isFeaturedView) {
       return featuredData?.account.classifiedNicheSlug ?? null;
     }
-    if (!scrapeJobData || scrapeJobData.status !== "completed") return null;
+    if (!scrapeJobData) return null;
+    const sidebarStatusOk =
+      scrapeJobData.status === "completed" ||
+      (scrapeJobData.status === "running" && scrapeJobData.classifiedNicheSlug);
+    if (!sidebarStatusOk) return null;
     if (scrapeJobData.classifiedNicheSlug) return scrapeJobData.classifiedNicheSlug;
     if (scrapeJobData.isDemo && featuredHandleContext.data?.nicheSlug) {
       return featuredHandleContext.data.nicheSlug;
@@ -658,7 +669,11 @@ export default function Dashboard() {
       }
       return slug ? toReadableNiche(slug) : "";
     }
-    if (!scrapeJobData || scrapeJobData.status !== "completed") return "";
+    if (!scrapeJobData) return "";
+    const sidebarStatusOk =
+      scrapeJobData.status === "completed" ||
+      (scrapeJobData.status === "running" && scrapeJobData.classifiedNicheSlug);
+    if (!sidebarStatusOk) return "";
     if (scrapeJobData.classifiedNicheSlug) {
       return toReadableNiche(scrapeJobData.classifiedNicheSlug);
     }
@@ -671,6 +686,15 @@ export default function Dashboard() {
   const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
   const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
   const jobComplete = isFeaturedView ? !!featuredData : job?.status === "completed";
+
+  const goingViralSlugs = useMemo(
+    () =>
+      [...new Set((user?.selectedNicheSlugs ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean))].slice(
+        0,
+        5
+      ),
+    [user?.selectedNicheSlugs]
+  );
 
   const reelsQuery = trpc.reels.list.useQuery(
     {
@@ -792,6 +816,16 @@ export default function Dashboard() {
     ].slice(0, 5);
   }, [user?.selectedCreatorHandles, displayScrapeHandle, job?.handle]);
 
+  const sidebarContentReady =
+    jobComplete ||
+    (jobRunning &&
+      (hasPersistedNiche ||
+        onboardingPickHandles.length > 0 ||
+        goingViralSlugs.length > 0 ||
+        (scrapeJobData?.totalReels ?? 0) > 0));
+
+  const sidebarSyncRefreshing = jobRunning && sidebarContentReady;
+
   const creatorsByHandlesQuery = trpc.featured.creatorsByHandles.useQuery(
     {
       handles: onboardingPickHandles,
@@ -799,7 +833,7 @@ export default function Dashboard() {
       limit: 5,
     },
     {
-      enabled: jobComplete && onboardingPickHandles.length > 0,
+      enabled: sidebarContentReady && onboardingPickHandles.length > 0,
       staleTime: DASHBOARD_SIDEBAR_STALE_MS,
     }
   );
@@ -811,7 +845,7 @@ export default function Dashboard() {
   /** In featured view we already have the account id from the URL, so
    * Tier 2 can skip the `featuredHandleContext` round-trip. */
   const canQueryRelatedTier2 =
-    jobComplete &&
+    sidebarContentReady &&
     tier1Decided &&
     !showRelatedFromPicks &&
     Boolean(nicheSlugForSidebar) &&
@@ -828,15 +862,10 @@ export default function Dashboard() {
     { enabled: canQueryRelatedTier2, staleTime: DASHBOARD_SIDEBAR_STALE_MS }
   );
 
-  const goingViralSlugs = useMemo(
-    () => [...new Set((user?.selectedNicheSlugs ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean))].slice(0, 5),
-    [user?.selectedNicheSlugs]
-  );
-
   const goingViralQuery = trpc.featured.goingViralByNiches.useQuery(
     { slugs: goingViralSlugs },
     {
-      enabled: jobComplete && goingViralSlugs.length > 0,
+      enabled: sidebarContentReady && goingViralSlugs.length > 0,
       staleTime: DASHBOARD_SIDEBAR_STALE_MS,
     }
   );
@@ -2945,7 +2974,7 @@ export default function Dashboard() {
           )}
         </div>
         <aside className="min-w-0 w-full space-y-4 border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
-          {!jobComplete ? (
+          {!sidebarContentReady ? (
             <>
               <div className="rounded-xl border border-border/40 bg-card p-4">
                 <div className="h-4 w-40 bg-muted rounded animate-pulse" />
@@ -2973,6 +3002,14 @@ export default function Dashboard() {
             </>
           ) : (
             <>
+              {sidebarSyncRefreshing && (
+                <div className="flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                  <p className="text-[11px] text-muted-foreground">
+                    Refreshing while reels update. Sidebar stays available from your last sync.
+                  </p>
+                </div>
+              )}
               {showRelatedPanel && (
                 relatedPanelLoading ? (
                   <div className="rounded-xl border border-border/40 bg-card p-4">
