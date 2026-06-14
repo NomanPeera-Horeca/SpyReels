@@ -218,6 +218,7 @@ import type { Transcription, Reel, User } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import { classifyReelsByIds, ensureThumbnailTextForReels } from "./services/classifyReels.js";
+import { refreshViralFlagsForScrapeJob } from "./reelViralFlag";
 import { buildExportRows, prepareReelsForExport } from "./exportPipeline";
 import { runExportJob, getExportJobIfAccessible } from "./exportJobRunner";
 import { isGoogleSheetsConfigured, exportToGoogleSheets } from "./googleSheets";
@@ -6870,6 +6871,7 @@ async function runScrapeJob(
     await updateReelsForJobFromScrape(jobId, mappedReels);
     await insertReels(mappedReels);
     await dedupeReelsForJob(jobId);
+    await refreshViralFlagsForScrapeJob(jobId);
     const finalReelCount = await countReelsForJob(jobId);
 
     await updateScrapeJob(jobId, {

@@ -5,6 +5,7 @@ import {
 } from "./db";
 import { buildExcelExportBuffer, fetchThumbnailBuffer } from "./exportExcel";
 import { buildExportRows, prepareReelsForExport } from "./exportPipeline";
+import { refreshViralFlagsForScrapeJob } from "./reelViralFlag";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import { storagePut } from "./storage";
 import type { ExportScope } from "../shared/exportScope";
@@ -52,6 +53,13 @@ export async function runExportJob(
         progressLabel: p.progressLabel ?? null,
       });
     });
+
+    await report({
+      currentStep: "analyzing",
+      progressPercent: 86,
+      progressLabel: "Scoring viral outliers…",
+    });
+    await refreshViralFlagsForScrapeJob(scrapeJobId);
 
     await report({
       currentStep: "building_excel",
