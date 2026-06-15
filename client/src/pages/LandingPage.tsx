@@ -139,8 +139,9 @@ const STEPS = [
   },
   {
     number: "02",
-    title: "Transcribe the one that blew up",
-    description: "One click. You get the full transcript with timestamps, the hook word for word, the structure, the CTA. You now know exactly why it went viral.",
+    title: 'Hit "Remake now" on the one that blew up',
+    description:
+      "One click. SpyReels transcribes it word for word and writes your version automatically: hook, script, delivery cues. Done in under 2 minutes.",
     icon: BarChart3,
   },
   {

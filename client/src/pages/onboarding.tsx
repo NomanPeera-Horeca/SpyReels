@@ -80,6 +80,16 @@ export default function OnboardingPage() {
   const [isCompleting, setIsCompleting] = useState(false);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
+
+  useEffect(() => {
+    if (user) {
+      posthog?.identify(String(user.id), {
+        email: user.email,
+        name: user.name,
+      });
+    }
+  }, [posthog, user?.id, user?.email, user?.name]);
+
   const trpcUtils = trpc.useUtils();
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     enabled: Boolean(user),

@@ -479,16 +479,6 @@ export default function Home() {
                 Get your first viral script in 3 minutes.
               </p>
             </div>
-            <Tooltip content="Dismiss. We won't show this again.">
-              <button
-                type="button"
-                onClick={dismissHint}
-                className="rounded-md p-1 text-muted-foreground transition hover:bg-card hover:text-foreground"
-                aria-label="Dismiss hint card"
-              >
-                <XCircle className="h-4 w-4" />
-              </button>
-            </Tooltip>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
@@ -523,8 +513,8 @@ export default function Home() {
                 3
               </span>
               <p>
-                <span className="font-medium text-foreground">Transcribe, then generate.</span>{" "}
-                Rewrite any hook in your voice with AI.
+                <span className="font-medium text-foreground">Hit &quot;Remake now&quot; on any Reel.</span>{" "}
+                One click. SpyReels transcribes it and writes a script in your voice automatically.
               </p>
             </div>
           </div>
