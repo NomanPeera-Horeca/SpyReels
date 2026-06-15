@@ -1,10 +1,11 @@
 /** Legacy how-to slugs consolidated into guide posts (301 + noindex in DB). */
 export const BLOG_SLUG_REDIRECTS: Record<string, string> = {
   "how-to-go-viral-on-instagram-reels-2024": "guide-grow-instagram-reels-under-10k",
-  "how-to-go-viral-on-instagram-reels-2026": "guide-grow-instagram-reels-under-10k",
+  "how-to-go-viral-on-instagram-reels-2026": "guide-how-to-go-viral-on-instagram-reels-2026",
   "how-to-spy-on-viral-instagram-reels": "guide-spy-on-competitor-instagram-reels",
   "how-to-write-instagram-reels-scripts-that-go-viral":
     "guide-instagram-reels-script-generator",
+  "how-to-find-viral-instagram-reels": "guide-find-viral-reels-your-niche",
 };
 
 export function getBlogRedirectTarget(slug: string): string | undefined {
@@ -133,5 +134,23 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "guide-instagram-reels-content-analysis-2026",
     "guide-reverse-engineer-viral-reels",
     "guide-instagram-reels-spy-tool",
+  ],
+  "guide-how-to-go-viral-on-instagram-reels-2026": [
+    "guide-spy-on-competitor-instagram-reels",
+    "guide-reverse-engineer-viral-reels",
+    "guide-grow-instagram-reels-under-10k",
+    "guide-instagram-reels-hook-ideas-2026",
+  ],
+  "guide-instagram-reels-hook-ideas-2026": [
+    "guide-instagram-reels-hook-examples",
+    "guide-instagram-reels-hook-patterns-data",
+    "guide-instagram-reels-script-generator",
+    "guide-how-to-go-viral-on-instagram-reels-2026",
+  ],
+  "guide-instagram-reels-content-strategy-under-10k": [
+    "guide-grow-instagram-reels-under-10k",
+    "guide-why-reels-get-no-views",
+    "guide-find-viral-reels-your-niche",
+    "guide-how-to-go-viral-on-instagram-reels-2026",
   ],
 };

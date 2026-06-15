@@ -52,7 +52,9 @@ Turn every pattern into a test card: hypothesis, format, hook line, proof requir
 
 If a viral format relies on shame, exaggeration, or manufactured outrage, you can study the structure and still reject the ethics. Structure travels. Cruelty does not have to. The best long-term creators build trust. Trust is a growth asset, not a speed limit.
 
-SpyReels exists because how to find viral reels in your niche should not require ten browser tabs and a spreadsheet meltdown. You can surface what is performing, compare structures, and move from “I noticed a pattern” to “I have a script” faster. You still choose the angle and the voice. SpyReels removes the friction between observation and publishing.
+SpyReels exists because how to find viral reels in your niche should not require ten browser tabs and a spreadsheet meltdown. You can surface what is performing with our [viral reel finder](/features/viral-reel-finder), compare structures, and move from “I noticed a pattern” to “I have a script” faster. Continue the chain with [how to spy on competitor Instagram Reels](/blog/guide-spy-on-competitor-instagram-reels) and [how to reverse engineer viral Instagram Reels](/blog/guide-reverse-engineer-viral-reels).
+
+[Try SpyReels free](https://spyreels.ai) and map three competitor accounts this week.
 
 ## Frequently Asked Questions
 

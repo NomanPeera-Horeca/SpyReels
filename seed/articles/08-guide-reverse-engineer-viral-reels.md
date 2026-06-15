@@ -60,7 +60,9 @@ Take a viral script shape and rewrite it under constraints: half the words, no a
 
 Set a timer. Thirty minutes of tape review beats three hours of half-attention scrolling. Stop when you have one actionable change for your next post. Research addiction feels productive but it is procrastination wearing a lab coat.
 
-SpyReels is the tool layer for people who reverse engineer viral instagram reels as a habit: pull competitor Reels, focus on what actually performed, and move from pattern recognition to a script you can film. You still supply the judgment and the voice. SpyReels makes the tape-review step faster so you publish more informed work.
+SpyReels is the tool layer for people who reverse engineer viral instagram reels as a habit: pull competitor Reels, focus on what actually performed, and move from pattern recognition to a script you can film. Start with [how to spy on competitor Instagram Reels](/blog/guide-spy-on-competitor-instagram-reels), then [find viral Reels in your niche](/blog/guide-find-viral-reels-your-niche). Use the [viral reel finder](/features/viral-reel-finder) when you want ranked lists without spreadsheets.
+
+[Try SpyReels free](https://spyreels.ai) and reverse-engineer one winning Reel this week.
 
 ## Frequently Asked Questions
 

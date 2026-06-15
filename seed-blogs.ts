@@ -34,9 +34,9 @@ async function seedBlogs() {
       slug: "guide-spy-on-competitor-instagram-reels",
       excerpt:
         "If you want to grow faster on Instagram, you need a repeatable way to study what is already working. Here is the exact method creators use to learn from competitor Reels without crossing ethical lines.",
-      metaTitle: "How to Spy on Competitor Instagram Reels | SpyReels",
+      metaTitle: "How to Spy on Competitor Instagram Reels (Step-by-Step 2026)",
       metaDescription:
-        "Learn the exact method to spy on competitor Instagram Reels legally, find what is working in your niche, and use those insights to grow faster.",
+        "Learn the exact method to analyze any competitor's Instagram Reels, find what's going viral in your niche, and reverse-engineer their formula. Free to try.",
       coverImageUrl: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=1200&q=80",
       tags: ["competitor research", "instagram reels", "growth strategy"],
       status: "published" as const,

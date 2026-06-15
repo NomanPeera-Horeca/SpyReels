@@ -12,9 +12,9 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 
-const PAGE_TITLE = "Viral Reel Finder for Instagram Creators | SpyReels";
+const PAGE_TITLE = "Viral Reel Finder for Instagram | Instagram Viral Reel Finder | SpyReels";
 const PAGE_DESCRIPTION =
-  "Find viral Instagram Reels in your niche fast. View counts, engagement rates, transcripts, and AI scripts for nano and micro creators. Free tier available.";
+  "Viral reel finder and Instagram viral reel finder for creators. Find viral Reels by views and engagement, transcribe hooks, and generate scripts. Free tier available.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
 const DIRECT_ANSWER =
@@ -154,6 +154,32 @@ export default function ViralReelFinder() {
         </h1>
 
         <p className="text-lg text-muted-foreground leading-relaxed mb-8">{DIRECT_ANSWER}</p>
+
+        <section className="mb-10 space-y-4 text-muted-foreground leading-relaxed">
+          <h2 className="text-2xl font-semibold text-foreground mb-2">
+            What is a viral reel finder (and an Instagram viral reel finder)?
+          </h2>
+          <p>
+            A <strong>viral reel finder</strong> is software that ranks Instagram Reels by performance signals such as views, likes, comments, and engagement rate so you can see winners fast. An <strong>Instagram viral reel finder</strong> does the same job inside the Reels format instead of mixing posts, stories, and unrelated clips. A general <strong>reel finder</strong> helps you <strong>find viral reels</strong> from public accounts you choose, not random hashtag noise.
+          </p>
+          <p>
+            Manual search fails because the feed hides sort order. You see recency, not results. SpyReels acts as a reel finder for creators under fifty thousand followers: enter a handle, review top performers, transcribe hooks, and move to scripting without rebuilding spreadsheets every Monday.
+          </p>
+          <p>
+            If you publish weekly, treat the viral reel finder as step one in a three-part loop: find viral reels that match your niche sentence, transcribe the hook and body, then rewrite the structure in your voice. Pair this feature with our guides on{" "}
+            <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">
+              finding viral Reels in your niche
+            </Link>{" "}
+            and{" "}
+            <Link href="/blog/guide-spy-on-competitor-instagram-reels" className="text-primary hover:underline">
+              spying on competitor Reels
+            </Link>
+            .
+          </p>
+          <p>
+            Nano and micro creators use an Instagram viral reel finder to stop guessing which competitor clip deserves a teardown. You get a sorted list, a transcript, and a path to film. That is the difference between inspiration hoarding and a content system you can repeat.
+          </p>
+        </section>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-12">
           <Button asChild size="lg">

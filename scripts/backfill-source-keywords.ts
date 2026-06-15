@@ -6,6 +6,7 @@
  *   pnpm tsx scripts/backfill-source-keywords.ts --dry-run # log only
  */
 import { config } from "dotenv";
+import { existsSync } from "fs";
 import { resolve } from "path";
 import mysql from "mysql2/promise";
 
@@ -13,7 +14,17 @@ const PRODUCTION_ENV_FILE = ".env.had-rotated-creds";
 const PRODUCTION_HOST = "maglev.proxy.rlwy.net:16621";
 const DRY_RUN = process.argv.includes("--dry-run");
 
+config({ path: resolve(process.cwd(), ".env") });
+if (existsSync(resolve(process.cwd(), PRODUCTION_ENV_FILE))) {
+  config({
+    path: resolve(process.cwd(), PRODUCTION_ENV_FILE),
+    override: true,
+  });
+}
+
 const KEYWORD_MAP: Record<string, string> = {
+  "how-to-go-viral-on-instagram-reels-2024":
+    "how to go viral on instagram reels",
   "how-to-go-viral-on-instagram-reels-2026":
     "how to go viral on instagram reels",
   "how-to-spy-on-viral-instagram-reels":
@@ -35,12 +46,22 @@ const KEYWORD_MAP: Record<string, string> = {
   "spyreels-vs-meedro": "spyreels vs meedro",
   "spyreels-vs-viralfindr": "spyreels vs viralfindr",
   "best-instagram-reels-tools-2026": "best instagram reels tools",
+  "guide-meedro-alternative": "meedro alternative",
+  "guide-viralfindr-alternative": "viralfindr alternative",
+  "meedro-review-2026": "meedro review 2026",
+  "viralfindr-review-2026": "viralfindr review 2026",
+  "guide-instagram-reels-spy-tool": "instagram reels spy tool",
+  "guide-instagram-reels-content-analysis-2026":
+    "instagram reels content analysis",
+  "guide-alex-hormozi-instagram-reels-analysis":
+    "alex hormozi instagram reels",
+  "guide-instagram-reels-engagement-rate": "instagram reels engagement rate",
+  "guide-instagram-reels-hook-patterns-data": "instagram reels hook patterns",
+  "guide-transcribe-instagram-reels-analysis": "transcribe instagram reels",
+  "guide-how-to-go-viral-on-instagram-reels-2026": "how to go viral on instagram reels",
+  "guide-instagram-reels-hook-ideas-2026": "instagram reels hook ideas",
+  "guide-instagram-reels-content-strategy-under-10k": "instagram reels content strategy",
 };
-
-config({
-  path: resolve(process.cwd(), PRODUCTION_ENV_FILE),
-  override: true,
-});
 
 function assertProductionDatabase(): string {
   const url = process.env.DATABASE_URL;
@@ -103,13 +124,25 @@ async function main() {
       );
 
       if (result.affectedRows === 0) {
-        console.log(`[skip] ${slug} — no row updated (sourceKeyword may have been set concurrently)`);
+        console.log(
+          `[skip] ${slug} — no row updated (sourceKeyword may have been set concurrently)`
+        );
         skipped++;
         continue;
       }
 
       console.log(`Updated ${slug} -> ${keyword}`);
       updated++;
+    }
+
+    const [nullRows] = await conn.execute<mysql.RowDataPacket[]>(
+      `SELECT slug FROM blog_posts WHERE status = 'published' AND (sourceKeyword IS NULL OR sourceKeyword = '') ORDER BY slug`
+    );
+    if (nullRows.length > 0) {
+      console.log("\nPublished posts still missing sourceKeyword:");
+      for (const row of nullRows) {
+        console.log(`  - ${row.slug}`);
+      }
     }
 
     console.log(

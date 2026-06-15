@@ -91,7 +91,7 @@ describe("enrichSpaHtmlForPublicPath", () => {
       async () => undefined
     );
     expect(out).toContain('rel="canonical" href="https://spyreels.ai/"');
-    expect(out).toContain("Find Viral Instagram Reels and Generate Scripts");
+    expect(out).toContain("Instagram Reels Spy Tool");
   });
 
   it("injects extension meta with non-brand-first title", async () => {

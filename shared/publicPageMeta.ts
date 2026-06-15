@@ -63,10 +63,9 @@ export function isPrivateAppPath(pathname: string): boolean {
 
 export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/": {
-    title:
-      "SpyReels - Find Viral Instagram Reels and Generate Scripts for Nano Creators",
+    title: "Instagram Reels Spy Tool | Research, Transcribe, and Script | SpyReels",
     description:
-      "Find viral Instagram Reels, transcribe them, and generate scripts in your voice. Built for nano and micro creators under 50K followers. Try free.",
+      "Instagram Reels spy tool for nano and micro creators. See competitor Reels ranked by views and engagement, transcribe hooks, and generate scripts in your voice. Try free.",
   },
   "/extension": {
     title: "Chrome Extension for Instagram Reels | Sort, Transcribe, and Save",
@@ -94,9 +93,9 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
       "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.",
   },
   "/features/viral-reel-finder": {
-    title: "Viral Reel Finder for Instagram Creators | SpyReels",
+    title: "Viral Reel Finder for Instagram | Instagram Viral Reel Finder | SpyReels",
     description:
-      "Find viral Instagram Reels in your niche fast. View counts, engagement rates, transcripts, and AI scripts for nano and micro creators. Free tier available.",
+      "Viral reel finder and Instagram viral reel finder for creators. Find viral Reels by views and engagement, transcribe hooks, and generate scripts. Free tier available.",
   },
   "/affiliate": {
     title: "SpyReels Affiliate Program - 20% Recurring Commission for 12 Months",

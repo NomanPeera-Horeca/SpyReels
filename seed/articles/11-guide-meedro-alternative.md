@@ -70,7 +70,9 @@ Use this quick checklist before you change tools. If three or more are true, a R
 | Ship on camera | Built-in teleprompter and script editor |
 | Capture inspiration on mobile | Telegram bot and Chrome extension |
 
-This is not a feature-for-feature clone. SpyReels goes deeper on the Reels loop and narrower on enterprise reporting. For a parallel story on discovery tools, read [best ViralFindr alternative](/blog/guide-viralfindr-alternative) and [Instagram Reels spy tool comparison](/blog/guide-instagram-reels-spy-tool).
+For a parallel story on discovery tools, read [best ViralFindr alternative](/blog/guide-viralfindr-alternative), [Instagram Reels spy tool comparison](/blog/guide-instagram-reels-spy-tool), and try the [viral reel finder](/features/viral-reel-finder) when you want ranked Reels without manual scrolling.
+
+[Try SpyReels free](https://spyreels.ai) and compare your Meedro workflow on one competitor account this week.
 
 ## Common mistakes when switching off Meedro
 

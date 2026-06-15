@@ -183,9 +183,9 @@ const FAQ = [
 // Landing Page
 // ═══════════════════════════════════════════════════════════════
 const HOME_TITLE =
-  "SpyReels - Find Viral Instagram Reels and Generate Scripts for Nano Creators";
+  "Instagram Reels Spy Tool | Research, Transcribe, and Script | SpyReels";
 const HOME_DESCRIPTION =
-  "Find viral Instagram Reels, transcribe them, and generate scripts in your voice. Built for nano and micro creators under 50K followers. Try free.";
+  "Instagram Reels spy tool for nano and micro creators. See competitor Reels ranked by views and engagement, transcribe hooks, and generate scripts in your voice. Try free.";
 
 export default function LandingPage() {
   useCanonical("/");
@@ -232,7 +232,7 @@ export default function LandingPage() {
         description: "Free tier available",
       },
       description:
-        "AI-powered Instagram Reels analytics and script generation for nano and micro creators.",
+        "Instagram Reels spy tool with analytics, transcription, and AI script generation for nano and micro creators.",
     });
 
     injectSchemaScript("home-faq-schema", {
@@ -413,13 +413,13 @@ export default function LandingPage() {
                 12,000+ creators are already using SpyReels
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
-                Why are their Reels getting 100K views{" "}
+                The Instagram Reels spy tool for creators who ask: why are their Reels getting{" "}
                 <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
-                  and yours are getting 200?
+                  100K views and yours get 200?
                 </span>
               </h1>
               <p className="text-lg sm:text-xl text-muted-foreground mb-4 leading-relaxed mx-auto lg:mx-0 max-w-2xl lg:max-w-xl">
-                SpyReels shows you exactly which Reels are going viral in your niche, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from zero to filming in under 10 minutes.
+                SpyReels ranks competitor Reels by performance, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from research to filming in under 10 minutes.
               </p>
               <p className="text-sm text-amber-400 font-medium mb-8">
                 While you are reading this, other creators in your niche are already using this.
