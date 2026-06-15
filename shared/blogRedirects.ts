@@ -103,4 +103,35 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "guide-meedro-alternative",
     "guide-viralfindr-alternative",
   ],
+  "guide-instagram-reels-content-analysis-2026": [
+    "guide-alex-hormozi-instagram-reels-analysis",
+    "guide-instagram-reels-engagement-rate",
+    "guide-instagram-reels-hook-patterns-data",
+    "guide-transcribe-instagram-reels-analysis",
+    "guide-reverse-engineer-viral-reels",
+  ],
+  "guide-alex-hormozi-instagram-reels-analysis": [
+    "guide-instagram-reels-content-analysis-2026",
+    "guide-instagram-reels-engagement-rate",
+    "guide-instagram-reels-hook-patterns-data",
+    "guide-instagram-reels-hook-examples",
+  ],
+  "guide-instagram-reels-engagement-rate": [
+    "guide-instagram-reels-content-analysis-2026",
+    "guide-instagram-reels-analytics-tool",
+    "guide-alex-hormozi-instagram-reels-analysis",
+    "guide-reverse-engineer-viral-reels",
+  ],
+  "guide-instagram-reels-hook-patterns-data": [
+    "guide-instagram-reels-hook-examples",
+    "guide-instagram-reels-content-analysis-2026",
+    "guide-transcribe-instagram-reels-analysis",
+    "guide-instagram-reels-script-generator",
+  ],
+  "guide-transcribe-instagram-reels-analysis": [
+    "guide-spy-on-competitor-instagram-reels",
+    "guide-instagram-reels-content-analysis-2026",
+    "guide-reverse-engineer-viral-reels",
+    "guide-instagram-reels-spy-tool",
+  ],
 };
