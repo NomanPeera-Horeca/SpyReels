@@ -1,0 +1,120 @@
+==============================================================================
+CREATOR-FIRST DISCOVER EXPERIMENT
+==============================================================================
+Business: I run a laundromat business and I want to grow my Instagram by posting reels about owning and operating laundromats.
+
+Step 1: routeNiche (Sonnet)...
+  primary_niche:   Business & Entrepreneurship
+  secondary:       Make Money Online
+  who_they_sell_to:Aspiring and current small business owners who are interested in owning or operating a laundromat as a semi-passive income business.
+  persona_keywords:small business owner, aspiring entrepreneur, passive income seeker, laundromat investor, self-employed
+  content_angles:  How much money a laundromat actually makes in a month; What I wish I knew before buying my first laundromat; Day in the life of a laundromat owner
+  business_type:   B2C  confidence: 0.82
+
+Step 2: generate niche-derived pillars + topics (Sonnet)...
+  [Laundromat Income Reality]
+      - laundromat monthly income
+      - how much laundromats make
+      - laundromat profit margin
+  [Buying Your First Laundromat]
+      - buying a laundromat
+      - laundromat business for beginners
+      - what to look for in a laundromat
+      - laundromat due diligence
+  [Owner Day in the Life]
+      - laundromat owner day in the life
+      - running a laundromat
+      - small business owner routine
+  [Operations and Mistakes]
+      - laundromat mistakes to avoid
+      - laundromat equipment breakdown
+      - laundromat business tips
+  total topics: 13
+
+Step 3: searchReelsByKeyword per topic...
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=71120
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat monthly income" found 10 reels
+  [Laundromat Income Reality] "laundromat monthly income": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=65099
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "how much laundromats make" found 10 reels
+  [Laundromat Income Reality] "how much laundromats make": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=68693
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat profit margin" found 10 reels
+  [Laundromat Income Reality] "laundromat profit margin": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60612
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72607
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=76155
+[Instagram] Search for "buying a laundromat" found 20 reels
+  [Buying Your First Laundromat] "buying a laundromat": 20 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75182
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat business for beginners" found 10 reels
+  [Buying Your First Laundromat] "laundromat business for beginners": 10 raw -> 3 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "what to look for in a laundromat" search failed: No results found for "what to look for in a laundromat". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59220
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63228
+[Instagram] Search for "laundromat due diligence" found 20 reels
+  [Buying Your First Laundromat] "laundromat due diligence": 20 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=54580
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat owner day in the life" found 10 reels
+  [Owner Day in the Life] "laundromat owner day in the life": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=57322
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66972
+[Instagram] Search for "running a laundromat" found 20 reels
+  [Owner Day in the Life] "running a laundromat": 20 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=53585
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=47641
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66564
+[Instagram] Search for "small business owner routine" found 20 reels
+  [Owner Day in the Life] "small business owner routine": 20 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63166
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat mistakes to avoid" found 10 reels
+  [Operations and Mistakes] "laundromat mistakes to avoid": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=52572
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat equipment breakdown" found 10 reels
+  [Operations and Mistakes] "laundromat equipment breakdown": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75625
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat business tips" found 10 reels
+  [Operations and Mistakes] "laundromat business tips": 10 raw -> 0 kept
+
+  raw reels: 160 | dropped (tier): 142 | dropped (<10000 followers): 11 | scored kept: 7
+
+Step 4: collapsed 7 reels -> 3 unique creators
+
+==============================================================================
+RANKED CREATORS (best reel each)
+==============================================================================
+  1. @laundromatgirlofficial   followers=   499985 views=   2580927 reach=   5.2x score=    39.9 T1
+     pillar:  [Operations and Mistakes] via "laundromat mistakes to avoid"
+     name:    Cami | Laundromat Girl
+     caption: Comment ✨Link✨ to learn more about owning a laundromat! #business #laundromat
+     url:     https://www.instagram.com/reel/DJ1taCdxPyK/
+
+  2. @thredleindia             followers=    61375 views=    716343 reach=  11.7x score=    25.1 T1
+     pillar:  [Owner Day in the Life] via "small business owner routine"
+     name:    thredle india
+     caption: Reels aren’t just quick 2-minute tasks—they take planning, scripting, shooting, editing… and when you’re a one
+     url:     https://www.instagram.com/reel/DFIH-SfKO2l/
+
+  3. @lindsey.deluce           followers=    28543 views=     52042 reach=   1.8x score=     4.4 T2
+     pillar:  [Laundromat Income Reality] via "laundromat profit margin"
+     name:    Lindsey Deluce
+     caption: It’s the “boring” businesses that I find the most interesting. And, they usually make the most money. We bough
+     url:     https://www.instagram.com/reel/DXxSaHgBeMe/
+
+==============================================================================
+PILLAR DIAGNOSTICS (which pillars found good creators)
+==============================================================================
+  [Operations and Mistakes] creators=1 avgScore=39.9 topScore=39.9
+  [Owner Day in the Life] creators=1 avgScore=25.1 topScore=25.1
+  [Laundromat Income Reality] creators=1 avgScore=4.4 topScore=4.4
+
+Done.

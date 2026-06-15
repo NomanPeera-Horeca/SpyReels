@@ -1,0 +1,254 @@
+◇ injected env (12) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+ScrapeCreators v2 keyword search A/B: production strip vs preserve spaces
+API: https://api.scrapecreators.com/v2/instagram/reels/search
+max results per mode: 10
+
+========================================================================
+MODE A: production (spaces removed)
+  input phrase: "deadlift tips"
+  query param:  "deadlifttips"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=deadlifttips&page=1
+  reels returned on page 1: 10
+   1. @jeremyethier         followers= 1288140 views=   7269181
+      caption: How to do the perfect deadlift, in 5 easy steps 💪
+   2. @jamalbrowner         followers=  524577 views=    470667
+      caption: Tips to improve your deadlift 🔑 @gymshark code: JAMAL10 @avancusofficial code: JAMAL @c4energy code
+   3. @jeffnippard          followers= 3988641 views=   3230764
+      caption: Deadlift checklist! If you tick all 5, you have a perfect deadlift ☑️☑️☑️☑️☑️
+   4. @australianstrengthcoach followers=  784344 views=    466898
+      caption: 10 point conventional deadlift checklist 👆 Mastering the conventional deadlift is one of the most r
+   5. @crunchportarthur     followers=    1721 views=       755
+      caption: Need deadlift tips? We got you! 🏋️‍♀️
+   6. @jeremyethier         followers= 1288140 views=    364292
+      caption: Deadlifts are simple, just do this 👊
+   7. @demicstory           followers=11804425 views=  12491452
+      caption: 🏋️‍♂️ How to Deadlift with Perfect Form (Fix These Mistakes)
+   8. @lauriechristinetongate followers=   91977 views=     11525
+      caption: Sumo Deadlift tips to help you easily lift more weight 💥 99 problems and deadlifts used to be my ab
+   9. @pathradecha          followers= 2146016 views=    627204
+      caption: The key to a strong deadlift is having proper technique. In fact, technique is even more unforgiving
+  10. @jeremyethier         followers= 1288140 views=   4748948
+      caption: How to do the perfect deadlift in 5 steps ✅ 👊. Note: I cover a lot of the finer details and cueing,
+
+========================================================================
+MODE B: spaces preserved
+  input phrase: "deadlift tips"
+  query param:  "deadlift tips"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=deadlift+tips&page=1
+  reels returned on page 1: 10
+   1. @jeremyethier         followers= 1288140 views=   7269181
+      caption: How to do the perfect deadlift, in 5 easy steps 💪
+   2. @jamalbrowner         followers=  524577 views=    470667
+      caption: Tips to improve your deadlift 🔑 @gymshark code: JAMAL10 @avancusofficial code: JAMAL @c4energy code
+   3. @jeffnippard          followers= 3988643 views=   3230764
+      caption: Deadlift checklist! If you tick all 5, you have a perfect deadlift ☑️☑️☑️☑️☑️
+   4. @jeremyethier         followers= 1288140 views=    364292
+      caption: Deadlifts are simple, just do this 👊
+   5. @crunchportarthur     followers=    1721 views=       755
+      caption: Need deadlift tips? We got you! 🏋️‍♀️
+   6. @australianstrengthcoach followers=  784344 views=    466898
+      caption: 10 point conventional deadlift checklist 👆 Mastering the conventional deadlift is one of the most r
+   7. @demicstory           followers=11804427 views=  12491452
+      caption: 🏋️‍♂️ How to Deadlift with Perfect Form (Fix These Mistakes)
+   8. @lauriechristinetongate followers=   91977 views=     11525
+      caption: Sumo Deadlift tips to help you easily lift more weight 💥 99 problems and deadlifts used to be my ab
+   9. @jeremyethier         followers= 1288140 views=   4748948
+      caption: How to do the perfect deadlift in 5 steps ✅ 👊. Note: I cover a lot of the finer details and cueing,
+  10. @pathradecha          followers= 2146016 views=    627204
+      caption: The key to a strong deadlift is having proper technique. In fact, technique is even more unforgiving
+
+  --- diff for "deadlift tips" ---
+  overlap (same shortcode in top 10): 10
+  only in STRIPPED: 0
+  only in SPACED:   0
+  verdict: identical top-10 sets
+
+========================================================================
+MODE A: production (spaces removed)
+  input phrase: "deadlift form"
+  query param:  "deadliftform"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=deadliftform&page=1
+  reels returned on page 1: 10
+   1. @jeremyethier         followers= 1288140 views=    364292
+      caption: Deadlifts are simple, just do this 👊
+   2. @jeremyethier         followers= 1288140 views=   7269181
+      caption: How to do the perfect deadlift, in 5 easy steps 💪
+   3. @jeffnippard          followers= 3988644 views=   3230764
+      caption: Deadlift checklist! If you tick all 5, you have a perfect deadlift ☑️☑️☑️☑️☑️
+   4. @demicstory           followers=11804428 views=  12491452
+      caption: 🏋️‍♂️ How to Deadlift with Perfect Form (Fix These Mistakes)
+   5. @pwrgrls_training     followers=   12880 views=      6614
+      caption: Ladies, ready to master your deadlift form and build strong glutes? 🍑 Proper deadlift technique is 
+   6. @australianstrengthcoach followers=  784344 views=    466899
+      caption: 10 point conventional deadlift checklist 👆 Mastering the conventional deadlift is one of the most r
+   7. @alexandramilne_      followers=  536459 views=    193023
+      caption: Learn how to SUMO DEADLIFT 👇🏽🚨 My favourite exercise from the first time I tried them. Sumo deadl
+   8. @glflincoln           followers=    5454 views=     10037
+      caption: Steve showing some improper and proper form on the Trap Bar Deadlift!
+   9. @jeremyethier         followers= 1288140 views=   4748948
+      caption: How to do the perfect deadlift in 5 steps ✅ 👊. Note: I cover a lot of the finer details and cueing,
+  10. @emilyskyefit         followers= 2529928 views=    531628
+      caption: TRADITIONAL DEADLIFT VS. ROMANIAN DEADLIFT - What’s the Difference? ✨I’m demonstrating with light du
+
+========================================================================
+MODE B: spaces preserved
+  input phrase: "deadlift form"
+  query param:  "deadlift form"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=deadlift+form&page=1
+  reels returned on page 1: 10
+   1. @jeremyethier         followers= 1288140 views=    364292
+      caption: Deadlifts are simple, just do this 👊
+   2. @jeffnippard          followers= 3988646 views=   3230764
+      caption: Deadlift checklist! If you tick all 5, you have a perfect deadlift ☑️☑️☑️☑️☑️
+   3. @jeremyethier         followers= 1288140 views=   7269181
+      caption: How to do the perfect deadlift, in 5 easy steps 💪
+   4. @fitwithfenton        followers=  270839 views=     59756
+      caption: Dumbbell deadlift 101
+   5. @demicstory           followers=11804430 views=  12491452
+      caption: 🏋️‍♂️ How to Deadlift with Perfect Form (Fix These Mistakes)
+   6. @pwrgrls_training     followers=   12880 views=      6614
+      caption: Ladies, ready to master your deadlift form and build strong glutes? 🍑 Proper deadlift technique is 
+   7. @australianstrengthcoach followers=  784344 views=    466899
+      caption: 10 point conventional deadlift checklist 👆 Mastering the conventional deadlift is one of the most r
+   8. @squat_university     followers= 4651591 views=    705621
+      caption: How to deadlift - for both Olympic weightlifting & conventional deadlift for powerlifting! . Shout o
+   9. @jeremyethier         followers= 1288140 views=   4748948
+      caption: How to do the perfect deadlift in 5 steps ✅ 👊. Note: I cover a lot of the finer details and cueing,
+  10. @emilyskyefit         followers= 2529928 views=    531628
+      caption: TRADITIONAL DEADLIFT VS. ROMANIAN DEADLIFT - What’s the Difference? ✨I’m demonstrating with light du
+
+  --- diff for "deadlift form" ---
+  overlap (same shortcode in top 10): 8
+  only in STRIPPED: 2
+  only in SPACED:   2
+  verdict: partial overlap
+
+========================================================================
+MODE A: production (spaces removed)
+  input phrase: "fat loss mistakes"
+  query param:  "fatlossmistakes"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=fatlossmistakes&page=1
+  reels returned on page 1: 10
+   1. @doctor.bako          followers=  243902 views=    126969
+      caption: The 3 Biggest Weight Loss Mistakes I See in Practice After years of working with patients, I've noti
+   2. @donsaladino          followers=  426407 views=     17132
+      caption: Top 3 MISTAKES people make when trying to lose body fat. ❌ Mistake 1. Not understanding proper nutri
+   3. @chalenejohnson       followers=  892538 views=     36023
+      caption: Comment MISTAKE and I’ll send you the biggest fat loss mistakes women over 40 are making. If you’re 
+   4. @autumncalabrese      followers= 1354315 views=    163917
+      caption: Fat Loss Mistake #2 One of the most common training mistakes I see women make when trying to lose fa
+   5. @ajvafitness          followers=   10740 views=      4197
+      caption: Are you making these 5 weight loss mistakes? 1️⃣ Doing ONLY cardio. 2️⃣ Ignoring your sleep schedule
+   6. @chad__reid           followers=    1649 views=       421
+      caption: How to fix my 3 biggest fat loss mistakes 👇 1. Track EVERYTHING & Yes that includes EVERYTHING: Oil
+   7. @sehatsafar           followers=  182681 views=   1061950
+      caption: Comment to know 6 Biggest Mistakes in Weight Loss & 4 Hacks to Balance any food 🔥💪🏻 #weightloss #
+   8. @biolayne             followers= 1211920 views=    140406
+      caption: @carbondietcoach can help you avoid some mistakes I frequently see people make when trying to lose w
+   9. @sanikavaid           followers=   11831 views=      4389
+      caption: ❌One of the biggest mistakes people make during fat loss is assuming that “healthy eating” automatic
+  10. @autumncalabrese      followers= 1354315 views=    244178
+      caption: Fat Loss Mistake #3 Thinking you’re prioritizing protein… when the bigger picture is missing. Protei
+
+========================================================================
+MODE B: spaces preserved
+  input phrase: "fat loss mistakes"
+  query param:  "fat loss mistakes"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=fat+loss+mistakes&page=1
+  reels returned on page 1: 10
+   1. @doctor.bako          followers=  243902 views=    126969
+      caption: The 3 Biggest Weight Loss Mistakes I See in Practice After years of working with patients, I've noti
+   2. @donsaladino          followers=  426407 views=     17132
+      caption: Top 3 MISTAKES people make when trying to lose body fat. ❌ Mistake 1. Not understanding proper nutri
+   3. @chalenejohnson       followers=  892538 views=     36023
+      caption: Comment MISTAKE and I’ll send you the biggest fat loss mistakes women over 40 are making. If you’re 
+   4. @autumncalabrese      followers= 1354315 views=    163917
+      caption: Fat Loss Mistake #2 One of the most common training mistakes I see women make when trying to lose fa
+   5. @ajvafitness          followers=   10740 views=      4197
+      caption: Are you making these 5 weight loss mistakes? 1️⃣ Doing ONLY cardio. 2️⃣ Ignoring your sleep schedule
+   6. @autumncalabrese      followers= 1354315 views=    174551
+      caption: Fat Loss Mistake #1 One of the biggest mistakes I see women make when trying to lose fat is under-ea
+   7. @sandy_baisoya_tiger  followers=  398411 views=   1131606
+      caption: Follow @sandy_baisoya_tiger ♥️💪 . . . . . Keywords: fat loss for beginners, sustainable fat loss, l
+   8. @hitfitclub.in        followers=    2683 views=      6513
+      caption: Working hard but not losing fat? These 3 mistakes could be the reason. 💥 . . fat loss mistakes Indi
+   9. @autumncalabrese      followers= 1354315 views=    244178
+      caption: Fat Loss Mistake #3 Thinking you’re prioritizing protein… when the bigger picture is missing. Protei
+  10. @chad__reid           followers=    1649 views=       421
+      caption: How to fix my 3 biggest fat loss mistakes 👇 1. Track EVERYTHING & Yes that includes EVERYTHING: Oil
+
+  --- diff for "fat loss mistakes" ---
+  overlap (same shortcode in top 10): 7
+  only in STRIPPED: 3
+  only in SPACED:   3
+  verdict: partial overlap
+
+========================================================================
+MODE A: production (spaces removed)
+  input phrase: "beginner gym workout"
+  query param:  "beginnergymworkout"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=beginnergymworkout&page=1
+  reels returned on page 1: 10
+   1. @yatindersingh_official followers= 1304098 views=    122729
+      caption: Beginner Workout Schedule 🙋‍♂️ Day-1 and 4 Try This ✔️ . . . #yatindersingh #beginner #muscle #buil
+   2. @surreysportpark      followers=    7353 views=     24799
+      caption: Struggling to get started? Watch on for 5 beginner exercises to use in the gym 💪🏿 #2026 #getmoving
+   3. @peak24fitness        followers=     971 views=       749
+      caption: Beginner Friendly Workout! New to the gym? Save this workout for later. All beginners should start o
+   4. @fittlicious          followers=  131988 views=      4367
+      caption: ✅ save this beginner workout plan . . . . . . . . #fullbodyworkout #workoutroutine #gymroutine #fitn
+   5. @planetfitness        followers=  554189 views=     32878
+      caption: calling all gym beginners! try this for your next full-body workout 💪 #planetfitness
+   6. @tallyrye             followers=  138802 views=     40312
+      caption: There are lots of beginner workouts on the internet, but not many of them actually cater to *complet
+   7. @nourishmovelove      followers=  666631 views=     96474
+      caption: SIMPLE GYM ROUTINE FOR WOMEN 👇 🚨We’ve been getting requests for more gym workout routines - if thi
+   8. @dr.destruction_      followers= 1896952 views=    232962
+      caption: Started the gym but don’t know what to do? Here’s the only rule beginners should follow 👉 Focus on 
+   9. @nehafunandfitness    followers= 5507802 views=    180143
+      caption: 21-Day Easy No-Jumping Workout Chart for Home #HomeWorkout #21DayChallenge #WomenFitness #FitnessRou
+  10. @anytimefitnessaltoona followers=     715 views=       483
+      caption: Coach Darrion’s Beginner-Friendly Gym Routine 💪 New to the gym or new to weightlifting? Don’t overc
+
+========================================================================
+MODE B: spaces preserved
+  input phrase: "beginner gym workout"
+  query param:  "beginner gym workout"
+========================================================================
+  HTTP 200  https://api.scrapecreators.com/v2/instagram/reels/search?query=beginner+gym+workout&page=1
+  reels returned on page 1: 10
+   1. @yatindersingh_official followers= 1304098 views=    122729
+      caption: Beginner Workout Schedule 🙋‍♂️ Day-1 and 4 Try This ✔️ . . . #yatindersingh #beginner #muscle #buil
+   2. @surreysportpark      followers=    7353 views=     24799
+      caption: Struggling to get started? Watch on for 5 beginner exercises to use in the gym 💪🏿 #2026 #getmoving
+   3. @nourishmovelove      followers=  666631 views=     96474
+      caption: SIMPLE GYM ROUTINE FOR WOMEN 👇 🚨We’ve been getting requests for more gym workout routines - if thi
+   4. @peak24fitness        followers=     971 views=       749
+      caption: Beginner Friendly Workout! New to the gym? Save this workout for later. All beginners should start o
+   5. @planetfitness        followers=  554189 views=     32878
+      caption: calling all gym beginners! try this for your next full-body workout 💪 #planetfitness
+   6. @dr.destruction_      followers= 1896952 views=    232962
+      caption: Started the gym but don’t know what to do? Here’s the only rule beginners should follow 👉 Focus on 
+   7. @nehafunandfitness    followers= 5507802 views=    180144
+      caption: 21-Day Easy No-Jumping Workout Chart for Home #HomeWorkout #21DayChallenge #WomenFitness #FitnessRou
+   8. @fittlicious          followers=  131988 views=      4367
+      caption: ✅ save this beginner workout plan . . . . . . . . #fullbodyworkout #workoutroutine #gymroutine #fitn
+   9. @anytimefitnessaltoona followers=     715 views=       483
+      caption: Coach Darrion’s Beginner-Friendly Gym Routine 💪 New to the gym or new to weightlifting? Don’t overc
+  10. @tallyrye             followers=  138802 views=     40312
+      caption: There are lots of beginner workouts on the internet, but not many of them actually cater to *complet
+
+  --- diff for "beginner gym workout" ---
+  overlap (same shortcode in top 10): 10
+  only in STRIPPED: 0
+  only in SPACED:   0
+  verdict: identical top-10 sets
+
+Done.

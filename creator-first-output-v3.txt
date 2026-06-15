@@ -1,0 +1,318 @@
+==============================================================================
+CREATOR-FIRST DISCOVER EXPERIMENT (v2: with peer-score)
+==============================================================================
+Business: I run a laundromat business and I want to grow my Instagram by posting reels about owning and operating laundromats.
+
+Step 1: routeNiche (Sonnet)...
+  primary_niche: Business & Entrepreneurship
+  who: Aspiring and current small business owners who are interested in owning or operating a laundromat as a semi-passive investment or local business.
+  business_type: B2C confidence: 0.82
+
+Step 2: niche-derived pillars + topics (Sonnet)...
+  [Real Numbers]
+      - laundromat monthly revenue
+      - laundromat profit margins
+      - how much laundromats make
+      - laundromat owner income
+  [Buying Your First]
+      - buying a laundromat
+      - laundromat due diligence
+      - finding laundromat for sale
+      - laundromat financing options
+  [Owner Honesty]
+      - laundromat ownership mistakes
+      - what I wish I knew
+      - laundromat business reality
+      - laundromat owner confessions
+  [Day in the Life]
+      - laundromat owner daily routine
+      - running a laundromat
+      - laundromat operations day
+      - laundromat maintenance routine
+  [Semi-Passive Play]
+      - semi passive business ideas
+      - laundromat passive income
+      - absentee owner business
+      - small business cash flow
+  [Growth and Scaling]
+      - scaling a laundromat
+      - adding laundromat locations
+      - laundromat business growth
+  [Local Business Investing]
+      - local business investment
+      - buying a small business
+      - cash flow business ideas
+      - brick and mortar investing
+  total topics: 27
+
+Step 3: searchReelsByKeyword per topic...
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=71977
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat monthly revenue" found 10 reels
+  [Real Numbers] "laundromat monthly revenue": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=69838
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat profit margins" found 10 reels
+  [Real Numbers] "laundromat profit margins": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66341
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "how much laundromats make" found 10 reels
+  [Real Numbers] "how much laundromats make": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64713
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat owner income" found 10 reels
+  [Real Numbers] "laundromat owner income": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59961
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=70000
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=70322
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=71532
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63357
+[Instagram] Search for "buying a laundromat" found 40 reels
+  [Buying Your First] "buying a laundromat": 40 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59033
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63284
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60361
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=56272
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=79885
+[Instagram] Search for "laundromat due diligence" found 40 reels
+  [Buying Your First] "laundromat due diligence": 40 raw -> 5 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "finding laundromat for sale" failed: No results found for "finding laundromat for sale". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=58560
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat financing options" found 10 reels
+  [Buying Your First] "laundromat financing options": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=49474
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat ownership mistakes" found 10 reels
+  [Owner Honesty] "laundromat ownership mistakes": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=78408
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59444
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55214
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64531
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60271
+[Instagram] Search for "what I wish I knew" found 40 reels
+  [Owner Honesty] "what I wish I knew": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=58520
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat business reality" found 10 reels
+  [Owner Honesty] "laundromat business reality": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "laundromat owner confessions" failed: No results found for "laundromat owner confessions". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=57197
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat owner daily routine" found 10 reels
+  [Day in the Life] "laundromat owner daily routine": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=56819
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=41450
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=54608
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=45508
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=53505
+[Instagram] Search for "running a laundromat" found 40 reels
+  [Day in the Life] "running a laundromat": 40 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "laundromat operations day" failed: No results found for "laundromat operations day". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=65650
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat maintenance routine" found 10 reels
+  [Day in the Life] "laundromat maintenance routine": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=69587
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "semi passive business ideas" found 9 reels
+  [Semi-Passive Play] "semi passive business ideas": 9 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=73280
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=48990
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55407
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=39924
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=40281
+[Instagram] Search for "laundromat passive income" found 40 reels
+  [Semi-Passive Play] "laundromat passive income": 40 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=46143
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63832
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=30190
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "absentee owner business" found 27 reels
+  [Semi-Passive Play] "absentee owner business": 27 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=44423
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=45197
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=40347
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=47983
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55820
+[Instagram] Search for "small business cash flow" found 40 reels
+  [Semi-Passive Play] "small business cash flow": 40 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=56245
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "scaling a laundromat" found 10 reels
+  [Growth and Scaling] "scaling a laundromat": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "adding laundromat locations" failed: No results found for "adding laundromat locations". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=74482
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "laundromat business growth" found 10 reels
+  [Growth and Scaling] "laundromat business growth": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=69161
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=57370
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66341
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "local business investment" found 29 reels
+  [Local Business Investing] "local business investment": 29 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=67858
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=42573
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=52969
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=40960
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=47332
+[Instagram] Search for "buying a small business" found 40 reels
+  [Local Business Investing] "buying a small business": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=61106
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=82101
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=70391
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "cash flow business ideas" found 26 reels
+  [Local Business Investing] "cash flow business ideas": 26 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=58220
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "brick and mortar investing" found 9 reels
+  [Local Business Investing] "brick and mortar investing": 9 raw -> 0 kept
+
+  raw: 490 | dropped tier: 439 | dropped <10000f: 30 | kept: 21
+
+Step 4: collapsed 21 reels -> 17 unique creators
+
+Step 5: peer-score (Haiku)...
+  peer-score: 17 -> 8 kept, 9 flagged
+
+==============================================================================
+RANKED PEERS (kept): 8
+==============================================================================
+  1. @laundromatmoneyofficial  followers=   213358 views=   2263990 reach=  10.6x score=    81.6 T1
+     pillar:  [Buying Your First] via "laundromat due diligence"
+     name:    Carlos Ochoa
+     peer:    KEEP - Documents laundromat revenue and operations directly
+     caption: 7 Days Of $$ At My Laundromat #laundromat #money #business
+     url:     https://www.instagram.com/reel/DU6ZpLfkj6K/
+
+  2. @mrtomdonnelly            followers=    29206 views=    793176 reach=  27.2x score=    36.8 T1
+     pillar:  [Buying Your First] via "laundromat due diligence"
+     name:    Tom Donnelly | Investor | Mentor
+     peer:    KEEP - Investor mentor comparing laundromat returns to rental property investments
+     caption: Laundromats will pay back your initial investment faster than a rental property will. It will also make you mo
+     url:     https://www.instagram.com/reel/DV01W12hfJi/
+
+  3. @thehannahingram          followers=   156071 views=   1061596 reach=   6.8x score=    36.5 T1
+     pillar:  [Real Numbers] via "how much laundromats make"
+     name:    Hannah Ingram
+     peer:    KEEP - Directly teaches laundromat and car wash business ownership with passive income focus
+     caption: Carlos shares with us how much money his laundromat made in 10 days! Comment "passive" and I will DM you a lin
+     url:     https://www.instagram.com/reel/C9LqtYsieBo/
+
+  4. @laundromatgirlofficial   followers=   499990 views=   4343225 reach=   8.7x score=    30.3 T1
+     pillar:  [Buying Your First] via "buying a laundromat"
+     name:    Cami | Laundromat Girl
+     peer:    KEEP - Core niche: buying and owning laundromats as business
+     caption: Comment ✨start✨to learn more about buying and owning a laundromat! #business #money #laundromat #smallbusiness
+     url:     https://www.instagram.com/reel/DVPN64jEpzO/
+
+  5. @businessbrendan          followers=    13561 views=    198217 reach=  14.6x score=     4.7 T1
+     pillar:  [Owner Honesty] via "laundromat ownership mistakes"
+     name:    Brendan Edmonds - Business Broker
+     peer:    KEEP - Business broker critiquing laundromat investment myths and realities
+     caption: This is why people buy a laundromat and quietly regret it 6 months later… 1. It is not passive income. Passive
+     url:     https://www.instagram.com/reel/DVme0VjEVUn/
+
+  6. @brianluebben             followers=   460093 views=    863296 reach=   1.9x score=     2.8 T2
+     pillar:  [Local Business Investing] via "buying a small business"
+     name:    Brian Luebben
+     peer:    KEEP - Genuine peer in small business ownership and entrepreneurship; directly addresses buying and operating small businesses
+     caption: How to buy a small business (step one) follow if you want the rest. Its a lot lol #fyp #financialfreedom #real
+     url:     https://www.instagram.com/reel/DHhQc13Ra0C/
+
+  7. @bizhubdata               followers=    12649 views=     32013 reach=   2.5x score=     2.2 T2
+     pillar:  [Local Business Investing] via "buying a small business"
+     name:    BizHub | Business Acquisition Analysis
+     peer:    KEEP - Genuine peer focused on small business acquisition analysis and financial vetting; directly relevant to laundromat business evaluation
+     caption: Most people shopping for a business never run the numbers that actually matter. This is what buying a small bu
+     url:     https://www.instagram.com/reel/DVWsmw2D6wx/
+
+  8. @benkellyone              followers=   808375 views=   1273156 reach=   1.6x score=     1.3 T2
+     pillar:  [Semi-Passive Play] via "absentee owner business"
+     name:    Ben Kelly
+     peer:    KEEP - Teaches SBA financing specifically for laundromat acquisition
+     caption: The U.S. government will give you $1,000,000 to buy one… It’s called an “SBA 7(a) loan”…. It’s a loan backed b
+     url:     https://www.instagram.com/reel/DYjoBmKIZs0/
+
+==============================================================================
+FLAGGED AS COLLISIONS (dropped): 9
+==============================================================================
+  1. @durable.ai               followers=    63251 views=    162482 reach=   2.6x score=     1.3 T2
+     pillar:  [Buying Your First] via "laundromat due diligence"
+     name:    Durable
+     peer:    DROP - Keyword collision: promoting premium laundry service, not laundromat business ownership
+     caption: Laundry… but make it convenient. 👕 @thelorrylaunderette is proof that even the most dreaded chore can become 
+     url:     https://www.instagram.com/reel/DOhXDzBkqBi/
+
+  2. @antoniakanoria           followers=    70036 views=    528838 reach=   7.6x score=    66.8 T1
+     pillar:  [Owner Honesty] via "what I wish I knew"
+     name:    lo
+     peer:    DROP - Keyword collision: generic life advice, no laundromat or business content
+     caption: part 1 . . . #25yearsold #whatiwishiknew #military #army
+     url:     https://www.instagram.com/reel/DT323dOAf06/
+
+  3. @tanaamen                 followers=   218769 views=   1182291 reach=   5.4x score=    43.4 T1
+     pillar:  [Owner Honesty] via "what I wish I knew"
+     name:    Tana Amen, BSN, RN
+     peer:    DROP - Keyword collision: nursing/health content, not laundromat business
+     caption: What I wish I knew in my 20s… before my 50s made me pay for it. I used to think 50 was “old.” Now I realize… i
+     url:     https://www.instagram.com/reel/DWZNGVYBmh7/
+
+  4. @constellationenergy      followers=    10259 views=     31413 reach=   3.1x score=     0.3 T2
+     pillar:  [Day in the Life] via "laundromat maintenance routine"
+     name:    Constellation
+     peer:    DROP - Keyword collision: energy company promoting laundry efficiency tips, not business ownership
+     caption: Spring cleaning can include your laundry routine, too. 🧺✨ A few small changes can help you use less energy, r
+     url:     https://www.instagram.com/reel/DWZFWkWk8dz/
+
+  5. @upflip                   followers=   142279 views=   1486861 reach=  10.5x score=    10.2 T1
+     pillar:  [Semi-Passive Play] via "semi passive business ideas"
+     name:    UpFlip
+     peer:    DROP - Keyword collision: generic business ideas list, not laundromat-specific expertise
+     caption: Comment “IDEAS” to get a PDF with 137 of the most profitable business ideas, including a full breakdown of eac
+     url:     https://www.instagram.com/reel/DTTFJjAD0kY/
+
+  6. @brent_chase              followers=    16243 views=   1507722 reach=  92.8x score=   343.2 T1
+     pillar:  [Semi-Passive Play] via "laundromat passive income"
+     name:    Brent Chase
+     peer:    DROP - Keyword collision: generic hustle/entrepreneur content, no laundromat focus
+     caption: #startups #entrepreneur #easymoney #hustleculture #millionaire
+     url:     https://www.instagram.com/reel/DURHmJ6j99Y/
+
+  7. @sharmarohit.ca           followers=    25156 views=     42309 reach=   1.7x score=     2.6 T2
+     pillar:  [Semi-Passive Play] via "absentee owner business"
+     name:    Rohit Sharma | Business & Real Estate
+     peer:    DROP - Keyword collision: vending machine business, not laundromat operations
+     caption: Earn $1,000/Day with a Mobile Cover Printing Machine! 💡 Day 40/50 Business Ideas in Canada: Launch a customiz
+     url:     https://www.instagram.com/reel/DDmPoDOP-8T/
+
+  8. @realtorvikasgoenka       followers=    13100 views=     46727 reach=   3.6x score=    17.0 T1
+     pillar:  [Local Business Investing] via "local business investment"
+     name:    Vikas D Goenka
+     peer:    DROP - Keyword collision: real estate/mall development, not laundromat business
+     caption: ₹298 Crore, Ekta Mall, Guwahati 1 Vision. 1 Landmark. Welcome to Ekta Mall — the new commercial pulse of Guwah
+     url:     https://www.instagram.com/reel/DV8f_PhkSre/
+
+  9. @atanubhuyan              followers=    45981 views=    495576 reach=  10.8x score=   158.4 T1
+     pillar:  [Local Business Investing] via "local business investment"
+     name:    Atanu Bhuyan
+     peer:    DROP - Keyword collision: non-English content unrelated to laundromat business
+     caption: Bidai zubeen
+     url:     https://www.instagram.com/reel/DO4BFGck_uk/
+
+==============================================================================
+PILLAR DIAGNOSTICS (kept peers only)
+==============================================================================
+  [Buying Your First] peers=3 avgScore=49.5 topScore=81.6
+  [Real Numbers] peers=1 avgScore=36.5 topScore=36.5
+  [Owner Honesty] peers=1 avgScore=4.7 topScore=4.7
+  [Local Business Investing] peers=2 avgScore=2.5 topScore=2.8
+  [Semi-Passive Play] peers=1 avgScore=1.3 topScore=1.3
+
+Done.

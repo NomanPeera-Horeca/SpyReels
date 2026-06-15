@@ -1,0 +1,463 @@
+==============================================================================
+CREATOR-FIRST DISCOVER EXPERIMENT (v2: with peer-score)
+==============================================================================
+Business: I am a personal trainer and online fitness coach. I want to grow my Instagram with reels about workouts, fat loss, and building muscle.
+
+Step 1: routeNiche (Sonnet)...
+  primary_niche: Health & Fitness
+  who: Everyday people who want to lose fat, build muscle, and get in shape through online coaching.
+  business_type: B2C confidence: 0.95
+
+Step 2: niche-derived pillars + topics (Sonnet)...
+  [Workout Routines]
+      - beginner gym workout
+      - home workout no equipment
+      - full body dumbbell workout
+      - 5 minute ab workout
+      - upper body workout women
+  [Fat Loss Education]
+      - fat loss myths debunked
+      - how to lose belly fat
+      - calorie deficit explained simply
+      - cardio vs weights fat loss
+      - why you are not losing weight
+  [Body Transformation]
+      - body recomposition results
+      - client transformation reveal
+      - 12 week transformation progress
+      - realistic weight loss journey
+      - body fat percentage change
+  [Muscle Building]
+      - how to build muscle beginners
+      - progressive overload explained
+      - lean muscle gain tips
+  [Nutrition Basics]
+      - high protein meal prep
+      - what I eat in a day
+      - protein intake for muscle
+  [Mindset and Consistency]
+      - fitness motivation for beginners
+      - how to stay consistent gym
+      - overcoming gym anxiety
+  total topics: 24
+
+Step 3: searchReelsByKeyword per topic...
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=87256
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=76452
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=80327
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72824
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63668
+[Instagram] Search for "beginner gym workout" found 40 reels
+  [Workout Routines] "beginner gym workout": 40 raw -> 3 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=86565
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64048
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75132
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=53897
+[Instagram] Search for "home workout no equipment" found 40 reels
+  [Workout Routines] "home workout no equipment": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=97248
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75297
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "full body dumbbell workout" found 20 reels
+  [Workout Routines] "full body dumbbell workout": 20 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55372
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60594
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60035
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66415
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=67961
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66067
+[Instagram] Search for "5 minute ab workout" found 40 reels
+  [Workout Routines] "5 minute ab workout": 40 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=86902
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=81982
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=76465
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72133
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=74827
+[Instagram] Search for "upper body workout women" found 40 reels
+  [Workout Routines] "upper body workout women": 40 raw -> 3 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59422
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=63312
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=43769
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60892
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=65550
+[Instagram] Search for "fat loss myths debunked" found 40 reels
+  [Fat Loss Education] "fat loss myths debunked": 40 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=80562
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64539
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=71479
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72539
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60254
+[Instagram] Search for "how to lose belly fat" found 40 reels
+  [Fat Loss Education] "how to lose belly fat": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=74099
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=61812
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59822
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64941
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66664
+[Instagram] Search for "calorie deficit explained simply" found 40 reels
+  [Fat Loss Education] "calorie deficit explained simply": 40 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=77462
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "cardio vs weights fat loss" found 10 reels
+  [Fat Loss Education] "cardio vs weights fat loss": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=78203
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=46828
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=45846
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=47038
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "why you are not losing weight" found 34 reels
+  [Fat Loss Education] "why you are not losing weight": 34 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=93767
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=56045
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55815
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55348
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=62461
+[Instagram] Search for "body recomposition results" found 40 reels
+  [Body Transformation] "body recomposition results": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=500 bodyLength=35
+  ! "client transformation reveal" failed: No results found for "client transformation reveal". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=65791
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "12 week transformation progress" found 10 reels
+  [Body Transformation] "12 week transformation progress": 10 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=98799
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=51003
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=58666
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59528
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=54418
+[Instagram] Search for "realistic weight loss journey" found 40 reels
+  [Body Transformation] "realistic weight loss journey": 40 raw -> 1 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=67307
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=49823
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=67849
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75568
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=69285
+[Instagram] Search for "body fat percentage change" found 40 reels
+  [Body Transformation] "body fat percentage change": 40 raw -> 4 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=95389
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "how to build muscle beginners" found 10 reels
+  [Muscle Building] "how to build muscle beginners": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=80070
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=59376
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=46834
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=75578
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=65742
+[Instagram] Search for "progressive overload explained" found 40 reels
+  [Muscle Building] "progressive overload explained": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=83461
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=10122
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "lean muscle gain tips" found 11 reels
+  [Muscle Building] "lean muscle gain tips": 11 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=102190
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=107736
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=102793
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=93455
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=90724
+[Instagram] Search for "high protein meal prep" found 40 reels
+  [Nutrition Basics] "high protein meal prep": 40 raw -> 3 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72003
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=61546
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=55922
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=66238
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=67381
+[Instagram] Search for "what I eat in a day" found 40 reels
+  [Nutrition Basics] "what I eat in a day": 40 raw -> 7 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+  ! "protein intake for muscle" failed: No results found for "protein intake for muscle". Try a different keyword or hashtag.
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=87144
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=62096
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=51469
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=56834
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=51342
+[Instagram] Search for "fitness motivation for beginners" found 40 reels
+  [Mindset and Consistency] "fitness motivation for beginners": 40 raw -> 2 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=64676
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=404 bodyLength=162
+[Instagram] Search for "how to stay consistent gym" found 10 reels
+  [Mindset and Consistency] "how to stay consistent gym": 10 raw -> 0 kept
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=62825
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=61777
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=60528
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=72525
+[Bug #64 diag] scGet path=/v2/instagram/reels/search status=200 bodyLength=58138
+[Instagram] Search for "overcoming gym anxiety" found 40 reels
+  [Mindset and Consistency] "overcoming gym anxiety": 40 raw -> 2 kept
+
+  raw: 705 | dropped tier: 620 | dropped <10000f: 46 | kept: 39
+
+Step 4: collapsed 39 reels -> 36 unique creators
+
+Step 5: peer-score (Haiku)...
+  peer-score: 36 -> 26 kept, 10 flagged
+
+==============================================================================
+RANKED PEERS (kept): 26
+==============================================================================
+  1. @marielaxfit              followers=   377752 views=  30427635 reach=  80.5x score=   242.6 T1
+     pillar:  [Workout Routines] via "full body dumbbell workout"
+     name:    Mariela Tijerina
+     peer:    KEEP - Genuine peer; posts full body dumbbell workouts designed to be effective and burn calories
+     caption: Full Body Dumbbell Workout Highly requested 🤍 so here’s a dumbbell version of the full body plate workout I p
+     url:     https://www.instagram.com/reel/DYX84VePPYA/
+
+  2. @strongwithsamantha       followers=    27457 views=    552033 reach=  20.1x score=   133.6 T1
+     pillar:  [Workout Routines] via "beginner gym workout"
+     name:    Sam Lee Lindauer
+     peer:    KEEP - Genuine peer; focuses on beginner gym workouts and strength training for women, aligned with niche
+     caption: No $ week of workouts in my b!0 #beginnergymworkout #beginnergymmotivation #gymmotivational #beginnergymtips #
+     url:     https://www.instagram.com/reel/DMyvpthAe2y/
+
+  3. @fitnessgill              followers=    14125 views=    243632 reach=  17.2x score=   114.1 T1
+     pillar:  [Fat Loss Education] via "how to lose belly fat"
+     name:    Gillian 💕
+     peer:    KEEP - Genuine peer; educates on fat loss with emphasis on exercise, diet, and walking habits
+     caption: 3 things that helped me lose belly fat🙂‍↕️ You cannot use these on their own to burn belly fat! They are mere
+     url:     https://www.instagram.com/reel/DXZqsFBCIKE/
+
+  4. @sarahspence_pt           followers=    17476 views=    272497 reach=  15.6x score=    53.0 T1
+     pillar:  [Muscle Building] via "progressive overload explained"
+     name:    Sarah Spence
+     peer:    KEEP - Direct peer: personal trainer explaining progressive overload for muscle building, core fitness coaching content
+     caption: Progressive overload: explained 🧬 #strengthtraining #weightlifting #buildmuscle #workouttips #liftingweights
+     url:     https://www.instagram.com/reel/DY45ZQ7JqlB/
+
+  5. @fayette_nyehn            followers=  1300153 views=  20601268 reach=  15.8x score=    49.6 T1
+     pillar:  [Nutrition Basics] via "high protein meal prep"
+     name:    Fayette Faith Nyehn
+     peer:    KEEP - Direct peer: high protein meal prep recipes, nutrition support for fitness and muscle building goals
+     caption: High protein meal prep lunch 😋 • • Ingredients: 1 tbsp olive oil 1-2 tbsp lemon juice 1/2 tsp oregano 1/2 tsp
+     url:     https://www.instagram.com/reel/C8pKiLWs3XX/
+
+  6. @vmfit24                  followers=   203008 views=   1566605 reach=   7.7x score=    23.4 T1
+     pillar:  [Workout Routines] via "home workout no equipment"
+     name:    Vinay Manglani
+     peer:    KEEP - Genuine peer; specializes in no-equipment home workouts and fat-burning exercises, core niche content
+     caption: Complete 10 min Full Body Home Workout | No Equipments Need 💪 45 sec each exercise, 15 sec rest SAVE this✍🏻 
+     url:     https://www.instagram.com/reel/DWbObIMk-2C/
+
+  7. @natalia_aurora           followers=  2024656 views=  10532026 reach=   5.2x score=    21.4 T1
+     pillar:  [Mindset and Consistency] via "fitness motivation for beginners"
+     name:    Natalia Bartholdi
+     peer:    KEEP - Fitness motivation creator addressing mindset and consistency, direct peer in fitness space
+     caption: Workout Motivation for 2026💪🏻🔥 Trusting the process and understanding your ”why” are key to staying motivat
+     url:     https://www.instagram.com/reel/DTFptOujNl4/
+
+  8. @trendy_criminal          followers=   609742 views=   5422086 reach=   8.9x score=    16.6 T1
+     pillar:  [Workout Routines] via "beginner gym workout"
+     name:    Nisha|Neeta Fitness
+     peer:    KEEP - Genuine peer in workout routines; caption directly addresses beginner gym workouts, fat loss, and home workouts
+     caption: gym vs bands workout [gym beginner abs fat-loss weight loss home workout]
+     url:     https://www.instagram.com/reel/DU3lvOXku3M/
+
+  9. @lidiavmera               followers=   572565 views=   2941002 reach=   5.1x score=    16.1 T1
+     pillar:  [Nutrition Basics] via "what I eat in a day"
+     name:    Lidia Mera
+     peer:    KEEP - Genuine peer in nutrition/diet content, core pillar for fitness coaching audience
+     caption: what i eat in a day! 🥝🍝 • • • • • #whatieatinaday #fulldayofeating #easyrecipes #healthyrecipes #steaksandwi
+     url:     https://www.instagram.com/reel/DTTKuizjSMu/
+
+ 10. @physique.ascension.club  followers=    17776 views=     62940 reach=   3.5x score=    12.5 T1
+     pillar:  [Mindset and Consistency] via "fitness motivation for beginners"
+     name:    Physique Ascension Club ™
+     peer:    KEEP - Fitness facility/coaching brand sharing transformation testimonials, aligned with fitness coaching niche
+     caption: Here’s a testimonial video from none other then @abhii_shekk sharing his first day experience here at @physiqu
+     url:     https://www.instagram.com/reel/DUYNWKZEuZS/
+
+ 11. @adigutierrezxoxo         followers=   305105 views=    954637 reach=   3.1x score=     8.1 T1
+     pillar:  [Nutrition Basics] via "what I eat in a day"
+     name:    Adi Gutierrez
+     peer:    KEEP - Nutrition content creator aligned with fitness niche, relevant to fat loss coaching
+     caption: What are you eating today? 💕 #whatieatinaday #mealideas #wieiad @alaninutrition
+     url:     https://www.instagram.com/reel/DUHBjKCEsR4/
+
+ 12. @kaylajchandler           followers=    55290 views=    248542 reach=   4.5x score=     7.5 T1
+     pillar:  [Nutrition Basics] via "high protein meal prep"
+     name:    Kayla | Feelin’ Fab
+     peer:    KEEP - Direct peer: high protein meal prep content, directly supports fitness and muscle building nutrition
+     caption: This 1-Hour High Protein Meal Prep Menu is perfect for those weeks when you have limited time to prep! Super e
+     url:     https://www.instagram.com/reel/C-NrUQvONx-/
+
+ 13. @3piecesofpecan           followers=   676852 views=   2197776 reach=   3.2x score=     6.6 T1
+     pillar:  [Nutrition Basics] via "high protein meal prep"
+     name:    Chance Cozby - 3PiecesofPecan
+     peer:    KEEP - Direct peer: high protein meal prep for fitness goals, supports muscle building and nutrition coaching
+     caption: High Protein Breakfast Meal Prep for the week for my Son. 649 Calories / 71 Grams of Protein per serving. Reci
+     url:     https://www.instagram.com/reel/DLh0m9NxlDh/
+
+ 14. @nutritionistheenatrivedi followers=   169816 views=   1494377 reach=   8.8x score=     3.1 T1
+     pillar:  [Fat Loss Education] via "why you are not losing weight"
+     name:    Heena 🎓MSc in Clinical Nutrition & a Holistic Diet Coach📍Mumbai
+     peer:    KEEP - Genuine peer; nutrition coach addressing weight loss barriers and calorie management for fat loss
+     caption: You’re NOT losing weight because of THIS 🚫 You think you’re eating healthy… But your calories are TOO HIGH 😶
+     url:     https://www.instagram.com/reel/DU8nTG2iNGi/
+
+ 15. @jamiebrown.fit           followers=   203057 views=    926602 reach=   4.6x score=     1.7 T1
+     pillar:  [Body Transformation] via "12 week transformation progress"
+     name:    Jamie Brown | Online Coach
+     peer:    KEEP - Direct peer: online coach sharing 12-week transformation, fat loss with muscle retention, exact audience match
+     caption: 12 weeks of consistency can look like this ☝️ I was training for years BUT I only started to look like it afte
+     url:     https://www.instagram.com/reel/DYpG3WHh5Nu/
+
+ 16. @gissellegironn           followers=    62934 views=    163655 reach=   2.6x score=    13.8 T2
+     pillar:  [Workout Routines] via "beginner gym workout"
+     name:    (none)
+     peer:    KEEP - Genuine peer; posts workout routines including upper body and beginner gym content matching search intent
+     caption: the workout routine I SWEAR by || @aybl physique set live April 9th 2pm EST dc GISSELLE #tonedarms #upperbodyw
+     url:     https://www.instagram.com/reel/DWy0aZFjgoD/
+
+ 17. @trainbloom               followers=  1181976 views=   2877290 reach=   2.4x score=    11.7 T2
+     pillar:  [Body Transformation] via "body recomposition results"
+     name:    Tony
+     peer:    KEEP - Genuine peer; body recomposition expert teaching how to lose fat and build muscle simultaneously
+     caption: Body Recomp 101 How do you lose fat AND build muscle at the same time? We *used to think* body recomp was only
+     url:     https://www.instagram.com/reel/DXwvf7eudq2/
+
+ 18. @sharon_gambu             followers=  2013200 views=   5007507 reach=   2.5x score=     7.1 T2
+     pillar:  [Workout Routines] via "home workout no equipment"
+     name:    Sharon Gambu
+     peer:    KEEP - Genuine peer; creates home workouts with no equipment and emphasizes consistency and diet for results
+     caption: Easy Home Workout | No Equipment Needed 🔥🔥 Disclaimer: Results may vary. Consistency, diet, and overall acti
+     url:     https://www.instagram.com/reel/DT0k4BMDFOy/
+
+ 19. @hayleymadiganfitness     followers=  1082071 views=   3011528 reach=   2.8x score=     5.5 T2
+     pillar:  [Workout Routines] via "upper body workout women"
+     name:    Hayley Madigan
+     peer:    KEEP - Genuine peer; beginner upper body dumbbell workouts for women with specific rep ranges and progression
+     caption: Beginner Upper Body Dumbbell Only Workout 💪🏼 1)Hammer to Bicep Curl - Aim for 8 reps 2)Bent Arm Lateral Rais
+     url:     https://www.instagram.com/reel/DOF_322CE7H/
+
+ 20. @thedrshannonshow         followers=    22860 views=     56055 reach=   2.5x score=     5.2 T2
+     pillar:  [Body Transformation] via "body recomposition results"
+     name:    The Dr. Shannon Show
+     peer:    KEEP - Direct peer: discusses body recomposition, fat loss while building muscle, core to fitness coaching niche
+     caption: Body recomposition means losing fat while building muscle. And although it seems like a purely aesthetic thing
+     url:     https://www.instagram.com/reel/DS-ThppkUrh/
+
+ 21. @tiboinshape              followers= 17121412 views=  38497624 reach=   2.2x score=     4.8 T2
+     pillar:  [Fat Loss Education] via "how to lose belly fat"
+     name:    Tiboinshape
+     peer:    KEEP - Genuine peer; focuses on belly fat loss workouts, core fat loss education pillar
+     caption: Best workout to lose belly fat fast !! 😱 @inshapenutrition
+     url:     https://www.instagram.com/reel/DDXO_KxtThm/
+
+ 22. @matt.minett              followers=   106597 views=    205004 reach=   1.9x score=     3.9 T2
+     pillar:  [Workout Routines] via "full body dumbbell workout"
+     name:    Matt Minett
+     peer:    KEEP - Genuine peer; beginner-focused full body dumbbell workouts directly match user's niche
+     caption: Beginner full body dumbbell workout 😮‍💨🔥 #fitness #workout #homeworkout #fitnesstips #viralfitness
+     url:     https://www.instagram.com/reel/DXxbnonBZu8/
+
+ 23. @sweatfitnessgirl         followers=   454676 views=    763759 reach=   1.7x score=     2.6 T2
+     pillar:  [Workout Routines] via "upper body workout women"
+     name:    Jen Edwards: Fitness Trainer | Health Coach | Home Workouts
+     peer:    KEEP - Genuine peer; fitness trainer posting targeted upper body workouts for specific demographics
+     caption: If you’re over 40 and want toned arms… do THIS simple upper body workout 💪🏼🔥 SEND this to a woman over 40 w
+     url:     https://www.instagram.com/reel/DWT-TlcjVV_/
+
+ 24. @sam_phill                followers=    17255 views=    950540 reach=  55.1x score=     0.6 T2
+     pillar:  [Workout Routines] via "5 minute ab workout"
+     name:    Samuel C. Phillips
+     peer:    KEEP - Genuine peer; ab and core workouts for summer body goals align with fat loss and muscle building focus
+     caption: 5 Minute Core Exercise to get ur abs right for Summer!🙂‍↕️💪🏾☀️🌊 #CoreExcercise #CoreWorkouts #AbWorkouts #
+     url:     https://www.instagram.com/reel/DX7N4-SRrqe/
+
+ 25. @kennhat.fit              followers=    29149 views=     88190 reach=   3.0x score=     0.1 T2
+     pillar:  [Mindset and Consistency] via "overcoming gym anxiety"
+     name:    KENN HAT
+     peer:    KEEP - Genuine peer helping women with gym anxiety and fitness confidence, directly relevant to beginner fitness audience
+     caption: HELPING WOMEN OVERCOME GYM ANXIETY pt. 2!!!! 🏋🏼‍♀️🫧🎧💘this time, failing an exercise in front of people 🫣
+     url:     https://www.instagram.com/reel/DC48nXYRd-b/
+
+ 26. @taylerfit                followers=   182436 views=   1037034 reach=   5.7x score=     0.0 T2
+     pillar:  [Workout Routines] via "upper body workout women"
+     name:    Tayler Stevenson
+     peer:    KEEP - Genuine peer; posts toned arms and upper body workouts with detailed exercise programming
+     caption: Toned arms workout 💪🏻 Hot girls train arms, so try this on your next upper body day: 1️⃣Single arm front rai
+     url:     https://www.instagram.com/reel/DOccV28krDT/
+
+==============================================================================
+FLAGGED AS COLLISIONS (dropped): 10
+==============================================================================
+  1. @heleneinbetween          followers=  1092871 views=   2038425 reach=   1.9x score=     5.9 T2
+     pillar:  [Body Transformation] via "realistic weight loss journey"
+     name:    Helene Sula - Travel and Lifestyle Blogger
+     peer:    DROP - Keyword collision: travel/lifestyle blogger, weight loss via walking not fitness coaching or muscle building focus
+     caption: I lost over 50 pounds by walking… And a calorie deficit That’s literally it. I didn’t do any weird diets. I di
+     url:     https://www.instagram.com/reel/DUjHI7RgUEH/
+
+  2. @dr.sajidmughal           followers=    23443 views=    124014 reach=   5.3x score=     5.4 T1
+     pillar:  [Body Transformation] via "body fat percentage change"
+     name:    Sajid Mughal
+     peer:    DROP - Keyword collision: content about facial anatomy and celebrity appearance, not fitness or body composition training
+     caption: Not older. Just bulkier — blame it on the Masseters! Ever noticed how Abhishek Bachchan and Arjun Kapoor somet
+     url:     https://www.instagram.com/reel/DOI9IR4iRTu/
+
+  3. @peak_personaa            followers=    59459 views=    902732 reach=  15.2x score=    74.8 T1
+     pillar:  [Body Transformation] via "body fat percentage change"
+     name:    Grooming | Fashion | lookmaxing | Self Development
+     peer:    DROP - Keyword collision: grooming/fashion/looksmaxxing account, not fitness coaching or muscle building
+     caption: How attractive is @hrithikroshan . . . . . . Unlock your true potential with expert face, body, and style anal
+     url:     https://www.instagram.com/reel/DECk4TpPw5P/
+
+  4. @drprashantdezire         followers=   357055 views=   1111726 reach=   3.1x score=     3.7 T1
+     pillar:  [Body Transformation] via "body fat percentage change"
+     name:    Dr Prashant Yadav
+     peer:    DROP - Keyword collision: celebrity cosmetic analysis, not fitness or body transformation coaching
+     caption: Salman Khan at 60 — still looking this youthful No visible wrinkles and glowing skin… . Do you think it’s natu
+     url:     https://www.instagram.com/reel/DRWrnl5kwPm/
+
+  5. @draseemsharmamd          followers=    29090 views=     47464 reach=   1.6x score=     2.7 T2
+     pillar:  [Body Transformation] via "body fat percentage change"
+     name:    Dr. Aseem Sharma  MD, DNB, MBA, FRCP(London)
+     peer:    DROP - Keyword collision: acting/anatomy analysis content, not fitness or body composition training
+     caption: When great acting becomes a masterclass in anatomy. Watch Akshaye Khanna closely in Dhurandhar. Every pause. E
+     url:     https://www.instagram.com/reel/DSti5gtgN_B/
+
+  6. @jeffmagnusonfit          followers=   295373 views=   1446430 reach=   4.9x score=    26.1 T1
+     pillar:  [Muscle Building] via "progressive overload explained"
+     name:    Jeff Magnuson
+     peer:    DROP - Keyword collision: found via progressive overload search but caption is about Diet Coke, not fitness content
+     caption: Is Diet Coke actually bad for you?
+     url:     https://www.instagram.com/reel/DYdGffbyX_H/
+
+  7. @isabelladinan            followers=    19132 views=     45146 reach=   2.4x score=     9.6 T2
+     pillar:  [Nutrition Basics] via "what I eat in a day"
+     name:    bella dinan
+     peer:    DROP - Keyword collision: generic what-I-eat-in-a-day with no fitness context, likely lifestyle/food content not fitness coaching
+     caption: #whatieatinaday
+     url:     https://www.instagram.com/reel/DYsLswCATnk/
+
+  8. @healthydemure            followers=    86643 views=    188736 reach=   2.2x score=     8.1 T2
+     pillar:  [Nutrition Basics] via "what I eat in a day"
+     name:    Anastasia
+     peer:    DROP - Keyword collision: generic what-I-eat-in-a-day content, no fitness or muscle building context evident
+     caption: full day of eating 🍽️ #whatieatinaday #wieiad #fulldayofeating #щояїмзадень #харчування
+     url:     https://www.instagram.com/reel/DYmJ93QIjrN/
+
+  9. @ayaataleb                followers=   473902 views=    964470 reach=   2.0x score=     4.6 T2
+     pillar:  [Nutrition Basics] via "what I eat in a day"
+     name:    Aya Taleb | Food Vlogger
+     peer:    DROP - Keyword collision: food vlogger, generic what-I-eat-in-a-day content, not fitness or nutrition coaching focused
+     caption: #whatieatinaday
+     url:     https://www.instagram.com/reel/DSXwgTUjIAS/
+
+ 10. @chomps                   followers=   161026 views=    577058 reach=   3.6x score=     0.9 T2
+     pillar:  [Mindset and Consistency] via "overcoming gym anxiety"
+     name:    Chomps
+     peer:    DROP - Keyword collision: appears to be a meat snack brand, not a fitness creator despite gym anxiety mention
+     caption: PSA: gym anxiety is way more common than you think. We’re taking notes from @kellwoods_ ✍️
+     url:     https://www.instagram.com/reel/DUoVpgsD5Cz/
+
+==============================================================================
+PILLAR DIAGNOSTICS (kept peers only)
+==============================================================================
+  [Workout Routines] peers=11 avgScore=40.9 topScore=242.6
+  [Fat Loss Education] peers=3 avgScore=40.7 topScore=114.1
+  [Muscle Building] peers=1 avgScore=53.0 topScore=53.0
+  [Nutrition Basics] peers=5 avgScore=17.6 topScore=49.6
+  [Mindset and Consistency] peers=3 avgScore=11.4 topScore=21.4
+  [Body Transformation] peers=3 avgScore=6.2 topScore=11.7
+
+Done.
