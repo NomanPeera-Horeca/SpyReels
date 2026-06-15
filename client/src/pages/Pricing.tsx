@@ -658,13 +658,7 @@ export default function Pricing() {
   const subQuery = trpc.billing.subscription.useQuery(undefined, {
     enabled: !!user,
   });
-  const checkoutMutation = trpc.billing.checkout.useMutation({
-    onSuccess: data => {
-      toast.info("Redirecting to checkout...");
-      window.open(data.url, "_blank");
-    },
-    onError: err => toast.error(err.message),
-  });
+  const checkoutMutation = trpc.billing.checkout.useMutation({});
 
   const plans = useMemo(() => {
     const byId = new Map(
@@ -799,22 +793,49 @@ export default function Pricing() {
     });
     const referralId =
       typeof window !== "undefined" && (window as any).Rewardful?.referral;
-    checkoutMutation.mutate({
-      planId: planId as any,
-      interval: isAnnual ? "yearly" : "monthly",
-      origin: window.location.origin,
-      referralId: typeof referralId === "string" ? referralId : undefined,
-    });
+
+    // Open tab synchronously so the browser does not block it as a popup
+    const checkoutTab = window.open("", "_blank");
+
+    checkoutMutation.mutate(
+      {
+        planId: planId as any,
+        interval: isAnnual ? "yearly" : "monthly",
+        origin: window.location.origin,
+        referralId: typeof referralId === "string" ? referralId : undefined,
+      },
+      {
+        onSuccess: data => {
+          if (checkoutTab) {
+            checkoutTab.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+        },
+        onError: err => {
+          checkoutTab?.close();
+          toast.error(err.message);
+        },
+      }
+    );
   };
 
   const getButtonText = (planId: string) => {
-    if (!user) return planId === "free" ? "Start Free" : "Start Free First";
     if (planId === currentPlan) return "Current Plan";
-    if (planId === "free") return "Free Forever";
-    return PLAN_ORDER.indexOf(planId as PublicPlanId) >
-      PLAN_ORDER.indexOf(currentPlan as PublicPlanId)
-      ? "Upgrade Now"
-      : "Switch Plan";
+    if (planId === "free") return user ? "Free Forever" : "Start Free, No Card";
+    const isUpgrade =
+      PLAN_ORDER.indexOf(planId as PublicPlanId) >
+      PLAN_ORDER.indexOf(currentPlan as PublicPlanId);
+    if (!user) {
+      const labels: Record<string, string> = {
+        starter: "Start with Starter →",
+        pro: "Start with Pro →",
+        business: "Start with Business →",
+        agency: "Start with Agency →",
+      };
+      return labels[planId] ?? "Get Started →";
+    }
+    return isUpgrade ? "Upgrade Now →" : "Switch Plan";
   };
 
   return (
@@ -1486,7 +1507,7 @@ export default function Pricing() {
             </p>
           </div>
           <Button size="sm" onClick={() => handleCheckout("free")}>
-            Start Free
+            Start Free, No Card
           </Button>
         </div>
       </div>

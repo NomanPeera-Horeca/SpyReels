@@ -1870,12 +1870,13 @@ export default function Dashboard() {
   }
 
   const isLoading = job?.status === "running" || job?.status === "pending";
-  /** User job reels: completed jobs, or running jobs that already have seeded/live rows. */
+  /** Reels list: featured catalog when data is loaded, or user scrape job paths. */
   const canDisplayJobReels =
-    !isFeaturedView &&
-    (job?.status === "completed" ||
-      ((job?.status === "running" || job?.status === "pending") &&
-        reelsData.length > 0));
+    (isFeaturedView && !!featuredData) ||
+    (!isFeaturedView &&
+      (job?.status === "completed" ||
+        ((job?.status === "running" || job?.status === "pending") &&
+          reelsData.length > 0)));
   const showUpdatingReelsBanner =
     !isFeaturedView &&
     job?.status === "running" &&
