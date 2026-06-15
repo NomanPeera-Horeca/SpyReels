@@ -40,6 +40,8 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+
+const FIRST_SCRIPT_NUDGE_DISMISSED_KEY = "spyreels_first_script_nudge_dismissed";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
 import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import {
@@ -434,6 +436,17 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
 
   const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput);
 
+  const onboardingQuery = trpc.onboarding.getState.useQuery();
+  const prevHasCompletedFirstSpyRef = useRef<boolean | null>(null);
+  const [showFirstScriptNudge, setShowFirstScriptNudge] = useState(false);
+
+  const dismissFirstScriptNudge = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(FIRST_SCRIPT_NUDGE_DISMISSED_KEY, "1");
+    }
+    setShowFirstScriptNudge(false);
+  }, []);
+
   const saveMutation = trpc.scripts.save.useMutation({
     onSuccess: (data, variables) => {
       const approved = variables.status === "approved";
@@ -485,6 +498,32 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     (hasTranscription && transcriptionQuery.isLoading);
 
   const script = scriptQuery.data;
+
+  useEffect(() => {
+    if (onboardingQuery.data && prevHasCompletedFirstSpyRef.current === null) {
+      prevHasCompletedFirstSpyRef.current = onboardingQuery.data.hasCompletedFirstSpy;
+    }
+  }, [onboardingQuery.data]);
+
+  useEffect(() => {
+    if (script?.status !== "completed") return;
+    if (
+      typeof window !== "undefined" &&
+      localStorage.getItem(FIRST_SCRIPT_NUDGE_DISMISSED_KEY)
+    ) {
+      return;
+    }
+    void onboardingQuery.refetch().then((result) => {
+      const prev = prevHasCompletedFirstSpyRef.current ?? false;
+      const now = result.data?.hasCompletedFirstSpy === true;
+      if (!prev && now) {
+        setShowFirstScriptNudge(true);
+        void trpcUtils.onboarding.getState.invalidate();
+      }
+      prevHasCompletedFirstSpyRef.current = now;
+    });
+  }, [script?.status, script?.id, onboardingQuery, trpcUtils]);
+
   const generatedScript = script?.generatedScript || "";
   const viralStructure = script?.viralStructure
     ? typeof script.viralStructure === "string"
@@ -809,6 +848,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             onSave={handleSave}
             isSaving={saveMutation.isPending}
             userTimezone={userTimezone}
+            showFirstScriptUpgradeNudge={showFirstScriptNudge}
+            onDismissFirstScriptUpgradeNudge={dismissFirstScriptNudge}
+            onSeePlans={() => {
+              dismissFirstScriptNudge();
+              navigate("/pricing");
+            }}
           />
         ) : isOpeningExistingScript ? (
           <div
@@ -1607,6 +1652,9 @@ function CompletedScriptSection({
   onSave,
   isSaving,
   userTimezone,
+  showFirstScriptUpgradeNudge = false,
+  onDismissFirstScriptUpgradeNudge,
+  onSeePlans,
 }: {
   displayScript: string;
   generatedScript: string;
@@ -1646,10 +1694,34 @@ function CompletedScriptSection({
   isSaving: boolean;
   userTimezone: string;
   sectionRef?: React.Ref<HTMLDivElement>;
+  showFirstScriptUpgradeNudge?: boolean;
+  onDismissFirstScriptUpgradeNudge?: () => void;
+  onSeePlans?: () => void;
 }) {
   const cuesLock = useFeatureLock("aiCues");
   return (
     <div ref={sectionRef}>
+      {showFirstScriptUpgradeNudge && onDismissFirstScriptUpgradeNudge && onSeePlans ? (
+        <div className="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
+          <p className="text-sm text-foreground">You just made your first SpyReels script.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upgrade to Solo Creator ($11/mo) to do this 30 times a month.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-8 text-xs" onClick={onSeePlans}>
+              See plans →
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={onDismissFirstScriptUpgradeNudge}
+            >
+              Maybe later
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-foreground">

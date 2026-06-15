@@ -1968,16 +1968,23 @@ Return JSON only:
           }
 
           // pending | failed → charge usage + kick Deepgram.
-          const usageCheck = await checkUsageLimit(
+          const bypassTranscribeLimit = await isFirstRemakeUsageBypassEligible(
             ctx.user.id,
-            "transcribeCount",
-            ctx.user.openId
+            ctx.user.hasCompletedFirstSpy,
+            "transcribeCount"
           );
-          if (!usageCheck.allowed) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
-            });
+          if (!bypassTranscribeLimit) {
+            const usageCheck = await checkUsageLimit(
+              ctx.user.id,
+              "transcribeCount",
+              ctx.user.openId
+            );
+            if (!usageCheck.allowed) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+              });
+            }
           }
           const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
           await updateFeaturedReelTranscription(fr.id, {
@@ -2023,12 +2030,23 @@ Return JSON only:
           };
         }
 
-        const usageCheck = await checkUsageLimit(ctx.user.id, "transcribeCount", ctx.user.openId);
-        if (!usageCheck.allowed) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
-          });
+        const bypassTranscribeLimit = await isFirstRemakeUsageBypassEligible(
+          ctx.user.id,
+          ctx.user.hasCompletedFirstSpy,
+          "transcribeCount"
+        );
+        if (!bypassTranscribeLimit) {
+          const usageCheck = await checkUsageLimit(
+            ctx.user.id,
+            "transcribeCount",
+            ctx.user.openId
+          );
+          if (!usageCheck.allowed) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            });
+          }
         }
         if (existing && existing.status === "failed") {
           const { getDb } = await import("./db");
@@ -2838,13 +2856,24 @@ Return JSON only:
           });
         }
 
-        // Check usage limit before generating
-        const usageCheck = await checkUsageLimit(ctx.user.id, "recreateCount", ctx.user.openId);
-        if (!usageCheck.allowed) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: `You've reached your monthly AI re-creation limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
-          });
+        // Check usage limit before generating (first script generation is free)
+        const bypassRecreateLimit = await isFirstRemakeUsageBypassEligible(
+          ctx.user.id,
+          ctx.user.hasCompletedFirstSpy,
+          "recreateCount"
+        );
+        if (!bypassRecreateLimit) {
+          const usageCheck = await checkUsageLimit(
+            ctx.user.id,
+            "recreateCount",
+            ctx.user.openId
+          );
+          if (!usageCheck.allowed) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You've reached your monthly AI re-creation limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+            });
+          }
         }
 
         const typed = input.topic.trim();
@@ -6217,26 +6246,64 @@ export type AppRouter = typeof appRouter;
 // ── Helper functions ──
 
 /**
+ * First-time bypass for Remake now: users with zero monthly usage on the
+ * given meter and no completed first spy skip the plan limit check so their
+ * first transcription or script generation always succeeds (aha moment).
+ */
+async function isFirstRemakeUsageBypassEligible(
+  userId: number,
+  hasCompletedFirstSpy: boolean,
+  usageField: "transcribeCount" | "recreateCount"
+): Promise<boolean> {
+  if (hasCompletedFirstSpy) return false;
+  const usage = await getMonthlyUsage(userId);
+  const used = usage[usageField] ?? 0;
+  return used === 0;
+}
+
+/**
+ * Flip `hasCompletedFirstSpy` exactly once per user (shared guard).
+ */
+async function maybeMarkFirstSpyCompletedForUser(userId: number): Promise<void> {
+  const onboardingState = await getOnboardingState(userId);
+  if (!onboardingState) return;
+  if (onboardingState.hasCompletedFirstSpy) return;
+  await updateOnboardingState(userId, { hasCompletedFirstSpy: true });
+}
+
+/**
+ * Featured Remake now aha moment: first successful script from catalog reels
+ * counts as completing first spy so the hint card dismisses without a scrape job.
+ */
+async function maybeMarkFirstSpyCompletedFromFeaturedScript(scriptId: number): Promise<void> {
+  try {
+    const script = await getRecreatedScript(scriptId);
+    if (!script?.featuredReelId) return;
+    await maybeMarkFirstSpyCompletedForUser(script.userId);
+  } catch (error) {
+    console.warn(
+      `[maybeMarkFirstSpyCompletedFromFeaturedScript] Non-fatal error for script ${scriptId}:`,
+      error
+    );
+  }
+}
+
+/**
  * Flip `hasCompletedFirstSpy` exactly once for a user's first successful
  * non-demo scrape completion. Guard rails:
  *  - Demo-seeded jobs never count as first spies (`scrapeJob.isDemo`).
  *  - If the flag is already true, skip the write.
  *  - Missing job/user rows are treated as no-ops (defensive).
  *
- * This helper intentionally only runs from runScrapeJob completion paths.
- * Resync and failed jobs must not mutate this onboarding flag.
+ * Also flipped from featured catalog script completion via
+ * `maybeMarkFirstSpyCompletedFromFeaturedScript`.
  */
 async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
   try {
     const job = await getScrapeJob(jobId);
     if (!job) return;
     if (job.isDemo) return;
-
-    const onboardingState = await getOnboardingState(job.userId);
-    if (!onboardingState) return;
-    if (onboardingState.hasCompletedFirstSpy) return;
-
-    await updateOnboardingState(job.userId, { hasCompletedFirstSpy: true });
+    await maybeMarkFirstSpyCompletedForUser(job.userId);
   } catch (error) {
     console.warn(
       `[maybeMarkFirstSpyCompleted] Non-fatal error for job ${jobId}:`,
@@ -7687,6 +7754,7 @@ Return ONLY valid JSON.`;
       readabilityAnalysis: readabilityAnalysis as any,
       status: "completed",
     });
+    await maybeMarkFirstSpyCompletedFromFeaturedScript(scriptId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     await updateRecreatedScript(scriptId, {

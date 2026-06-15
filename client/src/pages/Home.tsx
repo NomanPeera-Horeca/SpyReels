@@ -513,7 +513,7 @@ export default function Home() {
                 3
               </span>
               <p>
-                <span className="font-medium text-foreground">Hit &quot;Remake now&quot; on any Reel.</span>{" "}
+                <span className="font-medium text-foreground">Hit &quot;Remake in your voice&quot; on any Reel.</span>{" "}
                 One click. SpyReels transcribes it and writes a script in your voice automatically.
               </p>
             </div>

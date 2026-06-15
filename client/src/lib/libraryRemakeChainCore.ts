@@ -182,7 +182,7 @@ export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
     case "error":
       return "Retry";
     default:
-      return "Remake now";
+      return "Remake in your voice";
   }
 }
 

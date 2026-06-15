@@ -121,3 +121,8 @@ scripts/eval-results.json
 scripts/apify-test-results.json
 scripts/scoring-test-results.json
 scripts/discovery-pipeline-results.json
+
+.env.backup
+.env.had-rotated-creds
+.env.swap-bak
+scripts/output/

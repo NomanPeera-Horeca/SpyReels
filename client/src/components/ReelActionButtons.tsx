@@ -150,7 +150,9 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
 
   return (
     <div
-      className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end"
+      className={`flex items-center gap-0.5 sm:gap-1 flex-wrap justify-end ${
+        oneClickRemake ? "w-full" : "shrink-0"
+      }`}
       onClick={(e) => e.stopPropagation()}
     >
       {!hideBookmark && !collectionMode && (
@@ -172,12 +174,12 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
 
       {oneClickRemake ? (
         <Tooltip content={oneClickRemake.tooltip ?? oneClickRemake.label}>
-          <span>
+          <span className="block w-full">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className={`h-7 text-xs px-2 ${
+              className={`h-7 text-xs px-3 w-full justify-center ${
                 oneClickRemake.tone === "ready"
                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
                   : oneClickRemake.tone === "inspiration"
@@ -195,7 +197,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
               ) : (
                 <Wand2 className="h-3 w-3 sm:mr-1" />
               )}
-              <span className={labelClass}>{oneClickRemake.label}</span>
+              <span>{oneClickRemake.label}</span>
             </Button>
           </span>
         </Tooltip>
