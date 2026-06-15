@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
-import { enrichSpaHtmlForPublicPath, pathnameFromRequestUrl } from "../blogPageHtml";
+import { enrichSpaHtmlForPublicPath } from "../blogPageHtml";
 import { getBlogPostBySlug } from "../db";
 
 export async function setupVite(app: Express, server: Server) {
@@ -41,11 +41,7 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`
       );
       let page = await vite.transformIndexHtml(url, template);
-      page = await enrichSpaHtmlForPublicPath(
-        page,
-        pathnameFromRequestUrl(req.originalUrl),
-        getBlogPostBySlug
-      );
+      page = await enrichSpaHtmlForPublicPath(page, req.originalUrl, getBlogPostBySlug);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
@@ -81,11 +77,7 @@ export function serveStatic(app: Express) {
   app.use("*", async (req: Request, res: Response) => {
     try {
       let html = await readIndexHtml();
-      html = await enrichSpaHtmlForPublicPath(
-        html,
-        pathnameFromRequestUrl(req.originalUrl),
-        getBlogPostBySlug
-      );
+      html = await enrichSpaHtmlForPublicPath(html, req.originalUrl, getBlogPostBySlug);
       res.status(200).set({ "Content-Type": "text/html" }).end(html);
     } catch (err) {
       console.error("[SPA] Failed to serve index.html:", err);

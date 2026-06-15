@@ -103,7 +103,7 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/blog" component={BlogList} />
       <Route path="/blog/:slug" component={BlogPost} />
-      {/* <Route path="/extension" component={Extension} /> */}
+      <Route path="/extension" component={Extension} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/invitations/accept/:token" component={AcceptInvitation} />
       <Route path="/s/:token" component={PublicScriptView} />

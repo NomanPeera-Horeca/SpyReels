@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   injectBlogPostStructuredData,
   injectPageHeadMeta,
+  enrichSpaHtmlForPublicPath,
   parseBlogSlugFromPath,
   pathnameFromRequestUrl,
 } from "./blogPageHtml";
@@ -79,6 +80,57 @@ describe("injectBlogPostStructuredData", () => {
     expect(out).toContain('"@type":"BlogPosting"');
     expect(out).toContain('id="blog-breadcrumb-schema"');
     expect(out).toContain('id="blog-faq-schema"');
+  });
+});
+
+describe("enrichSpaHtmlForPublicPath", () => {
+  it("injects homepage canonical for UTM query URLs", async () => {
+    const out = await enrichSpaHtmlForPublicPath(
+      SAMPLE_HTML,
+      "/?ref=taaft_feat&utm_source=taaft_feat&utm_medium=referral",
+      async () => undefined
+    );
+    expect(out).toContain('rel="canonical" href="https://spyreels.ai/"');
+    expect(out).toContain("Find Viral Instagram Reels and Generate Scripts");
+  });
+
+  it("injects extension meta with non-brand-first title", async () => {
+    const out = await enrichSpaHtmlForPublicPath(
+      SAMPLE_HTML,
+      "/extension",
+      async () => undefined
+    );
+    expect(out).toContain("<title>Chrome Extension for Instagram Reels | Sort, Transcribe, and Save</title>");
+    expect(out).toContain('rel="canonical" href="https://spyreels.ai/extension"');
+    expect(out).not.toContain("<title>SpyReels - Viral Instagram Reels Intelligence</title>");
+  });
+
+  it("strips query string from blog post canonical", async () => {
+    const out = await enrichSpaHtmlForPublicPath(
+      SAMPLE_HTML,
+      "/blog/guide-meedro-alternative?utm_source=test",
+      async () =>
+        ({
+          id: 1,
+          slug: "guide-meedro-alternative",
+          title: "Best Meedro Alternative",
+          content: "Body",
+          excerpt: "Excerpt",
+          metaTitle: "Best Meedro Alternative 2026 | SpyReels",
+          metaDescription: "Meta",
+          canonicalUrl: null,
+          ogImageUrl: null,
+          coverImageUrl: null,
+          noIndex: false,
+          status: "published",
+          publishedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: null,
+          sourceKeyword: null,
+          authorId: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }) as never
+    );
+    expect(out).toContain('rel="canonical" href="https://spyreels.ai/blog/guide-meedro-alternative"');
   });
 });
 

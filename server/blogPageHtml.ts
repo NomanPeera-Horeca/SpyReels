@@ -1,12 +1,15 @@
 import type { BlogPost } from "../drizzle/schema";
+import {
+  canonicalUrlForPathname,
+  getStaticPublicPageSeo,
+  isPrivateAppPath,
+  normalizePublicPathname,
+} from "../shared/publicPageMeta";
 
 const SITE_URL = "https://spyreels.ai";
 const DEFAULT_OG_IMAGE =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 
-const BLOG_INDEX_TITLE = "Instagram Reels Growth Blog - SpyReels";
-const BLOG_INDEX_DESCRIPTION =
-  "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.";
 
 export type PageHeadMeta = {
   title: string;
@@ -59,10 +62,13 @@ export function injectPageHeadMeta(html: string, meta: PageHeadMeta): string {
 }
 
 export function blogIndexHeadMeta(): PageHeadMeta {
+  const seo = getStaticPublicPageSeo("/blog");
   return {
-    title: BLOG_INDEX_TITLE,
-    description: BLOG_INDEX_DESCRIPTION,
-    canonical: `${SITE_URL}/blog`,
+    title: seo?.title ?? "Instagram Reels Growth Blog - SpyReels",
+    description:
+      seo?.description ??
+      "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.",
+    canonical: canonicalUrlForPathname("/blog"),
     ogImage: DEFAULT_OG_IMAGE,
     ogType: "website",
   };
@@ -87,9 +93,7 @@ export function blogPostHeadMeta(post: BlogPost): PageHeadMeta {
 
 /** Pathname from Express originalUrl (req.path is wrong under app.use("*")). */
 export function pathnameFromRequestUrl(originalUrl: string): string {
-  const withoutQuery = originalUrl.split("?")[0] ?? "/";
-  const withoutHash = withoutQuery.split("#")[0] ?? "/";
-  return withoutHash || "/";
+  return normalizePublicPathname(originalUrl);
 }
 
 export function parseBlogSlugFromPath(pathname: string): string | null {
@@ -265,26 +269,69 @@ export function injectBlogPostStructuredData(html: string, post: BlogPost): stri
   return html.replace("</head>", `    ${scripts.join("\n    ")}\n  </head>`);
 }
 
+function extractTitleFromHtml(html: string): string | null {
+  const match = /<title>([^<]*)<\/title>/i.exec(html);
+  return match?.[1]?.trim() || null;
+}
+
+function extractDescriptionFromHtml(html: string): string | null {
+  const match = /<meta\s+name="description"\s+content="([^"]*)"\s*\/?>/i.exec(html);
+  return match?.[1]?.trim() || null;
+}
+
+function injectCanonicalFallbackMeta(html: string, pathname: string): string {
+  const canonical = canonicalUrlForPathname(pathname);
+  return injectPageHeadMeta(html, {
+    title: extractTitleFromHtml(html) ?? "SpyReels",
+    description:
+      extractDescriptionFromHtml(html) ??
+      "SpyReels helps Instagram creators find viral Reels, transcribe them, and generate scripts.",
+    canonical,
+  });
+}
+
 export async function enrichSpaHtmlForPublicPath(
   html: string,
-  pathname: string,
+  originalUrl: string,
   loadPostBySlug: (slug: string) => Promise<BlogPost | undefined>
 ): Promise<string> {
-  if (pathname === "/blog" || pathname === "/blog/") {
+  const pathname = pathnameFromRequestUrl(originalUrl);
+  const hasQueryString = originalUrl.includes("?");
+
+  if (isPrivateAppPath(pathname)) {
+    return html;
+  }
+
+  if (pathname === "/blog") {
     return injectPageHeadMeta(html, blogIndexHeadMeta());
   }
 
   const slug = parseBlogSlugFromPath(pathname);
-  if (!slug) {
-    return html;
+  if (slug) {
+    const post = await loadPostBySlug(slug);
+    if (!post || post.status !== "published") {
+      return hasQueryString ? injectCanonicalFallbackMeta(html, pathname) : html;
+    }
+
+    let enriched = injectPageHeadMeta(html, blogPostHeadMeta(post));
+    enriched = injectBlogPostStructuredData(enriched, post);
+    return enriched;
   }
 
-  const post = await loadPostBySlug(slug);
-  if (!post || post.status !== "published") {
-    return html;
+  const staticSeo = getStaticPublicPageSeo(pathname);
+  if (staticSeo) {
+    return injectPageHeadMeta(html, {
+      title: staticSeo.title,
+      description: staticSeo.description,
+      canonical: staticSeo.canonical,
+      ogImage: DEFAULT_OG_IMAGE,
+      ogType: "website",
+    });
   }
 
-  let enriched = injectPageHeadMeta(html, blogPostHeadMeta(post));
-  enriched = injectBlogPostStructuredData(enriched, post);
-  return enriched;
+  if (hasQueryString) {
+    return injectCanonicalFallbackMeta(html, pathname);
+  }
+
+  return html;
 }

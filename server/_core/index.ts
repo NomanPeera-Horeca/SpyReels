@@ -112,6 +112,7 @@ async function startServer() {
       // Static pages
       const staticPages = [
         { loc: "/", priority: "1.0", changefreq: "weekly" },
+        { loc: "/extension", priority: "0.8", changefreq: "monthly" },
         { loc: "/free-tools", priority: "0.8", changefreq: "weekly" },
         { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
         { loc: "/features/viral-reel-finder", priority: "0.8", changefreq: "weekly" },

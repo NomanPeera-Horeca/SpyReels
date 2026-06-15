@@ -7,7 +7,17 @@ import {
   Check, ArrowLeft
 } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useCanonical } from "@/hooks/useCanonical";
+import {
+  applyStandardPageMeta,
+  SPYREELS_SITE_URL,
+} from "@/lib/publicSeo";
+
+const EXTENSION_TITLE = "Chrome Extension for Instagram Reels | Sort, Transcribe, and Save";
+const EXTENSION_DESCRIPTION =
+  "Sort any creator's Instagram Reels by views and engagement, transcribe hooks in one click, and save winners to your SpyReels dashboard while you browse.";
+const EXTENSION_CANONICAL = `${SPYREELS_SITE_URL}/extension`;
 
 const SPYREELS_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 const EXTENSION_ZIP = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/reels-dashboard-extension_3c447ef3.zip";
@@ -92,6 +102,15 @@ const FREE_VS_PRO = [
 
 export default function Extension() {
   const [downloading, setDownloading] = useState(false);
+  useCanonical("/extension");
+
+  useEffect(() => {
+    applyStandardPageMeta({
+      title: EXTENSION_TITLE,
+      description: EXTENSION_DESCRIPTION,
+      canonicalUrl: EXTENSION_CANONICAL,
+    });
+  }, []);
 
   const handleDownload = () => {
     setDownloading(true);
