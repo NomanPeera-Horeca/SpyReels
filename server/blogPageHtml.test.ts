@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { injectPageHeadMeta, parseBlogSlugFromPath } from "./blogPageHtml";
+import {
+  injectBlogPostStructuredData,
+  injectPageHeadMeta,
+  parseBlogSlugFromPath,
+  pathnameFromRequestUrl,
+} from "./blogPageHtml";
 
 const SAMPLE_HTML = `<!doctype html>
 <html>
@@ -36,6 +41,44 @@ describe("injectPageHeadMeta", () => {
     });
     expect(out).toContain("Test &amp; &quot;quotes&quot;");
     expect(out).not.toContain("<script>alert(1)</script>");
+  });
+});
+
+describe("pathnameFromRequestUrl", () => {
+  it("returns pathname without query or hash", () => {
+    expect(pathnameFromRequestUrl("/blog/guide-meedro-alternative")).toBe(
+      "/blog/guide-meedro-alternative"
+    );
+    expect(pathnameFromRequestUrl("/blog/foo?utm=1#section")).toBe("/blog/foo");
+  });
+});
+
+describe("injectBlogPostStructuredData", () => {
+  it("adds BlogPosting and Breadcrumb JSON-LD", () => {
+    const out = injectBlogPostStructuredData(SAMPLE_HTML, {
+      id: 1,
+      slug: "guide-meedro-alternative",
+      title: "Best Meedro Alternative",
+      content: "## Frequently asked questions\n\n### What is Meedro?\n\nA tool.",
+      excerpt: "Short excerpt",
+      metaTitle: null,
+      metaDescription: "Meta desc",
+      canonicalUrl: null,
+      ogImageUrl: null,
+      coverImageUrl: null,
+      noIndex: false,
+      status: "published",
+      publishedAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: null,
+      sourceKeyword: null,
+      authorId: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    } as never);
+
+    expect(out).toContain('id="blog-posting-schema"');
+    expect(out).toContain('"@type":"BlogPosting"');
+    expect(out).toContain('id="blog-breadcrumb-schema"');
+    expect(out).toContain('id="blog-faq-schema"');
   });
 });
 
