@@ -61,7 +61,8 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // index: false so "/" falls through to the SPA handler and gets SEO meta injection
+  app.use(express.static(distPath, { index: false }));
 
   const indexPath = path.resolve(distPath, "index.html");
   let cachedIndexHtml: string | null = null;
