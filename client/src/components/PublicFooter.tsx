@@ -22,7 +22,7 @@ export function PublicFooter() {
           <Link href="/" className="flex items-center gap-2">
             <img
               src={SPYREELS_LOGO}
-              alt="SpyReels"
+              alt="SpyReels logo, Instagram Reels spy tool"
               className="h-7 w-7"
             />
             <span className="font-semibold tracking-tight">SpyReels</span>

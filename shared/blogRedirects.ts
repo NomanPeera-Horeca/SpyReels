@@ -153,4 +153,9 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "guide-find-viral-reels-your-niche",
     "guide-how-to-go-viral-on-instagram-reels-2026",
   ],
+  "guide-spyreels-review-2026": [
+    "best-instagram-reels-tools-2026",
+    "guide-instagram-reels-spy-tool",
+    "spyreels-vs-meedro",
+  ],
 };

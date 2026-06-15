@@ -708,7 +708,7 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="relative rounded-xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/10 max-w-5xl mx-auto">
-            <img src={WORKFLOW_IMG} alt="SpyReels workflow" className="w-full" loading="lazy" />
+            <img src={WORKFLOW_IMG} alt="SpyReels Instagram Reels spy tool workflow from research to script" className="w-full" loading="lazy" />
           </div>
         </div>
       </section>

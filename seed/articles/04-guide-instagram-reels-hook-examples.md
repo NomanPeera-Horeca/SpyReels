@@ -73,7 +73,15 @@ Save hooks in categories: mistake, contrast, proof, story, stat, warning, checkl
 
 Read the hook aloud while walking. If you would not say it to a friend at dinner, rewrite it. Remove jargon. Remove cleverness that hides the point. Make the viewer feel seen in one sentence, not impressed in five.
 
-SpyReels is the practical layer behind collecting instagram reels hook examples: you can study what is actually winning in your niche, pull patterns fast, and move from “cool line” to “filmable script” without losing your voice. Hooks are only half the job. SpyReels helps you connect the hook to structure, proof, and a CTA that matches your business goals.
+SpyReels is the practical layer behind collecting instagram reels hook examples: you can study what is actually winning in your niche, pull patterns fast, and move from “cool line” to “filmable script” without losing your voice. Pair these examples with our [Instagram Reels hook ideas](/blog/guide-instagram-reels-hook-ideas-2026) guide and [Reels script generator](/blog/guide-instagram-reels-script-generator) workflow. For data-backed patterns, read [Instagram Reels hook patterns](/blog/guide-instagram-reels-hook-patterns-data). Hooks are only half the job. SpyReels helps you connect the hook to structure, proof, and a CTA that matches your business goals.
+
+## Related guides
+
+- [Instagram Reels hook ideas and templates](/blog/guide-instagram-reels-hook-ideas-2026)
+- [Instagram Reels script generator guide](/blog/guide-instagram-reels-script-generator)
+- [Instagram Reels script template](/blog/guide-instagram-reels-script-template)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement, or [try SpyReels free](https://spyreels.ai).
 
 ## Frequently Asked Questions
 

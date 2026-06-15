@@ -60,7 +60,15 @@ Keep three variants: teaching, selling, storytelling. Under each, save two worke
 
 Same template, five hooks, pick two to film. Hooks change outcomes more than minor word tweaks in the body. If you only write one hook, you are guessing. If you write five, you are choosing.
 
-SpyReels pairs well with an instagram reels script template workflow because it helps you start from proven structures in your niche instead of inventing structure from zero every time. You can study winners, extract patterns, and then run your template with better inputs. Templates make you fast. SpyReels makes your inputs smarter.
+SpyReels pairs well with an instagram reels script template workflow because it helps you start from proven structures in your niche instead of inventing structure from zero every time. You can study winners, extract patterns, and then run your template with better inputs. See the full [Reels script generator](/blog/guide-instagram-reels-script-generator) guide and [Instagram Reels hook examples](/blog/guide-instagram-reels-hook-examples) for fill-in patterns. Templates make you fast. SpyReels makes your inputs smarter.
+
+## Related guides
+
+- [Instagram Reels script generator guide](/blog/guide-instagram-reels-script-generator)
+- [Instagram Reels hook examples](/blog/guide-instagram-reels-hook-examples)
+- [Best Instagram Reels tools in 2026](/blog/best-instagram-reels-tools-2026)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement, or [try SpyReels free](https://spyreels.ai).
 
 ## Frequently Asked Questions
 

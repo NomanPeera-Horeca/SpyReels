@@ -52,7 +52,15 @@ Do a two-week trial like you mean it: log in three times, run your weekly review
 
 If you never write down what you learned, you will re-learn the same lesson every month. Keep a single doc: competitor wins, your wins, your losses, and the next three tests. The tool surfaces signal. Your notes turn signal into skill.
 
-SpyReels is built as an instagram reels analytics tool in the sense creators actually need: competitor intelligence tied to Reels performance signals, faster sorting than scrolling a profile, and a path from “I see what worked” to “I can write what to film.” You still make the creative calls. SpyReels helps you stop guessing in the dark.
+SpyReels is built as an instagram reels analytics tool in the sense creators actually need: competitor intelligence tied to Reels performance signals, faster sorting than scrolling a profile, and a path from “I see what worked” to “I can write what to film.” Compare workflows in [how to find viral Reels in your niche](/blog/guide-find-viral-reels-your-niche) and our [Instagram Reels spy tool](/blog/guide-instagram-reels-spy-tool) guide. You still make the creative calls. SpyReels helps you stop guessing in the dark.
+
+## Related guides
+
+- [How to find viral Reels in your niche](/blog/guide-find-viral-reels-your-niche)
+- [SpyReels vs ViralFindr](/blog/spyreels-vs-viralfindr)
+- [Best Instagram Reels tools in 2026](/blog/best-instagram-reels-tools-2026)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement, or [try SpyReels free](https://spyreels.ai).
 
 ## Frequently Asked Questions
 

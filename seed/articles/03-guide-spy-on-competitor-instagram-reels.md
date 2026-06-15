@@ -53,6 +53,14 @@ SpyReels pulls competitor Reels into a sortable view, surfaces what performed, a
 
 [Try SpyReels free](https://spyreels.ai) on your top three competitor accounts this week.
 
+## Related guides
+
+- [How to find viral Reels in your niche](/blog/guide-find-viral-reels-your-niche)
+- [How to reverse engineer viral Reels](/blog/guide-reverse-engineer-viral-reels)
+- [Best Instagram Reels tools in 2026](/blog/best-instagram-reels-tools-2026)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement.
+
 ## Frequently asked questions
 
 ### Is it legal to spy on competitor Instagram Reels?

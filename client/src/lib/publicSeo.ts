@@ -1,3 +1,5 @@
+import { DEFAULT_OG_IMAGE } from "../../../shared/defaultOgImage";
+
 export const SPYREELS_SITE_URL = "https://spyreels.ai";
 
 export const SPYREELS_LOGO_URL =
@@ -53,12 +55,12 @@ export function applyStandardPageMeta(options: {
   setPageDescription(options.description);
   setMeta("og:title", options.title);
   setMeta("og:description", options.description);
-  setMeta("og:image", SPYREELS_LOGO_URL);
+  setMeta("og:image", DEFAULT_OG_IMAGE);
   setMeta("og:url", options.canonicalUrl);
   setMeta("og:type", options.ogType ?? "website");
   setMeta("twitter:card", "summary_large_image", "name");
   setMeta("twitter:title", options.title, "name");
   setMeta("twitter:description", options.description, "name");
-  setMeta("twitter:image", SPYREELS_LOGO_URL, "name");
+  setMeta("twitter:image", DEFAULT_OG_IMAGE, "name");
   setMeta("robots", options.robots ?? "index, follow", "name");
 }

@@ -5,11 +5,10 @@ import {
   isPrivateAppPath,
   normalizePublicPathname,
 } from "../shared/publicPageMeta";
+import { getStaticPageJsonLdScripts } from "../shared/staticPageStructuredData";
+import { DEFAULT_OG_IMAGE } from "../shared/defaultOgImage";
 
 const SITE_URL = "https://spyreels.ai";
-const DEFAULT_OG_IMAGE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
-
 
 export type PageHeadMeta = {
   title: string;
@@ -188,6 +187,21 @@ function jsonLdScript(id: string, data: Record<string, unknown>): string {
   return `<script id="${id}" type="application/ld+json">${JSON.stringify(data)}</script>`;
 }
 
+export function injectStructuredDataScripts(
+  html: string,
+  scripts: Array<{ id: string; data: Record<string, unknown> }>
+): string {
+  if (scripts.length === 0) {
+    return html;
+  }
+  const tags = scripts.map((script) => jsonLdScript(script.id, script.data)).join("\n    ");
+  return html.replace("</head>", `    ${tags}\n  </head>`);
+}
+
+export function injectStaticPageStructuredData(html: string, pathname: string): string {
+  return injectStructuredDataScripts(html, getStaticPageJsonLdScripts(pathname));
+}
+
 export function injectBlogPostStructuredData(html: string, post: BlogPost): string {
   const canonicalHref = resolveCanonicalHref(post);
   const dateModified = post.updatedAt || post.publishedAt || new Date().toISOString();
@@ -320,13 +334,15 @@ export async function enrichSpaHtmlForPublicPath(
 
   const staticSeo = getStaticPublicPageSeo(pathname);
   if (staticSeo) {
-    return injectPageHeadMeta(html, {
+    let enriched = injectPageHeadMeta(html, {
       title: staticSeo.title,
       description: staticSeo.description,
       canonical: staticSeo.canonical,
       ogImage: DEFAULT_OG_IMAGE,
       ogType: "website",
     });
+    enriched = injectStaticPageStructuredData(enriched, pathname);
+    return enriched;
   }
 
   if (hasQueryString) {

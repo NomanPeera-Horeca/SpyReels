@@ -153,7 +153,15 @@ Clear audio beats cinematic lighting for talking head Reels. Captions help reten
 
 Ask before you film: "If this Reels hits, what do I want a stranger to do?" Follow, save, DM, visit link, or trust me for the next ten posts. Virality without a next step is fireworks. Pretty, then dark.
 
-SpyReels helps you run the research and scripting loop without losing hours to random scrolling. Add competitors, find winners with the viral reel finder, transcribe, map hooks, and draft scripts you can film this week. Start on the [free plan at SpyReels](https://spyreels.ai) if you want the spy-transcribe-script workflow without guessing.
+SpyReels helps you run the research and scripting loop without losing hours to random scrolling. Add competitors, find winners with the [viral reel finder](/features/viral-reel-finder), transcribe, map hooks, and draft scripts you can film this week. Continue with [how to spy on competitor Instagram Reels](/blog/guide-spy-on-competitor-instagram-reels) and [Instagram Reels hook ideas](/blog/guide-instagram-reels-hook-ideas-2026). Start on the [free plan at SpyReels](https://spyreels.ai) if you want the spy-transcribe-script workflow without guessing.
+
+## Related guides
+
+- [How to spy on competitor Instagram Reels](/blog/guide-spy-on-competitor-instagram-reels)
+- [How to reverse engineer viral Reels](/blog/guide-reverse-engineer-viral-reels)
+- [Grow Instagram Reels under 10K followers](/blog/guide-grow-instagram-reels-under-10k)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement.
 
 ## Frequently asked questions
 

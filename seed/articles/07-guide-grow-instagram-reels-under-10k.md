@@ -60,7 +60,15 @@ Post twenty Reels in thirty days, minimum. Same niche sentence every time. Each 
 
 Under ten thousand followers, the scoreboard is skill and learning speed, not fame. If you compare your week three to someone’s year three, you will feel behind every time. Compare this week to last week: clearer hook, better proof, stronger CTA, faster filming.
 
-SpyReels helps creators who are figuring out how to grow instagram with reels under 10k followers by making competitor research and script structure faster. You can see what is winning in your niche, learn the shape of those winners, and turn patterns into scripts you can film this week. Growth still takes reps. SpyReels makes the reps smarter.
+SpyReels helps creators who are figuring out how to grow instagram with reels under 10k followers by making competitor research and script structure faster. You can see what is winning in your niche, learn the shape of those winners, and turn patterns into scripts you can film this week. Stack this with our [Instagram Reels content strategy under 10K](/blog/guide-instagram-reels-content-strategy-under-10k) guide and [best time to post Reels in 2026](/blog/guide-best-time-to-post-reels-2026). Growth still takes reps. SpyReels makes the reps smarter.
+
+## Related guides
+
+- [Best time to post Reels in 2026](/blog/guide-best-time-to-post-reels-2026)
+- [Why your Reels get no views](/blog/guide-why-reels-get-no-views)
+- [How to reverse engineer viral Reels](/blog/guide-reverse-engineer-viral-reels)
+
+Use the [viral reel finder](/features/viral-reel-finder) to rank competitor Reels by views and engagement, or [try SpyReels free](https://spyreels.ai).
 
 ## Frequently Asked Questions
 

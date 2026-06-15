@@ -28,6 +28,16 @@ const SLUG_CTA_MAP: Record<
   string,
   { midCta: "default" | "spy" | "script"; leadMagnet: "template" | "checklist" | "guide" }
 > = {
+  "guide-instagram-reels-spy-tool": { midCta: "spy", leadMagnet: "guide" },
+  "guide-spy-on-competitor-instagram-reels": { midCta: "spy", leadMagnet: "guide" },
+  "guide-find-viral-reels-your-niche": { midCta: "spy", leadMagnet: "guide" },
+  "guide-instagram-reels-analytics-tool": { midCta: "spy", leadMagnet: "checklist" },
+  "guide-meedro-alternative": { midCta: "spy", leadMagnet: "guide" },
+  "guide-viralfindr-alternative": { midCta: "spy", leadMagnet: "guide" },
+  "guide-how-to-go-viral-on-instagram-reels-2026": { midCta: "script", leadMagnet: "guide" },
+  "guide-instagram-reels-hook-ideas-2026": { midCta: "script", leadMagnet: "template" },
+  "guide-instagram-reels-script-generator": { midCta: "script", leadMagnet: "template" },
+  "best-instagram-reels-tools-2026": { midCta: "spy", leadMagnet: "guide" },
   "how-to-transcribe-instagram-reels-automatically": { midCta: "default", leadMagnet: "checklist" },
   "spy-on-competitor-instagram-reels-strategy": { midCta: "spy", leadMagnet: "guide" },
   "viral-instagram-reel-hook-formulas": { midCta: "script", leadMagnet: "template" },
@@ -326,7 +336,13 @@ function BlogPostView({ slug }: { slug: string }) {
       ),
       ul: ({ children }: any) => <ul className="list-disc pl-6 space-y-2 text-[17px] leading-[1.8] text-muted-foreground mb-5">{children}</ul>,
       ol: ({ children }: any) => <ol className="list-decimal pl-6 space-y-2 text-[17px] leading-[1.8] text-muted-foreground mb-5">{children}</ol>,
-      img: ({ ...props }: any) => <img {...props} className="rounded-xl border border-border/50 my-8 w-full" />,
+      img: ({ alt, ...props }: any) => (
+        <img
+          {...props}
+          alt={alt || post?.title || "SpyReels blog illustration"}
+          className="rounded-xl border border-border/50 my-8 w-full"
+        />
+      ),
       code: ({ inline, className, children, ...props }: any) => {
         const match = /language-(\w+)/.exec(className || "");
         const code = String(children).replace(/\n$/, "");
@@ -365,7 +381,7 @@ function BlogPostView({ slug }: { slug: string }) {
         <td className="px-4 py-3 text-left text-muted-foreground align-top">{children}</td>
       ),
     }),
-    []
+    [post?.title]
   );
 
   useEffect(() => {

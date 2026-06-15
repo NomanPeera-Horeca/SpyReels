@@ -34,7 +34,7 @@ export function PublicHeader() {
             <Link href="/" className="flex items-center gap-3">
               <img
                 src={SPYREELS_LOGO}
-                alt="SpyReels"
+                alt="SpyReels logo, Instagram Reels spy tool"
                 className="h-9 w-9"
               />
               <span className="text-lg font-semibold tracking-tight">

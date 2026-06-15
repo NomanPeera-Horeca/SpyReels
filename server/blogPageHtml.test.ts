@@ -6,6 +6,7 @@ import {
   parseBlogSlugFromPath,
   pathnameFromRequestUrl,
 } from "./blogPageHtml";
+import { STATIC_PAGE_JSON_LD_PATHS } from "../shared/staticPageStructuredData";
 
 const SAMPLE_HTML = `<!doctype html>
 <html>
@@ -132,6 +133,33 @@ describe("enrichSpaHtmlForPublicPath", () => {
     );
     expect(out).toContain('rel="canonical" href="https://spyreels.ai/blog/guide-meedro-alternative"');
   });
+
+  it.each(STATIC_PAGE_JSON_LD_PATHS)(
+    "injects server-side JSON-LD for static page %s",
+    async (pathname) => {
+      const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, pathname, async () => undefined);
+      expect(out).toContain('type="application/ld+json"');
+      if (pathname === "/") {
+        expect(out).toContain('id="home-software-schema"');
+        expect(out).toContain('id="home-faq-schema"');
+        expect(out).toContain('"@type":"SoftwareApplication"');
+      }
+      if (pathname === "/pricing") {
+        expect(out).toContain('id="pricing-product-schema"');
+        expect(out).toContain('id="pricing-faq-schema"');
+      }
+      if (pathname === "/features/viral-reel-finder") {
+        expect(out).toContain('id="finder-software-schema"');
+        expect(out).toContain('id="finder-faq-schema"');
+      }
+      if (pathname === "/free-tools/viral-hooks") {
+        expect(out).toContain('id="hooks-software-schema"');
+      }
+      if (pathname === "/affiliate") {
+        expect(out).toContain('id="affiliate-faq-schema"');
+      }
+    }
+  );
 });
 
 describe("parseBlogSlugFromPath", () => {
