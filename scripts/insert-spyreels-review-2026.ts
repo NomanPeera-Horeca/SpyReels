@@ -9,8 +9,8 @@ import { config } from "dotenv";
 import { existsSync, readFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
-import { eq } from "drizzle-orm";
-import { blogPosts } from "../drizzle/schema";
+import { asc, eq } from "drizzle-orm";
+import { blogPosts, users } from "../drizzle/schema";
 import { createBlogPost, getDb } from "../server/db";
 
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -72,9 +72,17 @@ async function main() {
     return;
   }
 
+  const firstUser = await db.select({ id: users.id }).from(users).orderBy(asc(users.id)).limit(1);
+  const authorId = firstUser[0]?.id;
+  if (!authorId) {
+    throw new Error("No users found for authorId");
+  }
+
   const id = await createBlogPost({
     ...POST,
+    authorId,
     content,
+    ogImageUrl: POST.coverImageUrl,
     status: "published",
     publishedAt: new Date(),
     noIndex: false,
