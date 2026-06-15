@@ -232,7 +232,9 @@ export default function HookGenerator() {
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full"
+                  className={`w-full gap-2${
+                    generateMutation.isPending ? " animate-pulse bg-primary/90" : ""
+                  }`}
                   disabled={
                     generateMutation.isPending ||
                     niche.trim().length < 2 ||
@@ -241,13 +243,13 @@ export default function HookGenerator() {
                 >
                   {generateMutation.isPending ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                       Generating your hooks...
                     </>
                   ) : (
                     <>
+                      <Sparkles className="h-4 w-4" />
                       Generate Viral Hooks
-                      <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
                 </Button>

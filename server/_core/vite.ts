@@ -61,8 +61,40 @@ export function serveStatic(app: Express) {
     );
   }
 
+  const htmlNoCacheHeaders = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+
+  // SPA shell routes: always revalidate so browsers pick up the latest chunk manifest
+  app.use((req, res, next) => {
+    if (req.path === "/" || !req.path.includes(".")) {
+      res.setHeader("Cache-Control", htmlNoCacheHeaders["Cache-Control"]);
+      res.setHeader("Pragma", htmlNoCacheHeaders.Pragma);
+      res.setHeader("Expires", htmlNoCacheHeaders.Expires);
+    }
+    next();
+  });
+
   // index: false so "/" falls through to the SPA handler and gets SEO meta injection
-  app.use(express.static(distPath, { index: false }));
+  app.use(
+    express.static(distPath, {
+      index: false,
+      maxAge: "1y",
+      setHeaders(res, filePath) {
+        if (filePath.endsWith(`${path.sep}index.html`)) {
+          res.setHeader("Cache-Control", htmlNoCacheHeaders["Cache-Control"]);
+          res.setHeader("Pragma", htmlNoCacheHeaders.Pragma);
+          res.setHeader("Expires", htmlNoCacheHeaders.Expires);
+          return;
+        }
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
 
   const indexPath = path.resolve(distPath, "index.html");
   let cachedIndexHtml: string | null = null;
@@ -79,9 +111,13 @@ export function serveStatic(app: Express) {
     try {
       let html = await readIndexHtml();
       html = await enrichSpaHtmlForPublicPath(html, req.originalUrl, getBlogPostBySlug);
-      res.status(200).set({ "Content-Type": "text/html" }).end(html);
+      res
+        .status(200)
+        .set({ "Content-Type": "text/html", ...htmlNoCacheHeaders })
+        .end(html);
     } catch (err) {
       console.error("[SPA] Failed to serve index.html:", err);
+      res.set(htmlNoCacheHeaders);
       res.sendFile(indexPath);
     }
   });
