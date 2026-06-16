@@ -139,7 +139,7 @@ const STEPS = [
   },
   {
     number: "02",
-    title: 'Hit "Remake in your voice" on the one that blew up',
+    title: 'Hit "Remake this into your voice" on the one that blew up',
     description:
       "One click. SpyReels transcribes it word for word and writes your version automatically: hook, script, delivery cues. Done in under 2 minutes.",
     icon: BarChart3,

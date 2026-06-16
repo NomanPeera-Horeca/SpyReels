@@ -152,36 +152,31 @@ export default function OnboardingPage() {
         <section>
           <header className="mb-6 space-y-3">
             <h1 className="text-4xl tracking-tight">
-              What are you <span className="italic text-primary">into</span>?
+              What do you <span className="italic text-primary">create</span>?
             </h1>
             <p className="max-w-2xl text-muted-foreground">
-              Pick all niches you&apos;re interested in: what you create, admire, or want to
-              learn from.{" "}
-              <span className="text-foreground">The more we know, the smarter our recommendations get.</span>
+              Pick your niche and SpyReels will show you the top viral creators in your space,
+              ready to remix.
             </p>
           </header>
 
           <div
-            className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+            className={`mb-6 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${
               selectedNiches.length > 0 ? "border-primary/30 bg-primary/5" : "border-border bg-card"
             }`}
           >
             <div className="flex items-center gap-3">
-              <span
-                className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 font-mono text-xs ${
-                  selectedNiches.length > 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {selectedNiches.length}
-              </span>
-              <span className="text-sm">
-                {`${selectedNiches.length} of ${MAX_NICHES} niches selected`}
-              </span>
+              {selectedNiches.length > 0 ? (
+                <>
+                  <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 font-mono text-xs text-primary-foreground">
+                    {selectedNiches.length}
+                  </span>
+                  <span className="text-sm">{selectedNiches.length} selected</span>
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">Pick your niche</span>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-primary">Tip:</span> Pick up to 5 niches. The more we know, the
-              smarter our recommendations
-            </p>
           </div>
 
           <div className="relative mb-5 max-w-lg">
@@ -231,6 +226,11 @@ export default function OnboardingPage() {
               })}
             </div>
           )}
+          {selectedNiches.length === 0 ? (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Select at least one to continue
+            </p>
+          ) : null}
         </section>
 
         <div className="sticky bottom-0 mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/90 px-1 py-4 backdrop-blur">

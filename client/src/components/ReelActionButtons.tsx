@@ -100,6 +100,9 @@ export interface ReelActionButtonsProps {
    * single primary CTA from parent (Dashboard grid user-job).
    */
   oneClickRemake?: OneClickRemakeAction;
+
+  /** New-user dashboard: filled primary CTA + secondary save below. */
+  firstVisitMode?: boolean;
 }
 
 export type OneClickRemakeAction = {
@@ -144,18 +147,35 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     onRemoveFromCollection,
     removeFromCollectionBusy,
     oneClickRemake,
+    firstVisitMode = false,
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
+  const showFirstVisitSaveSecondary =
+    firstVisitMode &&
+    oneClickRemake &&
+    oneClickRemake.label === "Remake this into your voice" &&
+    !hideBookmark &&
+    !collectionMode;
+  const useFilledPrimary =
+    firstVisitMode &&
+    oneClickRemake &&
+    oneClickRemake.tone !== "inspiration" &&
+    oneClickRemake.tone !== "ready" &&
+    oneClickRemake.label !== "No voice";
 
   return (
     <div
-      className={`flex items-center gap-0.5 sm:gap-1 flex-wrap justify-end ${
-        oneClickRemake ? "w-full" : "shrink-0"
+      className={`${
+        firstVisitMode && oneClickRemake
+          ? "flex w-full flex-col items-stretch gap-1.5"
+          : `flex items-center gap-0.5 sm:gap-1 flex-wrap justify-end ${
+              oneClickRemake ? "w-full" : "shrink-0"
+            }`
       }`}
       onClick={(e) => e.stopPropagation()}
     >
-      {!hideBookmark && !collectionMode && (
+      {!hideBookmark && !collectionMode && !firstVisitMode && (
         <Button
           variant="ghost"
           size="sm"
@@ -173,34 +193,62 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
       )}
 
       {oneClickRemake ? (
-        <Tooltip content={oneClickRemake.tooltip ?? oneClickRemake.label}>
-          <span className="block w-full">
+        <>
+          <Tooltip content={oneClickRemake.tooltip ?? oneClickRemake.label}>
+            <span className="block w-full">
+              <Button
+                type="button"
+                variant={useFilledPrimary ? "default" : "outline"}
+                size={firstVisitMode ? "default" : "sm"}
+                className={
+                  useFilledPrimary
+                    ? "h-9 w-full justify-center text-sm font-semibold"
+                    : firstVisitMode && oneClickRemake.tone === "inspiration"
+                      ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                      : `h-7 text-xs px-3 w-full justify-center ${
+                          oneClickRemake.tone === "ready"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+                            : oneClickRemake.tone === "inspiration"
+                              ? "border-primary/30 text-primary hover:bg-primary/10"
+                              : "border-primary/30 text-primary hover:bg-primary/10"
+                        }`
+                }
+                disabled={oneClickRemake.disabled}
+                onClick={oneClickRemake.onClick}
+                title={oneClickRemake.tooltip ?? oneClickRemake.label}
+              >
+                {oneClickRemake.loading ? (
+                  <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+                ) : oneClickRemake.tone === "inspiration" ? (
+                  <Bookmark className="h-3 w-3 sm:mr-1" />
+                ) : (
+                  <Wand2 className="h-3 w-3 sm:mr-1" />
+                )}
+                <span>{oneClickRemake.label}</span>
+              </Button>
+            </span>
+          </Tooltip>
+          {showFirstVisitSaveSecondary ? (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className={`h-7 text-xs px-3 w-full justify-center ${
-                oneClickRemake.tone === "ready"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
-                  : oneClickRemake.tone === "inspiration"
-                    ? "border-primary/30 text-primary hover:bg-primary/10"
-                    : "border-primary/30 text-primary hover:bg-primary/10"
+              className={`h-7 w-full justify-center text-xs ${
+                isSaved ? "text-primary" : "text-muted-foreground"
               }`}
-              disabled={oneClickRemake.disabled}
-              onClick={oneClickRemake.onClick}
-              title={oneClickRemake.tooltip ?? oneClickRemake.label}
+              onClick={onToggleSave}
+              disabled={!!saveBusy}
+              title={isSaved ? "Saved for inspiration" : "Save for Inspiration"}
             >
-              {oneClickRemake.loading ? (
-                <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-              ) : oneClickRemake.tone === "inspiration" ? (
-                <Bookmark className="h-3 w-3 sm:mr-1" />
+              {isSaved ? (
+                <BookmarkCheck className="h-3.5 w-3.5 mr-1" />
               ) : (
-                <Wand2 className="h-3 w-3 sm:mr-1" />
+                <Bookmark className="h-3.5 w-3.5 mr-1" />
               )}
-              <span>{oneClickRemake.label}</span>
+              <span>{isSaved ? "Saved" : "Save for Inspiration"}</span>
             </Button>
-          </span>
-        </Tooltip>
+          ) : null}
+        </>
       ) : (
         <>
       {hasTranscription ? (

@@ -1890,6 +1890,7 @@ export default function Dashboard() {
     (job.classifiedConfidence === "high" ||
       job.classifiedConfidence === "medium" ||
       job.classifiedConfidence === "low");
+  const isFirstVisitDashboard = user?.hasCompletedFirstSpy === false;
 
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
@@ -2163,6 +2164,8 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
               {canDisplayJobReels && reelsData.length > 0 && (
                 <>
+                  {!isFirstVisitDashboard ? (
+                    <>
                   <Tooltip content="Filter reels by date posted">
                     <div>
                       <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -2219,6 +2222,8 @@ export default function Dashboard() {
                       </Select>
                     </div>
                   </Tooltip>
+                    </>
+                  ) : null}
 
                   <Tooltip content="Switch between detailed list and visual grid view">
                     <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
@@ -2621,6 +2626,7 @@ export default function Dashboard() {
                           isQueued={isTxQueued}
                           isNoSpeech={isNoSpeech}
                           oneClickRemake={oneClickRemake}
+                          firstVisitMode={isFirstVisitDashboard}
                           onToggleSave={() => {
                             if (isFeaturedView) {
                               toggleSave.mutate({ featuredReelId: reel.id });
@@ -2820,7 +2826,7 @@ export default function Dashboard() {
                             isSaved
                               ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
                               : "bg-black/55 text-white/90 hover:bg-black/75"
-                          }`}
+                          } ${isFirstVisitDashboard ? "hidden" : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (isFeaturedView) {
@@ -2942,6 +2948,7 @@ export default function Dashboard() {
                             hideBookmark
                             hideExternalLink
                             oneClickRemake={oneClickRemake}
+                            firstVisitMode={isFirstVisitDashboard}
                             onToggleSave={() =>
                               isFeaturedView
                                 ? toggleSave.mutate({ featuredReelId: reel.id })
@@ -3011,7 +3018,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
-              {showRelatedPanel && (
+              {showRelatedPanel && !isFirstVisitDashboard && (
                 relatedPanelLoading ? (
                   <div className="rounded-xl border border-border/40 bg-card p-4">
                     <div className="h-5 w-48 bg-muted rounded animate-pulse" />

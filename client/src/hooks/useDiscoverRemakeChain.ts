@@ -444,6 +444,6 @@ export function remakeButtonLabel(state: DiscoverRemakeState): string {
     case "error":
       return "Retry";
     default:
-      return "Remake now";
+      return "Remake this into your voice";
   }
 }

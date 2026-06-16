@@ -197,6 +197,14 @@ export default function Home() {
     () => new Map(allNiches.map((niche) => [niche.slug, niche.name])),
     [allNiches]
   );
+  const visibleNicheTabs = useMemo(() => {
+    if (!prioritizeFeatured) return allNiches;
+    const fromOnboarding = (onboardingStateQuery.data?.selectedNicheSlugs ?? [])
+      .map((slug) => allNiches.find((niche) => niche.slug === slug))
+      .filter((niche): niche is NicheRow => niche != null);
+    if (fromOnboarding.length > 0) return fromOnboarding.slice(0, 5);
+    return allNiches.slice(0, 5);
+  }, [allNiches, onboardingStateQuery.data?.selectedNicheSlugs, prioritizeFeatured]);
 
   const accountsBySelectedNicheQuery = trpc.featured.accountsByNiche.useQuery(
     { nicheSlug: selectedNicheSlug },
@@ -464,17 +472,11 @@ export default function Home() {
             Spy Viral Reels
           </h1>
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          Enter a public Instagram handle and select a timeframe to collect all
-          Reels data including views, likes, comments, and more.
-        </p>
       </div>
 
       {showHintCard && (
         <p className="mb-5 text-sm font-medium text-muted-foreground">
-          Pick a creator below to see their top viral reels, then hit{" "}
-          <span className="font-semibold text-foreground">&quot;Remake in your voice&quot;</span>{" "}
-          to get your first script.
+          Pick a creator to get your first viral script.
         </p>
       )}
 
@@ -809,37 +811,32 @@ export default function Home() {
         id="featured-creators"
         className={"scroll-mt-24 " + (prioritizeFeatured ? "order-1" : "order-3")}
       >
-        <div className="mb-5">
-          <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-primary">
-            Instant research · No waiting
-          </span>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-            {prioritizeFeatured
-              ? "Start here: top viral creators"
-              : "Or spy on top viral creators"}
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Hand-picked creators with massive audiences. Their top viral reels
-            are already analyzed and ready.
-          </p>
-        </div>
+        {!prioritizeFeatured ? (
+          <div className="mb-5">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
+              Or spy on top viral creators
+            </h2>
+          </div>
+        ) : null}
 
         <div className="sticky top-0 z-10 mb-5 -mx-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur">
           <div className="flex w-max gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedNicheSlug("all")}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                selectedNicheSlug === "all"
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Tooltip content="Show every featured creator across all niches">
-                <span>All niches</span>
-              </Tooltip>
-            </button>
-            {allNiches.map((niche) => (
+            {!prioritizeFeatured ? (
+              <button
+                type="button"
+                onClick={() => setSelectedNicheSlug("all")}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  selectedNicheSlug === "all"
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Tooltip content="Show every featured creator across all niches">
+                  <span>All niches</span>
+                </Tooltip>
+              </button>
+            ) : null}
+            {visibleNicheTabs.map((niche) => (
               <button
                 key={niche.slug}
                 type="button"
@@ -874,18 +871,20 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="mb-4 flex items-center justify-between">
-          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            {selectedNicheSlug === "all"
-              ? "Top creators"
-              : `Top creators · ${(
-                  nicheNameBySlug.get(selectedNicheSlug) ?? selectedNicheSlug
-                ).toUpperCase()}`}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Sort: Followers (high to low)
-          </span>
-        </div>
+        {!prioritizeFeatured ? (
+          <div className="mb-4 flex items-center justify-between">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+              {selectedNicheSlug === "all"
+                ? "Top creators"
+                : `Top creators · ${(
+                    nicheNameBySlug.get(selectedNicheSlug) ?? selectedNicheSlug
+                  ).toUpperCase()}`}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Sort: Followers (high to low)
+            </span>
+          </div>
+        ) : null}
 
         {featuredLoading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -957,9 +956,11 @@ export default function Home() {
                 }}
                 className="rounded-xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/90"
               >
-                <div className="mb-3 inline-flex rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
-                  {creator.nicheName}
-                </div>
+                {!prioritizeFeatured ? (
+                  <div className="mb-3 inline-flex rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
+                    {creator.nicheName}
+                  </div>
+                ) : null}
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
                     <FeaturedProfileAvatar profilePicUrl={creator.profilePicUrl} handle={creator.handle} />

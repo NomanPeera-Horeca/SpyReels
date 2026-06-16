@@ -126,7 +126,7 @@ export function buildLibraryOneClickRemake(args: {
     };
   }
   return {
-    label: "Remake in your voice",
+    label: "Remake this into your voice",
     onClick: () => void args.startRemake(librarySource, startOpts),
   };
 }
