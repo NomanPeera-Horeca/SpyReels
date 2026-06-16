@@ -470,56 +470,13 @@ export default function Home() {
         </p>
       </div>
 
-      {showHintCard ? (
-        <div className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-primary">New to SpyReels?</p>
-              <p className="text-xs text-muted-foreground">
-                Get your first viral script in 3 minutes.
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
-              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                1
-              </span>
-              <p>
-                {prioritizeFeatured ? (
-                  <>
-                    <span className="font-medium text-foreground">Pick a creator.</span> Tap a
-                    featured creator above, or type any public handle below.
-                  </>
-                ) : (
-                  <>
-                    <span className="font-medium text-foreground">Pick a creator.</span> Type any
-                    @handle or click a featured viral creator below.
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
-              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                2
-              </span>
-              <p>
-                <span className="font-medium text-foreground">See viral reels instantly.</span>{" "}
-                Sort by engagement, views, or date.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
-              <span className="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                3
-              </span>
-              <p>
-                <span className="font-medium text-foreground">Hit &quot;Remake in your voice&quot; on any Reel.</span>{" "}
-                One click. SpyReels transcribes it and writes a script in your voice automatically.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {showHintCard && (
+        <p className="mb-5 text-sm font-medium text-muted-foreground">
+          Pick a creator below to see their top viral reels, then hit{" "}
+          <span className="font-semibold text-foreground">&quot;Remake in your voice&quot;</span>{" "}
+          to get your first script.
+        </p>
+      )}
 
       <div className="flex flex-col">
       <div
@@ -994,7 +951,10 @@ export default function Home() {
               <button
                 key={creator.id}
                 type="button"
-                onClick={() => setLocation(`/dashboard?featuredAccountId=${creator.id}`)}
+                onClick={() => {
+                  if (showHintCard) void dismissHint();
+                  setLocation(`/dashboard?featuredAccountId=${creator.id}`);
+                }}
                 className="rounded-xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/90"
               >
                 <div className="mb-3 inline-flex rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
