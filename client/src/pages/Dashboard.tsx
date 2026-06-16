@@ -2509,8 +2509,12 @@ export default function Dashboard() {
                   >
                     {/* Reel Row */}
                     <div
-                      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
-                        isExpanded ? "bg-card border-b border-border/30" : ""
+                      className={`${
+                        isFirstVisitDashboard
+                          ? "flex flex-col gap-3 p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer"
+                          : `flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
+                              isExpanded ? "bg-card border-b border-border/30" : ""
+                            }`
                       }`}
                       onClick={() => {
                         if (isExpanded) {
@@ -2520,6 +2524,7 @@ export default function Dashboard() {
                         }
                       }}
                     >
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                       {/* Rank */}
                       <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
                         {index + 1}
@@ -2606,51 +2611,90 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Actions  -  delegated to the shared ReelActionButtons
-                          (Commit 5) so List + Grid call identical mutations. */}
-                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end">
-                        <ReelActionButtons
-                          source={
-                            isFeaturedView
-                              ? { source: "featured", featuredReelId: reel.id }
-                              : { source: "user_job", reelId: reel.id, jobId: jobId! }
-                          }
-                          reelId={reel.id}
-                          reelUrl={reel.reelUrl}
-                          isSaved={isSaved}
-                          hasTranscription={hasTranscription}
-                          isProcessing={isProcessingForStrip}
-                          isFailed={isFailed}
-                          recreateState={recreateSt}
-                          saveBusy={toggleSave.isPending}
-                          isQueued={isTxQueued}
-                          isNoSpeech={isNoSpeech}
-                          oneClickRemake={oneClickRemake}
-                          firstVisitMode={isFirstVisitDashboard}
-                          onToggleSave={() => {
-                            if (isFeaturedView) {
-                              toggleSave.mutate({ featuredReelId: reel.id });
-                            } else {
-                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
-                            }
-                          }}
-                          onTranscribe={() => {}}
-                          onExpand={() => setExpandedReelId(reel.id)}
-                          onMakeVersion={() => {}}
-                          onOpenMyScript={() => {}}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedReelId(isExpanded ? null : reel.id);
-                          }}
+                      {!isFirstVisitDashboard ? (
+                        <div
+                          className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </Button>
+                          <ReelActionButtons
+                            source={
+                              isFeaturedView
+                                ? { source: "featured", featuredReelId: reel.id }
+                                : { source: "user_job", reelId: reel.id, jobId: jobId! }
+                            }
+                            reelId={reel.id}
+                            reelUrl={reel.reelUrl}
+                            isSaved={isSaved}
+                            hasTranscription={hasTranscription}
+                            isProcessing={isProcessingForStrip}
+                            isFailed={isFailed}
+                            recreateState={recreateSt}
+                            saveBusy={toggleSave.isPending}
+                            isQueued={isTxQueued}
+                            isNoSpeech={isNoSpeech}
+                            oneClickRemake={oneClickRemake}
+                            firstVisitMode={isFirstVisitDashboard}
+                            onToggleSave={() => {
+                              if (isFeaturedView) {
+                                toggleSave.mutate({ featuredReelId: reel.id });
+                              } else {
+                                toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                              }
+                            }}
+                            onTranscribe={() => {}}
+                            onExpand={() => setExpandedReelId(reel.id)}
+                            onMakeVersion={() => {}}
+                            onOpenMyScript={() => {}}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-muted-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedReelId(isExpanded ? null : reel.id);
+                            }}
+                          >
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      ) : null}
                       </div>
+
+                      {isFirstVisitDashboard ? (
+                        <div className="w-full" onClick={(e) => e.stopPropagation()}>
+                          <ReelActionButtons
+                            source={
+                              isFeaturedView
+                                ? { source: "featured", featuredReelId: reel.id }
+                                : { source: "user_job", reelId: reel.id, jobId: jobId! }
+                            }
+                            reelId={reel.id}
+                            reelUrl={reel.reelUrl}
+                            isSaved={isSaved}
+                            hasTranscription={hasTranscription}
+                            isProcessing={isProcessingForStrip}
+                            isFailed={isFailed}
+                            recreateState={recreateSt}
+                            saveBusy={toggleSave.isPending}
+                            isQueued={isTxQueued}
+                            isNoSpeech={isNoSpeech}
+                            oneClickRemake={oneClickRemake}
+                            firstVisitMode={isFirstVisitDashboard}
+                            onToggleSave={() => {
+                              if (isFeaturedView) {
+                                toggleSave.mutate({ featuredReelId: reel.id });
+                              } else {
+                                toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                              }
+                            }}
+                            onTranscribe={() => {}}
+                            onExpand={() => setExpandedReelId(reel.id)}
+                            onMakeVersion={() => {}}
+                            onOpenMyScript={() => {}}
+                          />
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Expanded inline workflow panel  -  same component now

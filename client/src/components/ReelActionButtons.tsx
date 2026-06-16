@@ -11,6 +11,7 @@ import {
   Info,
 } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
+import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
 
 /**
  * Discriminated source so a single callsite can't accidentally pass the
@@ -151,11 +152,15 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
   } = props;
 
   const labelClass = compact ? "hidden md:inline" : "hidden sm:inline";
+  const isRemakeCta = oneClickRemake?.label === LIBRARY_REMAKE_CTA_LABEL;
+  const isActiveRemake =
+    oneClickRemake?.loading ||
+    (oneClickRemake?.label?.startsWith("Transcribing") ?? false) ||
+    (oneClickRemake?.label?.startsWith("Generating") ?? false);
   const showFirstVisitSaveSecondary =
     firstVisitMode &&
     oneClickRemake &&
-    oneClickRemake.label === "Remake this into your voice" &&
-    !hideBookmark &&
+    (isRemakeCta || isActiveRemake) &&
     !collectionMode;
   const useFilledPrimary =
     firstVisitMode &&
@@ -163,6 +168,10 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     oneClickRemake.tone !== "inspiration" &&
     oneClickRemake.tone !== "ready" &&
     oneClickRemake.label !== "No voice";
+  const firstVisitPrimaryBtnClass =
+    "min-h-9 h-auto w-full justify-center px-2.5 py-2 text-xs font-semibold leading-snug whitespace-normal text-center";
+  const inspirationOnlyFirstVisit =
+    firstVisitMode && oneClickRemake?.tone === "inspiration";
 
   return (
     <div
@@ -198,14 +207,22 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
             <span className="block w-full">
               <Button
                 type="button"
-                variant={useFilledPrimary ? "default" : "outline"}
+                variant={
+                  inspirationOnlyFirstVisit
+                    ? "ghost"
+                    : useFilledPrimary
+                      ? "default"
+                      : "outline"
+                }
                 size={firstVisitMode ? "default" : "sm"}
                 className={
-                  useFilledPrimary
-                    ? "h-9 w-full justify-center text-sm font-semibold"
-                    : firstVisitMode && oneClickRemake.tone === "inspiration"
-                      ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                      : `h-7 text-xs px-3 w-full justify-center ${
+                  inspirationOnlyFirstVisit
+                    ? "h-7 w-full justify-center text-xs text-muted-foreground hover:text-foreground"
+                    : useFilledPrimary
+                      ? firstVisitPrimaryBtnClass
+                      : firstVisitMode && oneClickRemake.tone === "inspiration"
+                        ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                        : `h-7 text-xs px-3 w-full justify-center ${
                           oneClickRemake.tone === "ready"
                             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
                             : oneClickRemake.tone === "inspiration"
@@ -218,12 +235,12 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                 title={oneClickRemake.tooltip ?? oneClickRemake.label}
               >
                 {oneClickRemake.loading ? (
-                  <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+                  <Loader2 className="h-3 w-3 shrink-0 sm:mr-1 animate-spin" />
                 ) : oneClickRemake.tone === "inspiration" ? (
-                  <Bookmark className="h-3 w-3 sm:mr-1" />
-                ) : (
-                  <Wand2 className="h-3 w-3 sm:mr-1" />
-                )}
+                  <Bookmark className="h-3 w-3 shrink-0 sm:mr-1" />
+                ) : !firstVisitMode ? (
+                  <Wand2 className="h-3 w-3 shrink-0 sm:mr-1" />
+                ) : null}
                 <span>{oneClickRemake.label}</span>
               </Button>
             </span>

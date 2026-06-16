@@ -168,6 +168,8 @@ export function evaluateRemakeabilityGate(
   };
 }
 
+export const LIBRARY_REMAKE_CTA_LABEL = "Remake this into your voice";
+
 export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
   const pct = state.progressPercent;
   switch (state.stage) {
@@ -182,7 +184,7 @@ export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
     case "error":
       return "Retry";
     default:
-      return "Remake this into your voice";
+      return LIBRARY_REMAKE_CTA_LABEL;
   }
 }
 

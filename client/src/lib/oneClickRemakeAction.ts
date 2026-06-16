@@ -1,6 +1,7 @@
 import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type { StartRemakeOptions } from "@/hooks/useLibraryRemakeChain";
 import {
+  LIBRARY_REMAKE_CTA_LABEL,
   libraryRemakeButtonLabel,
   type LibraryRemakeSource,
   type LibraryRemakeState,
@@ -126,7 +127,7 @@ export function buildLibraryOneClickRemake(args: {
     };
   }
   return {
-    label: "Remake this into your voice",
+    label: LIBRARY_REMAKE_CTA_LABEL,
     onClick: () => void args.startRemake(librarySource, startOpts),
   };
 }
