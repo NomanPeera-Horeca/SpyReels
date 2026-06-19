@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, MessageCircleQuestion, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ClarificationStep, IdeaClarificationWizard } from "@shared/ideaClarification";
+import {
+  labelForWizardAnswer,
+  resolveWizardSteps,
+  type ClarificationStep,
+  type IdeaClarificationWizard,
+} from "@shared/ideaClarification";
 
 type Props = {
   open: boolean;
@@ -27,8 +32,13 @@ export function IdeaClarificationPanel({
   const [customText, setCustomText] = useState("");
   const [showCustom, setShowCustom] = useState(false);
 
-  const totalSteps = wizard.steps.length;
-  const step: ClarificationStep | undefined = wizard.steps[stepIndex];
+  const activeSteps = useMemo(
+    () => resolveWizardSteps(wizard, answers),
+    [wizard, answers]
+  );
+
+  const step: ClarificationStep | undefined = activeSteps[stepIndex];
+  const totalSteps = activeSteps.length;
 
   useEffect(() => {
     if (!open) return;
@@ -37,6 +47,12 @@ export function IdeaClarificationPanel({
     setCustomText("");
     setShowCustom(false);
   }, [open, wizard]);
+
+  useEffect(() => {
+    if (stepIndex >= activeSteps.length && activeSteps.length > 0) {
+      setStepIndex(activeSteps.length - 1);
+    }
+  }, [stepIndex, activeSteps.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +68,15 @@ export function IdeaClarificationPanel({
   const selectedId = answers[step.id];
   const isLastStep = stepIndex >= totalSteps - 1;
 
+  const answeredChips = activeSteps
+    .slice(0, stepIndex)
+    .map((s) => {
+      const raw = answers[s.id];
+      if (!raw) return null;
+      return { question: s.question, answer: labelForWizardAnswer(s, raw) };
+    })
+    .filter(Boolean) as Array<{ question: string; answer: string }>;
+
   const pickOption = (optionId: string) => {
     setShowCustom(false);
     setAnswers((prev) => ({ ...prev, [step.id]: optionId }));
@@ -59,18 +84,21 @@ export function IdeaClarificationPanel({
 
   const goNext = () => {
     if (!selectedId && !showCustom) return;
-    if (showCustom && customText.trim()) {
-      setAnswers((prev) => ({ ...prev, [step.id]: customText.trim() }));
-    }
-    if (isLastStep) {
-      const finalAnswers = {
-        ...answers,
-        ...(showCustom && customText.trim() ? { [step.id]: customText.trim() } : {}),
-      };
-      onComplete(finalAnswers, customText.trim() && showCustom ? customText.trim() : "");
+    const stepAnswer = showCustom && customText.trim() ? customText.trim() : selectedId;
+    if (!stepAnswer) return;
+
+    const nextAnswers = { ...answers, [step.id]: stepAnswer };
+    setAnswers(nextAnswers);
+
+    const nextActive = resolveWizardSteps(wizard, nextAnswers);
+    const nextIndex = stepIndex + 1;
+
+    if (nextIndex >= nextActive.length) {
+      onComplete(nextAnswers, "");
       return;
     }
-    setStepIndex((i) => i + 1);
+
+    setStepIndex(nextIndex);
     setShowCustom(false);
     setCustomText("");
   };
@@ -121,6 +149,20 @@ export function IdeaClarificationPanel({
               </button>
             </div>
           </div>
+
+          {answeredChips.length > 0 ? (
+            <div className="px-5 pt-4 flex flex-wrap gap-1.5">
+              {answeredChips.map((chip) => (
+                <span
+                  key={chip.question}
+                  className="inline-flex items-center rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] text-violet-200"
+                  title={chip.question}
+                >
+                  {chip.answer}
+                </span>
+              ))}
+            </div>
+          ) : null}
 
           <div className="px-5 pt-5 pb-2">
             <h2 className="text-lg font-semibold text-foreground leading-snug">{step.question}</h2>

@@ -15,8 +15,11 @@ import { REEL_NICHE_VALUES } from "@shared/reelNiches";
 import {
   buildClarificationWizard,
   formatClarificationAnswers,
+  ideaHasLockedAudience,
+  rankHooksForAudience,
   readTargetAudienceFromIdeaMeta,
   suggestionHedgesAudience,
+  type ClarificationAudienceType,
   type IdeaClarificationWizard,
 } from "../shared/ideaClarification";
 
@@ -8677,7 +8680,8 @@ async function getViralHookExamples(opts: {
  */
 async function getViralHookExamplesForIdea(
   dbNicheSlug: string | null,
-  _filmingFormat: string | null
+  _filmingFormat: string | null,
+  audienceType?: ClarificationAudienceType | null
 ): Promise<Array<{ hook: string; pattern: string; skipRate: number | null }>> {
   const results: Array<{ hook: string; pattern: string; skipRate: number | null }> = [];
 
@@ -8764,14 +8768,14 @@ async function getViralHookExamplesForIdea(
   }
 
   const seen = new Set<string>();
-  return results
+  const deduped = results
     .filter((r) => {
       const key = r.hook.slice(0, 40).toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    })
-    .slice(0, 6);
+    });
+  return rankHooksForAudience(deduped, audienceType ?? null).slice(0, 6);
 }
 
 /**
@@ -8823,7 +8827,12 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       return null;
     })();
 
-    const viralHookExamples = await getViralHookExamplesForIdea(dbNicheSlug, filmingFormat);
+    const lockedAudience = readTargetAudienceFromIdeaMeta(scriptIdea.viralStructure);
+    const viralHookExamples = await getViralHookExamplesForIdea(
+      dbNicheSlug,
+      filmingFormat,
+      lockedAudience?.type ?? null
+    );
     const viralHookBlock = buildViralHookBlock(viralHookExamples);
 
     const formatRules = buildFilmingFormatRules(filmingFormat);
@@ -9404,6 +9413,13 @@ async function validateIdeaInBackground(ideaId: number) {
 
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(idea));
 
+    const audienceLocked = ideaHasLockedAudience(idea);
+    const lockedAudience = readTargetAudienceFromIdeaMeta(idea.viralStructure);
+
+    const audienceRules = audienceLocked
+      ? `AUDIENCE IS LOCKED. The creator already chose who will watch this Reel${lockedAudience ? `: ${lockedAudience.label}` : ""}. Set needsAudienceClarification to false and audienceQuestion to empty string. Score and refine the idea ONLY for that audience. Do NOT hedge between audiences or suggest speaking to operators and guests in the same idea.`
+      : `AUDIENCE CLARITY CHECK (run this FIRST): Do you know exactly who will watch this Reel? If the idea could be for two different audiences (business owners vs customers, operators vs guests, professionals vs beginners), set needsAudienceClarification to true, set improvedIdea to empty string, and write audienceQuestion (under 12 words). Do NOT hedge in improvedIdea by saying "target either X or Y". Pick one audience only after the creator clarifies. If profile default audience applies clearly, you may use it and skip clarification.`;
+
     const response = await invokeLLM({
       messages: [
         {
@@ -9421,7 +9437,7 @@ Score the IDEA (not a script yet) on:
 
 Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views).
 
-AUDIENCE CLARITY CHECK (run this FIRST): Do you know exactly who will watch this Reel? If the idea could be for two different audiences (business owners vs customers, operators vs guests, professionals vs beginners), set needsAudienceClarification to true, set improvedIdea to empty string, and write audienceQuestion (under 12 words). Do NOT hedge in improvedIdea by saying "target either X or Y". Pick one audience only after the creator clarifies. If the idea already includes "Target audience:" or "Creator context:", set needsAudienceClarification to false. If profile default audience applies clearly, you may use it and skip clarification.`),
+${audienceRules}`),
         },
         {
           role: "user",
@@ -9458,10 +9474,11 @@ AUDIENCE CLARITY CHECK (run this FIRST): Do you know exactly who will watch this
     );
 
     const needsClarification =
-      (validation.needsAudienceClarification === true &&
+      !audienceLocked &&
+      ((validation.needsAudienceClarification === true &&
         typeof validation.audienceQuestion === "string" &&
         validation.audienceQuestion.trim().length > 0) ||
-      suggestionHedgesAudience(String(validation.improvedIdea || ""));
+        suggestionHedgesAudience(String(validation.improvedIdea || "")));
 
     if (needsClarification) {
       const wizard = buildClarificationWizard(

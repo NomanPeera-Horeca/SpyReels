@@ -18,6 +18,8 @@ import { IdeaClarificationPanel } from "@/components/IdeaClarificationPanel";
 import {
   isHospitalityIdea,
   parseClarificationWizard,
+  readClarificationSummary,
+  readTargetAudienceFromIdeaMeta,
   type IdeaClarificationWizard,
 } from "@shared/ideaClarification";
 
@@ -592,6 +594,29 @@ export default function IdeaToScript() {
                           </Badge>
                         )}
                       </div>
+
+                      {(() => {
+                        const summary =
+                          readClarificationSummary((idea as any).viralStructure) ??
+                          (() => {
+                            const locked = readTargetAudienceFromIdeaMeta((idea as any).viralStructure);
+                            return locked ? [{ question: "Target audience", answer: locked.label }] : null;
+                          })();
+                        if (!summary?.length) return null;
+                        return (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {summary.map((chip) => (
+                              <span
+                                key={chip.question}
+                                className="inline-flex items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200"
+                                title={chip.question}
+                              >
+                                {chip.answer}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* AI Validation / Approval Section */}
                       {isAwaitingApproval && (() => {

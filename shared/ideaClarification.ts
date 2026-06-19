@@ -27,6 +27,79 @@ export function isHospitalityIdea(text: string): boolean {
   return HOSPITALITY_RE.test(text);
 }
 
+export function readClarificationSummary(
+  viralStructure: unknown
+): Array<{ question: string; answer: string }> | null {
+  if (!viralStructure || typeof viralStructure !== "object") return null;
+  const meta = (viralStructure as Record<string, unknown>).ideaMeta;
+  if (!meta || typeof meta !== "object") return null;
+  const raw = (meta as Record<string, unknown>).clarificationAnswers;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: Array<{ question: string; answer: string }> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const q = (item as Record<string, unknown>).question;
+    const a = (item as Record<string, unknown>).answer;
+    if (typeof q === "string" && typeof a === "string" && a.trim()) {
+      out.push({ question: q.trim(), answer: a.trim() });
+    }
+  }
+  return out.length > 0 ? out : null;
+}
+
+export function ideaHasLockedAudience(idea: {
+  idea: string;
+  viralStructure?: unknown;
+}): boolean {
+  if (readTargetAudienceFromIdeaMeta(idea.viralStructure)) return true;
+  return /\nTarget audience:/i.test(idea.idea) || /\nCreator context:/i.test(idea.idea);
+}
+
+/** Steps shown after prior answers (e.g. skip guest journey for B2B audience). */
+export function resolveWizardSteps(
+  wizard: IdeaClarificationWizard,
+  answers: Record<string, string>
+): ClarificationStep[] {
+  const audType = audienceTypeFromAnswer(answers.audience ?? "");
+  return wizard.steps.filter((step) => {
+    if (step.id === "journey_moment") return audType === "b2c";
+    if (step.id === "venue_type") return audType === "b2c" || audType === "b2b";
+    return true;
+  });
+}
+
+export function labelForWizardAnswer(step: ClarificationStep, answerId: string): string {
+  const opt = step.options.find((o) => o.id === answerId);
+  return opt?.label ?? answerId;
+}
+
+const B2B_HOOK_RE =
+  /\b(owner|operator|manager|revpar|occupancy|your team|staff|pms|property manager|hospitality business)\b/i;
+const B2C_HOOK_RE =
+  /\b(you |your stay|when you|guest|traveler|traveller|diner|booking|check.?in|visit us|our hotel)\b/i;
+
+/** Prefer hooks that match the locked audience type when pulling viral examples. */
+export function hookMatchesAudienceType(
+  hook: string,
+  audienceType: ClarificationAudienceType | null | undefined
+): boolean {
+  if (!audienceType || audienceType === "other" || audienceType === "creator_peers") return true;
+  const hasB2b = B2B_HOOK_RE.test(hook);
+  const hasB2c = B2C_HOOK_RE.test(hook);
+  if (audienceType === "b2c") return hasB2c || !hasB2b;
+  if (audienceType === "b2b") return hasB2b || !hasB2c;
+  return true;
+}
+
+export function rankHooksForAudience<
+  T extends { hook: string; pattern: string; skipRate: number | null }
+>(hooks: T[], audienceType: ClarificationAudienceType | null | undefined): T[] {
+  if (!audienceType || audienceType === "other") return hooks;
+  const matched = hooks.filter((h) => hookMatchesAudienceType(h.hook, audienceType));
+  const rest = hooks.filter((h) => !hookMatchesAudienceType(h.hook, audienceType));
+  return [...matched, ...rest];
+}
+
 export function parseClarificationWizard(viralStructure: unknown): IdeaClarificationWizard | null {
   if (!viralStructure || typeof viralStructure !== "object") return null;
   const raw = (viralStructure as Record<string, unknown>).clarification;
@@ -145,7 +218,9 @@ export function formatClarificationAnswers(
 } {
   const summary: Array<{ question: string; answer: string }> = [];
 
-  for (const step of wizard.steps) {
+  const stepsToUse = resolveWizardSteps(wizard, answers);
+
+  for (const step of stepsToUse) {
     const raw = answers[step.id]?.trim();
     if (!raw) continue;
     const opt = step.options.find((o) => o.id === raw);
