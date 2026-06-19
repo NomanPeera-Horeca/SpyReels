@@ -5,8 +5,9 @@ import { normalizeAnalyticsHandle } from "@/lib/utils";
 import { usePostHog } from "@posthog/react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
+import { Button } from "@/components/ui/button";
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
 
@@ -15,6 +16,36 @@ function toDate(value: unknown): Date | null {
   if (value instanceof Date) return value;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function OnboardingShell({
+  children,
+  onSkip,
+}: {
+  children: React.ReactNode;
+  onSkip?: () => void;
+}) {
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border/50">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="inline-flex min-w-0">
+            <SpyReelsWordmark size="header" />
+          </Link>
+          {onSkip ? (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              Skip setup →
+            </button>
+          ) : null}
+        </div>
+      </header>
+      {children}
+    </div>
+  );
 }
 
 export default function OnboardingPage() {
@@ -155,47 +186,39 @@ export default function OnboardingPage() {
 
   if (isCompleting || completeMutation.isPending || skipMutation.isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
-        <div className="space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+      <OnboardingShell>
+        <div className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center px-6 py-16 text-center">
+          <div className="space-y-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            </div>
+            <h2 className="text-3xl tracking-tight text-foreground">{completionText}</h2>
+            <p className="max-w-lg text-sm text-muted-foreground">This takes a few seconds</p>
           </div>
-          <h2 className="text-3xl tracking-tight text-foreground">
-            Finding the best creators for you...
-          </h2>
-          <p className="max-w-lg text-sm text-muted-foreground">This takes a few seconds</p>
         </div>
-      </div>
+      </OnboardingShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <SpyReelsWordmark size="lg" />
-        <button
-          onClick={onSkip}
-          className="rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"
-        >
-          Skip setup →
-        </button>
-      </div>
+    <OnboardingShell onSkip={onSkip}>
+      <main className="mx-auto w-full max-w-6xl px-6 pb-12">
+        <header className="mb-8 space-y-3 pt-8">
+          <h1 className="text-4xl font-semibold tracking-tight">
+            What do you <span className="italic text-primary">create</span>?
+          </h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Stop guessing. See exactly what&apos;s making creators go viral in your niche. Then make
+            that.
+          </p>
+        </header>
 
-      <main className="mx-auto w-full max-w-5xl px-6 pb-12">
-        <h1 className="text-4xl tracking-tight mb-3">
-          What do you <span className="italic text-primary">create</span>?
-        </h1>
-        <p className="text-muted-foreground text-sm mb-12 max-w-lg">
-          Stop guessing. See exactly what&apos;s making creators go viral in your niche. Then make
-          that.
-        </p>
-
-        <div className="max-w-2xl mb-6">
-          <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wider">
+        <div className="mb-6 max-w-2xl">
+          <p className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
             Complete this sentence
           </p>
-          <div className="flex items-baseline gap-3 text-xl font-medium flex-wrap">
-            <span className="text-foreground whitespace-nowrap">I create content about</span>
+          <div className="flex flex-wrap items-baseline gap-3 text-xl font-medium">
+            <span className="whitespace-nowrap text-foreground">I create content about</span>
             <input
               type="text"
               value={description}
@@ -213,15 +236,15 @@ export default function OnboardingPage() {
               maxLength={200}
               autoFocus
               autoComplete="off"
-              className="flex-1 min-w-[220px] bg-transparent border-b-2 border-primary text-foreground text-xl font-medium outline-none px-1 py-0.5 placeholder:text-muted-foreground/40 focus:border-primary/80 transition-colors caret-primary"
+              className="min-w-[220px] flex-1 border-b-2 border-primary bg-transparent px-1 py-0.5 text-xl font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/80 caret-primary"
             />
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
+        <p className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
           Try an example
         </p>
-        <div className="flex flex-wrap gap-2 max-w-2xl mb-12">
+        <div className="mb-8 flex max-w-2xl flex-wrap gap-2">
           {[
             "fitness for busy moms",
             "my restaurant in Houston",
@@ -238,7 +261,7 @@ export default function OnboardingPage() {
                 setClarifyingQuestion(null);
                 setClarifyingAnswer("");
               }}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:text-foreground hover:bg-primary/5"
+              className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
             >
               {example}
             </button>
@@ -246,8 +269,8 @@ export default function OnboardingPage() {
         </div>
 
         {clarifyingQuestion ? (
-          <div className="max-w-2xl rounded-xl border border-border bg-card p-5 mb-8">
-            <p className="text-sm text-primary font-medium mb-3">{clarifyingQuestion}</p>
+          <div className="mb-8 max-w-2xl rounded-xl border border-border bg-card p-5">
+            <p className="mb-3 text-sm font-medium text-primary">{clarifyingQuestion}</p>
             <input
               type="text"
               value={clarifyingAnswer}
@@ -259,32 +282,32 @@ export default function OnboardingPage() {
               }}
               placeholder="e.g. small business owners, stay-at-home moms, beginners..."
               autoFocus
-              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
             />
           </div>
         ) : null}
-      </main>
 
-      <div className="sticky bottom-0 border-t border-border bg-background/90 backdrop-blur px-6 py-4 flex items-center justify-end">
-        <button
-          type="button"
-          disabled={description.trim().length < 8 || isRouting || isCompleting}
-          onClick={handleSubmit}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {isRouting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Finding creators...
-            </>
-          ) : (
-            <>
-              Show me what&apos;s working
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
-        </button>
-      </div>
-    </div>
+        <div className="sticky bottom-0 mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/90 px-1 py-4 backdrop-blur">
+          <Button
+            type="button"
+            disabled={description.trim().length < 8 || isRouting || isCompleting}
+            onClick={handleSubmit}
+            className="gap-2"
+          >
+            {isRouting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Finding creators...
+              </>
+            ) : (
+              <>
+                Show me what&apos;s working
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </main>
+    </OnboardingShell>
   );
 }
