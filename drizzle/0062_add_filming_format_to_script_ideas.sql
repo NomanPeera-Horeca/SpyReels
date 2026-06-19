@@ -1,0 +1,1 @@
+ALTER TABLE script_ideas ADD COLUMN filming_format VARCHAR(128) DEFAULT NULL;

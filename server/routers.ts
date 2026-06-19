@@ -47,6 +47,7 @@ const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   sortOrder: true,
 });
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
+import { ONBOARDING_NICHES } from "@/data/onboardingNiches";
 import {
   createScrapeJob,
   getScrapeJob,
@@ -494,6 +495,32 @@ function firstDayOfNextMonthUtc(): string {
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth();
   return new Date(Date.UTC(year, month + 1, 1)).toISOString();
+}
+
+function onboardingSlugForNicheName(name: string): string | null {
+  const trimmed = name.trim();
+  const hit = ONBOARDING_NICHES.find(
+    (n) => n.name === trimmed || n.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  return hit?.slug ?? null;
+}
+
+function selectedSlugsFromNicheRouting(result: {
+  primary_niche: string;
+  secondary_niches: string[];
+}): string[] {
+  const slugs: string[] = [];
+  const primary = onboardingSlugForNicheName(result.primary_niche);
+  if (primary) slugs.push(primary);
+  for (const secondary of result.secondary_niches) {
+    if (slugs.length >= 3) break;
+    const slug = onboardingSlugForNicheName(secondary);
+    if (slug && !slugs.includes(slug)) slugs.push(slug);
+  }
+  if (slugs.length === 0) {
+    slugs.push("business-entrepreneurship");
+  }
+  return slugs.slice(0, 3);
 }
 
 export const appRouter = router({
@@ -4682,6 +4709,28 @@ The hook MUST be 7-10 words. Count them.`),
     }),
 
     /**
+     * Maps free-text business description to onboarding niche slugs via AI.
+     * Called before `complete` when the user submits the fill-in-the-blank step.
+     */
+    routeNiche: protectedProcedure
+      .input(
+        z.object({
+          businessDescription: z.string().min(3).max(500),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const result = await routeNichePrompt({
+          businessDescription: input.businessDescription,
+        });
+
+        return {
+          selectedSlugs: selectedSlugsFromNicheRouting(result),
+          confidence: result.confidence,
+          clarifyingQuestion: result.clarifying_question ?? null,
+        };
+      }),
+
+    /**
      * Finalizes /onboarding: records the user's niche picks, optionally
      * seeds a demo scrape for the creator they chose, and stamps the
      * completion timestamp. Robust to every failure mode — per the
@@ -5416,6 +5465,7 @@ The hook MUST be 7-10 words. Count them.`),
         gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6"]).optional().default("auto"),
         inputMethod: z.enum(["text", "voice", "video"]).optional().default("text"),
         audioUrl: z.string().optional(),
+        filmingFormat: z.string().max(128).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const ideaId = await createScriptIdea({
@@ -5428,6 +5478,7 @@ The hook MUST be 7-10 words. Count them.`),
           gradeLevel: input.gradeLevel,
           inputMethod: input.inputMethod,
           audioUrl: input.audioUrl || null,
+          filmingFormat: input.filmingFormat || null,
           status: "validating",
           validationStatus: "pending",
         } as any);
@@ -7973,6 +8024,21 @@ function readScriptIdeaCreatorSlug(idea: { viralStructure?: unknown }): IdeaCrea
     : "balanced";
 }
 
+function readScriptIdeaFilmingFormat(idea: {
+  filmingFormat?: string | null;
+  viralStructure?: unknown;
+}): string | null {
+  if (typeof idea.filmingFormat === "string" && idea.filmingFormat.trim()) {
+    return idea.filmingFormat.trim();
+  }
+  const vs = idea.viralStructure;
+  if (!vs || typeof vs !== "object" || vs === null) return null;
+  const meta = (vs as Record<string, unknown>).ideaMeta;
+  if (!meta || typeof meta !== "object") return null;
+  const fmt = (meta as Record<string, unknown>).filmingFormat;
+  return typeof fmt === "string" && fmt.trim() ? fmt.trim() : null;
+}
+
 async function invokeIdeaScriptJudge(opts: {
   ideaText: string;
   nicheContext: string;
@@ -7985,6 +8051,7 @@ async function invokeIdeaScriptJudge(opts: {
   hookEffectiveness: number;
   pacingRetention: number;
   goalAlignment: number;
+  skipRatePrediction: number;
   verdictPass: boolean;
   criticalIssues: string[];
   rewriteDirectives: string;
@@ -7994,6 +8061,7 @@ async function invokeIdeaScriptJudge(opts: {
     hookEffectiveness: 8,
     pacingRetention: 8,
     goalAlignment: 8,
+    skipRatePrediction: 7,
     verdictPass: true,
     criticalIssues: [] as string[],
     rewriteDirectives: "",
@@ -8010,6 +8078,7 @@ Score each dimension 1-10 using short-form best practices:
 - Hook: pattern interrupt or curiosity gap in the first sentence; no sleepy setup.
 - Pacing / retention: idea density every ~12s of speech; avoids monologue walls; payoff stays on-theme.
 - Goal fit: aligns with the stated creator objective (growth vs trust vs teaching vs gentle promo).
+- Skip-rate prediction: Score 1-10. How many people stop scrolling vs swipe past in the first 3 seconds? 10 = almost nobody skips (bold claim, surprising question, shocking stat). 1 = most people swipe (opens with "Hey guys", restates the topic, slow setup). This is the single most important signal — Instagram's algorithm ranks reels by it.
 
 Overall score = holistic blend (not pure average).
 
@@ -8032,6 +8101,10 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
               hookEffectiveness: { type: "number", description: "1-10" },
               pacingRetention: { type: "number", description: "1-10" },
               goalAlignment: { type: "number", description: "1-10" },
+              skipRatePrediction: {
+                type: "number",
+                description: "1-10: likelihood of stopping the scroll in the first 3 seconds",
+              },
               verdict: {
                 type: "string",
                 enum: ["pass", "revise"],
@@ -8052,6 +8125,7 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
               "hookEffectiveness",
               "pacingRetention",
               "goalAlignment",
+              "skipRatePrediction",
               "verdict",
               "criticalIssues",
               "rewriteDirectives",
@@ -8070,6 +8144,7 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
       hookEffectiveness?: number;
       pacingRetention?: number;
       goalAlignment?: number;
+      skipRatePrediction?: number;
       verdict?: string;
       criticalIssues?: string[];
       rewriteDirectives?: string;
@@ -8089,13 +8164,18 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
       Math.max(1, Math.round(Number(parsed.goalAlignment) || overallScore))
     );
 
-    const verdictPass = overallScore >= IDEA_SCRIPT_JUDGE_PASS_SCORE;
+    const skipRatePrediction = Math.min(
+      10,
+      Math.max(1, Math.round(Number(parsed.skipRatePrediction) || 7))
+    );
+    const verdictPass = overallScore >= IDEA_SCRIPT_JUDGE_PASS_SCORE && skipRatePrediction >= 6;
 
     return {
       overallScore,
       hookEffectiveness,
       pacingRetention,
       goalAlignment,
+      skipRatePrediction,
       verdictPass,
       criticalIssues: (parsed.criticalIssues || []).slice(0, 5),
       rewriteDirectives: (parsed.rewriteDirectives || "").trim(),
@@ -8103,6 +8183,165 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
   } catch (e) {
     console.warn("[Ideas] Script judge parse/LLM issue — accepting draft:", e);
     return safeFallback();
+  }
+}
+
+/**
+ * Fetch up to 3 top-performing hook examples from SpyReels' own data.
+ *
+ * Queries BOTH pools every time:
+ *   Pool A — featuredReels: curated catalog (transcript inline on the row)
+ *   Pool B — reels + transcriptions: every reel any user has spied on
+ *
+ * This means the data improves automatically as users spy and transcribe.
+ * No retraining or manual updates needed.
+ *
+ * Priority order:
+ *   1. Same niche + viralFlag=true  (best signal)
+ *   2. Same niche, any viralFlag    (still niche-relevant)
+ *   3. Any niche + viralFlag=true   (cross-niche fallback)
+ *
+ * Returns diverse hook patterns — tries not to repeat the same hookPattern
+ * across the 3 examples so the AI sees variety.
+ */
+async function getViralHookExamples(opts: {
+  niche: string | null;
+  productionFormat: string | null;
+  limit?: number;
+}): Promise<Array<{
+  hookPattern: string;
+  hookLine: string;
+  viewCount: number;
+  niche: string | null;
+  productionFormat: string | null;
+}>> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    const cap = opts.limit ?? 3;
+    const fetchCap = cap * 6;
+
+    // Map UI format label to DB enum (e.g. "B-Roll Voiceover" -> "b_roll_voiceover")
+    const dbFormat = opts.productionFormat
+      ? opts.productionFormat.toLowerCase().replace(/[\s-]/g, "_")
+      : null;
+
+    // Pool A: featuredReels — transcript stored inline on the row
+    const fetchFeatured = async (viralOnly: boolean, ignoreNiche = false) => {
+      const c: Parameters<typeof and>[0][] = [
+        eq(featuredReels.transcriptionStatus, "completed" as any),
+      ];
+      if (!ignoreNiche && opts.niche) c.push(eq(featuredReels.niche, opts.niche as any));
+      if (dbFormat) c.push(eq(featuredReels.productionFormat, dbFormat as any));
+      if (viralOnly) c.push(eq(featuredReels.viralFlag, true));
+      return db
+        .select({
+          hookPattern: featuredReels.hookPattern,
+          transcript: featuredReels.transcript,
+          segments: featuredReels.transcriptSegments,
+          viewCount: featuredReels.viewCount,
+          niche: featuredReels.niche,
+          productionFormat: featuredReels.productionFormat,
+        })
+        .from(featuredReels)
+        .where(and(...c))
+        .orderBy(desc(featuredReels.viewCount))
+        .limit(fetchCap);
+    };
+
+    // Pool B: user-spied reels — hook metadata on reels, transcript on transcriptions
+    const fetchSpied = async (viralOnly: boolean, ignoreNiche = false) => {
+      const c: Parameters<typeof and>[0][] = [
+        eq(transcriptions.status, "completed" as any),
+      ];
+      if (!ignoreNiche && opts.niche) c.push(eq(reelsTable.niche, opts.niche as any));
+      if (dbFormat) c.push(eq(reelsTable.productionFormat, dbFormat as any));
+      if (viralOnly) c.push(eq(reelsTable.viralFlag, true));
+      return db
+        .select({
+          hookPattern: reelsTable.hookPattern,
+          transcript: transcriptions.transcript,
+          segments: transcriptions.segments,
+          viewCount: reelsTable.viewCount,
+          niche: reelsTable.niche,
+          productionFormat: reelsTable.productionFormat,
+        })
+        .from(reelsTable)
+        .innerJoin(transcriptions, eq(transcriptions.reelId, reelsTable.id))
+        .where(and(...c))
+        .orderBy(desc(reelsTable.viewCount))
+        .limit(fetchCap);
+    };
+
+    type RawRow = {
+      hookPattern: string | null;
+      transcript: string | null;
+      segments: unknown;
+      viewCount: number;
+      niche: string | null;
+      productionFormat: string | null;
+    };
+
+    let rows: RawRow[] = [];
+
+    // Pass 1: same niche + viral (both pools in parallel)
+    const [f1, s1] = await Promise.all([fetchFeatured(true), fetchSpied(true)]);
+    rows = [...f1, ...s1];
+
+    // Pass 2: same niche, any viralFlag
+    if (rows.length < cap) {
+      const [f2, s2] = await Promise.all([fetchFeatured(false), fetchSpied(false)]);
+      rows = [...rows, ...f2, ...s2];
+    }
+
+    // Pass 3: any niche + viral (cross-niche fallback)
+    if (rows.length < cap) {
+      const [f3, s3] = await Promise.all([
+        fetchFeatured(true, true),
+        fetchSpied(true, true),
+      ]);
+      rows = [...rows, ...f3, ...s3];
+    }
+
+    // Sort merged pool by viewCount descending
+    rows.sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0));
+
+    const results: Array<{
+      hookPattern: string;
+      hookLine: string;
+      viewCount: number;
+      niche: string | null;
+      productionFormat: string | null;
+    }> = [];
+
+    const seenPatterns = new Set<string>();
+
+    for (const row of rows) {
+      if (results.length >= cap) break;
+      if (!row.hookPattern || !row.transcript) continue;
+      // Prefer diverse patterns — skip duplicate hookPattern unless we're running out
+      if (seenPatterns.has(row.hookPattern) && rows.indexOf(row) < rows.length - 1) continue;
+      seenPatterns.add(row.hookPattern);
+
+      const hookLine =
+        extractHookTextFromSegments(row.segments, 3.6) ||
+        row.transcript.slice(0, 150).trim();
+      if (!hookLine) continue;
+
+      results.push({
+        hookPattern: row.hookPattern,
+        hookLine: hookLine.slice(0, 200),
+        viewCount: Number(row.viewCount ?? 0),
+        niche: row.niche ?? null,
+        productionFormat: row.productionFormat ?? null,
+      });
+    }
+
+    return results;
+  } catch (err) {
+    console.warn("[Ideas] getViralHookExamples failed (non-fatal):", err);
+    return [];
   }
 }
 
@@ -8126,6 +8365,26 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
     const nicheContext = scriptIdea.niche ? ` in the ${scriptIdea.niche} niche` : "";
     const toneContext = scriptIdea.tone || "engaging";
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(scriptIdea));
+
+    // Filming format selected by user (Part 2)
+    const filmingFormat = readScriptIdeaFilmingFormat(scriptIdea);
+
+    // Pull real proven hook examples from our own database (both catalog + user-spied reels)
+    const viralHookExamples = await getViralHookExamples({
+      niche: scriptIdea.niche ?? null,
+      productionFormat: filmingFormat,
+      limit: 3,
+    });
+
+    // Viral context block injected into AI prompts — empty string if no data yet
+    const viralHookContext = viralHookExamples.length > 0
+      ? `\n\nVIRAL HOOK REFERENCE — real reels from SpyReels database that performed well${scriptIdea.niche ? ` in ${scriptIdea.niche}` : ""}:\n${viralHookExamples
+          .map((ex, i) =>
+            `Example ${i + 1} | Pattern: ${ex.hookPattern} | Views: ${ex.viewCount.toLocaleString()}\nOpening line: "${ex.hookLine}"`
+          )
+          .join("\n")}\n\nDo NOT copy these lines. Study the pattern and energy. Apply the same hook mechanics to the user's specific topic.`
+      : "";
+
     const gradeLevelInstruction = scriptIdea.gradeLevel === "auto"
       ? "Choose the most appropriate reading level for the audience."
       : `Write at a Grade ${scriptIdea.gradeLevel} reading level.`;
@@ -8148,20 +8407,20 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
         },
         {
           role: "user",
-          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"
-
+          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"${filmingFormat ? `\nFilming format: ${filmingFormat}` : ""}
+${viralHookContext}
 The tone should be ${toneContext}.
 
 ${goalBrief}
 
 Return JSON with:
-- hook: { type (question/statistic/bold_claim/story/controversy), text (the actual hook line), technique (why it works) }
-- body: { pacing (fast/medium/slow), structure (listicle/story/tutorial/comparison/myth_busting), keyPoints (array of 3-5 main points to cover) }
+- hook: { type (question/stat/bold_claim/story/contrarian/direct_promise/pov/confession), text (the actual hook line), technique (why it stops the scroll) }
+- body: { pacing (fast/medium/slow), structure (listicle/story/tutorial/comparison/myth_busting), keyPoints (array of 3-5 main points) }
 - transition: { type (pattern_interrupt/visual_change/rhetorical_question), text (transition line) }
 - cta: { type (follow/save/share/comment/link), text (the CTA line) }
 - overallTone: string
 - estimatedPace: string
-- suggestedTitle: a catchy title for this script (max 80 chars)`,
+- suggestedTitle: catchy title for this script (max 80 chars)`,
         },
       ],
       response_format: {
@@ -8244,12 +8503,18 @@ Return JSON with:
           {
             role: "system",
             content: withAiFormattingRules(
-              `You are an elite Instagram Reels scriptwriter focused on filmed talking-head delivery.\n\n${writerRules}`
+              `You are an elite Instagram Reels scriptwriter.${
+                filmingFormat
+                  ? `\nFormat: ${filmingFormat}. Write specifically for this format.`
+                  : `\nInfer the most appropriate filming format from the topic.`
+              }
+
+${writerRules}${viralHookContext}`
             ),
           },
           {
             role: "user",
-            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150-300 spoken words.${refineBlock}\n\n${goalLine}`,
+            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n${filmingFormat ? `Filming format: ${filmingFormat}\n` : ""}\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150-300 spoken words.${refineBlock}\n\n${goalLine}`,
           },
         ],
       });
@@ -8275,6 +8540,7 @@ Return JSON with:
         hookEffectiveness: verdict.hookEffectiveness,
         pacingRetention: verdict.pacingRetention,
         goalAlignment: verdict.goalAlignment,
+        skipRatePrediction: verdict.skipRatePrediction,
         verdictPass: verdict.verdictPass,
         criticalIssues: verdict.criticalIssues,
       });
@@ -8307,7 +8573,12 @@ Return JSON with:
       finalOverallScore: verdict.overallScore,
       finalDecision: pass ? "pass" : "accepted_after_max_attempts",
     };
-    viralStructure.ideaMeta = { creatorGoal: readScriptIdeaCreatorSlug(scriptIdea) };
+    viralStructure.ideaMeta = {
+      creatorGoal: readScriptIdeaCreatorSlug(scriptIdea),
+      filmingFormat: filmingFormat ?? null,
+      viralHookCount: viralHookExamples.length,
+      viralHookNiche: scriptIdea.niche ?? null,
+    };
 
     // Update the idea with the generated content
     await updateScriptIdea(ideaId, {
@@ -8692,12 +8963,28 @@ If the raw idea is strong (8+) you may keep improvedIdea very close to what they
     );
 
     await updateScriptIdea(ideaId, {
+      idea: String(validation.improvedIdea || idea.idea),
       aiSuggestion: validation.improvedIdea,
       aiReasoning: validation.reasoning,
       viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
       validationStatus: "validated",
-      status: "awaiting_approval",
+      status: "processing",
     } as any);
+
+    const recreateCheck = await checkUsageLimit(idea.userId, "recreateCount");
+    if (!recreateCheck.allowed) {
+      await updateScriptIdea(ideaId, {
+        status: "failed",
+        errorMessage: `Monthly AI script limit reached (${recreateCheck.used}/${recreateCheck.limit}). Upgrade for more.`,
+      } as any);
+      return;
+    }
+    await incrementUsage(idea.userId, "recreateCount");
+
+    // Immediately kick off script generation — no approval gate
+    processIdeaInBackground(ideaId).catch(err =>
+      console.error(`[Ideas] Script generation failed for idea ${ideaId}:`, err)
+    );
 
     console.log(`[Ideas] Validated idea ${ideaId}: score ${validation.viralScore}/10`);
   } catch (error) {

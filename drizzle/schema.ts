@@ -782,6 +782,7 @@ export const scriptIdeas = mysqlTable(
   niche: varchar("niche", { length: 128 }), // Optional niche/category hint
   tone: varchar("tone", { length: 64 }).default("engaging"), // casual, professional, humorous, educational, engaging
   gradeLevel: varchar("gradeLevel", { length: 16 }).default("auto"), // reading level
+  filmingFormat: varchar("filmingFormat", { length: 128 }), // How the creator plans to film (talking head, b-roll, etc.)
   generatedScript: text("generatedScript"), // The AI-generated script
   generatedTitle: varchar("generatedTitle", { length: 256 }), // AI-generated title for the script
   viralStructure: json("viralStructure"), // Hook/body/CTA structure

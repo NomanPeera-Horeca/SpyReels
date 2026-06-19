@@ -41,6 +41,39 @@ const CREATOR_GOALS = [
   { value: "warm_promo", label: "Soft promo", hint: "Value then offer" },
 ] as const;
 
+const FILMING_FORMATS = [
+  {
+    id: "talking_head",
+    label: "You on camera, speaking",
+    icon: "🎥",
+    sub: "Selfie-style, face to camera",
+  },
+  {
+    id: "broll_voiceover",
+    label: "Show your space or product, speak over it",
+    icon: "🏨",
+    sub: "B-roll footage, your voice narrates",
+  },
+  {
+    id: "faceless_text",
+    label: "No face, text on screen",
+    icon: "✍️",
+    sub: "Faceless, text animates over video",
+  },
+  {
+    id: "tutorial_demo",
+    label: "Tutorial or step-by-step",
+    icon: "📋",
+    sub: "Whiteboard, demo, or screen recording",
+  },
+  {
+    id: "before_after",
+    label: "Before and After",
+    icon: "⚡",
+    sub: "Show the transformation or result",
+  },
+] as const;
+
 type IdeaStatus = "queued" | "validating" | "awaiting_approval" | "processing" | "completed" | "failed";
 
 const STATUS_CONFIG: Record<IdeaStatus, { icon: typeof Clock; color: string; label: string; bg: string }> = {
@@ -128,6 +161,8 @@ export default function IdeaToScript() {
   const [creatorGoal, setCreatorGoal] = useState<string>("balanced");
   const [tone, setTone] = useState("engaging");
   const [gradeLevel, setGradeLevel] = useState("auto");
+  const [filmingFormat, setFilmingFormat] = useState<string>("");
+  const [customFormat, setCustomFormat] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
   const [expandedIdea, setExpandedIdea] = useState<number | null>(null);
   const [editingIdeaId, setEditingIdeaId] = useState<number | null>(null);
@@ -290,6 +325,10 @@ export default function IdeaToScript() {
 
   const handleSubmit = () => {
     if (!ideaText.trim()) return;
+    const resolvedFormat =
+      filmingFormat === "custom"
+        ? customFormat.trim()
+        : FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label ?? "";
     submitMutation.mutate({
       idea: ideaText.trim(),
       niche: niche.trim() || undefined,
@@ -297,6 +336,7 @@ export default function IdeaToScript() {
       creatorGoal: creatorGoal as any,
       gradeLevel: gradeLevel as any,
       inputMethod: "text",
+      filmingFormat: resolvedFormat || undefined,
     });
   };
 
@@ -352,6 +392,54 @@ export default function IdeaToScript() {
           </p>
         </div>
       )}
+
+      {/* Format selector */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-foreground">How will you film this?</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {FILMING_FORMATS.map((fmt) => (
+            <button
+              key={fmt.id}
+              type="button"
+              onClick={() => {
+                setFilmingFormat(fmt.id);
+                setCustomFormat("");
+              }}
+              className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all hover:border-violet-500/50 ${
+                filmingFormat === fmt.id
+                  ? "border-violet-500 bg-violet-500/10"
+                  : "border-border bg-card"
+              }`}
+            >
+              <span className="text-2xl">{fmt.icon}</span>
+              <span className="text-xs font-semibold text-foreground leading-tight">{fmt.label}</span>
+              <span className="text-[10px] text-muted-foreground">{fmt.sub}</span>
+            </button>
+          ))}
+          <div
+            className={`flex flex-col gap-1 rounded-xl border p-3 transition-all ${
+              filmingFormat === "custom"
+                ? "border-violet-500 bg-violet-500/10"
+                : "border-border bg-card"
+            }`}
+          >
+            <span className="text-2xl">🎬</span>
+            <span className="text-xs font-semibold text-foreground">Describe your own format</span>
+            <input
+              type="text"
+              value={customFormat}
+              placeholder="e.g. interview, podcast clip..."
+              className="mt-1 w-full rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-violet-500/50 focus:outline-none"
+              onChange={(e) => {
+                setCustomFormat(e.target.value);
+                if (e.target.value.trim()) setFilmingFormat("custom");
+                else if (filmingFormat === "custom") setFilmingFormat("");
+              }}
+              onClick={() => setFilmingFormat("custom")}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Quick Submit Form */}
       <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-purple-500/5">
