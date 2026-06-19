@@ -152,6 +152,7 @@ export default function OnboardingPage() {
       setCompletionText("Finding the best creators for you...");
       const completeResult = await completeMutation.mutateAsync({
         selectedNicheSlugs: result.selectedSlugs,
+        businessDescription: fullDescription.trim(),
       });
       if (!completeResult.alreadyComplete) {
         posthog?.capture("onboarding_completed", {

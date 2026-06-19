@@ -4,8 +4,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Building2, Check, Loader2 } from "lucide-react";
+import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 
 const MAX_LENGTH = 1000;
+
+function nicheSummary(slugs: string[]): string | null {
+  const names = slugs
+    .map((slug) => ONBOARDING_NICHES_BY_SLUG.get(slug)?.name)
+    .filter(Boolean);
+  if (names.length === 0) return null;
+  return names.slice(0, 3).join(", ");
+}
 
 export function BusinessPersonalizationSection() {
   const [businessDescription, setBusinessDescription] = useState("");
@@ -19,10 +28,12 @@ export function BusinessPersonalizationSection() {
     onboardingStateQuery.isSuccess &&
     !(onboardingStateQuery.data.businessDescription?.trim() ?? "");
 
-  const discoverySeedQuery =
-    trpc.preferences.latestDiscoveryBusinessDescription.useQuery(undefined, {
-      enabled: !hydrated && savedBusinessEmpty,
-    });
+  const discoverySeedQuery = trpc.preferences.latestDiscoveryBusinessDescription.useQuery(
+    undefined,
+    {
+      enabled: onboardingStateQuery.isSuccess && savedBusinessEmpty,
+    }
+  );
 
   const utils = trpc.useUtils();
   const updateProfile = trpc.preferences.updateProfile.useMutation({
@@ -37,11 +48,13 @@ export function BusinessPersonalizationSection() {
   });
 
   useEffect(() => {
-    if (hydrated || onboardingStateQuery.isLoading) return;
+    if (hydrated || onboardingStateQuery.isLoading || !onboardingStateQuery.isSuccess) {
+      return;
+    }
 
     const savedBusiness =
-      onboardingStateQuery.data?.businessDescription?.trim() ?? "";
-    const savedAudience = onboardingStateQuery.data?.targetAudience ?? "";
+      onboardingStateQuery.data.businessDescription?.trim() ?? "";
+    const savedAudience = onboardingStateQuery.data.targetAudience?.trim() ?? "";
 
     setTargetAudience(savedAudience);
 
@@ -51,20 +64,24 @@ export function BusinessPersonalizationSection() {
       return;
     }
 
-    if (discoverySeedQuery.isLoading || discoverySeedQuery.isFetching) return;
-
     const seed = discoverySeedQuery.data?.trim();
     if (seed) {
       setBusinessDescription(seed);
       setSeededFromDiscovery(true);
+      setHydrated(true);
+      return;
+    }
+
+    const nicheHint = nicheSummary(onboardingStateQuery.data.selectedNicheSlugs ?? []);
+    if (nicheHint) {
+      setBusinessDescription(`I create content about ${nicheHint}.`);
     }
     setHydrated(true);
   }, [
     hydrated,
     onboardingStateQuery.isLoading,
+    onboardingStateQuery.isSuccess,
     onboardingStateQuery.data,
-    discoverySeedQuery.isLoading,
-    discoverySeedQuery.isFetching,
     discoverySeedQuery.data,
   ]);
 
@@ -84,9 +101,7 @@ export function BusinessPersonalizationSection() {
     });
   };
 
-  const isLoading =
-    onboardingStateQuery.isLoading ||
-    (!hydrated && savedBusinessEmpty && discoverySeedQuery.isLoading);
+  const isLoading = onboardingStateQuery.isLoading;
 
   return (
     <div className="rounded-lg border border-border/50 bg-card p-5 text-card-foreground">
@@ -97,7 +112,7 @@ export function BusinessPersonalizationSection() {
 
       <p className="mb-4 text-xs text-muted-foreground">
         Tell us what you do and who you create for. SpyReels uses this to
-        personalize Remake now scripts so drafts fit your offer and audience.
+        personalize Idea to Script and Remake now drafts so they fit your offer and audience.
       </p>
 
       {isLoading ? (
@@ -130,6 +145,11 @@ export function BusinessPersonalizationSection() {
                 then save.
               </p>
             )}
+            {!serverBusiness && !seededFromDiscovery && nicheSummary(onboardingStateQuery.data?.selectedNicheSlugs ?? []) ? (
+              <p className="text-xs text-muted-foreground">
+                Pre-filled from your niche interests. Add more detail about your offer, then save.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">

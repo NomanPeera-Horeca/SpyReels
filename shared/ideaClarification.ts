@@ -1,4 +1,78 @@
-/** Structured clarification wizard stored on script_ideas.viralStructure */
+/** Filming format ids aligned with script generation rules */
+export const FILMING_FORMAT_OPTIONS = [
+  { id: "talking_head", label: "You on camera, speaking", sub: "Selfie-style, face to camera" },
+  { id: "broll_voiceover", label: "Show your space or product, speak over it", sub: "B-roll footage, your voice narrates" },
+  { id: "faceless_text", label: "No face, text on screen", sub: "Faceless, text animates over video" },
+  { id: "tutorial_demo", label: "Tutorial or step-by-step", sub: "Whiteboard, demo, or screen recording" },
+  { id: "before_after", label: "Before and After", sub: "Show the transformation or result" },
+] as const;
+
+export type FilmingFormatId = (typeof FILMING_FORMAT_OPTIONS)[number]["id"];
+
+const EXPLICIT_FORMAT_RE =
+  /\b(talking head|on camera|face to camera|voiceover|voice over|b-roll|b roll|text on screen|faceless|tutorial|step-by-step|step by step|screen record|before and after|montage)\b/i;
+
+export function ideaMentionsFilmingFormat(text: string): boolean {
+  return EXPLICIT_FORMAT_RE.test(text);
+}
+
+/** Infer format when the idea strongly implies one style. Returns null if ambiguous. */
+export function inferFilmingFormatFromIdea(text: string): FilmingFormatId | null {
+  const t = text.toLowerCase();
+  if (ideaMentionsFilmingFormat(text)) {
+    if (/\b(text on screen|faceless)\b/.test(t)) return "faceless_text";
+    if (/\b(voiceover|voice over|b-roll|b roll)\b/.test(t)) return "broll_voiceover";
+    if (/\b(tutorial|step-by-step|step by step|screen record)\b/.test(t)) return "tutorial_demo";
+    if (/\bbefore and after\b/.test(t)) return "before_after";
+    if (/\b(talking head|on camera|face to camera)\b/.test(t)) return "talking_head";
+  }
+
+  if (/\b(how to|step \d|walkthrough|demo|screen share)\b/.test(t)) return "tutorial_demo";
+  if (/\b(before and after|transformation|then vs now)\b/.test(t)) return "before_after";
+  if (/\b(day in the life|behind the scenes|b roll montage)\b/.test(t)) return "broll_voiceover";
+
+  // Personal story / mistakes / lessons = talking head by default
+  if (
+    /\b(i made|my mistake|mistakes i|what i learned|here's what|here is what|when i|story time|confession)\b/.test(
+      t
+    )
+  ) {
+    return "talking_head";
+  }
+  if (/\b\d+\s+(mistakes|lessons|tips|things)\b/.test(t) && /\b(i |my |me\b)/.test(t)) {
+    return "talking_head";
+  }
+
+  return null;
+}
+
+export function filmingFormatLabelFromId(id: string): string {
+  const opt = FILMING_FORMAT_OPTIONS.find((o) => o.id === id);
+  return opt?.label ?? id.replace(/_/g, " ");
+}
+
+export function buildFilmingFormatWizard(): IdeaClarificationWizard {
+  return {
+    version: 1,
+    steps: [
+      {
+        id: "filming_format",
+        question: "How will you film this Reel?",
+        options: FILMING_FORMAT_OPTIONS.map((o) => ({
+          id: o.id,
+          label: o.label,
+          sub: o.sub,
+        })),
+        allowCustom: true,
+      },
+    ],
+  };
+}
+
+export function isFilmingFormatWizard(wizard: IdeaClarificationWizard): boolean {
+  return wizard.steps.length === 1 && wizard.steps[0]?.id === "filming_format";
+}
+
 
 export type ClarificationOption = {
   id: string;
@@ -60,12 +134,85 @@ export function readFollowUpsFromIdeaMeta(viralStructure: unknown): string[] | n
   return items.length > 0 ? items : null;
 }
 
+const AUDIENCE_LABELS: Record<string, string> = {
+  guests: "End guests, diners, or travelers",
+  customers: "My customers or audience",
+  operators: "Other business owners or operators in my industry",
+  creator_peers: "Other creators or beginners in my niche",
+};
+
 export function ideaHasLockedAudience(idea: {
   idea: string;
   viralStructure?: unknown;
 }): boolean {
   if (readTargetAudienceFromIdeaMeta(idea.viralStructure)) return true;
   return /\nTarget audience:/i.test(idea.idea) || /\nCreator context:/i.test(idea.idea);
+}
+
+const PERSONAL_CREATOR_STORY_RE =
+  /\b(i made|my mistake|mistakes i|what i learned|when i|how i|growing my|built my|scaled my|my page|my account|my channel|my brand|i wish i|here's what i|here is what i)\b/i;
+
+const DUAL_AUDIENCE_HEDGE_RE =
+  /\b(either .+ or|guests or operators|operators or guests|owners or customers|customers or owners|peers or customers|both audiences|aspiring .+ or .+ seeking)\b/i;
+
+/** Infer a locked audience when the idea text already implies one. */
+export function inferAudienceFromIdea(ideaText: string): {
+  id: string;
+  label: string;
+  type: ClarificationAudienceType;
+} | null {
+  const text = ideaText.trim();
+  if (!text) return null;
+
+  if (PERSONAL_CREATOR_STORY_RE.test(text)) {
+    return {
+      id: "creator_peers",
+      label: AUDIENCE_LABELS.creator_peers,
+      type: "creator_peers",
+    };
+  }
+
+  if (/\b(your team|your staff|property managers|hotel owners|restaurant owners|operators|revpar|occupancy)\b/i.test(text)) {
+    return {
+      id: "operators",
+      label: AUDIENCE_LABELS.operators,
+      type: "b2b",
+    };
+  }
+
+  if (
+    /\b(you should|if you are|if you're|for beginners who|stop doing|start doing)\b/i.test(text) &&
+    !/\b(i |my )/i.test(text)
+  ) {
+    return {
+      id: "customers",
+      label: AUDIENCE_LABELS.customers,
+      type: "b2c",
+    };
+  }
+
+  return null;
+}
+
+/** Skip audience wizard when profile or idea text already gives enough context. */
+export function shouldSkipAudienceClarification(
+  ideaText: string,
+  profile?: { targetAudience?: string | null } | null
+): boolean {
+  if (profile?.targetAudience?.trim()) return true;
+  if (inferAudienceFromIdea(ideaText)) return true;
+  if (DUAL_AUDIENCE_HEDGE_RE.test(ideaText)) return false;
+  if (isHospitalityIdea(ideaText)) return false;
+  return true;
+}
+
+export function audienceLockFromProfile(profile?: {
+  targetAudience?: string | null;
+  businessDescription?: string | null;
+} | null): { label: string; type: ClarificationAudienceType } | null {
+  const audience = profile?.targetAudience?.trim();
+  if (audience) return { label: audience, type: "other" };
+  return null;
 }
 
 /** Steps shown after prior answers (e.g. skip guest journey for B2B audience). */
@@ -259,13 +406,6 @@ export function buildClarificationWizard(
 
   return { version: 1, steps };
 }
-
-const AUDIENCE_LABELS: Record<string, string> = {
-  guests: "End guests, diners, or travelers",
-  customers: "My customers or audience",
-  operators: "Other business owners or operators in my industry",
-  creator_peers: "Other creators or beginners in my niche",
-};
 
 export function audienceTypeFromAnswer(audienceId: string): ClarificationAudienceType {
   if (audienceId === "guests" || audienceId === "customers") return "b2c";

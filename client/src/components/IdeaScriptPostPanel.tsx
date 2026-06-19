@@ -326,28 +326,30 @@ export function IdeaScriptPostPanel({
       </div>
 
       <div className="pt-2">
-        <p className="text-sm font-semibold mb-2">Follow-ups</p>
+        <p className="text-sm font-semibold mb-0.5">Keep going</p>
+        <p className="text-xs text-muted-foreground mb-2">Tap any prompt to write your next script</p>
         {followUpsQuery.isLoading && followUps.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
             <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-            Generating follow-ups for this script...
+            Finding your next scripts...
           </div>
         ) : followUps.length > 0 ? (
-          <div className="flex flex-col">
+          <div className="flex flex-col -mx-1">
             {followUps.map((text) => (
               <button
                 key={text}
                 type="button"
                 onClick={() => onFollowUp?.(text)}
-                className="flex items-start gap-2.5 w-full py-3 px-1 text-left text-sm leading-snug hover:bg-violet-50 hover:text-violet-700 rounded-lg transition-colors group"
+                disabled={isSavingScript}
+                className="flex items-start gap-2.5 w-full py-3 px-2 text-left text-sm leading-snug text-foreground/90 hover:bg-violet-50 hover:text-violet-800 dark:hover:bg-violet-950/40 rounded-lg transition-colors group border border-transparent hover:border-violet-200/80"
               >
-                <span className="text-muted-foreground shrink-0 mt-0.5">↳</span>
-                <span>{text}</span>
+                <span className="text-violet-500/70 group-hover:text-violet-600 shrink-0 mt-0.5 font-medium">↳</span>
+                <span className="group-hover:underline decoration-violet-300/80 underline-offset-2">{text}</span>
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground py-1">Follow-ups will appear here shortly.</p>
+          <p className="text-xs text-muted-foreground py-1">Next script prompts will appear here shortly.</p>
         )}
       </div>
 

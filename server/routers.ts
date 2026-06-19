@@ -14,11 +14,17 @@ import {
 import { REEL_NICHE_VALUES } from "@shared/reelNiches";
 import {
   buildClarificationWizard,
+  buildFilmingFormatWizard,
+  filmingFormatLabelFromId,
   formatClarificationAnswers,
+  inferAudienceFromIdea,
+  audienceLockFromProfile,
   ideaHasLockedAudience,
+  inferFilmingFormatFromIdea,
   rankHooksForAudience,
   readTargetAudienceFromIdeaMeta,
   readFollowUpsFromIdeaMeta,
+  shouldSkipAudienceClarification,
   suggestionHedgesAudience,
   type ClarificationAudienceType,
   type IdeaClarificationWizard,
@@ -4839,6 +4845,7 @@ The hook MUST be 7-10 words. Count them.`),
             .min(1)
             .max(5)
             .optional(),
+          businessDescription: z.string().max(1000).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -4901,6 +4908,12 @@ The hook MUST be 7-10 words. Count them.`),
           dedupedCreatorHandles,
           demoJobId !== null ? new Date() : null
         );
+        const businessText = input.businessDescription?.trim();
+        if (businessText) {
+          await updateUserPersonalization(ctx.user.id, {
+            businessDescription: businessText,
+          });
+        }
         let demoCreatorHandle: string | null = null;
         if (demoJobId) {
           const seededJob = await getScrapeJob(demoJobId);
@@ -5644,11 +5657,16 @@ The hook MUST be 7-10 words. Count them.`),
             input.clarificationAnswers,
             input.clarificationCustom
           );
+          const filmingRaw = input.clarificationAnswers.filming_format?.trim();
+          const filmingLabel = filmingRaw
+            ? filmingFormatLabelFromId(filmingRaw)
+            : undefined;
           const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
             ideaMeta: {
               targetAudience: formatted.targetAudience,
               audienceType: formatted.audienceType,
               clarificationAnswers: formatted.answerSummary,
+              ...(filmingLabel ? { filmingFormat: filmingLabel } : {}),
             },
             pendingQuestion: undefined,
             pendingQuestionType: undefined,
@@ -5665,6 +5683,7 @@ The hook MUST be 7-10 words. Count them.`),
             aiSuggestion: null,
             aiReasoning: null,
             viralStructure: mergedVs as any,
+            ...(filmingLabel ? { filmingFormat: filmingLabel } : {}),
           } as any);
 
           validateIdeaInBackground(input.ideaId).catch(err =>
@@ -5868,10 +5887,23 @@ The hook MUST be 7-10 words. Count them.`),
         if (cached?.length) return { followUps: cached };
 
         try {
+          const profile = await getOnboardingState(ctx.user.id);
+          const profileContext = [
+            profile?.businessDescription?.trim()
+              ? `Business: ${profile.businessDescription.trim()}`
+              : null,
+            profile?.targetAudience?.trim()
+              ? `Audience: ${profile.targetAudience.trim()}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("\n");
+
           const followUps = await generateIdeaFollowUps(
             idea.idea,
             idea.generatedScript,
-            idea.generatedTitle
+            idea.generatedTitle,
+            profileContext || null
           );
           if (followUps.length > 0) {
             const merged = mergeScriptIdeaViralStructure(idea.viralStructure, {
@@ -8196,8 +8228,15 @@ function mergeScriptIdeaViralStructure(
   return { ...base, ...patch };
 }
 
-function buildTargetAudiencePromptBlock(idea: { viralStructure?: unknown }): string {
-  const aud = readTargetAudienceFromIdeaMeta(idea.viralStructure);
+function buildTargetAudiencePromptBlock(
+  idea: { viralStructure?: unknown },
+  profile?: { targetAudience?: string | null } | null
+): string {
+  const aud =
+    readTargetAudienceFromIdeaMeta(idea.viralStructure) ??
+    (profile?.targetAudience?.trim()
+      ? { label: profile.targetAudience.trim(), type: "other" as ClarificationAudienceType }
+      : null);
   if (!aud) return "";
   const guard =
     aud.type === "b2c"
@@ -8208,6 +8247,62 @@ function buildTargetAudiencePromptBlock(idea: { viralStructure?: unknown }): str
           ? "Write TO other creators and peers. Use shared-experience framing, not consumer marketing speak."
           : "";
   return `\nTARGET AUDIENCE (locked by creator): ${aud.label}\n${guard}\n`;
+}
+
+function buildCreatorProfilePromptBlock(profile: {
+  businessDescription?: string | null;
+  targetAudience?: string | null;
+  selectedNicheSlugs?: string[] | null;
+} | null | undefined): string {
+  if (!profile) return "";
+  const lines: string[] = [];
+  const niches = (profile.selectedNicheSlugs ?? [])
+    .map((slug) => ONBOARDING_NICHES.find((n) => n.slug === slug)?.name ?? slug)
+    .filter(Boolean);
+  if (niches.length > 0) lines.push(`Creator niches: ${niches.join(", ")}`);
+  if (profile.businessDescription?.trim()) {
+    lines.push(`What they create / sell: ${profile.businessDescription.trim()}`);
+  }
+  if (profile.targetAudience?.trim()) {
+    lines.push(`Who they create for: ${profile.targetAudience.trim()}`);
+  }
+  if (lines.length === 0) return "";
+  return `\nCREATOR PROFILE (from onboarding — personalize voice, examples, and CTA to this):\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
+}
+
+async function autoLockAudienceFromContext(
+  ideaId: number,
+  idea: { idea: string; viralStructure?: unknown },
+  profile: {
+    targetAudience?: string | null;
+    businessDescription?: string | null;
+  } | null | undefined
+): Promise<{ idea: string; viralStructure?: unknown; locked: boolean }> {
+  if (ideaHasLockedAudience(idea)) {
+    return { ...idea, locked: true };
+  }
+
+  const inferred = inferAudienceFromIdea(idea.idea);
+  const fromProfile = audienceLockFromProfile(profile);
+  const lock = inferred ?? fromProfile;
+  if (!lock) return { ...idea, locked: false };
+
+  const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+    ideaMeta: {
+      targetAudience: lock.label,
+      audienceType: inferred?.type ?? lock.type,
+    },
+  });
+
+  await updateScriptIdea(ideaId, {
+    viralStructure: mergedVs as any,
+  } as any);
+
+  return {
+    idea: idea.idea,
+    viralStructure: mergedVs,
+    locked: true,
+  };
 }
 
 /** Passing score (1-10) keeps the drafted script without another LLM regeneration pass. */
@@ -8867,6 +8962,8 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
 
     const scriptIdea = idea;
 
+    const creatorProfile = await getOnboardingState(scriptIdea.userId);
+    const profileBlock = buildCreatorProfilePromptBlock(creatorProfile);
     const nicheContext = scriptIdea.niche ? ` in the ${scriptIdea.niche} niche` : "";
     const toneContext = scriptIdea.tone || "engaging";
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(scriptIdea));
@@ -8879,16 +8976,31 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
 
     const dbNicheSlug: string | null = (() => {
       const n = (scriptIdea.niche || "").toLowerCase();
+      if (n) {
+        const DB_NICHES = [
+          "fitness", "hospitality", "food", "beauty", "fashion", "travel",
+          "education", "finance", "real_estate", "tech", "lifestyle",
+          "business", "marketing", "parenting", "spirituality",
+        ];
+        const direct = DB_NICHES.find(
+          (slug) => n.includes(slug.replace("_", " ")) || n.includes(slug)
+        );
+        if (direct) return direct;
+      }
+      const profileSlugs = creatorProfile?.selectedNicheSlugs ?? [];
+      const SLUG_TO_DB: Record<string, string> = {
+        "health-fitness": "fitness",
+        "business-entrepreneurship": "business",
+        "marketing-sales": "marketing",
+        "make-money-online": "business",
+        "personal-finance": "finance",
+        "restaurants-cafes": "hospitality",
+        "food-cooking": "food",
+      };
+      for (const slug of profileSlugs) {
+        if (SLUG_TO_DB[slug]) return SLUG_TO_DB[slug];
+      }
       if (!n) return null;
-      const DB_NICHES = [
-        "fitness", "hospitality", "food", "beauty", "fashion", "travel",
-        "education", "finance", "real_estate", "tech", "lifestyle",
-        "business", "marketing", "parenting", "spirituality",
-      ];
-      const direct = DB_NICHES.find(
-        (slug) => n.includes(slug.replace("_", " ")) || n.includes(slug)
-      );
-      if (direct) return direct;
       if (n.includes("restaurant") || n.includes("cafe")) return "food";
       if (n.includes("hotel") || n.includes("venue") || n.includes("hospitality")) return "hospitality";
       if (n.includes("gym") || n.includes("workout") || n.includes("health")) return "fitness";
@@ -8908,10 +9020,10 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
     const viralHookBlock = buildViralHookBlock(viralHookExamples);
 
     const formatRules = buildFilmingFormatRules(filmingFormat);
-    const audienceBlock = buildTargetAudiencePromptBlock(scriptIdea);
+    const audienceBlock = buildTargetAudiencePromptBlock(scriptIdea, creatorProfile);
 
     const writerRules = `You are SpyReels' script engine. SpyReels analyses thousands of viral Instagram Reels to extract the exact patterns that stop the scroll. You write scripts grounded in those real patterns — not generic AI templates.
-
+${profileBlock}
 SPYREELS SCRIPT STANDARDS:
 - Start with the hook IMMEDIATELY. No "Hey guys", no setup, no intro. The very first word must grab attention.
 - Write for spoken delivery: short paragraphs (1-2 sentences), natural contractions, rhythm that sounds real when spoken aloud.
@@ -8935,7 +9047,7 @@ ${goalBrief}`;
         {
           role: "user",
           content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"
-
+${profileBlock}
 Tone: ${toneContext}
 ${goalBrief}
 ${filmingFormat ? `Filming format: ${filmingFormat.replace(/_/g, " ")}` : ""}
@@ -9464,6 +9576,65 @@ Score this reel. Return structured JSON with all sub-scores plus overallScore.`;
   };
 }
 
+async function pauseIdeaForFilmingFormatClarification(
+  ideaId: number,
+  idea: { viralStructure?: unknown }
+): Promise<void> {
+  const wizard = buildFilmingFormatWizard();
+  const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+    clarification: wizard,
+    pendingQuestion: wizard.steps[0]?.question ?? "How will you film this Reel?",
+    pendingQuestionType: "filming_format",
+  });
+
+  await updateScriptIdea(ideaId, {
+    aiReasoning: "Quick question so your script matches how you will film it.",
+    validationStatus: "validated",
+    status: "awaiting_approval",
+    viralStructure: mergedVs as any,
+  } as any);
+}
+
+/** Infer or pause for filming format before script generation. Returns false if paused. */
+async function ensureFilmingFormatBeforeScript(
+  ideaId: number,
+  idea: { idea: string; filmingFormat?: string | null; viralStructure?: unknown }
+): Promise<boolean> {
+  if (readScriptIdeaFilmingFormat(idea)) return true;
+
+  const inferred = inferFilmingFormatFromIdea(idea.idea);
+  if (inferred) {
+    const label = filmingFormatLabelFromId(inferred);
+    const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+      ideaMeta: { filmingFormat: label },
+    });
+    await updateScriptIdea(ideaId, {
+      filmingFormat: label,
+      viralStructure: mergedVs as any,
+    } as any);
+    return true;
+  }
+
+  await pauseIdeaForFilmingFormatClarification(ideaId, idea);
+  console.log(`[Ideas] Paused idea ${ideaId} for filming format clarification`);
+  return false;
+}
+
+async function proceedToIdeaScriptGeneration(ideaId: number, idea: { userId: number }): Promise<void> {
+  const recreateCheck = await checkUsageLimit(idea.userId, "recreateCount");
+  if (!recreateCheck.allowed) {
+    await updateScriptIdea(ideaId, {
+      status: "failed",
+      errorMessage: `Monthly AI script limit reached (${recreateCheck.used}/${recreateCheck.limit}). Upgrade for more.`,
+    } as any);
+    return;
+  }
+  await incrementUsage(idea.userId, "recreateCount");
+  processIdeaInBackground(ideaId).catch((err) =>
+    console.error(`[Ideas] Script generation failed for idea ${ideaId}:`, err)
+  );
+}
+
 /**
  * AI validates an idea before script generation.
  * Checks if the idea is clear, specific, and has viral potential.
@@ -9476,7 +9647,13 @@ async function validateIdeaInBackground(ideaId: number) {
     if (!idea) throw new Error("Idea not found");
 
     const onboarding = await getOnboardingState(idea.userId);
+    let workingIdea = await autoLockAudienceFromContext(ideaId, idea, onboarding);
+
+    const nicheLabels = (onboarding?.selectedNicheSlugs ?? [])
+      .map((slug) => ONBOARDING_NICHES.find((n) => n.slug === slug)?.name ?? slug)
+      .filter(Boolean);
     const profileContext = [
+      nicheLabels.length > 0 ? `Creator niches (from profile): ${nicheLabels.join(", ")}` : null,
       onboarding?.businessDescription?.trim()
         ? `Creator business (from profile): ${onboarding.businessDescription.trim()}`
         : null,
@@ -9489,12 +9666,15 @@ async function validateIdeaInBackground(ideaId: number) {
 
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(idea));
 
-    const audienceLocked = ideaHasLockedAudience(idea);
-    const lockedAudience = readTargetAudienceFromIdeaMeta(idea.viralStructure);
+    const audienceLocked = workingIdea.locked || ideaHasLockedAudience(workingIdea);
+    const lockedAudience = readTargetAudienceFromIdeaMeta(workingIdea.viralStructure);
+    const skipAudienceWizard = shouldSkipAudienceClarification(workingIdea.idea, onboarding);
 
     const audienceRules = audienceLocked
       ? `AUDIENCE IS LOCKED. The creator already chose who will watch this Reel${lockedAudience ? `: ${lockedAudience.label}` : ""}. Set needsAudienceClarification to false and audienceQuestion to empty string. Score and refine the idea ONLY for that audience. Do NOT hedge between audiences or suggest speaking to operators and guests in the same idea.`
-      : `AUDIENCE CLARITY CHECK (run this FIRST): Do you know exactly who will watch this Reel? If the idea could be for two different audiences (business owners vs customers, operators vs guests, professionals vs beginners), set needsAudienceClarification to true, set improvedIdea to empty string, and write audienceQuestion (under 12 words). Do NOT hedge in improvedIdea by saying "target either X or Y". Pick one audience only after the creator clarifies. If profile default audience applies clearly, you may use it and skip clarification.`;
+      : skipAudienceWizard
+        ? `AUDIENCE IS CLEAR from the idea text or creator profile. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed. Do NOT ask who the audience is.`
+        : `AUDIENCE CLARITY CHECK (hospitality / dual-audience ideas ONLY): Ask ONLY when the idea could legitimately target two different audiences (e.g. hotel guests vs hotel owners). Otherwise set needsAudienceClarification to false. If profile default audience applies, use it and skip clarification.`;
 
     const response = await invokeLLM({
       messages: [
@@ -9517,7 +9697,7 @@ ${audienceRules}`),
         },
         {
           role: "user",
-          content: `Reel idea draft:\n"${idea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}${profileContext ? `\n\n${profileContext}` : ""}`,
+          content: `Reel idea draft:\n"${workingIdea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}${profileContext ? `\n\n${profileContext}` : ""}`,
         },
       ],
       response_format: {
@@ -9551,6 +9731,7 @@ ${audienceRules}`),
 
     const needsClarification =
       !audienceLocked &&
+      !skipAudienceWizard &&
       ((validation.needsAudienceClarification === true &&
         typeof validation.audienceQuestion === "string" &&
         validation.audienceQuestion.trim().length > 0) ||
@@ -9558,7 +9739,7 @@ ${audienceRules}`),
 
     if (needsClarification) {
       const wizard = buildClarificationWizard(
-        idea.idea,
+        workingIdea.idea,
         typeof validation.audienceQuestion === "string" ? validation.audienceQuestion : null
       );
       const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
@@ -9595,23 +9776,16 @@ ${audienceRules}`),
       aiReasoning: validation.reasoning,
       viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
       validationStatus: "validated",
-      status: "processing",
+      status: "validating",
     } as any);
 
-    const recreateCheck = await checkUsageLimit(idea.userId, "recreateCount");
-    if (!recreateCheck.allowed) {
-      await updateScriptIdea(ideaId, {
-        status: "failed",
-        errorMessage: `Monthly AI script limit reached (${recreateCheck.used}/${recreateCheck.limit}). Upgrade for more.`,
-      } as any);
-      return;
-    }
-    await incrementUsage(idea.userId, "recreateCount");
+    const refreshed = await getScriptIdeaById(ideaId);
+    if (!refreshed) return;
+    const canProceed = await ensureFilmingFormatBeforeScript(ideaId, refreshed);
+    if (!canProceed) return;
 
-    // Immediately kick off script generation — no approval gate
-    processIdeaInBackground(ideaId).catch(err =>
-      console.error(`[Ideas] Script generation failed for idea ${ideaId}:`, err)
-    );
+    await updateScriptIdea(ideaId, { status: "processing" } as any);
+    await proceedToIdeaScriptGeneration(ideaId, refreshed);
 
     console.log(`[Ideas] Validated idea ${ideaId}: score ${validation.viralScore}/10`);
   } catch (error) {

@@ -1,15 +1,20 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
-import { Send, Loader2, Plus, Lightbulb, X } from "lucide-react";
+import { Send, Loader2, Lightbulb, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   isHospitalityIdea,
+  isFilmingFormatWizard,
   parseClarificationWizard,
   resolveWizardSteps,
 } from "@shared/ideaClarification";
+import {
+  buildIdeaStarterHeadline,
+  buildIdeaStarterPrompts,
+} from "@shared/ideaStarterPrompts";
 import { ClaudeStyleQuestionCard } from "@/components/ClaudeStyleQuestionCard";
 import { scriptHookSnippet } from "@/components/IdeaScriptPostPanel";
 import {
@@ -21,20 +26,6 @@ import {
   type ClarificationSession,
 } from "@/components/IdeaScriptConversation";
 
-const FILMING_FORMATS = [
-  { id: "talking_head", label: "You on camera, speaking", icon: "🎥", sub: "Selfie-style, face to camera" },
-  { id: "broll_voiceover", label: "Show your space or product, speak over it", icon: "🏨", sub: "B-roll footage, your voice narrates" },
-  { id: "faceless_text", label: "No face, text on screen", icon: "✍️", sub: "Faceless, text animates over video" },
-  { id: "tutorial_demo", label: "Tutorial or step-by-step", icon: "📋", sub: "Whiteboard, demo, or screen recording" },
-  { id: "before_after", label: "Before and After", icon: "⚡", sub: "Show the transformation or result" },
-] as const;
-
-const SUGGESTED_PROMPTS = [
-  "I want to create a script for guest journey experience",
-  "The moment after check-in that kills repeat visits at my hotel",
-  "3 mistakes I made growing my fitness page to 50k",
-];
-
 type ScriptEditContext = {
   ideaId: number;
   quote: string;
@@ -44,10 +35,6 @@ export default function IdeaToScript() {
   const posthog = usePostHog();
 
   const [ideaText, setIdeaText] = useState("");
-  const [filmingFormat, setFilmingFormat] = useState<string>("");
-  const [customFormat, setCustomFormat] = useState<string>("");
-  const [formatOpen, setFormatOpen] = useState(false);
-  const [formatError, setFormatError] = useState(false);
   const [expandedIdea, setExpandedIdea] = useState<number | null>(null);
   const [clarifySessions, setClarifySessions] = useState<Record<number, ClarificationSession>>({});
   const [editContext, setEditContext] = useState<ScriptEditContext | null>(null);
@@ -58,6 +45,15 @@ export default function IdeaToScript() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const utils = trpc.useUtils();
+  const onboardingQuery = trpc.onboarding.getState.useQuery();
+  const suggestedPrompts = useMemo(
+    () => buildIdeaStarterPrompts(onboardingQuery.data),
+    [onboardingQuery.data]
+  );
+  const starterHeadline = useMemo(
+    () => buildIdeaStarterHeadline(onboardingQuery.data),
+    [onboardingQuery.data]
+  );
   const ideasQuery = trpc.ideas.list.useQuery(undefined, {
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -143,16 +139,6 @@ export default function IdeaToScript() {
   );
 
   useEffect(() => {
-    if (!formatOpen) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-format-dropdown]")) setFormatOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [formatOpen]);
-
-  useEffect(() => {
     setClarifySessions((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -204,6 +190,21 @@ export default function IdeaToScript() {
 
   const handleSkipClarification = (ideaId: number) => {
     const idea = ideas.find((i) => i.id === ideaId);
+    const wizard = idea ? parseClarificationWizard((idea as any).viralStructure) : null;
+    if (wizard && isFilmingFormatWizard(wizard)) {
+      setClarifySessions((prev) => {
+        const next = { ...prev };
+        delete next[ideaId];
+        return next;
+      });
+      approveMutation.mutate({
+        ideaId,
+        action: "clarify",
+        clarificationAnswers: { filming_format: "talking_head" },
+      });
+      return;
+    }
+
     const defaultAudience = idea && isHospitalityIdea(idea.idea) ? "guests" : "customers";
     setClarifySessions((prev) => {
       const next = { ...prev };
@@ -257,16 +258,6 @@ export default function IdeaToScript() {
       return;
     }
 
-    if (!filmingFormat && !customFormat.trim()) {
-      setFormatError(true);
-      setFormatOpen(true);
-      setTimeout(() => setFormatError(false), 1000);
-      return;
-    }
-    const resolvedFormat =
-      filmingFormat === "custom"
-        ? customFormat.trim()
-        : FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label ?? "";
     submitMutation.mutate({
       idea: trimmed,
       niche: undefined,
@@ -274,7 +265,6 @@ export default function IdeaToScript() {
       creatorGoal: "balanced" as any,
       gradeLevel: "auto" as any,
       inputMethod: "text",
-      filmingFormat: resolvedFormat || undefined,
     });
     posthog?.capture("idea_to_script_submit");
   };
@@ -292,13 +282,6 @@ export default function IdeaToScript() {
       handleSubmit();
     }
   };
-
-  const formatLabel =
-    filmingFormat === "custom" && customFormat.trim()
-      ? customFormat.trim()
-      : filmingFormat
-      ? FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label
-      : null;
 
   const chatTitle =
     sortedIdeas.length > 0
@@ -342,12 +325,12 @@ export default function IdeaToScript() {
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                 <Lightbulb className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h2 className="text-lg font-medium mb-2">What Reel should we write?</h2>
+              <h2 className="text-lg font-medium mb-2">{starterHeadline}</h2>
               <p className="text-sm text-muted-foreground max-w-sm mb-6">
                 Describe your idea below. I will ask a few smart questions before drafting a script built to go viral.
               </p>
               <div className="flex flex-col gap-2 w-full max-w-md">
-                {SUGGESTED_PROMPTS.map((prompt) => (
+                {suggestedPrompts.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -382,7 +365,19 @@ export default function IdeaToScript() {
                   isSavingScript={saveToScriptsMutation.isPending && savingIdeaId === idea.id}
                   saveAssistantMessage={saveAssistantByIdea[idea.id] ?? null}
                   onEditPolish={(i) => wrapScriptForEdit(i)}
-                  onFollowUp={(i, text) => wrapScriptForEdit(i, text)}
+                  onFollowUp={(_i, text) => {
+                    posthog?.capture("idea_follow_up_submit", {
+                      followUp: text.slice(0, 120),
+                    });
+                    submitMutation.mutate({
+                      idea: text,
+                      niche: undefined,
+                      tone: "engaging" as any,
+                      creatorGoal: "balanced" as any,
+                      gradeLevel: "auto" as any,
+                      inputMethod: "text",
+                    });
+                  }}
                   onRegenerate={(i) =>
                     wrapScriptForEdit(i, "Regenerate the full script with a stronger hook and tighter pacing")
                   }
@@ -412,11 +407,7 @@ export default function IdeaToScript() {
             />
           ) : null}
 
-          <div
-            className={`rounded-[22px] border bg-card transition-colors ${
-              formatError ? "border-amber-400/60" : "border-border/60 focus-within:border-violet-400/35 focus-within:ring-[3px] focus-within:ring-violet-400/10"
-            }`}
-          >
+          <div className="rounded-[22px] border border-border/60 bg-card transition-colors focus-within:border-violet-400/35 focus-within:ring-[3px] focus-within:ring-violet-400/10">
             {editContext ? (
               <div className="mx-2.5 mt-2.5 px-3 py-2.5 rounded-xl bg-muted/80 border border-border/60 relative">
                 <button
@@ -443,52 +434,7 @@ export default function IdeaToScript() {
               rows={editContext ? 2 : 1}
               className="min-h-[52px] max-h-32 resize-none border-0 bg-transparent px-5 pt-4 pb-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none"
             />
-            <div className="flex items-center justify-between gap-2 px-3 pb-3">
-              <div className="flex items-center gap-1">
-                {!activeClarify && !editContext ? (
-                  <div className="relative" data-format-dropdown>
-                    <button
-                      type="button"
-                      onClick={() => setFormatOpen((v) => !v)}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors ${
-                        formatLabel
-                          ? "text-foreground bg-muted"
-                          : formatError
-                          ? "text-amber-600"
-                          : "text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      <Plus className="h-4 w-4" />
-                      {formatLabel ? (
-                        <span className="max-w-[140px] truncate hidden sm:inline">{formatLabel}</span>
-                      ) : null}
-                    </button>
-                    {formatOpen && (
-                      <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-[min(100vw-2rem,300px)] rounded-xl border border-border bg-popover shadow-xl p-1.5">
-                        {FILMING_FORMATS.map((fmt) => (
-                          <button
-                            key={fmt.id}
-                            type="button"
-                            onClick={() => {
-                              setFilmingFormat(fmt.id);
-                              setCustomFormat("");
-                              setFormatOpen(false);
-                              setFormatError(false);
-                            }}
-                            className={`w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left text-sm ${
-                              filmingFormat === fmt.id ? "bg-muted" : "hover:bg-muted/60"
-                            }`}
-                          >
-                            <span>{fmt.icon}</span>
-                            <span className="text-xs">{fmt.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
+            <div className="flex items-center justify-end gap-2 px-3 pb-3">
               <Button
                 onClick={handleSubmit}
                 disabled={

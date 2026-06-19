@@ -4,6 +4,7 @@ import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import {
   assignTagToScript,
   ensureDefaultTags,
+  getOnboardingState,
   getScriptIdeaById,
   getScriptTagsByWorkspace,
   updateSavedScript,
@@ -96,19 +97,37 @@ export function buildSaveAssistantMessage(plannedLabel: string | null): string {
   return `Script saved. I added it to My Scripts, tagged it Scripting, and scheduled it for ${plannedLabel}. I'm writing your caption and hashtags in the background so they're ready when you open the editor.`;
 }
 
+function buildUrgentFallbackFollowUps(ideaText: string): string[] {
+  const hook = ideaText.split("\n")[0]?.trim().slice(0, 60) || "this idea";
+  return [
+    `Write a 30-second version with a punchier hook that stops scrollers on "${hook}"`,
+    `Turn this into Part 2 with the fixes or next steps viewers will save right away`,
+    `Give me 3 alternate opening hooks I can film and A/B test on this same topic today`,
+  ];
+}
+
 export async function generateIdeaFollowUps(
   ideaText: string,
   script: string,
-  title?: string | null
+  title?: string | null,
+  profileContext?: string | null
 ): Promise<string[]> {
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
         content: withAiFormattingRules(
-          `You suggest follow-up actions for a creator who just received an Instagram Reel script in SpyReels.
-Return valid JSON only with exactly 3 followUps: full-length, actionable sentences (12-22 words each).
-Each follow-up should be a specific next step to improve, repurpose, or extend THIS script.
+          `You write follow-up prompts for SpyReels Idea to Script, like Perplexity's "Keep exploring" chips.
+Each tap starts a NEW script (uses credits). Your job: make the creator hungry to click immediately.
+
+Return valid JSON with exactly 3 followUps. Each follow-up must:
+- Be one full sentence, 10-18 words, written as what the CREATOR would type next
+- Start with a strong verb: Write, Turn, Give me, Create, Draft, Rewrite, Build, Show me
+- Feel urgent and specific to THIS script (reference the topic, hook, or angle when possible)
+- Lead to a new filmable script: sequel, shorter cut, hook variants, different emotion, CTA spin-off, or "Part 2"
+- Sound like the obvious next move after reading this script, not generic coaching
+
+Do NOT write: vague advice, "consider improving", questions with no action, or anything over 20 words.
 No bullet prefixes. No em dashes.`
         ),
       },
@@ -118,6 +137,7 @@ No bullet prefixes. No em dashes.`
 Script title: ${title || "Untitled"}
 Script excerpt:
 ${script.slice(0, 1200)}
+${profileContext ? `\nCreator profile:\n${profileContext}` : ""}
 
 Return JSON: { "followUps": ["...", "...", "..."] }`,
       },
@@ -145,15 +165,16 @@ Return JSON: { "followUps": ["...", "...", "..."] }`,
   });
 
   const raw = response.choices[0]?.message?.content;
-  if (typeof raw !== "string") return [];
+  if (typeof raw !== "string") return buildUrgentFallbackFollowUps(ideaText);
   try {
     const parsed = sanitizeAiOutputDeep(JSON.parse(raw)) as { followUps?: string[] };
-    return (parsed.followUps ?? [])
+    const items = (parsed.followUps ?? [])
       .map((s) => s.trim())
       .filter(Boolean)
       .slice(0, 3);
+    return items.length >= 3 ? items : buildUrgentFallbackFollowUps(ideaText);
   } catch {
-    return [];
+    return buildUrgentFallbackFollowUps(ideaText);
   }
 }
 
@@ -236,10 +257,21 @@ export async function generateAndStoreFollowUps(ideaId: number): Promise<string[
   const idea = await getScriptIdeaById(ideaId);
   if (!idea?.generatedScript?.trim()) return [];
 
+  const profile = await getOnboardingState(idea.userId);
+  const profileContext = [
+    profile?.businessDescription?.trim()
+      ? `Business: ${profile.businessDescription.trim()}`
+      : null,
+    profile?.targetAudience?.trim() ? `Audience: ${profile.targetAudience.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   const followUps = await generateIdeaFollowUps(
     idea.idea,
     idea.generatedScript,
-    idea.generatedTitle
+    idea.generatedTitle,
+    profileContext || null
   );
   if (followUps.length === 0) return [];
 
