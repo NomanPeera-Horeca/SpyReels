@@ -66,15 +66,6 @@ export function IdeaClarificationPanel({
     }
   }, [stepIndex, activeSteps.length]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   if (!open || !step) return null;
 
   const selectedId = answers[step.id];
@@ -125,61 +116,64 @@ export function IdeaClarificationPanel({
   };
 
   const shortPreview =
-    ideaPreview.length > 72 ? `${ideaPreview.slice(0, 72).trim()}...` : ideaPreview;
+    ideaPreview.length > 56 ? `${ideaPreview.slice(0, 56).trim()}...` : ideaPreview;
 
   return (
-    <div className="fixed inset-0 z-[100] font-sans">
+    <div className="fixed inset-0 z-[100] font-sans pointer-events-none">
       <button
         type="button"
         aria-label="Close clarification"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 bg-black/25 pointer-events-auto"
         onClick={onClose}
       />
 
       <div
         role="dialog"
         aria-modal="true"
-        className="absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col animate-in slide-in-from-bottom-full duration-300 ease-out"
+        className="absolute inset-x-0 bottom-0 flex justify-center px-3 pb-3 sm:px-4 sm:pb-5 pointer-events-none"
       >
-        <div className="flex min-h-0 flex-1 flex-col rounded-t-[20px] border-t border-white/10 bg-[#1c1c1e] shadow-[0_-24px_80px_rgba(0,0,0,0.55)]">
-          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-white/20" aria-hidden />
+        <div
+          className="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#232326] shadow-[0_-8px_40px_rgba(0,0,0,0.35)] animate-in slide-in-from-bottom-6 duration-250 ease-out"
+          style={{ maxHeight: "min(55vh, 480px)" }}
+        >
+          <div className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-white/20" aria-hidden />
 
-          <div className="h-1 shrink-0 bg-white/5">
+          <div className="mx-3 mt-2 h-0.5 shrink-0 overflow-hidden rounded-full bg-white/8">
             <div
               className="h-full bg-violet-500 transition-all duration-300 ease-out"
               style={{ width: `${progressPct}%` }}
             />
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-4 pb-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-3 pb-1">
             <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-white/40">
-                Quick question {stepIndex + 1} of {totalSteps}
+              <p className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                Question {stepIndex + 1} of {totalSteps}
               </p>
-              <p className="mt-0.5 truncate text-xs text-white/35" title={ideaPreview}>
+              <p className="mt-0.5 truncate text-[11px] text-white/30" title={ideaPreview}>
                 {shortPreview}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full p-2 text-white/45 transition-colors hover:bg-white/10 hover:text-white/80"
+              className="shrink-0 rounded-full p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/70"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
-            <h2 className="text-[22px] font-medium leading-snug tracking-tight text-white">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-1">
+            <h2 className="text-base font-medium leading-snug text-white/95 sm:text-[17px]">
               {step.question}
             </h2>
 
             {answeredChips.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {answeredChips.map((chip) => (
                   <span
                     key={chip.question}
-                    className="inline-flex items-center rounded-full bg-white/8 px-3 py-1 text-xs text-white/70"
+                    className="inline-flex items-center rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-white/60"
                     title={chip.question}
                   >
                     {chip.answer}
@@ -188,7 +182,7 @@ export function IdeaClarificationPanel({
               </div>
             ) : null}
 
-            <div className="mt-6 space-y-2 pb-4">
+            <div className="mt-3 space-y-1.5 pb-2">
               {step.options.map((opt) => {
                 const active = selectedId === opt.id && !showCustom;
                 return (
@@ -197,26 +191,26 @@ export function IdeaClarificationPanel({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => pickOption(opt.id)}
-                    className={`group w-full rounded-2xl px-4 py-4 text-left transition-all active:scale-[0.99] ${
+                    className={`group w-full rounded-xl px-3 py-2.5 text-left transition-all active:scale-[0.99] ${
                       active
-                        ? "bg-white/12 ring-1 ring-violet-400/50"
-                        : "bg-white/[0.06] hover:bg-white/10"
+                        ? "bg-white/12 ring-1 ring-violet-400/40"
+                        : "bg-white/[0.05] hover:bg-white/[0.09]"
                     }`}
                   >
-                    <span className="flex items-start gap-3">
+                    <span className="flex items-start gap-2.5">
                       <span
-                        className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
+                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors ${
                           active
                             ? "border-violet-400 bg-violet-400"
                             : "border-white/25 group-hover:border-white/40"
                         }`}
                       />
                       <span className="min-w-0">
-                        <span className="block text-[15px] font-medium text-white/95">
+                        <span className="block text-[13px] font-medium leading-snug text-white/90">
                           {opt.label}
                         </span>
                         {opt.sub ? (
-                          <span className="mt-1 block text-sm leading-snug text-white/45">
+                          <span className="mt-0.5 block text-xs leading-snug text-white/40">
                             {opt.sub}
                           </span>
                         ) : null}
@@ -227,7 +221,7 @@ export function IdeaClarificationPanel({
               })}
 
               {step.allowCustom ? (
-                <div className="pt-1">
+                <div>
                   {!showCustom ? (
                     <button
                       type="button"
@@ -240,12 +234,12 @@ export function IdeaClarificationPanel({
                           return next;
                         });
                       }}
-                      className="w-full rounded-2xl border border-dashed border-white/15 px-4 py-3.5 text-left text-sm text-white/45 transition-colors hover:border-white/25 hover:bg-white/[0.04] hover:text-white/70"
+                      className="w-full rounded-xl border border-dashed border-white/12 px-3 py-2.5 text-left text-xs text-white/40 transition-colors hover:border-white/20 hover:bg-white/[0.04] hover:text-white/60"
                     >
                       Something else...
                     </button>
                   ) : (
-                    <div className="rounded-2xl bg-white/[0.06] p-3">
+                    <div className="rounded-xl bg-white/[0.05] p-2.5">
                       <input
                         type="text"
                         value={customText}
@@ -255,14 +249,14 @@ export function IdeaClarificationPanel({
                         }}
                         placeholder="Type your answer..."
                         autoFocus
-                        className="w-full rounded-xl border-0 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
+                        className="w-full rounded-lg border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
                       />
                       <Button
                         type="button"
                         size="sm"
                         disabled={isSubmitting || !customText.trim()}
                         onClick={submitCustom}
-                        className="mt-2 h-9 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-500"
+                        className="mt-2 h-8 w-full rounded-lg bg-violet-600 text-xs text-white hover:bg-violet-500"
                       >
                         {isLastStep ? "Generate Script" : "Continue"}
                       </Button>
@@ -273,15 +267,15 @@ export function IdeaClarificationPanel({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/8 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/8 px-4 py-2.5">
             {stepIndex > 0 ? (
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={goBack}
-                className="flex items-center gap-1.5 text-sm text-white/45 transition-colors hover:text-white/75"
+                className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white/70"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-3.5 w-3.5" />
                 Back
               </button>
             ) : (
@@ -289,21 +283,19 @@ export function IdeaClarificationPanel({
                 type="button"
                 disabled={isSubmitting}
                 onClick={onSkip}
-                className="text-sm text-white/45 transition-colors hover:text-white/75"
+                className="text-xs text-white/40 transition-colors hover:text-white/70"
               >
-                Skip for now
+                Skip
               </button>
             )}
 
             {isSubmitting ? (
-              <span className="flex items-center gap-2 text-sm text-white/50">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Building your script...
+              <span className="flex items-center gap-1.5 text-xs text-white/45">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Building script...
               </span>
             ) : (
-              <span className="text-xs text-white/30">
-                Tap an option to continue
-              </span>
+              <span className="text-[10px] text-white/28">Tap to continue</span>
             )}
           </div>
         </div>
