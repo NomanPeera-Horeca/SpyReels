@@ -12,6 +12,13 @@ import {
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
 } from "@shared/instagramHandle";
 import { REEL_NICHE_VALUES } from "@shared/reelNiches";
+import {
+  buildClarificationWizard,
+  formatClarificationAnswers,
+  readTargetAudienceFromIdeaMeta,
+  suggestionHedgesAudience,
+  type IdeaClarificationWizard,
+} from "../shared/ideaClarification";
 
 const reelNicheInputEnum = z.enum(
   REEL_NICHE_VALUES as unknown as [string, ...string[]]
@@ -5590,8 +5597,10 @@ The hook MUST be 7-10 words. Count them.`),
     approve: protectedProcedure
       .input(z.object({
         ideaId: z.number(),
-        action: z.enum(["accept", "reject", "edit"]),
-        editedIdea: z.string().optional(), // only when action is "edit"
+        action: z.enum(["accept", "reject", "edit", "clarify"]),
+        editedIdea: z.string().optional(),
+        clarificationAnswers: z.record(z.string(), z.string()).optional(),
+        clarificationCustom: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const idea = await assertIdeaInWorkspace(input.ideaId, ctx);
@@ -5606,6 +5615,49 @@ The hook MUST be 7-10 words. Count them.`),
             errorMessage: "Idea rejected by user",
           } as any);
           return { status: "rejected" as const };
+        }
+
+        if (input.action === "clarify" && input.clarificationAnswers) {
+          const vs = idea.viralStructure as Record<string, unknown> | null;
+          const wizardRaw = vs?.clarification;
+          if (!wizardRaw || typeof wizardRaw !== "object" || !Array.isArray((wizardRaw as IdeaClarificationWizard).steps)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "No clarification wizard on this idea" });
+          }
+          const wizard = wizardRaw as IdeaClarificationWizard;
+          const formatted = formatClarificationAnswers(
+            idea.idea,
+            wizard,
+            input.clarificationAnswers,
+            input.clarificationCustom
+          );
+          const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+            ideaMeta: {
+              targetAudience: formatted.targetAudience,
+              audienceType: formatted.audienceType,
+              clarificationAnswers: formatted.answerSummary,
+            },
+            pendingQuestion: undefined,
+            pendingQuestionType: undefined,
+            clarification: undefined,
+          });
+          delete mergedVs.pendingQuestion;
+          delete mergedVs.pendingQuestionType;
+          delete mergedVs.clarification;
+
+          await updateScriptIdea(input.ideaId, {
+            idea: formatted.enrichedIdea,
+            validationStatus: "edited",
+            status: "validating",
+            aiSuggestion: null,
+            aiReasoning: null,
+            viralStructure: mergedVs as any,
+          } as any);
+
+          validateIdeaInBackground(input.ideaId).catch(err =>
+            console.error(`[Ideas] Re-validation after clarification failed for idea ${input.ideaId}:`, err)
+          );
+
+          return { status: "validating" as const };
         }
 
         if (input.action === "edit" && input.editedIdea) {
@@ -8047,6 +8099,42 @@ Return ONLY valid JSON.`;
 }
 
 
+function mergeScriptIdeaViralStructure(
+  existing: unknown,
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  const prevMeta =
+    base.ideaMeta && typeof base.ideaMeta === "object"
+      ? (base.ideaMeta as Record<string, unknown>)
+      : {};
+  if (patch.ideaMeta && typeof patch.ideaMeta === "object") {
+    return {
+      ...base,
+      ...patch,
+      ideaMeta: { ...prevMeta, ...(patch.ideaMeta as Record<string, unknown>) },
+    };
+  }
+  return { ...base, ...patch };
+}
+
+function buildTargetAudiencePromptBlock(idea: { viralStructure?: unknown }): string {
+  const aud = readTargetAudienceFromIdeaMeta(idea.viralStructure);
+  if (!aud) return "";
+  const guard =
+    aud.type === "b2c"
+      ? "Write TO this consumer audience in second person. Do NOT address business owners, operators, or industry peers unless they are the viewer."
+      : aud.type === "b2b"
+        ? "Write TO business buyers and operators in this industry. Do NOT write as if the viewer is an end consumer or guest."
+        : aud.type === "creator_peers"
+          ? "Write TO other creators and peers. Use shared-experience framing, not consumer marketing speak."
+          : "";
+  return `\nTARGET AUDIENCE (locked by creator): ${aud.label}\n${guard}\n`;
+}
+
 /** Passing score (1-10) keeps the drafted script without another LLM regeneration pass. */
 const IDEA_SCRIPT_JUDGE_PASS_SCORE = 7;
 /** Attempts after the first draft when the judge score is below {@link IDEA_SCRIPT_JUDGE_PASS_SCORE}. */
@@ -8739,6 +8827,7 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
     const viralHookBlock = buildViralHookBlock(viralHookExamples);
 
     const formatRules = buildFilmingFormatRules(filmingFormat);
+    const audienceBlock = buildTargetAudiencePromptBlock(scriptIdea);
 
     const writerRules = `You are SpyReels' script engine. SpyReels analyses thousands of viral Instagram Reels to extract the exact patterns that stop the scroll. You write scripts grounded in those real patterns — not generic AI templates.
 
@@ -8749,7 +8838,7 @@ SPYREELS SCRIPT STANDARDS:
 - 150-300 spoken words (30-60 seconds). One clear takeaway. One CTA at the end.
 - Every line earns its place. If a sentence doesn't move the story forward or deepen the hook, cut it.
 - Sound like a real creator, not an AI assistant summarising a topic.
-
+${audienceBlock}
 ${formatRules}
 
 ${goalBrief}`;
@@ -8769,6 +8858,7 @@ ${goalBrief}`;
 Tone: ${toneContext}
 ${goalBrief}
 ${filmingFormat ? `Filming format: ${filmingFormat.replace(/_/g, " ")}` : ""}
+${audienceBlock}
 ${viralHookBlock}
 
 Return JSON with:
@@ -9300,6 +9390,18 @@ async function validateIdeaInBackground(ideaId: number) {
     const idea = await getScriptIdeaById(ideaId);
     if (!idea) throw new Error("Idea not found");
 
+    const onboarding = await getOnboardingState(idea.userId);
+    const profileContext = [
+      onboarding?.businessDescription?.trim()
+        ? `Creator business (from profile): ${onboarding.businessDescription.trim()}`
+        : null,
+      onboarding?.targetAudience?.trim()
+        ? `Default target audience (from profile): ${onboarding.targetAudience.trim()}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(idea));
 
     const response = await invokeLLM({
@@ -9317,15 +9419,13 @@ Score the IDEA (not a script yet) on:
 4. Payoff: is there one obvious insight, story turn, or takeaway?
 5. Shelf life / calendar fit: can this become repeat-friendly content (series, pillar) when the goal is branding or education?
 
-Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views). Suggest a tighter improvedIdea (max 2 sentences) the user can approve.
+Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views).
 
-If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.
-
-AUDIENCE CLARITY CHECK: Before scoring, ask yourself: "Do I know exactly who will watch this Reel?" If the idea could be for two different audiences (e.g. business owners vs their customers, professionals vs beginners, parents vs teenagers, sellers vs buyers), and the idea text does not make it clear, set needsAudienceClarification to true and write a short audienceQuestion asking the creator who this Reel is for. The question must be under 12 words. Examples: "Who will watch this, your customers or industry peers?", "Is this for beginners or experienced practitioners?", "Who is your audience, guests visiting your place or other operators?". Only ask when genuinely ambiguous. If the idea already includes a "Target audience:" line or otherwise explicitly names who should watch, set needsAudienceClarification to false and audienceQuestion to empty string. If the idea clearly implies one audience (including first-person creator journey content like "mistakes I made growing my account"), set needsAudienceClarification to false and audienceQuestion to empty string.`),
+AUDIENCE CLARITY CHECK (run this FIRST): Do you know exactly who will watch this Reel? If the idea could be for two different audiences (business owners vs customers, operators vs guests, professionals vs beginners), set needsAudienceClarification to true, set improvedIdea to empty string, and write audienceQuestion (under 12 words). Do NOT hedge in improvedIdea by saying "target either X or Y". Pick one audience only after the creator clarifies. If the idea already includes "Target audience:" or "Creator context:", set needsAudienceClarification to false. If profile default audience applies clearly, you may use it and skip clarification.`),
         },
         {
           role: "user",
-          content: `Reel idea draft:\n"${idea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}`,
+          content: `Reel idea draft:\n"${idea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}${profileContext ? `\n\n${profileContext}` : ""}`,
         },
       ],
       response_format: {
@@ -9358,29 +9458,47 @@ AUDIENCE CLARITY CHECK: Before scoring, ask yourself: "Do I know exactly who wil
     );
 
     const needsClarification =
-      validation.needsAudienceClarification === true &&
-      typeof validation.audienceQuestion === "string" &&
-      validation.audienceQuestion.trim().length > 0;
+      (validation.needsAudienceClarification === true &&
+        typeof validation.audienceQuestion === "string" &&
+        validation.audienceQuestion.trim().length > 0) ||
+      suggestionHedgesAudience(String(validation.improvedIdea || ""));
 
     if (needsClarification) {
+      const wizard = buildClarificationWizard(
+        idea.idea,
+        typeof validation.audienceQuestion === "string" ? validation.audienceQuestion : null
+      );
+      const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+        clarification: wizard,
+        pendingQuestion: wizard.steps[0]?.question ?? "Who will watch this Reel?",
+        pendingQuestionType: "audience",
+      });
+
       await updateScriptIdea(ideaId, {
-        aiSuggestion: validation.improvedIdea,
-        aiReasoning: validation.reasoning,
+        aiSuggestion: null,
+        aiReasoning:
+          typeof validation.reasoning === "string" && validation.reasoning.trim()
+            ? validation.reasoning
+            : "We need one quick answer so your script speaks to the right people.",
         viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
         validationStatus: "validated",
         status: "awaiting_approval",
-        viralStructure: {
-          pendingQuestion: validation.audienceQuestion.trim(),
-          pendingQuestionType: "audience",
-        },
+        viralStructure: mergedVs as any,
       } as any);
-      console.log(`[Ideas] Paused idea ${ideaId} for audience clarification: "${validation.audienceQuestion}"`);
+      console.log(
+        `[Ideas] Paused idea ${ideaId} for clarification wizard (${wizard.steps.length} steps): "${wizard.steps[0]?.question}"`
+      );
       return;
     }
 
+    const improved =
+      typeof validation.improvedIdea === "string" && validation.improvedIdea.trim()
+        ? validation.improvedIdea.trim()
+        : idea.idea;
+
     await updateScriptIdea(ideaId, {
-      idea: String(validation.improvedIdea || idea.idea),
-      aiSuggestion: validation.improvedIdea,
+      idea: improved,
+      aiSuggestion: improved !== idea.idea ? improved : null,
       aiReasoning: validation.reasoning,
       viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
       validationStatus: "validated",

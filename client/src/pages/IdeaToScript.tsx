@@ -14,6 +14,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import { IdeaClarificationPanel } from "@/components/IdeaClarificationPanel";
+import {
+  isHospitalityIdea,
+  parseClarificationWizard,
+  type IdeaClarificationWizard,
+} from "@shared/ideaClarification";
 
 const TONE_OPTIONS = [
   { value: "engaging", label: "Engaging", emoji: "🎯" },
@@ -69,7 +75,7 @@ type IdeaStatus = "queued" | "validating" | "awaiting_approval" | "processing" |
 const STATUS_CONFIG: Record<IdeaStatus, { icon: typeof Clock; color: string; label: string; bg: string }> = {
   queued: { icon: Clock, color: "text-yellow-400", label: "In Queue", bg: "bg-yellow-400/10" },
   validating: { icon: Sparkles, color: "text-purple-400", label: "AI Reviewing...", bg: "bg-purple-400/10" },
-  awaiting_approval: { icon: AlertTriangle, color: "text-amber-400", label: "Needs Your Approval", bg: "bg-amber-400/10" },
+  awaiting_approval: { icon: AlertTriangle, color: "text-amber-400", label: "Quick question", bg: "bg-amber-400/10" },
   processing: { icon: Loader2, color: "text-blue-400", label: "Generating Script...", bg: "bg-blue-400/10" },
   completed: { icon: CheckCircle2, color: "text-green-400", label: "Ready", bg: "bg-green-400/10" },
   failed: { icon: XCircle, color: "text-red-400", label: "Failed", bg: "bg-red-400/10" },
@@ -122,6 +128,10 @@ function creatorGoalSlugFromListedIdea(idea: { viralStructure?: unknown }): stri
   return typeof slug === "string" ? slug : undefined;
 }
 
+function getClarificationWizard(idea: { viralStructure?: unknown }): IdeaClarificationWizard | null {
+  return parseClarificationWizard(idea.viralStructure);
+}
+
 function getPendingQuestion(idea: { viralStructure?: unknown }): string | null {
   const vs = idea.viralStructure;
   if (!vs || typeof vs !== "object" || vs === null) return null;
@@ -161,6 +171,8 @@ export default function IdeaToScript() {
   const [expandedIdea, setExpandedIdea] = useState<number | null>(null);
   const [editingIdeaId, setEditingIdeaId] = useState<number | null>(null);
   const [editedIdeaText, setEditedIdeaText] = useState("");
+  const [clarificationIdeaId, setClarificationIdeaId] = useState<number | null>(null);
+  const [clarificationDismissed, setClarificationDismissed] = useState<Set<number>>(() => new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const utils = trpc.useUtils();
@@ -169,7 +181,10 @@ export default function IdeaToScript() {
       const data = query.state.data;
       if (!data) return false;
       const hasPending = data.some((i: any) =>
-        i.status === "queued" || i.status === "processing" || i.status === "validating"
+        i.status === "queued" ||
+        i.status === "processing" ||
+        i.status === "validating" ||
+        i.status === "awaiting_approval"
       );
       return hasPending ? 3000 : false;
     },
@@ -189,8 +204,9 @@ export default function IdeaToScript() {
     onSuccess: (data, variables) => {
       if (variables.action === "reject") {
         toast.info("Idea rejected.");
-      } else if (variables.action === "edit") {
-        toast.success("Idea updated! AI is re-evaluating your version...");
+      } else if (variables.action === "edit" || variables.action === "clarify") {
+        toast.success("Got it! AI is shaping your script...");
+        setClarificationIdeaId(null);
       } else {
         toast.success("Approved! Script generation started.");
       }
@@ -291,8 +307,28 @@ export default function IdeaToScript() {
     return (order[a.status] ?? 6) - (order[b.status] ?? 6);
   });
 
+  const clarificationIdea = clarificationIdeaId
+    ? ideas.find((i) => i.id === clarificationIdeaId)
+    : null;
+  const clarificationWizard = clarificationIdea
+    ? getClarificationWizard(clarificationIdea as any)
+    : null;
+
+  useEffect(() => {
+    const pending = ideas.find(
+      (i) =>
+        i.status === "awaiting_approval" &&
+        getClarificationWizard(i as any) &&
+        !clarificationDismissed.has(i.id)
+    );
+    if (pending && clarificationIdeaId == null) {
+      setClarificationIdeaId(pending.id);
+    }
+  }, [ideas, clarificationIdeaId, clarificationDismissed]);
+
   return (
-    <div className="container max-w-4xl py-8 space-y-8">
+    <>
+    <div className="container max-w-4xl py-8 space-y-8 pb-32">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-2">
@@ -559,59 +595,24 @@ export default function IdeaToScript() {
 
                       {/* AI Validation / Approval Section */}
                       {isAwaitingApproval && (() => {
+                        const wizard = getClarificationWizard(idea as any);
                         const pendingQuestion = getPendingQuestion(idea as any);
 
-                        if (pendingQuestion) {
+                        if (wizard) {
                           return (
-                            <div className="mt-3 space-y-3">
-                              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-400/20">
-                                <p className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5" /> Quick question before we write your script
-                                </p>
-                                <p className="text-sm text-foreground font-medium">{pendingQuestion}</p>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  className="flex-1 h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
-                                  disabled={approveMutation.isPending}
-                                  onClick={() => {
-                                    const answer = "My customers / audience / viewers";
-                                    approveMutation.mutate({
-                                      ideaId: idea.id,
-                                      action: "edit",
-                                      editedIdea: `${idea.idea}\n\nTarget audience: ${answer}`,
-                                    });
-                                  }}
-                                >
-                                  {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                                  My customers / viewers
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5"
-                                  disabled={approveMutation.isPending}
-                                  onClick={() => {
-                                    const answer = "Other professionals / business owners in my industry";
-                                    approveMutation.mutate({
-                                      ideaId: idea.id,
-                                      action: "edit",
-                                      editedIdea: `${idea.idea}\n\nTarget audience: ${answer}`,
-                                    });
-                                  }}
-                                >
-                                  Other business owners
-                                </Button>
-                              </div>
+                            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-400/25">
+                              <p className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5" /> One quick question before we write your script
+                              </p>
+                              <p className="text-sm text-foreground mb-3">
+                                {pendingQuestion || wizard.steps[0]?.question}
+                              </p>
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                className="h-7 text-xs text-red-400 hover:text-red-300 gap-1.5 w-full"
-                                onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "reject" })}
-                                disabled={approveMutation.isPending}
+                                className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                                onClick={() => setClarificationIdeaId(idea.id)}
                               >
-                                <ThumbsDown className="h-3.5 w-3.5" /> Cancel
+                                Answer {wizard.steps.length} question{wizard.steps.length > 1 ? "s" : ""}
                               </Button>
                             </div>
                           );
@@ -789,5 +790,35 @@ export default function IdeaToScript() {
         )}
       </div>
     </div>
+
+    {clarificationIdea && clarificationWizard ? (
+      <IdeaClarificationPanel
+        open={clarificationIdeaId === clarificationIdea.id}
+        ideaPreview={clarificationIdea.idea}
+        wizard={clarificationWizard}
+        isSubmitting={approveMutation.isPending}
+        onClose={() => {
+          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
+          setClarificationIdeaId(null);
+        }}
+        onSkip={() => {
+          const defaultAudience = isHospitalityIdea(clarificationIdea.idea) ? "guests" : "customers";
+          approveMutation.mutate({
+            ideaId: clarificationIdea.id,
+            action: "clarify",
+            clarificationAnswers: { audience: defaultAudience },
+          });
+        }}
+        onComplete={(answers, customNotes) => {
+          approveMutation.mutate({
+            ideaId: clarificationIdea.id,
+            action: "clarify",
+            clarificationAnswers: answers,
+            clarificationCustom: customNotes || undefined,
+          });
+        }}
+      />
+    ) : null}
+    </>
   );
 }
