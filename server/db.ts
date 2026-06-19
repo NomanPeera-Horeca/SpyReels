@@ -2151,7 +2151,26 @@ export async function createScriptIdea(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
-  const result = await db.insert(scriptIdeas).values({ ...data, workspaceId });
+
+  const { filmingFormat, viralStructure, ...rest } = data;
+  let mergedStructure = viralStructure;
+  const formatLabel = typeof filmingFormat === "string" ? filmingFormat.trim() : "";
+  if (formatLabel) {
+    const base =
+      typeof viralStructure === "object" && viralStructure !== null
+        ? (viralStructure as Record<string, unknown>)
+        : {};
+    const meta =
+      typeof base.ideaMeta === "object" && base.ideaMeta !== null
+        ? (base.ideaMeta as Record<string, unknown>)
+        : {};
+    mergedStructure = {
+      ...base,
+      ideaMeta: { ...meta, filmingFormat: formatLabel },
+    };
+  }
+
+  const result = await db.insert(scriptIdeas).values({ ...rest, viralStructure: mergedStructure, workspaceId });
   return Number(result[0].insertId);
 }
 
