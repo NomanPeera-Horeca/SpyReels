@@ -816,12 +816,13 @@ export default function IdeaToScript() {
                       )}
 
                       {isExpanded && idea.status === "completed" && idea.generatedScript && (
-                        <div className="mt-3 p-3 rounded-lg bg-muted/30 border border-border/30">
-                          <p className="text-xs font-medium text-muted-foreground mb-2">Generated Script Preview:</p>
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {idea.generatedScript.substring(0, 500)}
-                            {idea.generatedScript.length > 500 && "..."}
-                          </p>
+                        <div className="mt-3 rounded-lg bg-muted/30 border border-border/30">
+                          <p className="text-xs font-medium text-muted-foreground px-3 pt-3 mb-2">Your Script:</p>
+                          <div className="px-3 pb-3 max-h-[500px] overflow-y-auto">
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                              {idea.generatedScript}
+                            </p>
+                          </div>
                         </div>
                       )}
 
@@ -834,12 +835,12 @@ export default function IdeaToScript() {
                               className="h-7 text-xs"
                               onClick={() => setExpandedIdea(isExpanded ? null : idea.id)}
                             >
-                              {isExpanded ? "Collapse" : "Preview Script"}
+                              {isExpanded ? "Hide Script" : "Read Script"}
                             </Button>
                             {idea.savedScriptId ? (
                               <Link href={`/scripts/${idea.savedScriptId}`}>
                                 <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white gap-1">
-                                  <FileText className="h-3 w-3" /> Open in Editor
+                                  <FileText className="h-3 w-3" /> Edit Script
                                 </Button>
                               </Link>
                             ) : (
@@ -854,7 +855,7 @@ export default function IdeaToScript() {
                                 ) : (
                                   <Plus className="h-3 w-3" />
                                 )}
-                                Save to My Scripts
+                                Use This Script
                               </Button>
                             )}
                           </>
