@@ -47,6 +47,19 @@ export function readClarificationSummary(
   return out.length > 0 ? out : null;
 }
 
+export function readFollowUpsFromIdeaMeta(viralStructure: unknown): string[] | null {
+  if (!viralStructure || typeof viralStructure !== "object") return null;
+  const meta = (viralStructure as Record<string, unknown>).ideaMeta;
+  if (!meta || typeof meta !== "object") return null;
+  const raw = (meta as Record<string, unknown>).followUps;
+  if (!Array.isArray(raw)) return null;
+  const items = raw
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((x) => x.trim())
+    .slice(0, 3);
+  return items.length > 0 ? items : null;
+}
+
 export function ideaHasLockedAudience(idea: {
   idea: string;
   viralStructure?: unknown;
@@ -130,22 +143,22 @@ export function buildClarificationWizard(
   const audienceStep: ClarificationStep = hospitality
     ? {
         id: "audience",
-        question: aiQuestion?.trim() || "Who is the target audience for this Reel?",
+        question: aiQuestion?.trim() || "Who is the target audience?",
         options: [
           {
             id: "guests",
             label: "End guests, diners, or travelers",
-            sub: "People visiting or experiencing your place",
+            sub: "People experiencing your place (B2C)",
           },
           {
             id: "operators",
-            label: "Hotel, restaurant, or venue operators",
-            sub: "Other owners and managers in hospitality",
+            label: "Restaurant or hotel owners and operators",
+            sub: "Hospitality buyers and managers (B2B)",
           },
           {
             id: "creator_peers",
-            label: "Other creators in my niche",
-            sub: "Peers learning content or growth tactics",
+            label: "Other creators and marketers in hospitality",
+            sub: "Peers learning content and growth",
           },
         ],
         allowCustom: true,
@@ -178,7 +191,7 @@ export function buildClarificationWizard(
   if (hospitality) {
     steps.push({
       id: "venue_type",
-      question: "What type of place is this about?",
+      question: "What type of place is this Reel about?",
       options: [
         { id: "hotel", label: "Hotel, resort, or boutique stay" },
         { id: "restaurant", label: "Restaurant, cafe, or bar" },
@@ -189,12 +202,56 @@ export function buildClarificationWizard(
     });
     steps.push({
       id: "journey_moment",
-      question: "Which part of the guest journey?",
+      question: "What's the core angle or hook?",
       options: [
-        { id: "check_in", label: "Arrival and check-in" },
-        { id: "during_stay", label: "During the stay or visit" },
-        { id: "checkout", label: "Checkout and goodbye" },
-        { id: "full_journey", label: "Full journey start to finish" },
+        {
+          id: "full_journey",
+          label: "The full guest journey from arrival to goodbye",
+          sub: "Start-to-finish story arc",
+        },
+        {
+          id: "during_stay",
+          label: "One key moment that makes or breaks the experience",
+          sub: "Single high-stakes beat in the visit",
+        },
+        {
+          id: "check_in",
+          label: "Behind the scenes of how you deliver the experience",
+          sub: "What guests never see but feel",
+        },
+        {
+          id: "checkout",
+          label: "Guest transformation or before/after story",
+          sub: "Emotional payoff and repeat-visit trigger",
+        },
+      ],
+      allowCustom: true,
+    });
+  } else {
+    steps.push({
+      id: "journey_moment",
+      question: "What's the core angle or hook?",
+      options: [
+        {
+          id: "full_journey",
+          label: "Full story from problem to payoff",
+          sub: "Complete narrative arc",
+        },
+        {
+          id: "during_stay",
+          label: "One surprising insight or mistake",
+          sub: "Curiosity-gap hook",
+        },
+        {
+          id: "check_in",
+          label: "Behind the scenes / how it's really done",
+          sub: "Insider perspective",
+        },
+        {
+          id: "checkout",
+          label: "Before and after transformation",
+          sub: "Visual or emotional contrast",
+        },
       ],
       allowCustom: true,
     });

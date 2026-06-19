@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels Idea to Script — UI preview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sr-bg: #fafafa;
+      --sr-surface: #ffffff;
+      --sr-text: #18181b;
+      --sr-muted: #71717a;
+      --sr-border: #e4e4e7;
+      --sr-violet-50: #f5f3ff;
+      --sr-violet-100: #ede9fe;
+      --sr-violet-500: #8b5cf6;
+      --sr-violet-600: #7c3aed;
+      --sr-violet-700: #6d28d9;
+      --sr-user-bubble: #f4f4f5;
+      --sr-shadow: 0 8px 32px rgba(124, 58, 237, 0.08);
+    }
+
+    html {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--sr-surface);
+      color: var(--sr-text);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Claude-style: only the thread scrolls; dock stays pinned at bottom */
+    .chat-shell {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .demo-bar {
+      flex-shrink: 0;
+      padding: 8px 16px;
+      background: var(--sr-violet-50);
+      border-bottom: 1px solid var(--sr-border);
+      font-size: 12px;
+      color: var(--sr-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .demo-bar strong { color: var(--sr-violet-700); font-weight: 500; }
+    .demo-bar button {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--sr-border);
+      background: var(--sr-surface);
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--sr-text);
+    }
+    .demo-bar button.active {
+      background: var(--sr-violet-600);
+      color: white;
+      border-color: var(--sr-violet-600);
+    }
+
+    .header {
+      flex-shrink: 0;
+      padding: 16px 20px 8px;
+      text-align: center;
+      background: var(--sr-surface);
+    }
+    .header h1 {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--sr-text);
+    }
+    .header .chev { font-size: 12px; color: var(--sr-muted); }
+
+    .thread {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--sr-surface);
+      -webkit-overflow-scrolling: touch;
+    }
+    .thread-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 20px 32px;
+    }
+
+    .user-msg {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+    .user-bubble {
+      max-width: 82%;
+      background: var(--sr-user-bubble);
+      border: 1px solid var(--sr-border);
+      border-radius: 22px;
+      padding: 11px 16px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--sr-text);
+    }
+
+    /* Claude-style consolidated Q&A summary (pic 1) */
+    .qa-summary .qa-block + .qa-block {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--sr-border);
+    }
+    .qa-summary .qa-q {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .qa-summary .qa-a {
+      font-size: 14px;
+      color: var(--sr-text);
+    }
+
+    .assistant-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .assistant-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--sr-violet-100);
+      border: 1px solid rgba(124, 58, 237, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--sr-violet-600);
+      font-size: 13px;
+    }
+    .assistant-body { flex: 1; min-width: 0; }
+    .assistant-text {
+      font-size: 14px;
+      color: var(--sr-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 4px;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--sr-violet-100);
+      border-top-color: var(--sr-violet-600);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Script output */
+    .script-content {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--sr-text);
+      white-space: pre-wrap;
+    }
+    .script-content strong { font-weight: 600; }
+
+    /* Action bar under script (no play button) */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 12px;
+      padding-top: 4px;
+    }
+    .action-bar button {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--sr-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s, color 0.12s;
+    }
+    .action-bar button:hover { background: var(--sr-user-bubble); color: var(--sr-text); }
+    .action-bar button.active-up { color: var(--sr-violet-600); background: var(--sr-violet-50); }
+    .action-bar button.active-down { color: #dc2626; background: #fef2f2; }
+    .action-bar svg { width: 16px; height: 16px; }
+
+    /* Thumbs-down follow-up card */
+    .feedback-card {
+      margin-top: 14px;
+      border: 1px solid var(--sr-border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: var(--sr-surface);
+    }
+    .feedback-card h4 {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .feedback-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .feedback-chips button {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--sr-border);
+      background: var(--sr-surface);
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--sr-text);
+    }
+    .feedback-chips button:hover,
+    .feedback-chips button.selected {
+      border-color: var(--sr-violet-500);
+      background: var(--sr-violet-50);
+      color: var(--sr-violet-700);
+    }
+    .feedback-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .feedback-input-row input {
+      flex: 1;
+      border: 1px solid var(--sr-border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .feedback-input-row input:focus {
+      border-color: rgba(124, 58, 237, 0.35);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
+    }
+    .feedback-submit {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 10px;
+      background: var(--sr-violet-600);
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .feedback-submit:hover { background: var(--sr-violet-700); }
+    .feedback-thanks {
+      font-size: 13px;
+      color: var(--sr-muted);
+      margin-top: 10px;
+    }
+
+    /* Post-script primary CTAs */
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 0;
+    }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      border: 1px solid var(--sr-border);
+      background: var(--sr-surface);
+      color: var(--sr-text);
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .cta-btn:hover { background: var(--sr-violet-50); border-color: var(--sr-violet-500); }
+    .cta-btn.primary {
+      background: var(--sr-violet-600);
+      border-color: var(--sr-violet-600);
+      color: white;
+    }
+    .cta-btn.primary:hover { background: var(--sr-violet-700); border-color: var(--sr-violet-700); }
+    .cta-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Perplexity / Claude-style follow-ups */
+    .follow-ups {
+      margin-top: 20px;
+      margin-bottom: 4px;
+    }
+    .follow-ups-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sr-text);
+      margin-bottom: 12px;
+    }
+    .follow-up-list { display: flex; flex-direction: column; gap: 0; }
+    .follow-up-btn {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 4px;
+      border: none;
+      border-radius: 0;
+      background: none;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--sr-text);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.12s, color 0.12s;
+    }
+    .follow-up-btn:hover { background: var(--sr-violet-50); color: var(--sr-violet-700); }
+    .follow-up-btn .arrow {
+      color: var(--sr-muted);
+      flex-shrink: 0;
+      margin-top: 2px;
+      font-size: 15px;
+      line-height: 1;
+    }
+    .follow-up-btn:hover .arrow { color: var(--sr-violet-500); }
+
+    .cta-btn.saved {
+      background: #16a34a;
+      border-color: #16a34a;
+      color: white;
+      pointer-events: none;
+    }
+    .cta-btn.saved:hover { background: #16a34a; border-color: #16a34a; }
+
+    .save-toast {
+      font-size: 12px;
+      color: #16a34a;
+      margin-top: 8px;
+      display: none;
+    }
+    .save-toast.visible { display: block; }
+
+    .calendar-prompt {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid #ddd6fe;
+      background: rgba(245, 243, 255, 0.6);
+    }
+    .calendar-prompt h4 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--sr-text);
+    }
+    .calendar-prompt p {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--sr-muted);
+      line-height: 1.45;
+    }
+    .calendar-prompt input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 1px solid var(--sr-border);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      margin-bottom: 10px;
+    }
+    .calendar-prompt input:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+    }
+    .calendar-prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .calendar-prompt-actions button {
+      font-size: 12px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--sr-border);
+      background: white;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .calendar-prompt-actions button.primary {
+      background: var(--sr-violet-600);
+      border-color: var(--sr-violet-600);
+      color: white;
+    }
+    .calendar-prompt-actions button.ghost {
+      border: none;
+      background: none;
+      color: var(--sr-muted);
+    }
+
+    /* Perplexity-style quoted context inside composer */
+    .composer.has-context { padding-top: 0; }
+    .composer-context {
+      margin: 10px 10px 0;
+      padding: 10px 32px 10px 12px;
+      background: #f4f4f5;
+      border: 1px solid var(--sr-border);
+      border-radius: 12px;
+      position: relative;
+    }
+    .composer-context-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--sr-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .composer-context-quote {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--sr-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .composer-context-quote::before { content: '"'; }
+    .composer-context-quote::after { content: '"'; }
+    .composer-context-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border: none;
+      background: none;
+      color: var(--sr-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .composer-context-close:hover { background: rgba(0,0,0,0.06); color: var(--sr-text); }
+    .composer.has-context textarea {
+      padding-top: 10px;
+    }
+
+    .script-ready {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #16a34a;
+      margin-top: 14px;
+    }
+
+    .dock {
+      flex-shrink: 0;
+      background: var(--sr-surface);
+      z-index: 20;
+      max-height: min(52vh, 520px);
+      overflow-y: auto;
+    }
+    .dock-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 16px 20px 20px;
+    }
+
+    .question-card {
+      background: var(--sr-surface);
+      border: 1px solid var(--sr-border);
+      border-radius: 16px;
+      box-shadow: var(--sr-shadow);
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+
+    .qc-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--sr-border);
+    }
+    .qc-question {
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .qc-nav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: var(--sr-muted);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .qc-nav button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      color: var(--sr-muted);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .qc-nav button:hover:not(:disabled) {
+      background: var(--sr-violet-50);
+      color: var(--sr-violet-600);
+    }
+    .qc-nav button:disabled { opacity: 0.25; cursor: default; }
+
+    .qc-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 13px 20px;
+      border: none;
+      border-bottom: 1px solid var(--sr-border);
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .qc-option:hover,
+    .qc-option.active { background: var(--sr-violet-50); }
+    .qc-option.active .qc-label { color: var(--sr-violet-700); }
+    .qc-num { width: 18px; font-size: 13px; color: var(--sr-muted); flex-shrink: 0; }
+    .qc-label { flex: 1; font-size: 14px; line-height: 1.35; }
+    .qc-sub { display: block; font-size: 12px; color: var(--sr-muted); margin-top: 2px; font-weight: 400; }
+    .qc-enter { font-size: 12px; color: var(--sr-violet-500); opacity: 0; transition: opacity 0.12s; }
+    .qc-option:hover .qc-enter,
+    .qc-option.active .qc-enter { opacity: 1; }
+
+    /* Something else: gray row like Claude, not a focused button */
+    .qc-something {
+      padding: 0;
+      border-top: 1px solid var(--sr-border);
+      background: #fafafa;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      min-height: 44px;
+    }
+    .qc-something-left {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      min-height: 44px;
+    }
+    .qc-something-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--sr-muted);
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      border: none;
+      background: none;
+      font-family: inherit;
+      padding: 0;
+    }
+    .qc-something-trigger:hover { color: var(--sr-text); }
+    .qc-something-trigger:focus { outline: none; }
+    .qc-something-trigger svg { width: 15px; height: 15px; opacity: 0.55; flex-shrink: 0; }
+
+    .qc-something-input-wrap {
+      display: none;
+      width: 100%;
+      align-items: center;
+      gap: 8px;
+    }
+    .qc-something-input-wrap.open { display: flex; }
+    .qc-something-input-wrap input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      color: var(--sr-text);
+      padding: 10px 0;
+    }
+    .qc-something-input-wrap input::placeholder { color: #a1a1aa; }
+    .qc-something-send {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: var(--sr-violet-600);
+      color: white;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .qc-something-send svg { width: 13px; height: 13px; }
+
+    .qc-skip-inline {
+      background: none;
+      border: none;
+      border-left: 1px solid var(--sr-border);
+      font-size: 13px;
+      color: var(--sr-muted);
+      cursor: pointer;
+      padding: 0 18px;
+      flex-shrink: 0;
+    }
+    .qc-skip-inline:hover { color: var(--sr-violet-600); }
+
+    .composer {
+      border: 1px solid var(--sr-border);
+      border-radius: 22px;
+      background: var(--sr-surface);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .composer:focus-within {
+      border-color: rgba(124, 58, 237, 0.35);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
+    }
+    .composer textarea {
+      width: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 15px 18px 6px;
+      font-size: 14px;
+      font-family: inherit;
+      background: transparent;
+      min-height: 48px;
+      color: var(--sr-text);
+    }
+    .composer textarea::placeholder { color: #a1a1aa; }
+    .composer-bar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0 12px 12px;
+    }
+    .composer-send {
+      width: 34px;
+      height: 34px;
+      border: none;
+      background: var(--sr-violet-600);
+      color: white;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .composer-send:hover { background: var(--sr-violet-700); }
+    .composer-send svg { width: 15px; height: 15px; }
+
+    .composer-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--sr-muted);
+      margin-top: 10px;
+      opacity: 0.75;
+    }
+    .tagline {
+      text-align: center;
+      font-size: 10px;
+      color: var(--sr-muted);
+      margin-top: 12px;
+    }
+    .tagline strong { color: var(--sr-violet-600); font-weight: 500; }
+
+    .hidden { display: none !important; }
+    .step-panel { display: none; }
+    .step-panel.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="demo-bar">
+    <strong>Preview states:</strong>
+    <button type="button" id="btn-during" class="active" onclick="showDemo('during')">During questions</button>
+    <button type="button" id="btn-done" onclick="showDemo('done')">Answers done (pic 1)</button>
+    <button type="button" id="btn-script" onclick="showDemo('script')">Script + follow-ups</button>
+    <button type="button" id="btn-edit" onclick="showDemo('edit')">Edit and polish</button>
+    <button type="button" id="btn-feedback" onclick="showDemo('feedback')">Thumbs down why</button>
+  </div>
+
+  <div class="chat-shell">
+    <header class="header">
+      <h1 id="chat-title">Guest journey experience script <span class="chev">▾</span></h1>
+    </header>
+
+    <main class="thread" id="thread-scroll">
+      <div class="thread-inner" id="thread-inner">
+        <div class="user-msg">
+          <div class="user-bubble">I want to create a script for guest journey experience</div>
+        </div>
+        <div id="dynamic-thread"></div>
+      </div>
+    </main>
+
+    <section class="dock" id="dock">
+      <div class="dock-inner" id="dock-inner">
+        <div id="question-slot"></div>
+        <div id="composer-slot"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const STEPS = [
+      {
+        question: "Who is the target audience?",
+        options: [
+          { label: "End guests, diners, or travelers", sub: "People experiencing your place (B2C)" },
+          { label: "Restaurant or hotel owners and operators", sub: "Hospitality buyers and managers (B2B)" },
+          { label: "Other creators and marketers in hospitality", sub: "Peers learning content and growth" },
+        ],
+      },
+      {
+        question: "What type of place is this Reel about?",
+        options: [
+          { label: "Hotel, resort, or boutique stay" },
+          { label: "Restaurant, cafe, or bar" },
+          { label: "Event or wedding venue" },
+          { label: "General hospitality / mixed" },
+        ],
+      },
+      {
+        question: "What's the core angle or hook?",
+        options: [
+          { label: "The full guest journey from arrival to goodbye", sub: "Start-to-finish story arc" },
+          { label: "One key moment that makes or breaks the experience", sub: "Single high-stakes beat" },
+          { label: "Behind the scenes of how you deliver the experience", sub: "What guests never see but feel" },
+          { label: "Guest transformation or before/after story", sub: "Emotional payoff" },
+        ],
+      },
+    ];
+
+    const DEMO_ANSWERS = [
+      { q: "Who is the target audience?", a: "End guests, diners, or travelers" },
+      { q: "What type of place is this Reel about?", a: "Restaurant, cafe, or bar" },
+      { q: "What's the core angle or hook?", a: "The full guest journey from arrival to goodbye" },
+    ];
+
+    const SAMPLE_SCRIPT = `**HOOK (0-3s)**
+"You think a great meal starts in the kitchen. It actually starts the second they walk in."
+
+**BODY**
+Show arrival: host greeting, coat check, the walk to the table.
+Cut to the first sip, the bread moment, the server's recommendation.
+Build to the reveal: the dish they've been waiting for.
+
+**CTA**
+"Save this if you're planning your next date night. Tag someone who deserves this experience."`;
+
+    const FOLLOW_UPS = [
+      "Rewrite the opening hook to lead with a stronger curiosity gap that makes diners stop scrolling within the first two seconds",
+      "Generate three alternative script versions with different emotional angles for the arrival-to-table guest journey moment",
+      "Shorten the full script to under 45 seconds while keeping the start-to-finish hospitality story arc intact",
+    ];
+
+    let currentStep = 1;
+    let collectedAnswers = [];
+    let flowComplete = false;
+    let scriptReady = false;
+    let scriptSaved = false;
+    let showCalendarPrompt = false;
+    let calendarHintValue = '';
+    let composerContext = null;
+    let composerDraft = '';
+
+    function escapeHtml(s) {
+      return s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function suggestedCalendarHint() {
+      const d = new Date();
+      d.setDate(d.getDate() + 2);
+      while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+
+    function formatPlannedLabel(hint) {
+      const trimmed = (hint || suggestedCalendarHint()).trim();
+      const parsed = Date.parse(trimmed);
+      if (!Number.isNaN(parsed)) {
+        const d = new Date(parsed);
+        d.setHours(9, 0, 0, 0);
+        return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' at 9 AM';
+      }
+      return trimmed + ' at 9 AM';
+    }
+
+    function buildCalendarPromptHtml() {
+      const hint = calendarHintValue || suggestedCalendarHint();
+      const hidden = !showCalendarPrompt || scriptSaved ? ' style="display:none"' : '';
+      return `
+        <div class="calendar-prompt" id="calendar-prompt"${hidden}>
+          <h4>Add this script to your calendar?</h4>
+          <p>Pick a day or date. We will save the script, tag it Scripting, schedule it, and write your caption in the background.</p>
+          <input type="text" id="calendar-hint-input" value="${escapeHtml(hint)}" placeholder="e.g. Thursday, March 12, or next Friday" />
+          <div class="calendar-prompt-actions">
+            <button type="button" class="primary" onclick="confirmSaveWithCalendar()">Save and schedule</button>
+            <button type="button" onclick="confirmSaveWithoutCalendar()">Save without calendar</button>
+            <button type="button" class="ghost" onclick="cancelCalendarPrompt()">Cancel</button>
+          </div>
+        </div>`;
+    }
+
+      const blocks = items.map(item =>
+        `<div class="qa-block"><div class="qa-q">Q: ${escapeHtml(item.q)}</div><div class="qa-a">A: ${escapeHtml(item.a)}</div></div>`
+      ).join('');
+      return `<div class="user-msg"><div class="user-bubble qa-summary">${blocks}</div></div>`;
+    }
+
+    function buildActionBarHtml() {
+      return `
+        <div class="action-bar">
+          <button type="button" title="Copy" onclick="copyScript()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button type="button" id="btn-up" title="Good script" onclick="thumbsUp()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+          </button>
+          <button type="button" id="btn-down" title="Needs work" onclick="thumbsDown()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 14V2"/><path d="M3 10v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5.24a2 2 0 0 1-1.79-1.11L2 2a3.13 3.13 0 0 0-3 3.88Z"/></svg>
+          </button>
+          <button type="button" title="Regenerate" onclick="regenerateScript()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+          </button>
+        </div>
+        <div id="feedback-area"></div>`;
+    }
+
+    function scriptQuoteSnippet() {
+      const hook = SAMPLE_SCRIPT.split('\n')[1] || SAMPLE_SCRIPT.slice(0, 120);
+      return hook.replace(/^"/, '').replace(/"$/, '').trim();
+    }
+
+    function buildPostScriptExtrasHtml() {
+      const followItems = FOLLOW_UPS.map((text, i) =>
+        `<button type="button" class="follow-up-btn" onclick="useFollowUpByIndex(${i})">
+          <span class="arrow">↳</span>
+          <span>${escapeHtml(text)}</span>
+        </button>`
+      ).join('');
+
+      const saveLabel = scriptSaved ? 'Saved to My Scripts' : 'Save to My Scripts';
+      const saveClass = scriptSaved ? 'cta-btn primary saved' : 'cta-btn primary';
+
+      return `
+        <div class="cta-row">
+          <button type="button" id="save-btn" class="${saveClass}" onclick="openCalendarPrompt()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            ${saveLabel}
+          </button>
+          <button type="button" class="cta-btn" onclick="startEditAndPolish()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit and polish
+          </button>
+          <button type="button" class="cta-btn" onclick="alert('Opens planner / calendar')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Plan post date
+          </button>
+          <button type="button" class="cta-btn" onclick="alert('Opens Research Reels')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Research similar Reels
+          </button>
+        </div>
+        ${buildCalendarPromptHtml()}
+        <p class="save-toast" id="save-toast"></p>
+        <div class="follow-ups">
+          <div class="follow-ups-label">Follow-ups</div>
+          <div class="follow-up-list">${followItems}</div>
+        </div>
+        <div class="script-ready">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+          Script ready
+        </div>`;
+    }
+
+    function buildScriptBlockHtml() {
+      return `
+        <div class="assistant-row" id="script-row">
+          <div class="assistant-avatar">✦</div>
+          <div class="assistant-body">
+            <div class="script-content">${SAMPLE_SCRIPT.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>
+            ${buildActionBarHtml()}
+            ${buildPostScriptExtrasHtml()}
+          </div>
+        </div>`;
+    }
+
+    function renderComposer(placeholder, hint, contextQuote, draftValue) {
+      const hasContext = !!contextQuote;
+      const contextHtml = hasContext ? `
+        <div class="composer-context">
+          <button type="button" class="composer-context-close" onclick="clearComposerContext()" aria-label="Remove context">✕</button>
+          <div class="composer-context-label">Editing script</div>
+          <div class="composer-context-quote">${escapeHtml(contextQuote)}</div>
+        </div>` : '';
+
+      return `
+        <div class="composer${hasContext ? ' has-context' : ''}">
+          ${contextHtml}
+          <textarea id="composer-input" placeholder="${escapeHtml(placeholder)}" rows="${hasContext ? 2 : 1}">${escapeHtml(draftValue || '')}</textarea>
+          <div class="composer-bar">
+            <button type="button" class="composer-send" id="send-btn" title="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <p class="composer-hint">${hint || '&nbsp;'}</p>
+        <p class="tagline"><strong>SpyReels</strong> asks smart questions so your script hits the right audience and goes viral.</p>`;
+    }
+
+    function mountComposerSlot(placeholder, hint) {
+      const quote = composerContext ? composerContext.quote : null;
+      document.getElementById('composer-slot').innerHTML = renderComposer(placeholder, hint, quote, composerDraft);
+      wireComposerEvents();
+      const input = document.getElementById('composer-input');
+      if (input && composerContext) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
+
+    function clearComposerContext() {
+      composerContext = null;
+      composerDraft = document.getElementById('composer-input')?.value || '';
+      if (scriptReady) {
+        mountComposerSlot(
+          'Ask for changes, a shorter hook, or describe your next Reel idea...',
+          'Type a revision or tap a follow-up above'
+        );
+      }
+    }
+
+    function wrapScriptInComposer(prefillText) {
+      composerContext = { quote: scriptQuoteSnippet(), fullScript: SAMPLE_SCRIPT };
+      composerDraft = prefillText || '';
+      mountComposerSlot(
+        prefillText ? '' : 'Describe what to change...',
+        'Your edit applies to the quoted script above'
+      );
+      document.getElementById('composer-input')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function startEditAndPolish() {
+      wrapScriptInComposer('');
+    }
+
+    function openCalendarPrompt() {
+      if (scriptSaved) return;
+      showCalendarPrompt = true;
+      calendarHintValue = suggestedCalendarHint();
+      const prompt = document.getElementById('calendar-prompt');
+      const input = document.getElementById('calendar-hint-input');
+      if (prompt) {
+        prompt.style.display = 'block';
+        if (input) {
+          input.value = calendarHintValue;
+          wireCalendarInput();
+          input.focus();
+        }
+      }
+    }
+
+    function cancelCalendarPrompt() {
+      showCalendarPrompt = false;
+      const prompt = document.getElementById('calendar-prompt');
+      if (prompt) prompt.style.display = 'none';
+    }
+
+    function wireCalendarInput() {
+      const input = document.getElementById('calendar-hint-input');
+      if (!input || input.dataset.wired) return;
+      input.dataset.wired = '1';
+      input.addEventListener('input', (e) => { calendarHintValue = e.target.value; });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); confirmSaveWithCalendar(); }
+      });
+    }
+
+    function finishSave(withCalendar) {
+      scriptSaved = true;
+      showCalendarPrompt = false;
+      const hint = calendarHintValue || suggestedCalendarHint();
+      const planned = withCalendar ? formatPlannedLabel(hint) : null;
+      const msg = planned
+        ? `Script saved. I added it to My Scripts, tagged it Scripting, and scheduled it for ${planned}. I'm writing your caption and hashtags in the background so they're ready when you open the editor.`
+        : `Script saved. I added it to My Scripts, tagged it Scripting. I'm writing your caption and hashtags in the background so they're ready when you open the editor.`;
+
+      const btn = document.getElementById('save-btn');
+      if (btn) {
+        btn.className = 'cta-btn primary saved';
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+          Saved to My Scripts`;
+      }
+      const prompt = document.getElementById('calendar-prompt');
+      if (prompt) prompt.remove();
+      const toast = document.getElementById('save-toast');
+      if (toast) {
+        toast.textContent = msg;
+        toast.classList.add('visible');
+      }
+      const body = document.querySelector('#script-row .assistant-body');
+      if (body && !document.getElementById('save-assistant-msg')) {
+        body.insertAdjacentHTML('beforeend', `<div class="assistant-save-msg" id="save-assistant-msg" style="margin-top:12px;font-size:14px;line-height:1.5;color:var(--sr-text)">${escapeHtml(msg)}</div>`);
+      }
+    }
+
+    function confirmSaveWithCalendar() {
+      if (scriptSaved) return;
+      const input = document.getElementById('calendar-hint-input');
+      if (input) calendarHintValue = input.value;
+      finishSave(true);
+    }
+
+    function confirmSaveWithoutCalendar() {
+      if (scriptSaved) return;
+      finishSave(false);
+    }
+
+    function saveScript() {
+      openCalendarPrompt();
+    }
+
+    function showPostScriptDock() {
+      scriptReady = true;
+      document.getElementById('question-slot').innerHTML = '';
+      mountComposerSlot(
+        'Ask for changes, a shorter hook, or describe your next Reel idea...',
+        'Type a revision or tap a follow-up above'
+      );
+    }
+
+    function showWizardDock(stepIndex) {
+      scriptReady = false;
+      composerContext = null;
+      composerDraft = '';
+      document.getElementById('question-slot').innerHTML = renderQuestionCardOnly(stepIndex);
+      mountComposerSlot('Or reply directly...', '↑↓ to navigate · Enter to select · or type below');
+      wireStepEvents();
+    }
+
+    function buildFeedbackCardHtml() {
+      return `
+        <div class="feedback-card">
+          <h4>What missed the mark?</h4>
+          <div class="feedback-chips">
+            <button type="button" onclick="selectChip(this)">Wrong audience</button>
+            <button type="button" onclick="selectChip(this)">Hook too weak</button>
+            <button type="button" onclick="selectChip(this)">Too generic</button>
+            <button type="button" onclick="selectChip(this)">Wrong tone</button>
+            <button type="button" onclick="selectChip(this)">Too long / too short</button>
+          </div>
+          <div class="feedback-input-row">
+            <input type="text" id="feedback-text" placeholder="Or tell us in your own words..." />
+            <button type="button" class="feedback-submit" onclick="submitFeedback()">Send</button>
+          </div>
+        </div>`;
+    }
+
+    function renderQuestionCardOnly(stepIndex) {
+      const step = STEPS[stepIndex - 1];
+      const total = STEPS.length;
+      return `
+        <div class="question-card step-panel visible" id="step-${stepIndex}">
+          <div class="qc-header">
+            <div class="qc-question">${escapeHtml(step.question)}</div>
+            <div class="qc-nav">
+              <button type="button" ${stepIndex <= 1 ? 'disabled' : ''} onclick="goBack()">‹</button>
+              <span>${stepIndex} of ${total}</span>
+              <button type="button" disabled aria-hidden="true">›</button>
+              <button type="button" aria-label="Close">✕</button>
+            </div>
+          </div>
+          <div class="qc-options">
+            ${step.options.map((opt, i) => `
+              <button type="button" class="qc-option${i === 0 ? ' active' : ''}" data-answer="${escapeHtml(opt.label)}">
+                <span class="qc-num">${i + 1}.</span>
+                <span class="qc-label">${escapeHtml(opt.label)}${opt.sub ? `<span class="qc-sub">${escapeHtml(opt.sub)}</span>` : ''}</span>
+                <span class="qc-enter">↵</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="qc-something" data-step="${stepIndex}">
+            <div class="qc-something-left">
+              <button type="button" class="qc-something-trigger" onclick="openSomethingElse(${stepIndex})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                Something else
+              </button>
+              <div class="qc-something-input-wrap" id="something-input-${stepIndex}">
+                <input type="text" placeholder="Type your answer..." id="something-field-${stepIndex}" />
+                <button type="button" class="qc-something-send" onclick="submitSomethingElse(${stepIndex})">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="qc-skip-inline" onclick="skipAll()">Skip</button>
+          </div>
+        </div>`;
+    }
+
+    function mountDuringFlow() {
+      flowComplete = false;
+      scriptReady = false;
+      scriptSaved = false;
+      showCalendarPrompt = false;
+      calendarHintValue = '';
+      composerContext = null;
+      composerDraft = '';
+      currentStep = 1;
+      collectedAnswers = [];
+      document.getElementById('dynamic-thread').innerHTML = '';
+      document.getElementById('dock').classList.remove('hidden');
+      showWizardDock(1);
+      setDemoButtons('during');
+    }
+
+    function afterScriptMount() {
+      wireCalendarInput();
+    }
+
+    function showDemo(mode) {
+      const thread = document.getElementById('dynamic-thread');
+      const dock = document.getElementById('dock');
+
+      if (mode === 'during') {
+        mountDuringFlow();
+        return;
+      }
+
+      if (mode === 'done') {
+        flowComplete = true;
+        scriptReady = false;
+        thread.innerHTML = buildQaSummaryHtml(DEMO_ANSWERS) + `
+          <div class="assistant-row">
+            <div class="assistant-avatar">✦</div>
+            <div class="assistant-text"><div class="spinner"></div>Writing your viral script...</div>
+          </div>`;
+        document.getElementById('question-slot').innerHTML = '';
+        mountComposerSlot(
+          'Ask for changes, a shorter hook, or describe your next Reel idea...',
+          'Script is generating — you can queue your next request here'
+        );
+        setDemoButtons('done');
+        scrollThread();
+        return;
+      }
+
+      if (mode === 'script') {
+        flowComplete = true;
+        scriptReady = true;
+        scriptSaved = false;
+        showCalendarPrompt = false;
+        composerContext = null;
+        composerDraft = '';
+        thread.innerHTML = buildQaSummaryHtml(DEMO_ANSWERS) + buildScriptBlockHtml();
+        showPostScriptDock();
+        afterScriptMount();
+        setDemoButtons('script');
+        scrollThread();
+        return;
+      }
+
+      if (mode === 'edit') {
+        flowComplete = true;
+        scriptReady = true;
+        scriptSaved = false;
+        showCalendarPrompt = false;
+        composerContext = null;
+        composerDraft = '';
+        thread.innerHTML = buildQaSummaryHtml(DEMO_ANSWERS) + buildScriptBlockHtml();
+        showPostScriptDock();
+        afterScriptMount();
+        startEditAndPolish();
+        setDemoButtons('edit');
+        scrollThread();
+        return;
+      }
+
+      if (mode === 'feedback') {
+        flowComplete = true;
+        scriptReady = true;
+        scriptSaved = false;
+        showCalendarPrompt = false;
+        composerContext = null;
+        composerDraft = '';
+        thread.innerHTML = buildQaSummaryHtml(DEMO_ANSWERS) + buildScriptBlockHtml();
+        showPostScriptDock();
+        afterScriptMount();
+        document.getElementById('btn-down')?.classList.add('active-down');
+        document.getElementById('feedback-area').innerHTML = buildFeedbackCardHtml();
+        setDemoButtons('feedback');
+        scrollThread();
+      }
+    }
+
+    function setDemoButtons(active) {
+      ['during', 'done', 'script', 'edit', 'feedback'].forEach(id => {
+        document.getElementById('btn-' + id)?.classList.toggle('active', id === active);
+      });
+    }
+
+    function scrollThread() {
+      const el = document.getElementById('thread-scroll') || document.querySelector('.thread');
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    function openSomethingElse(stepIndex) {
+      const row = document.querySelector(`.qc-something[data-step="${stepIndex}"]`);
+      row.querySelector('.qc-something-trigger').classList.add('hidden');
+      const wrap = document.getElementById('something-input-' + stepIndex);
+      wrap.classList.add('open');
+      document.getElementById('something-field-' + stepIndex).focus();
+    }
+
+    function submitSomethingElse(stepIndex) {
+      const val = document.getElementById('something-field-' + stepIndex).value.trim();
+      if (!val) return;
+      recordAnswer(stepIndex, val);
+    }
+
+    function recordAnswer(stepIndex, answerText) {
+      const step = STEPS[stepIndex - 1];
+      collectedAnswers.push({ q: step.question, a: answerText });
+
+      if (stepIndex < STEPS.length) {
+        currentStep = stepIndex + 1;
+        showWizardDock(currentStep);
+      } else {
+        finishFlow();
+      }
+    }
+
+    function finishFlow() {
+      flowComplete = true;
+      const thread = document.getElementById('dynamic-thread');
+      thread.innerHTML = buildQaSummaryHtml(collectedAnswers) + `
+        <div class="assistant-row" id="writing-row">
+          <div class="assistant-avatar">✦</div>
+          <div class="assistant-text"><div class="spinner"></div>Writing your viral script...</div>
+        </div>`;
+      document.getElementById('question-slot').innerHTML = '';
+      mountComposerSlot(
+        'Ask for changes, a shorter hook, or describe your next Reel idea...',
+        'Script is generating — you can queue your next request here'
+      );
+      scrollThread();
+
+      setTimeout(() => {
+        document.getElementById('writing-row').outerHTML = buildScriptBlockHtml();
+        showPostScriptDock();
+        scrollThread();
+      }, 1800);
+    }
+
+    function skipAll() {
+      collectedAnswers = [{ q: STEPS[0].question, a: "(skipped — default audience used)" }];
+      finishFlow();
+    }
+
+    function goBack() {
+      if (currentStep > 1) {
+        collectedAnswers.pop();
+        currentStep--;
+        showWizardDock(currentStep);
+      }
+    }
+
+    function pickOption(btn) {
+      if (flowComplete) return;
+      recordAnswer(currentStep, btn.dataset.answer);
+    }
+
+    function wireComposerEvents() {
+      const btn = document.getElementById('send-btn');
+      if (btn) btn.onclick = handleComposerSend;
+      const input = document.getElementById('composer-input');
+      if (!input) return;
+      input.oninput = () => { composerDraft = input.value; };
+      input.onkeydown = e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleComposerSend();
+        }
+      };
+    }
+
+    function handleComposerSend() {
+      const input = document.getElementById('composer-input');
+      const val = input?.value.trim();
+      if (!val) return;
+
+      if (scriptReady) {
+        const hadContext = !!composerContext;
+        appendRevisionRequest(val, hadContext);
+        input.value = '';
+        composerContext = null;
+        composerDraft = '';
+        mountComposerSlot(
+          'Ask for changes, a shorter hook, or describe your next Reel idea...',
+          'Type a revision or tap a follow-up above'
+        );
+        return;
+      }
+
+      if (!flowComplete && document.querySelector('.step-panel.visible')) {
+        input.value = '';
+        recordAnswer(currentStep, val);
+      }
+    }
+
+    function appendRevisionRequest(text, fromScriptContext) {
+      const thread = document.getElementById('dynamic-thread');
+      const userEl = document.createElement('div');
+      userEl.className = 'user-msg';
+      if (fromScriptContext) {
+        userEl.innerHTML = `
+          <div class="user-bubble">
+            <div style="font-size:12px;color:#71717a;margin-bottom:6px;">Edit request on current script</div>
+            ${escapeHtml(text)}
+          </div>`;
+      } else {
+        userEl.innerHTML = '<div class="user-bubble">' + escapeHtml(text) + '</div>';
+      }
+      thread.appendChild(userEl);
+
+      const thinking = document.createElement('div');
+      thinking.className = 'assistant-row';
+      thinking.innerHTML = '<div class="assistant-avatar">✦</div><div class="assistant-text"><div class="spinner"></div>Updating your script...</div>';
+      thread.appendChild(thinking);
+      scrollThread();
+
+      setTimeout(() => {
+        thinking.remove();
+        const oldScript = document.getElementById('script-row');
+        if (oldScript) {
+          oldScript.outerHTML = buildScriptBlockHtml();
+        }
+        scrollThread();
+      }, 1400);
+    }
+
+    function useFollowUp(text) {
+      wrapScriptInComposer(text);
+    }
+
+    function useFollowUpByIndex(i) {
+      useFollowUp(FOLLOW_UPS[i]);
+    }
+
+    function regenerateScript() {
+      if (!scriptReady) return;
+      wrapScriptInComposer('Regenerate the full script with a stronger hook and tighter pacing');
+    }
+
+    function wireStepEvents() {
+      document.querySelectorAll('.qc-option').forEach(btn => {
+        btn.onclick = () => pickOption(btn);
+        btn.onmouseenter = () => {
+          btn.closest('.qc-options').querySelectorAll('.qc-option').forEach(o => o.classList.remove('active'));
+          btn.classList.add('active');
+        };
+      });
+
+      document.querySelectorAll('[id^="something-field-"]').forEach(el => {
+        el.onkeydown = e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const step = el.id.replace('something-field-', '');
+            submitSomethingElse(Number(step));
+          }
+        };
+      });
+    }
+
+    document.addEventListener('keydown', e => {
+      if (flowComplete || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      const panel = document.querySelector('.step-panel.visible');
+      if (!panel) return;
+      const options = [...panel.querySelectorAll('.qc-option')];
+      let idx = options.findIndex(o => o.classList.contains('active'));
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        options[idx]?.classList.remove('active');
+        idx = Math.min(idx + 1, options.length - 1);
+        options[idx]?.classList.add('active');
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        options[idx]?.classList.remove('active');
+        idx = Math.max(idx - 1, 0);
+        options[idx]?.classList.add('active');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const active = options.find(o => o.classList.contains('active'));
+        if (active) pickOption(active);
+      }
+    });
+
+    function copyScript() {
+      navigator.clipboard?.writeText(SAMPLE_SCRIPT);
+      alert('Script copied');
+    }
+    function thumbsUp() {
+      document.getElementById('btn-up')?.classList.add('active-up');
+      document.getElementById('btn-down')?.classList.remove('active-down');
+      document.getElementById('feedback-area').innerHTML = '<p class="feedback-thanks">Thanks — this helps us improve scripts for you.</p>';
+    }
+    function thumbsDown() {
+      document.getElementById('btn-down')?.classList.add('active-down');
+      document.getElementById('btn-up')?.classList.remove('active-up');
+      document.getElementById('feedback-area').innerHTML = buildFeedbackCardHtml();
+    }
+    function selectChip(btn) {
+      btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    }
+    function submitFeedback() {
+      document.getElementById('feedback-area').innerHTML = '<p class="feedback-thanks">Got it — we will use this to improve future scripts.</p>';
+    }
+
+    mountDuringFlow();
+  </script>
+</body>
+</html>

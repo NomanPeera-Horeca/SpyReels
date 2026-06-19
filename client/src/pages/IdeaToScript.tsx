@@ -1,169 +1,47 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { usePostHog } from "@posthog/react";
-import {
-  Lightbulb, Send, Loader2, CheckCircle2, XCircle, Clock,
-  Trash2, RotateCcw, FileText, Plus, ChevronDown, Zap,
-  Mic, Sparkles, ThumbsUp, ThumbsDown, Pencil,
-  AlertTriangle,
-} from "lucide-react";
+import { Send, Loader2, Plus, Lightbulb, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Link } from "wouter";
-import { IdeaClarificationPanel } from "@/components/IdeaClarificationPanel";
 import {
   isHospitalityIdea,
   parseClarificationWizard,
-  readClarificationSummary,
-  readTargetAudienceFromIdeaMeta,
-  type IdeaClarificationWizard,
+  resolveWizardSteps,
 } from "@shared/ideaClarification";
-
-const TONE_OPTIONS = [
-  { value: "engaging", label: "Engaging", emoji: "🎯" },
-  { value: "casual", label: "Casual", emoji: "😎" },
-  { value: "professional", label: "Professional", emoji: "💼" },
-  { value: "humorous", label: "Humorous", emoji: "😂" },
-  { value: "educational", label: "Educational", emoji: "📚" },
-];
-
-const CREATOR_GOALS = [
-  { value: "balanced", label: "Balanced", hint: "Hook + trust mix" },
-  { value: "growth_virality", label: "Max reach", hint: "Discovery-first" },
-  { value: "personal_brand", label: "Personal brand", hint: "Calendar & voice" },
-  { value: "education_authority", label: "Teach / authority", hint: "Saves & clarity" },
-  { value: "warm_promo", label: "Soft promo", hint: "Value then offer" },
-] as const;
+import { ClaudeStyleQuestionCard } from "@/components/ClaudeStyleQuestionCard";
+import { scriptHookSnippet } from "@/components/IdeaScriptPostPanel";
+import {
+  IdeaScriptConversation,
+  buildInitialClarificationSession,
+  advanceClarificationSession,
+  retreatClarificationSession,
+  getActiveClarification,
+  type ClarificationSession,
+} from "@/components/IdeaScriptConversation";
 
 const FILMING_FORMATS = [
-  {
-    id: "talking_head",
-    label: "You on camera, speaking",
-    icon: "🎥",
-    sub: "Selfie-style, face to camera",
-  },
-  {
-    id: "broll_voiceover",
-    label: "Show your space or product, speak over it",
-    icon: "🏨",
-    sub: "B-roll footage, your voice narrates",
-  },
-  {
-    id: "faceless_text",
-    label: "No face, text on screen",
-    icon: "✍️",
-    sub: "Faceless, text animates over video",
-  },
-  {
-    id: "tutorial_demo",
-    label: "Tutorial or step-by-step",
-    icon: "📋",
-    sub: "Whiteboard, demo, or screen recording",
-  },
-  {
-    id: "before_after",
-    label: "Before and After",
-    icon: "⚡",
-    sub: "Show the transformation or result",
-  },
+  { id: "talking_head", label: "You on camera, speaking", icon: "🎥", sub: "Selfie-style, face to camera" },
+  { id: "broll_voiceover", label: "Show your space or product, speak over it", icon: "🏨", sub: "B-roll footage, your voice narrates" },
+  { id: "faceless_text", label: "No face, text on screen", icon: "✍️", sub: "Faceless, text animates over video" },
+  { id: "tutorial_demo", label: "Tutorial or step-by-step", icon: "📋", sub: "Whiteboard, demo, or screen recording" },
+  { id: "before_after", label: "Before and After", icon: "⚡", sub: "Show the transformation or result" },
 ] as const;
 
-type IdeaStatus = "queued" | "validating" | "awaiting_approval" | "processing" | "completed" | "failed";
+const SUGGESTED_PROMPTS = [
+  "I want to create a script for guest journey experience",
+  "The moment after check-in that kills repeat visits at my hotel",
+  "3 mistakes I made growing my fitness page to 50k",
+];
 
-const STATUS_CONFIG: Record<IdeaStatus, { icon: typeof Clock; color: string; label: string; bg: string }> = {
-  queued: { icon: Clock, color: "text-yellow-400", label: "In Queue", bg: "bg-yellow-400/10" },
-  validating: { icon: Sparkles, color: "text-purple-400", label: "AI Reviewing...", bg: "bg-purple-400/10" },
-  awaiting_approval: { icon: AlertTriangle, color: "text-amber-400", label: "Quick question", bg: "bg-amber-400/10" },
-  processing: { icon: Loader2, color: "text-blue-400", label: "Generating Script...", bg: "bg-blue-400/10" },
-  completed: { icon: CheckCircle2, color: "text-green-400", label: "Ready", bg: "bg-green-400/10" },
-  failed: { icon: XCircle, color: "text-red-400", label: "Failed", bg: "bg-red-400/10" },
+type ScriptEditContext = {
+  ideaId: number;
+  quote: string;
 };
-
-function IdeaScoreBadge({ score }: { score: number }) {
-  const color =
-    score >= 8 ? "text-sky-300 border-sky-400/30 bg-sky-400/10"
-      : score >= 5 ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
-      : "text-red-400 border-red-400/30 bg-red-400/10";
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color}`} title="AI score for your raw idea (before scripting)">
-      Idea {score}/10
-    </span>
-  );
-}
-
-function ScriptJudgeBadge(props: {
-  score: number;
-  decision?: string | null;
-  attempts?: number;
-}) {
-  const { score, decision, attempts } = props;
-  const color =
-    score >= 8 ? "text-emerald-300 border-emerald-400/30 bg-emerald-400/10"
-      : score >= 7 ? "text-green-400/90 border-green-400/25 bg-green-400/10"
-      : score >= 5 ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
-      : "text-orange-300 border-orange-400/35 bg-orange-400/10";
-  const flagged = decision === "accepted_after_max_attempts";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color}`}
-      title={
-        flagged
-          ? "Script judge kept the final pass after retries. Review manually if needed."
-          : "Automated QC score on the drafted script."
-      }
-    >
-      Script {score}/10{attempts && attempts > 1 ? ` · ${attempts} passes` : ""}{flagged ? " · review" : ""}
-    </span>
-  );
-}
-
-function creatorGoalSlugFromListedIdea(idea: { viralStructure?: unknown }): string | undefined {
-  const vs = idea.viralStructure;
-  if (!vs || typeof vs !== "object") return undefined;
-  const m = (vs as Record<string, unknown>).ideaMeta;
-  if (!m || typeof m !== "object") return undefined;
-  const slug = (m as Record<string, unknown>).creatorGoal;
-  return typeof slug === "string" ? slug : undefined;
-}
-
-function getClarificationWizard(idea: { viralStructure?: unknown }): IdeaClarificationWizard | null {
-  return parseClarificationWizard(idea.viralStructure);
-}
-
-function getPendingQuestion(idea: { viralStructure?: unknown }): string | null {
-  const vs = idea.viralStructure;
-  if (!vs || typeof vs !== "object" || vs === null) return null;
-  const q = (vs as Record<string, unknown>).pendingQuestion;
-  return typeof q === "string" && q.trim() ? q.trim() : null;
-}
-
-function viralStructureJudge(idea: { viralStructure?: unknown }): {
-  finalScore: number | null;
-  attempts: number;
-  decision?: string | null;
-} {
-  const vs = idea.viralStructure as Record<string, unknown> | null | undefined;
-  const jq = vs?.ideaScriptJudge as Record<string, unknown> | undefined;
-  if (!jq) return { finalScore: null, attempts: 0 };
-  const att = jq.attempts;
-  const n = Array.isArray(att) ? att.length : 0;
-  const raw = jq.finalOverallScore;
-  const finalScore =
-    typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseFloat(raw) : null;
-  return {
-    finalScore: Number.isFinite(finalScore) ? finalScore : null,
-    attempts: n || 1,
-    decision: typeof jq.finalDecision === "string" ? jq.finalDecision : null,
-  };
-}
 
 export default function IdeaToScript() {
   const posthog = usePostHog();
-  const { user } = useAuth();
 
   const [ideaText, setIdeaText] = useState("");
   const [filmingFormat, setFilmingFormat] = useState<string>("");
@@ -171,10 +49,12 @@ export default function IdeaToScript() {
   const [formatOpen, setFormatOpen] = useState(false);
   const [formatError, setFormatError] = useState(false);
   const [expandedIdea, setExpandedIdea] = useState<number | null>(null);
-  const [editingIdeaId, setEditingIdeaId] = useState<number | null>(null);
-  const [editedIdeaText, setEditedIdeaText] = useState("");
-  const [clarificationIdeaId, setClarificationIdeaId] = useState<number | null>(null);
-  const [clarificationDismissed, setClarificationDismissed] = useState<Set<number>>(() => new Set());
+  const [clarifySessions, setClarifySessions] = useState<Record<number, ClarificationSession>>({});
+  const [editContext, setEditContext] = useState<ScriptEditContext | null>(null);
+  const [saveAssistantByIdea, setSaveAssistantByIdea] = useState<Record<number, string>>({});
+  const [savingIdeaId, setSavingIdeaId] = useState<number | null>(null);
+
+  const threadEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const utils = trpc.useUtils();
@@ -183,10 +63,7 @@ export default function IdeaToScript() {
       const data = query.state.data;
       if (!data) return false;
       const hasPending = data.some((i: any) =>
-        i.status === "queued" ||
-        i.status === "processing" ||
-        i.status === "validating" ||
-        i.status === "awaiting_approval"
+        ["queued", "processing", "validating", "awaiting_approval"].includes(i.status)
       );
       return hasPending ? 3000 : false;
     },
@@ -194,8 +71,8 @@ export default function IdeaToScript() {
 
   const submitMutation = trpc.ideas.submit.useMutation({
     onSuccess: () => {
-      toast.success("Idea submitted! AI is reviewing it now...");
       setIdeaText("");
+      setEditContext(null);
       utils.ideas.list.invalidate();
       textareaRef.current?.focus();
     },
@@ -203,17 +80,14 @@ export default function IdeaToScript() {
   });
 
   const approveMutation = trpc.ideas.approve.useMutation({
-    onSuccess: (data, variables) => {
-      if (variables.action === "reject") {
-        toast.info("Idea rejected.");
-      } else if (variables.action === "edit" || variables.action === "clarify") {
-        toast.success("Got it! AI is shaping your script...");
-        setClarificationIdeaId(null);
-      } else {
-        toast.success("Approved! Script generation started.");
+    onSuccess: (_data, variables) => {
+      if (variables.action === "clarify") {
+        setClarifySessions((prev) => {
+          const next = { ...prev };
+          delete next[variables.ideaId];
+          return next;
+        });
       }
-      setEditingIdeaId(null);
-      setEditedIdeaText("");
       utils.ideas.list.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -233,24 +107,40 @@ export default function IdeaToScript() {
   });
 
   const retryMutation = trpc.ideas.retry.useMutation({
-    onSuccess: () => {
-      toast.success("Retrying...");
-      utils.ideas.list.invalidate();
-    },
+    onSuccess: () => utils.ideas.list.invalidate(),
     onError: (err) => toast.error(err.message),
   });
 
   const saveToScriptsMutation = trpc.ideas.saveToScripts.useMutation({
-    onSuccess: (data) => {
-      if (data.alreadySaved) {
-        toast.info("This script is already in My Scripts.");
-      } else {
-        toast.success("Saved to My Scripts!");
+    onMutate: ({ ideaId }) => {
+      setSavingIdeaId(ideaId);
+    },
+    onSuccess: (data, variables) => {
+      if (data.assistantMessage) {
+        setSaveAssistantByIdea((prev) => ({ ...prev, [variables.ideaId]: data.assistantMessage }));
       }
       utils.ideas.list.invalidate();
     },
     onError: (err) => toast.error(err.message),
+    onSettled: () => setSavingIdeaId(null),
   });
+
+  const ideas = ideasQuery.data || [];
+
+  const sortedIdeas = useMemo(
+    () => [...ideas].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [ideas]
+  );
+
+  const activeClarify = useMemo(
+    () => getActiveClarification(sortedIdeas as any[], clarifySessions),
+    [sortedIdeas, clarifySessions]
+  );
+
+  const latestCompletedIdea = useMemo(
+    () => [...sortedIdeas].reverse().find((i) => i.status === "completed" && i.generatedScript),
+    [sortedIdeas]
+  );
 
   useEffect(() => {
     if (!formatOpen) return;
@@ -262,8 +152,111 @@ export default function IdeaToScript() {
     return () => document.removeEventListener("mousedown", handler);
   }, [formatOpen]);
 
+  useEffect(() => {
+    setClarifySessions((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const idea of ideas) {
+        if (idea.status !== "awaiting_approval") {
+          if (next[idea.id] && !approveMutation.isPending) {
+            delete next[idea.id];
+            changed = true;
+          }
+          continue;
+        }
+        const wizard = parseClarificationWizard((idea as any).viralStructure);
+        if (wizard && !next[idea.id]) {
+          next[idea.id] = buildInitialClarificationSession();
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [ideas, approveMutation.isPending]);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [ideas, clarifySessions, approveMutation.isPending, activeClarify?.stepIndex, editContext]);
+
+  const handlePickOption = (ideaId: number, optionId: string, customText?: string) => {
+    const idea = ideas.find((i) => i.id === ideaId);
+    const wizard = idea ? parseClarificationWizard((idea as any).viralStructure) : null;
+    const session = clarifySessions[ideaId];
+    if (!wizard || !session) return;
+
+    const activeSteps = resolveWizardSteps(wizard, session.answers);
+    const step = activeSteps[session.stepIndex];
+    if (!step) return;
+
+    const answerId = customText?.trim() || optionId;
+    const { next, done, allAnswers } = advanceClarificationSession(session, wizard, step, answerId);
+    setClarifySessions((prev) => ({ ...prev, [ideaId]: next }));
+
+    if (done) {
+      approveMutation.mutate({
+        ideaId,
+        action: "clarify",
+        clarificationAnswers: allAnswers,
+        clarificationCustom: customText?.trim() || undefined,
+      });
+    }
+  };
+
+  const handleSkipClarification = (ideaId: number) => {
+    const idea = ideas.find((i) => i.id === ideaId);
+    const defaultAudience = idea && isHospitalityIdea(idea.idea) ? "guests" : "customers";
+    setClarifySessions((prev) => {
+      const next = { ...prev };
+      delete next[ideaId];
+      return next;
+    });
+    approveMutation.mutate({
+      ideaId,
+      action: "clarify",
+      clarificationAnswers: { audience: defaultAudience },
+    });
+  };
+
+  const handleClarifyBack = () => {
+    if (!activeClarify) return;
+    const { idea, wizard, session } = activeClarify;
+    const prev = retreatClarificationSession(session, wizard);
+    if (prev) setClarifySessions((s) => ({ ...s, [idea.id]: prev }));
+  };
+
+  const wrapScriptForEdit = (idea: { id: number; generatedScript?: string | null }, prefill = "") => {
+    if (!idea.generatedScript) return;
+    setEditContext({
+      ideaId: idea.id,
+      quote: scriptHookSnippet(idea.generatedScript),
+    });
+    setIdeaText(prefill);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
   const handleSubmit = () => {
-    if (!ideaText.trim()) return;
+    const trimmed = ideaText.trim();
+    if (!trimmed) return;
+
+    if (editContext) {
+      posthog?.capture("idea_script_revision_request", {
+        ideaId: editContext.ideaId,
+        request: trimmed,
+      });
+      toast.message("Script revision queued", {
+        description: "In-app revisions are coming soon. Your feedback was recorded.",
+      });
+      setIdeaText("");
+      setEditContext(null);
+      return;
+    }
+
+    if (activeClarify) {
+      handlePickOption(activeClarify.idea.id, trimmed, trimmed);
+      setIdeaText("");
+      return;
+    }
+
     if (!filmingFormat && !customFormat.trim()) {
       setFormatError(true);
       setFormatOpen(true);
@@ -275,7 +268,7 @@ export default function IdeaToScript() {
         ? customFormat.trim()
         : FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label ?? "";
     submitMutation.mutate({
-      idea: ideaText.trim(),
+      idea: trimmed,
       niche: undefined,
       tone: "engaging" as any,
       creatorGoal: "balanced" as any,
@@ -283,573 +276,252 @@ export default function IdeaToScript() {
       inputMethod: "text",
       filmingFormat: resolvedFormat || undefined,
     });
+    posthog?.capture("idea_to_script_submit");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (activeClarify || editContext) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      return;
+    }
+    if (e.key === "Enter" && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
-  const ideas = ideasQuery.data || [];
-  const stats = {
-    total: ideas.length,
-    validating: ideas.filter((i) => i.status === "validating").length,
-    processing: ideas.filter((i) => i.status === "queued" || i.status === "processing").length,
-    completed: ideas.filter((i) => i.status === "completed").length,
-    failed: ideas.filter((i) => i.status === "failed").length,
-  };
+  const formatLabel =
+    filmingFormat === "custom" && customFormat.trim()
+      ? customFormat.trim()
+      : filmingFormat
+      ? FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label
+      : null;
 
-  // Sort: awaiting_approval first, then validating, processing, queued, completed, failed
-  const sortedIdeas = [...ideas].sort((a, b) => {
-    const order: Record<string, number> = {
-      awaiting_approval: 0, validating: 1, processing: 2, queued: 3, completed: 4, failed: 5,
-    };
-    return (order[a.status] ?? 6) - (order[b.status] ?? 6);
-  });
+  const chatTitle =
+    sortedIdeas.length > 0
+      ? ideaUserPrompt(sortedIdeas[sortedIdeas.length - 1].idea).slice(0, 48)
+      : "New script";
 
-  const clarificationIdea = clarificationIdeaId
-    ? ideas.find((i) => i.id === clarificationIdeaId)
-    : null;
-  const clarificationWizard = clarificationIdea
-    ? getClarificationWizard(clarificationIdea as any)
-    : null;
+  const composerPlaceholder = editContext
+    ? "Describe what to change..."
+    : activeClarify
+    ? "Or reply directly..."
+    : latestCompletedIdea
+    ? "Ask for changes, a shorter hook, or describe your next Reel idea..."
+    : "Describe your Reel idea...";
 
-  useEffect(() => {
-    if (approveMutation.isPending) return;
-    const pending = ideas.find(
-      (i) =>
-        i.status === "awaiting_approval" &&
-        getClarificationWizard(i as any) &&
-        !clarificationDismissed.has(i.id)
-    );
-    if (pending && clarificationIdeaId == null) {
-      setClarificationIdeaId(pending.id);
-    }
-  }, [ideas, clarificationIdeaId, clarificationDismissed, approveMutation.isPending]);
+  const composerHint = editContext
+    ? "Your edit applies to the quoted script above"
+    : activeClarify
+    ? ""
+    : latestCompletedIdea
+    ? "Type a revision or tap a follow-up above"
+    : "";
 
   return (
-    <>
-    <div className="container max-w-4xl py-8 space-y-8 pb-32">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20">
-            <Lightbulb className="h-6 w-6 text-violet-400" />
-          </div>
-          <h1 className="text-2xl font-bold">Idea to Script</h1>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          Turn any idea into a script that&apos;s built to go viral.
-        </p>
+    <div className="flex flex-col h-[calc(100dvh-4rem)] w-full bg-background overflow-hidden">
+      <div className="shrink-0 px-4 py-3 text-center">
+        <h1 className="text-sm font-medium text-foreground truncate max-w-md mx-auto inline-flex items-center gap-1">
+          {chatTitle}
+          <span className="text-muted-foreground text-xs">▾</span>
+        </h1>
       </div>
 
-      <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-purple-500/5">
-        <CardContent className="p-6 space-y-0">
-
-          <Textarea
-            ref={textareaRef}
-            value={ideaText}
-            onChange={(e) => setIdeaText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="What's your reel idea?"
-            className="min-h-[100px] text-base resize-none bg-background/50 border-border/50 focus:border-violet-500/50"
-            autoFocus
-          />
-
-          <div className="border-t border-border/40 my-4" />
-
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-
-            <div className={`flex items-center gap-2 ${formatError ? "animate-shake" : ""}`}>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">How will you film this?</span>
-              <div className="relative" data-format-dropdown>
-                <button
-                  type="button"
-                  onClick={() => setFormatOpen((v) => !v)}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
-                    filmingFormat || customFormat.trim()
-                      ? "border-violet-500 bg-violet-500/10 text-foreground"
-                      : formatError
-                      ? "border-amber-400/60 text-amber-400"
-                      : "border-border bg-card text-muted-foreground hover:border-violet-500/50 hover:text-foreground"
-                  }`}
-                >
-                  <span>
-                    {filmingFormat === "custom" && customFormat.trim()
-                      ? `🎬 ${customFormat.trim()}`
-                      : filmingFormat
-                      ? `${FILMING_FORMATS.find((f) => f.id === filmingFormat)?.icon} ${FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label}`
-                      : formatError
-                      ? "Select a format first"
-                      : "Pick a format"}
-                  </span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${formatOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {formatOpen && (
-                  <div className="absolute top-[calc(100%+6px)] left-0 z-50 min-w-[240px] rounded-xl border border-border bg-card shadow-xl p-1.5">
-                    {FILMING_FORMATS.map((fmt) => (
-                      <button
-                        key={fmt.id}
-                        type="button"
-                        onClick={() => {
-                          setFilmingFormat(fmt.id);
-                          setCustomFormat("");
-                          setFormatOpen(false);
-                          setFormatError(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                          filmingFormat === fmt.id
-                            ? "bg-violet-500/15 text-violet-300"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
-                      >
-                        <span className="text-base flex-shrink-0">{fmt.icon}</span>
-                        <div>
-                          <div className="font-medium text-sm">{fmt.label}</div>
-                          <div className="text-xs text-muted-foreground">{fmt.sub}</div>
-                        </div>
-                      </button>
-                    ))}
-                    <div className="border-t border-border/40 my-1" />
-                    <div className="px-2 pb-1">
-                      <input
-                        type="text"
-                        value={customFormat}
-                        placeholder="🎬  My own format..."
-                        className="w-full rounded-md border border-border/50 bg-background/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500/50 focus:outline-none"
-                        onChange={(e) => {
-                          setCustomFormat(e.target.value);
-                          if (e.target.value.trim()) {
-                            setFilmingFormat("custom");
-                            setFormatError(false);
-                          } else if (filmingFormat === "custom") {
-                            setFilmingFormat("");
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+          {ideasQuery.isLoading ? (
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Loading...
+            </div>
+          ) : sortedIdeas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[40vh] text-center px-4">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <Lightbulb className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-medium mb-2">What Reel should we write?</h2>
+              <p className="text-sm text-muted-foreground max-w-sm mb-6">
+                Describe your idea below. I will ask a few smart questions before drafting a script built to go viral.
+              </p>
+              <div className="flex flex-col gap-2 w-full max-w-md">
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setIdeaText(prompt)}
+                    className="rounded-xl border border-border/60 bg-card px-4 py-3 text-sm text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  >
+                    {prompt}
+                  </button>
+                ))}
               </div>
             </div>
-
-            <Button
-              onClick={handleSubmit}
-              disabled={!ideaText.trim() || submitMutation.isPending}
-              className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
-            >
-              {submitMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Generate Script
-            </Button>
-          </div>
-
-          <p className="text-xs text-muted-foreground mt-3">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Ctrl</kbd>
-            {" + "}
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Enter</kbd>
-            {" to generate"}
-          </p>
-
-        </CardContent>
-      </Card>
-
-      {/* Stats Bar */}
-      {ideas.length > 0 && (
-        <div className="flex items-center gap-6 text-sm flex-wrap">
-          <span className="text-muted-foreground">
-            <span className="font-semibold text-foreground">{stats.total}</span> ideas
-          </span>
-          {stats.validating > 0 && (
-            <span className="flex items-center gap-1.5 text-purple-400">
-              <Sparkles className="h-3.5 w-3.5" /> {stats.validating} reviewing
-            </span>
+          ) : (
+            <div className="space-y-6">
+              {sortedIdeas.map((idea) => (
+                <IdeaScriptConversation
+                  key={idea.id}
+                  idea={idea as any}
+                  session={clarifySessions[idea.id] ?? null}
+                  isExpanded={expandedIdea === idea.id}
+                  onToggleExpand={() =>
+                    setExpandedIdea((id) => (id === idea.id ? null : idea.id))
+                  }
+                  onRetry={(id) => retryMutation.mutate({ id })}
+                  onDelete={(id) => deleteMutation.mutate({ id })}
+                  onSaveScript={(ideaId, opts) =>
+                    saveToScriptsMutation.mutate({
+                      ideaId,
+                      addToCalendar: opts.addToCalendar,
+                      calendarHint: opts.calendarHint,
+                    })
+                  }
+                  isSavingScript={saveToScriptsMutation.isPending && savingIdeaId === idea.id}
+                  saveAssistantMessage={saveAssistantByIdea[idea.id] ?? null}
+                  onEditPolish={(i) => wrapScriptForEdit(i)}
+                  onFollowUp={(i, text) => wrapScriptForEdit(i, text)}
+                  onRegenerate={(i) =>
+                    wrapScriptForEdit(i, "Regenerate the full script with a stronger hook and tighter pacing")
+                  }
+                />
+              ))}
+            </div>
           )}
-          {stats.processing > 0 && (
-            <span className="flex items-center gap-1.5 text-blue-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {stats.processing} generating
-            </span>
-          )}
-          {stats.completed > 0 && (
-            <span className="flex items-center gap-1.5 text-green-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {stats.completed} ready
-            </span>
-          )}
-          {stats.failed > 0 && (
-            <span className="flex items-center gap-1.5 text-red-400">
-              <XCircle className="h-3.5 w-3.5" /> {stats.failed} failed
-            </span>
-          )}
+          <div ref={threadEndRef} className="h-8" />
         </div>
-      )}
+      </div>
 
-      {/* Ideas Queue */}
-      <div className="space-y-3">
-        {ideasQuery.isLoading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            Loading your ideas...
-          </div>
-        ) : ideas.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="p-4 rounded-full bg-violet-500/10 mb-4">
-                <Zap className="h-8 w-8 text-violet-400" />
+      <div className="shrink-0 bg-background px-4 sm:px-6 py-4 max-h-[min(52vh,520px)] overflow-y-auto">
+        <div className="max-w-2xl mx-auto space-y-3">
+          {activeClarify ? (
+            <ClaudeStyleQuestionCard
+              question={activeClarify.step.question}
+              stepIndex={activeClarify.stepIndex}
+              totalSteps={activeClarify.totalSteps}
+              options={activeClarify.step.options}
+              allowCustom={activeClarify.step.allowCustom}
+              disabled={approveMutation.isPending}
+              onPick={(id) => handlePickOption(activeClarify.idea.id, id)}
+              onCustom={(t) => handlePickOption(activeClarify.idea.id, t, t)}
+              onSkip={() => handleSkipClarification(activeClarify.idea.id)}
+              onBack={activeClarify.stepIndex > 0 ? handleClarifyBack : undefined}
+              onDismiss={() => handleSkipClarification(activeClarify.idea.id)}
+            />
+          ) : null}
+
+          <div
+            className={`rounded-[22px] border bg-card transition-colors ${
+              formatError ? "border-amber-400/60" : "border-border/60 focus-within:border-violet-400/35 focus-within:ring-[3px] focus-within:ring-violet-400/10"
+            }`}
+          >
+            {editContext ? (
+              <div className="mx-2.5 mt-2.5 px-3 py-2.5 rounded-xl bg-muted/80 border border-border/60 relative">
+                <button
+                  type="button"
+                  onClick={() => setEditContext(null)}
+                  className="absolute top-2 right-2 h-5 w-5 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                  aria-label="Remove script context"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                  Editing script
+                </p>
+                <p className="text-sm text-muted-foreground line-clamp-3 pr-6">&ldquo;{editContext.quote}&rdquo;</p>
               </div>
-              <h3 className="text-lg font-semibold mb-2">Your Script Factory is Empty</h3>
-              <p className="text-muted-foreground max-w-md">
-                Drop your first idea above. We score the concept, help you tighten it, draft for your chosen creator goal,
-                and auto-rewrite weak scripts before they land here.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          sortedIdeas.map((idea) => {
-            const statusConfig = STATUS_CONFIG[idea.status as IdeaStatus] || STATUS_CONFIG.queued;
-            const StatusIcon = statusConfig.icon;
-            const isExpanded = expandedIdea === idea.id;
-            const isEditing = editingIdeaId === idea.id;
-            const isAwaitingApproval = idea.status === "awaiting_approval";
+            ) : null}
 
-            return (
-              <Card
-                key={idea.id}
-                className={`transition-all hover:border-border/60 ${
-                  isAwaitingApproval ? "border-amber-400/30 bg-amber-400/[0.02]" :
-                  idea.status === "completed" ? "border-green-500/20" : ""
-                }`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`p-1.5 rounded-md mt-0.5 ${statusConfig.bg}`}>
-                      <StatusIcon
-                        className={`h-4 w-4 ${statusConfig.color} ${
-                          idea.status === "processing" || idea.status === "validating" ? "animate-spin" : ""
-                        }`}
-                      />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          {idea.generatedTitle && idea.status === "completed" ? (
-                            <h3 className="font-semibold text-sm truncate">{idea.generatedTitle}</h3>
-                          ) : null}
-                          <p className={`text-sm ${idea.generatedTitle ? "text-muted-foreground" : "text-foreground"} ${!isExpanded && !isAwaitingApproval ? "line-clamp-2" : ""}`}>
-                            {idea.idea}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                          {(idea as any).viralScore != null && idea.status !== "completed" && (
-                            <IdeaScoreBadge score={Number((idea as any).viralScore)} />
-                          )}
-                          {idea.status === "completed" && (
-                            <>
-                              {(idea as any).viralScore != null && (
-                                <IdeaScoreBadge score={Number((idea as any).viralScore)} />
-                              )}
-                              {(() => {
-                                const jq = viralStructureJudge(idea as any);
-                                return jq.finalScore != null ? (
-                                  <ScriptJudgeBadge
-                                    score={jq.finalScore}
-                                    decision={jq.decision}
-                                    attempts={jq.attempts}
-                                  />
-                                ) : null;
-                              })()}
-                            </>
-                          )}
-                          <Badge variant="outline" className={`text-[10px] ${statusConfig.color} border-current/20`}>
-                            {statusConfig.label}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>{new Date(idea.createdAt).toLocaleDateString()}</span>
-                        {(idea as any).inputMethod && (idea as any).inputMethod !== "text" && (
-                          <Badge variant="secondary" className="text-[10px] gap-1">
-                            <Mic className="h-2.5 w-2.5" /> Voice
-                          </Badge>
-                        )}
-                        {(() => {
-                          const g = creatorGoalSlugFromListedIdea(idea);
-                          const gl = g ? CREATOR_GOALS.find((x) => x.value === g) : null;
-                          return gl && g !== "balanced" ? (
-                            <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-200">
-                              Goal: {gl.label}
-                            </Badge>
-                          ) : null;
-                        })()}
-                        {idea.niche && <Badge variant="secondary" className="text-[10px]">{idea.niche}</Badge>}
-                        {idea.tone && idea.tone !== "engaging" && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {TONE_OPTIONS.find((t) => t.value === idea.tone)?.emoji} {idea.tone}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {(() => {
-                        const summary =
-                          readClarificationSummary((idea as any).viralStructure) ??
-                          (() => {
-                            const locked = readTargetAudienceFromIdeaMeta((idea as any).viralStructure);
-                            return locked ? [{ question: "Target audience", answer: locked.label }] : null;
-                          })();
-                        if (!summary?.length) return null;
-                        return (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {summary.map((chip) => (
-                              <span
-                                key={chip.question}
-                                className="inline-flex items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200"
-                                title={chip.question}
-                              >
-                                {chip.answer}
-                              </span>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* AI Validation / Approval Section */}
-                      {isAwaitingApproval && (() => {
-                        const wizard = getClarificationWizard(idea as any);
-                        const pendingQuestion = getPendingQuestion(idea as any);
-
-                        if (wizard) {
-                          return (
-                            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-400/25">
-                              <p className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1.5">
-                                <AlertTriangle className="h-3.5 w-3.5" /> One quick question before we write your script
-                              </p>
-                              <p className="text-sm text-foreground mb-3">
-                                {pendingQuestion || wizard.steps[0]?.question}
-                              </p>
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
-                                onClick={() => setClarificationIdeaId(idea.id)}
-                              >
-                                Answer {wizard.steps.length > 1 ? `${wizard.steps.length} questions` : "1 question"}
-                              </Button>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="mt-3 space-y-3">
-                            {(idea as any).aiReasoning && (
-                              <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                                <p className="text-xs font-medium text-purple-300 mb-1 flex items-center gap-1.5">
-                                  <Sparkles className="h-3.5 w-3.5" /> AI Assessment
-                                </p>
-                                <p className="text-sm text-muted-foreground">{(idea as any).aiReasoning}</p>
-                              </div>
-                            )}
-                            {(idea as any).aiSuggestion && (
-                              <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                                <p className="text-xs font-medium text-green-300 mb-1">Suggested Improvement:</p>
-                                <p className="text-sm text-foreground font-medium">{(idea as any).aiSuggestion}</p>
-                              </div>
-                            )}
-                            {isEditing ? (
-                              <div className="space-y-2">
-                                <Textarea
-                                  value={editedIdeaText}
-                                  onChange={(e) => setEditedIdeaText(e.target.value)}
-                                  className="min-h-[80px] text-sm bg-background/50"
-                                  placeholder="Edit your idea..."
-                                  autoFocus
-                                />
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white gap-1"
-                                    onClick={() => approveMutation.mutate({
-                                      ideaId: idea.id,
-                                      action: "edit",
-                                      editedIdea: editedIdeaText.trim(),
-                                    })}
-                                    disabled={!editedIdeaText.trim() || approveMutation.isPending}
-                                  >
-                                    {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                                    Re-validate Idea
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 text-xs"
-                                    onClick={() => { setEditingIdeaId(null); setEditedIdeaText(""); }}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Button
-                                  size="sm"
-                                  className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                                  onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "accept" })}
-                                  disabled={approveMutation.isPending}
-                                >
-                                  {approveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
-                                  Accept & Generate
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 text-xs gap-1.5 border-violet-500/30 hover:bg-violet-500/10"
-                                  onClick={() => {
-                                    setEditingIdeaId(idea.id);
-                                    setEditedIdeaText((idea as any).aiSuggestion || idea.idea);
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" /> Edit Idea
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 text-xs text-red-400 hover:text-red-300 gap-1.5"
-                                  onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "reject" })}
-                                  disabled={approveMutation.isPending}
-                                >
-                                  <ThumbsDown className="h-3.5 w-3.5" /> Reject
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {idea.status === "failed" && idea.errorMessage && (
-                        <p className="text-xs text-red-400 mt-2 bg-red-400/5 rounded px-2 py-1">
-                          {idea.errorMessage}
-                        </p>
-                      )}
-
-                      {isExpanded && idea.status === "completed" && idea.generatedScript && (
-                        <div className="mt-3 rounded-lg bg-muted/30 border border-border/30">
-                          <p className="text-xs font-medium text-muted-foreground px-3 pt-3 mb-2">Your Script:</p>
-                          <div className="px-3 pb-3 max-h-[500px] overflow-y-auto">
-                            <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                              {idea.generatedScript}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2 mt-3">
-                        {idea.status === "completed" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs"
-                              onClick={() => setExpandedIdea(isExpanded ? null : idea.id)}
-                            >
-                              {isExpanded ? "Hide Script" : "Read Script"}
-                            </Button>
-                            {idea.savedScriptId ? (
-                              <Link href={`/scripts/${idea.savedScriptId}`}>
-                                <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white gap-1">
-                                  <FileText className="h-3 w-3" /> Edit Script
-                                </Button>
-                              </Link>
-                            ) : (
-                              <Button
-                                size="sm"
-                                className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white gap-1"
-                                onClick={() => saveToScriptsMutation.mutate({ ideaId: idea.id })}
-                                disabled={saveToScriptsMutation.isPending}
-                              >
-                                {saveToScriptsMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Plus className="h-3 w-3" />
-                                )}
-                                Use This Script
-                              </Button>
-                            )}
-                          </>
-                        )}
-                        {idea.status === "failed" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-blue-400 hover:text-blue-300 gap-1"
-                            onClick={() => retryMutation.mutate({ id: idea.id })}
-                            disabled={retryMutation.isPending}
-                          >
-                            <RotateCcw className="h-3 w-3" /> Retry
-                          </Button>
-                        )}
-                        {!isAwaitingApproval && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-muted-foreground hover:text-red-400 gap-1 ml-auto"
+            <Textarea
+              ref={textareaRef}
+              value={ideaText}
+              onChange={(e) => setIdeaText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={composerPlaceholder}
+              rows={editContext ? 2 : 1}
+              className="min-h-[52px] max-h-32 resize-none border-0 bg-transparent px-5 pt-4 pb-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none"
+            />
+            <div className="flex items-center justify-between gap-2 px-3 pb-3">
+              <div className="flex items-center gap-1">
+                {!activeClarify && !editContext ? (
+                  <div className="relative" data-format-dropdown>
+                    <button
+                      type="button"
+                      onClick={() => setFormatOpen((v) => !v)}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors ${
+                        formatLabel
+                          ? "text-foreground bg-muted"
+                          : formatError
+                          ? "text-amber-600"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {formatLabel ? (
+                        <span className="max-w-[140px] truncate hidden sm:inline">{formatLabel}</span>
+                      ) : null}
+                    </button>
+                    {formatOpen && (
+                      <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-[min(100vw-2rem,300px)] rounded-xl border border-border bg-popover shadow-xl p-1.5">
+                        {FILMING_FORMATS.map((fmt) => (
+                          <button
+                            key={fmt.id}
+                            type="button"
                             onClick={() => {
-                              if (confirm("Delete this idea?")) {
-                                deleteMutation.mutate({ id: idea.id });
-                              }
+                              setFilmingFormat(fmt.id);
+                              setCustomFormat("");
+                              setFormatOpen(false);
+                              setFormatError(false);
                             }}
+                            className={`w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left text-sm ${
+                              filmingFormat === fmt.id ? "bg-muted" : "hover:bg-muted/60"
+                            }`}
                           >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
+                            <span>{fmt.icon}</span>
+                            <span className="text-xs">{fmt.label}</span>
+                          </button>
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
+                ) : null}
+              </div>
+
+              <Button
+                onClick={handleSubmit}
+                disabled={
+                  !ideaText.trim() ||
+                  submitMutation.isPending ||
+                  approveMutation.isPending
+                }
+                size="icon"
+                className="h-9 w-9 shrink-0 rounded-full bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {submitMutation.isPending || approveMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {composerHint ? (
+            <p className="text-center text-[11px] text-muted-foreground/75">{composerHint}</p>
+          ) : null}
+          <p className="text-center text-[10px] text-muted-foreground/70">
+            <span className="text-violet-600 font-medium">SpyReels</span> asks smart questions so your script hits the
+            right audience and goes viral.
+          </p>
+        </div>
       </div>
     </div>
-
-    {clarificationIdea && clarificationWizard ? (
-      <IdeaClarificationPanel
-        open={clarificationIdeaId === clarificationIdea.id}
-        ideaId={clarificationIdea.id}
-        ideaPreview={clarificationIdea.idea}
-        wizard={clarificationWizard}
-        isSubmitting={approveMutation.isPending}
-        onClose={() => {
-          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
-          setClarificationIdeaId(null);
-        }}
-        onSkip={() => {
-          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
-          setClarificationIdeaId(null);
-          const defaultAudience = isHospitalityIdea(clarificationIdea.idea) ? "guests" : "customers";
-          approveMutation.mutate({
-            ideaId: clarificationIdea.id,
-            action: "clarify",
-            clarificationAnswers: { audience: defaultAudience },
-          });
-        }}
-        onComplete={(answers, customNotes) => {
-          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
-          setClarificationIdeaId(null);
-          approveMutation.mutate({
-            ideaId: clarificationIdea.id,
-            action: "clarify",
-            clarificationAnswers: answers,
-            clarificationCustom: customNotes || undefined,
-          });
-        }}
-      />
-    ) : null}
-    </>
   );
+}
+
+function ideaUserPrompt(text: string): string {
+  const base = text.split("\n\nCreator context:")[0]?.trim();
+  return base || text.trim();
 }

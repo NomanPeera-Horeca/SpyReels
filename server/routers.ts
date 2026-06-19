@@ -18,6 +18,7 @@ import {
   ideaHasLockedAudience,
   rankHooksForAudience,
   readTargetAudienceFromIdeaMeta,
+  readFollowUpsFromIdeaMeta,
   suggestionHedgesAudience,
   type ClarificationAudienceType,
   type IdeaClarificationWizard,
@@ -57,6 +58,16 @@ const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   sortOrder: true,
 });
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
+import {
+  assignScriptingTag,
+  buildSaveAssistantMessage,
+  enrichIdeaSavedScriptInBackground,
+  formatPlannedPostLabel,
+  generateAndStoreFollowUps,
+  generateIdeaFollowUps,
+  parseCalendarHint,
+  pickAutoPostSchedule,
+} from "./ideaScriptExtras";
 import { ONBOARDING_NICHES } from "@/data/onboardingNiches";
 import {
   createScrapeJob,
@@ -5769,19 +5780,37 @@ The hook MUST be 7-10 words. Count them.`),
         return assertIdeaInWorkspace(input.id, ctx);
       }),
 
-    /** Save a completed idea's script to My Scripts */
+    /** Save a completed idea's script to My Scripts (auto schedule, tag, caption in background) */
     saveToScripts: protectedProcedure
-      .input(z.object({ ideaId: z.number() }))
+      .input(
+        z.object({
+          ideaId: z.number(),
+          addToCalendar: z.boolean().optional().default(true),
+          calendarHint: z.string().max(200).optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         const idea = await assertIdeaInWorkspace(input.ideaId, ctx);
         if (idea.status !== "completed" || !idea.generatedScript) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Script not ready yet" });
         }
+
+        const schedule = input.addToCalendar
+          ? parseCalendarHint(input.calendarHint)
+          : null;
+        const plannedLabel = schedule
+          ? formatPlannedPostLabel(schedule.postDate, schedule.postTime)
+          : null;
+
         if (idea.savedScriptId) {
-          return { savedScriptId: idea.savedScriptId, alreadySaved: true };
+          return {
+            savedScriptId: idea.savedScriptId,
+            alreadySaved: true,
+            assistantMessage: buildSaveAssistantMessage(plannedLabel),
+            plannedPostLabel: plannedLabel,
+          };
         }
 
-        // Create a saved script from the idea
         const title = idea.generatedTitle || `Script: ${idea.idea.substring(0, 60)}`;
         const content = idea.generatedScript;
         const wordCount = content.split(/\s+/).filter(Boolean).length;
@@ -5796,10 +5825,11 @@ The hook MUST be 7-10 words. Count them.`),
           sourceHandle: "idea",
           gradeLevel: idea.gradeLevel || "auto",
           wordCount,
+          postDate: schedule?.postDate ?? null,
+          postTime: schedule?.postTime ?? null,
           status: "draft",
         });
 
-        // Create initial version
         await createScriptVersion({
           scriptId: savedScriptId,
           content,
@@ -5808,10 +5838,52 @@ The hook MUST be 7-10 words. Count them.`),
           changeDescription: `Generated from idea: ${idea.idea.substring(0, 100)}`,
         });
 
-        // Link the idea to the saved script
+        await assignScriptingTag(savedScriptId, ctx.workspaceId, ctx.user.id);
         await updateScriptIdea(input.ideaId, { savedScriptId });
 
-        return { savedScriptId, alreadySaved: false };
+        enrichIdeaSavedScriptInBackground(savedScriptId, content).catch((err) =>
+          console.error(`[Ideas] Background caption failed for script ${savedScriptId}:`, err)
+        );
+
+        const assistantMessage = buildSaveAssistantMessage(plannedLabel);
+
+        return {
+          savedScriptId,
+          alreadySaved: false,
+          assistantMessage,
+          plannedPostLabel: plannedLabel,
+        };
+      }),
+
+    /** AI follow-up suggestions for a completed idea script */
+    getFollowUps: protectedProcedure
+      .input(z.object({ ideaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const idea = await assertIdeaInWorkspace(input.ideaId, ctx);
+        if (idea.status !== "completed" || !idea.generatedScript?.trim()) {
+          return { followUps: [] as string[] };
+        }
+
+        const cached = readFollowUpsFromIdeaMeta(idea.viralStructure);
+        if (cached?.length) return { followUps: cached };
+
+        try {
+          const followUps = await generateIdeaFollowUps(
+            idea.idea,
+            idea.generatedScript,
+            idea.generatedTitle
+          );
+          if (followUps.length > 0) {
+            const merged = mergeScriptIdeaViralStructure(idea.viralStructure, {
+              ideaMeta: { followUps },
+            });
+            await updateScriptIdea(input.ideaId, { viralStructure: merged as any });
+          }
+          return { followUps };
+        } catch (err) {
+          console.error(`[Ideas] getFollowUps failed for idea ${input.ideaId}:`, err);
+          return { followUps: [] as string[] };
+        }
       }),
 
     /** Delete an idea */
@@ -9077,6 +9149,10 @@ ${goalLine}`,
       viralStructure: viralStructure as any,
       status: "completed",
     } as any);
+
+    generateAndStoreFollowUps(ideaId).catch((err) =>
+      console.error(`[Ideas] Follow-up generation failed for idea ${ideaId}:`, err)
+    );
 
     console.log(
       `[Ideas] Script generated for idea ${ideaId}: "${suggestedTitle}" (judge ${verdict.overallScore}/10, skip-rate ${skipRateResult.score}/10, pass=${pass}, regens=${regenCount}, hookExamples=${viralHookExamples.length})`
