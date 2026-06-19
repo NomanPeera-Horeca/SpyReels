@@ -1,18 +1,17 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePostHog } from "@posthog/react";
 import {
   Lightbulb, Send, Loader2, CheckCircle2, XCircle, Clock,
   Trash2, RotateCcw, FileText, Plus, ChevronDown, Zap,
-  Mic, MicOff, Square, Sparkles, ThumbsUp, ThumbsDown, Pencil,
+  Mic, Sparkles, ThumbsUp, ThumbsDown, Pencil,
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -22,15 +21,6 @@ const TONE_OPTIONS = [
   { value: "professional", label: "Professional", emoji: "💼" },
   { value: "humorous", label: "Humorous", emoji: "😂" },
   { value: "educational", label: "Educational", emoji: "📚" },
-];
-
-const GRADE_OPTIONS = [
-  { value: "auto", label: "Auto (Best fit)" },
-  { value: "2", label: "Grade 2 (Simple)" },
-  { value: "3", label: "Grade 3" },
-  { value: "4", label: "Grade 4" },
-  { value: "5", label: "Grade 5" },
-  { value: "6", label: "Grade 6 (Complex)" },
 ];
 
 const CREATOR_GOALS = [
@@ -157,25 +147,14 @@ export default function IdeaToScript() {
   const { user } = useAuth();
 
   const [ideaText, setIdeaText] = useState("");
-  const [niche, setNiche] = useState("");
-  const [creatorGoal, setCreatorGoal] = useState<string>("balanced");
-  const [tone, setTone] = useState("engaging");
-  const [gradeLevel, setGradeLevel] = useState("auto");
   const [filmingFormat, setFilmingFormat] = useState<string>("");
   const [customFormat, setCustomFormat] = useState<string>("");
-  const [showSettings, setShowSettings] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [formatError, setFormatError] = useState(false);
   const [expandedIdea, setExpandedIdea] = useState<number | null>(null);
   const [editingIdeaId, setEditingIdeaId] = useState<number | null>(null);
   const [editedIdeaText, setEditedIdeaText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Voice recording state
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const utils = trpc.useUtils();
   const ideasQuery = trpc.ideas.list.useQuery(undefined, {
@@ -197,18 +176,6 @@ export default function IdeaToScript() {
       textareaRef.current?.focus();
     },
     onError: (err) => toast.error(err.message),
-  });
-
-  const transcribeMutation = trpc.ideas.transcribeVoice.useMutation({
-    onSuccess: (data) => {
-      setIdeaText(data.text);
-      toast.success("Voice transcribed! Review and submit your idea.");
-      setIsTranscribing(false);
-    },
-    onError: (err) => {
-      toast.error("Transcription failed: " + err.message);
-      setIsTranscribing(false);
-    },
   });
 
   const approveMutation = trpc.ideas.approve.useMutation({
@@ -260,81 +227,34 @@ export default function IdeaToScript() {
     onError: (err) => toast.error(err.message),
   });
 
-  // Voice recording handlers
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm",
-      });
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-
-        if (blob.size < 1000) {
-          toast.error("Recording too short. Please try again.");
-          return;
-        }
-
-        // Convert to base64 and transcribe
-        setIsTranscribing(true);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(",")[1];
-          transcribeMutation.mutate({ audioBase64: base64, mimeType: "audio/webm" });
-        };
-        reader.readAsDataURL(blob);
-      };
-
-      mediaRecorder.start(250);
-      setIsRecording(true);
-      setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
-    } catch {
-      toast.error("Microphone access denied. Please allow microphone access and try again.");
-    }
-  }, [transcribeMutation]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+    if (!formatOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-format-dropdown]")) setFormatOpen(false);
     };
-  }, []);
-
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [formatOpen]);
 
   const handleSubmit = () => {
     if (!ideaText.trim()) return;
+    if (!filmingFormat && !customFormat.trim()) {
+      setFormatError(true);
+      setFormatOpen(true);
+      setTimeout(() => setFormatError(false), 1000);
+      return;
+    }
     const resolvedFormat =
       filmingFormat === "custom"
         ? customFormat.trim()
         : FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label ?? "";
     submitMutation.mutate({
       idea: ideaText.trim(),
-      niche: niche.trim() || undefined,
-      tone: tone as any,
-      creatorGoal: creatorGoal as any,
-      gradeLevel: gradeLevel as any,
+      niche: undefined,
+      tone: "engaging" as any,
+      creatorGoal: "balanced" as any,
+      gradeLevel: "auto" as any,
       inputMethod: "text",
       filmingFormat: resolvedFormat || undefined,
     });
@@ -348,10 +268,8 @@ export default function IdeaToScript() {
   };
 
   const ideas = ideasQuery.data || [];
-  const awaitingCount = ideas.filter((i) => i.status === "awaiting_approval").length;
   const stats = {
     total: ideas.length,
-    awaiting: awaitingCount,
     validating: ideas.filter((i) => i.status === "validating").length,
     processing: ideas.filter((i) => i.status === "queued" || i.status === "processing").length,
     completed: ideas.filter((i) => i.status === "completed").length,
@@ -376,137 +294,105 @@ export default function IdeaToScript() {
           </div>
           <h1 className="text-2xl font-bold">Idea to Script</h1>
         </div>
-        <p className="text-muted-foreground">
-          Type or speak a rough idea. We score the idea, refine it with you, draft a script tuned to your goal (calendar
-          posts, personal brand, teaching, or viral reach), then run an automatic quality check. Low scores kick off a smarter
-          rewrite before you save.
+        <p className="text-muted-foreground text-sm">
+          Turn any idea into a script that&apos;s built to go viral.
         </p>
       </div>
 
-      {/* Awaiting Approval Alert */}
-      {awaitingCount > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-400/10 border border-amber-400/20">
-          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-200">
-            <span className="font-semibold">{awaitingCount} idea{awaitingCount > 1 ? "s" : ""}</span> need{awaitingCount === 1 ? "s" : ""} your approval before script generation.
-          </p>
-        </div>
-      )}
-
-      {/* Format selector */}
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-foreground">How will you film this?</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {FILMING_FORMATS.map((fmt) => (
-            <button
-              key={fmt.id}
-              type="button"
-              onClick={() => {
-                setFilmingFormat(fmt.id);
-                setCustomFormat("");
-              }}
-              className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all hover:border-violet-500/50 ${
-                filmingFormat === fmt.id
-                  ? "border-violet-500 bg-violet-500/10"
-                  : "border-border bg-card"
-              }`}
-            >
-              <span className="text-2xl">{fmt.icon}</span>
-              <span className="text-xs font-semibold text-foreground leading-tight">{fmt.label}</span>
-              <span className="text-[10px] text-muted-foreground">{fmt.sub}</span>
-            </button>
-          ))}
-          <div
-            className={`flex flex-col gap-1 rounded-xl border p-3 transition-all ${
-              filmingFormat === "custom"
-                ? "border-violet-500 bg-violet-500/10"
-                : "border-border bg-card"
-            }`}
-          >
-            <span className="text-2xl">🎬</span>
-            <span className="text-xs font-semibold text-foreground">Describe your own format</span>
-            <input
-              type="text"
-              value={customFormat}
-              placeholder="e.g. interview, podcast clip..."
-              className="mt-1 w-full rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-violet-500/50 focus:outline-none"
-              onChange={(e) => {
-                setCustomFormat(e.target.value);
-                if (e.target.value.trim()) setFilmingFormat("custom");
-                else if (filmingFormat === "custom") setFilmingFormat("");
-              }}
-              onClick={() => setFilmingFormat("custom")}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Submit Form */}
       <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-purple-500/5">
-        <CardContent className="p-6 space-y-4">
-          <div className="relative">
-            <Textarea
-              ref={textareaRef}
-              value={ideaText}
-              onChange={(e) => setIdeaText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "Recording... speak your idea" : isTranscribing ? "Transcribing your voice..." : "What's your reel idea? Type it or click the mic to speak..."}
-              className="min-h-[100px] pr-4 text-base resize-none bg-background/50 border-border/50 focus:border-violet-500/50"
-              autoFocus
-              disabled={isRecording || isTranscribing}
-            />
-          </div>
+        <CardContent className="p-6 space-y-0">
 
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              {/* Voice Record Button */}
-              {isRecording ? (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={stopRecording}
-                  className="gap-2 animate-pulse"
-                >
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                  Stop {formatTime(recordingTime)}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={startRecording}
-                  disabled={isTranscribing || submitMutation.isPending}
-                  className="gap-2 border-violet-500/30 hover:bg-violet-500/10 hover:text-violet-300"
-                >
-                  {isTranscribing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                  {isTranscribing ? "Transcribing..." : "Voice"}
-                </Button>
-              )}
+          <Textarea
+            ref={textareaRef}
+            value={ideaText}
+            onChange={(e) => setIdeaText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="What's your reel idea?"
+            className="min-h-[100px] text-base resize-none bg-background/50 border-border/50 focus:border-violet-500/50"
+            autoFocus
+          />
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSettings(!showSettings)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showSettings ? "rotate-180" : ""}`} />
-                Settings
-              </Button>
-              {niche && (
-                <Badge variant="secondary" className="text-xs">{niche}</Badge>
-              )}
-              <Badge variant="outline" className="text-xs">
-                {TONE_OPTIONS.find((t) => t.value === tone)?.emoji} {TONE_OPTIONS.find((t) => t.value === tone)?.label}
-              </Badge>
+          <div className="border-t border-border/40 my-4" />
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+
+            <div className={`flex items-center gap-2 ${formatError ? "animate-shake" : ""}`}>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">How will you film this?</span>
+              <div className="relative" data-format-dropdown>
+                <button
+                  type="button"
+                  onClick={() => setFormatOpen((v) => !v)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                    filmingFormat || customFormat.trim()
+                      ? "border-violet-500 bg-violet-500/10 text-foreground"
+                      : formatError
+                      ? "border-amber-400/60 text-amber-400"
+                      : "border-border bg-card text-muted-foreground hover:border-violet-500/50 hover:text-foreground"
+                  }`}
+                >
+                  <span>
+                    {filmingFormat === "custom" && customFormat.trim()
+                      ? `🎬 ${customFormat.trim()}`
+                      : filmingFormat
+                      ? `${FILMING_FORMATS.find((f) => f.id === filmingFormat)?.icon} ${FILMING_FORMATS.find((f) => f.id === filmingFormat)?.label}`
+                      : formatError
+                      ? "Select a format first"
+                      : "Pick a format"}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${formatOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {formatOpen && (
+                  <div className="absolute top-[calc(100%+6px)] left-0 z-50 min-w-[240px] rounded-xl border border-border bg-card shadow-xl p-1.5">
+                    {FILMING_FORMATS.map((fmt) => (
+                      <button
+                        key={fmt.id}
+                        type="button"
+                        onClick={() => {
+                          setFilmingFormat(fmt.id);
+                          setCustomFormat("");
+                          setFormatOpen(false);
+                          setFormatError(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+                          filmingFormat === fmt.id
+                            ? "bg-violet-500/15 text-violet-300"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <span className="text-base flex-shrink-0">{fmt.icon}</span>
+                        <div>
+                          <div className="font-medium text-sm">{fmt.label}</div>
+                          <div className="text-xs text-muted-foreground">{fmt.sub}</div>
+                        </div>
+                      </button>
+                    ))}
+                    <div className="border-t border-border/40 my-1" />
+                    <div className="px-2 pb-1">
+                      <input
+                        type="text"
+                        value={customFormat}
+                        placeholder="🎬  My own format..."
+                        className="w-full rounded-md border border-border/50 bg-background/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500/50 focus:outline-none"
+                        onChange={(e) => {
+                          setCustomFormat(e.target.value);
+                          if (e.target.value.trim()) {
+                            setFilmingFormat("custom");
+                            setFormatError(false);
+                          } else if (filmingFormat === "custom") {
+                            setFilmingFormat("");
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Button
               onClick={handleSubmit}
-              disabled={!ideaText.trim() || submitMutation.isPending || isRecording || isTranscribing}
+              disabled={!ideaText.trim() || submitMutation.isPending}
               className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
             >
               {submitMutation.isPending ? (
@@ -514,65 +400,17 @@ export default function IdeaToScript() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              Submit Idea
+              Generate Script
             </Button>
           </div>
 
-          {/* Collapsible Settings */}
-          {showSettings && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-border/30">
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Niche (optional)</label>
-                <input
-                  type="text"
-                  value={niche}
-                  onChange={(e) => setNiche(e.target.value)}
-                  placeholder="e.g., Fitness, Tech, Finance"
-                  className="w-full px-3 py-2 text-sm rounded-md border border-border/50 bg-background/50 focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Creator goal</label>
-                <Select value={creatorGoal} onValueChange={setCreatorGoal}>
-                  <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CREATOR_GOALS.map((g) => (
-                      <SelectItem key={g.value} value={g.value}>
-                        <span className="font-medium">{g.label}</span>
-                        <span className="text-muted-foreground text-xs">: {g.hint}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Tone</label>
-                <Select value={tone} onValueChange={setTone}>
-                  <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TONE_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.emoji} {t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Reading Level</label>
-                <Select value={gradeLevel} onValueChange={setGradeLevel}>
-                  <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {GRADE_OPTIONS.map((g) => (
-                      <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Enter</kbd> to submit &middot; Click <Mic className="inline h-3 w-3" /> to speak your idea
+          <p className="text-xs text-muted-foreground mt-3">
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Ctrl</kbd>
+            {" + "}
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">Enter</kbd>
+            {" to generate"}
           </p>
+
         </CardContent>
       </Card>
 
@@ -582,11 +420,6 @@ export default function IdeaToScript() {
           <span className="text-muted-foreground">
             <span className="font-semibold text-foreground">{stats.total}</span> ideas
           </span>
-          {stats.awaiting > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5" /> {stats.awaiting} awaiting
-            </span>
-          )}
           {stats.validating > 0 && (
             <span className="flex items-center gap-1.5 text-purple-400">
               <Sparkles className="h-3.5 w-3.5" /> {stats.validating} reviewing

@@ -46,6 +46,12 @@ export type Niche = (typeof NICHES)[number];
 
 export interface NicheRoutingInput {
   businessDescription: string;
+  /**
+   * Optional extra context injected when we already know the user's intent.
+   * E.g. "This creator makes content FOR their guests, not for other hotel owners."
+   * Injected by the backend when we detect obvious B2C hospitality/venue/food signals.
+   */
+  clarificationContext?: string | null;
 }
 
 export interface NicheRoutingOutput {

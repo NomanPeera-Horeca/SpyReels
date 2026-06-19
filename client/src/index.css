@@ -204,4 +204,14 @@
       box-shadow: 0 0 0 2px oklch(0.65 0.2 280 / 0.45);
     }
   }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-4px); }
+    40%, 80% { transform: translateX(4px); }
+  }
+
+  .animate-shake {
+    animation: shake 0.3s ease;
+  }
 }

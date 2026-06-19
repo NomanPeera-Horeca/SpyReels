@@ -523,6 +523,44 @@ function selectedSlugsFromNicheRouting(result: {
   return slugs.slice(0, 3);
 }
 
+/**
+ * Detects whether a business description clearly signals a B2C hospitality/venue creator
+ * (posting content for guests, diners, travellers) vs a B2B seller targeting operators.
+ *
+ * Returns a clarification string to inject into the niche routing prompt,
+ * or null if no strong signal is found.
+ */
+function detectHospitalityB2CContext(description: string): string | null {
+  const d = description.toLowerCase();
+
+  const b2cPatterns = [
+    /\bmy (hotel|motel|resort|boutique hotel|bed and breakfast|b&b|airbnb|bnb)\b/,
+    /\bmy (restaurant|cafe|coffee shop|bistro|brasserie|diner|eatery|bar|pub|tavern|lounge|rooftop bar|speakeasy)\b/,
+    /\bmy (venue|event space|wedding venue|banquet hall)\b/,
+    /\b(we (are|run|own|operate)|i (run|own|operate)) a (hotel|resort|restaurant|cafe|bar|venue|spa)\b/,
+    /content (for|about) (our |my )?(guests|visitors|diners|customers|travellers|tourists)/,
+    /show(ing)? (guests|visitors|diners|people) (around|what|how|why)/,
+    /attract (guests|visitors|diners|tourists|customers) (to|for)/,
+    /\b(guest experience|guest journey|dining experience|hotel experience)\b/,
+  ];
+
+  const b2bPatterns = [
+    /sell(ing)? to (hotels|restaurants|operators|hospitality businesses)/,
+    /\b(hospitality software|hotel management system|pos system|restaurant tech|property management)\b/,
+    /\b(wholesale|distributor|supplier)\b.*\b(hotel|restaurant)\b/,
+    /\b(hotel|restaurant) owner(s)?\b.*\b(buy|purchase|invest|subscribe)\b/,
+  ];
+
+  const hasB2CSignal = b2cPatterns.some((p) => p.test(d));
+  const hasB2BSignal = b2bPatterns.some((p) => p.test(d));
+
+  if (hasB2CSignal && !hasB2BSignal) {
+    return "This creator owns or runs a hospitality or food and beverage venue. They are making content FOR their guests, diners, or visitors to attract and inspire them. They are a B2C creator. Route to Restaurants & Cafes, Travel, Food & Cooking, or similar consumer-facing niches. Do NOT route to Business & Entrepreneurship.";
+  }
+
+  return null;
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -2146,10 +2184,14 @@ Return JSON only:
         })
       )
       .mutation(async ({ input }) => {
-        // TODO: pass clarification into niche routing prompt once Step 2 lands
-        void input.clarification;
+        const clarificationContext =
+          input.clarification === "audience"
+            ? "The creator confirmed they are making content FOR their end customers or audience (B2C). They are not selling to other businesses."
+            : "The creator confirmed they sell to or target other businesses or peers in their industry (B2B). Route to the niche where their business buyers pay attention.";
+
         const result = await routeNichePrompt({
           businessDescription: input.description,
+          clarificationContext,
         });
         return {
           routedNiche: result.primary_niche,
@@ -4719,9 +4761,32 @@ The hook MUST be 7-10 words. Count them.`),
         })
       )
       .mutation(async ({ input }) => {
+        const clarificationContext = detectHospitalityB2CContext(input.businessDescription);
+
         const result = await routeNichePrompt({
           businessDescription: input.businessDescription,
+          clarificationContext,
         });
+
+        if (
+          clarificationContext &&
+          result.business_type === "B2B" &&
+          result.confidence > 0.5
+        ) {
+          const correctedResult = await routeNichePrompt({
+            businessDescription: input.businessDescription,
+            clarificationContext:
+              clarificationContext +
+              " IMPORTANT: The user is definitively a B2C creator. business_type must be B2C. Do not route to Business & Entrepreneurship.",
+          });
+          if (correctedResult.business_type !== "B2B") {
+            return {
+              selectedSlugs: selectedSlugsFromNicheRouting(correctedResult),
+              confidence: correctedResult.confidence,
+              clarifyingQuestion: correctedResult.clarifying_question ?? null,
+            };
+          }
+        }
 
         return {
           selectedSlugs: selectedSlugsFromNicheRouting(result),
@@ -7987,6 +8052,121 @@ const IDEA_SCRIPT_JUDGE_PASS_SCORE = 7;
 /** Attempts after the first draft when the judge score is below {@link IDEA_SCRIPT_JUDGE_PASS_SCORE}. */
 const IDEA_SCRIPT_JUDGE_MAX_EXTRA_DRAFTS = 2;
 
+/**
+ * Returns format-specific hook and filming rules based on the selected filming format.
+ * Hook type varies significantly by format — talking-head hooks differ from text-on-screen hooks.
+ */
+function buildFilmingFormatRules(filmingFormat: string | null | undefined): string {
+  const raw = (filmingFormat || "").trim().toLowerCase();
+  const fmt = (() => {
+    if (!raw) return "talking_head";
+    if (raw === "talking_head" || raw.includes("on camera") || raw.includes("talking head")) {
+      return "talking_head";
+    }
+    if (
+      raw === "voiceover" ||
+      raw === "broll_voiceover" ||
+      raw.includes("voiceover") ||
+      raw.includes("b-roll") ||
+      raw.includes("speak over")
+    ) {
+      return "voiceover";
+    }
+    if (
+      raw === "text_on_screen" ||
+      raw === "faceless_text" ||
+      raw.includes("text on screen") ||
+      raw.includes("no face")
+    ) {
+      return "text_on_screen";
+    }
+    if (
+      raw === "b_roll" ||
+      raw === "before_after" ||
+      raw.includes("montage") ||
+      raw.includes("before and after")
+    ) {
+      return "b_roll";
+    }
+    if (
+      raw === "screen_recording" ||
+      raw === "tutorial_demo" ||
+      raw.includes("tutorial") ||
+      raw.includes("step-by-step") ||
+      raw.includes("screen recording")
+    ) {
+      return "screen_recording";
+    }
+    return raw;
+  })();
+
+  switch (fmt) {
+    case "talking_head":
+      return `FORMAT: Talking head (creator on camera speaking directly).
+- Hook must be a spoken line the creator says in the FIRST 2 seconds. No cold open setup.
+- Write as natural spoken speech with contractions. Short punchy sentences.
+- Hook patterns that work: bold claim, mistake reveal, "you" callout, contrarian opener, specific number.
+- Every line should feel like the creator is talking to ONE person watching from their phone.`;
+
+    case "voiceover":
+      return `FORMAT: Voiceover (creator narrates over B-roll or clips, not on camera).
+- Hook is spoken but the VISUAL carries it — write the hook line so it works even if viewer only hears audio.
+- Describe the emotional or visual tension in the words themselves.
+- Hook patterns that work: open loop ("what you're about to see..."), surprising stat, bold narrative claim.
+- Pacing can be slightly slower than talking-head — the visual does half the work.`;
+
+    case "text_on_screen":
+      return `FORMAT: Text on screen (words appear on screen, minimal or no voice).
+- Hook is READ not heard — it must stop the scroll visually in under 1.5 seconds.
+- Write short punchy lines (5-9 words max per text card).
+- Use line breaks to create anticipation. Each paragraph = one screen card.
+- Hook patterns that work: cliffhanger, "POV:", "Nobody talks about this:", listicle promise.
+- No filler — every word is visible and must earn its place.`;
+
+    case "b_roll":
+      return `FORMAT: B-roll montage with narration.
+- The hook line must paint a vivid picture in words because the viewer is watching visual action.
+- Open with a result, transformation, or striking contrast — not a question.
+- Hook patterns that work: result-first, before/after reveal, specific transformation.
+- Write narration that COMPLEMENTS visuals — don't describe what's obvious on screen.`;
+
+    case "screen_recording":
+      return `FORMAT: Screen recording / tutorial walkthrough.
+- Hook must immediately promise a specific outcome or reveal ("I'll show you exactly how to...").
+- Viewer is watching a screen — use second-person to guide ("Click here", "You'll see...").
+- Hook patterns that work: specific promise, time-bound result, mistake reveal.
+- Keep pacing instructional and clear — curiosity gap works but must resolve fast.`;
+
+    default:
+      return `FORMAT: Custom filming format.
+- Hook must stop the scroll in the first 2 seconds.
+- Write as natural spoken content. Keep it punchy and specific.
+- Hook patterns that work: bold claim, curiosity gap, specific number, contrarian take.`;
+  }
+}
+
+/**
+ * Builds the viral hook examples block to inject into the script generation prompt.
+ * Grounds the AI in real proven hooks from SpyReels' database.
+ */
+function buildViralHookBlock(
+  examples: Array<{ hook: string; pattern: string; skipRate: number | null }>
+): string {
+  if (examples.length === 0) return "";
+
+  const lines = examples.map((ex, i) => {
+    const skipLabel = ex.skipRate != null ? ` [skip score: ${ex.skipRate}/10]` : "";
+    return `${i + 1}. [${ex.pattern}]${skipLabel}: "${ex.hook}"`;
+  });
+
+  return `
+**REAL VIRAL HOOKS FROM SPYREELS DATABASE (proven high skip-score performers in this niche):**
+${lines.join("\n")}
+
+These are the FIRST LINES from real videos that scored 6+ out of 10 on skip-rate prediction (meaning viewers did NOT skip — they watched). Use these as inspiration for the hook PATTERN and ENERGY — do not copy them word-for-word. Adapt the pattern to the user's specific topic.
+`;
+}
+
 function ideaCreatorGoalDirectives(goal: string | null | undefined): string {
   const g = (goal || "balanced").trim();
   switch (g) {
@@ -8187,6 +8367,63 @@ Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS
 }
 
 /**
+ * Scores a script's first line for skip-rate likelihood (1-10).
+ * 10 = viewer almost certainly keeps watching. 1 = high skip risk.
+ * This is a lightweight single-LLM call focused only on the hook.
+ */
+async function scoreSkipRate(
+  hookLine: string,
+  filmingFormat: string | null,
+  niche: string | null
+): Promise<{ score: number; reason: string }> {
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: withAiFormattingRules(
+            `You are an Instagram algorithm specialist. Your only job is to predict whether a viewer will skip past the first 2 seconds of a Reel based on the opening hook line. Score 1-10 where 10 = almost nobody skips (super compelling), 1 = almost everyone skips (generic/boring). Be ruthless and realistic. Return JSON only.`
+          ),
+        },
+        {
+          role: "user",
+          content: `Filming format: ${filmingFormat || "talking head"}
+Niche: ${niche || "general"}
+Hook line (first thing the viewer sees/hears): "${hookLine}"
+
+Score this hook for skip-rate resistance. 
+Return JSON: { "score": <1-10>, "reason": "<one sentence why>" }`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "skip_rate_score",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              score: { type: "number" },
+              reason: { type: "string" },
+            },
+            required: ["score", "reason"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const raw = response.choices?.[0]?.message?.content;
+    if (!raw) return { score: 5, reason: "Unable to score" };
+    const parsed = JSON.parse(String(raw).trim()) as { score?: number; reason?: string };
+    const score = Math.min(10, Math.max(1, Math.round(Number(parsed.score) || 5)));
+    return { score, reason: String(parsed.reason || "").trim() };
+  } catch {
+    return { score: 5, reason: "Skip rate scoring unavailable" };
+  }
+}
+
+/**
  * Fetch up to 3 top-performing hook examples from SpyReels' own data.
  *
  * Queries BOTH pools every time:
@@ -8346,6 +8583,110 @@ async function getViralHookExamples(opts: {
 }
 
 /**
+ * Pull real viral hook examples from featured_reels and spied_reels
+ * for a given DB niche slug and optional filming format.
+ * Returns up to 6 hook lines with their pattern labels.
+ */
+async function getViralHookExamplesForIdea(
+  dbNicheSlug: string | null,
+  _filmingFormat: string | null
+): Promise<Array<{ hook: string; pattern: string; skipRate: number | null }>> {
+  const results: Array<{ hook: string; pattern: string; skipRate: number | null }> = [];
+
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    if (dbNicheSlug) {
+      const featuredRows = await db
+        .select({
+          transcript: featuredReels.transcript,
+          hookPattern: featuredReels.hookPattern,
+          viewCount: featuredReels.viewCount,
+        })
+        .from(featuredReels)
+        .where(
+          and(
+            eq(featuredReels.niche, dbNicheSlug as any),
+            isNotNull(featuredReels.hookPattern),
+            isNotNull(featuredReels.transcript),
+            ne(featuredReels.transcriptionStatus, "failed"),
+            eq(featuredReels.viralFlag, true)
+          )
+        )
+        .orderBy(desc(featuredReels.viewCount))
+        .limit(8);
+
+      for (const row of featuredRows) {
+        if (!row.transcript || !row.hookPattern) continue;
+        const firstSentence = row.transcript.trim().split(/[.!?]\s/)[0]?.trim();
+        if (firstSentence && firstSentence.length > 10 && firstSentence.length < 200) {
+          results.push({
+            hook: firstSentence,
+            pattern: String(row.hookPattern),
+            skipRate: row.viewCount >= 100_000 ? 8 : row.viewCount >= 10_000 ? 7 : 6,
+          });
+        }
+      }
+    }
+
+    if (dbNicheSlug && results.length < 6) {
+      const spiedRows = await db
+        .select({
+          transcript: transcriptions.transcript,
+          hookPattern: reelsTable.hookPattern,
+          threeSecondHoldRate: reelsTable.threeSecondHoldRate,
+          viewCount: reelsTable.viewCount,
+        })
+        .from(reelsTable)
+        .innerJoin(transcriptions, eq(transcriptions.reelId, reelsTable.id))
+        .where(
+          and(
+            eq(reelsTable.niche, dbNicheSlug as any),
+            isNotNull(reelsTable.hookPattern),
+            isNotNull(transcriptions.transcript),
+            eq(transcriptions.status, "completed" as any),
+            eq(reelsTable.viralFlag, true)
+          )
+        )
+        .orderBy(desc(reelsTable.viewCount))
+        .limit(6);
+
+      for (const row of spiedRows) {
+        if (!row.transcript || !row.hookPattern) continue;
+        const firstSentence = row.transcript.trim().split(/[.!?]\s/)[0]?.trim();
+        if (firstSentence && firstSentence.length > 10 && firstSentence.length < 200) {
+          const holdRate = row.threeSecondHoldRate ? Number(row.threeSecondHoldRate) : null;
+          const skipRate =
+            holdRate != null && !Number.isNaN(holdRate)
+              ? Math.min(10, Math.max(6, Math.round(holdRate / 10)))
+              : row.viewCount >= 50_000
+                ? 7
+                : 6;
+          results.push({
+            hook: firstSentence,
+            pattern: String(row.hookPattern),
+            skipRate,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Ideas] getViralHookExamplesForIdea failed, continuing without examples:", err);
+  }
+
+  const seen = new Set<string>();
+  return results
+    .filter((r) => {
+      const key = r.hook.slice(0, 40).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+}
+
+/**
  * Background processor for Idea-to-Script.
  * Generates a full reel script from a user's topic idea using AI.
  */
@@ -8366,61 +8707,79 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
     const toneContext = scriptIdea.tone || "engaging";
     const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(scriptIdea));
 
-    // Filming format selected by user (Part 2)
-    const filmingFormat = readScriptIdeaFilmingFormat(scriptIdea);
-
-    // Pull real proven hook examples from our own database (both catalog + user-spied reels)
-    const viralHookExamples = await getViralHookExamples({
-      niche: scriptIdea.niche ?? null,
-      productionFormat: filmingFormat,
-      limit: 3,
-    });
-
-    // Viral context block injected into AI prompts — empty string if no data yet
-    const viralHookContext = viralHookExamples.length > 0
-      ? `\n\nVIRAL HOOK REFERENCE — real reels from SpyReels database that performed well${scriptIdea.niche ? ` in ${scriptIdea.niche}` : ""}:\n${viralHookExamples
-          .map((ex, i) =>
-            `Example ${i + 1} | Pattern: ${ex.hookPattern} | Views: ${ex.viewCount.toLocaleString()}\nOpening line: "${ex.hookLine}"`
-          )
-          .join("\n")}\n\nDo NOT copy these lines. Study the pattern and energy. Apply the same hook mechanics to the user's specific topic.`
-      : "";
-
     const gradeLevelInstruction = scriptIdea.gradeLevel === "auto"
       ? "Choose the most appropriate reading level for the audience."
       : `Write at a Grade ${scriptIdea.gradeLevel} reading level.`;
 
-    const writerRules = `Follow Instagram Reels script rules:
-- Spoken monologue only. Short paragraphs (1-2 sentences) for breath pauses.
-- No labels, bullets, scene directions, or "[music]" unless the creator would literally say it.
-- Start with the hook line immediately (no "Hey guys" meta intro).
-- 150-300 spoken words (roughly 30-60s). One clear takeaway.
-- ${goalBrief}`;
+    const filmingFormat = readScriptIdeaFilmingFormat(scriptIdea);
 
-    // Step 1: Generate a viral structure for the idea
+    const dbNicheSlug: string | null = (() => {
+      const n = (scriptIdea.niche || "").toLowerCase();
+      if (!n) return null;
+      const DB_NICHES = [
+        "fitness", "hospitality", "food", "beauty", "fashion", "travel",
+        "education", "finance", "real_estate", "tech", "lifestyle",
+        "business", "marketing", "parenting", "spirituality",
+      ];
+      const direct = DB_NICHES.find(
+        (slug) => n.includes(slug.replace("_", " ")) || n.includes(slug)
+      );
+      if (direct) return direct;
+      if (n.includes("restaurant") || n.includes("cafe")) return "food";
+      if (n.includes("hotel") || n.includes("venue") || n.includes("hospitality")) return "hospitality";
+      if (n.includes("gym") || n.includes("workout") || n.includes("health")) return "fitness";
+      if (n.includes("skin") || n.includes("makeup") || n.includes("beauty")) return "beauty";
+      if (n.includes("real estate") || n.includes("property")) return "real_estate";
+      if (n.includes("finance") || n.includes("money") || n.includes("invest")) return "finance";
+      if (n.includes("travel") || n.includes("vacation")) return "travel";
+      return null;
+    })();
+
+    const viralHookExamples = await getViralHookExamplesForIdea(dbNicheSlug, filmingFormat);
+    const viralHookBlock = buildViralHookBlock(viralHookExamples);
+
+    const formatRules = buildFilmingFormatRules(filmingFormat);
+
+    const writerRules = `You are SpyReels' script engine. SpyReels analyses thousands of viral Instagram Reels to extract the exact patterns that stop the scroll. You write scripts grounded in those real patterns — not generic AI templates.
+
+SPYREELS SCRIPT STANDARDS:
+- Start with the hook IMMEDIATELY. No "Hey guys", no setup, no intro. The very first word must grab attention.
+- Write for spoken delivery: short paragraphs (1-2 sentences), natural contractions, rhythm that sounds real when spoken aloud.
+- No labels, bullets, or stage directions unless the creator would literally say them.
+- 150-300 spoken words (30-60 seconds). One clear takeaway. One CTA at the end.
+- Every line earns its place. If a sentence doesn't move the story forward or deepen the hook, cut it.
+- Sound like a real creator, not an AI assistant summarising a topic.
+
+${formatRules}
+
+${goalBrief}`;
+
     const structureResponse = await invokeLLM({
       messages: [
         {
           role: "system",
           content: withAiFormattingRules(
-            "You are a senior short-form script architect. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew."
+            "You are a senior short-form script architect at SpyReels. You build viral Reel structures grounded in proven patterns from real top-performing creators. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew."
           ),
         },
         {
           role: "user",
-          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"${filmingFormat ? `\nFilming format: ${filmingFormat}` : ""}
-${viralHookContext}
-The tone should be ${toneContext}.
+          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"
 
+Tone: ${toneContext}
 ${goalBrief}
+${filmingFormat ? `Filming format: ${filmingFormat.replace(/_/g, " ")}` : ""}
+${viralHookBlock}
 
 Return JSON with:
-- hook: { type (question/stat/bold_claim/story/contrarian/direct_promise/pov/confession), text (the actual hook line), technique (why it stops the scroll) }
-- body: { pacing (fast/medium/slow), structure (listicle/story/tutorial/comparison/myth_busting), keyPoints (array of 3-5 main points) }
-- transition: { type (pattern_interrupt/visual_change/rhetorical_question), text (transition line) }
-- cta: { type (follow/save/share/comment/link), text (the CTA line) }
+- hook: { type (one of: question/statistic/bold_claim/story/controversy/mistake_reveal/you_callout/open_loop/result_first/contrarian), text (the actual hook line, written and ready to use), technique (why this hook stops the scroll for THIS specific topic) }
+- body: { pacing (fast/medium/slow), structure (listicle/story/tutorial/comparison/myth_busting), keyPoints (array of 3-5 main points — specific and concrete, not generic) }
+- transition: { type (pattern_interrupt/visual_change/rhetorical_question/pivot), text (the actual transition line) }
+- cta: { type (follow/save/share/comment/link), text (the actual CTA line) }
 - overallTone: string
 - estimatedPace: string
-- suggestedTitle: catchy title for this script (max 80 chars)`,
+- suggestedTitle: a catchy title for this script (max 80 chars)
+- hookRationale: why this specific hook pattern works for this topic and format (1 sentence)`,
         },
       ],
       response_format: {
@@ -8472,8 +8831,18 @@ Return JSON with:
               overallTone: { type: "string" },
               estimatedPace: { type: "string" },
               suggestedTitle: { type: "string" },
+              hookRationale: { type: "string" },
             },
-            required: ["hook", "body", "transition", "cta", "overallTone", "estimatedPace", "suggestedTitle"],
+            required: [
+              "hook",
+              "body",
+              "transition",
+              "cta",
+              "overallTone",
+              "estimatedPace",
+              "suggestedTitle",
+              "hookRationale",
+            ],
             additionalProperties: false,
           },
         },
@@ -8490,31 +8859,40 @@ Return JSON with:
     }
 
     const suggestedTitle = viralStructure.suggestedTitle || `Script: ${scriptIdea.idea.substring(0, 60)}`;
+    const hookRationale = viralStructure.hookRationale || "";
 
     const goalLine = goalBrief;
 
     async function draftScript(refinementBrief: string | null): Promise<string> {
       const refineBlock = refinementBrief
-        ? `\n\nREVISION BRIEF (you previously missed the mark):\n${refinementBrief}\nRewrite from scratch with new wording, tighter hook, sharper pacing.\n`
+        ? `\n\nREVISION BRIEF (previous draft missed the mark — rewrite from scratch):\n${refinementBrief}\nNew wording, tighter hook, sharper pacing. Do not recycle any lines from the previous draft.\n`
         : "";
 
       const scriptResponse = await invokeLLM({
         messages: [
           {
             role: "system",
-            content: withAiFormattingRules(
-              `You are an elite Instagram Reels scriptwriter.${
-                filmingFormat
-                  ? `\nFormat: ${filmingFormat}. Write specifically for this format.`
-                  : `\nInfer the most appropriate filming format from the topic.`
-              }
-
-${writerRules}${viralHookContext}`
-            ),
+            content: withAiFormattingRules(`${writerRules}`),
           },
           {
             role: "user",
-            content: `Write the complete reel script.\nTopic${nicheContext}: "${scriptIdea.idea}"\n${filmingFormat ? `Filming format: ${filmingFormat}\n` : ""}\n\nSTRUCTURE PLAN (stay faithful to beats and order):\n${JSON.stringify(viralStructure, null, 2)}\n\nRequirements:\n- Tone: ${toneContext}\n- ${gradeLevelInstruction}\n- Word count roughly 150-300 spoken words.${refineBlock}\n\n${goalLine}`,
+            content: `Write the complete Reel script.
+Topic${nicheContext}: "${scriptIdea.idea}"
+
+STRUCTURE PLAN (follow these beats in order — do not skip any):
+${JSON.stringify(viralStructure, null, 2)}
+
+${viralHookBlock ? `HOOK GUIDANCE:\nThe hook type is "${viralStructure?.hook?.type || "bold_claim"}". ${hookRationale}\nThe hook must be the very first line. No warmup. No greeting. Start with the hook verbatim or a strong variation.` : ""}
+
+Requirements:
+- Tone: ${toneContext}
+- ${gradeLevelInstruction}
+- Word count: 150-300 spoken words.
+- Do NOT start with "Hey", "So", "Okay", "Welcome", or any greeting.
+- Do NOT include labels like "Hook:", "Body:", "CTA:" — write one flowing spoken script.
+- The hook line must match the pattern: "${viralStructure?.hook?.type || "bold_claim"}"${refineBlock}
+
+${goalLine}`,
           },
         ],
       });
@@ -8522,6 +8900,11 @@ ${writerRules}${viralHookContext}`
     }
 
     let generatedScript = await draftScript(null);
+
+    const hookLineForScoring = generatedScript.trim().split(/\n/)[0]?.trim() || generatedScript.slice(0, 150);
+    const skipRateResult = await scoreSkipRate(hookLineForScoring, filmingFormat, scriptIdea.niche || null);
+
+    const skipRateFailed = skipRateResult.score < 5;
 
     const judgeAttempts: Record<string, unknown>[] = [];
 
@@ -8540,23 +8923,30 @@ ${writerRules}${viralHookContext}`
         hookEffectiveness: verdict.hookEffectiveness,
         pacingRetention: verdict.pacingRetention,
         goalAlignment: verdict.goalAlignment,
-        skipRatePrediction: verdict.skipRatePrediction,
         verdictPass: verdict.verdictPass,
         criticalIssues: verdict.criticalIssues,
+        skipRateScore: label === "initial" ? skipRateResult.score : undefined,
+        skipRateReason: label === "initial" ? skipRateResult.reason : undefined,
       });
       return verdict;
     };
 
     let verdict = await judgeOnce(generatedScript, "initial");
 
-    let pass = verdict.verdictPass;
+    let pass = verdict.verdictPass && !skipRateFailed;
     let regenCount = 0;
     while (!pass && regenCount < IDEA_SCRIPT_JUDGE_MAX_EXTRA_DRAFTS) {
       const issuesBullets =
         verdict.criticalIssues.length > 0
           ? verdict.criticalIssues.map((line, idx) => `${idx + 1}. ${line}`).join("\n")
           : "(none listed)";
-      const refinement = `${verdict.rewriteDirectives.trim()}\n\nConcrete issues detected:\n${issuesBullets}`.trim();
+
+      const skipNote =
+        skipRateFailed && regenCount === 0
+          ? `\nCRITICAL: The hook scored only ${skipRateResult.score}/10 for skip-rate resistance. Reason: ${skipRateResult.reason}. Rewrite the hook entirely — it must be more specific, more surprising, or more immediately relevant to the viewer. Use the "${viralStructure?.hook?.type || "bold_claim"}" pattern.`
+          : "";
+
+      const refinement = `${verdict.rewriteDirectives.trim()}\n\nConcrete issues detected:\n${issuesBullets}${skipNote}`.trim();
 
       generatedScript = await draftScript(refinement || verdict.rewriteDirectives);
       verdict = await judgeOnce(generatedScript, `rewrite_${regenCount + 1}`);
@@ -8575,12 +8965,13 @@ ${writerRules}${viralHookContext}`
     };
     viralStructure.ideaMeta = {
       creatorGoal: readScriptIdeaCreatorSlug(scriptIdea),
-      filmingFormat: filmingFormat ?? null,
-      viralHookCount: viralHookExamples.length,
-      viralHookNiche: scriptIdea.niche ?? null,
+      filmingFormat: filmingFormat || "talking_head",
+      dbNicheSlug,
+      viralHookExamplesUsed: viralHookExamples.length,
+      skipRateScore: skipRateResult.score,
+      skipRateReason: skipRateResult.reason,
     };
 
-    // Update the idea with the generated content
     await updateScriptIdea(ideaId, {
       generatedScript,
       generatedTitle: suggestedTitle,
@@ -8589,7 +8980,7 @@ ${writerRules}${viralHookContext}`
     } as any);
 
     console.log(
-      `[Ideas] Successfully generated script for idea ${ideaId}: "${suggestedTitle}" (judge final ${verdict.overallScore}/10, pass=${pass}, regens=${regenCount})`
+      `[Ideas] Script generated for idea ${ideaId}: "${suggestedTitle}" (judge ${verdict.overallScore}/10, skip-rate ${skipRateResult.score}/10, pass=${pass}, regens=${regenCount}, hookExamples=${viralHookExamples.length})`
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
