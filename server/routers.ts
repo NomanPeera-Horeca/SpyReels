@@ -9319,7 +9319,9 @@ Score the IDEA (not a script yet) on:
 
 Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views). Suggest a tighter improvedIdea (max 2 sentences) the user can approve.
 
-If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.`),
+If the raw idea is strong (8+) you may keep improvedIdea very close to what they wrote.
+
+AUDIENCE CLARITY CHECK: Before scoring, ask yourself: "Do I know exactly who will watch this Reel?" If the idea could be for two different audiences (e.g. business owners vs their customers, professionals vs beginners, parents vs teenagers, sellers vs buyers), and the idea text does not make it clear, set needsAudienceClarification to true and write a short audienceQuestion asking the creator who this Reel is for. The question must be under 12 words. Examples: "Who will watch this, your customers or industry peers?", "Is this for beginners or experienced practitioners?", "Who is your audience, guests visiting your place or other operators?". Only ask when genuinely ambiguous. If the idea already includes a "Target audience:" line or otherwise explicitly names who should watch, set needsAudienceClarification to false and audienceQuestion to empty string. If the idea clearly implies one audience (including first-person creator journey content like "mistakes I made growing my account"), set needsAudienceClarification to false and audienceQuestion to empty string.`),
         },
         {
           role: "user",
@@ -9337,8 +9339,10 @@ If the raw idea is strong (8+) you may keep improvedIdea very close to what they
               viralScore: { type: "number", description: "Score from 1-10" },
               reasoning: { type: "string", description: "2-3 sentence explanation of the score" },
               improvedIdea: { type: "string", description: "Refined version of the idea optimized for viral potential" },
+              needsAudienceClarification: { type: "boolean", description: "True if target audience is ambiguous" },
+              audienceQuestion: { type: "string", description: "Short clarifying question under 12 words, or empty string if not needed" },
             },
-            required: ["viralScore", "reasoning", "improvedIdea"],
+            required: ["viralScore", "reasoning", "improvedIdea", "needsAudienceClarification", "audienceQuestion"],
             additionalProperties: false,
           },
         },
@@ -9352,6 +9356,27 @@ If the raw idea is strong (8+) you may keep improvedIdea very close to what they
     const validation = sanitizeAiOutputDeep(
       JSON.parse(contentStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
     );
+
+    const needsClarification =
+      validation.needsAudienceClarification === true &&
+      typeof validation.audienceQuestion === "string" &&
+      validation.audienceQuestion.trim().length > 0;
+
+    if (needsClarification) {
+      await updateScriptIdea(ideaId, {
+        aiSuggestion: validation.improvedIdea,
+        aiReasoning: validation.reasoning,
+        viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
+        validationStatus: "validated",
+        status: "awaiting_approval",
+        viralStructure: {
+          pendingQuestion: validation.audienceQuestion.trim(),
+          pendingQuestionType: "audience",
+        },
+      } as any);
+      console.log(`[Ideas] Paused idea ${ideaId} for audience clarification: "${validation.audienceQuestion}"`);
+      return;
+    }
 
     await updateScriptIdea(ideaId, {
       idea: String(validation.improvedIdea || idea.idea),

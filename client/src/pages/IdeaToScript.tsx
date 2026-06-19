@@ -122,6 +122,13 @@ function creatorGoalSlugFromListedIdea(idea: { viralStructure?: unknown }): stri
   return typeof slug === "string" ? slug : undefined;
 }
 
+function getPendingQuestion(idea: { viralStructure?: unknown }): string | null {
+  const vs = idea.viralStructure;
+  if (!vs || typeof vs !== "object" || vs === null) return null;
+  const q = (vs as Record<string, unknown>).pendingQuestion;
+  return typeof q === "string" && q.trim() ? q.trim() : null;
+}
+
 function viralStructureJudge(idea: { viralStructure?: unknown }): {
   finalScore: number | null;
   attempts: number;
@@ -551,96 +558,150 @@ export default function IdeaToScript() {
                       </div>
 
                       {/* AI Validation / Approval Section */}
-                      {isAwaitingApproval && (
-                        <div className="mt-3 space-y-3">
-                          {/* AI Reasoning */}
-                          {(idea as any).aiReasoning && (
-                            <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                              <p className="text-xs font-medium text-purple-300 mb-1 flex items-center gap-1.5">
-                                <Sparkles className="h-3.5 w-3.5" /> AI Assessment
-                              </p>
-                              <p className="text-sm text-muted-foreground">{(idea as any).aiReasoning}</p>
-                            </div>
-                          )}
+                      {isAwaitingApproval && (() => {
+                        const pendingQuestion = getPendingQuestion(idea as any);
 
-                          {/* AI Suggestion */}
-                          {(idea as any).aiSuggestion && (
-                            <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                              <p className="text-xs font-medium text-green-300 mb-1">Suggested Improvement:</p>
-                              <p className="text-sm text-foreground font-medium">{(idea as any).aiSuggestion}</p>
-                            </div>
-                          )}
-
-                          {/* Edit mode */}
-                          {isEditing ? (
-                            <div className="space-y-2">
-                              <Textarea
-                                value={editedIdeaText}
-                                onChange={(e) => setEditedIdeaText(e.target.value)}
-                                className="min-h-[80px] text-sm bg-background/50"
-                                placeholder="Edit your idea..."
-                                autoFocus
-                              />
-                              <div className="flex items-center gap-2">
+                        if (pendingQuestion) {
+                          return (
+                            <div className="mt-3 space-y-3">
+                              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-400/20">
+                                <p className="text-xs font-medium text-amber-300 mb-1 flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Quick question before we write your script
+                                </p>
+                                <p className="text-sm text-foreground font-medium">{pendingQuestion}</p>
+                              </div>
+                              <div className="flex gap-2">
                                 <Button
                                   size="sm"
-                                  className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white gap-1"
-                                  onClick={() => approveMutation.mutate({
-                                    ideaId: idea.id,
-                                    action: "edit",
-                                    editedIdea: editedIdeaText.trim(),
-                                  })}
-                                  disabled={!editedIdeaText.trim() || approveMutation.isPending}
+                                  className="flex-1 h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                                  disabled={approveMutation.isPending}
+                                  onClick={() => {
+                                    const answer = "My customers / audience / viewers";
+                                    approveMutation.mutate({
+                                      ideaId: idea.id,
+                                      action: "edit",
+                                      editedIdea: `${idea.idea}\n\nTarget audience: ${answer}`,
+                                    });
+                                  }}
                                 >
-                                  {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                                  Re-validate Idea
+                                  {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                  My customers / viewers
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 h-8 text-xs border-white/10 hover:bg-white/5"
+                                  disabled={approveMutation.isPending}
+                                  onClick={() => {
+                                    const answer = "Other professionals / business owners in my industry";
+                                    approveMutation.mutate({
+                                      ideaId: idea.id,
+                                      action: "edit",
+                                      editedIdea: `${idea.idea}\n\nTarget audience: ${answer}`,
+                                    });
+                                  }}
+                                >
+                                  Other business owners
+                                </Button>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-red-400 hover:text-red-300 gap-1.5 w-full"
+                                onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "reject" })}
+                                disabled={approveMutation.isPending}
+                              >
+                                <ThumbsDown className="h-3.5 w-3.5" /> Cancel
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="mt-3 space-y-3">
+                            {(idea as any).aiReasoning && (
+                              <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                                <p className="text-xs font-medium text-purple-300 mb-1 flex items-center gap-1.5">
+                                  <Sparkles className="h-3.5 w-3.5" /> AI Assessment
+                                </p>
+                                <p className="text-sm text-muted-foreground">{(idea as any).aiReasoning}</p>
+                              </div>
+                            )}
+                            {(idea as any).aiSuggestion && (
+                              <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+                                <p className="text-xs font-medium text-green-300 mb-1">Suggested Improvement:</p>
+                                <p className="text-sm text-foreground font-medium">{(idea as any).aiSuggestion}</p>
+                              </div>
+                            )}
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editedIdeaText}
+                                  onChange={(e) => setEditedIdeaText(e.target.value)}
+                                  className="min-h-[80px] text-sm bg-background/50"
+                                  placeholder="Edit your idea..."
+                                  autoFocus
+                                />
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white gap-1"
+                                    onClick={() => approveMutation.mutate({
+                                      ideaId: idea.id,
+                                      action: "edit",
+                                      editedIdea: editedIdeaText.trim(),
+                                    })}
+                                    disabled={!editedIdeaText.trim() || approveMutation.isPending}
+                                  >
+                                    {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                                    Re-validate Idea
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs"
+                                    onClick={() => { setEditingIdeaId(null); setEditedIdeaText(""); }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                                  onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "accept" })}
+                                  disabled={approveMutation.isPending}
+                                >
+                                  {approveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                                  Accept & Generate
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1.5 border-violet-500/30 hover:bg-violet-500/10"
+                                  onClick={() => {
+                                    setEditingIdeaId(idea.id);
+                                    setEditedIdeaText((idea as any).aiSuggestion || idea.idea);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" /> Edit Idea
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-7 text-xs"
-                                  onClick={() => { setEditingIdeaId(null); setEditedIdeaText(""); }}
+                                  className="h-8 text-xs text-red-400 hover:text-red-300 gap-1.5"
+                                  onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "reject" })}
+                                  disabled={approveMutation.isPending}
                                 >
-                                  Cancel
+                                  <ThumbsDown className="h-3.5 w-3.5" /> Reject
                                 </Button>
                               </div>
-                            </div>
-                          ) : (
-                            /* Accept / Edit / Reject buttons */
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                                onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "accept" })}
-                                disabled={approveMutation.isPending}
-                              >
-                                {approveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
-                                Accept & Generate
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs gap-1.5 border-violet-500/30 hover:bg-violet-500/10"
-                                onClick={() => {
-                                  setEditingIdeaId(idea.id);
-                                  setEditedIdeaText((idea as any).aiSuggestion || idea.idea);
-                                }}
-                              >
-                                <Pencil className="h-3.5 w-3.5" /> Edit Idea
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 text-xs text-red-400 hover:text-red-300 gap-1.5"
-                                onClick={() => approveMutation.mutate({ ideaId: idea.id, action: "reject" })}
-                                disabled={approveMutation.isPending}
-                              >
-                                <ThumbsDown className="h-3.5 w-3.5" /> Reject
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {idea.status === "failed" && idea.errorMessage && (
                         <p className="text-xs text-red-400 mt-2 bg-red-400/5 rounded px-2 py-1">
