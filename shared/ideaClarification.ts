@@ -60,12 +60,24 @@ export function resolveWizardSteps(
   wizard: IdeaClarificationWizard,
   answers: Record<string, string>
 ): ClarificationStep[] {
-  const audType = audienceTypeFromAnswer(answers.audience ?? "");
+  const audienceId = answers.audience?.trim();
+  if (!audienceId) {
+    return wizard.steps;
+  }
+  const audType = audienceTypeFromAnswer(audienceId);
   return wizard.steps.filter((step) => {
     if (step.id === "journey_moment") return audType === "b2c";
     if (step.id === "venue_type") return audType === "b2c" || audType === "b2b";
     return true;
   });
+}
+
+/** Step count for progress UI (full path until audience is chosen, then filtered). */
+export function wizardStepCount(
+  wizard: IdeaClarificationWizard,
+  answers: Record<string, string>
+): number {
+  return resolveWizardSteps(wizard, answers).length;
 }
 
 export function labelForWizardAnswer(step: ClarificationStep, answerId: string): string {

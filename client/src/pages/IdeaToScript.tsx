@@ -317,6 +317,7 @@ export default function IdeaToScript() {
     : null;
 
   useEffect(() => {
+    if (approveMutation.isPending) return;
     const pending = ideas.find(
       (i) =>
         i.status === "awaiting_approval" &&
@@ -326,7 +327,7 @@ export default function IdeaToScript() {
     if (pending && clarificationIdeaId == null) {
       setClarificationIdeaId(pending.id);
     }
-  }, [ideas, clarificationIdeaId, clarificationDismissed]);
+  }, [ideas, clarificationIdeaId, clarificationDismissed, approveMutation.isPending]);
 
   return (
     <>
@@ -637,7 +638,7 @@ export default function IdeaToScript() {
                                 className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
                                 onClick={() => setClarificationIdeaId(idea.id)}
                               >
-                                Answer {wizard.steps.length} question{wizard.steps.length > 1 ? "s" : ""}
+                                Answer {wizard.steps.length > 1 ? `${wizard.steps.length} questions` : "1 question"}
                               </Button>
                             </div>
                           );
@@ -819,6 +820,7 @@ export default function IdeaToScript() {
     {clarificationIdea && clarificationWizard ? (
       <IdeaClarificationPanel
         open={clarificationIdeaId === clarificationIdea.id}
+        ideaId={clarificationIdea.id}
         ideaPreview={clarificationIdea.idea}
         wizard={clarificationWizard}
         isSubmitting={approveMutation.isPending}
@@ -827,6 +829,8 @@ export default function IdeaToScript() {
           setClarificationIdeaId(null);
         }}
         onSkip={() => {
+          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
+          setClarificationIdeaId(null);
           const defaultAudience = isHospitalityIdea(clarificationIdea.idea) ? "guests" : "customers";
           approveMutation.mutate({
             ideaId: clarificationIdea.id,
@@ -835,6 +839,8 @@ export default function IdeaToScript() {
           });
         }}
         onComplete={(answers, customNotes) => {
+          setClarificationDismissed((prev) => new Set(prev).add(clarificationIdea.id));
+          setClarificationIdeaId(null);
           approveMutation.mutate({
             ideaId: clarificationIdea.id,
             action: "clarify",
