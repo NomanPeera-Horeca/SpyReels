@@ -1,5 +1,6 @@
 import { ENV } from "./env";
 import { sanitizeAiOutput } from "../utils/sanitizeAiOutput";
+import { isRetryableLlmError } from "@shared/ideaScriptErrors";
 import Anthropic from "@anthropic-ai/sdk";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -312,13 +313,38 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const maxTokensResolved = maxTokensParam ?? max_tokensParam ?? 8192;
   const modelResolved = model ?? "claude-sonnet-4-6";
 
-  const response = await client.messages.create({
-    model: modelResolved,
-    max_tokens: maxTokensResolved,
-    ...(typeof temperature === "number" ? { temperature } : {}),
-    ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
-    messages: normalizedMessages,
-  });
+  const retryDelaysMs = [2000, 4000];
+  let response: Awaited<ReturnType<Anthropic["messages"]["create"]>> | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      response = await client.messages.create({
+        model: modelResolved,
+        max_tokens: maxTokensResolved,
+        ...(typeof temperature === "number" ? { temperature } : {}),
+        ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
+        messages: normalizedMessages,
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      const status = (err as { status?: number })?.status;
+      console.error(
+        `[invokeLLM] attempt ${attempt + 1}/3 failed`,
+        { status, model: modelResolved, message: err instanceof Error ? err.message : String(err) }
+      );
+      if (attempt < 2 && isRetryableLlmError(err)) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt] ?? 4000));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (!response) {
+    throw lastError instanceof Error ? lastError : new Error("LLM request failed");
+  }
 
   const textContent = response.content.find(b => b.type === "text");
   const rawTextValue =

@@ -10,7 +10,9 @@ import {
   type ClarificationStep,
   type IdeaClarificationWizard,
 } from "@shared/ideaClarification";
+import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { IdeaScriptPostPanel, type SaveScriptOptions } from "@/components/IdeaScriptPostPanel";
+import { IdeaScriptProgressPanel } from "@/components/IdeaScriptProgressPanel";
 
 export type ChatTurn = { role: "user"; content: string };
 
@@ -180,10 +182,10 @@ export function IdeaScriptConversation({
 
       {(idea.status === "validating" || idea.status === "queued") && (
         <AssistantRow>
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-            Reviewing your idea...
-          </span>
+          <IdeaScriptProgressPanel
+            status={idea.status === "queued" ? "validating" : idea.status}
+            viralStructure={idea.viralStructure}
+          />
         </AssistantRow>
       )}
 
@@ -198,13 +200,7 @@ export function IdeaScriptConversation({
 
       {idea.status === "processing" && (
         <AssistantRow>
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-            Writing your viral script
-            {idea.viralScore != null ? (
-              <span className="text-muted-foreground/70">· idea {idea.viralScore}/10</span>
-            ) : null}
-          </span>
+          <IdeaScriptProgressPanel status="processing" viralStructure={idea.viralStructure} />
         </AssistantRow>
       )}
 
@@ -212,7 +208,7 @@ export function IdeaScriptConversation({
         <AssistantRow>
           <span className="inline-flex items-start gap-2 text-red-500">
             <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            {idea.errorMessage || "Something went wrong. Try again."}
+            {formatIdeaScriptErrorForUser(idea.errorMessage, "validation")}
           </span>
           {onRetry ? (
             <div className="mt-3">

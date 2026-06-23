@@ -25,14 +25,12 @@ import {
   readTargetAudienceFromIdeaMeta,
   readFollowUpsFromIdeaMeta,
   shouldSkipAudienceClarification,
-  suggestionHedgesAudience,
   type ClarificationAudienceType,
   type IdeaClarificationWizard,
 } from "../shared/ideaClarification";
 import {
   inferAudienceFromText,
   inferNicheFromText,
-  isNicheAndAudienceClear,
 } from "../shared/creatorContextInference";
 
 const reelNicheInputEnum = z.enum(
@@ -220,6 +218,11 @@ import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
+import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import {
+  buildIdeaScriptProgressSteps,
+  type IdeaScriptProgressStepId,
+} from "@shared/ideaScriptProgress";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
@@ -8258,6 +8261,25 @@ function mergeScriptIdeaViralStructure(
   return { ...base, ...patch };
 }
 
+async function setIdeaScriptProgress(
+  ideaId: number,
+  idea: { viralStructure?: unknown },
+  flow: "validation" | "processing",
+  activeStepId: IdeaScriptProgressStepId,
+  completedThrough?: IdeaScriptProgressStepId
+): Promise<Record<string, unknown>> {
+  const now = new Date().toISOString();
+  const steps = buildIdeaScriptProgressSteps(flow, activeStepId, completedThrough).map((step) => ({
+    ...step,
+    at: step.status !== "pending" ? now : undefined,
+  }));
+  const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+    ideaMeta: { progressSteps: steps, progressUpdatedAt: now },
+  });
+  await updateScriptIdea(ideaId, { viralStructure: mergedVs as any } as any);
+  return mergedVs;
+}
+
 function buildTargetAudiencePromptBlock(
   idea: { viralStructure?: unknown },
   profile?: { targetAudience?: string | null } | null
@@ -8981,7 +9003,6 @@ async function getViralHookExamplesForIdea(
  */
 async function processIdeaInBackground(ideaId: number): Promise<void> {
   try {
-    // Mark as processing
     await updateScriptIdea(ideaId, { status: "processing" } as any);
 
     const idea = await getScriptIdeaById(ideaId);
@@ -8990,7 +9011,8 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       return;
     }
 
-    const scriptIdea = idea;
+    let workingVs = await setIdeaScriptProgress(ideaId, idea, "processing", "find_viral_hooks");
+    const scriptIdea = { ...idea, viralStructure: workingVs };
 
     const creatorProfile = await getOnboardingState(scriptIdea.userId);
     const profileBlock = buildCreatorProfilePromptBlock(creatorProfile);
@@ -9046,6 +9068,13 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       dbNicheSlug,
       filmingFormat,
       lockedAudience?.type ?? null
+    );
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      scriptIdea,
+      "processing",
+      "build_structure",
+      "find_viral_hooks"
     );
     const viralHookBlock = buildViralHookBlock(viralHookExamples);
 
@@ -9176,6 +9205,14 @@ Return JSON with:
 
     const goalLine = goalBrief;
 
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      { viralStructure: workingVs },
+      "processing",
+      "write_script",
+      "build_structure"
+    );
+
     async function draftScript(refinementBrief: string | null): Promise<string> {
       const refineBlock = refinementBrief
         ? `\n\nREVISION BRIEF (previous draft missed the mark — rewrite from scratch):\n${refinementBrief}\nNew wording, tighter hook, sharper pacing. Do not recycle any lines from the previous draft.\n`
@@ -9213,6 +9250,14 @@ ${goalLine}`,
     }
 
     let generatedScript = await draftScript(null);
+
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      { viralStructure: workingVs },
+      "processing",
+      "polish_hook",
+      "write_script"
+    );
 
     const hookLineForScoring = generatedScript.trim().split(/\n/)[0]?.trim() || generatedScript.slice(0, 150);
     const skipRateResult = await scoreSkipRate(hookLineForScoring, filmingFormat, scriptIdea.niche || null);
@@ -9271,6 +9316,14 @@ ${goalLine}`,
       throw new Error("Generated script empty after refinement");
     }
 
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      { viralStructure: workingVs },
+      "processing",
+      "finalize",
+      "polish_hook"
+    );
+
     viralStructure.ideaScriptJudge = {
       attempts: judgeAttempts,
       finalOverallScore: verdict.overallScore,
@@ -9304,7 +9357,7 @@ ${goalLine}`,
     console.error(`[Ideas] Failed to process idea ${ideaId}:`, message);
     await updateScriptIdea(ideaId, {
       status: "failed",
-      errorMessage: message,
+      errorMessage: formatIdeaScriptErrorForUser(error, "script"),
     } as any);
   }
 }
@@ -9673,9 +9726,8 @@ async function proceedToIdeaScriptGeneration(ideaId: number, idea: { userId: num
 }
 
 /**
- * AI validates an idea before script generation.
- * Checks if the idea is clear, specific, and has viral potential.
- * Suggests improvements and assigns a viral score.
+ * Rule-based pre-check before script generation (no separate validation LLM).
+ * Remake goes straight to scripting; Idea to Script uses the same model here.
  */
 async function validateIdeaInBackground(ideaId: number) {
   try {
@@ -9683,109 +9735,37 @@ async function validateIdeaInBackground(ideaId: number) {
     const idea = await getScriptIdeaById(ideaId);
     if (!idea) throw new Error("Idea not found");
 
+    let workingVs = await setIdeaScriptProgress(ideaId, idea, "validation", "read_idea");
+
     const onboarding = await getOnboardingState(idea.userId);
-    let workingIdea = await autoLockAudienceFromContext(ideaId, idea, onboarding);
-
-    const nicheLabels = (onboarding?.selectedNicheSlugs ?? [])
-      .map((slug) => ONBOARDING_NICHES.find((n) => n.slug === slug)?.name ?? slug)
-      .filter(Boolean);
-    const profileContext = [
-      nicheLabels.length > 0 ? `Creator niches (from profile): ${nicheLabels.join(", ")}` : null,
-      onboarding?.businessDescription?.trim()
-        ? `Creator business (from profile): ${onboarding.businessDescription.trim()}`
-        : null,
-      onboarding?.targetAudience?.trim()
-        ? `Default target audience (from profile): ${onboarding.targetAudience.trim()}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const goalBrief = ideaCreatorGoalDirectives(readScriptIdeaCreatorSlug(idea));
+    let workingIdea = await autoLockAudienceFromContext(ideaId, { ...idea, viralStructure: workingVs }, onboarding);
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      workingIdea,
+      "validation",
+      "match_profile",
+      "read_idea"
+    );
+    workingIdea = { ...workingIdea, viralStructure: workingVs };
 
     const audienceLocked = workingIdea.locked || ideaHasLockedAudience(workingIdea);
-    const lockedAudience = readTargetAudienceFromIdeaMeta(workingIdea.viralStructure);
     const skipAudienceWizard = shouldSkipAudienceClarification(workingIdea.idea, onboarding);
-    const inferredNiche = inferNicheFromText(workingIdea.idea);
-    const inferredAudience = inferAudienceFromText(workingIdea.idea);
-    const contextClear = isNicheAndAudienceClear(workingIdea.idea);
 
-    const audienceRules = audienceLocked
-      ? `AUDIENCE IS LOCKED. The creator already chose who will watch this Reel${lockedAudience ? `: ${lockedAudience.label}` : ""}. Set needsAudienceClarification to false and audienceQuestion to empty string. Score and refine the idea ONLY for that audience. Do NOT hedge between audiences or suggest speaking to operators and guests in the same idea.`
-      : contextClear
-        ? `NICHE AND TARGET AUDIENCE ARE BOTH CLEAR from the idea. Niche: ${inferredNiche!.label}. Audience: ${inferredAudience!.label}. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed. Do NOT ask follow-up questions.`
-        : skipAudienceWizard
-          ? `AUDIENCE IS CLEAR from the idea text or creator profile. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed.`
-          : `Ask a follow-up ONLY if you cannot infer the niche OR the target audience from the idea. If both are obvious (e.g. real estate content for first-time home buyers), set needsAudienceClarification to false. If genuinely ambiguous, ask one short question about the missing piece only.`;
-
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: withAiFormattingRules(`You are a senior Instagram Reels producer. You review raw ideas BEFORE scripting.
-
-${goalBrief}
-
-Score the IDEA (not a script yet) on:
-1. Clarity: specific audience + promise; enough detail to write a teleprompter-ready monologue.
-2. Hook potential: can the first spoken line create a curiosity gap or tension?
-3. Emotional pull: relatability, stakes, or aspiration (pick what fits the creator goal).
-4. Payoff: is there one obvious insight, story turn, or takeaway?
-5. Shelf life / calendar fit: can this become repeat-friendly content (series, pillar) when the goal is branding or education?
-
-Return a 1-10 "viralScore" that reflects potential IF executed well (not a promise of views).
-
-${audienceRules}`),
-        },
-        {
-          role: "user",
-          content: `Reel idea draft:\n"${workingIdea.idea}"${idea.niche ? `\n\nDeclared niche: ${idea.niche}` : ""}${idea.tone ? `\nDesired tone preset: ${idea.tone}` : ""}${profileContext ? `\n\n${profileContext}` : ""}`,
-        },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "idea_validation",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              viralScore: { type: "number", description: "Score from 1-10" },
-              reasoning: { type: "string", description: "2-3 sentence explanation of the score" },
-              improvedIdea: { type: "string", description: "Refined version of the idea optimized for viral potential" },
-              needsAudienceClarification: { type: "boolean", description: "True if target audience is ambiguous" },
-              audienceQuestion: { type: "string", description: "Short clarifying question under 12 words, or empty string if not needed" },
-            },
-            required: ["viralScore", "reasoning", "improvedIdea", "needsAudienceClarification", "audienceQuestion"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const content = response.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No validation response from AI");
-
-    const contentStr = typeof content === "string" ? content : "";
-    const validation = sanitizeAiOutputDeep(
-      JSON.parse(contentStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
+    workingVs = await setIdeaScriptProgress(
+      ideaId,
+      workingIdea,
+      "validation",
+      "score_idea",
+      "match_profile"
     );
+    workingIdea = { ...workingIdea, viralStructure: workingVs };
 
     const needsClarification =
-      !audienceLocked &&
-      !skipAudienceWizard &&
-      !contextClear &&
-      ((validation.needsAudienceClarification === true &&
-        typeof validation.audienceQuestion === "string" &&
-        validation.audienceQuestion.trim().length > 0) ||
-        suggestionHedgesAudience(String(validation.improvedIdea || "")));
+      !audienceLocked && !skipAudienceWizard && shouldAskCreatorContextQuestion(workingIdea.idea);
 
     if (needsClarification) {
-      const wizard = buildClarificationWizard(
-        workingIdea.idea,
-        typeof validation.audienceQuestion === "string" ? validation.audienceQuestion : null
-      );
-      const mergedVs = mergeScriptIdeaViralStructure(idea.viralStructure, {
+      const wizard = buildClarificationWizard(workingIdea.idea, null);
+      const mergedVs = mergeScriptIdeaViralStructure(workingIdea.viralStructure, {
         clarification: wizard,
         pendingQuestion: wizard.steps[0]?.question ?? "Who will watch this Reel?",
         pendingQuestionType: "audience",
@@ -9793,11 +9773,8 @@ ${audienceRules}`),
 
       await updateScriptIdea(ideaId, {
         aiSuggestion: null,
-        aiReasoning: coerceIdeaValidationText(
-          validation.reasoning,
-          "We need one quick answer so your script speaks to the right people."
-        ),
-        viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
+        aiReasoning: "We need one quick answer so your script speaks to the right people.",
+        viralScore: 7,
         validationStatus: "validated",
         status: "awaiting_approval",
         viralStructure: mergedVs as any,
@@ -9808,23 +9785,13 @@ ${audienceRules}`),
       return;
     }
 
-    const improved =
-      typeof validation.improvedIdea === "string" && validation.improvedIdea.trim()
-        ? validation.improvedIdea.trim()
-        : workingIdea.idea;
-
-    const reasoningText = coerceIdeaValidationText(
-      validation.reasoning,
-      "Validated and ready for scripting."
-    );
-
     await updateScriptIdea(ideaId, {
-      idea: improved,
-      aiSuggestion: improved !== workingIdea.idea ? improved : null,
-      aiReasoning: reasoningText,
-      viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
+      aiSuggestion: null,
+      aiReasoning: "Your idea is clear. Writing your script now.",
+      viralScore: 7,
       validationStatus: "validated",
       status: "validating",
+      viralStructure: workingVs as any,
     } as any);
 
     const refreshed = await getScriptIdeaById(ideaId);
@@ -9835,13 +9802,13 @@ ${audienceRules}`),
     await updateScriptIdea(ideaId, { status: "processing" } as any);
     await proceedToIdeaScriptGeneration(ideaId, refreshed);
 
-    console.log(`[Ideas] Validated idea ${ideaId}: score ${validation.viralScore}/10`);
+    console.log(`[Ideas] Rule-based validation passed for idea ${ideaId}, starting script generation`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[Ideas] Validation failed for idea ${ideaId}:`, message);
     await updateScriptIdea(ideaId, {
       status: "failed",
-      errorMessage: `Validation failed: ${message}`,
+      errorMessage: formatIdeaScriptErrorForUser(error, "validation"),
     } as any);
   }
 }

@@ -171,11 +171,18 @@ export function inferAudienceFromIdea(ideaText: string): {
 /** Skip audience wizard when niche AND audience are both clear from the idea or profile. */
 export function shouldSkipAudienceClarification(
   ideaText: string,
-  profile?: { targetAudience?: string | null } | null
+  profile?: {
+    targetAudience?: string | null;
+    businessDescription?: string | null;
+    selectedNicheSlugs?: string[] | null;
+  } | null
 ): boolean {
   if (profile?.targetAudience?.trim()) return true;
   if (isNicheAndAudienceClear(ideaText)) return true;
   if (DUAL_AUDIENCE_HEDGE_RE.test(ideaText)) return false;
+  if ((profile?.selectedNicheSlugs?.length ?? 0) > 0 && profile?.businessDescription?.trim()) {
+    return true;
+  }
   return !shouldAskCreatorContextQuestion(ideaText);
 }
 

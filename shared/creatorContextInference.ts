@@ -21,6 +21,11 @@ const NICHE_RULES: Array<{ pattern: RegExp; slug: string; label: string }> = [
   { pattern: /\b(money|income|side hustle|make money)\b/i, slug: "make-money-online", label: "Make Money Online" },
   { pattern: /\b(finance|invest|budget|saving)\b/i, slug: "personal-finance", label: "Personal Finance" },
   { pattern: /\b(marketing|ads|social media growth)\b/i, slug: "marketing-sales", label: "Marketing & Sales" },
+  {
+    pattern: /\b(offer|selling|sell more|belief shift|mindset shift|conversion|clients?|leads?)\b/i,
+    slug: "marketing-sales",
+    label: "Marketing & Sales",
+  },
 ];
 
 const HOSPITALITY_RE =
@@ -72,6 +77,14 @@ export function inferAudienceFromText(text: string): InferredAudience | null {
       id: "creator_peers",
       label: "Other creators or beginners in my niche",
       type: "creator_peers",
+    };
+  }
+
+  if (/\b(my offer|start selling|made my offer|belief shift|selling more|get clients)\b/i.test(t)) {
+    return {
+      id: "customers",
+      label: "My customers or audience",
+      type: "b2c",
     };
   }
 
