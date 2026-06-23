@@ -87,3 +87,20 @@ export function buildIdeaStarterHeadline(ctx: StarterPromptContext | null | unde
   if (names.length === 1) return `What ${names[0]} Reel should we write?`;
   return `What Reel should we write for your ${names.slice(0, 2).join(" and ")} audience?`;
 }
+
+const CHIP_LABELS = [
+  "Mistakes I made early on",
+  "Hot take in my niche",
+  "Behind the scenes of my work",
+];
+
+/** Short chip labels that fill full niche prompts on first visit. */
+export function buildIdeaStarterChips(
+  ctx: StarterPromptContext | null | undefined
+): Array<{ label: string; value: string }> {
+  const prompts = buildIdeaStarterPrompts(ctx).slice(0, 3);
+  return prompts.map((value, i) => ({
+    label: CHIP_LABELS[i] ?? value.slice(0, 32),
+    value,
+  }));
+}
