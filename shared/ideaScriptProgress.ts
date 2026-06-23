@@ -22,7 +22,7 @@ const STEP_LABELS: Record<IdeaScriptProgressStepId, string> = {
   match_profile: "Matched your niche and audience",
   score_idea: "Checked hook potential",
   find_viral_hooks: "Pulled viral hooks from your niche",
-  build_structure: "Built your script outline",
+  build_structure: "Built your H.E.I.T. outline",
   write_script: "Writing your script",
   polish_hook: "Sharpening the opening hook",
   finalize: "Finalizing your script",

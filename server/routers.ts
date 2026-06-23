@@ -223,6 +223,16 @@ import {
   buildIdeaScriptProgressSteps,
   type IdeaScriptProgressStepId,
 } from "@shared/ideaScriptProgress";
+import {
+  buildHeitWriterRules,
+  buildHeitStructurePrompt,
+  HEIT_STRUCTURE_JSON_SCHEMA,
+  normalizeHeitStructure,
+  readHeitHookType,
+  buildHeitDraftUserPrompt,
+  HEIT_JUDGE_CRITERIA,
+  HEIT_FRAMEWORK,
+} from "@shared/ideaScriptHeit";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
@@ -8570,6 +8580,8 @@ Score each dimension 1-10 using short-form best practices:
 - Goal fit: aligns with the stated creator objective (growth vs trust vs teaching vs gentle promo).
 - Skip-rate prediction: Score 1-10. How many people stop scrolling vs swipe past in the first 3 seconds? 10 = almost nobody skips (bold claim, surprising question, shocking stat). 1 = most people swipe (opens with "Hey guys", restates the topic, slow setup). This is the single most important signal — Instagram's algorithm ranks reels by it.
 
+${HEIT_JUDGE_CRITERIA}
+
 Overall score = holistic blend (not pure average).
 
 Return JSON verdict. Use "pass" only if overallScore >= ${IDEA_SCRIPT_JUDGE_PASS_SCORE} AND the draft is legitimately worthy of filming without another rewrite.`),
@@ -9081,127 +9093,58 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
     const formatRules = buildFilmingFormatRules(filmingFormat);
     const audienceBlock = buildTargetAudiencePromptBlock(scriptIdea, creatorProfile);
 
-    const writerRules = `You are SpyReels' script engine. SpyReels analyses thousands of viral Instagram Reels to extract the exact patterns that stop the scroll. You write scripts grounded in those real patterns — not generic AI templates.
-${profileBlock}
-SPYREELS SCRIPT STANDARDS:
-- Start with the hook IMMEDIATELY. No "Hey guys", no setup, no intro. The very first word must grab attention.
-- Write for spoken delivery: short paragraphs (1-2 sentences), natural contractions, rhythm that sounds real when spoken aloud.
-- No labels, bullets, or stage directions unless the creator would literally say them.
-- 150-300 spoken words (30-60 seconds). One clear takeaway. One CTA at the end.
-- Every line earns its place. If a sentence doesn't move the story forward or deepen the hook, cut it.
-- Sound like a real creator, not an AI assistant summarising a topic.
-${audienceBlock}
-${formatRules}
-
-${goalBrief}`;
+    const writerRules = buildHeitWriterRules({
+      profileBlock,
+      audienceBlock,
+      formatRules,
+      goalBrief,
+    });
 
     const structureResponse = await invokeLLM({
       messages: [
         {
           role: "system",
           content: withAiFormattingRules(
-            "You are a senior short-form script architect at SpyReels. You build viral Reel structures grounded in proven patterns from real top-performing creators. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew."
+            "You are a senior short-form script architect at SpyReels. You build H.E.I.T. Reel structures grounded in proven patterns from real top-performing creators. Always respond with valid JSON only. Every beat must be filmable on a phone without a production crew."
           ),
         },
         {
           role: "user",
-          content: `Create a viral Reel structure for this topic${nicheContext}: "${scriptIdea.idea}"
-${profileBlock}
-Tone: ${toneContext}
-${goalBrief}
-${filmingFormat ? `Filming format: ${filmingFormat.replace(/_/g, " ")}` : ""}
-${audienceBlock}
-${viralHookBlock}
-
-Return JSON with:
-- hook: { type (one of: question/statistic/bold_claim/story/controversy/mistake_reveal/you_callout/open_loop/result_first/contrarian), text (the actual hook line, written and ready to use), technique (why this hook stops the scroll for THIS specific topic) }
-- body: { pacing (fast/medium/slow), structure (listicle/story/tutorial/comparison/myth_busting), keyPoints (array of 3-5 main points — specific and concrete, not generic) }
-- transition: { type (pattern_interrupt/visual_change/rhetorical_question/pivot), text (the actual transition line) }
-- cta: { type (follow/save/share/comment/link), text (the actual CTA line) }
-- overallTone: string
-- estimatedPace: string
-- suggestedTitle: a catchy title for this script (max 80 chars)
-- hookRationale: why this specific hook pattern works for this topic and format (1 sentence)`,
+          content: buildHeitStructurePrompt({
+            idea: scriptIdea.idea,
+            nicheContext,
+            profileBlock,
+            toneContext,
+            goalBrief,
+            filmingFormat,
+            audienceBlock,
+            viralHookBlock,
+          }),
         },
       ],
       response_format: {
         type: "json_schema",
-        json_schema: {
-          name: "viral_idea_structure",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              hook: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  text: { type: "string" },
-                  technique: { type: "string" },
-                },
-                required: ["type", "text", "technique"],
-                additionalProperties: false,
-              },
-              body: {
-                type: "object",
-                properties: {
-                  pacing: { type: "string" },
-                  structure: { type: "string" },
-                  keyPoints: { type: "array", items: { type: "string" } },
-                },
-                required: ["pacing", "structure", "keyPoints"],
-                additionalProperties: false,
-              },
-              transition: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  text: { type: "string" },
-                },
-                required: ["type", "text"],
-                additionalProperties: false,
-              },
-              cta: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  text: { type: "string" },
-                },
-                required: ["type", "text"],
-                additionalProperties: false,
-              },
-              overallTone: { type: "string" },
-              estimatedPace: { type: "string" },
-              suggestedTitle: { type: "string" },
-              hookRationale: { type: "string" },
-            },
-            required: [
-              "hook",
-              "body",
-              "transition",
-              "cta",
-              "overallTone",
-              "estimatedPace",
-              "suggestedTitle",
-              "hookRationale",
-            ],
-            additionalProperties: false,
-          },
-        },
+        json_schema: HEIT_STRUCTURE_JSON_SCHEMA,
       },
     });
 
     let viralStructure: Record<string, any>;
     try {
-      viralStructure = sanitizeAiOutputDeep(
-        JSON.parse((String(structureResponse.choices[0].message.content) || "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim())
-      );
+      viralStructure = normalizeHeitStructure(
+        sanitizeAiOutputDeep(
+          JSON.parse(
+            (String(structureResponse.choices[0].message.content) || "{}")
+              .replace(/```json\n?/g, "")
+              .replace(/```\n?/g, "")
+              .trim()
+          )
+        ) as Record<string, unknown>
+      ) as Record<string, any>;
     } catch {
-      viralStructure = { error: "Failed to parse structure" };
+      viralStructure = { error: "Failed to parse structure", framework: HEIT_FRAMEWORK };
     }
 
     const suggestedTitle = viralStructure.suggestedTitle || `Script: ${scriptIdea.idea.substring(0, 60)}`;
-    const hookRationale = viralStructure.hookRationale || "";
 
     const goalLine = goalBrief;
 
@@ -9214,10 +9157,6 @@ Return JSON with:
     );
 
     async function draftScript(refinementBrief: string | null): Promise<string> {
-      const refineBlock = refinementBrief
-        ? `\n\nREVISION BRIEF (previous draft missed the mark — rewrite from scratch):\n${refinementBrief}\nNew wording, tighter hook, sharper pacing. Do not recycle any lines from the previous draft.\n`
-        : "";
-
       const scriptResponse = await invokeLLM({
         messages: [
           {
@@ -9226,23 +9165,16 @@ Return JSON with:
           },
           {
             role: "user",
-            content: `Write the complete Reel script.
-Topic${nicheContext}: "${scriptIdea.idea}"
-
-STRUCTURE PLAN (follow these beats in order — do not skip any):
-${JSON.stringify(viralStructure, null, 2)}
-
-${viralHookBlock ? `HOOK GUIDANCE:\nThe hook type is "${viralStructure?.hook?.type || "bold_claim"}". ${hookRationale}\nThe hook must be the very first line. No warmup. No greeting. Start with the hook verbatim or a strong variation.` : ""}
-
-Requirements:
-- Tone: ${toneContext}
-- ${gradeLevelInstruction}
-- Word count: 150-300 spoken words.
-- Do NOT start with "Hey", "So", "Okay", "Welcome", or any greeting.
-- Do NOT include labels like "Hook:", "Body:", "CTA:" — write one flowing spoken script.
-- The hook line must match the pattern: "${viralStructure?.hook?.type || "bold_claim"}"${refineBlock}
-
-${goalLine}`,
+            content: buildHeitDraftUserPrompt({
+              idea: scriptIdea.idea,
+              nicheContext,
+              viralStructure,
+              viralHookBlock,
+              toneContext,
+              gradeLevelInstruction,
+              goalLine,
+              refinementBrief,
+            }),
           },
         ],
       });
@@ -9299,9 +9231,10 @@ ${goalLine}`,
           ? verdict.criticalIssues.map((line, idx) => `${idx + 1}. ${line}`).join("\n")
           : "(none listed)";
 
+      const heitHookType = readHeitHookType(viralStructure);
       const skipNote =
         skipRateFailed && regenCount === 0
-          ? `\nCRITICAL: The hook scored only ${skipRateResult.score}/10 for skip-rate resistance. Reason: ${skipRateResult.reason}. Rewrite the hook entirely — it must be more specific, more surprising, or more immediately relevant to the viewer. Use the "${viralStructure?.hook?.type || "bold_claim"}" pattern.`
+          ? `\nCRITICAL: The hook scored only ${skipRateResult.score}/10 for skip-rate resistance. Reason: ${skipRateResult.reason}. Rewrite the hook entirely. Use a stronger H.E.I.T. hook type ("${heitHookType}"): context, contrarian, or intrigue.`
           : "";
 
       const refinement = `${verdict.rewriteDirectives.trim()}\n\nConcrete issues detected:\n${issuesBullets}${skipNote}`.trim();
@@ -9336,6 +9269,7 @@ ${goalLine}`,
       viralHookExamplesUsed: viralHookExamples.length,
       skipRateScore: skipRateResult.score,
       skipRateReason: skipRateResult.reason,
+      framework: HEIT_FRAMEWORK,
     };
 
     await updateScriptIdea(ideaId, {
