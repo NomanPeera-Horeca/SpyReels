@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { mergeRemakeability } from "@/lib/remakeability";
 import { trpc } from "@/lib/trpc";
+import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 
 export type RemakeStage =
   | "idle"
@@ -298,7 +299,10 @@ export function useDiscoverRemakeChain() {
           }
           if (scriptStatus?.status === "failed") {
             throw new Error(
-              scriptStatus.errorMessage?.trim() || "Script generation failed. Try again."
+              formatIdeaScriptErrorForUser(
+                scriptStatus.errorMessage?.trim() || "Script generation failed. Try again.",
+                "remake"
+              )
             );
           }
           if (attempt < GENERATE_MAX) await sleep(POLL_MS);
@@ -317,9 +321,7 @@ export function useDiscoverRemakeChain() {
         });
       } catch (err) {
         if (cancelledRef.current.has(shortcode)) return;
-        const message =
-          err instanceof Error ? err.message : "Remake failed. Try again.";
-        failRemake(shortcode, message);
+        failRemake(shortcode, formatIdeaScriptErrorForUser(err, "remake"));
       }
     },
     [buildIngestDeps, failRemake, generateMutation, patchState, trpcUtils]

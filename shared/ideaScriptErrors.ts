@@ -1,7 +1,9 @@
-export type IdeaScriptErrorContext = "validation" | "script";
+export type IdeaScriptErrorContext = "validation" | "script" | "remake";
 
 function contextVerb(context: IdeaScriptErrorContext): string {
-  return context === "validation" ? "validating your idea" : "writing your script";
+  if (context === "validation") return "validating your idea";
+  if (context === "remake") return "remaking this reel";
+  return "writing your script";
 }
 
 function rawErrorMessage(error: unknown): string {
@@ -14,7 +16,7 @@ function looksLikeApiPayload(message: string): boolean {
   return message.includes('{"type"') || message.includes("request_id") || message.includes("overloaded_error");
 }
 
-/** User-safe copy for Idea to Script failures (no raw API JSON). */
+/** User-safe copy for LLM failures (no raw API JSON). */
 export function formatIdeaScriptErrorForUser(
   error: unknown,
   context: IdeaScriptErrorContext = "validation"
@@ -31,7 +33,7 @@ export function formatIdeaScriptErrorForUser(
   const lower = raw.toLowerCase();
 
   if (lower.includes("overloaded") || raw.includes("529")) {
-    return "Our AI is busy right now. Wait a moment and tap Retry.";
+    return "That took too long to finish. Tap Retry and we will run it again.";
   }
 
   if (

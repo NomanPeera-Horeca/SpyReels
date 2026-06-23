@@ -3,6 +3,9 @@ import { sanitizeAiOutput } from "../utils/sanitizeAiOutput";
 import { isRetryableLlmError } from "@shared/ideaScriptErrors";
 import Anthropic from "@anthropic-ai/sdk";
 
+const DEFAULT_LLM_MODEL = "claude-sonnet-4-6";
+const FALLBACK_LLM_MODEL = "claude-haiku-4-5-20251001";
+
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
 export type TextContent = {
@@ -311,34 +314,45 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     : systemPrompt;
 
   const maxTokensResolved = maxTokensParam ?? max_tokensParam ?? 8192;
-  const modelResolved = model ?? "claude-sonnet-4-6";
+  const modelsToTry = model ? [model] : [DEFAULT_LLM_MODEL, FALLBACK_LLM_MODEL];
+  const retryDelaysMs = [1500, 3000, 6000];
 
-  const retryDelaysMs = [2000, 4000];
   let response: Awaited<ReturnType<Anthropic["messages"]["create"]>> | null = null;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      response = await client.messages.create({
-        model: modelResolved,
-        max_tokens: maxTokensResolved,
-        ...(typeof temperature === "number" ? { temperature } : {}),
-        ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
-        messages: normalizedMessages,
-      });
-      break;
-    } catch (err) {
-      lastError = err;
-      const status = (err as { status?: number })?.status;
-      console.error(
-        `[invokeLLM] attempt ${attempt + 1}/3 failed`,
-        { status, model: modelResolved, message: err instanceof Error ? err.message : String(err) }
-      );
-      if (attempt < 2 && isRetryableLlmError(err)) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt] ?? 4000));
-        continue;
+  modelLoop: for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex++) {
+    const currentModel = modelsToTry[modelIndex]!;
+    if (modelIndex > 0) {
+      console.warn(`[invokeLLM] retrying with fallback model ${currentModel}`);
+    }
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await client.messages.create({
+          model: currentModel,
+          max_tokens: maxTokensResolved,
+          ...(typeof temperature === "number" ? { temperature } : {}),
+          ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
+          messages: normalizedMessages,
+        });
+        break modelLoop;
+      } catch (err) {
+        lastError = err;
+        const status = (err as { status?: number })?.status;
+        console.error(
+          `[invokeLLM] attempt ${attempt + 1}/3 failed`,
+          { status, model: currentModel, message: err instanceof Error ? err.message : String(err) }
+        );
+
+        if (!isRetryableLlmError(err)) {
+          throw err;
+        }
+
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt] ?? 6000));
+          continue;
+        }
       }
-      throw err;
     }
   }
 

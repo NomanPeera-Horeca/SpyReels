@@ -8240,7 +8240,7 @@ Return ONLY valid JSON.`;
       status: "completed",
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = formatIdeaScriptErrorForUser(error, "remake");
     await updateRecreatedScript(scriptId, {
       status: "failed",
       errorMessage: message,

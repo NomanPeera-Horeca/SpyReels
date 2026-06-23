@@ -18,6 +18,7 @@ import {
   type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
 import { trpc } from "@/lib/trpc";
+import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 
 export type LibrarySaveState = "idle" | "saved" | "error";
 
@@ -276,7 +277,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
           }
           if (scriptStatus?.status === "failed") {
             throw new Error(
-              scriptStatus.errorMessage?.trim() || "Script generation failed. Try again."
+              formatIdeaScriptErrorForUser(
+                scriptStatus.errorMessage?.trim() || "Script generation failed. Try again.",
+                "remake"
+              )
             );
           }
           if (attempt < LIBRARY_GENERATE_MAX) await sleep(LIBRARY_POLL_MS);
@@ -295,8 +299,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         });
       } catch (err) {
         if (cancelledRef.current.has(key)) return;
-        const message = err instanceof Error ? err.message : "Remake failed. Try again.";
-        failRemake(source, message);
+        failRemake(source, formatIdeaScriptErrorForUser(err, "remake"));
       }
     },
     [
