@@ -1,4 +1,10 @@
 /** Filming format ids aligned with script generation rules */
+import {
+  inferAudienceFromText,
+  isNicheAndAudienceClear,
+  shouldAskCreatorContextQuestion,
+} from "./creatorContextInference";
+
 export const FILMING_FORMAT_OPTIONS = [
   { id: "talking_head", label: "You on camera, speaking", sub: "Selfie-style, face to camera" },
   { id: "broll_voiceover", label: "Show your space or product, speak over it", sub: "B-roll footage, your voice narrates" },
@@ -150,9 +156,6 @@ export function ideaHasLockedAudience(idea: {
   return /\nTarget audience:/i.test(idea.idea) || /\nCreator context:/i.test(idea.idea);
 }
 
-const PERSONAL_CREATOR_STORY_RE =
-  /\b(i made|my mistake|mistakes i|what i learned|when i|how i|growing my|built my|scaled my|my page|my account|my channel|my brand|i wish i|here's what i|here is what i)\b/i;
-
 const DUAL_AUDIENCE_HEDGE_RE =
   /\b(either .+ or|guests or operators|operators or guests|owners or customers|customers or owners|peers or customers|both audiences|aspiring .+ or .+ seeking)\b/i;
 
@@ -162,57 +165,18 @@ export function inferAudienceFromIdea(ideaText: string): {
   label: string;
   type: ClarificationAudienceType;
 } | null {
-  const text = ideaText.trim();
-  if (!text) return null;
-
-  if (PERSONAL_CREATOR_STORY_RE.test(text)) {
-    return {
-      id: "creator_peers",
-      label: AUDIENCE_LABELS.creator_peers,
-      type: "creator_peers",
-    };
-  }
-
-  if (isHospitalityIdea(text)) {
-    return {
-      id: "guests",
-      label: AUDIENCE_LABELS.guests,
-      type: "b2c",
-    };
-  }
-
-  if (/\b(your team|your staff|property managers|hotel owners|restaurant owners|operators|revpar|occupancy)\b/i.test(text)) {
-    return {
-      id: "operators",
-      label: AUDIENCE_LABELS.operators,
-      type: "b2b",
-    };
-  }
-
-  if (
-    /\b(you should|if you are|if you're|for beginners who|stop doing|start doing)\b/i.test(text) &&
-    !/\b(i |my )/i.test(text)
-  ) {
-    return {
-      id: "customers",
-      label: AUDIENCE_LABELS.customers,
-      type: "b2c",
-    };
-  }
-
-  return null;
+  return inferAudienceFromText(ideaText);
 }
 
-/** Skip audience wizard when profile or idea text already gives enough context. */
+/** Skip audience wizard when niche AND audience are both clear from the idea or profile. */
 export function shouldSkipAudienceClarification(
   ideaText: string,
   profile?: { targetAudience?: string | null } | null
 ): boolean {
   if (profile?.targetAudience?.trim()) return true;
-  if (inferAudienceFromIdea(ideaText)) return true;
+  if (isNicheAndAudienceClear(ideaText)) return true;
   if (DUAL_AUDIENCE_HEDGE_RE.test(ideaText)) return false;
-  if (isHospitalityIdea(ideaText)) return false;
-  return true;
+  return !shouldAskCreatorContextQuestion(ideaText);
 }
 
 export function audienceLockFromProfile(profile?: {

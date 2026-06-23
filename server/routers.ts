@@ -29,6 +29,11 @@ import {
   type ClarificationAudienceType,
   type IdeaClarificationWizard,
 } from "../shared/ideaClarification";
+import {
+  inferAudienceFromText,
+  inferNicheFromText,
+  isNicheAndAudienceClear,
+} from "../shared/creatorContextInference";
 
 const reelNicheInputEnum = z.enum(
   REEL_NICHE_VALUES as unknown as [string, ...string[]]
@@ -64,7 +69,10 @@ const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   sortOrder: true,
 });
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
-import { isOnboardingDescriptionClearEnough, inferOnboardingSlugsFromDescription } from "../shared/onboardingDescription";
+import {
+  inferOnboardingSlugsFromDescription,
+  shouldAskCreatorContextQuestion,
+} from "../shared/onboardingDescription";
 import {
   assignScriptingTag,
   buildSaveAssistantMessage,
@@ -4795,15 +4803,19 @@ The hook MUST be 7-10 words. Count them.`),
           routed: Awaited<ReturnType<typeof routeNichePrompt>>,
           businessDescription: string
         ) => {
-          const clearEnough = isOnboardingDescriptionClearEnough(businessDescription);
-          const clarifying =
-            !clearEnough &&
-            routed.confidence < 0.55 &&
-            Boolean(routed.clarifying_question?.trim());
+          const slugs = selectedSlugsFromNicheRouting(routed);
+          const keywordSlugs = inferOnboardingSlugsFromDescription(businessDescription);
+          const useKeywords =
+            slugs.length === 0 ||
+            (slugs.length === 1 &&
+              slugs[0] === "business-entrepreneurship" &&
+              keywordSlugs[0] !== "business-entrepreneurship");
+          const askFollowUp = shouldAskCreatorContextQuestion(businessDescription);
+          const aiQuestion = routed.clarifying_question?.trim() || null;
           return {
-            selectedSlugs: selectedSlugsFromNicheRouting(routed),
-            confidence: clearEnough ? Math.max(routed.confidence, 0.8) : routed.confidence,
-            clarifyingQuestion: clarifying ? routed.clarifying_question ?? null : null,
+            selectedSlugs: useKeywords ? keywordSlugs : slugs,
+            confidence: askFollowUp ? routed.confidence : 0.9,
+            clarifyingQuestion: askFollowUp && aiQuestion ? aiQuestion : null,
           };
         };
 
@@ -9694,12 +9706,17 @@ async function validateIdeaInBackground(ideaId: number) {
     const audienceLocked = workingIdea.locked || ideaHasLockedAudience(workingIdea);
     const lockedAudience = readTargetAudienceFromIdeaMeta(workingIdea.viralStructure);
     const skipAudienceWizard = shouldSkipAudienceClarification(workingIdea.idea, onboarding);
+    const inferredNiche = inferNicheFromText(workingIdea.idea);
+    const inferredAudience = inferAudienceFromText(workingIdea.idea);
+    const contextClear = isNicheAndAudienceClear(workingIdea.idea);
 
     const audienceRules = audienceLocked
       ? `AUDIENCE IS LOCKED. The creator already chose who will watch this Reel${lockedAudience ? `: ${lockedAudience.label}` : ""}. Set needsAudienceClarification to false and audienceQuestion to empty string. Score and refine the idea ONLY for that audience. Do NOT hedge between audiences or suggest speaking to operators and guests in the same idea.`
-      : skipAudienceWizard
-        ? `AUDIENCE IS CLEAR from the idea text or creator profile. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed. Do NOT ask who the audience is.`
-        : `AUDIENCE CLARITY CHECK (hospitality / dual-audience ideas ONLY): Ask ONLY when the idea could legitimately target two different audiences (e.g. hotel guests vs hotel owners). Otherwise set needsAudienceClarification to false. If profile default audience applies, use it and skip clarification.`;
+      : contextClear
+        ? `NICHE AND TARGET AUDIENCE ARE BOTH CLEAR from the idea. Niche: ${inferredNiche!.label}. Audience: ${inferredAudience!.label}. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed. Do NOT ask follow-up questions.`
+        : skipAudienceWizard
+          ? `AUDIENCE IS CLEAR from the idea text or creator profile. Set needsAudienceClarification to false and audienceQuestion to empty string. Refine the idea and proceed.`
+          : `Ask a follow-up ONLY if you cannot infer the niche OR the target audience from the idea. If both are obvious (e.g. real estate content for first-time home buyers), set needsAudienceClarification to false. If genuinely ambiguous, ask one short question about the missing piece only.`;
 
     const response = await invokeLLM({
       messages: [
@@ -9757,6 +9774,7 @@ ${audienceRules}`),
     const needsClarification =
       !audienceLocked &&
       !skipAudienceWizard &&
+      !contextClear &&
       ((validation.needsAudienceClarification === true &&
         typeof validation.audienceQuestion === "string" &&
         validation.audienceQuestion.trim().length > 0) ||

@@ -5,7 +5,7 @@ import { normalizeAnalyticsHandle } from "@/lib/utils";
 import { usePostHog } from "@posthog/react";
 import { toast } from "sonner";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { Button } from "@/components/ui/button";
@@ -54,15 +54,13 @@ export default function OnboardingPage() {
   const [, setLocation] = useLocation();
   const [description, setDescription] = useState("");
   const [isRouting, setIsRouting] = useState(false);
-  const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
-  const [clarifyingAnswer, setClarifyingAnswer] = useState("");
   const [completionText, setCompletionText] = useState<string>(
     "Finding the best creators for you..."
   );
   const [isCompleting, setIsCompleting] = useState(false);
-
+  const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
+  const [clarifyingAnswer, setClarifyingAnswer] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const clarifyRef = useRef<HTMLDivElement>(null);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
 
@@ -128,12 +126,16 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     const fullDescription =
       clarifyingQuestion && clarifyingAnswer.trim()
-        ? `${description}. ${clarifyingAnswer}`
-        : description;
+        ? `${description.trim()}. ${clarifyingAnswer.trim()}`
+        : description.trim();
+
+    if (fullDescription.length < 6) {
+      setSubmitError("Add a few more words so we know your niche.");
+      return;
+    }
 
     if (clarifyingQuestion && !clarifyingAnswer.trim()) {
-      setSubmitError("Answer the question above, then tap Show me what's working again.");
-      clarifyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setSubmitError("Answer the question above to continue.");
       return;
     }
 
@@ -144,16 +146,9 @@ export default function OnboardingPage() {
         businessDescription: fullDescription,
       });
 
-      if (
-        result.confidence < 0.55 &&
-        result.clarifyingQuestion &&
-        !clarifyingAnswer.trim()
-      ) {
+      if (result.clarifyingQuestion && !clarifyingAnswer.trim()) {
         setClarifyingQuestion(result.clarifyingQuestion);
-        setSubmitError("One quick detail will help us find the right creators for you.");
-        setTimeout(() => {
-          clarifyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 50);
+        setSubmitError("We need one detail about your niche or audience, then tap the button again.");
         return;
       }
 
@@ -166,7 +161,7 @@ export default function OnboardingPage() {
       setCompletionText("Finding the best creators for you...");
       const completeResult = await completeMutation.mutateAsync({
         selectedNicheSlugs: result.selectedSlugs,
-        businessDescription: fullDescription.trim(),
+        businessDescription: fullDescription,
       });
       if (!completeResult.alreadyComplete) {
         posthog?.capture("onboarding_completed", {
@@ -182,7 +177,7 @@ export default function OnboardingPage() {
       await trpcUtils.onboarding.getState.refetch();
       setLocation("/research");
     } catch (err) {
-      console.error("Niche routing failed", err);
+      console.error("Onboarding submit failed", err);
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setSubmitError(message);
@@ -244,15 +239,16 @@ export default function OnboardingPage() {
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
+                setSubmitError(null);
                 setClarifyingQuestion(null);
                 setClarifyingAnswer("");
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && description.trim().length >= 8 && !isRouting) {
+                if (e.key === "Enter" && description.trim().length >= 6 && !isRouting) {
                   handleSubmit();
                 }
               }}
-              placeholder="fitness for busy moms..."
+              placeholder="first-time home buyers in Houston..."
               maxLength={200}
               autoFocus
               autoComplete="off"
@@ -278,8 +274,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={() => {
                 setDescription(example);
-                setClarifyingQuestion(null);
-                setClarifyingAnswer("");
+                setSubmitError(null);
               }}
               className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
             >
@@ -289,10 +284,7 @@ export default function OnboardingPage() {
         </div>
 
         {clarifyingQuestion ? (
-          <div
-            ref={clarifyRef}
-            className="mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-5"
-          >
+          <div className="mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-5">
             <p className="mb-3 text-sm font-medium text-primary">{clarifyingQuestion}</p>
             <input
               type="text"
@@ -303,7 +295,7 @@ export default function OnboardingPage() {
                   handleSubmit();
                 }
               }}
-              placeholder="Add the missing detail in your own words..."
+              placeholder="Your niche or who you create for..."
               autoFocus
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
             />
@@ -317,7 +309,7 @@ export default function OnboardingPage() {
         <div className="sticky bottom-0 mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/90 px-1 py-4 backdrop-blur">
           <Button
             type="button"
-            disabled={description.trim().length < 8 || isRouting || isCompleting}
+            disabled={description.trim().length < 6 || isRouting || isCompleting}
             onClick={handleSubmit}
             className="gap-2"
           >
