@@ -27,6 +27,7 @@ export function inferFilmingFormatFromIdea(text: string): FilmingFormatId | null
     if (/\b(talking head|on camera|face to camera)\b/.test(t)) return "talking_head";
   }
 
+  if (/\b(bts|behind the scenes|behind-the-scenes)\b/i.test(text)) return "broll_voiceover";
   if (/\b(how to|step \d|walkthrough|demo|screen share)\b/.test(t)) return "tutorial_demo";
   if (/\b(before and after|transformation|then vs now)\b/.test(t)) return "before_after";
   if (/\b(day in the life|behind the scenes|b roll montage)\b/.test(t)) return "broll_voiceover";
@@ -169,6 +170,14 @@ export function inferAudienceFromIdea(ideaText: string): {
       id: "creator_peers",
       label: AUDIENCE_LABELS.creator_peers,
       type: "creator_peers",
+    };
+  }
+
+  if (isHospitalityIdea(text)) {
+    return {
+      id: "guests",
+      label: AUDIENCE_LABELS.guests,
+      type: "b2c",
     };
   }
 
@@ -442,11 +451,26 @@ export function formatClarificationAnswers(
   }
 
   const audienceId = answers.audience ?? "";
-  const targetAudience =
+  let targetAudience =
     AUDIENCE_LABELS[audienceId] ??
     answers.audience ??
     customNotes?.trim() ??
-    "General audience";
+    "";
+  let audienceType = audienceTypeFromAnswer(audienceId);
+
+  if (!targetAudience) {
+    const inferred = inferAudienceFromIdea(originalIdea);
+    if (inferred) {
+      targetAudience = inferred.label;
+      audienceType = inferred.type;
+    } else if (isHospitalityIdea(originalIdea)) {
+      targetAudience = AUDIENCE_LABELS.guests;
+      audienceType = "b2c";
+    } else {
+      targetAudience = "General audience";
+      audienceType = "other";
+    }
+  }
 
   const lines = summary.map((s) => `- ${s.question}: ${s.answer}`);
   const enrichedIdea = `${originalIdea.trim()}\n\nCreator context:\n${lines.join("\n")}\n\nTarget audience: ${targetAudience}`;
@@ -454,7 +478,7 @@ export function formatClarificationAnswers(
   return {
     enrichedIdea,
     targetAudience,
-    audienceType: audienceTypeFromAnswer(audienceId),
+    audienceType,
     answerSummary: summary,
   };
 }

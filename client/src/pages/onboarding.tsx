@@ -3,8 +3,9 @@ import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
 import { usePostHog } from "@posthog/react";
+import { toast } from "sonner";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,9 @@ export default function OnboardingPage() {
     "Finding the best creators for you..."
   );
   const [isCompleting, setIsCompleting] = useState(false);
+
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const clarifyRef = useRef<HTMLDivElement>(null);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
 
@@ -127,6 +131,13 @@ export default function OnboardingPage() {
         ? `${description}. ${clarifyingAnswer}`
         : description;
 
+    if (clarifyingQuestion && !clarifyingAnswer.trim()) {
+      setSubmitError("Answer the question above, then tap Show me what's working again.");
+      clarifyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
+    setSubmitError(null);
     setIsRouting(true);
     try {
       const result = await routeNicheMutation.mutateAsync({
@@ -134,12 +145,15 @@ export default function OnboardingPage() {
       });
 
       if (
-        result.confidence < 0.6 &&
+        result.confidence < 0.55 &&
         result.clarifyingQuestion &&
         !clarifyingAnswer.trim()
       ) {
         setClarifyingQuestion(result.clarifyingQuestion);
-        setIsRouting(false);
+        setSubmitError("One quick detail will help us find the right creators for you.");
+        setTimeout(() => {
+          clarifyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
         return;
       }
 
@@ -169,8 +183,13 @@ export default function OnboardingPage() {
       setLocation("/research");
     } catch (err) {
       console.error("Niche routing failed", err);
-      setIsRouting(false);
+      const message =
+        err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setSubmitError(message);
+      toast.error("Could not finish setup", { description: message });
       setIsCompleting(false);
+    } finally {
+      setIsRouting(false);
     }
   };
 
@@ -270,7 +289,10 @@ export default function OnboardingPage() {
         </div>
 
         {clarifyingQuestion ? (
-          <div className="mb-8 max-w-2xl rounded-xl border border-border bg-card p-5">
+          <div
+            ref={clarifyRef}
+            className="mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-5"
+          >
             <p className="mb-3 text-sm font-medium text-primary">{clarifyingQuestion}</p>
             <input
               type="text"
@@ -281,11 +303,15 @@ export default function OnboardingPage() {
                   handleSubmit();
                 }
               }}
-              placeholder="e.g. small business owners, stay-at-home moms, beginners..."
+              placeholder="Add the missing detail in your own words..."
               autoFocus
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
             />
           </div>
+        ) : null}
+
+        {submitError ? (
+          <p className="mb-4 max-w-2xl text-sm text-destructive">{submitError}</p>
         ) : null}
 
         <div className="sticky bottom-0 mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/90 px-1 py-4 backdrop-blur">

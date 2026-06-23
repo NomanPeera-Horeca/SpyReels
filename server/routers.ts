@@ -64,6 +64,7 @@ const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   sortOrder: true,
 });
 import { routeNiche as routeNichePrompt } from "./ai/prompts/niche-routing";
+import { isOnboardingDescriptionClearEnough, inferOnboardingSlugsFromDescription } from "../shared/onboardingDescription";
 import {
   assignScriptingTag,
   buildSaveAssistantMessage,
@@ -4790,36 +4791,53 @@ The hook MUST be 7-10 words. Count them.`),
       .mutation(async ({ input }) => {
         const clarificationContext = detectHospitalityB2CContext(input.businessDescription);
 
-        const result = await routeNichePrompt({
-          businessDescription: input.businessDescription,
-          clarificationContext,
-        });
-
-        if (
-          clarificationContext &&
-          result.business_type === "B2B" &&
-          result.confidence > 0.5
-        ) {
-          const correctedResult = await routeNichePrompt({
-            businessDescription: input.businessDescription,
-            clarificationContext:
-              clarificationContext +
-              " IMPORTANT: The user is definitively a B2C creator. business_type must be B2C. Do not route to Business & Entrepreneurship.",
-          });
-          if (correctedResult.business_type !== "B2B") {
-            return {
-              selectedSlugs: selectedSlugsFromNicheRouting(correctedResult),
-              confidence: correctedResult.confidence,
-              clarifyingQuestion: correctedResult.clarifying_question ?? null,
-            };
-          }
-        }
-
-        return {
-          selectedSlugs: selectedSlugsFromNicheRouting(result),
-          confidence: result.confidence,
-          clarifyingQuestion: result.clarifying_question ?? null,
+        const finalizeRouteNicheResponse = (
+          routed: Awaited<ReturnType<typeof routeNichePrompt>>,
+          businessDescription: string
+        ) => {
+          const clearEnough = isOnboardingDescriptionClearEnough(businessDescription);
+          const clarifying =
+            !clearEnough &&
+            routed.confidence < 0.55 &&
+            Boolean(routed.clarifying_question?.trim());
+          return {
+            selectedSlugs: selectedSlugsFromNicheRouting(routed),
+            confidence: clearEnough ? Math.max(routed.confidence, 0.8) : routed.confidence,
+            clarifyingQuestion: clarifying ? routed.clarifying_question ?? null : null,
+          };
         };
+
+        try {
+          const result = await routeNichePrompt({
+            businessDescription: input.businessDescription,
+            clarificationContext,
+          });
+
+          if (
+            clarificationContext &&
+            result.business_type === "B2B" &&
+            result.confidence > 0.5
+          ) {
+            const correctedResult = await routeNichePrompt({
+              businessDescription: input.businessDescription,
+              clarificationContext:
+                clarificationContext +
+                " IMPORTANT: The user is definitively a B2C creator. business_type must be B2C. Do not route to Business & Entrepreneurship.",
+            });
+            if (correctedResult.business_type !== "B2B") {
+              return finalizeRouteNicheResponse(correctedResult, input.businessDescription);
+            }
+          }
+
+          return finalizeRouteNicheResponse(result, input.businessDescription);
+        } catch (err) {
+          console.error("[Onboarding] routeNiche failed, using keyword fallback:", err);
+          return {
+            selectedSlugs: inferOnboardingSlugsFromDescription(input.businessDescription),
+            confidence: 0.75,
+            clarifyingQuestion: null as string | null,
+          };
+        }
       }),
 
     /**
@@ -9620,6 +9638,13 @@ async function ensureFilmingFormatBeforeScript(
   return false;
 }
 
+function coerceIdeaValidationText(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value.trim();
+  if (value == null) return fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
 async function proceedToIdeaScriptGeneration(ideaId: number, idea: { userId: number }): Promise<void> {
   const recreateCheck = await checkUsageLimit(idea.userId, "recreateCount");
   if (!recreateCheck.allowed) {
@@ -9750,10 +9775,10 @@ ${audienceRules}`),
 
       await updateScriptIdea(ideaId, {
         aiSuggestion: null,
-        aiReasoning:
-          typeof validation.reasoning === "string" && validation.reasoning.trim()
-            ? validation.reasoning
-            : "We need one quick answer so your script speaks to the right people.",
+        aiReasoning: coerceIdeaValidationText(
+          validation.reasoning,
+          "We need one quick answer so your script speaks to the right people."
+        ),
         viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
         validationStatus: "validated",
         status: "awaiting_approval",
@@ -9768,12 +9793,17 @@ ${audienceRules}`),
     const improved =
       typeof validation.improvedIdea === "string" && validation.improvedIdea.trim()
         ? validation.improvedIdea.trim()
-        : idea.idea;
+        : workingIdea.idea;
+
+    const reasoningText = coerceIdeaValidationText(
+      validation.reasoning,
+      "Validated and ready for scripting."
+    );
 
     await updateScriptIdea(ideaId, {
       idea: improved,
-      aiSuggestion: improved !== idea.idea ? improved : null,
-      aiReasoning: validation.reasoning,
+      aiSuggestion: improved !== workingIdea.idea ? improved : null,
+      aiReasoning: reasoningText,
       viralScore: Math.min(10, Math.max(1, Math.round(Number(validation.viralScore) || 5))),
       validationStatus: "validated",
       status: "validating",
