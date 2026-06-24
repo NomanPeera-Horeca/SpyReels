@@ -15,6 +15,13 @@ import { installClientLoadFailureReporting } from "./utils/clientLoadFailureRepo
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
   defaults: "2026-01-30",
+  session_recording: {
+    maskAllInputs: false,
+    maskInputOptions: {
+      password: true,
+      email: true,
+    },
+  },
 });
 
 if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {

@@ -233,6 +233,16 @@ import {
   HEIT_JUDGE_CRITERIA,
   HEIT_FRAMEWORK,
 } from "@shared/ideaScriptHeit";
+import {
+  buildIdeaScriptCompletedProps,
+  buildIdeaScriptFailedProps,
+  buildRemakeScriptCompletedProps,
+  buildRemakeScriptFailedProps,
+} from "@shared/scriptGenerationAnalytics";
+import {
+  capturePostHogEvent,
+  posthogDistinctIdForUser,
+} from "./analytics/posthogServer";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
@@ -482,6 +492,18 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
           ts: Date.now(),
         })
       ).toString("base64");
+
+      void capturePostHogEvent({
+        distinctId: `hook_generator_${Date.now()}`,
+        event: "hook_generator_completed",
+        properties: {
+          pipeline: "hook_generator",
+          video_idea: input.niche.slice(0, 500),
+          target_audience: input.targetAudience.slice(0, 500),
+          hooks_count: hooks.length,
+          first_hook: hooks[0]?.hook?.slice(0, 200) ?? null,
+        },
+      });
 
       return {
         free: hooks.slice(0, 2),
@@ -3078,6 +3100,7 @@ Return JSON only:
         // Run generation in background
         runScriptGeneration(
           scriptId,
+          ctx.user.id,
           transcription.transcript,
           transcription.segments,
           caption,
@@ -7833,6 +7856,7 @@ Place cues at the START of the line they apply to. Every 2-3 lines should have a
 /** Background job: analyze viral structure and generate a new script */
 async function runScriptGeneration(
   scriptId: number,
+  userId: number,
   originalTranscript: string,
   segments: unknown,
   caption: string,
@@ -8117,8 +8141,30 @@ Return ONLY valid JSON.`;
       status: "completed",
     });
     await maybeMarkFirstSpyCompletedFromFeaturedScript(scriptId);
+
+    const stored = await getRecreatedScript(scriptId);
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(userId),
+      event: "remake_script_completed",
+      properties: buildRemakeScriptCompletedProps({
+        scriptId,
+        userId,
+        topic: stored?.topic ?? topic,
+        generatedScript: String(generatedScript),
+      }),
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = formatIdeaScriptErrorForUser(error, "remake");
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(userId),
+      event: "remake_script_failed",
+      properties: buildRemakeScriptFailedProps({
+        scriptId,
+        userId,
+        topic,
+        errorMessage: message,
+      }),
+    });
     await updateRecreatedScript(scriptId, {
       status: "failed",
       errorMessage: message,
@@ -9323,6 +9369,20 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       status: "completed",
     } as any);
 
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(scriptIdea.userId),
+      event: "idea_script_completed",
+      properties: buildIdeaScriptCompletedProps({
+        ideaId,
+        userId: scriptIdea.userId,
+        idea: scriptIdea.idea,
+        niche: scriptIdea.niche,
+        generatedTitle: suggestedTitle,
+        generatedScript,
+        viralStructure,
+      }),
+    });
+
     generateAndStoreFollowUps(ideaId).catch((err) =>
       console.error(`[Ideas] Follow-up generation failed for idea ${ideaId}:`, err)
     );
@@ -9333,6 +9393,20 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[Ideas] Failed to process idea ${ideaId}:`, message);
+    const failedIdea = await getScriptIdeaById(ideaId);
+    if (failedIdea) {
+      void capturePostHogEvent({
+        distinctId: posthogDistinctIdForUser(failedIdea.userId),
+        event: "idea_script_failed",
+        properties: buildIdeaScriptFailedProps({
+          ideaId,
+          userId: failedIdea.userId,
+          idea: failedIdea.idea,
+          niche: failedIdea.niche,
+          errorMessage: formatIdeaScriptErrorForUser(error, "script"),
+        }),
+      });
+    }
     await updateScriptIdea(ideaId, {
       status: "failed",
       errorMessage: formatIdeaScriptErrorForUser(error, "script"),

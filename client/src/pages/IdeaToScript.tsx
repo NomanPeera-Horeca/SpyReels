@@ -12,6 +12,10 @@ import {
   resolveWizardSteps,
 } from "@shared/ideaClarification";
 import { buildIdeaStarterChips } from "@shared/ideaStarterPrompts";
+import {
+  buildIdeaScriptCompletedProps,
+  buildIdeaScriptFailedProps,
+} from "@shared/scriptGenerationAnalytics";
 import { ClaudeStyleQuestionCard } from "@/components/ClaudeStyleQuestionCard";
 import { scriptHookSnippet } from "@/components/IdeaScriptPostPanel";
 import {
@@ -40,6 +44,7 @@ export default function IdeaToScript() {
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const trackedScriptEventsRef = useRef<Set<string>>(new Set());
 
   const utils = trpc.useUtils();
   const onboardingQuery = trpc.onboarding.getState.useQuery();
@@ -154,6 +159,56 @@ export default function IdeaToScript() {
       return changed ? next : prev;
     });
   }, [ideas, approveMutation.isPending]);
+
+  useEffect(() => {
+    if (!posthog) return;
+    for (const idea of ideas as Array<{
+      id: number;
+      userId?: number;
+      status: string;
+      idea: string;
+      niche?: string | null;
+      generatedScript?: string | null;
+      generatedTitle?: string | null;
+      viralStructure?: unknown;
+      errorMessage?: string | null;
+    }>) {
+      if (idea.status === "completed" && idea.generatedScript) {
+        const key = `completed:${idea.id}`;
+        if (trackedScriptEventsRef.current.has(key)) continue;
+        trackedScriptEventsRef.current.add(key);
+        posthog.capture(
+          "idea_script_completed",
+          buildIdeaScriptCompletedProps({
+            ideaId: idea.id,
+            userId: idea.userId ?? 0,
+            idea: idea.idea,
+            niche: idea.niche,
+            generatedTitle: idea.generatedTitle,
+            generatedScript: idea.generatedScript,
+            viralStructure: idea.viralStructure,
+            source: "client",
+          })
+        );
+      }
+      if (idea.status === "failed") {
+        const key = `failed:${idea.id}`;
+        if (trackedScriptEventsRef.current.has(key)) continue;
+        trackedScriptEventsRef.current.add(key);
+        posthog.capture(
+          "idea_script_failed",
+          buildIdeaScriptFailedProps({
+            ideaId: idea.id,
+            userId: idea.userId ?? 0,
+            idea: idea.idea,
+            niche: idea.niche,
+            errorMessage: idea.errorMessage,
+            source: "client",
+          })
+        );
+      }
+    }
+  }, [ideas, posthog]);
 
   useEffect(() => {
     if (isFirstVisit) return;

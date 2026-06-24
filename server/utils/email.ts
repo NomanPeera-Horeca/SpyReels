@@ -188,3 +188,19 @@ export async function sendOutreachPlainTextEmail(
 
   return result.data?.id ?? "";
 }
+
+export async function sendScriptGenerationReportEmail(
+  toEmail: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<void> {
+  await getResend().emails.send({
+    from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    to: toEmail,
+    subject,
+    text,
+    html,
+    tags: [{ name: "template", value: "script_generation_report" }],
+  });
+}
