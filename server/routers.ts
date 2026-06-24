@@ -337,6 +337,31 @@ function inferPanelTestAccount(u: (typeof users.$inferSelect)): boolean {
   return false;
 }
 
+const HOOK_GENERATOR_JSON_SCHEMA = {
+  name: "viral_hooks",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      hooks: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            hook: { type: "string" },
+            pattern: { type: "string" },
+            reasoning: { type: "string" },
+          },
+          required: ["hook", "pattern", "reasoning"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["hooks"],
+    additionalProperties: false,
+  },
+} as const;
+
 const hookGeneratorRouter = router({
   generate: publicProcedure
     .input(z.object({
@@ -344,6 +369,7 @@ const hookGeneratorRouter = router({
       targetAudience: z.string().min(2).max(500),
     }))
     .mutation(async ({ input }) => {
+      try {
       const response = await invokeLLM({
         messages: [
           {
@@ -410,7 +436,10 @@ Return JSON with this exact structure:
 The hooks array must contain exactly 10 unique items. No two hooks should sound similar in structure or wording. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
           },
         ],
-        response_format: { type: "json_object" },
+        response_format: {
+          type: "json_schema",
+          json_schema: HOOK_GENERATOR_JSON_SCHEMA,
+        },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "").trim();
@@ -425,7 +454,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         });
       }
 
-      if (!parsed.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length < 10) {
+      if (!parsed.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length < 5) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Hook generation incomplete. Please try again.",
@@ -436,7 +465,14 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         hook: String(h.hook ?? "").trim(),
         pattern: String(h.pattern ?? "").trim(),
         reasoning: String(h.reasoning ?? "").trim(),
-      }));
+      })).filter(h => h.hook.length > 0);
+
+      if (hooks.length < 5) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Hook generation incomplete. Please try again.",
+        });
+      }
 
       const sessionToken = Buffer.from(
         JSON.stringify({
@@ -449,9 +485,17 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       return {
         free: hooks.slice(0, 2),
-        lockedCount: 8,
+        lockedCount: Math.max(0, hooks.length - 2),
         sessionToken,
       };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error("[Hook generator] generate failed:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: formatIdeaScriptErrorForUser(error, "hooks"),
+        });
+      }
     }),
 
   unlock: publicProcedure

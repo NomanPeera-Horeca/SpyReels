@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useCanonical } from "@/hooks/useCanonical";
 import {
   applyStandardPageMeta,
@@ -123,14 +123,21 @@ export default function HookGenerator() {
   const [email, setEmail] = useState("");
   const [freeHooks, setFreeHooks] = useState<Hook[]>([]);
   const [allHooks, setAllHooks] = useState<Hook[]>([]);
+  const [lockedCount, setLockedCount] = useState(8);
   const [sessionToken, setSessionToken] = useState("");
   const [error, setError] = useState("");
 
   const generateMutation = trpc.hookGenerator.generate.useMutation({
     onSuccess: (data) => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       setFreeHooks(data.free);
+      setLockedCount(data.lockedCount);
       setSessionToken(data.sessionToken);
-      setStage("preview");
+      startTransition(() => {
+        setStage("preview");
+      });
       setError("");
     },
     onError: (err) => setError(err.message),
@@ -138,8 +145,13 @@ export default function HookGenerator() {
 
   const unlockMutation = trpc.hookGenerator.unlock.useMutation({
     onSuccess: (data) => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       setAllHooks(data.hooks);
-      setStage("unlocked");
+      startTransition(() => {
+        setStage("unlocked");
+      });
       setError("");
     },
     onError: (err) => setError(err.message),
@@ -188,7 +200,8 @@ export default function HookGenerator() {
           </p>
         </div>
 
-        {/* Stage 1: Input */}
+        {/* Stage content: key forces a clean remount when switching stages (avoids React insertBefore crashes) */}
+        <div key={stage}>
         {stage === "input" && (
           <Card>
             <CardContent className="p-6 sm:p-8">
@@ -204,7 +217,6 @@ export default function HookGenerator() {
                     placeholder="How I cut my food costs by 40% in 30 days"
                     className="text-base"
                     disabled={generateMutation.isPending}
-                    autoFocus
                     maxLength={500}
                   />
                   <p className="text-xs text-muted-foreground mt-2">
@@ -258,7 +270,6 @@ export default function HookGenerator() {
           </Card>
         )}
 
-        {/* Stage 2: Preview with email gate */}
         {stage === "preview" && (
           <div className="space-y-6">
             <div className="text-center">
@@ -286,7 +297,7 @@ export default function HookGenerator() {
                 </Card>
               ))}
 
-              {Array.from({ length: 8 }).map((_, i) => (
+              {Array.from({ length: lockedCount }).map((_, i) => (
                 <Card key={`locked-${i}`} className="relative overflow-hidden">
                   <CardContent className="p-5 relative">
                     <div className="blur-md select-none pointer-events-none">
@@ -352,7 +363,6 @@ export default function HookGenerator() {
           </div>
         )}
 
-        {/* Stage 3: All unlocked */}
         {stage === "unlocked" && (
           <div className="space-y-6">
             <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30">
@@ -412,6 +422,7 @@ export default function HookGenerator() {
             </Card>
           </div>
         )}
+        </div>
 
         <section className="max-w-3xl mx-auto mt-16 mb-12 px-4">
           <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-foreground">

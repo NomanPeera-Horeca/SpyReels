@@ -1,8 +1,9 @@
-export type IdeaScriptErrorContext = "validation" | "script" | "remake";
+export type IdeaScriptErrorContext = "validation" | "script" | "remake" | "hooks";
 
 function contextVerb(context: IdeaScriptErrorContext): string {
   if (context === "validation") return "validating your idea";
   if (context === "remake") return "remaking this reel";
+  if (context === "hooks") return "generating your hooks";
   return "writing your script";
 }
 
