@@ -3,6 +3,7 @@
  * Uses global fetch with x-api-key (no direct Instagram mobile API calls).
  */
 
+import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { parseInstagramReelShortcode } from "./instagramUrl";
 
 const API_BASE = "https://api.scrapecreators.com";
@@ -217,6 +218,8 @@ export interface ReelData {
   duration: number;
   postedAt: Date;
   ownerUsername: string;
+  /** True when collected only to reach MIN_SPY_DISPLAY_REELS (older than spy window). */
+  outsideSpyWindow?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -608,6 +611,8 @@ export interface ScrapeResult {
   /** Most recent posted date across ALL parsed items, regardless of the
    * date-window filter. Null when no items parsed. */
   mostRecentItemAt: Date | null;
+  /** Count of reels inside the user-selected timeframe (excludes backfill). */
+  reelsInWindow: number;
 }
 
 export async function scrapeReels(
@@ -631,14 +636,17 @@ export async function scrapeReels(
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - timeframeDays);
 
-  const allReels: ReelData[] = [];
+  const inWindowReels: ReelData[] = [];
+  const backfillReels: ReelData[] = [];
   const seenShortcodes = new Set<string>();
+
+  const combinedCount = () => inWindowReels.length + backfillReels.length;
 
   let maxId: string | null = null;
   let hasMore = true;
   let pageCount = 0;
   const maxPages = 100;
-  let consecutiveEmptyPages = 0;
+  let consecutiveInWindowEmptyPages = 0;
   let stoppedReason = "";
   /** API returned rows we could not map to ReelData (shape drift / new fields). */
   let pagesWithItemsButNoParses = 0;
@@ -657,12 +665,12 @@ export async function scrapeReels(
     if (Date.now() - startTime > timeoutMs) {
       stoppedReason = `timeout after ${Math.round((Date.now() - startTime) / 1000)}s`;
       console.warn(
-        `[Instagram] Scrape timeout for @${handle} after ${pageCount} pages, ${allReels.length} reels collected`
+        `[Instagram] Scrape timeout for @${handle} after ${pageCount} pages, ${combinedCount()} reels collected`
       );
       break;
     }
 
-    if (allReels.length >= maxReels) {
+    if (combinedCount() >= maxReels) {
       stoppedReason = `reached ${maxReels} reel cap`;
       console.log(
         `[Instagram] Reached reel cap (${maxReels}) for @${handle} after ${pageCount} pages`
@@ -687,9 +695,9 @@ export async function scrapeReels(
       break;
     }
 
-    let foundInRangeThisPage = false;
+    let foundInWindowThisPage = false;
     let parsedThisPage = 0;
-    const pageInRangeReels: ReelData[] = [];
+    const pageNewReels: ReelData[] = [];
 
     for (const item of page.items) {
       const reel = parseClipItem(item, profile.username);
@@ -697,20 +705,31 @@ export async function scrapeReels(
       parsedThisPage++;
 
       if (seenShortcodes.has(reel.shortcode)) continue;
-      seenShortcodes.add(reel.shortcode);
 
       if (Number.isNaN(reel.postedAt.getTime())) continue;
+
+      seenShortcodes.add(reel.shortcode);
 
       if (!mostRecentItemAt || reel.postedAt > mostRecentItemAt) {
         mostRecentItemAt = reel.postedAt;
       }
 
-      if (reel.postedAt >= cutoffDate) {
-        allReels.push(reel);
-        pageInRangeReels.push(reel);
-        foundInRangeThisPage = true;
+      const inWindow = reel.postedAt >= cutoffDate;
+      if (inWindow) {
+        inWindowReels.push(reel);
+        pageNewReels.push(reel);
+        foundInWindowThisPage = true;
 
-        if (allReels.length >= maxReels) break;
+        if (combinedCount() >= maxReels) break;
+        continue;
+      }
+
+      if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
+        const backfillReel: ReelData = { ...reel, outsideSpyWindow: true };
+        backfillReels.push(backfillReel);
+        pageNewReels.push(backfillReel);
+
+        if (combinedCount() >= maxReels) break;
       }
     }
 
@@ -729,30 +748,42 @@ export async function scrapeReels(
           );
         }
       }
-    } else if (foundInRangeThisPage) {
-      consecutiveEmptyPages = 0;
+    } else if (foundInWindowThisPage) {
+      consecutiveInWindowEmptyPages = 0;
     } else {
-      consecutiveEmptyPages++;
+      consecutiveInWindowEmptyPages++;
     }
 
-    if (onProgress) {
-      onProgress(allReels.length, pageInRangeReels);
+    if (onProgress && pageNewReels.length > 0) {
+      onProgress(combinedCount(), pageNewReels);
     }
 
-    if (!page.moreAvailable || !page.maxId || consecutiveEmptyPages >= 3) {
+    if (!page.moreAvailable || !page.maxId) {
       hasMore = false;
+    } else if (
+      inWindowReels.length > 0 &&
+      consecutiveInWindowEmptyPages >= 3 &&
+      combinedCount() >= MIN_SPY_DISPLAY_REELS
+    ) {
+      hasMore = false;
+      stoppedReason = "in-window window exhausted with minimum sample met";
     } else {
       maxId = page.maxId;
     }
   }
 
+  const allReels = [...inWindowReels, ...backfillReels];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const shapeWarning =
     pagesWithItemsButNoParses > 0
       ? `, unparseable_pages=${pagesWithItemsButNoParses}`
       : "";
+  const backfillNote =
+    backfillReels.length > 0
+      ? `, in_window=${inWindowReels.length}, backfill=${backfillReels.length}`
+      : "";
   console.log(
-    `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
+    `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
   );
 
   return {
@@ -761,6 +792,7 @@ export async function scrapeReels(
     profilePicUrl: profile.profilePicUrl,
     totalParsedItems: seenShortcodes.size,
     mostRecentItemAt,
+    reelsInWindow: inWindowReels.length,
   };
 }
 

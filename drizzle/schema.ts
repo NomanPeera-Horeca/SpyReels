@@ -117,6 +117,8 @@ export const scrapeJobs = mysqlTable(
   timeframeDays: int("timeframeDays").notNull(),
   status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
   totalReels: int("totalReels").default(0).notNull(),
+  /** Reels posted inside the user-selected spy window (excludes older backfill). */
+  reelsInWindow: int("reelsInWindow"),
   followerCount: int("followerCount").default(0).notNull(),
   profilePicUrl: text("profilePicUrl"),
   errorMessage: text("errorMessage"),

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,11 @@ function runReelRowScrollPulse(node: HTMLElement) {
   }, 2100);
 }
 
+function dashboardDateFilterLabel(dateFilter: string): string {
+  if (dateFilter === "all") return "All Time";
+  return `Last ${dateFilter} days`;
+}
+
 /** Bug #23: cache scrape snapshots and featured sidebar reads; avoid refetch on every /dashboard?jobId= navigation. */
 const DASHBOARD_SNAPSHOT_STALE_MS = 3_600_000;
 const DASHBOARD_SIDEBAR_STALE_MS = 300_000;
@@ -353,6 +359,11 @@ export default function Dashboard() {
     },
     [posthog]
   );
+
+  const resetDashboardFilters = useCallback(() => {
+    setDateFilter("all");
+    setNicheFilter("all");
+  }, []);
 
   const prevJobStatusRef = useRef<string | undefined>(undefined);
   const prevHasCompletedFirstSpyRef = useRef<boolean | undefined>(undefined);
@@ -599,6 +610,7 @@ export default function Dashboard() {
           classifiedNicheSlug: null as string | null,
           classifiedConfidence: null as BadgeConfidence | null,
           totalReels: 0,
+          reelsInWindow: null as number | null,
           timeframeDays: null as number | null,
           followerCount: 0,
           errorMessage: null as string | null,
@@ -616,6 +628,7 @@ export default function Dashboard() {
         classifiedNicheSlug: featuredData.account.classifiedNicheSlug,
         classifiedConfidence: null as BadgeConfidence | null,
         totalReels: featuredData.reels.length,
+        reelsInWindow: null as number | null,
         timeframeDays: null as number | null,
         followerCount: featuredData.followerCount,
         errorMessage: null as string | null,
@@ -1892,6 +1905,13 @@ export default function Dashboard() {
       job.classifiedConfidence === "low");
   const isFirstVisitDashboard = user?.hasCompletedFirstSpy === false;
 
+  const reelsInSpyWindow =
+    !isFeaturedView && typeof job?.reelsInWindow === "number" ? job.reelsInWindow : null;
+  const backfilledReelCount =
+    reelsInSpyWindow != null && reelsData.length > reelsInSpyWindow
+      ? reelsData.length - reelsInSpyWindow
+      : 0;
+
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
@@ -2363,6 +2383,26 @@ export default function Dashboard() {
             </div>
           )}
 
+          {!isFeaturedView &&
+          job?.status === "completed" &&
+          backfilledReelCount > 0 &&
+          typeof job.timeframeDays === "number" ? (
+            <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
+              <p className="text-sm text-foreground">
+                Only {reelsInSpyWindow ?? 0} reel{(reelsInSpyWindow ?? 0) === 1 ? "" : "s"} posted in
+                the last {job.timeframeDays} days. We added {backfilledReelCount} older reel
+                {backfilledReelCount === 1 ? "" : "s"} so you have at least{" "}
+                {Math.min(reelsData.length, MIN_SPY_DISPLAY_REELS)} to study.
+              </p>
+            </div>
+          ) : null}
+
+          {canDisplayJobReels && reelsData.length > 0 && dateFilter !== "all" ? (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Showing {sortedReels.length} of {reelsData.length} reels ({dashboardDateFilterLabel(dateFilter)})
+            </p>
+          ) : null}
+
           {/* Loading state (no reels yet) */}
           {isLoading && reelsData.length === 0 && (
             <div className="border border-border/50 bg-card rounded-lg p-8">
@@ -2444,7 +2484,7 @@ export default function Dashboard() {
 
           {/* Reels list */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "list" && (
-            <div className="space-y-1">
+            <div key="list" className="space-y-1">
               {sortedReels.map((reel, index) => {
                 const isExpanded = expandedReelId === reel.id;
                 const hasTranscription = reel.transcription?.status === "completed";
@@ -2773,7 +2813,7 @@ export default function Dashboard() {
 
           {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
-            <div className="space-y-3">
+            <div key="grid" className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {sortedReels.map((reel, index) => {
                   const isModalOpen = gridModalReelId === reel.id;
@@ -3013,17 +3053,54 @@ export default function Dashboard() {
           )}
 
           {/* Empty state - only show when reels have loaded but are empty */}
-          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && (
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length > 0 && dateFilter !== "all" ? (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <Film className="h-12 w-12 text-muted-foreground/30" />
+                <div className="space-y-2 max-w-md">
+                  <p className="text-foreground font-medium">
+                    No reels match {dashboardDateFilterLabel(dateFilter)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    This spy has {reelsData.length} reel{reelsData.length === 1 ? "" : "s"} total.
+                    Widen the date filter to see them.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={resetDashboardFilters}>
+                  Show all reels
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length === 0 && nicheFilter !== "all" ? (
+            <div className="border border-border/50 bg-card rounded-lg p-8">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <Film className="h-12 w-12 text-muted-foreground/30" />
+                <div className="space-y-2 max-w-md">
+                  <p className="text-foreground font-medium">No reels in this niche</p>
+                  <p className="text-sm text-muted-foreground">
+                    Try All Niches to see every reel from this spy.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setNicheFilter("all")}>
+                  Show all niches
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length === 0 && nicheFilter === "all" ? (
             <div className="border border-border/50 bg-card rounded-lg p-8">
               <div className="flex flex-col items-center justify-center gap-4">
                 <Film className="h-12 w-12 text-muted-foreground/30" />
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground text-center max-w-md">
                   No reels found for @{(displayScrapeHandle || job.handle)}
                   {typeof job.timeframeDays === "number" ? ` in the last ${job.timeframeDays} days.` : "."}
                 </p>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
         <aside className="min-w-0 w-full space-y-4 border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           {!sidebarContentReady ? (

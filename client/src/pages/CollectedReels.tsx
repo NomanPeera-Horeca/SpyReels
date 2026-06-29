@@ -876,7 +876,7 @@ export default function CollectedReels() {
       )}
 
       {sortedReels.length > 0 && viewMode === "list" && (
-        <div className="space-y-1">
+        <div key="list" className="space-y-1">
           {sortedReels.map((reel, index) => {
             const effectiveViews = getEffectiveViews(reel);
             const engagementRate = getEngagementRate(reel);
@@ -1056,7 +1056,7 @@ export default function CollectedReels() {
       )}
 
       {sortedReels.length > 0 && viewMode === "grid" && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div key="grid" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sortedReels.map((reel, index) => {
             const mappedReelId = reel.transcriptionReelId ?? null;
             const isPending = reel.status === "pending";

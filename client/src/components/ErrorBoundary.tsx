@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
+import { browserTranslationContext } from "@/utils/browserTranslation";
 import { AlertTriangle, RotateCcw } from "lucide-react";
+import posthog from "posthog-js";
 import { Component, ReactNode } from "react";
 
 interface Props {
@@ -19,6 +21,22 @@ class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: { componentStack?: string | null }) {
+    try {
+      const message = error.message ?? "";
+      posthog.capture("client_error_boundary", {
+        error_name: error.name,
+        error_message: message.slice(0, 320),
+        error_stack: error.stack?.slice(0, 800) ?? null,
+        component_stack: errorInfo.componentStack?.slice(0, 400) ?? null,
+        likely_remove_child: message.includes("removeChild"),
+        ...browserTranslationContext(),
+      });
+    } catch {
+      // Ignore PostHog failures during crash handling.
+    }
   }
 
   render() {

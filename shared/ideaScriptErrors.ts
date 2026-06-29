@@ -1,4 +1,13 @@
+import { IDEA_SUBMIT_MAX_LENGTH } from "./ideaScriptLimits";
+import { formatZodIssuesForUser } from "./trpcValidationErrors";
+
 export type IdeaScriptErrorContext = "validation" | "script" | "remake" | "hooks";
+
+export function ideaSubmitTooLongMessage(max = IDEA_SUBMIT_MAX_LENGTH): string {
+  return formatZodIssuesForUser([
+    { code: "too_big", type: "string", maximum: max, path: ["idea"] },
+  ]);
+}
 
 function contextVerb(context: IdeaScriptErrorContext): string {
   if (context === "validation") return "validating your idea";

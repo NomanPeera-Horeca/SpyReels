@@ -169,7 +169,7 @@ Return JSON: { "followUps": ["...", "...", "..."] }`,
   try {
     const parsed = sanitizeAiOutputDeep(JSON.parse(raw)) as { followUps?: string[] };
     const items = (parsed.followUps ?? [])
-      .map((s) => s.trim())
+      .map((s) => s.trim().slice(0, 500))
       .filter(Boolean)
       .slice(0, 3);
     return items.length >= 3 ? items : buildUrgentFallbackFollowUps(ideaText);

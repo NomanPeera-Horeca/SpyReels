@@ -1,11 +1,31 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
+import { formatTrpcValidationMessage, formatZodIssuesForUser } from "@shared/trpcValidationErrors";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import { ZodError } from "zod";
 import type { TrpcContext } from "./context";
 import { assertAdminEmailUser } from "../middleware/requireAdmin";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape, error }) {
+    if (error.cause instanceof ZodError) {
+      return {
+        ...shape,
+        message: formatZodIssuesForUser(error.cause.issues),
+      };
+    }
+
+    const friendly = formatTrpcValidationMessage(shape.message);
+    if (friendly !== shape.message) {
+      return {
+        ...shape,
+        message: friendly,
+      };
+    }
+
+    return shape;
+  },
 });
 
 export const router = t.router;

@@ -7130,6 +7130,7 @@ async function runScrapeJob(
       profilePicUrl,
       totalParsedItems,
       mostRecentItemAt,
+      reelsInWindow,
     } = await runWithScrapeCallContext(
       { source: "scrape_job", jobId, handle: cleanHandleForLog },
       () =>
@@ -7329,6 +7330,7 @@ async function runScrapeJob(
     await updateScrapeJob(jobId, {
       status: "completed",
       totalReels: finalReelCount,
+      reelsInWindow,
       followerCount,
       profilePicUrl: proxiedPicUrl || undefined,
       currentStep: "complete",

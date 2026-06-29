@@ -16,6 +16,9 @@ import {
   buildIdeaScriptCompletedProps,
   buildIdeaScriptFailedProps,
 } from "@shared/scriptGenerationAnalytics";
+import { formatTrpcValidationMessage } from "@shared/trpcValidationErrors";
+import { ideaSubmitTooLongMessage } from "@shared/ideaScriptErrors";
+import { IDEA_SUBMIT_MAX_LENGTH } from "@shared/ideaScriptLimits";
 import { ClaudeStyleQuestionCard } from "@/components/ClaudeStyleQuestionCard";
 import { scriptHookSnippet } from "@/components/IdeaScriptPostPanel";
 import {
@@ -70,7 +73,7 @@ export default function IdeaToScript() {
       utils.ideas.list.invalidate();
       textareaRef.current?.focus();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(formatTrpcValidationMessage(err.message)),
   });
 
   const approveMutation = trpc.ideas.approve.useMutation({
@@ -292,6 +295,23 @@ export default function IdeaToScript() {
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
+  const submitIdea = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (trimmed.length > IDEA_SUBMIT_MAX_LENGTH) {
+      toast.error(ideaSubmitTooLongMessage());
+      return;
+    }
+    submitMutation.mutate({
+      idea: trimmed,
+      niche: undefined,
+      tone: "engaging" as any,
+      creatorGoal: "balanced" as any,
+      gradeLevel: "auto" as any,
+      inputMethod: "text",
+    });
+  };
+
   const handleSubmit = () => {
     const trimmed = ideaText.trim();
     if (!trimmed) return;
@@ -315,14 +335,7 @@ export default function IdeaToScript() {
       return;
     }
 
-    submitMutation.mutate({
-      idea: trimmed,
-      niche: undefined,
-      tone: "engaging" as any,
-      creatorGoal: "balanced" as any,
-      gradeLevel: "auto" as any,
-      inputMethod: "text",
-    });
+    submitIdea(trimmed);
     posthog?.capture("idea_to_script_submit");
   };
 
@@ -400,6 +413,7 @@ export default function IdeaToScript() {
         onChange={(e) => setIdeaText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={composerPlaceholder}
+        maxLength={IDEA_SUBMIT_MAX_LENGTH}
         rows={variant === "hero" ? 2 : editContext ? 2 : 1}
         className={
           variant === "hero"
@@ -454,14 +468,7 @@ export default function IdeaToScript() {
             posthog?.capture("idea_follow_up_submit", {
               followUp: text.slice(0, 120),
             });
-            submitMutation.mutate({
-              idea: text,
-              niche: undefined,
-              tone: "engaging" as any,
-              creatorGoal: "balanced" as any,
-              gradeLevel: "auto" as any,
-              inputMethod: "text",
-            });
+            submitIdea(text);
           }}
           onRegenerate={(i) =>
             wrapScriptForEdit(i, "Regenerate the full script with a stronger hook and tighter pacing")
