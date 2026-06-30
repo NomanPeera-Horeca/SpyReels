@@ -5,7 +5,14 @@ import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CalendarDays, Film, Loader2, Sparkles } from "lucide-react";
+import { CalendarDays, Film, HelpCircle, Loader2, Sparkles } from "lucide-react";
+import { HelpTipBadge } from "@/components/HelpTipBadge";
+import Tooltip from "@/components/Tooltip";
+import {
+  formatTooltip,
+  funnelTooltip,
+  PLAN_FORMAT_LABELS,
+} from "@/lib/studioContentHelp";
 
 type PlanCard = {
   id: number;
@@ -44,13 +51,13 @@ const AGENT_STEPS = [
   "Building your content board...",
 ];
 
-const FORMAT_LABELS: Record<string, string> = {
-  "talking-head": "Talking Head",
-  "voiceover-broll": "Voiceover",
-  "behind-the-scenes": "BTS",
-  "tutorial-demo": "Tutorial",
-  "trending-audio": "Trending",
-  faceless: "Faceless",
+const FORMAT_LABELS = PLAN_FORMAT_LABELS;
+
+const FUNNEL_FILTER_TIPS: Record<string, string | null> = {
+  all: null,
+  tofu: funnelTooltip("tofu"),
+  mofu: funnelTooltip("mofu"),
+  bofu: funnelTooltip("bofu"),
 };
 
 const FUNNEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -129,12 +136,16 @@ function PlanCardItem({
 
       <div className={`p-3 ${isAdjusting ? "pt-3" : "pt-8"}`}>
         <div className="flex items-center gap-1.5 flex-wrap mb-2">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${funnel.bg} ${funnel.color}`}>
-            {funnel.label}
-          </span>
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-            {FORMAT_LABELS[card.contentFormat] ?? card.contentFormat}
-          </span>
+          <HelpTipBadge
+            label={funnel.label}
+            tip={funnelTooltip(card.funnelStage)}
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${funnel.bg} ${funnel.color}`}
+          />
+          <HelpTipBadge
+            label={FORMAT_LABELS[card.contentFormat] ?? card.contentFormat}
+            tip={formatTooltip(card.contentFormat)}
+            className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+          />
           <span className="ml-auto text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             Day {card.day}
           </span>
@@ -432,28 +443,56 @@ export default function ThirtyDayPlan() {
         </Button>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {["all", "tofu", "mofu", "bofu"].map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilterFunnel(f)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
-              filterFunnel === f
-                ? "bg-violet-600 text-white"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            {f === "all" ? "All" : f.toUpperCase()}
-          </button>
-        ))}
+      <div className="flex gap-2 flex-wrap items-center">
+        {["all", "tofu", "mofu", "bofu"].map((f) => {
+          const label = f === "all" ? "All" : f.toUpperCase();
+          const tip = FUNNEL_FILTER_TIPS[f];
+          const button = (
+            <button
+              type="button"
+              onClick={() => setFilterFunnel(f)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                filterFunnel === f
+                  ? "bg-violet-600 text-white"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              } ${tip ? "cursor-help underline decoration-dotted underline-offset-2" : ""}`}
+            >
+              {label}
+            </button>
+          );
+          if (tip) {
+            return (
+              <Tooltip key={f} content={tip}>
+                {button}
+              </Tooltip>
+            );
+          }
+          return (
+            <span key={f} className="inline-flex">
+              {button}
+            </span>
+          );
+        })}
+        <Tooltip
+          content={
+            <span>
+              <strong>Formats on each card</strong> (hover the gray badge): Talking Head, Voiceover,
+              BTS, Tutorial, Trending, or Faceless. Each is a different way to film the idea.
+            </span>
+          }
+        >
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help ml-1">
+            <HelpCircle className="h-3.5 w-3.5" />
+            Format guide
+          </span>
+        </Tooltip>
       </div>
 
       {approvedCount > 0 && !anySelected && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-              {approvedCount} idea{approvedCount !== 1 ? "s" : ""} approved — ready to script
+              {approvedCount} idea{approvedCount !== 1 ? "s" : ""} approved, ready to script
             </p>
             <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
               Click Write Script on any card to open AI Coach
