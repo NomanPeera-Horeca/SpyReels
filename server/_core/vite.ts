@@ -8,6 +8,37 @@ import viteConfig from "../../vite.config";
 import { enrichSpaHtmlForPublicPath } from "../blogPageHtml";
 import { getBlogPostBySlug } from "../db";
 
+/** PostHog replay loads CSS/JS from our origin inside an iframe on these hosts. */
+const POSTHOG_REPLAY_ORIGINS = new Set([
+  "https://us.posthog.com",
+  "https://eu.posthog.com",
+]);
+
+function applyPostHogReplayCors(req: Request, res: Response): void {
+  const origin = req.headers.origin;
+  if (!origin || !POSTHOG_REPLAY_ORIGINS.has(origin)) return;
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+}
+
+function postHogReplayAssetCorsMiddleware(
+  req: Request,
+  res: Response,
+  next: () => void
+): void {
+  if (!req.path.startsWith("/assets/")) {
+    next();
+    return;
+  }
+  applyPostHogReplayCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.status(204).end();
+    return;
+  }
+  next();
+}
+
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
@@ -76,6 +107,8 @@ export function serveStatic(app: Express) {
     }
     next();
   });
+
+  app.use(postHogReplayAssetCorsMiddleware);
 
   // index: false so "/" falls through to the SPA handler and gets SEO meta injection
   app.use(
