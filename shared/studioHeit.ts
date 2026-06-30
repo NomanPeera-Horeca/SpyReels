@@ -119,8 +119,10 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "title": "Short catchy working title",
   "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
   "hook": "H section only. MAX 2 sentences. Zero warm-up. Written in the FORMAT's voice.",
-  "body": "E+I sections combined. E: Name the problem, show it's bigger than they think. I: Story/metaphor/analogy with concrete detail. Written in the FORMAT's voice. No bullet points.",
-  "callToAction": "T section — ONE specific action. 1-2 sentences max."
+  "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
+  "illustrate": "I section only. One story, analogy, or example with concrete detail.",
+  "teach": "T section only. ONE clear takeaway or action. Not a list.",
+  "cta": "Final call to action. Tell them exactly what to do next (comment, DM, save, follow). 1-2 sentences."
 }`;
 }
 

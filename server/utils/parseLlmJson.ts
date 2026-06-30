@@ -108,12 +108,20 @@ export function normalizeCoachScriptPayload(
     "teach",
     "T"
   );
+  const explain = pickString(parsed, "explain", "Explain", "E");
+  const illustrate = pickString(parsed, "illustrate", "Illustrate", "I");
+  const teach = pickString(parsed, "teach", "Teach");
+  const cta = pickString(parsed, "cta", "CTA");
 
   return {
     ...parsed,
     hook,
-    body,
-    callToAction,
+    body: body || [explain, illustrate].filter(Boolean).join("\n\n"),
+    callToAction: cta || teach || callToAction,
+    explain,
+    illustrate,
+    teach,
+    cta: cta || callToAction,
   };
 }
 

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels AI Coach — Result page mock (Replit-style)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --text: #18181b;
+      --muted: #71717a;
+      --border: #e4e4e7;
+      --blue-50: #eff6ff;
+      --blue-200: #bfdbfe;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --gray-50: #f9fafb;
+      --gray-200: #e5e7eb;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --orange-50: #fff7ed;
+      --orange-200: #fed7aa;
+      --orange-500: #f97316;
+      --orange-700: #c2410c;
+      --indigo-100: #e0e7ff;
+      --indigo-800: #3730a3;
+      --violet-600: #7c3aed;
+      --violet-700: #6d28d9;
+    }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      line-height: 1.5;
+    }
+
+    .preview-banner {
+      background: #ede9fe;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      font-size: 12px;
+      color: var(--violet-700);
+      text-align: center;
+    }
+    .preview-banner strong { font-weight: 600; }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .back-link {
+      font-size: 14px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .back-link:hover { color: var(--text); }
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+    .btn:hover { background: var(--gray-50); }
+    .btn-primary {
+      background: var(--violet-600);
+      border-color: var(--violet-600);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--violet-700); }
+
+    /* Two column layout */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { order: 2; }
+    }
+
+    /* Header */
+    .script-header { margin-bottom: 20px; }
+    .script-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .pill-indigo { background: var(--indigo-100); color: var(--indigo-800); }
+    .pill-gray { background: var(--gray-200); color: var(--gray-700); }
+    .pill-sky { background: #e0f2fe; color: #0369a1; }
+    .duration {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .duration svg { width: 14px; height: 14px; opacity: 0.7; }
+
+    /* HEIT section cards */
+    .sections { display: flex; flex-direction: column; gap: 16px; }
+
+    .heit-card {
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+    }
+    .heit-card.hook {
+      background: var(--blue-50);
+      border-color: var(--blue-200);
+      border-left: 3px solid var(--blue-500);
+    }
+    .heit-card.explain,
+    .heit-card.illustrate,
+    .heit-card.teach {
+      background: var(--gray-50);
+      border-color: var(--gray-200);
+      border-left: 3px solid var(--gray-500);
+    }
+    .heit-card.cta {
+      background: var(--orange-50);
+      border-color: var(--orange-200);
+      border-left: 3px solid var(--orange-500);
+    }
+
+    .heit-header {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .heit-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .heit-badge.h { background: var(--blue-500); color: white; }
+    .heit-badge.e,
+    .heit-badge.i,
+    .heit-badge.t-text { background: var(--gray-200); color: var(--gray-700); }
+    .heit-badge.cta-badge { background: var(--orange-500); color: white; }
+
+    .heit-label-block { flex: 1; min-width: 0; }
+    .heit-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .heit-card.hook .heit-label { color: var(--blue-700); }
+    .heit-card.cta .heit-label { color: var(--orange-700); }
+
+    .heit-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.45;
+    }
+
+    .heit-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .heit-card.hook .heit-body { font-weight: 500; }
+
+    .hook-link {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--blue-600);
+      text-decoration: none;
+    }
+    .hook-link:hover { color: var(--blue-700); text-decoration: underline; }
+
+    /* Bottom actions */
+    .bottom-actions {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ghost-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-ghost {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--gray-200);
+      background: var(--surface);
+      cursor: pointer;
+    }
+    .btn-ghost:hover { background: var(--gray-50); }
+    .refine-input {
+      width: 100%;
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--surface);
+    }
+    .refine-input::placeholder {
+      color: #a1a1aa;
+      font-style: italic;
+    }
+
+    /* Sidebar */
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+    @media (min-width: 961px) {
+      .sidebar { position: sticky; top: 20px; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .note-block { margin-bottom: 16px; }
+    .note-block:last-child { margin-bottom: 0; }
+    .note-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .note-label svg { width: 14px; height: 14px; }
+    .note-text {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--gray-700);
+    }
+
+    .quick-action {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--violet-600);
+      text-decoration: none;
+      padding: 8px 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-family: inherit;
+      width: 100%;
+      text-align: left;
+    }
+    .quick-action:hover { color: var(--violet-700); text-decoration: underline; }
+    .quick-action svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    .broll-list {
+      margin: 6px 0 0 16px;
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .broll-list li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="preview-banner">
+    <strong>Design mock only.</strong> AI Coach result page, Replit-style two-column layout. Not wired to the app.
+  </div>
+
+  <div class="page">
+    <div class="top-bar">
+      <a href="#" class="back-link" onclick="return false;">← New idea</a>
+      <div class="top-actions">
+        <button type="button" class="btn">Save to My Scripts</button>
+        <button type="button" class="btn">Copy script</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- LEFT: Script column -->
+      <main>
+        <header class="script-header">
+          <h1 class="script-title">The Silent Profit Killer Hiding in Every Restaurant Kitchen</h1>
+          <div class="meta-row">
+            <span class="pill pill-indigo">Voiceover + B-Roll</span>
+            <span class="pill pill-gray">Instagram Reels</span>
+            <span class="pill pill-sky">TOFU</span>
+            <span class="duration">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              45-60 seconds
+            </span>
+          </div>
+        </header>
+
+        <div class="sections">
+          <!-- HOOK -->
+          <section class="heit-card hook">
+            <div class="heit-header">
+              <div class="heit-badge h">H</div>
+              <div class="heit-label-block">
+                <div class="heit-label">Hook</div>
+                <p class="heit-subtitle">First 2 seconds. Stop the scroll. No warm-up.</p>
+              </div>
+            </div>
+            <div class="heit-body">
+              Most restaurants fail not because of bad food, but because of one invisible line item on their P&amp;L that nobody talks about until it is too late.
+            </div>
+            <a href="#" class="hook-link" onclick="return false;">Try 3 alternative hooks</a>
+          </section>
+
+          <!-- EXPLAIN -->
+          <section class="heit-card explain">
+            <div class="heit-header">
+              <div class="heit-badge e">E</div>
+              <div class="heit-label-block">
+                <div class="heit-label">Explain</div>
+                <p class="heit-subtitle">Name the problem. Show it is bigger than they think. Build tension. Do not solve it yet.</p>
+              </div>
+            </div>
+            <div class="heit-body">
+              Commercial kitchen equipment is the second-largest expense after labor, and most owners have no idea what their walk-in, fryers, and hood systems actually cost to run every month. In 2026, with commercial energy rates up 18% year over year, that blind spot is quietly eating 8 to 12 percent of gross revenue at independent restaurants.
+            </div>
+          </section>
+
+          <!-- ILLUSTRATE -->
+          <section class="heit-card illustrate">
+            <div class="heit-header">
+              <div class="heit-badge i">I</div>
+              <div class="heit-label-block">
+                <div class="heit-label">Illustrate</div>
+                <p class="heit-subtitle">One specific story or example. Concrete details so they see themselves in it.</p>
+              </div>
+            </div>
+            <div class="heit-body">
+              I walked into a client&apos;s kitchen last month. Beautiful setup. New line, proper ventilation. Owner was proud. Then we pulled his utility bills. His walk-in alone was running $1,400 a month because the door seal was shot and nobody had checked it in two years. One $40 part. Fourteen hundred dollars a month bleeding out.
+            </div>
+          </section>
+
+          <!-- TEACH -->
+          <section class="heit-card teach">
+            <div class="heit-header">
+              <div class="heit-badge t-text">T</div>
+              <div class="heit-label-block">
+                <div class="heit-label">Teach</div>
+                <p class="heit-subtitle">ONE clear takeaway. Not a list. One thing they should do differently.</p>
+              </div>
+            </div>
+            <div class="heit-body">
+              Pull your last three utility bills and divide total kWh by total covers served. That number is your real cost per guest. If it is above $0.80, your equipment stack is working against you, not for you.
+            </div>
+          </section>
+
+          <!-- CTA -->
+          <section class="heit-card cta">
+            <div class="heit-header">
+              <div class="heit-badge cta-badge">CTA</div>
+              <div class="heit-label-block">
+                <div class="heit-label">Call to Action</div>
+                <p class="heit-subtitle">Tell them exactly what to do next. One thing only.</p>
+              </div>
+            </div>
+            <div class="heit-body">
+              Comment ENERGY and I will send you the free equipment audit checklist we use on every new restaurant install.
+            </div>
+          </section>
+        </div>
+
+        <div class="bottom-actions">
+          <div class="ghost-row">
+            <button type="button" class="btn-ghost">Edit manually</button>
+            <button type="button" class="btn-ghost">Refine with AI</button>
+          </div>
+          <input
+            type="text"
+            class="refine-input"
+            placeholder='e.g. "Make the hook more contrarian"'
+            aria-label="Refine instruction"
+          />
+        </div>
+      </main>
+
+      <!-- RIGHT: Sidebar -->
+      <aside class="sidebar">
+        <div class="panel">
+          <h2 class="panel-title">Production Notes</h2>
+
+          <div class="note-block">
+            <div class="note-label">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Setup
+            </div>
+            <p class="note-text">Film B-roll at a commercial kitchen or equipment showroom. Voiceover recorded separately in a quiet room. Cut between utility bill close-ups and equipment shots.</p>
+          </div>
+
+          <div class="note-block">
+            <div class="note-label">Format</div>
+            <p class="note-text">Voiceover + B-Roll</p>
+          </div>
+
+          <div class="note-block">
+            <div class="note-label">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              Duration
+            </div>
+            <p class="note-text">45-60 seconds</p>
+          </div>
+
+          <div class="note-block">
+            <div class="note-label">Voice tone</div>
+            <p class="note-text">Calm authority. Like a consultant who has seen this 100 times, not a salesperson.</p>
+          </div>
+
+          <div class="note-block">
+            <div class="note-label">B-roll shots</div>
+            <ul class="broll-list">
+              <li>Walk-in cooler door, tight on gasket</li>
+              <li>Utility bill on clipboard, finger on kWh line</li>
+              <li>Fryer bank running during service</li>
+            </ul>
+          </div>
+
+          <div class="note-block">
+            <div class="note-label">Funnel stage</div>
+            <span class="pill pill-sky">TOFU</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">Quick Actions</h2>
+          <button type="button" class="quick-action">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy full script
+          </button>
+          <button type="button" class="quick-action">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save to My Scripts
+          </button>
+          <a href="#" class="quick-action" onclick="return false;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            New idea
+          </a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

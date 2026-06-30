@@ -10,6 +10,14 @@ import {
   buildStudioDateContext,
   COACH_SYSTEM_PROMPT,
 } from "@shared/studioHeit";
+import {
+  buildProductionNotesJson,
+  coachScriptIsComplete,
+  combineBodyFromSections,
+  parseCoachScriptSections,
+  parseProductionNotes,
+  sectionsFromGenerated,
+} from "@shared/coachScriptSections";
 import { coachScripts, planCards } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -116,12 +124,21 @@ function mapPlanCardRow(row: typeof planCards.$inferSelect) {
 }
 
 function mapCoachScriptRow(row: typeof coachScripts.$inferSelect) {
+  const sections = parseCoachScriptSections({
+    body: row.body,
+    callToAction: row.callToAction,
+    productionNotes: row.productionNotes,
+  });
   return {
     id: row.id,
     title: row.title,
     hook: row.hook,
     body: row.body,
     callToAction: row.callToAction,
+    explain: sections.explain,
+    illustrate: sections.illustrate,
+    teach: sections.teach,
+    cta: sections.cta,
     platform: row.platform,
     tone: row.tone,
     estimatedDuration: row.estimatedDuration,
@@ -482,7 +499,7 @@ export const studioRouter = router({
       const generated = normalizeCoachScriptPayload(
         parseJsonFromLlm<Record<string, unknown>>(raw, {})
       );
-      if (!generated.hook || !generated.body || !generated.callToAction) {
+      if (!coachScriptIsComplete(generated)) {
         console.warn(
           "[studio.generate] incomplete LLM payload",
           raw.slice(0, 800)
@@ -498,12 +515,15 @@ export const studioRouter = router({
         ? platformRaw
         : "both";
 
-      const coachPayload = generated.productionCoach
-        ? JSON.stringify({
-            ...(generated.productionCoach as object),
-            contentFormat: generated.contentFormat ?? "talking-head",
-          })
-        : null;
+      const sections = sectionsFromGenerated(generated);
+      const bodyCombined = combineBodyFromSections(sections);
+      const ctaText = sections.cta || sections.teach || String(generated.callToAction ?? "");
+
+      const coachPayload = buildProductionNotesJson(
+        generated.productionCoach,
+        sections,
+        { contentFormat: String(generated.contentFormat ?? "talking-head") }
+      );
 
       const insertResult = await db.insert(coachScripts).values({
           userId: ctx.user.id,
@@ -511,8 +531,8 @@ export const studioRouter = router({
           planCardId: input.planCardId ?? null,
           title: String(generated.title ?? "Untitled script").slice(0, 256),
           hook: String(generated.hook),
-          body: String(generated.body),
-          callToAction: String(generated.callToAction),
+          body: bodyCombined,
+          callToAction: ctaText,
           platform,
           tone: String(generated.tone ?? "conversational").slice(0, 64),
           estimatedDuration: generated.estimatedDuration
@@ -559,6 +579,12 @@ export const studioRouter = router({
         .limit(1);
       if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
 
+      const existingSections = parseCoachScriptSections({
+        body: script.body,
+        callToAction: script.callToAction,
+        productionNotes: script.productionNotes,
+      });
+
       const response = await invokeLLM({
         messages: [
           {
@@ -569,7 +595,7 @@ export const studioRouter = router({
           },
           {
             role: "user",
-            content: `HOOK (H): ${script.hook}\n\nBODY (E→I): ${script.body}\n\nCTA (T): ${script.callToAction}\n\nInstruction: ${input.instruction}\n\nReturn: {"hook":"...","body":"...","callToAction":"..."}`,
+            content: `HOOK: ${script.hook}\nEXPLAIN: ${existingSections.explain}\nILLUSTRATE: ${existingSections.illustrate}\nTEACH: ${existingSections.teach}\nCTA: ${existingSections.cta}\n\nInstruction: ${input.instruction}\n\nReturn: {"hook":"...","explain":"...","illustrate":"...","teach":"...","cta":"..."}`,
           },
         ],
         maxTokens: 2048,
@@ -577,28 +603,39 @@ export const studioRouter = router({
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const refined = normalizeCoachScriptPayload(
+      const refinedPayload = normalizeCoachScriptPayload(
         parseJsonFromLlm<Record<string, unknown>>(raw, {})
-      ) as Record<string, string>;
+      );
+      const sections = sectionsFromGenerated({
+        ...refinedPayload,
+        explain: refinedPayload.explain ?? existingSections.explain,
+        illustrate: refinedPayload.illustrate ?? existingSections.illustrate,
+        teach: refinedPayload.teach ?? existingSections.teach,
+        cta: refinedPayload.cta ?? refinedPayload.callToAction ?? existingSections.cta,
+        hook: refinedPayload.hook ?? script.hook,
+      });
+
+      const notes = parseProductionNotes(script.productionNotes);
+      const productionNotes = buildProductionNotesJson(
+        notes ?? {},
+        sections,
+        { contentFormat: script.contentFormat ?? undefined }
+      );
 
       await db
         .update(coachScripts)
         .set({
-          hook: refined.hook ?? script.hook,
-          body: refined.body ?? script.body,
-          callToAction: refined.callToAction ?? script.callToAction,
+          hook: String(refinedPayload.hook ?? script.hook),
+          body: combineBodyFromSections(sections),
+          callToAction: sections.cta || sections.teach,
+          productionNotes,
         })
         .where(eq(coachScripts.id, input.id));
 
       const [updated] = await db.select().from(coachScripts).where(eq(coachScripts.id, input.id)).limit(1);
       if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
 
-      return {
-        id: updated.id,
-        hook: updated.hook,
-        body: updated.body,
-        callToAction: updated.callToAction,
-      };
+      return mapCoachScriptRow(updated);
     }),
 
   hookVariations: protectedProcedure
