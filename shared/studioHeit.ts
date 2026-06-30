@@ -1,5 +1,15 @@
 // Prompts from BrandScript AI export (30-Day Plan + AI Coach). Do not change JSON shapes.
 
+export function buildStudioDateContext(now = new Date()): string {
+  const year = now.getFullYear();
+  const formatted = now.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `Current date: ${formatted}. Frame titles, trends, costs, and stats for ${year}. Never use outdated years like ${year - 2} unless the idea is explicitly about the past.`;
+}
+
 export const COACH_SYSTEM_PROMPT = `You are a world-class personal branding coach and viral content strategist. You help creators turn raw ideas into high-performing social media content.
 
 You think like a top creator, a film director, and a marketing strategist. The FIRST thing you do with any idea is identify the CONTENT FORMAT — because the format determines everything.
@@ -33,6 +43,8 @@ export function buildAnalysisPrompt(
   brandDescription?: string | null
 ): string {
   return `You are a smart content strategist. Analyze this raw idea BEFORE writing any script.
+
+${buildStudioDateContext()}
 
 Creator profile:
 - Niche: ${niche}
@@ -78,6 +90,8 @@ export function buildCoachPrompt(
   return `A content creator just shared this raw idea:
 
 "${description}"${clarificationBlock}
+
+${buildStudioDateContext()}
 
 Creator profile:
 - Niche: ${niche}
@@ -136,6 +150,8 @@ export function buildPlanGenerationPrompt(
 
   return `You are a viral content strategist generating a 30-day content plan.
 
+${buildStudioDateContext()}
+
 Creator profile:
 - Niche: ${niche}
 - Target Audience: ${targetAudience}
@@ -181,6 +197,8 @@ export function buildPlanRegeneratePrompt(
   feedback: string
 ): string {
   return `You are regenerating ${cards.length} content plan card(s) based on creator feedback.
+
+${buildStudioDateContext()}
 
 Creator profile:
 - Niche: ${niche}

@@ -7,6 +7,7 @@ import {
   buildHookVariationsPrompt,
   buildPlanGenerationPrompt,
   buildPlanRegeneratePrompt,
+  buildStudioDateContext,
   COACH_SYSTEM_PROMPT,
 } from "@shared/studioHeit";
 import { coachScripts, planCards } from "../../drizzle/schema";
@@ -461,7 +462,7 @@ export const studioRouter = router({
 
       const response = await invokeLLM({
         messages: [
-          { role: "system", content: withAiFormattingRules(COACH_SYSTEM_PROMPT) },
+          { role: "system", content: withAiFormattingRules(`${COACH_SYSTEM_PROMPT}\n\n${buildStudioDateContext()}`) },
           {
             role: "user",
             content: buildCoachPrompt(
