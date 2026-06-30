@@ -16,7 +16,10 @@ import { getDb } from "../db";
 import { getCreatorCoachProfile } from "../planCoachProfile";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
-import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
+import {
+  normalizeCoachScriptPayload,
+  parseLlmJson,
+} from "../utils/parseLlmJson";
 
 const planGoalSchema = z.enum(["grow", "viral", "authority", "monetize"]);
 const planPlatformSchema = z.enum(["instagram", "tiktok", "youtube", "all"]);
@@ -35,13 +38,7 @@ type RawPlanCard = {
 };
 
 function parseJsonFromLlm<T>(raw: string, fallback: T): T {
-  const trimmed = raw.trim();
-  if (!trimmed) return fallback;
-  try {
-    return sanitizeAiOutputDeep(JSON.parse(trimmed)) as T;
-  } catch {
-    return fallback;
-  }
+  return parseLlmJson(raw, fallback);
 }
 
 function mapPlanCardRow(row: typeof planCards.$inferSelect) {
@@ -128,11 +125,16 @@ export const planRouter = router({
           },
         ],
         maxTokens: 8192,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "[]");
-      const parsed = parseJsonFromLlm<RawPlanCard[] | { cards?: RawPlanCard[] }>(raw, []);
-      const cardsRaw = Array.isArray(parsed) ? parsed : parsed.cards ?? [];
+      const parsed = parseJsonFromLlm<
+        RawPlanCard[] | { cards?: RawPlanCard[]; plan?: RawPlanCard[] }
+      >(raw, []);
+      const cardsRaw = Array.isArray(parsed)
+        ? parsed
+        : parsed.cards ?? parsed.plan ?? [];
       if (cardsRaw.length < 10) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -273,11 +275,16 @@ export const planRouter = router({
           },
         ],
         maxTokens: 4096,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "[]");
-      const parsed = parseJsonFromLlm<RawPlanCard[] | { cards?: RawPlanCard[] }>(raw, []);
-      const replacements = Array.isArray(parsed) ? parsed : parsed.cards ?? [];
+      const parsed = parseJsonFromLlm<
+        RawPlanCard[] | { cards?: RawPlanCard[]; plan?: RawPlanCard[] }
+      >(raw, []);
+      const replacements = Array.isArray(parsed)
+        ? parsed
+        : parsed.cards ?? parsed.plan ?? [];
       if (!replacements.length) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -339,6 +346,7 @@ export const studioRouter = router({
           },
         ],
         maxTokens: 1024,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");
@@ -401,11 +409,18 @@ export const studioRouter = router({
           },
         ],
         maxTokens: 4096,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const generated = parseJsonFromLlm<Record<string, unknown>>(raw, {});
+      const generated = normalizeCoachScriptPayload(
+        parseJsonFromLlm<Record<string, unknown>>(raw, {})
+      );
       if (!generated.hook || !generated.body || !generated.callToAction) {
+        console.warn(
+          "[studio.generate] incomplete LLM payload",
+          raw.slice(0, 800)
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "AI returned an incomplete script. Please try again.",
@@ -492,10 +507,13 @@ export const studioRouter = router({
           },
         ],
         maxTokens: 2048,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const refined = parseJsonFromLlm<Record<string, string>>(raw, {});
+      const refined = normalizeCoachScriptPayload(
+        parseJsonFromLlm<Record<string, unknown>>(raw, {})
+      ) as Record<string, string>;
 
       await db
         .update(coachScripts)
@@ -548,6 +566,7 @@ export const studioRouter = router({
           },
         ],
         maxTokens: 1024,
+        response_format: { type: "json_object" },
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");

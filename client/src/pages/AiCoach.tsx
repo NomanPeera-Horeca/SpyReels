@@ -99,7 +99,8 @@ export default function AiCoach() {
         generateMutation.mutate({ description, clarifications: [] });
       }
     },
-    onError: () => {
+    onError: (err) => {
+      toast.error(err.message || "Could not analyze your idea. Trying to write anyway...");
       setPhase("generating");
       generateMutation.mutate({ description, clarifications: [] });
     },

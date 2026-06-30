@@ -142,8 +142,9 @@ Distribution rules:
 - Vary content formats across all 30 days — no more than 5 consecutive same format
 - Platforms: rotate across ${platforms.join(" and ")} — assign the best platform per idea
 
-Return a JSON array of exactly 30 objects:
-[
+Return a JSON object with a "cards" array of exactly 30 items:
+{
+  "cards": [
   {
     "day": 1,
     "funnelStage": "tofu | mofu | bofu",
@@ -155,9 +156,10 @@ Return a JSON array of exactly 30 objects:
     "filmingLocation": "Specific location e.g. 'At your desk, front camera' or 'In the kitchen, showing prep'",
     "researchSignal": "1 sentence on why this topic works — what audience question or trend it taps"
   }
-]
+  ]
+}
 
-Return ONLY valid JSON array. Be extremely specific to the niche — zero generic advice.`;
+Return ONLY valid JSON. Be extremely specific to the niche — zero generic advice.`;
 }
 
 export function buildPlanRegeneratePrompt(
@@ -181,10 +183,10 @@ Creator feedback: "${feedback}"
 
 Generate ${cards.length} replacement card(s) that address this feedback. Keep the same day numbers and funnel stage unless feedback explicitly asks to change them.
 
-Return a JSON array of ${cards.length} object(s) with the same shape as above:
-[{ "day", "funnelStage", "contentFormat", "platform", "title", "hook", "angle", "filmingLocation", "researchSignal" }]
+Return a JSON object with a "cards" array of ${cards.length} replacement item(s):
+{ "cards": [{ "day", "funnelStage", "contentFormat", "platform", "title", "hook", "angle", "filmingLocation", "researchSignal" }] }
 
-Return ONLY valid JSON array.`;
+Return ONLY valid JSON.`;
 }
 
 export function buildHookVariationsPrompt(
