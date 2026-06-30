@@ -55,6 +55,7 @@ import {
 } from "./discovery/db";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
+import { planRouter, studioRouter } from "./routers/planCoachRouter";
 import {
   buildPanelUserReport,
   panelUserFiltersSchema,
@@ -6624,6 +6625,9 @@ The hook MUST be 7-10 words. Count them.`),
   }),
 
   outreach: outreachRouter,
+
+  plan: planRouter,
+  studio: studioRouter,
 });
 
 export type AppRouter = typeof appRouter;

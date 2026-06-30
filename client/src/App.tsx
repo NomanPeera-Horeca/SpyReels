@@ -38,6 +38,8 @@ const CollectedReels = lazy(() => import("./pages/CollectedReels"));
 const Discovery = lazy(() => import("./pages/Discovery"));
 const CreatorDiscovery = lazy(() => import("./pages/CreatorDiscovery"));
 const IdeaToScript = lazy(() => import("./pages/IdeaToScript"));
+const ThirtyDayPlan = lazy(() => import("./pages/ThirtyDayPlan"));
+const AiCoach = lazy(() => import("./pages/AiCoach"));
 const Library = lazy(() => import("./pages/Library"));
 const PasteScript = lazy(() => import("./pages/PasteScript"));
 const Interests = lazy(() => import("./pages/Interests"));
@@ -71,6 +73,8 @@ function DashboardRouter() {
           <Route path="/scripts/:id" component={ScriptEditor} />
           <Route path="/collected" component={CollectedReels} />
           <Route path="/ideas" component={IdeaToScript} />
+          <Route path="/plan" component={ThirtyDayPlan} />
+          <Route path="/studio" component={AiCoach} />
           <Route path="/library" component={Library} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />

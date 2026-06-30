@@ -810,6 +810,69 @@ export const scriptIdeas = mysqlTable(
 export type ScriptIdea = typeof scriptIdeas.$inferSelect;
 export type InsertScriptIdea = typeof scriptIdeas.$inferInsert;
 
+/** 30-day content plan idea cards (BrandScript-style plan board). */
+export const planCards = mysqlTable(
+  "plan_cards",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    day: int("day").notNull(),
+    funnelStage: varchar("funnelStage", { length: 16 }).notNull(),
+    contentFormat: varchar("contentFormat", { length: 32 }).notNull(),
+    platform: varchar("platform", { length: 32 }).notNull(),
+    title: text("title").notNull(),
+    hook: text("hook").notNull(),
+    angle: text("angle").notNull(),
+    filmingLocation: text("filmingLocation").notNull(),
+    researchSignal: text("researchSignal"),
+    status: varchar("status", { length: 16 }).notNull().default("pending"),
+    goal: varchar("goal", { length: 32 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_plan_cards_workspace").on(table.workspaceId),
+  })
+);
+
+export type PlanCard = typeof planCards.$inferSelect;
+export type InsertPlanCard = typeof planCards.$inferInsert;
+
+/** AI Coach HEIT scripts (separate from saved_scripts library). */
+export const coachScripts = mysqlTable(
+  "coach_scripts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    planCardId: int("planCardId"),
+    title: varchar("title", { length: 256 }).notNull(),
+    hook: text("hook").notNull(),
+    body: text("body").notNull(),
+    callToAction: text("callToAction").notNull(),
+    platform: varchar("platform", { length: 32 }).notNull().default("both"),
+    tone: varchar("tone", { length: 64 }).notNull().default("conversational"),
+    estimatedDuration: varchar("estimatedDuration", { length: 64 }),
+    contentType: varchar("contentType", { length: 64 }),
+    contentFormat: varchar("contentFormat", { length: 64 }),
+    formatLabel: varchar("formatLabel", { length: 128 }),
+    productionNotes: text("productionNotes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_coach_scripts_workspace").on(table.workspaceId),
+  })
+);
+
+export type CoachScript = typeof coachScripts.$inferSelect;
+export type InsertCoachScript = typeof coachScripts.$inferInsert;
+
 /* ────────────────────────────────────────────────────────────────────
  * Featured Accounts
  *
