@@ -116,3 +116,31 @@ export function normalizeCoachScriptPayload(
     callToAction,
   };
 }
+
+const PLAN_CARD_ARRAY_KEYS = [
+  "cards",
+  "plan",
+  "ideas",
+  "contentPlan",
+  "content_plan",
+  "days",
+  "items",
+] as const;
+
+export function extractPlanCardsFromParsed<T extends Record<string, unknown>>(
+  parsed: unknown
+): T[] {
+  if (Array.isArray(parsed)) {
+    return parsed.filter((item) => item && typeof item === "object") as T[];
+  }
+  if (!parsed || typeof parsed !== "object") return [];
+
+  const record = parsed as Record<string, unknown>;
+  for (const key of PLAN_CARD_ARRAY_KEYS) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value.filter((item) => item && typeof item === "object") as T[];
+    }
+  }
+  return [];
+}

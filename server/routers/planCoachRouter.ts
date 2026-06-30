@@ -17,9 +17,18 @@ import { getCreatorCoachProfile } from "../planCoachProfile";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import {
+  extractPlanCardsFromParsed,
   normalizeCoachScriptPayload,
   parseLlmJson,
 } from "../utils/parseLlmJson";
+
+const PLAN_BATCHES = [
+  { startDay: 1, endDay: 10 },
+  { startDay: 11, endDay: 20 },
+  { startDay: 21, endDay: 30 },
+] as const;
+
+const MIN_PLAN_CARDS = 24;
 
 const planGoalSchema = z.enum(["grow", "viral", "authority", "monetize"]);
 const planPlatformSchema = z.enum(["instagram", "tiktok", "youtube", "all"]);
@@ -39,6 +48,53 @@ type RawPlanCard = {
 
 function parseJsonFromLlm<T>(raw: string, fallback: T): T {
   return parseLlmJson(raw, fallback);
+}
+
+async function generatePlanCardBatch(args: {
+  niche: string;
+  targetAudience: string;
+  goal: string;
+  platforms: string[];
+  brandDescription: string | null;
+  startDay: number;
+  endDay: number;
+}): Promise<RawPlanCard[]> {
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "user",
+        content: withAiFormattingRules(
+          buildPlanGenerationPrompt(
+            args.niche,
+            args.targetAudience,
+            args.goal,
+            args.platforms,
+            args.brandDescription,
+            { startDay: args.startDay, endDay: args.endDay }
+          )
+        ),
+      },
+    ],
+    maxTokens: 4096,
+    response_format: { type: "json_object" },
+  });
+
+  const raw = String(response.choices[0]?.message?.content ?? "{}");
+  const finishReason = response.choices[0]?.finish_reason;
+  const parsed = parseJsonFromLlm<unknown>(raw, null);
+  const cards = extractPlanCardsFromParsed<RawPlanCard>(parsed);
+
+  if (cards.length < 5) {
+    console.warn("[plan.generate] batch incomplete", {
+      startDay: args.startDay,
+      endDay: args.endDay,
+      finishReason,
+      cardCount: cards.length,
+      rawPreview: raw.slice(0, 600),
+    });
+  }
+
+  return cards;
 }
 
 function mapPlanCardRow(row: typeof planCards.$inferSelect) {
@@ -109,45 +165,57 @@ export const planRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: "user",
-            content: withAiFormattingRules(
-              buildPlanGenerationPrompt(
-                profile.niche,
-                profile.targetAudience,
-                input.goal,
-                input.platforms,
-                profile.brandDescription
-              )
-            ),
-          },
-        ],
-        maxTokens: 8192,
-        response_format: { type: "json_object" },
-      });
+      const cardsRaw: RawPlanCard[] = [];
+      for (const batch of PLAN_BATCHES) {
+        let batchCards = await generatePlanCardBatch({
+          niche: profile.niche,
+          targetAudience: profile.targetAudience,
+          goal: input.goal,
+          platforms: input.platforms,
+          brandDescription: profile.brandDescription,
+          startDay: batch.startDay,
+          endDay: batch.endDay,
+        });
 
-      const raw = String(response.choices[0]?.message?.content ?? "[]");
-      const parsed = parseJsonFromLlm<
-        RawPlanCard[] | { cards?: RawPlanCard[]; plan?: RawPlanCard[] }
-      >(raw, []);
-      const cardsRaw = Array.isArray(parsed)
-        ? parsed
-        : parsed.cards ?? parsed.plan ?? [];
-      if (cardsRaw.length < 10) {
+        if (batchCards.length < 5) {
+          batchCards = await generatePlanCardBatch({
+            niche: profile.niche,
+            targetAudience: profile.targetAudience,
+            goal: input.goal,
+            platforms: input.platforms,
+            brandDescription: profile.brandDescription,
+            startDay: batch.startDay,
+            endDay: batch.endDay,
+          });
+        }
+
+        cardsRaw.push(...batchCards);
+      }
+
+      if (cardsRaw.length < MIN_PLAN_CARDS) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Plan generation returned incomplete results. Please try again.",
         });
       }
 
+      const cardsByDay = new Map<number, RawPlanCard>();
+      for (const [idx, card] of cardsRaw.entries()) {
+        const day = typeof card.day === "number" ? card.day : idx + 1;
+        cardsByDay.set(day, { ...card, day });
+      }
+      const dedupedCards = Array.from(cardsByDay.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([, card]) => card);
+
       await db.delete(planCards).where(eq(planCards.workspaceId, ctx.workspaceId));
 
-      const values = cardsRaw.slice(0, 30).map((c, idx) => ({
-        userId: ctx.user.id,
-        workspaceId: ctx.workspaceId,
-        day: typeof c.day === "number" ? c.day : idx + 1,
+      const values = dedupedCards
+        .slice(0, 30)
+        .map((c, idx) => ({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          day: typeof c.day === "number" ? c.day : idx + 1,
         funnelStage: (c.funnelStage ?? "tofu").slice(0, 16),
         contentFormat: (c.contentFormat ?? "talking-head").slice(0, 32),
         platform: (c.platform ?? "instagram").slice(0, 32),
@@ -158,7 +226,8 @@ export const planRouter = router({
         researchSignal: c.researchSignal ? String(c.researchSignal).slice(0, 2000) : null,
         status: "pending",
         goal: input.goal,
-      }));
+        }))
+        .sort((a, b) => a.day - b.day);
 
       await db.insert(planCards).values(values);
       await incrementUsage(ctx.user.id, "recreateCount");
@@ -278,13 +347,9 @@ export const planRouter = router({
         response_format: { type: "json_object" },
       });
 
-      const raw = String(response.choices[0]?.message?.content ?? "[]");
-      const parsed = parseJsonFromLlm<
-        RawPlanCard[] | { cards?: RawPlanCard[]; plan?: RawPlanCard[] }
-      >(raw, []);
-      const replacements = Array.isArray(parsed)
-        ? parsed
-        : parsed.cards ?? parsed.plan ?? [];
+      const raw = String(response.choices[0]?.message?.content ?? "{}");
+      const parsed = parseJsonFromLlm<unknown>(raw, null);
+      const replacements = extractPlanCardsFromParsed<RawPlanCard>(parsed);
       if (!replacements.length) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

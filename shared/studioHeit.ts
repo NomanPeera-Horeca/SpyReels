@@ -115,14 +115,24 @@ export function buildPlanGenerationPrompt(
   targetAudience: string,
   goal: string,
   platforms: string[],
-  brandDescription?: string | null
+  brandDescription?: string | null,
+  options?: { startDay?: number; endDay?: number }
 ): string {
+  const startDay = options?.startDay ?? 1;
+  const endDay = options?.endDay ?? 30;
+  const cardCount = endDay - startDay + 1;
+  const isFullPlan = startDay === 1 && endDay === 30;
+
   const goalDescriptions: Record<string, string> = {
     grow: "Maximize reach and follower count — prioritize TOFU content",
     viral: "Land one big breakout video — use bold contrarian hooks",
     authority: "Become the go-to expert — mix TOFU education with MOFU case studies",
     monetize: "Convert followers into paying clients — balance MOFU trust + BOFU offers",
   };
+
+  const scopeLine = isFullPlan
+    ? "Generate exactly 30 content idea cards — one per day."
+    : `Generate exactly ${cardCount} content idea cards for days ${startDay} through ${endDay} (part of a 30-day plan).`;
 
   return `You are a viral content strategist generating a 30-day content plan.
 
@@ -133,20 +143,21 @@ Creator profile:
 - Goal: ${goal} — ${goalDescriptions[goal] ?? goal}
 ${brandDescription ? `- Brand: ${brandDescription}` : ""}
 
-Generate exactly 30 content idea cards — one per day. Each card is a specific, actionable content idea researched from what's working in this niche right now.
+${scopeLine} Each card is a specific, actionable content idea researched from what's working in this niche right now.
 
 Distribution rules:
 - TOFU (awareness): ~50% — hooks that get shared by non-followers
 - MOFU (trust): ~35% — builds credibility with existing audience
 - BOFU (conversion): ~15% — drives action or inquiry
-- Vary content formats across all 30 days — no more than 5 consecutive same format
+- Vary content formats — no more than 3 consecutive same format in this batch
 - Platforms: rotate across ${platforms.join(" and ")} — assign the best platform per idea
+- Use day numbers ${startDay} through ${endDay} exactly once each
 
-Return a JSON object with a "cards" array of exactly 30 items:
+Return a JSON object with a "cards" array of exactly ${cardCount} items:
 {
   "cards": [
   {
-    "day": 1,
+    "day": ${startDay},
     "funnelStage": "tofu | mofu | bofu",
     "contentFormat": "talking-head | voiceover-broll | behind-the-scenes | tutorial-demo | trending-audio | faceless",
     "platform": "${platforms[0] ?? "instagram"} | ${platforms[1] ?? "tiktok"} | all",

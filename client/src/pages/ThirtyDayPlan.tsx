@@ -394,7 +394,7 @@ export default function ThirtyDayPlan() {
             </div>
             <h2 className="text-xl font-bold mb-1">Researching your niche...</h2>
             <p className="text-sm text-muted-foreground">
-              AI is building 30 custom content ideas. Takes about a minute.
+              AI is building 30 custom content ideas. Takes about 2 to 3 minutes.
             </p>
           </div>
           <div className="space-y-3">
