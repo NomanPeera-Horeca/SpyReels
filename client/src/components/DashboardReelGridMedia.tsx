@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
 import { Loader2, Play, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import {
+  registerGridVideoPlayer,
+  releaseGridVideoPlay,
+  requestGridVideoPlay,
+} from "@/lib/gridVideoPlaybackCoordinator";
 
 type Size = "default" | "compact";
 
@@ -39,32 +44,84 @@ export function DashboardReelGridMedia({
   const [videoFailed, setVideoFailed] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const userPausedRef = useRef(false);
+  const programmaticPauseRef = useRef(false);
+  const fallbackId = useId();
+  const playerId = useMemo(() => {
+    if (reelId != null) return `reel-${reelId}`;
+    const code = (shortcode ?? "").trim();
+    if (code) return `shortcode-${code}`;
+    return fallbackId;
+  }, [reelId, shortcode, fallbackId]);
   const refreshMutation = trpc.reels.refreshVideoUrl.useMutation();
   const isCompact = size === "compact";
   const isControlled = playingControlled !== undefined;
   const playing = isControlled ? playingControlled : playingLocal;
 
-  const setPlaying = (next: boolean) => {
-    if (isControlled) {
-      onPlayingChange?.(next);
-    } else {
-      setPlayingLocal(next);
-    }
-  };
+  const pauseVideoElement = useCallback((programmatic: boolean) => {
+    programmaticPauseRef.current = programmatic;
+    videoRef.current?.pause();
+  }, []);
+
+  const setPlaying = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        pauseVideoElement(true);
+        releaseGridVideoPlay(playerId);
+        userPausedRef.current = false;
+      } else {
+        userPausedRef.current = false;
+      }
+      if (isControlled) {
+        onPlayingChange?.(next);
+      } else {
+        setPlayingLocal(next);
+      }
+    },
+    [isControlled, onPlayingChange, playerId, pauseVideoElement]
+  );
+  const setPlayingRef = useRef(setPlaying);
+  setPlayingRef.current = setPlaying;
+
+  useEffect(() => {
+    return registerGridVideoPlayer(playerId, {
+      pause: () => {
+        pauseVideoElement(true);
+        setPlayingRef.current(false);
+      },
+    });
+  }, [playerId, pauseVideoElement]);
+
+  const stopPlayback = useCallback(() => {
+    setPlaying(false);
+  }, [setPlaying]);
 
   const thumb = (thumbnailUrl ?? "").trim();
   const showThumb = thumb.length > 0 && !thumbFailed;
   const hasResolvableVideo =
     resolvedSrc.length > 0 || Boolean(shortcode?.trim()) || Boolean((videoUrl ?? "").trim());
 
+  // Do not overwrite the active preview URL while the inline player is open.
   useEffect(() => {
+    if (playing) return;
     setResolvedSrc((videoUrl ?? "").trim());
     setVideoFailed(false);
-  }, [videoUrl]);
+  }, [videoUrl, playing]);
 
   useEffect(() => {
     setThumbFailed(false);
   }, [thumb]);
+
+  const tryPlay = useCallback(() => {
+    if (userPausedRef.current) return;
+    const v = videoRef.current;
+    if (!v || v.paused === false) return;
+    const p = v.play();
+    void p.catch(() => {
+      setVideoFailed(true);
+      setPlaying(false);
+    });
+  }, [setPlaying]);
 
   const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
     const current = resolvedSrc || (videoUrl ?? "").trim();
@@ -93,6 +150,7 @@ export function DashboardReelGridMedia({
   const startPlayback = useCallback(async () => {
     if (isPreparing) return;
     setVideoFailed(false);
+    userPausedRef.current = false;
     setIsPreparing(true);
     try {
       const src = await resolvePlayableUrl();
@@ -101,27 +159,43 @@ export function DashboardReelGridMedia({
         setPlaying(false);
         return;
       }
+      requestGridVideoPlay(playerId);
       setResolvedSrc(src);
       setPlaying(true);
     } finally {
       setIsPreparing(false);
     }
-  }, [isPreparing, resolvePlayableUrl, setPlaying]);
+  }, [isPreparing, resolvePlayableUrl, setPlaying, playerId]);
 
   useEffect(() => {
-    if (!playing) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const p = v.play();
-    void p.catch(() => {
-      setVideoFailed(true);
-      setPlaying(false);
-    });
-  }, [playing, resolvedSrc, setPlaying]);
+    if (!playing) {
+      pauseVideoElement(true);
+    }
+  }, [playing, pauseVideoElement]);
+
+  const handleVideoLoadedData = () => {
+    tryPlay();
+  };
+
+  const handleVideoPause = () => {
+    if (programmaticPauseRef.current) {
+      programmaticPauseRef.current = false;
+      return;
+    }
+    userPausedRef.current = true;
+  };
+
+  const handleVideoPlay = () => {
+    userPausedRef.current = false;
+  };
 
   const handleVideoError = () => {
     setVideoFailed(true);
-    setPlaying(false);
+    stopPlayback();
+  };
+
+  const handleVideoEnded = () => {
+    stopPlayback();
   };
 
   const handleRetry = async (e: React.MouseEvent) => {
@@ -136,15 +210,19 @@ export function DashboardReelGridMedia({
         <div className="relative h-full w-full bg-black" onClick={(e) => e.stopPropagation()}>
           <video
             ref={videoRef}
-            key={resolvedSrc}
+            key={playerId}
             src={resolvedSrc}
             poster={thumb || undefined}
             controls
             playsInline
-            autoPlay
+            loop={false}
             preload="metadata"
             className="h-full w-full object-cover"
+            onLoadedData={handleVideoLoadedData}
+            onPause={handleVideoPause}
+            onPlay={handleVideoPlay}
             onError={handleVideoError}
+            onEnded={handleVideoEnded}
           />
           <button
             type="button"
@@ -154,7 +232,7 @@ export function DashboardReelGridMedia({
             )}
             aria-label="Close video"
             title="Close video"
-            onClick={() => setPlaying(false)}
+            onClick={stopPlayback}
           >
             <X className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
           </button>

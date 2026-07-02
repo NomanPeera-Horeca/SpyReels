@@ -89,14 +89,18 @@ export function ReelDialogVideo({
     return (
       <video
         ref={videoRef}
-        key={resolvedSrc}
+        key={reelId ?? code ?? resolvedSrc}
         src={resolvedSrc}
         poster={thumb || undefined}
         controls
         playsInline
+        loop={false}
         preload="metadata"
         className={className}
         onError={() => setVideoFailed(true)}
+        onEnded={() => {
+          videoRef.current?.pause();
+        }}
       />
     );
   }
