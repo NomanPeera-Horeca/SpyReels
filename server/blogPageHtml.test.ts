@@ -14,7 +14,9 @@ const SAMPLE_HTML = `<!doctype html>
     <title>Old title</title>
     <meta name="description" content="Old description" />
   </head>
-  <body></body>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>`;
 
 describe("injectPageHeadMeta", () => {
@@ -158,8 +160,49 @@ describe("enrichSpaHtmlForPublicPath", () => {
       if (pathname === "/affiliate") {
         expect(out).toContain('id="affiliate-faq-schema"');
       }
+      if (pathname === "/about") {
+        expect(out).toContain('id="about-person-schema"');
+        expect(out).toContain('id="about-organization-schema"');
+      }
+      if (pathname === "/contact") {
+        expect(out).toContain('id="contact-organization-schema"');
+      }
+      if (pathname === "/extension") {
+        expect(out).toContain('id="extension-software-schema"');
+      }
+      expect(out).toContain('id="seo-crawler-snapshot"');
+      expect(out).toContain("<h1>");
     }
   );
+
+  it("injects crawler H1 for blog posts", async () => {
+    const out = await enrichSpaHtmlForPublicPath(
+      SAMPLE_HTML,
+      "/blog/guide-meedro-alternative",
+      async () =>
+        ({
+          id: 1,
+          slug: "guide-meedro-alternative",
+          title: "Best Meedro Alternative",
+          content: "Body",
+          excerpt: "Short excerpt for crawlers",
+          metaTitle: "Best Meedro Alternative 2026 | SpyReels",
+          metaDescription: "Meta",
+          canonicalUrl: null,
+          ogImageUrl: null,
+          coverImageUrl: null,
+          noIndex: false,
+          status: "published",
+          publishedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: null,
+          sourceKeyword: null,
+          authorId: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }) as never
+    );
+    expect(out).toContain("<h1>Best Meedro Alternative</h1>");
+    expect(out).toContain("Short excerpt for crawlers");
+  });
 });
 
 describe("parseBlogSlugFromPath", () => {

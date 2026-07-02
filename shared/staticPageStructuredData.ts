@@ -372,6 +372,93 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: faqSchema(AFFILIATE_FAQ),
         },
       ];
+    case "/about":
+      return [
+        {
+          id: "about-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "About", item: `${SPYREELS_SITE_URL}/about` },
+          ]),
+        },
+        {
+          id: "about-person-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "Person",
+            name: "Noah Perry",
+            url: `${SPYREELS_SITE_URL}/about`,
+            jobTitle: "Founder",
+            worksFor: {
+              "@type": "Organization",
+              name: "SpyReels",
+            },
+          },
+        },
+        {
+          id: "about-organization-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "SpyReels",
+            url: SPYREELS_SITE_URL,
+            logo: SPYREELS_LOGO_URL,
+            sameAs: [],
+          },
+        },
+      ];
+    case "/contact":
+      return [
+        {
+          id: "contact-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Contact", item: `${SPYREELS_SITE_URL}/contact` },
+          ]),
+        },
+        {
+          id: "contact-organization-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "SpyReels",
+            url: SPYREELS_SITE_URL,
+            contactPoint: {
+              "@type": "ContactPoint",
+              contactType: "customer support",
+              email: "noah.perry@spyreels.ai",
+              availableLanguage: "English",
+            },
+          },
+        },
+      ];
+    case "/extension":
+      return [
+        {
+          id: "extension-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Chrome Extension", item: `${SPYREELS_SITE_URL}/extension` },
+          ]),
+        },
+        {
+          id: "extension-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SpyReels Chrome Extension for Instagram Reels",
+            applicationCategory: "BrowserApplication",
+            operatingSystem: "Chrome",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            description:
+              "Chrome extension to sort Instagram Reels by views and engagement, transcribe hooks, and save winners to your SpyReels dashboard.",
+          },
+        },
+      ];
     default:
       return [];
   }
@@ -383,4 +470,7 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/features/viral-reel-finder",
   "/free-tools/viral-hooks",
   "/affiliate",
+  "/about",
+  "/contact",
+  "/extension",
 ] as const;

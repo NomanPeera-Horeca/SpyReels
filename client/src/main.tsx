@@ -30,6 +30,8 @@ if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {
 
 captureUtmsFromLocation();
 
+document.getElementById("seo-crawler-snapshot")?.remove();
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {

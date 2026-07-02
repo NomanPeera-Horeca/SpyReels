@@ -1,5 +1,10 @@
 import type { BlogPost } from "../drizzle/schema";
 import {
+  buildCrawlerSnapshotHtml,
+  getStaticCrawlerSnapshot,
+  type CrawlerPageSnapshot,
+} from "../shared/crawlerPageSnapshot";
+import {
   canonicalUrlForPathname,
   getStaticPublicPageSeo,
   isPrivateAppPath,
@@ -58,6 +63,14 @@ export function injectPageHeadMeta(html: string, meta: PageHeadMeta): string {
   ].join("\n    ");
 
   return out.replace("</head>", `    ${headExtras}\n  </head>`);
+}
+
+export function injectCrawlerSnapshot(html: string, snapshot: CrawlerPageSnapshot): string {
+  const snippet = buildCrawlerSnapshotHtml(snapshot);
+  if (html.includes('<div id="root">')) {
+    return html.replace('<div id="root">', `${snippet}\n    <div id="root">`);
+  }
+  return html.replace("</body>", `  ${snippet}\n  </body>`);
 }
 
 export function blogIndexHeadMeta(): PageHeadMeta {
@@ -317,7 +330,12 @@ export async function enrichSpaHtmlForPublicPath(
   }
 
   if (pathname === "/blog") {
-    return injectPageHeadMeta(html, blogIndexHeadMeta());
+    let enriched = injectPageHeadMeta(html, blogIndexHeadMeta());
+    const snapshot = getStaticCrawlerSnapshot("/blog");
+    if (snapshot) {
+      enriched = injectCrawlerSnapshot(enriched, snapshot);
+    }
+    return enriched;
   }
 
   const slug = parseBlogSlugFromPath(pathname);
@@ -329,6 +347,10 @@ export async function enrichSpaHtmlForPublicPath(
 
     let enriched = injectPageHeadMeta(html, blogPostHeadMeta(post));
     enriched = injectBlogPostStructuredData(enriched, post);
+    enriched = injectCrawlerSnapshot(enriched, {
+      h1: post.title,
+      summary: post.excerpt || post.metaDescription || undefined,
+    });
     return enriched;
   }
 
@@ -342,6 +364,10 @@ export async function enrichSpaHtmlForPublicPath(
       ogType: "website",
     });
     enriched = injectStaticPageStructuredData(enriched, pathname);
+    const snapshot = getStaticCrawlerSnapshot(pathname);
+    if (snapshot) {
+      enriched = injectCrawlerSnapshot(enriched, snapshot);
+    }
     return enriched;
   }
 

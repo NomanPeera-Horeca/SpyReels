@@ -12,9 +12,9 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 
-const PAGE_TITLE = "Viral Reel Finder for Instagram | Instagram Viral Reel Finder | SpyReels";
+const PAGE_TITLE = "Viral Reel Finder for Instagram | SpyReels";
 const PAGE_DESCRIPTION =
-  "Viral reel finder and Instagram viral reel finder for creators. Find viral Reels by views and engagement, transcribe hooks, and generate scripts. Free tier available.";
+  "Find viral Instagram Reels by views and engagement rate. Transcribe hooks and generate scripts. Free tier for nano and micro creators.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
 const DIRECT_ANSWER =
@@ -166,11 +166,15 @@ export default function ViralReelFinder() {
             Manual search fails because the feed hides sort order. You see recency, not results. SpyReels acts as a reel finder for creators under fifty thousand followers: enter a handle, review top performers, transcribe hooks, and move to scripting without rebuilding spreadsheets every Monday.
           </p>
           <p>
-            If you publish weekly, treat the viral reel finder as step one in a three-part loop: find viral reels that match your niche sentence, transcribe the hook and body, then rewrite the structure in your voice. Pair this feature with our guides on{" "}
+            If you publish weekly, treat the viral reel finder as step one in a three-part loop: find viral reels that match your niche sentence, transcribe the hook and body, then rewrite the structure in your voice. Pair this feature with our{" "}
+            <Link href="/blog/guide-instagram-reels-hook-patterns-data" className="text-primary hover:underline">
+              hook patterns data study
+            </Link>
+            ,{" "}
             <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">
               finding viral Reels in your niche
-            </Link>{" "}
-            and{" "}
+            </Link>
+            , and{" "}
             <Link href="/blog/guide-spy-on-competitor-instagram-reels" className="text-primary hover:underline">
               spying on competitor Reels
             </Link>
@@ -322,6 +326,10 @@ export default function ViralReelFinder() {
         <p className="text-sm text-muted-foreground text-center">
           <Link href="/blog" className="text-primary hover:underline">
             Instagram growth blog
+          </Link>
+          {" · "}
+          <Link href="/blog/guide-instagram-reels-content-analysis-2026" className="text-primary hover:underline">
+            420 Reels research hub
           </Link>
           {" · "}
           <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">

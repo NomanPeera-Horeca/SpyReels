@@ -25,14 +25,19 @@ import {
 
 const POPULAR_GUIDES = [
   {
+    href: "/blog/guide-instagram-reels-hook-patterns-data",
+    title: "Hook patterns from 420 top Reels (2026 data)",
+    description: "Question hooks averaged 5.67% ER in our study. See which patterns win.",
+  },
+  {
+    href: "/blog/guide-instagram-reels-content-analysis-2026",
+    title: "420 Reels content analysis study",
+    description: "Original research on hooks, formats, and engagement across 14 creators.",
+  },
+  {
     href: "/blog/guide-find-viral-reels-your-niche",
     title: "How to find viral Reels in your niche",
     description: "Research methods to spot winning Reels before you film.",
-  },
-  {
-    href: "/blog/guide-spy-on-competitor-instagram-reels",
-    title: "How to spy on competitor Instagram Reels",
-    description: "Study rivals without guessing what is working.",
   },
   {
     href: "/blog/guide-instagram-reels-script-generator",
@@ -40,14 +45,9 @@ const POPULAR_GUIDES = [
     description: "Turn viral patterns into scripts you can film today.",
   },
   {
-    href: "/blog/guide-grow-instagram-reels-under-10k",
-    title: "Grow Instagram Reels under 10K followers",
-    description: "A realistic plan for small accounts still building reach.",
-  },
-  {
-    href: "/blog/best-instagram-reels-tools-2026",
-    title: "Best Instagram Reels tools in 2026",
-    description: "Compare SpyReels, Meedro, ViralFindr, and Descript.",
+    href: "/blog/guide-spy-on-competitor-instagram-reels",
+    title: "How to spy on competitor Instagram Reels",
+    description: "Study rivals without guessing what is working.",
   },
 ] as const;
 

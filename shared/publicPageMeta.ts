@@ -93,9 +93,9 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
       "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.",
   },
   "/features/viral-reel-finder": {
-    title: "Viral Reel Finder for Instagram | Instagram Viral Reel Finder | SpyReels",
+    title: "Viral Reel Finder for Instagram | SpyReels",
     description:
-      "Viral reel finder and Instagram viral reel finder for creators. Find viral Reels by views and engagement, transcribe hooks, and generate scripts. Free tier available.",
+      "Find viral Instagram Reels by views and engagement rate. Transcribe hooks and generate scripts. Free tier for nano and micro creators.",
   },
   "/affiliate": {
     title: "SpyReels Affiliate Program - 20% Recurring Commission for 12 Months",

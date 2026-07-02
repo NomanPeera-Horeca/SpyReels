@@ -198,6 +198,13 @@ export default function HookGenerator() {
           <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
             Get scroll-stopping hooks for your Instagram Reels in seconds. We analyze viral reels to find patterns that actually work.
           </p>
+          <p className="mt-4 text-sm text-muted-foreground max-w-xl mx-auto">
+            See which hook patterns averaged the highest engagement in our{" "}
+            <Link href="/blog/guide-instagram-reels-hook-patterns-data" className="text-primary hover:underline">
+              420 Reels data study
+            </Link>
+            , then generate lines in those shapes below.
+          </p>
         </div>
 
         {/* Stage content: key forces a clean remount when switching stages (avoids React insertBefore crashes) */}
