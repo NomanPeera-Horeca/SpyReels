@@ -21,6 +21,8 @@ const PRODUCTION_HOST = "maglev.proxy.rlwy.net:16621";
 const DRY_RUN = process.argv.includes("--dry-run");
 
 const KEYWORD_MAP: Record<string, string> = {
+  "how-to-go-viral-on-instagram-reels-2024":
+    "how to go viral on instagram reels",
   "how-to-go-viral-on-instagram-reels-2026":
     "how to go viral on instagram reels",
   "how-to-spy-on-viral-instagram-reels":
@@ -42,6 +44,24 @@ const KEYWORD_MAP: Record<string, string> = {
   "spyreels-vs-meedro": "spyreels vs meedro",
   "spyreels-vs-viralfindr": "spyreels vs viralfindr",
   "best-instagram-reels-tools-2026": "best instagram reels tools",
+  "guide-meedro-alternative": "meedro alternative",
+  "guide-viralfindr-alternative": "viralfindr alternative",
+  "meedro-review-2026": "meedro review 2026",
+  "viralfindr-review-2026": "viralfindr review 2026",
+  "guide-instagram-reels-spy-tool": "instagram reels spy tool",
+  "guide-instagram-reels-content-analysis-2026":
+    "instagram reels content analysis",
+  "guide-alex-hormozi-instagram-reels-analysis":
+    "alex hormozi instagram reels",
+  "guide-instagram-reels-engagement-rate": "instagram reels engagement rate",
+  "guide-instagram-reels-hook-patterns-data": "instagram reels hook patterns",
+  "guide-transcribe-instagram-reels-analysis": "transcribe instagram reels",
+  "guide-how-to-go-viral-on-instagram-reels-2026":
+    "how to go viral on instagram reels",
+  "guide-instagram-reels-hook-ideas-2026": "instagram reels hook ideas",
+  "guide-instagram-reels-content-strategy-under-10k":
+    "instagram reels content strategy",
+  "guide-spyreels-review-2026": "spyreels review",
 };
 
 const META_UPDATES: Record<

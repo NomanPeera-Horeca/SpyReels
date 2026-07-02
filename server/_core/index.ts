@@ -96,7 +96,7 @@ async function startServer() {
   // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
     res.type("text/plain").send(
-      `User-agent: GPTBot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: anthropic-ai\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\n\nUser-agent: Bytespider\nAllow: /\n\nUser-agent: FacebookBot\nAllow: /\n\nUser-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /affiliate\nAllow: /contact\nAllow: /about\nAllow: /free-tools\nAllow: /free-tools/*\nAllow: /features\nAllow: /features/*\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
+      `User-agent: GPTBot\nAllow: /\n\nUser-agent: Bingbot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: anthropic-ai\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\n\nUser-agent: Bytespider\nAllow: /\n\nUser-agent: FacebookBot\nAllow: /\n\nUser-agent: *\nAllow: /\nAllow: /blog\nAllow: /blog/*\nAllow: /terms\nAllow: /privacy\nAllow: /pricing\nAllow: /affiliate\nAllow: /contact\nAllow: /about\nAllow: /free-tools\nAllow: /free-tools/*\nAllow: /features\nAllow: /features/*\nAllow: /llms.txt\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /saved\nDisallow: /scripts\nDisallow: /search\nDisallow: /history\nDisallow: /settings\nDisallow: /billing\n\nSitemap: https://spyreels.ai/sitemap.xml`
     );
   });
 

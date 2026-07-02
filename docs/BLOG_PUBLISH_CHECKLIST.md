@@ -66,6 +66,31 @@ Wait 1-2 weeks for recrawl before judging "Duplicate, Google chose different can
 
 ---
 
+## Bing Webmaster Tools (ChatGPT search path)
+
+Bing indexing matters for ChatGPT live search. Google-only ops are not enough.
+
+### One-time setup
+
+- [ ] Verify **https://spyreels.ai** at [Bing Webmaster Tools](https://www.bing.com/webmasters) (DNS or HTML tag).
+- [ ] Submit sitemap: `https://spyreels.ai/sitemap.xml`
+- [ ] Confirm **URL Inspection** shows key pages as indexed (home, pricing, viral finder, hook tool, top guides).
+
+### After deploy or blog batch
+
+- [ ] Run: `pnpm tsx scripts/notify-bing-sitemap.ts` (prints Bing checklist; optional IndexNow if `INDEXNOW_KEY` is set).
+- [ ] Request indexing in Bing for the **canonical** URL only (same rule as GSC).
+- [ ] Confirm `robots.txt` allows `Bingbot` (explicit rule on production).
+
+**Note:** `bing.com/ping` is deprecated (HTTP 410). Sitemap submission must happen in Bing Webmaster Tools UI.
+
+### Do not
+
+- Request Bing indexing on legacy `how-to-*` URLs after merge.
+- Block Bingbot while allowing GPTBot (ChatGPT search uses Bing for live results).
+
+---
+
 ## Do not
 
 - Publish a second post targeting the same primary keyword without consolidating the old URL.

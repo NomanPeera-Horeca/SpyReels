@@ -3,7 +3,7 @@
 
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-grow-instagram-reels-under-10k', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2024';
 
-UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-grow-instagram-reels-under-10k', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2026';
+UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-how-to-go-viral-on-instagram-reels-2026', updatedAt = NOW() WHERE slug = 'how-to-go-viral-on-instagram-reels-2026';
 
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-spy-on-competitor-instagram-reels', updatedAt = NOW() WHERE slug = 'how-to-spy-on-viral-instagram-reels';
 

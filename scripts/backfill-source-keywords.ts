@@ -10,17 +10,21 @@ import { existsSync } from "fs";
 import { resolve } from "path";
 import mysql from "mysql2/promise";
 
-const PRODUCTION_ENV_FILE = ".env.had-rotated-creds";
 const PRODUCTION_HOST = "maglev.proxy.rlwy.net:16621";
 const DRY_RUN = process.argv.includes("--dry-run");
 
-config({ path: resolve(process.cwd(), ".env") });
-if (existsSync(resolve(process.cwd(), PRODUCTION_ENV_FILE))) {
-  config({
-    path: resolve(process.cwd(), PRODUCTION_ENV_FILE),
-    override: true,
-  });
+function loadEnv(): void {
+  const envFileArg = process.argv.find((a) => a.startsWith("--env-file="));
+  const envPath = envFileArg
+    ? resolve(process.cwd(), envFileArg.slice("--env-file=".length))
+    : resolve(process.cwd(), ".env");
+
+  if (existsSync(envPath)) {
+    config({ path: envPath });
+  }
 }
+
+loadEnv();
 
 const KEYWORD_MAP: Record<string, string> = {
   "how-to-go-viral-on-instagram-reels-2024":
@@ -67,7 +71,7 @@ function assertProductionDatabase(): string {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      `DATABASE_URL is not set after loading ${PRODUCTION_ENV_FILE}.`
+      "DATABASE_URL is not set. Copy the current URL from Railway into .env."
     );
   }
   if (!url.includes(PRODUCTION_HOST)) {
