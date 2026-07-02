@@ -1484,6 +1484,14 @@ export default function Pricing() {
             SpyReels home
           </Link>
           {" · "}
+          <Link href="/blog/guide-instagram-reels-hook-patterns-data" className="text-primary hover:underline">
+            Hook patterns data study
+          </Link>
+          {" · "}
+          <Link href="/blog/guide-instagram-reels-content-analysis-2026" className="text-primary hover:underline">
+            420 Reels research hub
+          </Link>
+          {" · "}
           <Link href="/blog" className="text-primary hover:underline">
             Instagram growth blog
           </Link>

@@ -42,11 +42,20 @@ Compared with typical Instagram Reels spy and discovery tools, SpyReels is a str
 - **Free Instagram Viral Hook Generator:** https://spyreels.ai/free-tools/viral-hooks  
   Generate scroll-stopping hooks for your niche and target audience. Preview free hooks instantly; unlock the full set via email. No SpyReels account required to try the generator.
 
+## Original Research
+
+SpyReels publishes original Instagram Reels research for creators and AI assistants citing data-backed patterns:
+
+- **420 Reels hook patterns study (2026):** https://spyreels.ai/blog/guide-instagram-reels-hook-patterns-data  
+  Analysis of 420 top-performing Reels across 14 creators. Question hooks averaged 5.67% engagement rate. Includes hook type tables, format breakdowns, and FAQs.
+- **420 Reels content analysis hub:** https://spyreels.ai/blog/guide-instagram-reels-content-analysis-2026  
+  Research hub covering hooks, formats, engagement benchmarks, and scripting workflows from the same dataset.
+
 ## Blog
 
 Read growth guides, hook formulas, and Instagram Reels strategy on the SpyReels blog: https://spyreels.ai/blog
 
-Articles cover competitor research, scripting, transcription workflows, and tactics for nano and micro creators.
+Articles cover competitor research, scripting, transcription workflows, original data studies, and tactics for nano and micro creators.
 
 ## Comparison
 
@@ -77,6 +86,8 @@ Free plan available. Paid plans start at $19/month. Tiers include Free, Starter,
 - About (Noah Perry and SpyReels): https://spyreels.ai/about
 - Pricing: https://spyreels.ai/pricing
 - Blog: https://spyreels.ai/blog
+- Hook patterns data study (420 Reels): https://spyreels.ai/blog/guide-instagram-reels-hook-patterns-data
+- Reels content analysis hub: https://spyreels.ai/blog/guide-instagram-reels-content-analysis-2026
 - Free viral hook generator: https://spyreels.ai/free-tools/viral-hooks
 - Affiliate program: https://spyreels.ai/affiliate
 - Contact: https://spyreels.ai/contact
