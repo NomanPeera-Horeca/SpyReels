@@ -1,4 +1,5 @@
-import { useEffect, useState, startTransition } from "react";
+import { useEffect, useRef, useState, startTransition } from "react";
+import { usePostHog } from "@posthog/react";
 import { useCanonical } from "@/hooks/useCanonical";
 import {
   applyStandardPageMeta,
@@ -46,6 +47,8 @@ const HOOKS_FAQ_ITEMS = [
 ];
 
 export default function HookGenerator() {
+  const posthog = usePostHog();
+  const resultsRef = useRef<HTMLDivElement>(null);
   useCanonical("/free-tools/viral-hooks");
 
   useEffect(() => {
@@ -127,6 +130,14 @@ export default function HookGenerator() {
   const [sessionToken, setSessionToken] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (stage === "preview" || stage === "unlocked") {
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [stage]);
+
   const generateMutation = trpc.hookGenerator.generate.useMutation({
     onSuccess: (data) => {
       if (document.activeElement instanceof HTMLElement) {
@@ -139,8 +150,17 @@ export default function HookGenerator() {
         setStage("preview");
       });
       setError("");
+      posthog?.capture("hook_generator_generate_success", {
+        free_hook_count: data.free.length,
+        locked_hook_count: data.lockedCount,
+      });
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      setError(err.message);
+      posthog?.capture("hook_generator_generate_failed", {
+        message: err.message.slice(0, 200),
+      });
+    },
   });
 
   const unlockMutation = trpc.hookGenerator.unlock.useMutation({
@@ -153,14 +173,26 @@ export default function HookGenerator() {
         setStage("unlocked");
       });
       setError("");
+      posthog?.capture("hook_generator_unlock_success", {
+        hook_count: data.hooks.length,
+      });
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      setError(err.message);
+      posthog?.capture("hook_generator_unlock_failed", {
+        message: err.message.slice(0, 200),
+      });
+    },
   });
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     if (niche.trim().length < 2 || audience.trim().length < 2) return;
     setError("");
+    posthog?.capture("hook_generator_generate_started", {
+      niche_length: niche.trim().length,
+      audience_length: audience.trim().length,
+    });
     generateMutation.mutate({
       niche: niche.trim(),
       targetAudience: audience.trim(),
@@ -171,6 +203,7 @@ export default function HookGenerator() {
     e.preventDefault();
     if (!email.trim()) return;
     setError("");
+    posthog?.capture("hook_generator_unlock_started");
     const params = new URLSearchParams(window.location.search);
     unlockMutation.mutate({
       email: email.trim(),
@@ -207,12 +240,25 @@ export default function HookGenerator() {
           </p>
         </div>
 
+        {generateMutation.isPending ? (
+          <div
+            className="mb-6 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+            <span>
+              Generating your hooks with AI. This usually takes a few seconds. Please keep this tab open.
+            </span>
+          </div>
+        ) : null}
+
         {/* Stage content: key forces a clean remount when switching stages (avoids React insertBefore crashes) */}
-        <div key={stage}>
+        <div key={stage} ref={resultsRef}>
         {stage === "input" && (
           <Card>
             <CardContent className="p-6 sm:p-8">
-              <form onSubmit={handleGenerate} className="space-y-4">
+              <form onSubmit={handleGenerate} className="space-y-4" aria-busy={generateMutation.isPending}>
                 <div>
                   <label htmlFor="niche-input" className="text-sm font-medium block mb-2">
                     What's your video about?

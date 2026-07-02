@@ -385,6 +385,7 @@ const hookGeneratorRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
+      const startedAt = Date.now();
       const response = await invokeLLM({
         messages: [
           {
@@ -507,6 +508,8 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
           target_audience: input.targetAudience.slice(0, 500),
           hooks_count: hooks.length,
           first_hook: hooks[0]?.hook?.slice(0, 200) ?? null,
+          duration_ms: Date.now() - startedAt,
+          model: response.model,
         },
       });
 

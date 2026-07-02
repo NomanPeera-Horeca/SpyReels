@@ -286,7 +286,9 @@ function DashboardLayoutContent({
                         const button = (
                           <SidebarMenuButton
                             isActive={isActive}
-                            onClick={() => setLocation(item.path)}
+                            onClick={() => {
+                              if (!isActive) setLocation(item.path);
+                            }}
                             tooltip={mockupTooltip ? undefined : item.label}
                             className="h-10 transition-all font-normal"
                           >

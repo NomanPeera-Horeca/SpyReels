@@ -52,6 +52,12 @@ export function PublicHeader() {
               <Link
                 href="/free-tools/viral-hooks"
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                onClick={(e) => {
+                  if (pathname === "/free-tools/viral-hooks") {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }
+                }}
               >
                 Free Tools
               </Link>

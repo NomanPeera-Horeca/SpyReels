@@ -141,6 +141,10 @@ export default function OnboardingPage() {
 
     setSubmitError(null);
     setIsRouting(true);
+    posthog?.capture("onboarding_submit_started", {
+      has_clarifying_answer: Boolean(clarifyingAnswer.trim()),
+      description_length: fullDescription.length,
+    });
     try {
       const result = await routeNicheMutation.mutateAsync({
         businessDescription: fullDescription,
@@ -149,8 +153,13 @@ export default function OnboardingPage() {
       if (result.clarifyingQuestion && !clarifyingAnswer.trim()) {
         setClarifyingQuestion(result.clarifyingQuestion);
         setSubmitError("We need one detail about your niche or audience, then tap the button again.");
+        posthog?.capture("onboarding_clarifying_question_shown");
         return;
       }
+
+      posthog?.capture("onboarding_route_success", {
+        niche_count: result.selectedSlugs.length,
+      });
 
       posthog?.capture("onboarding_niches_selected", {
         niche_slugs: result.selectedSlugs,
@@ -172,6 +181,9 @@ export default function OnboardingPage() {
           ),
           demo_seeded: Boolean(completeResult.demoJobId),
         });
+        posthog?.capture("onboarding_complete_success", {
+          demo_seeded: Boolean(completeResult.demoJobId),
+        });
       }
       await trpcUtils.onboarding.getState.invalidate();
       await trpcUtils.onboarding.getState.refetch();
@@ -182,6 +194,10 @@ export default function OnboardingPage() {
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setSubmitError(message);
       toast.error("Could not finish setup", { description: message });
+      posthog?.capture("onboarding_submit_failed", {
+        message: message.slice(0, 200),
+        stage: isCompleting ? "complete" : "route",
+      });
       setIsCompleting(false);
     } finally {
       setIsRouting(false);
@@ -199,7 +215,13 @@ export default function OnboardingPage() {
   if (!user) return null;
   if (shouldBypassOnboarding) return null;
 
-  if (isCompleting || completeMutation.isPending || skipMutation.isPending) {
+  if (isRouting || isCompleting || completeMutation.isPending || skipMutation.isPending) {
+    const progressTitle = isRouting && !isCompleting
+      ? "Understanding your niche..."
+      : completionText;
+    const progressHint = isRouting && !isCompleting
+      ? "Usually 10 to 30 seconds. Please keep this tab open."
+      : "This takes a few seconds";
     return (
       <OnboardingShell>
         <div className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center px-6 py-16 text-center">
@@ -207,8 +229,8 @@ export default function OnboardingPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
             </div>
-            <h2 className="text-3xl tracking-tight text-foreground">{completionText}</h2>
-            <p className="max-w-lg text-sm text-muted-foreground">This takes a few seconds</p>
+            <h2 className="text-3xl tracking-tight text-foreground">{progressTitle}</h2>
+            <p className="max-w-lg text-sm text-muted-foreground">{progressHint}</p>
           </div>
         </div>
       </OnboardingShell>
@@ -272,11 +294,14 @@ export default function OnboardingPage() {
             <button
               key={example}
               type="button"
+              disabled={isRouting || isCompleting}
               onClick={() => {
                 setDescription(example);
                 setSubmitError(null);
+                setClarifyingQuestion(null);
+                setClarifyingAnswer("");
               }}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
+              className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               {example}
             </button>

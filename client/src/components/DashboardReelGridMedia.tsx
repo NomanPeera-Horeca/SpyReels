@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
+import { usePostHog } from "@posthog/react";
 import { Loader2, Play, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
@@ -38,6 +39,7 @@ export function DashboardReelGridMedia({
   onVideoUrlResolved?: (url: string) => void;
   fallbackLabel?: string;
 }) {
+  const posthog = usePostHog();
   const [playingLocal, setPlayingLocal] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
@@ -112,16 +114,36 @@ export function DashboardReelGridMedia({
     setThumbFailed(false);
   }, [thumb]);
 
+  const capturePreviewEvent = useCallback(
+    (
+      event: "reel_preview_play_started" | "reel_preview_play_success" | "reel_preview_play_failed",
+      extra?: Record<string, string | number | boolean | null | undefined>
+    ) => {
+      posthog?.capture(event, {
+        reel_id: reelId ?? null,
+        shortcode: shortcode?.trim() || null,
+        size,
+        ...extra,
+      });
+    },
+    [posthog, reelId, shortcode, size]
+  );
+
   const tryPlay = useCallback(() => {
     if (userPausedRef.current) return;
     const v = videoRef.current;
     if (!v || v.paused === false) return;
     const p = v.play();
-    void p.catch(() => {
-      setVideoFailed(true);
-      setPlaying(false);
-    });
-  }, [setPlaying]);
+    void p
+      .then(() => {
+        capturePreviewEvent("reel_preview_play_success");
+      })
+      .catch(() => {
+        capturePreviewEvent("reel_preview_play_failed", { reason: "play_promise_rejected" });
+        setVideoFailed(true);
+        setPlaying(false);
+      });
+  }, [capturePreviewEvent, setPlaying]);
 
   const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
     const current = resolvedSrc || (videoUrl ?? "").trim();
@@ -142,19 +164,25 @@ export function DashboardReelGridMedia({
       return next;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Preview unavailable";
+      capturePreviewEvent("reel_preview_play_failed", {
+        reason: "refresh_failed",
+        message: message.slice(0, 200),
+      });
       toast.error("Video preview unavailable", { description: message });
       return null;
     }
-  }, [resolvedSrc, videoUrl, shortcode, reelId, refreshMutation, onVideoUrlResolved]);
+  }, [resolvedSrc, videoUrl, shortcode, reelId, refreshMutation, onVideoUrlResolved, capturePreviewEvent]);
 
   const startPlayback = useCallback(async () => {
     if (isPreparing) return;
     setVideoFailed(false);
     userPausedRef.current = false;
     setIsPreparing(true);
+    capturePreviewEvent("reel_preview_play_started");
     try {
       const src = await resolvePlayableUrl();
       if (!src) {
+        capturePreviewEvent("reel_preview_play_failed", { reason: "no_playable_url" });
         setVideoFailed(true);
         setPlaying(false);
         return;
@@ -165,7 +193,7 @@ export function DashboardReelGridMedia({
     } finally {
       setIsPreparing(false);
     }
-  }, [isPreparing, resolvePlayableUrl, setPlaying, playerId]);
+  }, [isPreparing, resolvePlayableUrl, setPlaying, playerId, capturePreviewEvent]);
 
   useEffect(() => {
     if (!playing) {
@@ -190,6 +218,7 @@ export function DashboardReelGridMedia({
   };
 
   const handleVideoError = () => {
+    capturePreviewEvent("reel_preview_play_failed", { reason: "video_element_error" });
     setVideoFailed(true);
     stopPlayback();
   };
