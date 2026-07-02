@@ -2893,6 +2893,8 @@ export default function Dashboard() {
                           className="relative h-full w-full"
                           thumbnailUrl={reel.thumbnailUrl}
                           videoUrl={reel.videoUrl}
+                          shortcode={reel.shortcode}
+                          reelId={reel.id}
                         />
                         <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
                           #{index + 1}
@@ -3382,6 +3384,8 @@ export default function Dashboard() {
           gridModalReel
             ? {
                 id: gridModalReel.id,
+                reelId: gridModalReel.id,
+                shortcode: gridModalReel.shortcode,
                 caption: gridModalReel.caption,
                 thumbnailUrl: gridModalReel.thumbnailUrl,
                 videoUrl: gridModalReel.videoUrl ?? "",

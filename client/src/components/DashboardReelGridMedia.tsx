@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef } from "react";
-import { Play, X } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Loader2, Play, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { needsVideoUrlRefresh } from "@shared/mediaUrl";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 type Size = "default" | "compact";
 
@@ -8,26 +11,35 @@ type Size = "default" | "compact";
 export function DashboardReelGridMedia({
   thumbnailUrl,
   videoUrl,
+  shortcode,
+  reelId,
   className,
   size = "default",
   playing: playingControlled,
   onPlayingChange,
+  onVideoUrlResolved,
   fallbackLabel,
 }: {
   thumbnailUrl: string | null | undefined;
   videoUrl: string | null | undefined;
+  /** Required to refresh expired Instagram CDN URLs on play. */
+  shortcode?: string | null;
+  reelId?: number;
   className?: string;
-  /** Smaller play/close controls for narrow list rows. */
   size?: Size;
-  /** When set, parent controls play state (for one-at-a-time grids). */
   playing?: boolean;
   onPlayingChange?: (playing: boolean) => void;
-  /** Shown on placeholder when thumbnail is missing or failed to load. */
+  /** Called when a refreshed stable URL is fetched (parent can update cache). */
+  onVideoUrlResolved?: (url: string) => void;
   fallbackLabel?: string;
 }) {
   const [playingLocal, setPlayingLocal] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const refreshMutation = trpc.reels.refreshVideoUrl.useMutation();
   const isCompact = size === "compact";
   const isControlled = playingControlled !== undefined;
   const playing = isControlled ? playingControlled : playingLocal;
@@ -40,36 +52,99 @@ export function DashboardReelGridMedia({
     }
   };
 
-  const src = (videoUrl ?? "").trim();
-  const hasVideo = src.length > 0;
   const thumb = (thumbnailUrl ?? "").trim();
   const showThumb = thumb.length > 0 && !thumbFailed;
+  const hasResolvableVideo =
+    resolvedSrc.length > 0 || Boolean(shortcode?.trim()) || Boolean((videoUrl ?? "").trim());
+
+  useEffect(() => {
+    setResolvedSrc((videoUrl ?? "").trim());
+    setVideoFailed(false);
+  }, [videoUrl]);
 
   useEffect(() => {
     setThumbFailed(false);
   }, [thumb]);
+
+  const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
+    const current = resolvedSrc || (videoUrl ?? "").trim();
+    const code = (shortcode ?? "").trim();
+    if (!code && !current) return null;
+    if (current && !needsVideoUrlRefresh(current)) return current;
+    if (!code) return current || null;
+
+    try {
+      const result = await refreshMutation.mutateAsync({
+        shortcode: code,
+        reelId,
+      });
+      const next = result.videoUrl.trim();
+      if (!next) return null;
+      setResolvedSrc(next);
+      onVideoUrlResolved?.(next);
+      return next;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Preview unavailable";
+      toast.error("Video preview unavailable", { description: message });
+      return null;
+    }
+  }, [resolvedSrc, videoUrl, shortcode, reelId, refreshMutation, onVideoUrlResolved]);
+
+  const startPlayback = useCallback(async () => {
+    if (isPreparing) return;
+    setVideoFailed(false);
+    setIsPreparing(true);
+    try {
+      const src = await resolvePlayableUrl();
+      if (!src) {
+        setVideoFailed(true);
+        setPlaying(false);
+        return;
+      }
+      setResolvedSrc(src);
+      setPlaying(true);
+    } finally {
+      setIsPreparing(false);
+    }
+  }, [isPreparing, resolvePlayableUrl, setPlaying]);
 
   useEffect(() => {
     if (!playing) return;
     const v = videoRef.current;
     if (!v) return;
     const p = v.play();
-    void p.catch(() => {});
-  }, [playing]);
+    void p.catch(() => {
+      setVideoFailed(true);
+      setPlaying(false);
+    });
+  }, [playing, resolvedSrc, setPlaying]);
+
+  const handleVideoError = () => {
+    setVideoFailed(true);
+    setPlaying(false);
+  };
+
+  const handleRetry = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVideoFailed(false);
+    await startPlayback();
+  };
 
   return (
     <div className={cn(className)}>
-      {playing && hasVideo ? (
+      {playing && resolvedSrc && !videoFailed ? (
         <div className="relative h-full w-full bg-black" onClick={(e) => e.stopPropagation()}>
           <video
             ref={videoRef}
-            src={src}
+            key={resolvedSrc}
+            src={resolvedSrc}
             poster={thumb || undefined}
             controls
             playsInline
             autoPlay
             preload="metadata"
             className="h-full w-full object-cover"
+            onError={handleVideoError}
           />
           <button
             type="button"
@@ -109,26 +184,49 @@ export function DashboardReelGridMedia({
               ) : null}
             </div>
           )}
-          {hasVideo ? (
+          {videoFailed ? (
+            <div
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/75 px-3 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-xs font-medium text-white">Preview unavailable</p>
+              {shortcode?.trim() ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/25"
+                  onClick={handleRetry}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {hasResolvableVideo ? (
             <button
               type="button"
               className={cn(
-                "absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80",
+                "absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80 disabled:opacity-70",
                 isCompact ? "h-9 w-9" : "h-12 w-12"
               )}
               aria-label="Play video"
               title="Play video"
+              disabled={isPreparing || refreshMutation.isPending}
               onClick={(e) => {
                 e.stopPropagation();
-                setPlaying(true);
+                void startPlayback();
               }}
             >
-              <Play
-                className={cn(
-                  "translate-x-0.5 fill-current",
-                  isCompact ? "h-4 w-4" : "h-5 w-5"
-                )}
-              />
+              {isPreparing || refreshMutation.isPending ? (
+                <Loader2 className={cn("animate-spin", isCompact ? "h-4 w-4" : "h-5 w-5")} />
+              ) : (
+                <Play
+                  className={cn(
+                    "translate-x-0.5 fill-current",
+                    isCompact ? "h-4 w-4" : "h-5 w-5"
+                  )}
+                />
+              )}
             </button>
           ) : null}
         </>

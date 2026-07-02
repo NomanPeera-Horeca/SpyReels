@@ -2,6 +2,7 @@ import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type { StartRemakeOptions } from "@/hooks/useLibraryRemakeChain";
 import {
   LIBRARY_REMAKE_CTA_LABEL,
+  READY_TO_FILM_CTA_LABEL,
   libraryRemakeButtonLabel,
   type LibraryRemakeSource,
   type LibraryRemakeState,
@@ -84,9 +85,9 @@ export function buildLibraryOneClickRemake(args: {
   }
   if (hookState.stage === "ready" && hookState.scriptId != null) {
     return {
-      label: "Open script",
+      label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
-      tooltip: "Open your script in the panel below",
+      tooltip: "Open your script and record in the teleprompter",
       onClick: () => args.triggerOpenMyScript(args.openScriptReelId, hookState.scriptId!),
     };
   }
@@ -102,9 +103,9 @@ export function buildLibraryOneClickRemake(args: {
   }
   if (args.batchRecreateSt === "ready" && args.batchEntry?.latestScriptId) {
     return {
-      label: "Open script",
+      label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
-      tooltip: "Open your script in the panel below",
+      tooltip: "Open your script and record in the teleprompter",
       onClick: () =>
         args.triggerOpenMyScript(args.openScriptReelId, args.batchEntry!.latestScriptId),
     };

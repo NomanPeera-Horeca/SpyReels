@@ -60,6 +60,10 @@ import {
   buildPanelUserReport,
   panelUserFiltersSchema,
 } from "./adminUserMetrics";
+import {
+  buildTrafficConversionReport,
+  trafficReportFiltersSchema,
+} from "./adminTrafficMetrics";
 
 const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   limit: true,
@@ -806,10 +810,16 @@ export const appRouter = router({
         // Check if handle already exists in monitoring
         const normalizedHandle = normalizeInstagramHandle(input.handle);
         const existingJobs = await getScrapeJobsByWorkspace(ctx.workspaceId);
-        const existingJob = existingJobs.find(
-          (j) => j.handle.toLowerCase() === normalizedHandle && (j.status === "completed" || j.status === "running")
+        const existingRunningJob = existingJobs.find(
+          (j) => j.handle.toLowerCase() === normalizedHandle && j.status === "running"
         );
-        if (existingJob) {
+        if (existingRunningJob) {
+          return { jobId: existingRunningJob.id, resumed: true as const };
+        }
+        const existingCompletedJob = existingJobs.find(
+          (j) => j.handle.toLowerCase() === normalizedHandle && j.status === "completed"
+        );
+        if (existingCompletedJob) {
           throw new TRPCError({
             code: "CONFLICT",
             message: `@${normalizedHandle} is already in your Creator Radar. Open Creator Radar and tap Refresh to pull new reels (fresh window from your last sync, not a full archive backfill).`,
@@ -1086,6 +1096,59 @@ export const appRouter = router({
             transcription: transcriptionMap.get(r.id) || null,
           })),
         };
+      }),
+
+    /** Fetch a fresh Instagram video URL, mirror to R2, and persist on the reel row. */
+    refreshVideoUrl: protectedProcedure
+      .input(
+        z.object({
+          shortcode: z.string().min(1),
+          reelId: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const shortcode = input.shortcode.trim();
+        const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+
+        if (input.reelId != null) {
+          const reel = await getReelById(input.reelId);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
+          }
+          const job = await getScrapeJob(reel.jobId);
+          if (!job || job.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          const existing = (reel.videoUrl ?? "").trim();
+          if (publicBase && existing.startsWith(publicBase)) {
+            return { videoUrl: existing };
+          }
+        }
+
+        const freshData = await fetchReelByShortcode(shortcode);
+        if (!freshData?.videoUrl?.trim()) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not retrieve a fresh video URL for this reel.",
+          });
+        }
+
+        const mirrored = await ensureReelVideoOnR2(shortcode, freshData.videoUrl);
+        const videoUrl = mirrored.trim() || freshData.videoUrl.trim();
+
+        if (input.reelId != null) {
+          const db = await getDb();
+          if (db) {
+            const { reels: reelsTable } = await import("../drizzle/schema");
+            const { eq } = await import("drizzle-orm");
+            await db
+              .update(reelsTable)
+              .set({ videoUrl })
+              .where(eq(reelsTable.id, input.reelId));
+          }
+        }
+
+        return { videoUrl };
       }),
   }),
 
@@ -6402,6 +6465,12 @@ The hook MUST be 7-10 words. Count them.`),
   admin: router({
     ping: adminPanelProcedure.query(() => ({ ok: true as const })),
 
+    trafficConversionReport: adminPanelProcedure
+      .input(trafficReportFiltersSchema.optional())
+      .query(async ({ input }) => {
+        return buildTrafficConversionReport(trafficReportFiltersSchema.parse(input ?? {}));
+      }),
+
     trafficOverview: adminPanelProcedure.query(() => ({
       visitors: 0,
       signups7d: 0,
@@ -7331,6 +7400,30 @@ async function runScrapeJob(
     await refreshViralFlagsForScrapeJob(jobId);
     const finalReelCount = await countReelsForJob(jobId);
 
+    const mirrorDb = await getDb();
+    if (mirrorDb) {
+      const reelIdsForMirror = await mirrorDb
+        .select({ id: reelsTable.id })
+        .from(reelsTable)
+        .where(eq(reelsTable.jobId, jobId))
+        .then((rows) => rows.map((r) => r.id));
+      if (reelIdsForMirror.length > 0) {
+        const mirrorResult = await mirrorReelVideosToR2ByIds(reelIdsForMirror);
+        console.log(
+          `[runScrapeJob ${jobId}] mirror-videos ok=${mirrorResult.ok} failed=${mirrorResult.failed} skipped=${mirrorResult.skipped}`
+        );
+        classifyReelsByIds(reelIdsForMirror)
+          .then((r) =>
+            console.log(
+              `[runScrapeJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
+            )
+          )
+          .catch((err) =>
+            console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
+          );
+      }
+    }
+
     await updateScrapeJob(jobId, {
       status: "completed",
       totalReels: finalReelCount,
@@ -7347,35 +7440,6 @@ async function runScrapeJob(
     console.log(
       `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${finalReelCount} followers=${followerCount}`
     );
-
-    const classifyDb = await getDb();
-    if (classifyDb) {
-      const newReelIds = await classifyDb
-        .select({ id: reelsTable.id })
-        .from(reelsTable)
-        .where(eq(reelsTable.jobId, jobId))
-        .then((rows) => rows.map((r) => r.id));
-      if (newReelIds.length > 0) {
-        classifyReelsByIds(newReelIds)
-          .then((r) =>
-            console.log(
-              `[runScrapeJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
-            )
-          )
-          .catch((err) =>
-            console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
-          );
-        mirrorReelVideosToR2ByIds(newReelIds)
-          .then((r) =>
-            console.log(
-              `[runScrapeJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
-            )
-          )
-          .catch((err) =>
-            console.error(`[runScrapeJob ${jobId}] mirror-videos error:`, err)
-          );
-      }
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const failureReason = classifyScrapeFailureMessage(message);

@@ -22,7 +22,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { TRPCClientError } from "@trpc/client";
 import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
+import { useActiveScrapeJob } from "@/lib/activeScrapeJob";
+import { ActiveScrapeJobNotice } from "@/components/ActiveScrapeJobNotice";
 import {
   normalizeInstagramHandle,
   isValidInstagramHandleNormalized,
@@ -154,6 +157,7 @@ export default function Home() {
       : null;
 
   const scrapeGate = useUsageGate("scrapeCount");
+  const { activeJob: activeRunningJob } = useActiveScrapeJob();
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: RESEARCH_STALE_MS,
     refetchOnWindowFocus: false,
@@ -359,20 +363,41 @@ export default function Home() {
       : accountsBySelectedNicheQuery.error?.message ?? null;
 
   const startScrape = trpc.scrape.start.useMutation({
-    onSuccess: data => {
+    onSuccess: (data, variables) => {
+      const normalizedHandle = normalizeInstagramHandle(variables.handle);
+      posthog?.capture("research_started", {
+        handle: normalizedHandle,
+        timeframe_days: variables.timeframeDays,
+        resumed: "resumed" in data && data.resumed,
+      });
+      if ("resumed" in data && data.resumed) {
+        toast.message(`Already researching @${normalizedHandle}`, {
+          description: "Opening your progress page.",
+        });
+      }
       // Search-to-featured shortcut (Commit 2.5): backend detected the
       // handle already exists as a featured creator, so jump straight to
       // the instant Path-B dashboard instead of scraping.
       if ("seededFromFeatured" in data && data.seededFromFeatured) {
         posthog?.capture("featured_spy_started", {
-          handle: handle.replace(/^@/, "").trim().toLowerCase(),
+          handle: normalizedHandle,
           job_id: data.jobId,
         });
       }
+      utils.scrape.list.invalidate();
       navigateAfterScrapeStart(data, setLocation, "research");
     },
     onError: error => {
       const msg = error.message ?? "";
+      if (error instanceof TRPCClientError && error.data?.code === "CONFLICT") {
+        toast.error(msg, {
+          action: {
+            label: "Creator Radar",
+            onClick: () => setLocation("/history"),
+          },
+        });
+        return;
+      }
       if (isLikelyInstagramRateLimitMessage(msg)) {
         toast.error("Instagram is limiting requests right now", {
           description:
@@ -425,9 +450,9 @@ export default function Home() {
       );
       return;
     }
-    posthog?.capture("research_started", {
-      handle: normalized,
-      timeframe_days: parseInt(timeframe),
+    toast.message(`Researching @${normalized}...`, {
+      description: "This usually takes 30-45 seconds.",
+      duration: 6000,
     });
     startScrape.mutate({
       handle: normalized,
@@ -479,6 +504,10 @@ export default function Home() {
           Pick a creator to get your first viral script.
         </p>
       )}
+
+      {activeRunningJob ? (
+        <ActiveScrapeJobNotice job={activeRunningJob} variant="banner" />
+      ) : null}
 
       <div className="flex flex-col">
       <div

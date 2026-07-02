@@ -7,7 +7,7 @@ import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
 const MAX_VIDEO_DOWNLOAD_BYTES = 120 * 1024 * 1024; // 120 MiB
 
 const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
-const MIRROR_BATCH_SIZE = 1;
+const MIRROR_BATCH_SIZE = 2;
 
 export function reelVideoR2Key(shortcode: string): string {
   const safe = shortcode.replace(/[^a-zA-Z0-9_-]/g, "");

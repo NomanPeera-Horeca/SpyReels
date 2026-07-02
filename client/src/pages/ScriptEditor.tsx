@@ -72,6 +72,13 @@ import { ScriptExport } from "@/components/ScriptExport";
 import { ShareScript } from "@/components/ShareScript";
 import { PostDateTimePicker } from "@/components/PostDateTimePicker";
 import { ScriptEditorSourceReel } from "@/components/ScriptEditorSourceReel";
+import {
+  baselineFromEditorState,
+  baselineFromScript,
+  isScriptEditorDirty,
+  isStatusOnlyScriptUpdate,
+  type ScriptEditorBaseline,
+} from "@/lib/scriptEditorBaseline";
 
 /** Parse a date string/Date to a Date object for the calendar picker */
 function parseDateValue(
@@ -94,7 +101,7 @@ export default function ScriptEditor() {
   const [editedNotes, setEditedNotes] = useState("");
   const [postDate, setPostDate] = useState<Date | undefined>(undefined);
   const [postTime, setPostTime] = useState("09:00");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [savedBaseline, setSavedBaseline] = useState<ScriptEditorBaseline | null>(null);
   const [showTeleprompter, setShowTeleprompter] = useState(false);
   const [activeTab, setActiveTab] = useState<"edit" | "versions">("edit");
 
@@ -103,6 +110,7 @@ export default function ScriptEditor() {
   const [toolInput, setToolInput] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [selectionInstruction, setSelectionInstruction] = useState("");
+  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
   const [showSelectionPopup, setShowSelectionPopup] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -133,45 +141,78 @@ export default function ScriptEditor() {
   const sourceReel = script?.sourceReel ?? null;
   const showSourceReel = Boolean(script?.reelId && sourceReel);
 
+  const isDirty = isScriptEditorDirty(savedBaseline, {
+    editedContent,
+    editedTitle,
+    editedNotes,
+    postDate,
+    postTime,
+  });
+
   useEffect(() => {
-    if (script && !hasUnsavedChanges) {
-      setEditedContent(script.content);
-      setEditedTitle(script.title);
-      setEditedNotes(script.notes || "");
-      setPostDate(parseDateValue(script.postDate));
-      setPostTime((script as any).postTime || "09:00");
-      // Load saved caption data
-      if ((script as any).generatedCaption)
-        setGeneratedCaption((script as any).generatedCaption);
-      if ((script as any).generatedHashtags) {
-        try {
-          setGeneratedHashtags(JSON.parse((script as any).generatedHashtags));
-        } catch {}
-      }
-      if ((script as any).captionStyle)
-        setCaptionStyle((script as any).captionStyle);
+    if (!script) return;
+    const baseline = baselineFromScript({
+      content: script.content,
+      title: script.title,
+      notes: script.notes,
+      postDate: script.postDate,
+      postTime: (script as { postTime?: string | null }).postTime,
+    });
+    setSavedBaseline(baseline);
+    setEditedContent(baseline.content);
+    setEditedTitle(baseline.title);
+    setEditedNotes(baseline.notes);
+    setPostDate(
+      baseline.postDateKey ? new Date(`${baseline.postDateKey}T12:00:00.000Z`) : undefined
+    );
+    setPostTime(baseline.postTime);
+    setPendingSelection(null);
+    if ((script as { generatedCaption?: string }).generatedCaption) {
+      setGeneratedCaption((script as { generatedCaption: string }).generatedCaption);
     }
-  }, [script, hasUnsavedChanges]);
+    if ((script as { generatedHashtags?: string }).generatedHashtags) {
+      try {
+        setGeneratedHashtags(JSON.parse((script as { generatedHashtags: string }).generatedHashtags));
+      } catch {
+        /* ignore */
+      }
+    }
+    if ((script as { captionStyle?: string }).captionStyle) {
+      setCaptionStyle((script as { captionStyle: string }).captionStyle);
+    }
+  }, [script?.id]);
 
   const posthog = usePostHog();
 
+  const syncBaselineContent = useCallback((content: string) => {
+    setSavedBaseline((prev) => (prev ? { ...prev, content } : prev));
+  }, []);
+
   // --- Mutations ---
   const updateMutation = trpc.scripts.update.useMutation({
-    onSuccess: () => {
-      posthog?.capture("script_saved", { script_id: scriptId });
+    onSuccess: (_data, variables) => {
+      if (!isStatusOnlyScriptUpdate(variables)) {
+        posthog?.capture("script_saved", { script_id: scriptId });
+        setSavedBaseline({
+          content: variables.content ?? "",
+          title: variables.title ?? "",
+          notes: variables.notes ?? "",
+          postDateKey: variables.postDate ? variables.postDate.slice(0, 10) : null,
+          postTime: variables.postTime ?? "09:00",
+        });
+        toast.success("Script saved");
+      }
       utils.scripts.get.invalidate({ id: scriptId! });
       utils.scripts.list.invalidate();
-      setHasUnsavedChanges(false);
-      toast.success("Script saved");
     },
   });
 
   const grammarMutation = trpc.scripts.grammarCheck.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Grammar corrected");
+      toast.success("Grammar corrected and saved");
     },
     onError: () => toast.error("Grammar check failed"),
   });
@@ -179,11 +220,11 @@ export default function ScriptEditor() {
   const rewriteMutation = trpc.scripts.aiRewrite.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       setActiveTool(null);
       setToolInput("");
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script rewritten");
+      toast.success("Script rewritten and saved");
     },
     onError: () => toast.error("Rewrite failed"),
   });
@@ -191,9 +232,9 @@ export default function ScriptEditor() {
   const phraseSwapMutation = trpc.scripts.phraseSwap.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Phrases swapped with fresh alternatives");
+      toast.success("Phrases swapped and saved");
     },
     onError: () => toast.error("Phrase swap failed"),
   });
@@ -201,9 +242,9 @@ export default function ScriptEditor() {
   const simplifyMutation = trpc.scripts.simplify.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script simplified");
+      toast.success("Script simplified and saved");
     },
     onError: () => toast.error("Simplify failed"),
   });
@@ -211,9 +252,9 @@ export default function ScriptEditor() {
   const adjustToneMutation = trpc.scripts.adjustTone.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Tone adjusted");
+      toast.success("Tone adjusted and saved");
     },
     onError: () => toast.error("Tone adjustment failed"),
   });
@@ -221,9 +262,9 @@ export default function ScriptEditor() {
   const makeShorterMutation = trpc.scripts.makeShorter.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script shortened");
+      toast.success("Script shortened and saved");
     },
     onError: () => toast.error("Shortening failed"),
   });
@@ -231,12 +272,13 @@ export default function ScriptEditor() {
   const rewriteSelectionMutation = trpc.scripts.rewriteSelection.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       setShowSelectionPopup(false);
+      setPendingSelection(null);
       setSelectedText("");
       setSelectionInstruction("");
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Selection rewritten");
+      toast.success("Selection rewritten and saved");
     },
     onError: () => toast.error("Selection rewrite failed"),
   });
@@ -244,11 +286,11 @@ export default function ScriptEditor() {
   const rewriteWithAngleMutation = trpc.scripts.rewriteWithAngle.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       setActiveTool(null);
       setToolInput("");
       utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script rewritten with new angle");
+      toast.success("Script rewritten with new angle and saved");
     },
     onError: () => toast.error("Angle rewrite failed"),
   });
@@ -270,7 +312,7 @@ export default function ScriptEditor() {
   const restoreVersionMutation = trpc.scripts.restoreVersion.useMutation({
     onSuccess: data => {
       setEditedContent(data.content);
-      setHasUnsavedChanges(false);
+      syncBaselineContent(data.content);
       utils.scripts.get.invalidate({ id: scriptId! });
       toast.success("Version restored");
     },
@@ -297,7 +339,27 @@ export default function ScriptEditor() {
       changeType: "manual_edit",
       changeDescription: "Manual edit",
     });
-  }, [scriptId, editedTitle, editedContent, editedNotes, postDate, postTime]);
+  }, [scriptId, editedTitle, editedContent, editedNotes, postDate, postTime, updateMutation]);
+
+  const handleSaveClick = useCallback(() => {
+    if (updateMutation.isPending) return;
+    if (!isDirty) {
+      toast.message("No changes to save");
+      return;
+    }
+    handleSave();
+  }, [updateMutation.isPending, isDirty, handleSave]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveClick();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleSaveClick]);
 
   const handleApprove = () => {
     if (!scriptId) return;
@@ -315,10 +377,17 @@ export default function ScriptEditor() {
     if (start !== end) {
       const selected = editedContent.substring(start, end);
       if (selected.trim().length > 5) {
-        setSelectedText(selected);
-        setShowSelectionPopup(true);
+        setPendingSelection(selected);
+        return;
       }
     }
+    setPendingSelection(null);
+  };
+
+  const openSelectionRewrite = () => {
+    if (!pendingSelection) return;
+    setSelectedText(pendingSelection);
+    setShowSelectionPopup(true);
   };
 
   const isAnyMutationPending =
@@ -377,10 +446,7 @@ export default function ScriptEditor() {
             </Button>
             <input
               value={editedTitle}
-              onChange={e => {
-                setEditedTitle(e.target.value);
-                setHasUnsavedChanges(true);
-              }}
+              onChange={e => setEditedTitle(e.target.value)}
               className="text-lg font-semibold bg-transparent border-none outline-none flex-1 min-w-0"
               placeholder="Script title..."
             />
@@ -404,16 +470,17 @@ export default function ScriptEditor() {
             ) : null}
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {hasUnsavedChanges && (
-              <span className="text-xs text-amber-500 font-medium hidden sm:inline">
+            {isDirty && (
+              <span className="text-xs text-amber-500 font-medium">
                 Unsaved
               </span>
             )}
             <Button
               variant="outline"
               size="sm"
-              onClick={handleSave}
-              disabled={updateMutation.isPending || !hasUnsavedChanges}
+              onClick={handleSaveClick}
+              disabled={updateMutation.isPending}
+              className={!isDirty ? "opacity-70" : undefined}
             >
               <Save className="w-3.5 h-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Save</span>
@@ -982,27 +1049,53 @@ export default function ScriptEditor() {
 
             {activeTab === "edit" ? (
               /* Editor */
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="relative flex-1 overflow-y-auto p-4">
+                {isAnyMutationPending ? (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[1px]">
+                    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      Updating script...
+                    </div>
+                  </div>
+                ) : null}
                 <Textarea
                   ref={textareaRef}
                   value={editedContent}
-                  onChange={e => {
-                    setEditedContent(e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
+                  onChange={e => setEditedContent(e.target.value)}
                   onMouseUp={handleTextSelect}
                   onKeyUp={e => {
                     if (e.shiftKey) handleTextSelect();
                   }}
+                  readOnly={isAnyMutationPending}
                   className="min-h-[500px] text-base leading-relaxed resize-none border-none focus-visible:ring-0 p-0 bg-transparent"
                   placeholder="Start writing your script..."
                 />
-                {/* Selection hint */}
-                {!showSelectionPopup && !isAnyMutationPending && (
+                {pendingSelection && !showSelectionPopup && !isAnyMutationPending ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2">
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                      Selected: &ldquo;{pendingSelection.slice(0, 72)}
+                      {pendingSelection.length > 72 ? "..." : ""}&rdquo;
+                    </span>
+                    <Button type="button" size="sm" className="h-7 text-xs" onClick={openSelectionRewrite}>
+                      <Wand2 className="mr-1 h-3 w-3" />
+                      Rewrite selection
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setPendingSelection(null)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                ) : null}
+                {!pendingSelection && !showSelectionPopup && !isAnyMutationPending ? (
                   <p className="text-[11px] text-muted-foreground/50 mt-2">
-                    Tip: Select text in the editor to rewrite just that part
+                    Tip: Select text, then click Rewrite selection to edit just that part
                   </p>
-                )}
+                ) : null}
               </div>
             ) : (
               /* Version History */
@@ -1152,15 +1245,9 @@ export default function ScriptEditor() {
               </h4>
               <PostDateTimePicker
                 date={postDate}
-                onDateChange={d => {
-                  setPostDate(d);
-                  setHasUnsavedChanges(true);
-                }}
+                onDateChange={setPostDate}
                 time={postTime}
-                onTimeChange={t => {
-                  setPostTime(t);
-                  setHasUnsavedChanges(true);
-                }}
+                onTimeChange={setPostTime}
                 timezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
                 compact
               />
@@ -1173,10 +1260,7 @@ export default function ScriptEditor() {
               </h4>
               <Textarea
                 value={editedNotes}
-                onChange={e => {
-                  setEditedNotes(e.target.value);
-                  setHasUnsavedChanges(true);
-                }}
+                onChange={e => setEditedNotes(e.target.value)}
                 placeholder="Add notes about this script..."
                 className="text-xs min-h-[80px] resize-none"
               />
@@ -1570,6 +1654,7 @@ export default function ScriptEditor() {
                 variant="outline"
                 onClick={() => {
                   setShowSelectionPopup(false);
+                  setPendingSelection(null);
                   setSelectedText("");
                   setSelectionInstruction("");
                 }}

@@ -76,6 +76,7 @@ export function SourceReelModal({
                 <DashboardReelGridMedia
                   thumbnailUrl={sourceReel.thumbnailUrl}
                   videoUrl={sourceReel.videoUrl}
+                  shortcode={sourceReel.shortcode}
                   className="absolute inset-0 h-full w-full"
                 />
               </div>

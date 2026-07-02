@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Lightbulb,
   Loader2,
+  Play,
   Wand2,
   X,
 } from "lucide-react";
@@ -148,7 +149,7 @@ function DiscoverRemakeButton({
   const isInspiration = stage === "inspiration";
   const isError = stage === "error";
   const fillWidth = isReady ? 100 : isError ? 0 : progressPercent;
-  const label = isReady ? "Your script is ready →" : remakeButtonLabel(remakeState);
+  const label = isReady ? "Ready to Film" : remakeButtonLabel(remakeState);
 
   const handleClick = () => {
     if (isBusy) return;
@@ -181,9 +182,7 @@ function DiscoverRemakeButton({
       }
       size="sm"
       className={cn(
-        "relative min-w-0 w-full overflow-hidden",
-        isReady &&
-          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white",
+        "relative min-w-0 w-full overflow-hidden font-semibold shadow-sm",
         isInspiration && "border-primary/30 text-primary hover:bg-primary/10"
       )}
       disabled={isBusy}
@@ -202,6 +201,8 @@ function DiscoverRemakeButton({
       <span className="relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5">
         {isBusy ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+        ) : isReady ? (
+          <Play className="h-3.5 w-3.5 shrink-0 fill-current" />
         ) : isInspiration ? (
           <Bookmark className="h-3.5 w-3.5 shrink-0" />
         ) : (
@@ -247,6 +248,7 @@ function DiscoverReelCard({
         <DashboardReelGridMedia
           thumbnailUrl={reel.thumbnailUrl}
           videoUrl={reel.videoUrl}
+          shortcode={reel.shortcode}
           className="relative h-full w-full"
           playing={isPlaying}
           onPlayingChange={onPlayChange}
@@ -974,6 +976,7 @@ export default function Discovery() {
     const engagementPct = perViewEngagementPercent(reel);
     return {
       id: gridModalReelId,
+      shortcode: reel.shortcode,
       caption: reel.caption,
       thumbnailUrl: reel.thumbnailUrl,
       videoUrl: reel.videoUrl,

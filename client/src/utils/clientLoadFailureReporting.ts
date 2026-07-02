@@ -21,7 +21,7 @@ export function installClientLoadFailureReporting(posthog: PostHog | null): () =
     const t = ev.target;
     if (t && t !== window && t instanceof HTMLElement) {
       const tag = t.tagName;
-      if (tag === "SCRIPT" || tag === "LINK" || tag === "IMG") {
+      if (tag === "SCRIPT" || tag === "LINK" || tag === "IMG" || tag === "VIDEO") {
         const props: Record<string, unknown> = { tag };
         if (tag === "IMG" && (t as HTMLImageElement).src) {
           props.src = String((t as HTMLImageElement).src).slice(0, 240);
@@ -31,6 +31,9 @@ export function installClientLoadFailureReporting(posthog: PostHog | null): () =
         }
         if (tag === "LINK" && (t as HTMLLinkElement).href) {
           props.href = String((t as HTMLLinkElement).href).slice(0, 240);
+        }
+        if (tag === "VIDEO" && (t as HTMLVideoElement).src) {
+          props.src = String((t as HTMLVideoElement).src).slice(0, 240);
         }
         capture("client_resource_load_error", props);
       }

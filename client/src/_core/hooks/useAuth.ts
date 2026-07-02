@@ -1,6 +1,7 @@
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
+import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo } from "react";
 
 type UseAuthOptions = {
@@ -25,6 +26,10 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {
+      posthog.capture("user_signed_out");
+      posthog.reset();
+    }
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
@@ -40,6 +45,15 @@ export function useAuth(options?: UseAuthOptions) {
       await utils.auth.me.invalidate();
     }
   }, [logoutMutation, utils]);
+
+  useEffect(() => {
+    const user = meQuery.data;
+    if (!user || !import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) return;
+    posthog.identify(String(user.id), {
+      email: user.email ?? undefined,
+      name: user.name ?? undefined,
+    });
+  }, [meQuery.data?.id, meQuery.data?.email, meQuery.data?.name]);
 
   const state = useMemo(() => {
     localStorage.setItem(

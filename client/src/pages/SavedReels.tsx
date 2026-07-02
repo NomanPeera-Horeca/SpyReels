@@ -773,6 +773,8 @@ export default function SavedReels() {
                               className="relative h-full w-full"
                               thumbnailUrl={reel.thumbnailUrl}
                               videoUrl={reel.videoUrl}
+                              shortcode={reel.shortcode}
+                              reelId={item.source === "scraped" ? reel.id : undefined}
                             />
                             {reel.duration ? (
                               <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[9px] font-mono text-white">
@@ -1011,6 +1013,8 @@ export default function SavedReels() {
                             className="relative h-full w-full"
                             thumbnailUrl={reel.thumbnailUrl}
                             videoUrl={reel.videoUrl}
+                            shortcode={reel.shortcode}
+                            reelId={item.source === "scraped" ? reel.id : undefined}
                           />
                           <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
                             #{index + 1}

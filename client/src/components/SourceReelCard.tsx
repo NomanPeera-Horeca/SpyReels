@@ -87,6 +87,7 @@ export function SourceReelCard({
           <DashboardReelGridMedia
             thumbnailUrl={sourceReel.thumbnailUrl}
             videoUrl={sourceReel.videoUrl}
+            shortcode={sourceReel.shortcode}
             className="absolute inset-0 h-full w-full"
             size="compact"
           />

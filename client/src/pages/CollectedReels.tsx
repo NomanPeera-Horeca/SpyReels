@@ -920,6 +920,8 @@ export default function CollectedReels() {
                           className="relative h-full w-full"
                           thumbnailUrl={reel.thumbnailUrl}
                           videoUrl={reel.videoUrl}
+                          shortcode={reel.shortcode}
+                          reelId={reel.transcriptionReelId ?? undefined}
                         />
                         <span className="pointer-events-none absolute right-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
                           {sourceBadge(reel)}
@@ -1130,6 +1132,8 @@ export default function CollectedReels() {
                       className="relative h-full w-full"
                       thumbnailUrl={reel.thumbnailUrl}
                       videoUrl={reel.videoUrl}
+                      shortcode={reel.shortcode}
+                      reelId={reel.transcriptionReelId ?? undefined}
                     />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">

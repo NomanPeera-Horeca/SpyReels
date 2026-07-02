@@ -1111,6 +1111,18 @@ describe("scrape.list - profilePicUrl", () => {
 });
 
 describe("scrape.start - duplicate prevention", () => {
+  it("returns existing job when research is already running for the handle", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.scrape.start({
+      handle: "anotheruser",
+      timeframeDays: 90,
+    });
+
+    expect(result).toEqual({ jobId: 2, resumed: true });
+  });
+
   it("blocks duplicate research for handles already in monitoring", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);

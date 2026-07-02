@@ -169,6 +169,7 @@ export function evaluateRemakeabilityGate(
 }
 
 export const LIBRARY_REMAKE_CTA_LABEL = "Remake this into your voice";
+export const READY_TO_FILM_CTA_LABEL = "Ready to Film";
 
 export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
   const pct = state.progressPercent;
@@ -180,7 +181,7 @@ export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
     case "inspiration":
       return "Save for Inspiration";
     case "ready":
-      return "Open script";
+      return READY_TO_FILM_CTA_LABEL;
     case "error":
       return "Retry";
     default:

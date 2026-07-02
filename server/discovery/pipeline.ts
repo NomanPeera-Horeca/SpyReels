@@ -17,6 +17,7 @@ import {
 import {
   mirrorProfilePicsBounded,
   mirrorReelThumbnailsBounded,
+  mirrorReelVideosBounded,
 } from "./mediaMirror";
 import { DISCOVERY_REELS_PER_PAGE } from "../../shared/const";
 import {
@@ -904,17 +905,19 @@ async function applyRelevanceFilter(
 function topReelsToViralOutput(
   topReels: ScoredReel[],
   stableThumbs?: Map<string, string>,
-  stableProfilePics?: Map<string, string>
+  stableProfilePics?: Map<string, string>,
+  stableVideos?: Map<string, string>
 ): DiscoveryResult["viralReels"] {
   return topReels.map((reel) => {
     const ownerKey = reel.owner.username.toLowerCase();
     const mirroredPic = stableProfilePics?.get(ownerKey) ?? "";
     const profilePicUrl = mirroredPic || reel.owner.profilePicUrl;
+    const mirroredVideo = stableVideos?.get(reel.shortcode) ?? "";
     return {
       shortcode: reel.shortcode,
       reelUrl: reel.reelUrl,
       thumbnailUrl: stableThumbs?.get(reel.shortcode) ?? reel.thumbnailUrl,
-      videoUrl: reel.videoUrl,
+      videoUrl: mirroredVideo || reel.videoUrl,
       caption: reel.caption,
       views: reel.views,
       likes: reel.likes,
@@ -947,6 +950,7 @@ function buildDiscoveryResultFromReels(params: {
   usdPerCredit: number;
   stableThumbs?: Map<string, string>;
   stableProfilePics?: Map<string, string>;
+  stableVideos?: Map<string, string>;
   topReelsOverride?: ScoredReel[];
 }): DiscoveryResult {
   const { uniqueReels, scored, topReels: defaultTop } = selectTopScoredReels(
@@ -961,7 +965,8 @@ function buildDiscoveryResultFromReels(params: {
     viralReels: topReelsToViralOutput(
       topReels,
       params.stableThumbs,
-      params.stableProfilePics
+      params.stableProfilePics,
+      params.stableVideos
     ),
     totalCandidatesBeforeFilter: params.combinedReels.length,
     totalCandidatesAfterFilter: scored.length,
@@ -1248,7 +1253,16 @@ export async function runDiscoveryPipeline(
     }))
   );
 
-  // Mirror profile pics to R2 for unique owners in the result set only. Deliberate cost tradeoff: stable avatars in the sidebar at search time; revisit lazy-mirror if R2 writes become significant.
+  const stableVideos = await mirrorReelVideosBounded(
+    topReels
+      .filter((reel) => (reel.videoUrl ?? "").trim().length > 0)
+      .map((reel) => ({
+        shortcode: reel.shortcode,
+        videoUrl: reel.videoUrl,
+      }))
+  );
+
+  // Mirror profile pics to R2 for unique owners in the result set only.
   const ownersByUsername = new Map<string, ParsedReel["owner"]>();
   for (const reel of topReels) {
     const key = reel.owner.username.toLowerCase();
@@ -1273,6 +1287,7 @@ export async function runDiscoveryPipeline(
     usdPerCredit,
     stableThumbs,
     stableProfilePics,
+    stableVideos,
     topReelsOverride: topReels,
   });
   });

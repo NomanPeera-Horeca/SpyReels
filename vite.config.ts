@@ -1,4 +1,5 @@
 import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
+import posthogRollup from "@posthog/rollup-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
@@ -158,8 +159,32 @@ const discoveryV1EnabledForClient = parseDiscoveryV1Enabled(
   process.env.NODE_ENV
 );
 
-export default defineConfig({
-  plugins,
+export default defineConfig(({ mode }) => {
+  const buildPlugins = [...plugins];
+  if (
+    mode === "production" &&
+    process.env.POSTHOG_API_KEY &&
+    process.env.POSTHOG_PROJECT_ID
+  ) {
+    buildPlugins.push(
+      posthogRollup({
+        personalApiKey: process.env.POSTHOG_API_KEY,
+        projectId: process.env.POSTHOG_PROJECT_ID,
+        host:
+          process.env.POSTHOG_HOST ??
+          process.env.VITE_PUBLIC_POSTHOG_HOST ??
+          "https://us.i.posthog.com",
+        sourcemaps: {
+          enabled: true,
+          releaseName: "spyreels",
+          deleteAfterUpload: true,
+        },
+      })
+    );
+  }
+
+  return {
+  plugins: buildPlugins,
   define: {
     __DISCOVERY_V1_ENABLED__: discoveryV1EnabledForClient,
   },
@@ -196,4 +221,5 @@ export default defineConfig({
   test: {
     exclude: ['tests/e2e/**', 'node_modules/**']
   },
-} as import("vite").UserConfig & { test: { exclude: string[] } });
+};
+});

@@ -12,9 +12,13 @@ import {
 } from "@/components/InlineWorkflow";
 import { Film, Eye, Heart, MessageCircle, TrendingUp, Clock } from "lucide-react";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
+import { ReelDialogVideo } from "@/components/ReelDialogVideo";
 
 export type GridReelWorkflowPreview = {
   id: number;
+  /** DB reel id for refreshVideoUrl; omit for discovery search results. */
+  reelId?: number;
+  shortcode?: string | null;
   caption: string | null;
   thumbnailUrl: string | null;
   /** Direct MP4 URL when available (R2 or CDN). */
@@ -63,14 +67,12 @@ export function GridReelWorkflowDialog({
           <>
             <div className="flex shrink-0 gap-3 border-b border-border/40 p-4 sm:gap-4">
               <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:h-44 sm:w-28">
-                {reel.videoUrl?.trim() ? (
-                  <video
-                    key={reel.id}
-                    src={reel.videoUrl.trim()}
-                    poster={reel.thumbnailUrl ?? undefined}
-                    controls
-                    playsInline
-                    preload="metadata"
+                {reel.videoUrl?.trim() || reel.shortcode?.trim() ? (
+                  <ReelDialogVideo
+                    reelId={reel.reelId}
+                    shortcode={reel.shortcode}
+                    videoUrl={reel.videoUrl}
+                    thumbnailUrl={reel.thumbnailUrl}
                     className="h-full w-full object-cover"
                   />
                 ) : reel.thumbnailUrl ? (

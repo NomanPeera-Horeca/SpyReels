@@ -5,13 +5,17 @@ import {
   Clock,
   FileText,
   Loader2,
+  Play,
   Wand2,
   ExternalLink,
   Trash2,
   Info,
 } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
-import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
+import {
+  LIBRARY_REMAKE_CTA_LABEL,
+  READY_TO_FILM_CTA_LABEL,
+} from "@/lib/libraryRemakeChainCore";
 
 /**
  * Discriminated source so a single callsite can't accidentally pass the
@@ -111,7 +115,7 @@ export type OneClickRemakeAction = {
   disabled?: boolean;
   loading?: boolean;
   tooltip?: string;
-  /** default | ready (emerald) | inspiration (primary outline) */
+  /** default | ready (solid primary) | inspiration (primary outline) */
   tone?: "default" | "ready" | "inspiration";
   onClick: () => void;
 };
@@ -168,6 +172,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     oneClickRemake.tone !== "inspiration" &&
     oneClickRemake.tone !== "ready" &&
     oneClickRemake.label !== "No voice";
+  const useReadyPrimary = oneClickRemake?.tone === "ready";
   const firstVisitPrimaryBtnClass =
     "min-h-9 h-auto w-full justify-center px-2.5 py-2 text-xs font-semibold leading-snug whitespace-normal text-center";
   const inspirationOnlyFirstVisit =
@@ -210,7 +215,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                 variant={
                   inspirationOnlyFirstVisit
                     ? "ghost"
-                    : useFilledPrimary
+                    : useReadyPrimary || useFilledPrimary
                       ? "default"
                       : "outline"
                 }
@@ -218,17 +223,17 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                 className={
                   inspirationOnlyFirstVisit
                     ? "h-7 w-full justify-center text-xs text-muted-foreground hover:text-foreground"
-                    : useFilledPrimary
-                      ? firstVisitPrimaryBtnClass
-                      : firstVisitMode && oneClickRemake.tone === "inspiration"
-                        ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                        : `h-7 text-xs px-3 w-full justify-center ${
-                          oneClickRemake.tone === "ready"
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
-                            : oneClickRemake.tone === "inspiration"
+                    : useReadyPrimary
+                      ? "h-7 w-full justify-center text-xs px-3 font-semibold shadow-sm"
+                      : useFilledPrimary
+                        ? firstVisitPrimaryBtnClass
+                        : firstVisitMode && oneClickRemake.tone === "inspiration"
+                          ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
+                          : `h-7 text-xs px-3 w-full justify-center ${
+                            oneClickRemake.tone === "inspiration"
                               ? "border-primary/30 text-primary hover:bg-primary/10"
                               : "border-primary/30 text-primary hover:bg-primary/10"
-                        }`
+                          }`
                 }
                 disabled={oneClickRemake.disabled}
                 onClick={oneClickRemake.onClick}
@@ -236,6 +241,8 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
               >
                 {oneClickRemake.loading ? (
                   <Loader2 className="h-3 w-3 shrink-0 sm:mr-1 animate-spin" />
+                ) : oneClickRemake.tone === "ready" ? (
+                  <Play className="h-3 w-3 shrink-0 sm:mr-1 fill-current" />
                 ) : oneClickRemake.tone === "inspiration" ? (
                   <Bookmark className="h-3 w-3 shrink-0 sm:mr-1" />
                 ) : !firstVisitMode ? (
@@ -397,11 +404,11 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
           )
         ) : (
           <Button
-            variant="outline"
+            variant={recreateState === "ready" ? "default" : "outline"}
             size="sm"
             className={`h-7 text-xs px-2 ${
               recreateState === "ready"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
+                ? "font-semibold shadow-sm"
                 : "border-primary/30 text-primary hover:bg-primary/10"
             }`}
             disabled={recreateState === "generating"}
@@ -410,7 +417,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
             }
             title={
               recreateState === "ready"
-                ? "Open your script in the panel below"
+                ? "Open your script and record in the teleprompter"
                 : recreateState === "generating"
                   ? "Script is still generating"
                   : "Write your own viral script using this reel's hook and structure"
@@ -418,12 +425,14 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
           >
             {recreateState === "generating" ? (
               <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+            ) : recreateState === "ready" ? (
+              <Play className="h-3 w-3 sm:mr-1 fill-current" />
             ) : (
               <Wand2 className="h-3 w-3 sm:mr-1" />
             )}
             <span className={labelClass}>
               {recreateState === "ready"
-                ? "Open My Script ✓"
+                ? READY_TO_FILM_CTA_LABEL
                 : recreateState === "generating"
                   ? "Generating..."
                   : "Make My Version"}

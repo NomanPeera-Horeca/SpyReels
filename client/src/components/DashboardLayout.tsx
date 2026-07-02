@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usePostHog } from "@posthog/react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +27,8 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import ExportJobTracker from "@/components/ExportJobTracker";
+import { ActiveScrapeJobNotice } from "@/components/ActiveScrapeJobNotice";
+import { useActiveScrapeJob } from "@/lib/activeScrapeJob";
 import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -145,23 +146,15 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   useActivityHeartbeat(Boolean(user));
-  const posthog = usePostHog();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const { activeJob: activeRunningJob } = useActiveScrapeJob();
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { themePreference, setThemePreference, switchable } = useTheme();
 
-  useEffect(() => {
-    if (user) {
-      posthog?.identify(String(user.id), {
-        email: user.email,
-        name: user.name,
-      });
-    }
-  }, [posthog, user?.id, user?.email, user?.name]);
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     ...(isDiscoveryV1Enabled
@@ -237,6 +230,9 @@ function DashboardLayoutContent({
           disableTransition={isResizing}
         >
           <WorkspaceSwitcher />
+          {activeRunningJob ? (
+            <ActiveScrapeJobNotice job={activeRunningJob} variant="sidebar" />
+          ) : null}
           <SidebarHeader className="h-16 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
@@ -381,9 +377,7 @@ function DashboardLayoutContent({
                 {switchable ? <DropdownMenuSeparator /> : null}
                 <DropdownMenuItem
                   onClick={() => {
-                    posthog?.capture("user_signed_out");
-                    posthog?.reset();
-                    logout();
+                    void logout();
                   }}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
