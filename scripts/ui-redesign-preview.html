@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels UI redesign preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* SpyReels tokens (from index.css) */
+    :root {
+      --radius: 12px;
+      --font: "Inter", system-ui, sans-serif;
+      --primary: #9b5de5;
+      --primary-strong: #7c3aed;
+      --primary-glow: rgba(155, 93, 229, 0.35);
+      --cyan: #22d3ee;
+      --emerald: #34d399;
+      --amber: #fbbf24;
+    }
+
+    /* Direction A: Dark Pro (recommended) */
+    [data-theme="dark"] {
+      --bg: #121218;
+      --bg-elevated: #1a1a22;
+      --surface: #22222c;
+      --surface-hover: #2a2a36;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-faint: #71717a;
+      --sidebar-bg: #16161d;
+      --hero-from: rgba(124, 58, 237, 0.22);
+      --hero-to: rgba(34, 211, 238, 0.08);
+      --chip-bg: rgba(155, 93, 229, 0.14);
+      --chip-text: #d8b4fe;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      --input-bg: #1e1e28;
+    }
+
+    /* Direction B: Premium light (not flat white) */
+    [data-theme="light"] {
+      --bg: #eceaf3;
+      --bg-elevated: #f7f6fa;
+      --surface: #ffffff;
+      --surface-hover: #faf9fc;
+      --border: rgba(30, 27, 46, 0.1);
+      --border-strong: rgba(30, 27, 46, 0.16);
+      --text: #18181f;
+      --text-muted: #52525b;
+      --text-faint: #71717a;
+      --sidebar-bg: #f3f1f8;
+      --hero-from: rgba(124, 58, 237, 0.12);
+      --hero-to: rgba(34, 211, 238, 0.06);
+      --chip-bg: rgba(124, 58, 237, 0.1);
+      --chip-text: #6d28d9;
+      --shadow: 0 10px 40px rgba(49, 46, 129, 0.08);
+      --input-bg: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: #0c0c10;
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Preview chrome */
+    .preview-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(12, 12, 16, 0.92);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+    }
+    .preview-bar h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fafafa;
+      margin-right: auto;
+    }
+    .preview-bar p {
+      margin: 0;
+      font-size: 12px;
+      color: #a1a1aa;
+      width: 100%;
+    }
+    @media (min-width: 900px) {
+      .preview-bar p { width: auto; margin-right: 12px; }
+    }
+    .toggle-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .toggle-group button {
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: #e4e4e7;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .toggle-group button.active {
+      background: linear-gradient(135deg, #7c3aed, #0891b2);
+      border-color: transparent;
+      color: white;
+    }
+
+    .app-shell {
+      display: none;
+      min-height: calc(100vh - 56px);
+    }
+    .app-shell.visible { display: flex; }
+
+    /* Shared app layout */
+    .sidebar {
+      width: 248px;
+      flex-shrink: 0;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px 16px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary-strong), #0891b2);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 14px;
+    }
+    .nav-section {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      padding: 14px 10px 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+    .nav-item.active {
+      background: var(--chip-bg);
+      color: var(--chip-text);
+      box-shadow: inset 0 0 0 1px rgba(155, 93, 229, 0.25);
+    }
+    .nav-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+    .nav-item.active .nav-dot { opacity: 1; background: var(--primary); }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg);
+      overflow: auto;
+    }
+    .main-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--hero-from), var(--surface) 45%, var(--hero-to));
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      right: -60px;
+      top: -60px;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--primary-glow), transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.15);
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    [data-theme="light"] .eyebrow { background: rgba(255,255,255,0.6); }
+    .hero h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+    .hero p { margin: 0; font-size: 13px; color: var(--text-muted); max-width: 480px; line-height: 1.5; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .profile-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+    }
+    .profile-pill strong { font-size: 14px; display: block; color: var(--text); }
+    .profile-pill span { font-size: 11px; color: var(--text-muted); }
+    .badge-completed {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--emerald);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+    .select, .btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      background: var(--input-bg);
+      color: var(--text);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-strong), #0e7490);
+      border: none;
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+    .btn-ghost { background: transparent; color: var(--text-muted); }
+    .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .view-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .view-toggle button.active {
+      background: var(--chip-bg);
+      color: var(--chip-text);
+    }
+
+    /* Reel list card */
+    .reel-list { display: flex; flex-direction: column; gap: 12px; }
+    .reel-row {
+      display: grid;
+      grid-template-columns: 88px 1fr auto;
+      gap: 16px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .reel-row:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+    .rank {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .thumb-wrap {
+      position: relative;
+      aspect-ratio: 9/14;
+      border-radius: 10px;
+      overflow: hidden;
+      background: linear-gradient(160deg, #2d2d3a, #14141a);
+    }
+    .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; opacity: 0.85; }
+    .play-fab {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+    .play-fab span {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.25);
+      backdrop-filter: blur(4px);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 12px;
+    }
+    .reel-body h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .tag-purple { background: var(--chip-bg); color: var(--chip-text); }
+    .tag-blue { background: rgba(34, 211, 238, 0.12); color: #22d3ee; }
+    .tag-green { background: rgba(52, 211, 153, 0.12); color: var(--emerald); }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .stats strong { color: var(--text); }
+    .eng-rate { color: var(--emerald); font-weight: 700; }
+    .reel-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+      min-width: 160px;
+    }
+    .btn-ready {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--primary-strong), #6d28d9);
+      color: white;
+      box-shadow: 0 4px 16px var(--primary-glow);
+    }
+    .btn-outline {
+      width: 100%;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
+    }
+    .transcribed {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--emerald);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Grid */
+    .reel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .grid-card {
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .grid-card .thumb-wrap { aspect-ratio: 9/14; border-radius: 0; }
+    .grid-card .meta { padding: 12px; }
+    .grid-card .eng-rate { font-size: 12px; margin-bottom: 8px; display: block; }
+
+    /* Research */
+    .research-card {
+      max-width: 520px;
+      padding: 24px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .research-card h2 { margin: 0 0 6px; font-size: 18px; color: var(--text); }
+    .research-card p { margin: 0 0 20px; font-size: 13px; color: var(--text-muted); }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .field input, .field select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .banner-running {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(155, 93, 229, 0.35);
+      background: var(--chip-bg);
+      font-size: 13px;
+      color: var(--chip-text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* Script modal */
+    .modal-backdrop {
+      display: grid;
+      place-items: center;
+      min-height: 500px;
+      padding: 24px;
+      background: rgba(0,0,0,0.55);
+    }
+    [data-theme="light"] .modal-backdrop { background: rgba(24, 24, 31, 0.35); }
+    .modal {
+      width: 100%;
+      max-width: 720px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 { margin: 0; font-size: 16px; color: var(--text); }
+    .modal-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    .modal-pane {
+      padding: 18px 20px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      border-right: 1px solid var(--border);
+    }
+    .modal-pane:last-child { border-right: none; }
+    .modal-pane h4 {
+      margin: 0 0 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-faint);
+    }
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .right-rail {
+      width: 220px;
+      flex-shrink: 0;
+      padding: 20px 16px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .right-rail h4 {
+      margin: 0 0 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-faint);
+    }
+    .creator-mini {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .creator-mini .avatar { width: 28px; height: 28px; }
+
+    .note-box {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px dashed var(--border-strong);
+      background: rgba(155, 93, 229, 0.06);
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .note-box strong { color: var(--chip-text); }
+
+    @media (max-width: 900px) {
+      .sidebar, .right-rail { display: none; }
+      .reel-row { grid-template-columns: 72px 1fr; }
+      .reel-actions { grid-column: 1 / -1; flex-direction: row; }
+      .modal-body { grid-template-columns: 1fr; }
+      .modal-pane { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <header class="preview-bar">
+    <h1>SpyReels UI redesign preview</h1>
+    <p>Toggle theme and screen. Approve a direction before we implement in React.</p>
+    <div class="toggle-group" id="themeToggle">
+      <button type="button" data-theme="dark" class="active">A · Dark Pro (recommended)</button>
+      <button type="button" data-theme="light">B · Premium light</button>
+    </div>
+    <div class="toggle-group" id="screenToggle">
+      <button type="button" data-screen="dashboard-list" class="active">Dashboard list</button>
+      <button type="button" data-screen="dashboard-grid">Dashboard grid</button>
+      <button type="button" data-screen="research">Research</button>
+      <button type="button" data-screen="script-modal">Script modal</button>
+    </div>
+  </header>
+
+  <!-- DASHBOARD LIST -->
+  <div class="app-shell visible" id="screen-dashboard-list" data-theme="dark">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-mark">S</span> SpyReels</div>
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active"><span class="nav-dot"></span> Dashboard</div>
+      <div class="nav-section">Discover</div>
+      <div class="nav-item"><span class="nav-dot"></span> Spy Viral Reels</div>
+      <div class="nav-item"><span class="nav-dot"></span> Creator Radar</div>
+      <div class="nav-section">Create</div>
+      <div class="nav-item"><span class="nav-dot"></span> My Scripts</div>
+      <div class="nav-item"><span class="nav-dot"></span> Idea to Script</div>
+    </aside>
+    <div class="main">
+      <div class="main-inner">
+        <section class="hero">
+          <div class="eyebrow">Your workspace</div>
+          <h2>Good morning, Noman</h2>
+          <p>Spy a creator to find viral patterns, or open Creator Radar to revisit accounts you track.</p>
+        </section>
+
+        <div class="toolbar">
+          <div class="profile-pill">
+            <div class="avatar"></div>
+            <div>
+              <strong>@aronsogi</strong>
+              <span>111 reels · 93.8K followers</span>
+            </div>
+            <span class="badge-completed">completed</span>
+          </div>
+          <select class="select"><option>All Time</option></select>
+          <select class="select"><option>All Niches</option></select>
+          <div class="view-toggle">
+            <button class="active">List</button>
+            <button>Grid</button>
+          </div>
+          <button class="btn btn-primary" style="margin-left:auto">Export Excel</button>
+        </div>
+
+        <div class="reel-list">
+          <article class="reel-row">
+            <div class="thumb-wrap">
+              <span class="rank">#21</span>
+              <div class="play-fab"><span>▶</span></div>
+            </div>
+            <div class="reel-body">
+              <h3>Most people think rich people work harder. They don't. They work on different things...</h3>
+              <div class="tags">
+                <span class="tag tag-purple">Marketing</span>
+                <span class="tag tag-blue">Direct Promise</span>
+                <span class="tag tag-green">Score 8.2</span>
+              </div>
+              <div class="stats">
+                <span><strong>1.2M</strong> views</span>
+                <span><strong>42K</strong> likes</span>
+                <span class="eng-rate">4.82% ER</span>
+                <span>Mar 12</span>
+              </div>
+            </div>
+            <div class="reel-actions">
+              <span class="transcribed">● Transcribed</span>
+              <button type="button" class="btn-ready">Ready to Film</button>
+              <button type="button" class="btn-outline">Remake in your voice</button>
+            </div>
+          </article>
+
+          <article class="reel-row">
+            <div class="thumb-wrap">
+              <span class="rank">#22</span>
+              <div class="play-fab"><span>▶</span></div>
+            </div>
+            <div class="reel-body">
+              <h3>Stop posting reels until you fix this one mistake in your hook...</h3>
+              <div class="tags">
+                <span class="tag tag-purple">Marketing</span>
+                <span class="tag tag-blue">Question Hook</span>
+              </div>
+              <div class="stats">
+                <span><strong>890K</strong> views</span>
+                <span class="eng-rate">3.91% ER</span>
+              </div>
+            </div>
+            <div class="reel-actions">
+              <span class="transcribed">● Transcribed</span>
+              <button type="button" class="btn-outline">Remake in your voice</button>
+            </div>
+          </article>
+        </div>
+
+        <div class="note-box">
+          <strong>Why this works vs current white UI:</strong> Surfaces are tinted (not pure white on grey). Purple brand color carries weight on CTAs, tags, and active nav. Cards have depth (border + shadow). Engagement green and cyan accents pop. Text contrast is WCAG-friendly.
+        </div>
+      </div>
+    </div>
+    <aside class="right-rail">
+      <h4>Related creators</h4>
+      <div class="creator-mini"><div class="avatar"></div> Grant Cardone</div>
+      <div class="creator-mini"><div class="avatar"></div> Ryan Serhant</div>
+      <div class="creator-mini"><div class="avatar"></div> Codie Sanchez</div>
+    </aside>
+  </div>
+
+  <!-- DASHBOARD GRID -->
+  <div class="app-shell" id="screen-dashboard-grid" data-theme="dark">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-mark">S</span> SpyReels</div>
+      <div class="nav-item active"><span class="nav-dot"></span> Dashboard</div>
+    </aside>
+    <div class="main">
+      <div class="main-inner">
+        <div class="toolbar">
+          <div class="profile-pill">
+            <div class="avatar"></div>
+            <div><strong>@aronsogi</strong><span>111 reels</span></div>
+          </div>
+          <div class="view-toggle" style="margin-left:auto">
+            <button>List</button>
+            <button class="active">Grid</button>
+          </div>
+        </div>
+        <div class="reel-grid">
+          <div class="grid-card">
+            <div class="thumb-wrap"><span class="rank">#21</span><div class="play-fab"><span>▶</span></div></div>
+            <div class="meta">
+              <span class="eng-rate">4.82% ER</span>
+              <button type="button" class="btn-ready">Ready to Film</button>
+            </div>
+          </div>
+          <div class="grid-card">
+            <div class="thumb-wrap"><span class="rank">#22</span><div class="play-fab"><span>▶</span></div></div>
+            <div class="meta">
+              <span class="eng-rate">3.91% ER</span>
+              <button type="button" class="btn-outline" style="width:100%">Remake</button>
+            </div>
+          </div>
+          <div class="grid-card">
+            <div class="thumb-wrap"><span class="rank">#23</span><div class="play-fab"><span>▶</span></div></div>
+            <div class="meta">
+              <span class="eng-rate">5.10% ER</span>
+              <button type="button" class="btn-outline" style="width:100%">Remake</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESEARCH -->
+  <div class="app-shell" id="screen-research" data-theme="dark">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-mark">S</span> SpyReels</div>
+      <div class="nav-item active"><span class="nav-dot"></span> Spy Viral Reels</div>
+    </aside>
+    <div class="main">
+      <div class="main-inner">
+        <div class="banner-running">
+          <span>● Researching @garyvee — pulling reels...</span>
+          <button class="btn btn-ghost">View progress</button>
+        </div>
+        <div class="research-card">
+          <h2>New Spy Session</h2>
+          <p>Enter a public Instagram handle to collect and rank their viral reels.</p>
+          <div class="field">
+            <label>Instagram handle</label>
+            <input type="text" placeholder="@creator" value="@garyvee" />
+          </div>
+          <div class="field">
+            <label>Timeframe</label>
+            <select><option>Last 30 days</option></select>
+          </div>
+          <button type="button" class="btn btn-primary" style="width:100%; padding:12px; margin-top:8px">Start Spying</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT MODAL -->
+  <div class="app-shell" id="screen-script-modal" data-theme="dark">
+    <div class="main" style="width:100%">
+      <div class="modal-backdrop">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Ready to Film</h2>
+            <button class="btn btn-ghost">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-pane">
+              <h4>Transcript</h4>
+              Most people think rich people work harder. They don't. They work on different things. While you're answering emails, they're building systems...
+            </div>
+            <div class="modal-pane">
+              <h4>Your script</h4>
+              <strong style="color:var(--text)">Hook:</strong> Everyone thinks the grind is the answer. It's not.<br><br>
+              <strong style="color:var(--text)">Body:</strong> The wealthiest creators I study don't outwork you. They out-leverage you...
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline">Edit script</button>
+            <button class="btn btn-primary">Open in editor</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const themeToggle = document.getElementById("themeToggle");
+    const screenToggle = document.getElementById("screenToggle");
+    const shells = document.querySelectorAll(".app-shell");
+    let theme = "dark";
+    let screen = "dashboard-list";
+
+    function apply() {
+      shells.forEach((el) => {
+        const id = el.id.replace("screen-", "");
+        const visible = id === screen;
+        el.classList.toggle("visible", visible);
+        if (visible) el.setAttribute("data-theme", theme);
+      });
+      themeToggle.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.theme === theme);
+      });
+      screenToggle.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.screen === screen);
+      });
+    }
+
+    themeToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-theme]");
+      if (!btn) return;
+      theme = btn.dataset.theme;
+      apply();
+    });
+
+    screenToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-screen]");
+      if (!btn) return;
+      screen = btn.dataset.screen;
+      apply();
+    });
+  })();
+  </script>
+</body>
+</html>

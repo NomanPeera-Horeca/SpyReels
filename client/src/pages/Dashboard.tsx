@@ -2246,7 +2246,7 @@ export default function Dashboard() {
                   ) : null}
 
                   <Tooltip content="Switch between detailed list and visual grid view">
-                    <div className="inline-flex items-center rounded-md border border-border bg-card p-1">
+                    <div className="workspace-view-toggle inline-flex items-center">
                       <Button
                         variant={viewMode === "list" ? "default" : "ghost"}
                         size="sm"
@@ -2484,7 +2484,7 @@ export default function Dashboard() {
 
           {/* Reels list */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "list" && (
-            <div key="list" className="space-y-1">
+            <div key="list" className="space-y-3">
               {sortedReels.map((reel, index) => {
                 const isExpanded = expandedReelId === reel.id;
                 const hasTranscription = reel.transcription?.status === "completed";
@@ -2545,15 +2545,15 @@ export default function Dashboard() {
                   <div
                     key={reel.id}
                     ref={setReelRowRef(reel.id)}
-                    className="rounded-lg border border-border/30 overflow-hidden"
+                    className="workspace-reel-card overflow-hidden"
                   >
                     {/* Reel Row */}
                     <div
                       className={`${
                         isFirstVisitDashboard
-                          ? "flex flex-col gap-3 p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer"
-                          : `flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-card/50 hover:bg-card transition-colors cursor-pointer ${
-                              isExpanded ? "bg-card border-b border-border/30" : ""
+                          ? "flex flex-col gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer"
+                          : `flex items-center gap-2 sm:gap-3 p-2 sm:p-3 hover:bg-accent/25 transition-colors cursor-pointer ${
+                              isExpanded ? "bg-accent/20 border-b border-border/40" : ""
                             }`
                       }`}
                       onClick={() => {
@@ -2881,8 +2881,8 @@ export default function Dashboard() {
                     <div
                       key={reel.id}
                       ref={setReelRowRef(reel.id)}
-                      className={`group relative rounded-lg border bg-card transition-colors ${
-                        isModalOpen ? "border-primary/40" : "border-border/40 hover:border-border/70"
+                      className={`workspace-reel-card group relative overflow-hidden ${
+                        isModalOpen ? "ring-2 ring-primary/35" : ""
                       }`}
                     >
                       <div

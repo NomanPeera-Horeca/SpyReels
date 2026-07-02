@@ -45,14 +45,14 @@ const getInitialTheme = (): ResolvedTheme => {
 };
 
 function readStoredPreference(): ThemePreference {
-  if (typeof window === "undefined") return "system";
+  if (typeof window === "undefined") return "dark";
   try {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s === "light" || s === "dark" || s === "system") return s;
   } catch {
     /* ignore */
   }
-  return "system";
+  return "dark";
 }
 
 function resolvePreference(
