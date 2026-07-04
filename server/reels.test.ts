@@ -225,6 +225,9 @@ vi.mock("./db", () => ({
   assignTagToScript: vi.fn().mockResolvedValue(undefined),
   removeTagFromScript: vi.fn().mockResolvedValue(undefined),
   getTagsForScript: vi.fn().mockResolvedValue([{ id: 1, name: "Scripting", color: "#6366f1" }]),
+  getTagsForScripts: vi.fn().mockResolvedValue(
+    new Map([[1, [{ id: 1, name: "Scripting", color: "#6366f1" }]]])
+  ),
   getScriptsByTag: vi.fn().mockResolvedValue([]),
   getLatestVersionNumber: vi.fn().mockResolvedValue(1),
   ensureDefaultTags: vi.fn().mockResolvedValue(undefined),

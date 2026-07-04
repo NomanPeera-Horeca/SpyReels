@@ -126,6 +126,7 @@ import {
   assignTagToScript,
   removeTagFromScript,
   getTagsForScript,
+  getTagsForScripts,
   getScriptsByTag,
   createScriptVersion,
   getScriptVersions,
@@ -3872,10 +3873,10 @@ Return JSON only:
         if (input?.status) {
           scripts = scripts.filter(s => s.status === input.status);
         }
-        // Attach tags to each script
-        const result = await Promise.all(scripts.map(async (s) => {
-          const tags = await getTagsForScript(s.id);
-          return { ...s, tags };
+        const tagMap = await getTagsForScripts(scripts.map((s) => s.id));
+        const result = scripts.map((s) => ({
+          ...s,
+          tags: tagMap.get(s.id) ?? [],
         }));
         return enrichScriptsWithSendMeta(result);
       }),
@@ -3950,6 +3951,36 @@ Return JSON only:
         await assertScriptInWorkspace(input.scriptId, ctx);
         await removeTagFromScript(input.scriptId, input.tagId);
         return { success: true };
+      }),
+
+    bulkAssignTag: protectedProcedure
+      .input(
+        z.object({
+          scriptIds: z.array(z.number()).min(1).max(50),
+          tagId: z.number(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        for (const scriptId of input.scriptIds) {
+          await assertScriptInWorkspace(scriptId, ctx);
+          await assignTagToScript(scriptId, input.tagId);
+        }
+        return { success: true, count: input.scriptIds.length };
+      }),
+
+    bulkRemoveTag: protectedProcedure
+      .input(
+        z.object({
+          scriptIds: z.array(z.number()).min(1).max(50),
+          tagId: z.number(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        for (const scriptId of input.scriptIds) {
+          await assertScriptInWorkspace(scriptId, ctx);
+          await removeTagFromScript(scriptId, input.tagId);
+        }
+        return { success: true, count: input.scriptIds.length };
       }),
 
     /** AI Grammar Check - fix spelling, grammar, sentence structure */

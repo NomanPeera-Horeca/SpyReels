@@ -1307,7 +1307,7 @@ export default function Dashboard() {
   // Dashboard overview data (only fetched when no jobId)
   const showOverview = !jobId && !featuredAccountId;
   const jobsListQuery = trpc.scrape.list.useQuery(undefined, { enabled: showOverview });
-  const scriptsListQuery = trpc.scripts.list.useQuery(undefined, { enabled: showOverview });
+  const scriptsListQuery = trpc.scripts.list.useQuery({}, { enabled: showOverview });
   const savedListQuery = trpc.saved.list.useQuery(undefined, {
     enabled: showOverview,
     staleTime: 45_000,

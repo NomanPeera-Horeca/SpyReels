@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   FileText,
   Search,
@@ -44,6 +44,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -53,9 +55,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { savedScriptOpenPath } from "@/lib/scriptOpenPath";
+import {
+  parseScriptsTagFilter,
+  savedScriptOpenPathWithListContext,
+  scriptsListPath,
+  type ScriptsTagFilter,
+} from "@/lib/scriptsListPath";
+
+import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
 
 type ViewMode = "grid" | "kanban" | "calendar";
+type TagFilter = ScriptsTagFilter;
 
 // Default stage tag names that serve as Kanban columns
 const KANBAN_STAGES = ["Scripting", "Rehearsing", "Filming", "Editing", "Posting"];
@@ -98,8 +108,12 @@ function scriptTagAccentStyles(color: string, compact?: boolean): CSSProperties 
 
 export default function MyScripts() {
   const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const mobileCreate = useMobileCreateAppContext();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const tagFilter = useMemo(() => parseScriptsTagFilter(searchString), [searchString]);
+  const [selectedScriptIds, setSelectedScriptIds] = useState<Set<number>>(new Set());
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "approved">("all");
   const [showNewTagDialog, setShowNewTagDialog] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -108,6 +122,20 @@ export default function MyScripts() {
 
   const kanbanLock = useFeatureLock("kanban");
   const calendarLock = useFeatureLock("calendar");
+
+  const applyTagFilter = useCallback(
+    (filter: TagFilter) => {
+      setLocation(scriptsListPath(filter), { replace: true });
+    },
+    [setLocation]
+  );
+
+  const openScript = useCallback(
+    (script: { id: number; coachScriptId?: number | null }) => {
+      navigate(savedScriptOpenPathWithListContext(script, tagFilter));
+    },
+    [navigate, tagFilter]
+  );
 
   const handleSwitchView = useCallback(
     (mode: ViewMode) => {
@@ -132,7 +160,7 @@ export default function MyScripts() {
 
   const tagsQuery = trpc.tags.list.useQuery();
   const scriptsQuery = trpc.scripts.list.useQuery(
-    selectedTagId ? { tagId: selectedTagId } : undefined
+    typeof tagFilter === "number" ? { tagId: tagFilter } : {}
   );
   const utils = trpc.useUtils();
 
@@ -146,9 +174,11 @@ export default function MyScripts() {
   });
 
   const deleteTagMutation = trpc.tags.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       utils.tags.list.invalidate();
-      if (selectedTagId) setSelectedTagId(null);
+      if (typeof tagFilter === "number" && tagFilter === variables.id) {
+        applyTagFilter("all");
+      }
       toast.success("Tag deleted");
     },
   });
@@ -178,8 +208,29 @@ export default function MyScripts() {
     },
   });
 
+  const bulkAssignTagMutation = trpc.scripts.bulkAssignTag.useMutation({
+    onSuccess: (data) => {
+      void utils.scripts.list.invalidate();
+      setSelectedScriptIds(new Set());
+      toast.success(`Tag added to ${data.count} script${data.count !== 1 ? "s" : ""}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const bulkRemoveTagMutation = trpc.scripts.bulkRemoveTag.useMutation({
+    onSuccess: (data) => {
+      void utils.scripts.list.invalidate();
+      setSelectedScriptIds(new Set());
+      toast.success(`Tag removed from ${data.count} script${data.count !== 1 ? "s" : ""}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const filteredScripts = useMemo(() => {
     let scripts = scriptsQuery.data || [];
+    if (tagFilter === "untagged") {
+      scripts = scripts.filter((s) => !s.tags?.length);
+    }
     if (statusFilter !== "all") {
       scripts = scripts.filter((s) => s.status === statusFilter);
     }
@@ -193,7 +244,23 @@ export default function MyScripts() {
       );
     }
     return scripts;
-  }, [scriptsQuery.data, statusFilter, searchQuery]);
+  }, [scriptsQuery.data, tagFilter, statusFilter, searchQuery]);
+
+  const anyScriptSelected = selectedScriptIds.size > 0;
+
+  const tagsOnSelection = useMemo(() => {
+    if (!anyScriptSelected) return [];
+    const byId = new Map<number, { id: number; name: string; color: string; count: number }>();
+    for (const script of filteredScripts) {
+      if (!selectedScriptIds.has(script.id)) continue;
+      for (const tag of script.tags ?? []) {
+        const existing = byId.get(tag.id);
+        if (existing) existing.count += 1;
+        else byId.set(tag.id, { ...tag, count: 1 });
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [anyScriptSelected, filteredScripts, selectedScriptIds]);
 
   const tagColors = [
     "#7c3aed", "#2563eb", "#d97706", "#059669", "#dc2626",
@@ -308,8 +375,11 @@ export default function MyScripts() {
     toast.success("Script moved!");
   };
 
+  const scriptsLoading = scriptsQuery.isFetching && scriptsQuery.data === undefined;
+  const scriptsLoadFailed = scriptsQuery.isError;
+
   return (
-    <div className="p-3 sm:p-6 max-w-[1400px] mx-auto">
+    <div className={`p-3 sm:p-6 max-w-[1400px] mx-auto ${anyScriptSelected ? (mobileCreate ? "pb-mobile-tabs" : "pb-28") : ""}`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <div>
@@ -319,9 +389,11 @@ export default function MyScripts() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {filteredScripts.length} script{filteredScripts.length !== 1 ? "s" : ""}
-            {selectedTagId && tagsQuery.data
-              ? ` tagged "${tagsQuery.data.find((t) => t.id === selectedTagId)?.name}"`
-              : ""}
+            {tagFilter === "untagged"
+              ? " with no tags"
+              : typeof tagFilter === "number" && tagsQuery.data
+                ? ` tagged "${tagsQuery.data.find((t) => t.id === tagFilter)?.name}"`
+                : ""}
           </p>
         </div>
 
@@ -379,27 +451,39 @@ export default function MyScripts() {
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <Tag className="w-4 h-4 text-muted-foreground" />
         <button
-          onClick={() => setSelectedTagId(null)}
+          onClick={() => applyTagFilter("all")}
           className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-            selectedTagId === null
+            tagFilter === "all"
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
           All
         </button>
+        <button
+          onClick={() => applyTagFilter(tagFilter === "untagged" ? "all" : "untagged")}
+          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            tagFilter === "untagged"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
+        >
+          Untagged
+        </button>
         {tagsQuery.data?.map((tag) => (
           <div key={tag.id} className="group relative">
             <button
-              onClick={() => setSelectedTagId(tag.id === selectedTagId ? null : tag.id)}
+              onClick={() =>
+                applyTagFilter(tagFilter === tag.id ? "all" : tag.id)
+              }
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                tag.id === selectedTagId
+                tagFilter === tag.id
                   ? "text-white"
                   : "text-muted-foreground hover:opacity-80"
               }`}
               style={{
-                backgroundColor: tag.id === selectedTagId ? tag.color : `${tag.color}20`,
-                color: tag.id === selectedTagId ? "white" : tag.color,
+                backgroundColor: tagFilter === tag.id ? tag.color : `${tag.color}20`,
+                color: tagFilter === tag.id ? "white" : tag.color,
               }}
             >
               <span
@@ -462,7 +546,7 @@ export default function MyScripts() {
       </div>
 
       {/* Content Views */}
-      {scriptsQuery.isLoading ? (
+      {scriptsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
@@ -472,12 +556,31 @@ export default function MyScripts() {
             </div>
           ))}
         </div>
+      ) : scriptsLoadFailed ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Could not load scripts</p>
+          <p className="text-sm mt-1 max-w-md mx-auto">
+            {scriptsQuery.error?.message ?? "Something went wrong loading your library."}
+          </p>
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => void scriptsQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
       ) : filteredScripts.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">No scripts yet</p>
+          <p className="text-lg font-medium">
+            {tagFilter === "untagged" ? "No untagged scripts" : "No scripts yet"}
+          </p>
           <p className="text-sm mt-1">
-            Scripts you save from Re-Create will appear here
+            {tagFilter === "untagged"
+              ? "Every script in this view has at least one tag. Tap All to see everything."
+              : "Scripts you save from Re-Create will appear here"}
           </p>
         </div>
       ) : viewMode === "grid" ? (
@@ -488,7 +591,20 @@ export default function MyScripts() {
               key={script.id}
               script={script}
               stageTagIdsOrdered={stageTags.map((t) => t.id)}
-              navigate={navigate}
+              allTags={tagsQuery.data ?? []}
+              selected={selectedScriptIds.has(script.id)}
+              anySelected={anyScriptSelected}
+              onToggleSelect={() =>
+                setSelectedScriptIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(script.id)) next.delete(script.id);
+                  else next.add(script.id);
+                  return next;
+                })
+              }
+              assignTagMutation={assignTagMutation}
+              removeTagMutation={removeTagMutation}
+              openScript={openScript}
               updateScriptMutation={updateScriptMutation}
               deleteScriptMutation={deleteScriptMutation}
               formatDate={formatDate}
@@ -538,7 +654,7 @@ export default function MyScripts() {
                     onDragStart={() => handleDragStart(script.id)}
                     className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors group overflow-hidden"
                     style={{ ...miniAccent, backgroundColor: "hsl(var(--card))" }}
-                    onClick={() => navigate(savedScriptOpenPath(script))}
+                    onClick={() => openScript(script)}
                   >
                     <div className="flex items-start justify-between gap-1">
                       <h4 className="text-xs font-medium truncate flex-1">{script.title}</h4>
@@ -605,7 +721,7 @@ export default function MyScripts() {
                     onDragStart={() => handleDragStart(script.id)}
                     className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
                     style={uaStyle}
-                    onClick={() => navigate(savedScriptOpenPath(script))}
+                    onClick={() => openScript(script)}
                   >
                     <h4 className="text-xs font-medium truncate">{script.title}</h4>
                     <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
@@ -634,11 +750,107 @@ export default function MyScripts() {
           calendarData={calendarData}
           calendarMonth={calendarMonth}
           setCalendarMonth={setCalendarMonth}
-          navigate={navigate}
+          openScript={openScript}
           updateScriptMutation={updateScriptMutation}
           filteredScripts={filteredScripts}
           stageTagIdsOrdered={stageTags.map((t) => t.id)}
         />
+      )}
+
+      {anyScriptSelected && (
+        <div
+          className={`fixed left-0 right-0 flex items-center justify-center px-4 pointer-events-none z-40 ${
+            mobileCreate ? "bottom-[calc(4.25rem+env(safe-area-inset-bottom))] pb-2" : "bottom-0 pb-5"
+          }`}
+        >
+          <div className="bg-card border border-border shadow-2xl rounded-2xl pointer-events-auto w-full max-w-lg overflow-hidden">
+            <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {selectedScriptIds.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedScriptIds(new Set())}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="px-3 pb-3 flex gap-2 flex-wrap">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 min-w-[120px] text-xs"
+                    disabled={bulkAssignTagMutation.isPending}
+                  >
+                    <Tag className="w-3.5 h-3.5 mr-1.5" />
+                    Add tag
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="max-h-64 overflow-y-auto">
+                  {(tagsQuery.data ?? []).map((tag) => (
+                    <DropdownMenuItem
+                      key={tag.id}
+                      onClick={() =>
+                        bulkAssignTagMutation.mutate({
+                          scriptIds: Array.from(selectedScriptIds),
+                          tagId: tag.id,
+                        })
+                      }
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full mr-2 shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 min-w-[120px] text-xs"
+                    disabled={bulkRemoveTagMutation.isPending || tagsOnSelection.length === 0}
+                  >
+                    <X className="w-3.5 h-3.5 mr-1.5" />
+                    Remove tag
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="max-h-64 overflow-y-auto">
+                  {tagsOnSelection.length === 0 ? (
+                    <DropdownMenuItem disabled>No tags on selection</DropdownMenuItem>
+                  ) : (
+                    tagsOnSelection.map((tag) => (
+                      <DropdownMenuItem
+                        key={tag.id}
+                        onClick={() =>
+                          bulkRemoveTagMutation.mutate({
+                            scriptIds: Array.from(selectedScriptIds),
+                            tagId: tag.id,
+                          })
+                        }
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full mr-2 shrink-0"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                        <span className="ml-auto text-[10px] text-muted-foreground pl-2">
+                          {tag.count}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* New Tag Dialog */}
@@ -690,31 +902,65 @@ export default function MyScripts() {
 function ScriptCard({
   script,
   stageTagIdsOrdered,
-  navigate,
+  allTags,
+  selected,
+  anySelected,
+  onToggleSelect,
+  assignTagMutation,
+  removeTagMutation,
+  openScript,
   updateScriptMutation,
   deleteScriptMutation,
   formatDate,
 }: {
   script: any;
   stageTagIdsOrdered: number[];
-  navigate: (path: string) => void;
+  allTags: Array<{ id: number; name: string; color: string }>;
+  selected: boolean;
+  anySelected: boolean;
+  onToggleSelect: () => void;
+  assignTagMutation: any;
+  removeTagMutation: any;
+  openScript: (script: { id: number; coachScriptId?: number | null }) => void;
   updateScriptMutation: any;
   deleteScriptMutation: any;
   formatDate: (date: Date | string | null) => string;
 }) {
   const accent = accentColorFromScriptTags(script.tags, stageTagIdsOrdered);
   const accentStyles = accent ? scriptTagAccentStyles(accent, false) : undefined;
+  const assignedTagIds = new Set<number>((script.tags ?? []).map((t: { id: number }) => t.id));
+  const tagsToAdd = allTags.filter((t) => !assignedTagIds.has(t.id));
+  const tagsToRemove = script.tags ?? [];
 
   return (
     <div
-      className="rounded-lg border border-border/70 hover:border-primary/45 transition-colors cursor-pointer group overflow-hidden"
+      className={`relative rounded-lg border border-border/70 hover:border-primary/45 transition-colors cursor-pointer group overflow-hidden ${
+        selected ? "border-violet-500 ring-1 ring-violet-500/30" : ""
+      }`}
       style={{
         ...(accentStyles ?? {}),
         backgroundColor: "hsl(var(--card))",
       }}
-      onClick={() => navigate(savedScriptOpenPath(script))}
+      onClick={() => openScript(script)}
     >
-      <div className="p-4">
+      <button
+        type="button"
+        aria-label={selected ? "Deselect script" : "Select script"}
+        className={`absolute top-2.5 left-2.5 z-10 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+          selected
+            ? "bg-violet-600 border-violet-600"
+            : anySelected
+              ? "border-border bg-background"
+              : "border-transparent group-hover:border-border bg-background/80 opacity-0 group-hover:opacity-100"
+        }`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect();
+        }}
+      >
+        {selected && <span className="text-white text-[10px] font-bold">✓</span>}
+      </button>
+      <div className="p-4 pt-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
@@ -740,7 +986,7 @@ function ScriptCard({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(savedScriptOpenPath(script));
+                  openScript(script);
                 }}
               >
                 <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit
@@ -757,6 +1003,55 @@ function ScriptCard({
                 <CheckCircle2 className="w-3.5 h-3.5 mr-2" />
                 {script.status === "approved" ? "Mark as Draft" : "Approve"}
               </DropdownMenuItem>
+              {tagsToAdd.length > 0 ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">Add tag</DropdownMenuLabel>
+                  {tagsToAdd.map((tag) => (
+                    <DropdownMenuItem
+                      key={`add-${tag.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        assignTagMutation.mutate(
+                          { scriptId: script.id, tagId: tag.id },
+                          { onSuccess: () => toast.success(`Added "${tag.name}"`) }
+                        );
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full mr-2 shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              ) : null}
+              {tagsToRemove.length > 0 ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">Remove tag</DropdownMenuLabel>
+                  {tagsToRemove.map((tag: { id: number; name: string; color: string }) => (
+                    <DropdownMenuItem
+                      key={`remove-${tag.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeTagMutation.mutate(
+                          { scriptId: script.id, tagId: tag.id },
+                          { onSuccess: () => toast.success(`Removed "${tag.name}"`) }
+                        );
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full mr-2 shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              ) : null}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -874,7 +1169,7 @@ function CalendarView({
   calendarData,
   calendarMonth,
   setCalendarMonth,
-  navigate,
+  openScript,
   updateScriptMutation,
   filteredScripts,
   stageTagIdsOrdered,
@@ -882,7 +1177,7 @@ function CalendarView({
   calendarData: any;
   calendarMonth: { year: number; month: number };
   setCalendarMonth: (m: { year: number; month: number }) => void;
-  navigate: (path: string) => void;
+  openScript: (script: { id: number; coachScriptId?: number | null }) => void;
   updateScriptMutation: any;
   filteredScripts: any[];
   stageTagIdsOrdered: number[];
@@ -1021,7 +1316,7 @@ function CalendarView({
                             onDragStart={(e) => {
                               e.dataTransfer.setData("text/plain", script.id.toString());
                             }}
-                            onClick={() => navigate(savedScriptOpenPath(script))}
+                            onClick={() => openScript(script)}
                             className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer transition-colors ${
                               stripe
                                 ? "text-foreground"
@@ -1075,7 +1370,7 @@ function CalendarView({
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/plain", script.id.toString());
                   }}
-                  onClick={() => navigate(savedScriptOpenPath(script))}
+                  onClick={() => openScript(script)}
                   className="px-3 py-1.5 rounded-md bg-card border border-border/30 text-xs cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
                   style={
                     stripe

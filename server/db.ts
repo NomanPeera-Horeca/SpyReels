@@ -1649,6 +1649,38 @@ export async function getTagsForScript(scriptId: number): Promise<ScriptTag[]> {
   return db.select().from(scriptTags).where(inArray(scriptTags.id, tagIds));
 }
 
+/** Batch-load tags for many scripts (avoids N+1 on scripts.list). */
+export async function getTagsForScripts(
+  scriptIds: number[]
+): Promise<Map<number, ScriptTag[]>> {
+  const map = new Map<number, ScriptTag[]>();
+  for (const id of scriptIds) {
+    map.set(id, []);
+  }
+  if (scriptIds.length === 0) return map;
+
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const assignments = await db
+    .select()
+    .from(scriptTagAssignments)
+    .where(inArray(scriptTagAssignments.scriptId, scriptIds));
+  if (assignments.length === 0) return map;
+
+  const tagIds = [...new Set(assignments.map((a) => a.tagId))];
+  const tagRows = await db.select().from(scriptTags).where(inArray(scriptTags.id, tagIds));
+  const tagById = new Map(tagRows.map((t) => [t.id, t]));
+
+  for (const assignment of assignments) {
+    const tag = tagById.get(assignment.tagId);
+    if (!tag) continue;
+    map.get(assignment.scriptId)?.push(tag);
+  }
+
+  return map;
+}
+
 /** Find a tag by name in a workspace, or create a non-default tag with the same styling. */
 export async function findOrCreateScriptTagInWorkspace(
   workspaceId: string,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
 import { useAppBack } from "@/hooks/useAppBack";
@@ -81,6 +81,7 @@ import {
   type ScriptEditorBaseline,
 } from "@/lib/scriptEditorBaseline";
 import { shouldAutoOpenFilm } from "@shared/scriptFilm";
+import { parseScriptsTagFilter, scriptsListPath } from "@/lib/scriptsListPath";
 
 /** Parse a date string/Date to a Date object for the calendar picker */
 function parseDateValue(
@@ -97,7 +98,11 @@ export default function ScriptEditor() {
   const [, params] = useRoute("/scripts/:id");
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const handleBack = useAppBack("/scripts");
+  const scriptsBackPath = useMemo(
+    () => scriptsListPath(parseScriptsTagFilter(searchString)),
+    [searchString]
+  );
+  const handleBack = useAppBack(scriptsBackPath);
   const scriptId = params?.id ? parseInt(params.id) : null;
 
   const [editedContent, setEditedContent] = useState("");
