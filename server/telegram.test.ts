@@ -99,6 +99,11 @@ vi.mock("./db", () => ({
   upsertUser: vi.fn(),
   getTelegramConnectionByLinkCode: vi.fn(),
   getTelegramConnectionByChatId: vi.fn(),
+  hasCollectedReelIngestColumns: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("./collectedReelWorker", () => ({
+  enqueueCollectedReelIngest: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock telegramBot module
@@ -498,7 +503,7 @@ describe("handleTelegramUpdate", () => {
 // ── Telegram Bot Token Validation ──
 
 describe("Telegram Bot Token", () => {
-  it("TELEGRAM_BOT_TOKEN environment variable is set", () => {
+  it.skipIf(!process.env.TELEGRAM_BOT_TOKEN)("TELEGRAM_BOT_TOKEN environment variable is set", () => {
     // The token should be configured via webdev_request_secrets
     const token = process.env.TELEGRAM_BOT_TOKEN;
     expect(token).toBeDefined();

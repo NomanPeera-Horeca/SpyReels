@@ -60,13 +60,13 @@ export default function OnboardingGate({
     } catch {
       // ignore
     }
-    setLocation(`/invitations/accept/${encodeURIComponent(trimmed)}`);
+    setLocation(`/invitations/accept/${encodeURIComponent(trimmed)}`, { replace: true });
   }, [loading, user, location, setLocation]);
 
   useEffect(() => {
     if (!shouldRedirectToOnboarding) return;
     if (location === "/onboarding") return;
-    setLocation("/onboarding");
+    setLocation("/onboarding", { replace: true });
   }, [location, setLocation, shouldRedirectToOnboarding]);
 
   if (loading) return null;

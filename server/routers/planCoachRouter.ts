@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   buildAnalysisPrompt,
@@ -14,6 +14,8 @@ import {
   buildProductionNotesJson,
   coachScriptIsComplete,
   combineBodyFromSections,
+  countWords,
+  flattenViralScriptForCopy,
   parseCoachScriptSections,
   parseProductionNotes,
   sectionsFromGenerated,
@@ -21,15 +23,35 @@ import {
 import { coachScripts, planCards } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, createSavedScript } from "../db";
 import { getCreatorCoachProfile } from "../planCoachProfile";
+import { resolveCoachIntent } from "../studioCoachAgent";
+import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
+import {
+  getAudienceSignalsByIds,
+  getOrFetchAudienceSignals,
+} from "../audienceResearch/service";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
+import { generateCoachScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
+import {
+  completeAgentProgress,
+  failAgentProgress,
+  getAgentProgress,
+  initAgentProgress,
+  scheduleClearAgentProgress,
+  setAgentProgressSteps,
+} from "../agentProgressStore";
+import {
+  buildPlanProgressSteps,
+  type PlanProgressStepId,
+} from "@shared/planAgentProgress";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import {
   extractPlanCardsFromParsed,
   normalizeCoachScriptPayload,
   parseLlmJson,
 } from "../utils/parseLlmJson";
+import type { CoachCapabilityId } from "@shared/studioCoachUi";
 
 const PLAN_BATCHES = [
   { startDay: 1, endDay: 10 },
@@ -67,6 +89,7 @@ async function generatePlanCardBatch(args: {
   brandDescription: string | null;
   startDay: number;
   endDay: number;
+  audienceResearchBlock?: string;
 }): Promise<RawPlanCard[]> {
   const response = await invokeLLM({
     messages: [
@@ -79,7 +102,11 @@ async function generatePlanCardBatch(args: {
             args.goal,
             args.platforms,
             args.brandDescription,
-            { startDay: args.startDay, endDay: args.endDay }
+            {
+              startDay: args.startDay,
+              endDay: args.endDay,
+              audienceResearchBlock: args.audienceResearchBlock,
+            }
           )
         ),
       },
@@ -123,6 +150,19 @@ function mapPlanCardRow(row: typeof planCards.$inferSelect) {
   };
 }
 
+function mapCoachScriptSummary(row: typeof coachScripts.$inferSelect) {
+  return {
+    id: row.id,
+    title: row.title,
+    hookPreview: row.hook.slice(0, 120),
+    planCardId: row.planCardId,
+    contentFormat: row.contentFormat,
+    formatLabel: row.formatLabel,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 function mapCoachScriptRow(row: typeof coachScripts.$inferSelect) {
   const sections = parseCoachScriptSections({
     body: row.body,
@@ -162,7 +202,27 @@ async function assertCoachScriptInWorkspace(scriptId: number, workspaceId: strin
   }
 }
 
+const PLAN_FLOW = "plan" as const;
+
+function setPlanProgressStep(
+  userId: number,
+  activeStepId: PlanProgressStepId,
+  completedThrough?: PlanProgressStepId
+) {
+  const current = getAgentProgress(PLAN_FLOW, userId);
+  if (!current || current.status !== "running") return;
+  setAgentProgressSteps({
+    flow: PLAN_FLOW,
+    userId,
+    steps: buildPlanProgressSteps(activeStepId, completedThrough),
+  });
+}
+
 export const planRouter = router({
+  getGenerationProgress: protectedProcedure.query(({ ctx }) => {
+    return getAgentProgress(PLAN_FLOW, ctx.user.id);
+  }),
+
   generate: protectedProcedure
     .input(
       z.object({
@@ -179,24 +239,37 @@ export const planRouter = router({
         });
       }
 
-      const profile = await getCreatorCoachProfile(ctx.user.id);
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      initAgentProgress({
+        flow: PLAN_FLOW,
+        userId: ctx.user.id,
+        steps: buildPlanProgressSteps("read_profile"),
+      });
 
-      const cardsRaw: RawPlanCard[] = [];
-      for (const batch of PLAN_BATCHES) {
-        let batchCards = await generatePlanCardBatch({
-          niche: profile.niche,
+      try {
+        setPlanProgressStep(ctx.user.id, "read_profile");
+        const profile = await getCreatorCoachProfile(ctx.user.id);
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+        setPlanProgressStep(ctx.user.id, "audience_research", "read_profile");
+        const { signals: audienceSignalsList } = await getOrFetchAudienceSignals({
+          workspaceId: ctx.workspaceId,
+          nicheSlug: profile.nicheSlug,
+          nicheLabel: profile.niche,
           targetAudience: profile.targetAudience,
-          goal: input.goal,
-          platforms: input.platforms,
-          brandDescription: profile.brandDescription,
-          startDay: batch.startDay,
-          endDay: batch.endDay,
+          forceRefresh: true,
         });
+        const audienceResearchBlock = formatAudienceSignalsForPrompt(audienceSignalsList);
 
-        if (batchCards.length < 5) {
-          batchCards = await generatePlanCardBatch({
+        const batchStepIds: PlanProgressStepId[] = ["ideas_week1", "ideas_week2", "ideas_week3"];
+        const cardsRaw: RawPlanCard[] = [];
+        for (const [batchIndex, batch] of PLAN_BATCHES.entries()) {
+          const stepId = batchStepIds[batchIndex]!;
+          const completedThrough =
+            batchIndex === 0 ? ("audience_research" as PlanProgressStepId) : batchStepIds[batchIndex - 1]!;
+          setPlanProgressStep(ctx.user.id, stepId, completedThrough);
+
+          let batchCards = await generatePlanCardBatch({
             niche: profile.niche,
             targetAudience: profile.targetAudience,
             goal: input.goal,
@@ -204,59 +277,98 @@ export const planRouter = router({
             brandDescription: profile.brandDescription,
             startDay: batch.startDay,
             endDay: batch.endDay,
+            audienceResearchBlock,
+          });
+
+          if (batchCards.length < 5) {
+            batchCards = await generatePlanCardBatch({
+              niche: profile.niche,
+              targetAudience: profile.targetAudience,
+              goal: input.goal,
+              platforms: input.platforms,
+              brandDescription: profile.brandDescription,
+              startDay: batch.startDay,
+              endDay: batch.endDay,
+              audienceResearchBlock,
+            });
+          }
+
+          cardsRaw.push(...batchCards);
+        }
+
+        if (cardsRaw.length < MIN_PLAN_CARDS) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Plan generation returned incomplete results. Please try again.",
           });
         }
 
-        cardsRaw.push(...batchCards);
+        setPlanProgressStep(ctx.user.id, "finalize_board", "ideas_week3");
+
+        const cardsByDay = new Map<number, RawPlanCard>();
+        for (const [idx, card] of cardsRaw.entries()) {
+          const day = typeof card.day === "number" ? card.day : idx + 1;
+          cardsByDay.set(day, { ...card, day });
+        }
+        const dedupedCards = Array.from(cardsByDay.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([, card]) => card);
+
+        await db.delete(planCards).where(eq(planCards.workspaceId, ctx.workspaceId));
+
+        const values = dedupedCards
+          .slice(0, 30)
+          .map((c, idx) => ({
+            userId: ctx.user.id,
+            workspaceId: ctx.workspaceId,
+            day: typeof c.day === "number" ? c.day : idx + 1,
+            funnelStage: (c.funnelStage ?? "tofu").slice(0, 16),
+            contentFormat: (c.contentFormat ?? "talking-head").slice(0, 32),
+            platform: (c.platform ?? "instagram").slice(0, 32),
+            title: String(c.title ?? "Untitled idea").slice(0, 2000),
+            hook: String(c.hook ?? "").slice(0, 2000),
+            angle: String(c.angle ?? "").slice(0, 4000),
+            filmingLocation: String(c.filmingLocation ?? "At your desk").slice(0, 500),
+            researchSignal: c.researchSignal ? String(c.researchSignal).slice(0, 2000) : null,
+            status: "pending",
+            goal: input.goal,
+          }))
+          .sort((a, b) => a.day - b.day);
+
+        await db.insert(planCards).values(values);
+        await incrementUsage(ctx.user.id, "recreateCount");
+
+        const inserted = await db
+          .select()
+          .from(planCards)
+          .where(eq(planCards.workspaceId, ctx.workspaceId))
+          .orderBy(asc(planCards.day));
+
+        setPlanProgressStep(ctx.user.id, "finalize_board", "finalize_board");
+        completeAgentProgress(PLAN_FLOW, ctx.user.id);
+
+        return {
+          cards: inserted.map(mapPlanCardRow),
+          audienceSignals: audienceSignalsList.map((signal) => ({
+            id: signal.id ?? 0,
+            source: signal.source,
+            title: signal.title,
+            snippet: signal.snippet,
+            sourceUrl: signal.sourceUrl,
+          })),
+        };
+      } catch (err) {
+        const message =
+          err instanceof TRPCError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Something went wrong. Please try again.";
+        failAgentProgress({ flow: PLAN_FLOW, userId: ctx.user.id, errorMessage: message });
+        throw err;
+      } finally {
+        scheduleClearAgentProgress(PLAN_FLOW, ctx.user.id);
       }
-
-      if (cardsRaw.length < MIN_PLAN_CARDS) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Plan generation returned incomplete results. Please try again.",
-        });
-      }
-
-      const cardsByDay = new Map<number, RawPlanCard>();
-      for (const [idx, card] of cardsRaw.entries()) {
-        const day = typeof card.day === "number" ? card.day : idx + 1;
-        cardsByDay.set(day, { ...card, day });
-      }
-      const dedupedCards = Array.from(cardsByDay.entries())
-        .sort((a, b) => a[0] - b[0])
-        .map(([, card]) => card);
-
-      await db.delete(planCards).where(eq(planCards.workspaceId, ctx.workspaceId));
-
-      const values = dedupedCards
-        .slice(0, 30)
-        .map((c, idx) => ({
-          userId: ctx.user.id,
-          workspaceId: ctx.workspaceId,
-          day: typeof c.day === "number" ? c.day : idx + 1,
-        funnelStage: (c.funnelStage ?? "tofu").slice(0, 16),
-        contentFormat: (c.contentFormat ?? "talking-head").slice(0, 32),
-        platform: (c.platform ?? "instagram").slice(0, 32),
-        title: String(c.title ?? "Untitled idea").slice(0, 2000),
-        hook: String(c.hook ?? "").slice(0, 2000),
-        angle: String(c.angle ?? "").slice(0, 4000),
-        filmingLocation: String(c.filmingLocation ?? "At your desk").slice(0, 500),
-        researchSignal: c.researchSignal ? String(c.researchSignal).slice(0, 2000) : null,
-        status: "pending",
-        goal: input.goal,
-        }))
-        .sort((a, b) => a.day - b.day);
-
-      await db.insert(planCards).values(values);
-      await incrementUsage(ctx.user.id, "recreateCount");
-
-      const inserted = await db
-        .select()
-        .from(planCards)
-        .where(eq(planCards.workspaceId, ctx.workspaceId))
-        .orderBy(asc(planCards.day));
-
-      return { cards: inserted.map(mapPlanCardRow) };
     }),
 
   listCards: protectedProcedure.query(async ({ ctx }) => {
@@ -407,6 +519,43 @@ export const planRouter = router({
 });
 
 export const studioRouter = router({
+  getGenerationProgress: protectedProcedure.query(({ ctx }) => {
+    return getCoachGenerationProgress(ctx.user.id);
+  }),
+
+  resolveIntent: protectedProcedure
+    .input(
+      z.object({
+        message: z.string().min(1).max(8000),
+        capabilityId: z
+          .enum(["write_script", "from_plan", "refine_script", "hook_ideas"])
+          .optional(),
+        activeScriptId: z.number().optional(),
+        attachedPlanCardId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [recent] = await db
+        .select({ id: coachScripts.id })
+        .from(coachScripts)
+        .where(eq(coachScripts.workspaceId, ctx.workspaceId))
+        .orderBy(desc(coachScripts.updatedAt))
+        .limit(1);
+
+      const action = await resolveCoachIntent({
+        message: input.message,
+        capabilityId: input.capabilityId as CoachCapabilityId | undefined,
+        activeScriptId: input.activeScriptId ?? null,
+        attachedPlanCardId: input.attachedPlanCardId ?? null,
+        recentScriptId: recent?.id ?? null,
+      });
+
+      return action;
+    }),
+
   analyze: protectedProcedure
     .input(z.object({ description: z.string().min(10).max(8000) }))
     .mutation(async ({ ctx, input }) => {
@@ -462,102 +611,19 @@ export const studioRouter = router({
           .optional()
           .default([]),
         planCardId: z.number().optional(),
+        audienceSignalIds: z.array(z.number()).max(3).optional().default([]),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const usageCheck = await checkUsageLimit(ctx.user.id, "recreateCount", ctx.user.openId);
-      if (!usageCheck.allowed) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: `You've reached your monthly AI script limit (${usageCheck.used}/${usageCheck.limit}). Upgrade for more.`,
-        });
-      }
-
-      const profile = await getCreatorCoachProfile(ctx.user.id);
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-
-      const response = await invokeLLM({
-        messages: [
-          { role: "system", content: withAiFormattingRules(`${COACH_SYSTEM_PROMPT}\n\n${buildStudioDateContext()}`) },
-          {
-            role: "user",
-            content: buildCoachPrompt(
-              input.description,
-              profile.niche,
-              profile.targetAudience,
-              profile.brandDescription,
-              input.clarifications
-            ),
-          },
-        ],
-        maxTokens: 4096,
-        response_format: { type: "json_object" },
+      return generateCoachScriptWithProgress({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        openId: ctx.user.openId,
+        description: input.description,
+        clarifications: input.clarifications,
+        planCardId: input.planCardId,
+        audienceSignalIds: input.audienceSignalIds,
       });
-
-      const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const generated = normalizeCoachScriptPayload(
-        parseJsonFromLlm<Record<string, unknown>>(raw, {})
-      );
-      if (!coachScriptIsComplete(generated)) {
-        console.warn(
-          "[studio.generate] incomplete LLM payload",
-          raw.slice(0, 800)
-        );
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "AI returned an incomplete script. Please try again.",
-        });
-      }
-
-      const platformRaw = String(generated.platform ?? "both");
-      const platform = ["instagram", "tiktok", "both"].includes(platformRaw)
-        ? platformRaw
-        : "both";
-
-      const sections = sectionsFromGenerated(generated);
-      const bodyCombined = combineBodyFromSections(sections);
-      const ctaText = sections.cta || sections.teach || String(generated.callToAction ?? "");
-
-      const coachPayload = buildProductionNotesJson(
-        generated.productionCoach,
-        sections,
-        { contentFormat: String(generated.contentFormat ?? "talking-head") }
-      );
-
-      const insertResult = await db.insert(coachScripts).values({
-          userId: ctx.user.id,
-          workspaceId: ctx.workspaceId,
-          planCardId: input.planCardId ?? null,
-          title: String(generated.title ?? "Untitled script").slice(0, 256),
-          hook: String(generated.hook),
-          body: bodyCombined,
-          callToAction: ctaText,
-          platform,
-          tone: String(generated.tone ?? "conversational").slice(0, 64),
-          estimatedDuration: generated.estimatedDuration
-            ? String(generated.estimatedDuration).slice(0, 64)
-            : null,
-          contentType: generated.contentType ? String(generated.contentType).slice(0, 64) : null,
-          contentFormat: generated.contentFormat
-            ? String(generated.contentFormat).slice(0, 64)
-            : null,
-          formatLabel: generated.formatLabel ? String(generated.formatLabel).slice(0, 128) : null,
-          productionNotes: coachPayload,
-        });
-
-      const scriptId = insertResult[0]?.insertId;
-      if (!scriptId) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to save script" });
-      }
-
-      const [row] = await db.select().from(coachScripts).where(eq(coachScripts.id, scriptId)).limit(1);
-      if (!row) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to load script" });
-      }
-
-      await incrementUsage(ctx.user.id, "recreateCount");
-      return mapCoachScriptRow(row);
     }),
 
   refine: protectedProcedure
@@ -703,5 +769,124 @@ export const studioRouter = router({
         body: updated.body,
         callToAction: updated.callToAction,
       };
+    }),
+
+  list: protectedProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).optional().default(20) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const limit = input?.limit ?? 20;
+      const rows = await db
+        .select()
+        .from(coachScripts)
+        .where(eq(coachScripts.workspaceId, ctx.workspaceId))
+        .orderBy(desc(coachScripts.updatedAt))
+        .limit(limit);
+      return { scripts: rows.map(mapCoachScriptSummary) };
+    }),
+
+  get: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [row] = await db
+        .select()
+        .from(coachScripts)
+        .where(and(eq(coachScripts.id, input.id), eq(coachScripts.workspaceId, ctx.workspaceId)))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+      return mapCoachScriptRow(row);
+    }),
+
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        hook: z.string().min(1).max(2000),
+        explain: z.string().max(8000),
+        illustrate: z.string().max(8000),
+        teach: z.string().max(4000),
+        cta: z.string().max(2000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [script] = await db
+        .select()
+        .from(coachScripts)
+        .where(eq(coachScripts.id, input.id))
+        .limit(1);
+      if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+
+      const sections = {
+        explain: input.explain.trim(),
+        illustrate: input.illustrate.trim(),
+        teach: input.teach.trim(),
+        cta: input.cta.trim(),
+      };
+      const notes = parseProductionNotes(script.productionNotes);
+      const productionNotes = buildProductionNotesJson(notes ?? {}, sections, {
+        contentFormat: script.contentFormat ?? undefined,
+        funnelStage: notes?.funnelStage,
+      });
+
+      await db
+        .update(coachScripts)
+        .set({
+          hook: input.hook.trim(),
+          body: combineBodyFromSections(sections),
+          callToAction: sections.cta || sections.teach,
+          productionNotes,
+        })
+        .where(eq(coachScripts.id, input.id));
+
+      const [updated] = await db.select().from(coachScripts).where(eq(coachScripts.id, input.id)).limit(1);
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+      return mapCoachScriptRow(updated);
+    }),
+
+  saveToLibrary: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [script] = await db
+        .select()
+        .from(coachScripts)
+        .where(eq(coachScripts.id, input.id))
+        .limit(1);
+      if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+
+      const sections = parseCoachScriptSections({
+        body: script.body,
+        callToAction: script.callToAction,
+        productionNotes: script.productionNotes,
+      });
+      const content = flattenViralScriptForCopy({
+        title: script.title,
+        hook: script.hook,
+        sections,
+      });
+
+      const savedId = await createSavedScript({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        title: script.title,
+        content,
+        originalContent: content,
+        wordCount: countWords(content),
+        status: "draft",
+        notes: "Saved from AI Coach",
+      });
+
+      return { savedScriptId: savedId };
     }),
 });

@@ -5,14 +5,25 @@ export type CoachScriptSections = {
   cta: string;
 };
 
+export type InstagramAudioPick = {
+  title: string;
+  artist?: string;
+  searchHint: string;
+  matchReason: string;
+  isTrending?: boolean;
+};
+
 export type CoachProductionNotes = {
   device?: string;
   cameraSettings?: string;
   setup?: string;
   music?: string;
+  musicMix?: string;
+  instagramAudio?: InstagramAudioPick[];
   voiceTone?: string;
   bRoll?: Array<{ shot?: string; example?: string; canUseStock?: boolean }>;
   textOverlay?: string;
+  hookOnScreenText?: string;
   contentFormat?: string;
   funnelStage?: string;
   sections?: CoachScriptSections;
@@ -131,7 +142,11 @@ export function flattenCoachScriptForCopy(args: {
   title: string;
   hook: string;
   sections: CoachScriptSections;
+  userFriendly?: boolean;
 }): string {
+  if (args.userFriendly) {
+    return flattenViralScriptForCopy(args);
+  }
   const lines = [
     args.title,
     "",
@@ -151,4 +166,37 @@ export function flattenCoachScriptForCopy(args: {
     args.sections.cta,
   ];
   return lines.filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
+}
+
+/** Copy format shown to creators (no internal HEIT jargon). */
+export function flattenViralScriptForCopy(args: {
+  title: string;
+  hook: string;
+  sections: CoachScriptSections;
+}): string {
+  const lines = [
+    args.title,
+    "",
+    "HOOK",
+    args.hook,
+    "",
+    "PROBLEM SETUP",
+    args.sections.explain,
+    "",
+    "STORY OR EXAMPLE",
+    args.sections.illustrate,
+    "",
+    "KEY TAKEAWAY",
+    args.sections.teach,
+    "",
+    "CALL TO ACTION",
+    args.sections.cta,
+  ];
+  return lines.filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
+}
+
+export function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
 }

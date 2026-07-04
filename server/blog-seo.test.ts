@@ -3,8 +3,8 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 // Mock database
-vi.mock("./db", () => ({
-  getPublishedBlogPosts: vi.fn().mockResolvedValue([
+const { mockPublishedPosts } = vi.hoisted(() => ({
+  mockPublishedPosts: [
     {
       id: 1,
       title: "How to Go Viral on Instagram Reels",
@@ -21,7 +21,12 @@ vi.mock("./db", () => ({
       createdAt: new Date("2026-01-15"),
       updatedAt: new Date("2026-01-20"),
     },
-  ]),
+  ],
+}));
+
+vi.mock("./db", () => ({
+  getPublishedBlogPosts: vi.fn().mockResolvedValue(mockPublishedPosts),
+  getPublishedIndexableBlogPosts: vi.fn().mockResolvedValue(mockPublishedPosts),
   getBlogPostBySlug: vi.fn().mockImplementation(async (slug: string) => {
     if (slug === "how-to-go-viral-instagram-reels") {
       return {

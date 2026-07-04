@@ -80,16 +80,20 @@ export function buildCoachPrompt(
   niche: string,
   targetAudience: string,
   brandDescription?: string | null,
-  clarifications?: Array<{ question: string; answer: string }>
+  clarifications?: Array<{ question: string; answer: string }>,
+  audienceResearchBlock?: string
 ): string {
   const clarificationBlock =
     clarifications && clarifications.length > 0
       ? `\n\nAdditional context (treat as ground truth):\n${clarifications.map((c) => `Q: ${c.question}\nA: ${c.answer}`).join("\n\n")}`
       : "";
+  const audienceBlock = audienceResearchBlock?.trim()
+    ? `\n\n${audienceResearchBlock.trim()}`
+    : "";
 
   return `A content creator just shared this raw idea:
 
-"${description}"${clarificationBlock}
+"${description}"${clarificationBlock}${audienceBlock}
 
 ${buildStudioDateContext()}
 
@@ -109,7 +113,24 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
     "device": "iPhone | Android | GoPro",
     "cameraSettings": "2-3 sentences specific to format and device",
     "setup": "One sentence: exactly where to position camera for this format",
-    "music": "Specific music vibe with artist/song reference and app search term",
+    "musicMix": "One sentence: exact volume and when to duck or fade (e.g. 8-12% under voice, mute during hook)",
+    "instagramAudio": [
+      {
+        "title": "Exact track name as shown in Instagram Reels audio library",
+        "artist": "Artist or original sound creator name",
+        "searchHint": "Exact phrase the creator should paste into Instagram Reels audio search",
+        "matchReason": "One sentence: why this trending audio fits THIS script tone and niche",
+        "isTrending": true
+      },
+      {
+        "title": "Backup track name",
+        "artist": "Artist name",
+        "searchHint": "Backup search phrase",
+        "matchReason": "One sentence: when to use this instead",
+        "isTrending": false
+      }
+    ],
+    "music": "Legacy one-line summary only if needed; prefer instagramAudio picks above",
     "voiceTone": "Delivery style and emotion for this format",
     "bRoll": [
       { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
@@ -123,7 +144,13 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "illustrate": "I section only. One story, analogy, or example with concrete detail.",
   "teach": "T section only. ONE clear takeaway or action. Not a list.",
   "cta": "Final call to action. Tell them exactly what to do next (comment, DM, save, follow). 1-2 sentences."
-}`;
+}
+
+Music rules for productionCoach.instagramAudio:
+- Give exactly 2 picks: one primary (isTrending: true) and one backup.
+- Use real songs or original sounds that are commonly found in Instagram Reels audio search for this niche in ${new Date().getFullYear()}. Include the exact searchHint string.
+- Match audio energy to the script (calm educational vs hype vs emotional story). No vague advice like "use trending audio."
+- talking-head scripts: low-volume background tracks. trending-audio format: the sound IS the hook, say so in musicMix.`;
 }
 
 export function buildPlanGenerationPrompt(
@@ -132,7 +159,7 @@ export function buildPlanGenerationPrompt(
   goal: string,
   platforms: string[],
   brandDescription?: string | null,
-  options?: { startDay?: number; endDay?: number }
+  options?: { startDay?: number; endDay?: number; audienceResearchBlock?: string }
 ): string {
   const startDay = options?.startDay ?? 1;
   const endDay = options?.endDay ?? 30;
@@ -161,8 +188,8 @@ Creator profile:
 - Goal: ${goal} — ${goalDescriptions[goal] ?? goal}
 ${brandDescription ? `- Brand: ${brandDescription}` : ""}
 
-${scopeLine} Each card is a specific, actionable content idea researched from what's working in this niche right now.
-
+${scopeLine} Each card is a specific, actionable content idea grounded in real audience questions when provided below.
+${options?.audienceResearchBlock ?? ""}
 Distribution rules:
 - TOFU (awareness): ~50% — hooks that get shared by non-followers
 - MOFU (trust): ~35% — builds credibility with existing audience
@@ -183,7 +210,7 @@ Return a JSON object with a "cards" array of exactly ${cardCount} items:
     "hook": "The exact opening line ready to record — no warm-up",
     "angle": "1-2 sentences on the HEIT angle — what problem, what illustration, what takeaway",
     "filmingLocation": "Specific location e.g. 'At your desk, front camera' or 'In the kitchen, showing prep'",
-    "researchSignal": "1 sentence on why this topic works — what audience question or trend it taps"
+    "researchSignal": "1 sentence on why this topic works — cite a real audience question or thread from the research block when possible (e.g. 'Based on r/fitness discussion about...')"
   }
   ]
 }

@@ -841,6 +841,33 @@ export const planCards = mysqlTable(
 export type PlanCard = typeof planCards.$inferSelect;
 export type InsertPlanCard = typeof planCards.$inferInsert;
 
+/** Cached Reddit / Quora / web audience questions per workspace niche. */
+export const audienceSignals = mysqlTable(
+  "audience_signals",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    nicheSlug: varchar("nicheSlug", { length: 64 }).notNull(),
+    source: mysqlEnum("source", ["reddit", "quora", "web"]).notNull(),
+    title: varchar("title", { length: 512 }).notNull(),
+    snippet: text("snippet"),
+    sourceUrl: varchar("sourceUrl", { length: 1024 }).notNull(),
+    score: int("score").default(0).notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNicheIdx: index("idx_audience_signals_workspace_niche").on(
+      table.workspaceId,
+      table.nicheSlug
+    ),
+  })
+);
+
+export type AudienceSignal = typeof audienceSignals.$inferSelect;
+export type InsertAudienceSignal = typeof audienceSignals.$inferInsert;
+
 /** AI Coach HEIT scripts (separate from saved_scripts library). */
 export const coachScripts = mysqlTable(
   "coach_scripts",

@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clapperboard,
-  Lightbulb,
   Loader2,
   Users,
   X,
@@ -22,8 +21,13 @@ import { useUsageGate } from "@/hooks/useUsageGate";
 import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { formatRelativeActive } from "@/lib/formatActivity";
-import { LOADING_TIPS } from "@/data/loadingTips";
+import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import {
+  DISCOVERY_AGENT_FOOTER,
+  discoveryProgressFromJob,
+} from "@shared/discoveryAgentProgress";
 import { cn } from "@/lib/utils";
+import { DISCOVERY_AUTORUN_KEY, DISCOVERY_PREFILL_KEY } from "@shared/onboardingFlow";
 
 type CreatorDiscoveryResult =
   inferRouterOutputs<AppRouter>["creatorDiscovery"]["getSearch"];
@@ -36,25 +40,6 @@ type RankedCreator = CreatorDiscoveryResult["rankedCreators"][number];
 const MAX_DESCRIPTION_LENGTH = 1000;
 const MIN_DESCRIPTION_LENGTH = 20;
 const DISCOVERY_CREATORS_PER_PAGE = 9;
-
-const CREATOR_DISCOVERY_SEARCH_TIPS: readonly string[] = [
-  "We route your business to a niche, then generate topic phrases real creators rank for on Instagram.",
-  "Each topic is searched on Instagram to find reels from creators in your space.",
-  "Viral score blends reach (views vs followers) with engagement on each creator's best reel.",
-  "We collapse multiple hits into one entry per creator, keeping their strongest reel.",
-  "A peer filter removes keyword collisions: creators who matched a word but are not in your niche.",
-  "Creators with 10,000+ followers and strong reach multipliers rise to the top of your list.",
-  ...LOADING_TIPS.slice(0, 6),
-];
-
-function shuffle<T>(arr: readonly T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]!];
-  }
-  return out;
-}
 
 function creatorTierBadgeClass(tier: 1 | 2): string {
   if (tier === 1) {
@@ -222,125 +207,29 @@ function isPrePeer(result: CreatorDiscoveryResult | null): boolean {
   );
 }
 
-function CreatorDiscoverySearchLoading() {
-  const tips = useMemo(() => shuffle(CREATOR_DISCOVERY_SEARCH_TIPS), []);
-  const [tipIndex, setTipIndex] = useState(0);
-  const [tipVisible, setTipVisible] = useState(true);
-  const tipIndexRef = useRef(0);
-
-  useEffect(() => {
-    const rotate = setInterval(() => {
-      setTipVisible(false);
-      const fadeTimer = setTimeout(() => {
-        tipIndexRef.current = (tipIndexRef.current + 1) % tips.length;
-        setTipIndex(tipIndexRef.current);
-        setTipVisible(true);
-      }, 300);
-      return () => clearTimeout(fadeTimer);
-    }, 7000);
-    return () => clearInterval(rotate);
-  }, [tips.length]);
-
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 py-12 text-center rounded-xl border border-border/60 bg-muted/20 w-full">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      <div className="space-y-2 max-w-md px-4">
-        <p className="font-medium">Finding peer creators in your niche...</p>
-        <p className="text-sm text-muted-foreground">
-          This usually takes 5 to 10 minutes. We route your niche, search topics
-          on Instagram, and filter for genuine peers.
-        </p>
-        <div
-          className={cn(
-            "mt-4 rounded-lg border border-border/50 bg-background/60 px-4 py-3 text-left transition-opacity duration-300",
-            tipVisible ? "opacity-100" : "opacity-0"
-          )}
-        >
-          <div className="flex items-start gap-2">
-            <Lightbulb className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                While you wait
-              </p>
-              <p className="text-sm text-foreground/90">{tips[tipIndex]}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CreatorDiscoveryProgress({
-  job,
+function CreatorDiscoveryResultsHeader({
   result,
-  isJobRunning,
-  isSearchStarting,
   preFilterCount,
 }: {
-  job: CreatorDiscoveryJobStatus | undefined;
-  result: CreatorDiscoveryResult | null;
-  isJobRunning: boolean;
-  isSearchStarting: boolean;
+  result: CreatorDiscoveryResult;
   preFilterCount: number | null;
 }) {
-  const rankedCount = result?.rankedCreators.length ?? 0;
-
-  if (
-    !isJobRunning &&
-    !isSearchStarting &&
-    result &&
-    rankedCount > 0
-  ) {
-    const niche = result.routedNiche.trim() || "your niche";
-    const filteredFrom =
-      preFilterCount != null && preFilterCount > rankedCount
-        ? preFilterCount
-        : null;
-
-    return (
-      <div className="space-y-1">
-        <p className="text-lg font-semibold">
-          {rankedCount} top peer{rankedCount === 1 ? "" : "s"} in {niche}
-        </p>
-        {filteredFrom != null ? (
-          <p className="text-sm text-muted-foreground">
-            (filtered from {filteredFrom} creators searched)
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (!isJobRunning && !isSearchStarting) return null;
-
-  const topicsTotal = job?.topicsTotal ?? 0;
-  const topicsSearched = job?.topicsSearched ?? 0;
-  const creatorsFound =
-    job?.creatorsFound ?? result?.rankedCreators.length ?? 0;
-  const prePeer = isPrePeer(result);
-
-  let message = "Routing your niche...";
-
-  if (job?.status === "pending" || (topicsTotal === 0 && !prePeer)) {
-    message = "Routing your niche...";
-  } else if (topicsTotal > 0 && topicsSearched === 0) {
-    message = "Building search topics...";
-  } else if (topicsSearched < topicsTotal) {
-    message = `Searching topics ${topicsSearched}/${topicsTotal} · ${creatorsFound} creators found so far`;
-  } else if (prePeer) {
-    const n = result?.rankedCreators.length ?? creatorsFound;
-    message = `Found ${n} creators · selecting best peers...`;
-  } else {
-    const n = preFilterCount ?? creatorsFound;
-    message = `Selecting best peers from ${n} creators...`;
-  }
+  const rankedCount = result.rankedCreators.length;
+  const niche = result.routedNiche.trim() || "your niche";
+  const filteredFrom =
+    preFilterCount != null && preFilterCount > rankedCount ? preFilterCount : null;
 
   return (
-    <p className="text-sm text-muted-foreground flex items-center gap-2">
-      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-      {message}
-    </p>
+    <div className="space-y-1">
+      <p className="text-lg font-semibold">
+        {rankedCount} top peer{rankedCount === 1 ? "" : "s"} in {niche}
+      </p>
+      {filteredFrom != null ? (
+        <p className="text-sm text-muted-foreground">
+          (filtered from {filteredFrom} creators searched)
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -556,7 +445,9 @@ export default function CreatorDiscovery() {
   const [textareaFocused, setTextareaFocused] = useState(false);
   const [hideRecentDropdown, setHideRecentDropdown] = useState(false);
   const [scrapingUsername, setScrapingUsername] = useState<string | null>(null);
+  const [pendingAutorun, setPendingAutorun] = useState<string | null>(null);
   const preFilterCountRef = useRef<number | null>(null);
+  const prefillHandledRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [, setLocation] = useLocation();
@@ -570,6 +461,22 @@ export default function CreatorDiscovery() {
     return () => {
       if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    if (prefillHandledRef.current) return;
+    prefillHandledRef.current = true;
+
+    const prefill = sessionStorage.getItem(DISCOVERY_PREFILL_KEY)?.trim();
+    const autorun = sessionStorage.getItem(DISCOVERY_AUTORUN_KEY) === "1";
+    sessionStorage.removeItem(DISCOVERY_PREFILL_KEY);
+    sessionStorage.removeItem(DISCOVERY_AUTORUN_KEY);
+    if (!prefill) return;
+
+    setDescription(prefill);
+    if (autorun && prefill.length >= MIN_DESCRIPTION_LENGTH) {
+      setPendingAutorun(prefill);
+    }
   }, []);
   const jobStatusQuery = trpc.creatorDiscovery.jobStatus.useQuery(
     { jobId: activeJobId! },
@@ -716,11 +623,53 @@ export default function CreatorDiscovery() {
     return rankedCreators.slice(start, start + DISCOVERY_CREATORS_PER_PAGE);
   }, [rankedCreators, creatorPage]);
 
-  const showInitialLoading =
-    (searchMutation.isPending || (isJobRunning && result == null)) &&
-    !isReplayLoading;
   const showResults =
     result != null && rankedCreators.length > 0 && !isReplayLoading;
+
+  const discoveryProgressSteps = useMemo(
+    () =>
+      discoveryProgressFromJob({
+        job: jobStatus,
+        isSearchStarting: searchMutation.isPending,
+        isPrePeer: isPrePeer(result),
+        hasResults: showResults,
+      }),
+    [jobStatus, searchMutation.isPending, result, showResults]
+  );
+
+  const showDiscoveryProgress =
+    (isSearching || isJobRunning || searchMutation.isPending) && !isReplayLoading;
+
+  useEffect(() => {
+    if (!pendingAutorun) return;
+    if (quotaQuery.isLoading) return;
+    if (isSearching || isReplayLoading) return;
+
+    const text = pendingAutorun.trim();
+    setPendingAutorun(null);
+
+    if (text.length < MIN_DESCRIPTION_LENGTH) return;
+    if (quotaAtLimit) {
+      toast.error("Monthly discovery search limit reached.");
+      return;
+    }
+
+    setActiveJobId(null);
+    setResult(null);
+    setCreatorPage(1);
+    setReplayedAt(null);
+    setPreFilterCount(null);
+    preFilterCountRef.current = null;
+    setHideRecentDropdown(true);
+    searchMutation.mutate({ businessDescription: text });
+  }, [
+    pendingAutorun,
+    quotaQuery.isLoading,
+    quotaAtLimit,
+    isSearching,
+    isReplayLoading,
+    searchMutation,
+  ]);
 
   const handleSubmit = () => {
     if (!submitEnabled) return;
@@ -871,19 +820,27 @@ export default function CreatorDiscovery() {
         </div>
       </div>
 
-      {showInitialLoading || isReplayLoading ? (
-        <CreatorDiscoverySearchLoading />
+      {showDiscoveryProgress ? (
+        <AgentProgressPanel
+          steps={discoveryProgressSteps}
+          subheadline="We route your niche, search topics on Instagram, and filter for genuine peers."
+          footer={DISCOVERY_AGENT_FOOTER}
+          badgeLabel="Discovering"
+        />
+      ) : null}
+
+      {isReplayLoading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Loading saved search...
+        </div>
       ) : null}
 
       {showResults || isJobRunning || searchMutation.isPending ? (
         <div className="space-y-6">
-          <CreatorDiscoveryProgress
-            job={jobStatus}
-            result={result}
-            isJobRunning={isJobRunning}
-            isSearchStarting={searchMutation.isPending}
-            preFilterCount={preFilterCount}
-          />
+          {showResults && !isJobRunning && !searchMutation.isPending && result ? (
+            <CreatorDiscoveryResultsHeader result={result} preFilterCount={preFilterCount} />
+          ) : null}
           {replayedAt ? (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
               Showing saved results from {formatRelativeActive(replayedAt)}. Run a

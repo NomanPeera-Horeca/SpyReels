@@ -11,6 +11,8 @@ import "./index.css";
 import posthog from "posthog-js";
 import { PostHogProvider } from "@posthog/react";
 import { installClientLoadFailureReporting } from "./utils/clientLoadFailureReporting";
+import { resolveAppUrl, isNativeApp } from "@/lib/nativeApp";
+import { registerSW } from "virtual:pwa-register";
 
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
@@ -30,6 +32,31 @@ if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {
 }
 
 captureUtmsFromLocation();
+
+if (import.meta.env.PROD && !isNativeApp()) {
+  registerSW({ immediate: true });
+  window.addEventListener("appinstalled", () => {
+    posthog.capture("pwa_installed", { method: "appinstalled_event" });
+  });
+}
+
+void (async () => {
+  if (!isNativeApp()) return;
+  const [{ StatusBar, Style }, { SplashScreen }] = await Promise.all([
+    import("@capacitor/status-bar"),
+    import("@capacitor/splash-screen"),
+  ]);
+  try {
+    await StatusBar.setStyle({ style: Style.Dark });
+  } catch {
+    /* ignore */
+  }
+  try {
+    await SplashScreen.hide();
+  } catch {
+    /* ignore */
+  }
+})();
 
 document.getElementById("seo-crawler-snapshot")?.remove();
 
@@ -65,7 +92,7 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: resolveAppUrl("/api/trpc"),
       transformer: superjson,
       fetch(input, init) {
         const headers = new Headers(init?.headers);

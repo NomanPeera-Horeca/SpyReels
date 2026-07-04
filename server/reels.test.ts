@@ -137,6 +137,7 @@ vi.mock("./db", () => ({
   unsaveReel: vi.fn().mockResolvedValue(undefined),
   isReelSaved: vi.fn().mockResolvedValue(false),
   getSavedReelsWithDetails: vi.fn().mockResolvedValue([]),
+  getSavedDiscoverReelsWithDetails: vi.fn().mockResolvedValue([]),
   getSavedFeaturedReelsWithDetails: vi.fn().mockResolvedValue([]),
   upsertUser: vi.fn(),
   getUserByOpenId: vi.fn(),

@@ -4,6 +4,7 @@ import { formatReelTaxonomyLabel } from "@shared/reelNiches";
 
 export type CreatorCoachProfile = {
   niche: string;
+  nicheSlug: string;
   targetAudience: string;
   brandDescription: string | null;
 };
@@ -19,6 +20,7 @@ export async function getCreatorCoachProfile(userId: number): Promise<CreatorCoa
 
   const slugs = state.selectedNicheSlugs ?? [];
   const firstSlug = typeof slugs[0] === "string" ? slugs[0].trim() : "";
+  const nicheSlug = firstSlug || "business";
   const niche = firstSlug ? formatReelTaxonomyLabel(firstSlug) : "Content creator";
   const targetAudience = state.targetAudience?.trim() || "General audience";
   const brandDescription = state.businessDescription?.trim() || null;
@@ -30,5 +32,5 @@ export async function getCreatorCoachProfile(userId: number): Promise<CreatorCoa
     });
   }
 
-  return { niche, targetAudience, brandDescription };
+  return { niche, nicheSlug, targetAudience, brandDescription };
 }

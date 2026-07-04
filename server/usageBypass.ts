@@ -5,8 +5,15 @@ export type UsageBypassIdentity = {
   role?: string | null;
 };
 
-/** Owner, DB admin role, or ADMIN_EMAIL match — no monthly caps. */
+/** Owner, DB admin role, ADMIN_EMAIL match, or LOCAL_DEV_UNLIMITED_USAGE in development — no monthly caps. */
 export function hasUnlimitedUsage(identity: UsageBypassIdentity): boolean {
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.LOCAL_DEV_UNLIMITED_USAGE?.trim() === "1"
+  ) {
+    return true;
+  }
+
   const ownerOpenId = process.env.OWNER_OPEN_ID?.trim();
   if (ownerOpenId && identity.openId === ownerOpenId) return true;
 

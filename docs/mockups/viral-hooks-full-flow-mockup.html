@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels Hook Generator - Full Flow Mockup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #121218; --fg: #f4f4f5; --muted: #a1a1aa; --card: #1a1a22; --border: #2e2e3a;
+      --primary: #7c3aed; --primary-soft: rgba(124,58,237,0.12); --primary-border: rgba(124,58,237,0.35);
+      --emerald: #34d399; --emerald-soft: rgba(52,211,153,0.12); --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
+
+    /* Mockup chrome */
+    .chrome { position: sticky; top: 0; z-index: 200; background: #0a0a0f; border-bottom: 1px solid var(--border); }
+    .chrome-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid rgba(46,46,58,0.4); }
+    .chrome-row:last-child { border-bottom: none; }
+    .chrome-label { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-width: 72px; }
+    .chrome button {
+      border: 1px solid var(--border); background: var(--card); color: var(--fg);
+      border-radius: 999px; padding: 5px 11px; font-size: 11px; font-weight: 600; cursor: pointer;
+    }
+    .chrome button.active { border-color: var(--primary); background: var(--primary-soft); color: #c4b5fd; }
+    .chrome-note { padding: 6px 14px 10px; font-size: 11px; color: var(--muted); text-align: center; }
+    .chrome-spec {
+      padding: 8px 14px 10px; font-size: 11px; color: #c4b5fd; background: rgba(124,58,237,0.08);
+      border-top: 1px solid var(--primary-border); line-height: 1.55;
+    }
+    .chrome-spec strong { color: var(--fg); }
+
+    .flow { display: none; }
+    .flow.active { display: block; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* Shared components */
+    .pub-header {
+      border-bottom: 1px solid rgba(46,46,58,0.5); height: 56px; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between; max-width: 960px; margin: 0 auto;
+    }
+    .app-header {
+      border-bottom: 1px solid rgba(46,46,58,0.5); height: 52px; padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between; background: #16161e;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; text-decoration: none; color: var(--fg); }
+    .logo-icon { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg,#6366f1,var(--primary)); display: grid; place-items: center; font-size: 12px; }
+    .nav { display: flex; gap: 18px; }
+    .nav a { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .btn-sm { font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 8px; text-decoration: none; border: none; cursor: pointer; }
+    .btn-ghost { background: transparent; color: var(--fg); }
+    .btn-primary-sm { background: var(--primary); color: #fff; }
+    .btn-outline-sm { border: 1px solid var(--border); background: transparent; color: var(--fg); }
+
+    .wrap { max-width: 720px; margin: 0 auto; padding: 36px 24px 48px; }
+    .wrap.wide { max-width: 960px; }
+    h1.page-title { font-size: clamp(1.4rem,3.5vw,1.85rem); font-weight: 800; letter-spacing: -0.03em; }
+    .page-sub { margin-top: 8px; font-size: 15px; color: var(--muted); max-width: 560px; }
+
+    .panel { border: 1px solid var(--border); background: var(--card); border-radius: 16px; padding: 22px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .field label span { font-weight: 400; color: var(--muted); }
+    textarea, input, select {
+      width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+      border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
+    }
+    textarea { min-height: 110px; resize: vertical; line-height: 1.55; }
+    .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .chip { border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 999px; padding: 5px 10px; font-size: 11px; }
+    .chip.on { border-color: var(--primary); background: var(--primary-soft); color: #c4b5fd; }
+    .btn { border: none; border-radius: 10px; padding: 11px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-script { background: linear-gradient(135deg,#6d28d9,#7c3aed); color: #fff; box-shadow: 0 4px 14px rgba(124,58,237,0.35); }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
+    .hint { font-size: 12px; color: var(--muted); }
+
+    /* Hook card pic 4 */
+    .hook-card { border: 1px solid var(--border); background: var(--card); border-radius: 14px; overflow: hidden; margin-bottom: 12px; }
+    .hook-inner { display: grid; grid-template-columns: 1fr 130px; }
+    @media(max-width:640px){ .hook-inner{ grid-template-columns:1fr; } .preview-col{ border-top:1px solid var(--border); padding:14px!important; display:flex; justify-content:center; } .nav,.opts{ display:none; } }
+    .hook-body { padding: 16px 18px; }
+    .hook-num { font-size: 13px; font-weight: 800; color: var(--primary); margin-bottom: 8px; }
+    .lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    .spoken { font-size: 15px; font-weight: 600; line-height: 1.45; }
+    .ontext-box { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--border); }
+    .ontext-box p:last-child { font-size: 14px; font-weight: 700; margin-top: 3px; }
+    .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .btn-copy { border: 1px solid var(--border); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 6px 11px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-copy.pri { border-color: var(--primary); color: #c4b5fd; }
+
+    .preview-col { background: #0e0e14; border-left: 1px solid var(--border); padding: 10px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .preview-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .phone { width: 118px; aspect-ratio: 9/16; border-radius: 12px; border: 2px solid #3f3f50; position: relative; overflow: hidden;
+      background: linear-gradient(160deg,#2a2040,#0a0a10 45%,#1a2838); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    .phone-notch { position:absolute; top:5px; left:50%; transform:translateX(-50%); width:32px; height:4px; border-radius:99px; background:#000; z-index:6; }
+    .phone-time { position:absolute; top:14px; left:7px; font-size:7px; font-weight:700; color:#fff; background:rgba(0,0,0,0.55); padding:2px 4px; border-radius:3px; z-index:5; }
+    /* Safe zone overlays (research wired) */
+    .zone-top { position:absolute; top:0; left:0; right:0; height:11%; background:rgba(239,68,68,0.12); border-bottom:1px dashed rgba(239,68,68,0.35); z-index:1; pointer-events:none; }
+    .zone-bottom { position:absolute; bottom:0; left:0; right:0; height:22%; background:rgba(239,68,68,0.12); border-top:1px dashed rgba(239,68,68,0.35); z-index:1; pointer-events:none; }
+    .zone-right { position:absolute; top:0; right:0; bottom:0; width:14%; background:rgba(239,68,68,0.08); border-left:1px dashed rgba(239,68,68,0.3); z-index:1; pointer-events:none; }
+    .zone-safe { position:absolute; top:15%; left:8%; right:16%; bottom:24%; border:1px dashed rgba(52,211,153,0.45); border-radius:4px; z-index:2; pointer-events:none; }
+    .zone-crop45 { position:absolute; top:10%; left:10%; right:10%; bottom:18%; border:1px dashed rgba(167,139,250,0.35); z-index:2; pointer-events:none; }
+    .phone-cap-wrap { position:absolute; top:28%; left:10%; right:18%; z-index:4; text-align:center; }
+    .phone-cap-box {
+      display:inline-block; padding:5px 6px; border-radius:5px;
+      background:rgba(0,0,0,0.72); /* #000 @ 72% - default, no niche colors v1 */
+      max-width:100%;
+    }
+    .phone-cap {
+      font-size:7.5px; font-weight:800; line-height:1.25; color:#FFFFFF;
+      letter-spacing:-0.02em;
+    }
+    .phone-face { position:absolute; bottom:30%; left:50%; transform:translateX(-50%); width:34px; height:34px; border-radius:50%; background:#4b5563; border:2px solid rgba(255,255,255,0.12); z-index:3; }
+    .phone-bar { position:absolute; bottom:7px; left:7px; display:flex; align-items:center; gap:4px; z-index:3; }
+    .phone-av { width:14px; height:14px; border-radius:50%; background:var(--primary); }
+    .phone-user { font-size:6px; font-weight:700; color:#fff; }
+    .preview-platform { margin-top:6px; font-size:8px; color:var(--muted); }
+    .preview-platform select { font-size:8px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--fg); width:100%; }
+    .preview-tip { margin-top:4px; font-size:7px; color:#86efac; text-align:center; line-height:1.3; max-width:118px; }
+
+    /* Teaser unlock */
+    .teaser { margin-top: 8px; border: 1px solid var(--primary-border); border-radius: 14px;
+      background: linear-gradient(165deg,rgba(124,58,237,0.12),var(--card)); padding: 20px; }
+    .teaser h3 { font-size: 15px; font-weight: 800; }
+    .teaser p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .pills { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+    .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:99px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:#d4d4d8; }
+    .teaser-row { display:grid; grid-template-columns:24px 1fr; gap:8px; padding:10px 12px; border-radius:8px; background:rgba(0,0,0,0.2); margin-bottom:6px; font-size:12px; }
+    .teaser-row .n { font-weight:800; color:var(--primary); }
+    .teaser-row .t { font-weight:600; -webkit-mask-image:linear-gradient(90deg,#000 50%,transparent); mask-image:linear-gradient(90deg,#000 50%,transparent); white-space:nowrap; overflow:hidden; }
+    .unlock-box { margin-top:16px; padding:20px; border-radius:14px; border:1px solid var(--border); background:var(--card); }
+    .unlock-box h3 { font-size:15px; font-weight:800; }
+    .benefits { margin:10px 0 14px; list-style:none; }
+    .benefits li { font-size:13px; color:var(--muted); padding:3px 0 3px 18px; position:relative; }
+    .benefits li::before { content:"✓"; position:absolute; left:0; color:var(--emerald); font-weight:800; }
+    .unlock-form { display:grid; grid-template-columns:1fr auto; gap:10px; }
+    @media(max-width:520px){ .unlock-form{ grid-template-columns:1fr; } }
+
+    .success { display:flex; gap:12px; padding:16px; border-radius:12px; border:1px solid rgba(52,211,153,0.35); background:var(--emerald-soft); margin-bottom:20px; }
+    .success-ico { width:34px; height:34px; border-radius:50%; background:rgba(52,211,153,0.2); color:var(--emerald); display:grid; place-items:center; font-weight:800; flex-shrink:0; }
+    .success h3 { font-size:14px; font-weight:700; color:var(--emerald); }
+    .success p { font-size:13px; color:var(--muted); margin-top:3px; }
+    .badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:99px; background:var(--emerald-soft); color:var(--emerald); }
+
+    .cta-bar { margin-top:24px; padding:20px 22px; border-radius:14px; border:1px solid var(--primary-border);
+      background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(124,58,237,0.02)); display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; }
+    .cta-bar h3 { font-size:15px; font-weight:800; }
+    .cta-bar p { font-size:13px; color:var(--muted); margin-top:3px; max-width:440px; }
+
+    /* SEO content below fold */
+    .seo { max-width:720px; margin:0 auto; padding:40px 24px 60px; border-top:1px solid var(--border); }
+    .seo h2 { font-size:1.25rem; font-weight:800; margin-bottom:16px; }
+    .steps3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px; }
+    @media(max-width:640px){ .steps3{ grid-template-columns:1fr; } }
+    .step-card { padding:16px; border-radius:12px; border:1px solid var(--border); background:var(--card); }
+    .step-card .num { font-size:11px; font-weight:800; color:#c4b5fd; }
+    .step-card h3 { font-size:14px; font-weight:700; margin-top:6px; }
+    .step-card p { font-size:12px; color:var(--muted); margin-top:4px; }
+    .pattern-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:32px; }
+    @media(max-width:640px){ .pattern-grid{ grid-template-columns:1fr; } }
+    .pat { padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card); }
+    .pat strong { font-size:13px; display:block; }
+    .pat span { font-size:12px; color:var(--muted); margin-top:4px; display:block; }
+    .faq details { border:1px solid var(--border); border-radius:10px; background:var(--card); margin-bottom:8px; padding:12px 14px; }
+    .faq summary { font-size:14px; font-weight:600; cursor:pointer; list-style:none; }
+    .faq summary::-webkit-details-marker { display:none; }
+    .faq p { font-size:13px; color:var(--muted); margin-top:8px; line-height:1.55; }
+
+    /* In-app shell */
+    .app-shell { min-height:100vh; background:var(--bg); }
+    .app-sidebar-hint { font-size:11px; color:var(--muted); padding:8px 20px; background:#16161e; border-bottom:1px solid var(--border); text-align:center; }
+    .breadcrumb { font-size:12px; color:var(--muted); margin-bottom:16px; }
+    .breadcrumb a { color:#c4b5fd; text-decoration:none; }
+    .context-banner { padding:12px 16px; border-radius:10px; border:1px solid var(--border); background:#16161e; margin-bottom:20px; font-size:13px; }
+    .context-banner strong { color:var(--fg); }
+
+    /* Full script = OnboardingAhaView + AiCoachResultView (previewMode) */
+    .aha-shell { min-height:100vh; background:#0f0f14; }
+    .aha-top { max-width:1120px; margin:0 auto; padding:28px 20px 0; text-align:center; }
+    .aha-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:99px; background:var(--emerald-soft); color:var(--emerald); font-size:12px; font-weight:700; margin-bottom:10px; }
+    .aha-title { font-size:clamp(1.5rem,4vw,2rem); font-weight:800; letter-spacing:-0.03em; }
+    .aha-sub { margin-top:8px; font-size:15px; color:var(--muted); max-width:520px; margin-left:auto; margin-right:auto; }
+    .proof-card { max-width:640px; margin:20px auto 0; padding:14px 18px; border-radius:12px; border:1px solid var(--border); background:var(--card); font-size:13px; color:var(--muted); text-align:left; }
+    .proof-card strong { color:var(--fg); }
+    .coach-wrap { max-width:1120px; margin:0 auto; padding:24px 16px 48px; }
+    .coach-grid { display:grid; grid-template-columns:1fr 300px; gap:20px; align-items:start; }
+    @media(max-width:900px){ .coach-grid{ grid-template-columns:1fr; } }
+    .coach-main { min-width:0; }
+    .coach-h1 { font-size:1.35rem; font-weight:800; letter-spacing:-0.02em; }
+    .coach-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .coach-badge { font-size:10px; font-weight:700; padding:4px 10px; border-radius:99px; background:rgba(99,102,241,0.2); color:#a5b4fc; }
+    .coach-badge.gray { background:rgba(255,255,255,0.06); color:#d4d4d8; }
+    .coach-badge.sky { background:rgba(14,165,233,0.15); color:#7dd3fc; text-transform:uppercase; }
+    .heit { margin-top:14px; padding:16px; border-radius:14px; border:1px solid; }
+    .heit.blue { border-color:rgba(59,130,246,0.35); background:rgba(59,130,246,0.08); border-left:3px solid #3b82f6; }
+    .heit.gray { border-color:var(--border); background:rgba(255,255,255,0.02); border-left:3px solid #6b7280; }
+    .heit.orange { border-color:rgba(249,115,22,0.35); background:rgba(249,115,22,0.08); border-left:3px solid #f97316; }
+    .heit-head { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; }
+    .heit-num { width:26px; height:26px; border-radius:7px; display:grid; place-items:center; font-size:11px; font-weight:800; flex-shrink:0; }
+    .heit-num.blue { background:#3b82f6; color:#fff; }
+    .heit-num.gray { background:#374151; color:#e5e7eb; }
+    .heit-num.orange { background:#f97316; color:#fff; }
+    .heit-label { font-size:13px; font-weight:700; }
+    .heit-label.blue { color:#93c5fd; }
+    .heit-label.orange { color:#fdba74; }
+    .heit-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .heit-body { padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:#16161e; font-size:13px; line-height:1.55; font-weight:500; }
+    .hook-ontext-row { margin-top:10px; display:grid; grid-template-columns:1fr 120px; gap:10px; align-items:start; }
+    @media(max-width:640px){ .hook-ontext-row{ grid-template-columns:1fr; } }
+    .ontext-mini { padding:8px 10px; border-radius:8px; border:1px dashed var(--border); background:var(--bg); font-size:12px; font-weight:700; }
+    .coach-aside { border-radius:14px; border:1px solid var(--border); background:var(--card); padding:16px; position:sticky; top:16px; }
+    .coach-aside h2 { font-size:13px; font-weight:800; margin-bottom:12px; }
+    .prod-block { margin-bottom:14px; }
+    .prod-lbl { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+    .prod-val { font-size:12px; color:#e4e4e7; line-height:1.5; }
+    .aha-ctas { max-width:1120px; margin:0 auto; padding:0 16px 32px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+    .aha-cta-primary { padding:12px 22px; border-radius:12px; background:var(--primary); color:#fff; font-size:14px; font-weight:700; border:none; cursor:pointer; }
+    .aha-cta-secondary { padding:12px 18px; border-radius:12px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
+    .steer { max-width:1120px; margin:0 auto; padding:0 16px 48px; }
+    .steer h3 { font-size:14px; font-weight:800; margin-bottom:12px; text-align:center; color:var(--muted); }
+    .steer-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    @media(max-width:720px){ .steer-grid{ grid-template-columns:1fr; } }
+    .steer-card { padding:14px; border-radius:12px; border:1px solid var(--border); background:var(--card); font-size:12px; }
+    .steer-card strong { display:block; font-size:13px; margin-bottom:4px; }
+
+    /* Auth gate = same Dialog as LandingPage / AuthDialog (pic 2) */
+    .gate-scene { position:relative; min-height:100vh; }
+    .gate-backdrop { filter:blur(4px); opacity:0.45; pointer-events:none; user-select:none; }
+    .gate-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+    .auth-dialog { width:100%; max-width:420px; border-radius:16px; border:1px solid var(--border); background:#18181f; padding:24px 24px 20px; box-shadow:0 24px 60px rgba(0,0,0,0.5); position:relative; }
+    .auth-close { position:absolute; top:14px; right:14px; width:28px; height:28px; border:none; border-radius:8px; background:transparent; color:var(--muted); font-size:18px; cursor:pointer; }
+    .auth-dialog h2 { text-align:center; font-size:1.35rem; font-weight:800; }
+    .auth-tagline { text-align:center; font-size:13px; color:var(--muted); margin-top:6px; margin-bottom:18px; }
+    .auth-google { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px 16px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
+    .auth-google img { width:18px; height:18px; }
+    .auth-or { display:flex; align-items:center; gap:10px; margin:16px 0; }
+    .auth-or span { font-size:11px; color:var(--muted); }
+    .auth-or div { flex:1; height:1px; background:var(--border); }
+    .auth-tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .auth-tab { flex:1; padding:8px; border-radius:8px; border:none; font-size:13px; font-weight:600; cursor:pointer; background:transparent; color:var(--muted); }
+    .auth-tab.on { background:var(--primary); color:#fff; }
+    .auth-input { width:100%; padding:11px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:13px; margin-bottom:10px; }
+    .auth-submit { width:100%; padding:11px; border-radius:10px; border:none; background:var(--primary); color:#fff; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px; }
+    .auth-foot { text-align:center; font-size:11px; color:var(--muted); margin-top:14px; }
+    .auth-context { text-align:center; font-size:12px; color:#c4b5fd; margin-bottom:14px; padding:8px 12px; border-radius:8px; background:var(--primary-soft); border:1px solid var(--primary-border); }
+
+    .divider-label { text-align:center; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin:28px 0 14px; }
+
+    /* In-app hook replace (lighter than full aha) */
+    .script-result { max-width:960px; margin:0 auto; padding:24px 20px 48px; }
+    .script-title { font-size:1.35rem; font-weight:800; letter-spacing:-0.03em; }
+    .hook-block { margin:16px 0; border:2px solid var(--primary-border); border-radius:14px; overflow:hidden; }
+    .hook-block-head { padding:8px 14px; background:var(--primary-soft); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#c4b5fd; }
+    .script-section { margin-top:16px; padding:16px; border-radius:12px; border:1px solid var(--border); background:var(--card); font-size:13px; line-height:1.55; }
+    .script-section h3 { font-size:12px; font-weight:700; color:#c4b5fd; margin-bottom:6px; }
+    .script-actions { margin-top:20px; display:flex; flex-wrap:wrap; gap:10px; }
+  </style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="chrome-row">
+    <span class="chrome-label">Flow</span>
+    <button type="button" class="flow-btn active" data-flow="seo">SEO page (public)</button>
+    <button type="button" class="flow-btn" data-flow="app">In-app (logged in)</button>
+  </div>
+  <div class="chrome-row" id="seo-states">
+    <span class="chrome-label">SEO step</span>
+    <button type="button" class="seo-btn active" data-screen="seo-input">1. Input</button>
+    <button type="button" class="seo-btn" data-screen="seo-preview">2. Results (2 free)</button>
+    <button type="button" class="seo-btn" data-screen="seo-unlocked">3. After unlock (all 10)</button>
+    <button type="button" class="seo-btn" data-screen="seo-gate">4. Sign up gate</button>
+    <button type="button" class="seo-btn" data-screen="seo-script">5. Full script</button>
+    <button type="button" class="seo-btn" data-screen="seo-content">6. SEO below fold</button>
+  </div>
+  <div class="chrome-row" id="app-states" style="display:none">
+    <span class="chrome-label">App step</span>
+    <button type="button" class="app-btn active" data-screen="app-from-studio">1. From Studio</button>
+    <button type="button" class="app-btn" data-screen="app-hooks">2. All hooks (no gate)</button>
+    <button type="button" class="app-btn" data-screen="app-script-new">3. Full script (new)</button>
+    <button type="button" class="app-btn" data-screen="app-script-existing">4. Apply to script</button>
+    <button type="button" class="app-btn" data-screen="app-script-hook-block">5. Script w/ hook block</button>
+  </div>
+  <p class="chrome-note">Full product mockup. Pic 4 cards everywhere. No hook detail page. Step 4 = Landing AuthDialog overlay. Step 5 = OnboardingAhaView + AiCoachResultView.</p>
+  <p class="chrome-spec"><strong>Hook quality (LLM):</strong> Return <code>hook</code> (spoken, 6-14 words) + <code>onScreenText</code> (3-7 words, max ~30 chars, different words than spoken). Preview: white text on black box @ 72% opacity, upper third, center 80% safe zone. <strong>Colors:</strong> monochrome default in v1 (no niche color packs yet).</p>
+</div>
+
+<!-- ===================== SEO FLOW ===================== -->
+<div id="flow-seo" class="flow active">
+
+  <!-- 1 INPUT -->
+  <div id="seo-input" class="screen active">
+    <header class="pub-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <nav class="nav"><a href="#">Free Tools</a><a href="#">Pricing</a><a href="#">Blog</a></nav>
+      <div style="display:flex;gap:8px"><a class="btn-sm btn-ghost" href="#">Log in</a><a class="btn-sm btn-primary-sm" href="#">Start free</a></div>
+    </header>
+    <div class="wrap">
+      <h1 class="page-title">Free Instagram Viral Hook Generator</h1>
+      <p class="page-sub">Paste your Reel idea or script draft. Get 10 hooks with spoken lines and on-screen text.</p>
+      <div class="panel" style="margin-top:24px">
+        <div class="field">
+          <label>What's your Reel about? <span>(idea, outline, or script)</span></label>
+          <textarea>I'm making a Reel for 9-to-5 workers who feel stuck. Side income while working full time, the mistake of saving before earning extra, and the one habit that changed everything in month 2.</textarea>
+        </div>
+        <div class="opts">
+          <div class="field"><label>Hook style</label><select><option>Mix of patterns</option></select></div>
+          <div class="field"><label>Video format</label><select><option>Talking head</option></select></div>
+        </div>
+        <div class="chips"><span class="chip on">Direct</span><span class="chip">Bold</span><span class="chip">Curious</span></div>
+        <div class="row"><button class="btn btn-primary">Generate 10 hooks</button><span class="hint">Preview 2 free. Unlock all with email.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 PREVIEW -->
+  <div id="seo-preview" class="screen">
+    <header class="pub-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <div style="display:flex;gap:8px"><a class="btn-sm btn-ghost" href="#">Log in</a></div>
+    </header>
+    <div class="wrap wide">
+      <h1 class="page-title">Your hooks</h1>
+      <p class="page-sub">2 free previews. Unlock 8 more with email.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 14px;flex-wrap:wrap;gap:8px">
+        <strong>10 hooks for your Reel</strong>
+        <span class="badge" style="background:#2a2a34;color:var(--muted)">2 ready · 8 waiting</span>
+      </div>
+
+      <!-- Hook 1 -->
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 1</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">I worked 9 to 5 for 3 years before I made my first $1K on the side. Here is what I did differently.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>3 YEARS at a 9-5 before my first $1K</p></div>
+            <p class="meta">Story cold open · 0:00 to 0:02</p>
+            <div class="actions">
+              <button class="btn-copy pri">Copy spoken</button>
+              <button class="btn-copy">Copy on-screen</button>
+              <button class="btn-copy">Copy both</button>
+            </div>
+          </div>
+          <div class="preview-col">
+            <span class="preview-lbl">Reel preview</span>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-time">0:01</div>
+              <div class="zone-top"></div>
+              <div class="zone-bottom"></div>
+              <div class="zone-right"></div>
+              <div class="zone-safe"></div>
+              <div class="phone-cap-wrap">
+                <div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div>
+              </div>
+              <div class="phone-face"></div>
+              <div class="phone-bar"><div class="phone-av"></div><span class="phone-user">you</span></div>
+            </div>
+            <div class="preview-platform">Platform <select><option>Instagram Reels</option><option>TikTok</option><option>YouTube Shorts</option></select></div>
+            <div class="preview-tip">Safe zone wired. White on black box (no color v1).</div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Hook 2 -->
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 2</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">Stop saving money first if you are still stuck at a job you hate.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>STOP saving first</p></div>
+            <p class="meta">Contrarian · 0:00 to 0:01</p>
+            <div class="actions">
+              <button class="btn-copy pri">Copy spoken</button>
+              <button class="btn-copy">Copy on-screen</button>
+            </div>
+          </div>
+          <div class="preview-col">
+            <span class="preview-lbl">Reel preview</span>
+            <div class="phone"><div class="phone-notch"></div><div class="phone-time">0:01</div>
+              <div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">STOP saving first</div></div></div>
+              <div class="phone-face"></div><div class="phone-bar"><div class="phone-av"></div><span class="phone-user">you</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <section class="teaser">
+        <h3>8 more hooks are ready for your Reel</h3>
+        <p>Already generated. Unlock to copy all 10 and get them in your inbox.</p>
+        <div class="pills"><span class="pill">Curiosity gap</span><span class="pill">Cost reveal</span><span class="pill">Question hook</span><span class="pill">+5 more</span></div>
+        <div class="teaser-row"><span class="n">3</span><span class="t">The real reason your side hustle never hits $1K/month...</span></div>
+        <div class="teaser-row"><span class="n">4</span><span class="t">Everyone says pay yourself first. They are wrong if you...</span></div>
+      </section>
+
+      <div class="unlock-box">
+        <h3>Unlock all 10 hooks free</h3>
+        <ul class="benefits">
+          <li>Full spoken + on-screen text for every hook</li>
+          <li>Reel preview on each card</li>
+          <li>Email copy to film later</li>
+        </ul>
+        <div class="unlock-form">
+          <input type="email" placeholder="your@email.com" />
+          <button class="btn btn-primary">Unlock all 10</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 UNLOCKED ALL 10 -->
+  <div id="seo-unlocked" class="screen">
+    <header class="pub-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <div style="display:flex;gap:8px"><a class="btn-sm btn-ghost" href="#">Log in</a></div>
+    </header>
+    <div class="wrap wide">
+      <div class="success">
+        <div class="success-ico">✓</div>
+        <div>
+          <h3>All 10 hooks unlocked</h3>
+          <p>Sent to you@example.com. Scroll to see hooks 1 through 10.</p>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <strong>10 hooks for your Reel</strong>
+        <span class="badge">All 10 ready</span>
+      </div>
+      <div class="row" style="margin-top:0;margin-bottom:16px">
+        <button class="btn-copy">Copy all hooks</button>
+        <button class="btn-copy">Download text</button>
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px">Generate another Reel</button>
+      </div>
+
+      <!-- Show hooks 1, 2, 3 as examples - label says all 10 -->
+      <p class="hint" style="margin-bottom:12px">Hooks 1 to 10 use this same card. Showing 1, 2, 3 below.</p>
+
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 1</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">I worked 9 to 5 for 3 years before I made my first $1K on the side. Here is what I did differently.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>3 YEARS at a 9-5 before my first $1K</p></div>
+            <div class="actions">
+              <button class="btn-copy pri">Copy spoken</button>
+              <button class="btn-copy">Copy on-screen</button>
+              <button class="btn btn-script" style="padding:7px 12px;font-size:11px">Turn into full script</button>
+            </div>
+          </div>
+          <div class="preview-col"><span class="preview-lbl">Reel preview</span>
+            <div class="phone"><div class="phone-notch"></div><div class="phone-time">0:01</div><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div></div><div class="phone-face"></div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 2</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">Stop saving money first if you are still stuck at a job you hate.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>STOP saving first</p></div>
+            <div class="actions">
+              <button class="btn-copy pri">Copy spoken</button>
+              <button class="btn btn-script" style="padding:7px 12px;font-size:11px">Turn into full script</button>
+            </div>
+          </div>
+          <div class="preview-col"><span class="preview-lbl">Reel preview</span>
+            <div class="phone"><div class="phone-notch"></div><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">STOP saving first</div></div></div><div class="phone-face"></div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 3</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">The real reason your side hustle never hits $1K/month is not what Reddit told you.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>Your side hustle is capped at $1K</p></div>
+            <div class="actions">
+              <button class="btn-copy pri">Copy spoken</button>
+              <button class="btn btn-script" style="padding:7px 12px;font-size:11px">Turn into full script</button>
+            </div>
+          </div>
+          <div class="preview-col"><span class="preview-lbl">Reel preview</span>
+            <div class="phone"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">Your side hustle is capped at $1K</div></div></div><div class="phone-face"></div></div>
+          </div>
+        </div>
+      </article>
+
+      <p class="hint" style="text-align:center;margin:12px 0">... hooks 4 through 10 continue in same format ...</p>
+
+      <div class="cta-bar">
+        <div>
+          <h3>Love this hook? Write the full Reel in 30 seconds.</h3>
+          <p>SpyReels expands your hook into a ready-to-film script with delivery notes and teleprompter. Free to start.</p>
+        </div>
+        <button class="btn btn-script">Turn hook #1 into full script</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 SIGN UP GATE = Landing AuthDialog overlay (pic 2), hooks dimmed behind -->
+  <div id="seo-gate" class="screen">
+    <div class="gate-scene">
+      <div class="gate-backdrop">
+        <header class="pub-header">
+          <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+          <div style="display:flex;gap:8px"><a class="btn-sm btn-ghost" href="#">Log in</a></div>
+        </header>
+        <div class="wrap wide" style="padding-top:24px">
+          <h1 class="page-title" style="font-size:1.25rem">Your hooks</h1>
+          <p class="page-sub">You clicked Turn hook #1 into full script</p>
+          <article class="hook-card" style="margin-top:16px">
+            <div class="hook-inner">
+              <div class="hook-body">
+                <div class="hook-num">Hook 1 · selected</div>
+                <p class="spoken">I worked 9 to 5 for 3 years before I made my first $1K on the side.</p>
+                <div class="ontext-box"><p class="lbl">On-screen text</p><p>3 YEARS at a 9-5 before my first $1K</p></div>
+              </div>
+              <div class="preview-col"><div class="phone"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div></div></div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="gate-overlay">
+        <div class="auth-dialog">
+          <button type="button" class="auth-close" aria-label="Close">×</button>
+          <h2>Welcome to SpyReels</h2>
+          <p class="auth-tagline">Spy on viral Reels. Steal the script. Own the feed.</p>
+          <p class="auth-context">You picked hook #1. Sign up to expand it into a full Reel script. No credit card.</p>
+          <button type="button" class="auth-google">
+            <img src="https://www.google.com/favicon.ico" alt="" />
+            Continue with Google
+          </button>
+          <div class="auth-or"><div></div><span>or</span><div></div></div>
+          <div class="auth-tabs">
+            <button type="button" class="auth-tab">Log In</button>
+            <button type="button" class="auth-tab on">Sign Up</button>
+          </div>
+          <input type="text" class="auth-input" placeholder="Your name" value="" />
+          <input type="email" class="auth-input" placeholder="Email address" value="" />
+          <input type="password" class="auth-input" placeholder="Password" value="" />
+          <button type="button" class="auth-submit">Create Account</button>
+          <p class="auth-foot">Free to start. No credit card required.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 FULL SCRIPT = same as onboarding first script (OnboardingAhaView + AiCoachResultView previewMode) -->
+  <div id="seo-script" class="screen">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio</span>
+    </header>
+    <div class="aha-shell">
+      <div class="aha-top">
+        <div class="aha-badge">✓ Your first script is ready</div>
+        <h1 class="aha-title">Film this today</h1>
+        <p class="aha-sub">We expanded your hook into a full viral script. Same screen you see after onboarding.</p>
+        <div class="proof-card">
+          <strong>Side income for 9-to-5 workers</strong> · Based on your hook generator input. SpyReels skipped onboarding and generated this script directly in Studio.
+        </div>
+      </div>
+
+      <div class="coach-wrap">
+        <div class="coach-grid">
+          <div class="coach-main">
+            <h2 class="coach-h1">Side income for 9-to-5 workers</h2>
+            <div class="coach-badges">
+              <span class="coach-badge">Talking head</span>
+              <span class="coach-badge gray">Instagram Reels</span>
+              <span class="coach-badge sky">Awareness</span>
+              <span class="coach-badge gray">~45 sec</span>
+            </div>
+
+            <!-- Section 1 Hook with pic 4 on-screen + preview -->
+            <section class="heit blue">
+              <div class="heit-head">
+                <div class="heit-num blue">1</div>
+                <div>
+                  <div class="heit-label blue">Hook</div>
+                  <p class="heit-sub">First 2 seconds. Stop the scroll. No warm-up.</p>
+                </div>
+              </div>
+              <div class="heit-body">I worked 9 to 5 for 3 years before I made my first $1K on the side. Here is what I did differently.</div>
+              <div class="hook-ontext-row" style="margin-top:12px">
+                <div>
+                  <p class="lbl">On-screen text (first 2 sec)</p>
+                  <div class="ontext-mini">3 YEARS at a 9-5 before my first $1K</div>
+                  <div class="actions" style="margin-top:8px"><button class="btn-copy pri">Copy spoken</button><button class="btn-copy">Copy on-screen</button></div>
+                </div>
+                <div class="preview-col" style="border:none;background:transparent;padding:0">
+                  <div class="phone" style="width:100px">
+                    <div class="zone-safe"></div>
+                    <div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div></div>
+                    <div class="phone-face"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="heit gray">
+              <div class="heit-head">
+                <div class="heit-num gray">2</div>
+                <div>
+                  <div class="heit-label">Problem</div>
+                  <p class="heit-sub">Name the problem. Show it is bigger than they think.</p>
+                </div>
+              </div>
+              <div class="heit-body">Most people try to save their way out of a job they hate. They cut coffee, skip dinners, and still feel stuck because their income never moves.</div>
+            </section>
+
+            <section class="heit gray">
+              <div class="heit-head">
+                <div class="heit-num gray">3</div>
+                <div>
+                  <div class="heit-label">Story</div>
+                  <p class="heit-sub">One specific story. Concrete details.</p>
+                </div>
+              </div>
+              <div class="heit-body">Month 2 I stopped obsessing over savings and built one small offer on weekends. First $1K took 11 weeks. Same 9-to-5 job. Different leverage.</div>
+            </section>
+
+            <section class="heit gray">
+              <div class="heit-head">
+                <div class="heit-num gray">4</div>
+                <div>
+                  <div class="heit-label">Takeaway</div>
+                  <p class="heit-sub">ONE clear takeaway. Not a list.</p>
+                </div>
+              </div>
+              <div class="heit-body">Earn before you optimize. One skill you can sell beats another month of penny-pinching.</div>
+            </section>
+
+            <section class="heit orange">
+              <div class="heit-head">
+                <div class="heit-num orange">5</div>
+                <div>
+                  <div class="heit-label orange">Call to action</div>
+                  <p class="heit-sub">Tell them exactly what to do next.</p>
+                </div>
+              </div>
+              <div class="heit-body">Comment SIDE if you want my 3-shift checklist. I will send the doc I used in month 2.</div>
+            </section>
+          </div>
+
+          <aside class="coach-aside">
+            <h2>Production Notes</h2>
+            <div class="prod-block">
+              <p class="prod-lbl">Setup</p>
+              <p class="prod-val">Talking head, natural light, phone vertical. Cut to B-roll at "3 shifts".</p>
+            </div>
+            <div class="prod-block">
+              <p class="prod-lbl">Format</p>
+              <p class="prod-val">Talking head</p>
+            </div>
+            <div class="prod-block">
+              <p class="prod-lbl">Duration</p>
+              <p class="prod-val">~45 seconds</p>
+            </div>
+            <div class="prod-block">
+              <p class="prod-lbl">On-screen text</p>
+              <p class="prod-val">White on black box, upper third. Max 30 chars. No niche colors in v1.</p>
+            </div>
+            <div class="prod-block">
+              <p class="prod-lbl">Delivery</p>
+              <p class="prod-val">Calm frustration on hook, faster pace on story, direct eye contact on CTA.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="aha-ctas">
+        <button type="button" class="aha-cta-primary">See full script in Studio</button>
+        <button type="button" class="aha-cta-primary">Film now</button>
+        <button type="button" class="aha-cta-secondary">Write another script</button>
+      </div>
+
+      <div class="steer">
+        <h3>What's next</h3>
+        <div class="steer-grid">
+          <div class="steer-card"><strong>Spy on competitors</strong>Find Reels that already work in your niche and steal the structure.</div>
+          <div class="steer-card"><strong>Film with teleprompter</strong>Open this script in the built-in teleprompter and record today.</div>
+          <div class="steer-card"><strong>Generate more hooks</strong>Try 10 new openers for your next Reel from the free tool.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 SEO CONTENT -->
+  <div id="seo-content" class="screen">
+    <header class="pub-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+    </header>
+    <div class="wrap"><p class="hint" style="text-align:center;padding:20px 0">↑ Tool sits above this section on the live page</p></div>
+    <div class="seo">
+      <h2>How it works</h2>
+      <div class="steps3">
+        <div class="step-card"><div class="num">STEP 1</div><h3>Paste your Reel idea</h3><p>Video topic, outline, or script draft. Up to 500 characters.</p></div>
+        <div class="step-card"><div class="num">STEP 2</div><h3>Get 10 hooks</h3><p>Each with spoken line, on-screen text, and Reel preview.</p></div>
+        <div class="step-card"><div class="num">STEP 3</div><h3>Copy and film</h3><p>Or turn any hook into a full script inside SpyReels.</p></div>
+      </div>
+
+      <h2>10 viral hook patterns</h2>
+      <div class="pattern-grid">
+        <div class="pat"><strong>Cost reveal</strong><span>"I was paying $4K/month until I changed this one thing"</span></div>
+        <div class="pat"><strong>Mistake call-out</strong><span>"Stop doing X if you actually want Y"</span></div>
+        <div class="pat"><strong>Curiosity loop</strong><span>"The real reason X fails is not what you think"</span></div>
+        <div class="pat"><strong>Contrarian</strong><span>"Everyone says X. They are wrong."</span></div>
+        <div class="pat"><strong>Result-first</strong><span>"I cut X by 40% in 30 days. Here is how."</span></div>
+        <div class="pat"><strong>Question hook</strong><span>"Why does X never work the way they promise?"</span></div>
+        <div class="pat"><strong>Specific number</strong><span>"3 things I wish I knew before starting X"</span></div>
+        <div class="pat"><strong>Time-bound</strong><span>"I tried X for 30 days. Results shocked me."</span></div>
+        <div class="pat"><strong>Personal stake</strong><span>"If you are stuck at X, this changed everything"</span></div>
+        <div class="pat"><strong>Authority flip</strong><span>"I am a [pro]. Here is what they won't tell you"</span></div>
+      </div>
+
+      <h2>Frequently asked questions</h2>
+      <div class="faq">
+        <details open><summary>Is this really free?</summary><p>Yes. Preview 2 hooks with no signup. Unlock all 10 with your email. No credit card.</p></details>
+        <details><summary>Can I turn a hook into a full script?</summary><p>Yes. After unlock, click Turn into full script. Free SpyReels account required.</p></details>
+        <details><summary>Do I need SpyReels to use the hooks?</summary><p>No. Copy and film with any tool. SpyReels adds full scripts, teleprompter, and viral Reel research.</p></details>
+        <details><summary>What is on-screen text?</summary><p>Short bold caption for the first 2 seconds (3 to 7 words, max ~30 chars). Shown in preview as white text on a semi-transparent black box, upper third. No niche colors in v1.</p></details>
+        <details><summary>Can I use hooks on TikTok?</summary><p>Yes. Patterns work on all short-form video. Optimize delivery per platform.</p></details>
+      </div>
+      <p class="hint" style="margin-top:24px;text-align:center"><a href="#" style="color:#c4b5fd">SpyReels pricing</a> · <a href="#" style="color:#c4b5fd">Blog</a> · <a href="#" style="color:#c4b5fd">Home</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== IN-APP FLOW ===================== -->
+<div id="flow-app" class="flow">
+
+  <!-- From Studio -->
+  <div id="app-from-studio" class="screen active">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio · Script #847</span>
+    </header>
+    <p class="app-sidebar-hint">Mockup: user already has a script open in Studio</p>
+    <div class="wrap">
+      <p class="breadcrumb"><a href="#">Studio</a> / Side income script / Generate hooks</p>
+      <div class="context-banner">
+        <strong>From your current script:</strong> Side income for 9-to-5 workers who feel stuck. We prefilled your Reel content below.
+      </div>
+      <h1 class="page-title">Generate hook alternatives</h1>
+      <p class="page-sub">Try different openers for this script. No email gate. All hooks instant.</p>
+      <div class="panel" style="margin-top:20px">
+        <div class="field">
+          <label>Reel content <span>(from script)</span></label>
+          <textarea>Side income for 9-to-5 workers. Mistake: saving before earning extra. 3 shifts in month 2.</textarea>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary">Generate 10 hooks</button>
+          <span class="hint">Logged in · unlimited · saves to workspace</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- All hooks in app -->
+  <div id="app-hooks" class="screen">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio</span>
+    </header>
+    <div class="wrap wide">
+      <p class="breadcrumb"><a href="#">Studio</a> / Script #847 / Hooks</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <h1 class="page-title" style="font-size:1.25rem">10 hook alternatives</h1>
+        <span class="badge">All 10 ready · no email gate</span>
+      </div>
+
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 1 · currently on script</div>
+            <p class="lbl">Say this</p>
+            <p class="spoken">I worked 9 to 5 for 3 years before I made my first $1K on the side.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>3 YEARS at a 9-5 before my first $1K</p></div>
+            <div class="actions">
+              <button class="btn-copy pri">Copy</button>
+              <button class="btn btn-script" style="padding:7px 12px;font-size:11px">Replace hook on this script</button>
+              <button class="btn btn-outline-sm" style="padding:7px 12px;font-size:11px">New script from hook</button>
+            </div>
+          </div>
+          <div class="preview-col"><span class="preview-lbl">Reel preview</span>
+            <div class="phone"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div></div><div class="phone-face"></div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="hook-card">
+        <div class="hook-inner">
+          <div class="hook-body">
+            <div class="hook-num">Hook 2</div>
+            <p class="spoken">Stop saving money first if you are still stuck at a job you hate.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>STOP saving first</p></div>
+            <div class="actions">
+              <button class="btn btn-script" style="padding:7px 12px;font-size:11px">Replace hook on this script</button>
+              <button class="btn btn-outline-sm" style="padding:7px 12px;font-size:11px">New script from hook</button>
+            </div>
+          </div>
+          <div class="preview-col"><div class="phone"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">STOP saving first</div></div></div></div></div>
+        </div>
+      </article>
+
+      <p class="hint" style="text-align:center">Hooks 3 to 10 same format</p>
+    </div>
+  </div>
+
+  <!-- New script from hook = same OnboardingAhaView as SEO step 5 -->
+  <div id="app-script-new" class="screen">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio</span>
+    </header>
+    <div class="aha-shell">
+      <div class="aha-top">
+        <p class="breadcrumb" style="text-align:left;max-width:1120px;margin:0 auto 12px;padding:0 16px"><a href="#">Hooks</a> / New script from hook #2</p>
+        <div class="aha-badge">✓ Script ready</div>
+        <h1 class="aha-title">Film this today</h1>
+        <p class="aha-sub">In-app: New script from hook. Same aha screen as onboarding and hook tool conversion.</p>
+      </div>
+      <div class="coach-wrap">
+        <div class="coach-grid">
+          <div class="coach-main">
+            <h2 class="coach-h1">Stop saving first (full Reel script)</h2>
+            <div class="coach-badges"><span class="coach-badge">Talking head</span><span class="coach-badge gray">Instagram Reels</span></div>
+            <section class="heit blue">
+              <div class="heit-head"><div class="heit-num blue">1</div><div><div class="heit-label blue">Hook</div><p class="heit-sub">First 2 seconds.</p></div></div>
+              <div class="heit-body">Stop saving money first if you are still stuck at a job you hate.</div>
+              <div class="hook-ontext-row" style="margin-top:10px">
+                <div><div class="ontext-mini">STOP saving first</div></div>
+                <div class="preview-col" style="border:none;background:transparent;padding:0"><div class="phone" style="width:90px"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">STOP saving first</div></div></div></div></div>
+              </div>
+            </section>
+            <section class="heit gray"><div class="heit-head"><div class="heit-num gray">2</div><div><div class="heit-label">Problem</div></div></div><div class="heit-body">Saving feels responsible but income is the lever...</div></section>
+            <p class="hint" style="margin-top:12px">Sections 3 to 5 + Production Notes sidebar = same as SEO step 5 mockup.</p>
+          </div>
+          <aside class="coach-aside"><h2>Production Notes</h2><p class="prod-val">On-screen: white on black box. No niche colors v1.</p></aside>
+        </div>
+      </div>
+      <div class="aha-ctas">
+        <button type="button" class="aha-cta-primary">Film now</button>
+        <button type="button" class="aha-cta-secondary">Back to hooks</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apply to existing script -->
+  <div id="app-script-existing" class="screen">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio · Script #847 updated</span>
+    </header>
+    <div class="script-result">
+      <div class="success" style="margin-bottom:16px">
+        <div class="success-ico">✓</div>
+        <div><h3>Hook replaced on your script</h3><p>Script #847 updated. Body adjusted to match new opener.</p></div>
+      </div>
+      <h1 class="script-title">Side income for 9-to-5 workers</h1>
+      <div class="hook-block">
+        <div class="hook-block-head">Updated hook · first 2 seconds</div>
+        <div class="hook-inner">
+          <div class="hook-body">
+            <p class="spoken">Stop saving money first if you are still stuck at a job you hate.</p>
+            <div class="ontext-box"><p class="lbl">On-screen text</p><p>STOP saving first</p></div>
+          </div>
+          <div class="preview-col"><div class="phone"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">STOP saving first</div></div></div></div></div>
+        </div>
+      </div>
+      <div class="script-section"><h3>Body</h3><p>Body rewritten to flow from new contrarian hook...</p></div>
+      <div class="script-actions">
+        <button class="btn btn-primary">Film now</button>
+        <button class="btn btn-outline-sm">Try another hook</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Any script with hook + on-screen in section 1 (Studio default) -->
+  <div id="app-script-hook-block" class="screen">
+    <header class="app-header">
+      <a class="logo" href="#"><span class="logo-icon">▶</span> SpyReels</a>
+      <span style="font-size:12px;color:var(--muted)">Studio</span>
+    </header>
+    <div class="aha-shell">
+      <div class="aha-top">
+        <div class="aha-badge">✓ Your first script is ready</div>
+        <h1 class="aha-title">Film this today</h1>
+        <p class="aha-sub">Every Studio script shows spoken hook + on-screen text + preview inside Hook section (section 1).</p>
+      </div>
+      <div class="coach-wrap">
+        <div class="coach-main">
+          <section class="heit blue">
+            <div class="heit-head"><div class="heit-num blue">1</div><div><div class="heit-label blue">Hook</div><p class="heit-sub">Say this + show this on screen.</p></div></div>
+            <div class="heit-body">I worked 9 to 5 for 3 years before I made my first $1K on the side.</div>
+            <div class="hook-ontext-row" style="margin-top:10px">
+              <div>
+                <div class="ontext-mini">3 YEARS at a 9-5 before my first $1K</div>
+                <div class="actions" style="margin-top:8px"><button class="btn-copy pri">Copy spoken</button><button class="btn-copy">Copy on-screen</button><button class="btn btn-outline-sm" style="font-size:11px;padding:6px 10px">Try other hooks</button></div>
+              </div>
+              <div class="preview-col" style="border:none;background:transparent;padding:0">
+                <div class="phone" style="width:100px"><div class="phone-cap-wrap"><div class="phone-cap-box"><div class="phone-cap">3 YEARS at a 9-5 before my first $1K</div></div></div><div class="phone-face"></div></div>
+              </div>
+            </div>
+          </section>
+          <p class="hint" style="margin-top:14px">Sections 2 to 5 + sidebar + CTAs + What's next = identical to SEO step 5 and onboarding aha.</p>
+        </div>
+      </div>
+      <div class="aha-ctas">
+        <button type="button" class="aha-cta-primary">Film now</button>
+        <button type="button" class="aha-cta-secondary">See full script</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const flowBtns = document.querySelectorAll('.flow-btn');
+  const seoStates = document.getElementById('seo-states');
+  const appStates = document.getElementById('app-states');
+  const flows = { seo: document.getElementById('flow-seo'), app: document.getElementById('flow-app') };
+
+  flowBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      flowBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      Object.values(flows).forEach(f => f.classList.remove('active'));
+      flows[btn.dataset.flow].classList.add('active');
+      seoStates.style.display = btn.dataset.flow === 'seo' ? 'flex' : 'none';
+      appStates.style.display = btn.dataset.flow === 'app' ? 'flex' : 'none';
+    });
+  });
+
+  function wire(group, prefix) {
+    document.querySelectorAll('.' + group).forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.' + group).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const flow = btn.closest('.flow') || flows[prefix.startsWith('seo') ? 'seo' : 'app'];
+        flow.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(btn.dataset.screen).classList.add('active');
+      });
+    });
+  }
+  wire('seo-btn', 'seo');
+  wire('app-btn', 'app');
+</script>
+</body>
+</html>

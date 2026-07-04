@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SpyReels</string>
+    <string name="title_activity_main">SpyReels</string>
+    <string name="package_name">ai.spyreels.app</string>
+    <string name="custom_url_scheme">ai.spyreels.app</string>
+</resources>

@@ -90,13 +90,16 @@ function formatHookPatternLabel(pattern: string): string {
 }
 
 function buildHookGeneratorEmailBodies(
-  hooks: Array<{ hook: string; pattern: string; reasoning: string }>,
+  hooks: Array<{ hook: string; onScreenText?: string; pattern: string; reasoning: string }>,
   targetAudience: string
 ): { text: string; html: string } {
   const hooksBlock = hooks
     .map((h, i) => {
       const patternLabel = formatHookPatternLabel(h.pattern);
-      return `${i + 1}. ${h.hook}\n   Pattern: ${patternLabel} — ${h.reasoning}`;
+      const onScreen = h.onScreenText?.trim()
+        ? `\n   On-screen: ${h.onScreenText}`
+        : "";
+      return `${i + 1}. ${h.hook}${onScreen}\n   Pattern: ${patternLabel}: ${h.reasoning}`;
     })
     .join("\n\n");
 
@@ -119,8 +122,11 @@ SpyReels.ai`;
   const hooksHtml = hooks
     .map((h, i) => {
       const patternLabel = formatHookPatternLabel(h.pattern);
-      return `<p style="margin: 0 0 16px; line-height: 1.5;">${i + 1}. ${escapeHtml(h.hook)}<br>
-<span style="color: #555;">Pattern: ${escapeHtml(patternLabel)} — ${escapeHtml(h.reasoning)}</span></p>`;
+      const onScreenHtml = h.onScreenText?.trim()
+        ? `<br><span style="color: #777;">On-screen: ${escapeHtml(h.onScreenText)}</span>`
+        : "";
+      return `<p style="margin: 0 0 16px; line-height: 1.5;">${i + 1}. ${escapeHtml(h.hook)}${onScreenHtml}<br>
+<span style="color: #555;">Pattern: ${escapeHtml(patternLabel)}: ${escapeHtml(h.reasoning)}</span></p>`;
     })
     .join("");
 
@@ -140,7 +146,7 @@ ${hooksHtml}
 export async function sendHookGeneratorHooksEmail(
   toEmail: string,
   niche: string,
-  hooks: Array<{ hook: string; pattern: string; reasoning: string }>,
+  hooks: Array<{ hook: string; onScreenText?: string; pattern: string; reasoning: string }>,
   targetAudience: string
 ) {
   const subjectPreview = hookEmailSubjectNiche(niche);

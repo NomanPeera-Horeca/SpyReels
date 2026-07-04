@@ -10,12 +10,15 @@ import {
   Search,
   ThumbsDown,
   ThumbsUp,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { usePostHog } from "@posthog/react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
+import { scriptFilmPath } from "@shared/scriptFilm";
 
 export type SaveScriptOptions = {
   addToCalendar: boolean;
@@ -63,6 +66,7 @@ export function IdeaScriptPostPanel({
   onRegenerate,
 }: Props) {
   const posthog = usePostHog();
+  const mobileCreate = useMobileCreateAppContext();
   const [saved, setSaved] = useState(!!savedScriptId);
   const [thumb, setThumb] = useState<"up" | "down" | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -288,6 +292,13 @@ export function IdeaScriptPostPanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2 pt-1">
+        {mobileCreate && savedScriptId ? (
+          <Link href={scriptFilmPath(savedScriptId)}>
+            <Button size="sm" className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Video className="h-3 w-3 mr-1.5" /> Film now
+            </Button>
+          </Link>
+        ) : null}
         {saved || savedScriptId ? (
           savedScriptId ? (
             <Link href={`/scripts/${savedScriptId}`}>

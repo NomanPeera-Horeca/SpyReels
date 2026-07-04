@@ -1,13 +1,17 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
+import MobileAppLayout from "./components/MobileAppLayout";
 import { DashboardLayoutSkeleton } from "./components/DashboardLayoutSkeleton";
+import { MobileAppLayoutSkeleton } from "./components/MobileAppLayoutSkeleton";
+import { MobileCreateAppProvider } from "./contexts/MobileCreateAppContext";
+import { isMobileCreateApp, isMobileCreateAllowedPath } from "@/lib/mobileCreateApp";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -48,7 +52,47 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AcceptInvitation = lazy(() => import("./pages/AcceptInvitation"));
 const PublicScriptView = lazy(() => import("./pages/PublicScriptView"));
 
-function DashboardRouter() {
+const MobileMore = lazy(() => import("./pages/MobileMore"));
+
+function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  if (!isMobileCreateAllowedPath(location)) {
+    return <Redirect to="/plan" />;
+  }
+  return <>{children}</>;
+}
+
+function MobileHomeRedirect() {
+  return <Redirect to="/plan" />;
+}
+
+function MobileCreateRouter() {
+  return (
+    <MobileAppLayout>
+      <Suspense fallback={<MobileAppLayoutSkeleton />}>
+        <MobileCreateRouteGuard>
+          <Switch>
+            <Route path="/" component={MobileHomeRedirect} />
+            <Route path="/research" component={MobileHomeRedirect} />
+            <Route path="/dashboard" component={MobileHomeRedirect} />
+            <Route path="/plan" component={ThirtyDayPlan} />
+            <Route path="/studio" component={AiCoach} />
+            <Route path="/scripts" component={MyScripts} />
+            <Route path="/scripts/:id" component={ScriptEditor} />
+            <Route path="/ideas" component={IdeaToScript} />
+            <Route path="/more" component={MobileMore} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/workspace/settings" component={WorkspaceSettings} />
+            <Route path="/billing" component={Billing} />
+            <Route component={MobileHomeRedirect} />
+          </Switch>
+        </MobileCreateRouteGuard>
+      </Suspense>
+    </MobileAppLayout>
+  );
+}
+
+function DesktopDashboardRouter() {
   return (
     <DashboardLayout>
       <Suspense fallback={<DashboardLayoutSkeleton />}>
@@ -97,6 +141,16 @@ function DashboardRouter() {
         </Switch>
       </Suspense>
     </DashboardLayout>
+  );
+}
+
+function DashboardRouter() {
+  const [mobileCreate] = useState(() => isMobileCreateApp());
+
+  return (
+    <MobileCreateAppProvider active={mobileCreate}>
+      {mobileCreate ? <MobileCreateRouter /> : <DesktopDashboardRouter />}
+    </MobileCreateAppProvider>
   );
 }
 

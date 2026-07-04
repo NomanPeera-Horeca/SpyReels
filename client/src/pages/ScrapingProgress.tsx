@@ -19,6 +19,8 @@ import {
   isValidInstagramHandleNormalized,
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
 } from "@shared/instagramHandle";
+import { navigateAppReplace, resolveFromParamFallback } from "@shared/appNavigation";
+import { useAppBack } from "@/hooks/useAppBack";
 
 /**
  * Ordered pipeline stages shown in the multi-step list. Index matches the
@@ -75,8 +77,10 @@ export default function ScrapingProgress() {
 
   // If someone lands here without a jobId, bounce them to /research.
   useEffect(() => {
-    if (jobId === null) setLocation("/research");
+    if (jobId === null) navigateAppReplace(setLocation, "/research");
   }, [jobId, setLocation]);
+
+  const handleBack = useAppBack(resolveFromParamFallback(fromParam));
 
   const progressQuery = trpc.scrape.progress.useQuery(
     { jobId: jobId! },
@@ -101,11 +105,15 @@ export default function ScrapingProgress() {
   const handle = data?.handle ?? "";
   const errorMessage = data?.errorMessage ?? null;
 
-  // Redirect on success.
+  // Redirect on success (replace so back from dashboard skips this loading screen).
   useEffect(() => {
     if (status === "completed") {
       const t = setTimeout(
-        () => setLocation(`/dashboard?jobId=${jobId}&from=${fromParam}`),
+        () =>
+          navigateAppReplace(
+            setLocation,
+            `/dashboard?jobId=${jobId}&from=${fromParam}`
+          ),
         400
       );
       return () => clearTimeout(t);
@@ -177,7 +185,7 @@ export default function ScrapingProgress() {
     });
   };
 
-  const handleBackToResearch = () => setLocation("/research");
+  const handleBackToResearch = () => handleBack();
 
   if (progressQuery.isError) {
     return (

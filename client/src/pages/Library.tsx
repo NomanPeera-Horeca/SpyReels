@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -95,6 +96,7 @@ function HookAnalysisMarkdown({ markdown }: { markdown: string }) {
 
 export default function Library() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("transcripts");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -435,7 +437,7 @@ export default function Library() {
                     variant="outline"
                     className="gap-2 border-border/80"
                     onClick={() => {
-                      window.location.href = `/scripts/${previewItem.id}`;
+                      setLocation(`/scripts/${previewItem.id}`);
                     }}
                   >
                     <ArrowRight className="h-4 w-4" /> Open in editor
@@ -477,6 +479,7 @@ function TranscriptsView({ data, isLoading, isError, errorMessage, onRetry, onCo
   onPreview: (item: any) => void;
   formatDate: (d: any) => string;
 }) {
+  const [, setLocation] = useLocation();
   if (isError && onRetry) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
@@ -512,7 +515,7 @@ function TranscriptsView({ data, isLoading, isError, errorMessage, onRetry, onCo
           Run transcriptions from the dashboard on reels you spy, or add reels via Telegram.
           Saved transcripts show up here automatically.
         </p>
-        <Button variant="default" className="mt-6 shadow-sm" onClick={() => window.location.href = "/dashboard"}>
+        <Button variant="default" className="mt-6 shadow-sm" onClick={() => setLocation("/dashboard")}>
           Go to dashboard
         </Button>
       </div>
@@ -609,6 +612,7 @@ function ScriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, 
   onPreview: (item: any) => void;
   formatDate: (d: any) => string;
 }) {
+  const [, setLocation] = useLocation();
   if (isError && onRetry) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
@@ -645,10 +649,10 @@ function ScriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, 
           lands in the Scripts tab here.
         </p>
         <div className="flex flex-wrap gap-2 justify-center mt-6">
-          <Button variant="default" className="shadow-sm" onClick={() => window.location.href = "/scripts"}>
+          <Button variant="default" className="shadow-sm" onClick={() => setLocation("/scripts")}>
             My Scripts
           </Button>
-          <Button variant="outline" className="border-border/70" onClick={() => window.location.href = "/ideas"}>
+          <Button variant="outline" className="border-border/70" onClick={() => setLocation("/ideas")}>
             Idea to Script
           </Button>
         </div>
@@ -731,7 +735,7 @@ function ScriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, 
                       size="sm"
                       variant="outline"
                       className="h-9 gap-1.5 border-border/80 text-foreground hover:bg-accent"
-                      onClick={(e) => { e.stopPropagation(); window.location.href = `/scripts/${item.id}`; }}
+                      onClick={(e) => { e.stopPropagation(); setLocation(`/scripts/${item.id}`); }}
                     >
                       <ArrowRight className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline text-xs">Edit</span>

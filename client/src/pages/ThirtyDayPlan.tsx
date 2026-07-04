@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
+import { ONBOARDING_PLAN_AUTOSTART_KEY } from "@shared/onboardingFlow";
+import { STUDIO_PREFILL_META_KEY } from "@shared/studioCoachUi";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CalendarDays, Film, HelpCircle, Loader2, Sparkles } from "lucide-react";
+import { CalendarDays, ExternalLink, Film, HelpCircle, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import { useAgentProgressPoll } from "@/hooks/useAgentProgressPoll";
+import { buildPlanProgressSteps, PLAN_AGENT_FOOTER } from "@shared/planAgentProgress";
+import { audienceSourceLabel } from "@shared/audienceResearch";
+import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
 import { HelpTipBadge } from "@/components/HelpTipBadge";
 import Tooltip from "@/components/Tooltip";
 import {
@@ -41,15 +48,6 @@ const PLATFORMS = [
   { value: "tiktok", label: "TikTok" },
   { value: "youtube", label: "YouTube" },
 ] as const;
-
-const AGENT_STEPS = [
-  "Researching what your audience asks on Reddit, Quora, and YouTube...",
-  "Analyzing top creators and trending angles in your niche...",
-  "Balancing TOFU, MOFU, and BOFU across 30 days...",
-  "Assigning formats and filming locations to each day...",
-  "Writing hook lines for each idea...",
-  "Building your content board...",
-];
 
 const FORMAT_LABELS = PLAN_FORMAT_LABELS;
 
@@ -233,6 +231,7 @@ function PlanCardItem({
 
 export default function ThirtyDayPlan() {
   const [, setLocation] = useLocation();
+  const mobileCreate = useMobileCreateAppContext();
   const utils = trpc.useUtils();
 
   const [phase, setPhase] = useState<"setup" | "generating" | "board">("setup");
@@ -241,17 +240,27 @@ export default function ThirtyDayPlan() {
     "instagram",
     "tiktok",
   ]);
-  const [agentStep, setAgentStep] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [filterFunnel, setFilterFunnel] = useState("all");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectFeedback, setRejectFeedback] = useState("");
   const [adjustingId, setAdjustingId] = useState<number | null>(null);
   const [adjustText, setAdjustText] = useState("");
-  const agentIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showOnboardingPlanHint, setShowOnboardingPlanHint] = useState(false);
 
   const cardsQuery = trpc.plan.listCards.useQuery();
   const cards = cardsQuery.data?.cards ?? [];
+  const audienceQuery = trpc.audienceResearch.list.useQuery(undefined, {
+    enabled: phase === "board",
+    staleTime: 120_000,
+  });
+  const refreshAudienceMutation = trpc.audienceResearch.refresh.useMutation({
+    onSuccess: () => {
+      void utils.audienceResearch.list.invalidate();
+      toast.success("Audience questions refreshed");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   useEffect(() => {
     if (cards.length > 0 && phase === "setup") setPhase("board");
@@ -259,16 +268,25 @@ export default function ThirtyDayPlan() {
 
   const generateMutation = trpc.plan.generate.useMutation({
     onSuccess: () => {
-      if (agentIntervalRef.current) clearInterval(agentIntervalRef.current);
-      setAgentStep(AGENT_STEPS.length);
       setTimeout(() => setPhase("board"), 600);
       void utils.plan.listCards.invalidate();
+      void utils.audienceResearch.list.invalidate();
     },
     onError: (err) => {
-      if (agentIntervalRef.current) clearInterval(agentIntervalRef.current);
       setPhase("setup");
       toast.error(err.message);
     },
+  });
+
+  const fetchPlanProgress = useMemo(
+    () => () => utils.plan.getGenerationProgress.fetch(undefined, { staleTime: 0 }),
+    [utils.plan.getGenerationProgress]
+  );
+
+  const planProgressSteps = useAgentProgressPoll({
+    enabled: phase === "generating" && generateMutation.isPending,
+    initialSteps: buildPlanProgressSteps("read_profile"),
+    fetchProgress: fetchPlanProgress,
   });
 
   const statusMutation = trpc.plan.updateStatus.useMutation({
@@ -290,23 +308,37 @@ export default function ThirtyDayPlan() {
     onError: (err) => toast.error(err.message),
   });
 
+  const planAutostartRef = useRef(false);
+  useEffect(() => {
+    if (planAutostartRef.current) return;
+    if (cards.length > 0) return;
+    if (sessionStorage.getItem(ONBOARDING_PLAN_AUTOSTART_KEY) !== "1") return;
+    planAutostartRef.current = true;
+    sessionStorage.removeItem(ONBOARDING_PLAN_AUTOSTART_KEY);
+    setGoal("grow");
+    setSelectedPlatforms(["instagram"]);
+    setPhase("setup");
+    setShowOnboardingPlanHint(true);
+  }, [cards.length]);
+
   function handleGenerate() {
     if (!selectedPlatforms.length) return;
     setPhase("generating");
-    setAgentStep(0);
-    let step = 0;
-    agentIntervalRef.current = setInterval(() => {
-      step += 1;
-      if (step < AGENT_STEPS.length - 1) setAgentStep(step);
-      else if (agentIntervalRef.current) clearInterval(agentIntervalRef.current);
-    }, 1400);
     generateMutation.mutate({ goal, platforms: selectedPlatforms });
   }
 
   function handleWriteScript(card: PlanCard) {
     sessionStorage.setItem(
       STUDIO_PREFILL_KEY,
-      `${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`
+      `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`
+    );
+    sessionStorage.setItem(
+      STUDIO_PREFILL_META_KEY,
+      JSON.stringify({
+        planCardId: card.id,
+        planCardTitle: card.title,
+        planCardDay: card.day,
+      })
     );
     setLocation("/studio");
   }
@@ -331,8 +363,28 @@ export default function ThirtyDayPlan() {
         </div>
         <h1 className="text-2xl font-bold mb-1">Your 30-Day Content Plan</h1>
         <p className="text-sm text-muted-foreground mb-8">
-          AI-researched ideas from your audience&apos;s real questions
+          AI-generated content ideas tailored to your niche and goal
         </p>
+
+        {showOnboardingPlanHint ? (
+          <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-950/20">
+            <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+              Your first script is ready. Now build 30 more ideas like it.
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-violet-800/80 dark:text-violet-200/80">
+              We pre-selected Grow my audience on Instagram. Tap generate when you are ready.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-7 px-2 text-xs text-violet-700 dark:text-violet-300"
+              onClick={() => setShowOnboardingPlanHint(false)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
 
         <div className="space-y-6">
           <div>
@@ -397,39 +449,19 @@ export default function ThirtyDayPlan() {
 
   if (phase === "generating") {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] px-4">
-        <div className="max-w-md w-full">
-          <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-violet-100 dark:bg-violet-950/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Loader2 className="h-7 w-7 text-violet-600 animate-spin" />
-            </div>
-            <h2 className="text-xl font-bold mb-1">Researching your niche...</h2>
-            <p className="text-sm text-muted-foreground">
-              AI is building 30 custom content ideas. Takes about 2 to 3 minutes.
-            </p>
-          </div>
-          <div className="space-y-3">
-            {AGENT_STEPS.map((step, i) => (
-              <div
-                key={step}
-                className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                  i <= agentStep ? "bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800" : "opacity-30"
-                }`}
-              >
-                <span className={`text-sm flex-1 ${i <= agentStep ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                  {step}
-                </span>
-                {i < agentStep && <span className="text-emerald-500 text-xs font-bold">✓</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AgentProgressPanel
+        steps={planProgressSteps}
+        subheadline="Pulling real audience questions from Reddit and Quora, then building 30 custom ideas. Takes about 2 to 3 minutes."
+        footer={PLAN_AGENT_FOOTER}
+        badgeLabel="Planning"
+      />
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-28 px-2 sm:px-0">
+    <div
+      className={`max-w-6xl mx-auto space-y-6 px-2 sm:px-0 ${mobileCreate ? "pb-mobile-tabs" : "pb-28"}`}
+    >
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">30-Day Content Plan</h1>
@@ -442,6 +474,62 @@ export default function ThirtyDayPlan() {
           Regenerate plan
         </Button>
       </div>
+
+      {(audienceQuery.data?.signals.length ?? 0) > 0 ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+                Audience research for {audienceQuery.data?.niche ?? "your niche"}
+              </p>
+              <p className="text-xs text-sky-800/80 dark:text-sky-200/80">
+                Real questions from Reddit and the web that shaped this plan
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => refreshAudienceMutation.mutate()}
+              disabled={refreshAudienceMutation.isPending}
+            >
+              {refreshAudienceMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Refresh
+            </Button>
+          </div>
+          <ul className="space-y-2">
+            {audienceQuery.data?.signals.slice(0, 5).map((signal) => (
+              <li key={signal.id} className="rounded-lg border border-sky-200/80 bg-background/80 px-3 py-2 dark:border-sky-900">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {audienceSourceLabel(signal.source)}
+                    </p>
+                    <p className="text-sm font-medium leading-snug">{signal.title}</p>
+                    {signal.snippet ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{signal.snippet}</p>
+                    ) : null}
+                  </div>
+                  <a
+                    href={signal.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-sky-700 hover:text-sky-900 dark:text-sky-300"
+                    aria-label="Open source"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="flex gap-2 flex-wrap items-center">
         {["all", "tofu", "mofu", "bofu"].map((f) => {
@@ -573,7 +661,11 @@ export default function ThirtyDayPlan() {
       )}
 
       {anySelected && (
-        <div className="fixed bottom-0 left-0 right-0 flex items-center justify-center pb-5 px-4 pointer-events-none z-50">
+        <div
+          className={`fixed left-0 right-0 flex items-center justify-center px-4 pointer-events-none z-40 ${
+            mobileCreate ? "bottom-[calc(4.25rem+env(safe-area-inset-bottom))] pb-2" : "bottom-0 pb-5"
+          }`}
+        >
           <div className="bg-card border border-border shadow-2xl rounded-2xl pointer-events-auto w-full max-w-lg overflow-hidden">
             <div className="px-4 pt-3 pb-1 flex items-center justify-between">
               <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>

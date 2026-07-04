@@ -6,7 +6,17 @@ import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY
 import { sendPaymentConfirmationEmail } from "../utils/email.js";
 import { hasUnlimitedUsage, unlimitedUsageResult } from "../usageBypass";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
+function resolveStripeSecretKey(): string {
+  const key = process.env.STRIPE_SECRET_KEY?.trim();
+  if (key) return key;
+  if (process.env.NODE_ENV === "development") {
+    // Allows local dev without Stripe; checkout/webhook calls will still fail at the API.
+    return "sk_test_local_development_placeholder_not_for_billing";
+  }
+  throw new Error("STRIPE_SECRET_KEY is not configured");
+}
+
+const stripe = new Stripe(resolveStripeSecretKey(), {
   apiVersion: "2025-02-24.acacia" as any,
 });
 

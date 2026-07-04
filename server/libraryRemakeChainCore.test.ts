@@ -179,7 +179,7 @@ describe("evaluateRemakeabilityGate", () => {
 
 describe("libraryRemakeButtonLabel", () => {
   it("returns Remake in your voice when idle", () => {
-    expect(libraryRemakeButtonLabel({ stage: "idle", progressPercent: 0 })).toBe("Remake in your voice");
+    expect(libraryRemakeButtonLabel({ stage: "idle", progressPercent: 0 })).toBe("Remake this into your voice");
   });
 
   it("shows percent while generating", () => {

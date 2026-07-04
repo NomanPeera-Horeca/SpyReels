@@ -15,10 +15,14 @@ export function AuthDialog({
   open,
   onOpenChange,
   defaultMode = "login",
+  contextMessage,
+  returnTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultMode?: Exclude<AuthMode, "forgot">;
+  contextMessage?: string;
+  returnTo?: string;
 }) {
   const [authMode, setAuthMode] = useState<AuthMode>(defaultMode);
   const [authEmail, setAuthEmail] = useState("");
@@ -35,7 +39,7 @@ export function AuthDialog({
   }, [defaultMode, open]);
 
   const handleGoogleLogin = () => {
-    window.location.href = getLoginUrl();
+    window.location.href = getLoginUrl({ returnTo: returnTo || undefined });
   };
 
   const handleEmailAuth = async () => {
@@ -62,7 +66,7 @@ export function AuthDialog({
       if (!res.ok) {
         setAuthError(data.error || "Something went wrong");
       } else {
-        window.location.href = "/";
+        window.location.href = returnTo || "/";
       }
     } catch {
       setAuthError("Network error. Please try again.");
@@ -104,6 +108,11 @@ export function AuthDialog({
           <p className="text-center text-sm text-muted-foreground">
             Spy on viral Reels. Steal the script. Own the feed.
           </p>
+          {contextMessage ? (
+            <p className="w-full rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-xs font-medium text-primary">
+              {contextMessage}
+            </p>
+          ) : null}
           <button
             onClick={handleGoogleLogin}
             className="flex w-full items-center justify-center gap-3 rounded-lg border border-border px-6 py-3 font-medium transition-colors hover:bg-accent"

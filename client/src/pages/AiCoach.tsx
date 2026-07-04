@@ -1,12 +1,39 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePostHog } from "@posthog/react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
+import {
+  parseStudioPrefillMeta,
+  STUDIO_PREFILL_META_KEY,
+  type CoachCapabilityId,
+  type StudioPrefillMeta,
+} from "@shared/studioCoachUi";
+import type { CoachAction } from "@shared/studioCoachAgent";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Sparkles } from "lucide-react";
+import { History, Loader2 } from "lucide-react";
 import { AiCoachResultView, type CoachResultScript } from "@/components/AiCoachResultView";
+import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
+import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
 import { combineBodyFromSections } from "@shared/coachScriptSections";
+import { scriptFilmPath } from "@shared/scriptFilm";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
+import { useAgentProgressPoll } from "@/hooks/useAgentProgressPoll";
+import {
+  COACH_AGENT_FOOTER,
+  buildCoachScriptProgressSteps,
+} from "@shared/coachAgentProgress";
+import type { AgentProgressStep } from "@shared/agentProgress";
 
 type FactCheck = {
   hasClaim: boolean;
@@ -26,15 +53,26 @@ type AnalysisResult = {
 
 type Phase = "idle" | "analyzing" | "clarifying" | "generating" | "result";
 
-const EXAMPLE_PROMPTS = [
-  "I just got a testimonial from a client who lost 22kg using my program. Turn this into a reel.",
-  "I want to make a video about why counting calories is a waste of time and what you should do instead",
-  "I went behind the scenes at a top hotel kitchen last night. The things I saw were wild.",
-  "My client doubled her revenue in 90 days by doing ONE thing differently. I want to talk about it.",
-];
+type PlanCardOption = {
+  id: number;
+  day: number;
+  title: string;
+  hook: string;
+  angle: string;
+  status: string;
+};
+
+function buildPlanPrefill(card: PlanCardOption): string {
+  return `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`;
+}
 
 export default function AiCoach() {
+  const posthog = usePostHog();
+  const [, setLocation] = useLocation();
+  const mobileCreate = useMobileCreateAppContext();
+  const utils = trpc.useUtils();
   const [description, setDescription] = useState("");
+  const [attachedContext, setAttachedContext] = useState<StudioPrefillMeta | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [clarifications, setClarifications] = useState<{ question: string; answer: string }[]>([]);
@@ -53,34 +91,114 @@ export default function AiCoach() {
     contrarian: string;
     intrigue: string;
   } | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
+  const [filmNowPending, setFilmNowPending] = useState(false);
+  const pendingFilmRef = useRef(false);
+  const [agentMessage, setAgentMessage] = useState<string | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
+
+  const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const { data: planData } = trpc.plan.listCards.useQuery(undefined, { staleTime: 60_000 });
+  const { data: audienceData, isLoading: audienceSignalsLoading } = trpc.audienceResearch.list.useQuery(
+    undefined,
+    { staleTime: 60_000 }
+  );
+
+  const planCards = planData?.cards ?? [];
+  const audienceSignals = audienceData?.signals ?? [];
+  const recentScripts = historyData?.scripts ?? [];
+
+  const suggestions = useMemo(() => {
+    const approved = planCards.filter((c) => c.status === "approved").slice(0, 3);
+    const fromPlan = approved.map(
+      (c) => `Write a viral script for my Day ${c.day} plan idea: "${c.title}"`
+    );
+    if (fromPlan.length >= 2) return fromPlan;
+    return [];
+  }, [planCards]);
 
   useEffect(() => {
     const prefill = sessionStorage.getItem(STUDIO_PREFILL_KEY);
+    const metaRaw = sessionStorage.getItem(STUDIO_PREFILL_META_KEY);
+    const meta = parseStudioPrefillMeta(metaRaw);
     if (prefill) {
       setDescription(prefill);
       sessionStorage.removeItem(STUDIO_PREFILL_KEY);
-      setTimeout(() => textareaRef.current?.focus(), 50);
     }
-  }, []);
+    if (meta) {
+      setAttachedContext(meta);
+      sessionStorage.removeItem(STUDIO_PREFILL_META_KEY);
+    }
+    if (prefill || meta) {
+      posthog?.capture("ai_coach_prefill_loaded", {
+        has_plan_card: Boolean(meta?.planCardId),
+      });
+    }
+  }, [posthog]);
+
+  const launchQueryHandledRef = useRef(false);
+
+  const applyScriptResult = (data: CoachResultScript) => {
+    setResult(data);
+    setEditDraft({
+      hook: data.hook,
+      explain: data.explain,
+      illustrate: data.illustrate,
+      teach: data.teach,
+      cta: data.cta,
+    });
+    setPhase("result");
+    setEditMode(false);
+    setHookVariations(null);
+  };
+
+  const resolveIntentMutation = trpc.studio.resolveIntent.useMutation();
+
+  const buildGenerateInput = (overrides?: {
+    description?: string;
+    clarifications?: { question: string; answer: string }[];
+  }) => ({
+    description: overrides?.description ?? description,
+    clarifications: overrides?.clarifications ?? [],
+    planCardId: attachedContext?.planCardId,
+    audienceSignalIds: attachedContext?.audienceSignalId
+      ? [attachedContext.audienceSignalId]
+      : [],
+  });
 
   const generateMutation = trpc.studio.generate.useMutation({
     onSuccess: (data) => {
-      setResult(data);
-      setEditDraft({
-        hook: data.hook,
-        explain: data.explain,
-        illustrate: data.illustrate,
-        teach: data.teach,
-        cta: data.cta,
+      applyScriptResult(data);
+      void utils.studio.list.invalidate();
+      posthog?.capture("ai_coach_script_generated", {
+        script_id: data.id,
+        plan_card_id: attachedContext?.planCardId ?? null,
       });
-      setPhase("result");
     },
     onError: (err) => {
       toast.error(err.message);
       setPhase("idle");
     },
   });
+
+  const fetchCoachProgress = useMemo(
+    () => () => utils.studio.getGenerationProgress.fetch(undefined, { staleTime: 0 }),
+    [utils.studio.getGenerationProgress]
+  );
+
+  const coachProgressSteps = useAgentProgressPoll({
+    enabled: phase === "generating" && generateMutation.isPending,
+    initialSteps: buildCoachScriptProgressSteps("read_profile"),
+    fetchProgress: fetchCoachProgress,
+  });
+
+  const analyzingSteps = useMemo<AgentProgressStep[]>(
+    () => [{ id: "analyze", label: "Understanding your idea", status: "active" }],
+    []
+  );
 
   const analyzeMutation = trpc.studio.analyze.useMutation({
     onSuccess: (data) => {
@@ -94,34 +212,71 @@ export default function AiCoach() {
         setPhase("clarifying");
       } else {
         setPhase("generating");
-        generateMutation.mutate({ description, clarifications: [] });
+        generateMutation.mutate(buildGenerateInput({ clarifications: [] }));
       }
     },
-    onError: (err) => {
-      toast.error(err.message || "Could not analyze your idea. Trying to write anyway...");
+    onError: () => {
+      toast.message("Could not analyze your idea. Writing your script anyway...");
       setPhase("generating");
-      generateMutation.mutate({ description, clarifications: [] });
+      generateMutation.mutate(buildGenerateInput({ clarifications: [] }));
     },
   });
 
   const refineMutation = trpc.studio.refine.useMutation({
     onSuccess: (data) => {
-      if (!result) return;
-      setResult(data);
-      setEditDraft({
-        hook: data.hook,
-        explain: data.explain,
-        illustrate: data.illustrate,
-        teach: data.teach,
-        cta: data.cta,
-      });
+      applyScriptResult(data);
       setRefineInput("");
+      void utils.studio.list.invalidate();
+      posthog?.capture("ai_coach_script_refined", { script_id: data.id });
+    },
+    onError: (err) => {
+      toast.error(err.message);
+      setPhase(result ? "result" : "idle");
+    },
+  });
+
+  const updateMutation = trpc.studio.update.useMutation({
+    onSuccess: (data) => {
+      applyScriptResult(data);
+      setEditMode(false);
+      void utils.studio.list.invalidate();
+      posthog?.capture("ai_coach_script_updated", { script_id: data.id });
+      toast.success("Script saved");
     },
     onError: (err) => toast.error(err.message),
   });
 
+  const saveToLibraryMutation = trpc.studio.saveToLibrary.useMutation({
+    onSuccess: (data) => {
+      setSavedLibraryScriptId(data.savedScriptId);
+      posthog?.capture("ai_coach_saved_to_library", {
+        script_id: result?.id,
+        saved_script_id: data.savedScriptId,
+      });
+      if (pendingFilmRef.current) {
+        pendingFilmRef.current = false;
+        setFilmNowPending(false);
+        posthog?.capture("ai_coach_film_now", {
+          script_id: result?.id,
+          saved_script_id: data.savedScriptId,
+        });
+        setLocation(scriptFilmPath(data.savedScriptId));
+        return;
+      }
+      toast.success("Saved to My Scripts library");
+    },
+    onError: (err) => {
+      pendingFilmRef.current = false;
+      setFilmNowPending(false);
+      toast.error(err.message);
+    },
+  });
+
   const hookVariationsMutation = trpc.studio.hookVariations.useMutation({
-    onSuccess: setHookVariations,
+    onSuccess: (data) => {
+      setHookVariations(data);
+      posthog?.capture("ai_coach_hook_variations_generated", { script_id: result?.id });
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -131,6 +286,7 @@ export default function AiCoach() {
       setResult({ ...result, hook: data.hook });
       setEditDraft((d) => ({ ...d, hook: data.hook }));
       setHookVariations(null);
+      void utils.studio.list.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -143,131 +299,383 @@ export default function AiCoach() {
     setResult(null);
     setEditMode(false);
     setHookVariations(null);
+    setAttachedContext(null);
+    setAgentMessage(null);
+    setIsRouting(false);
+    setSavedLibraryScriptId(null);
+    pendingFilmRef.current = false;
+    setFilmNowPending(false);
   };
 
-  const startAnalyze = () => {
-    const trimmed = description.trim();
-    if (!trimmed) return;
+  useEffect(() => {
+    if (launchQueryHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      launchQueryHandledRef.current = true;
+      reset();
+      window.history.replaceState(null, "", "/studio");
+      return;
+    }
+    const scriptIdRaw = params.get("script");
+    if (!scriptIdRaw) return;
+    const id = Number(scriptIdRaw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    launchQueryHandledRef.current = true;
+    void utils.studio.get
+      .fetch({ id })
+      .then((data) => {
+        applyScriptResult(data);
+        posthog?.capture("ai_coach_script_loaded", { script_id: id, source: "url_param" });
+      })
+      .catch(() => {
+        toast.error("Could not load that script");
+      });
+    window.history.replaceState(null, "", "/studio");
+  }, [posthog, utils.studio.get]);
+
+  const goFilm = (savedScriptId: number) => {
+    posthog?.capture("ai_coach_film_now", {
+      script_id: result?.id,
+      saved_script_id: savedScriptId,
+    });
+    setLocation(scriptFilmPath(savedScriptId));
+  };
+
+  const handleSaveToLibrary = () => {
+    if (!result) return;
+    pendingFilmRef.current = false;
+    saveToLibraryMutation.mutate({ id: result.id });
+  };
+
+  const handleFilmNow = () => {
+    if (!result) return;
+    if (savedLibraryScriptId) {
+      goFilm(savedLibraryScriptId);
+      return;
+    }
+    pendingFilmRef.current = true;
+    setFilmNowPending(true);
+    saveToLibraryMutation.mutate({ id: result.id });
+  };
+
+  const beginWriteFlow = (trimmed: string) => {
+    posthog?.capture("ai_coach_started", {
+      plan_card_id: attachedContext?.planCardId ?? null,
+    });
+    setAgentMessage("Writing your viral script...");
     setPhase("analyzing");
     analyzeMutation.mutate({ description: trimmed });
   };
 
-  if (phase === "idle") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 sm:px-6">
-        <div className="w-full max-w-2xl">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-              <Sparkles className="h-4 w-4" />
-              AI Personal Brand Coach
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold mb-3">What do you want to say?</h1>
-            <p className="text-muted-foreground text-base sm:text-lg">
-              Dump your raw idea. I will research it first, then write your HEIT script.
-            </p>
-          </div>
+  const executeCoachAction = async (action: CoachAction, trimmed: string) => {
+    if (action.assistantMessage) {
+      setAgentMessage(action.assistantMessage);
+    }
 
-          <div className="relative mb-4">
-            <Textarea
-              ref={textareaRef}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && description.trim()) {
-                  startAnalyze();
-                }
-              }}
-              placeholder="e.g. My client just got a 5-star review. I want to make a reel about it."
-              className="min-h-[140px] px-5 py-4 pr-16 text-base rounded-2xl resize-none"
-              autoFocus
-            />
-            <Button
-              type="button"
-              size="icon"
-              className="absolute bottom-4 right-4 rounded-xl bg-violet-600 hover:bg-violet-700"
-              onClick={startAnalyze}
-              disabled={!description.trim() || analyzeMutation.isPending}
-            >
-              →
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground text-right mb-6">Cmd + Enter to generate</p>
+    switch (action.tool) {
+      case "load_plan_card": {
+        const card =
+          planCards.find((c) => c.id === action.planCardId) ??
+          planCards.find((c) => c.status === "approved") ??
+          planCards[0];
+        if (!card) {
+          toast.message("Generate a 30-day plan first, then come back here.");
+          setPhase("idle");
+          setIsRouting(false);
+          return;
+        }
+        attachPlanCard(card);
+        setPhase("idle");
+        setIsRouting(false);
+        toast.message(action.assistantMessage ?? "Plan idea attached. Hit the arrow to write your script.");
+        return;
+      }
+      case "refine_script": {
+        const scriptId = action.scriptId ?? recentScripts[0]?.id;
+        if (!scriptId) {
+          toast.message("Write a script first, then refine it here.");
+          setPhase("idle");
+          setIsRouting(false);
+          return;
+        }
+        setPhase("generating");
+        const loaded = await utils.studio.get.fetch({ id: scriptId });
+        applyScriptResult(loaded);
+        const instruction = action.refineInstruction?.trim() ?? trimmed;
+        if (instruction.length >= 8) {
+          refineMutation.mutate({ id: scriptId, instruction });
+        } else {
+          setRefineInput(instruction);
+          setPhase("result");
+          toast.message("Add a refine instruction below your script.");
+        }
+        setIsRouting(false);
+        return;
+      }
+      case "generate_hook_ideas": {
+        const scriptId = action.scriptId ?? recentScripts[0]?.id;
+        if (!scriptId) {
+          toast.message("Write a script first, then try new hook ideas.");
+          setPhase("idle");
+          setIsRouting(false);
+          return;
+        }
+        setPhase("generating");
+        setAgentMessage("Generating new hook ideas...");
+        const loaded = await utils.studio.get.fetch({ id: scriptId });
+        applyScriptResult(loaded);
+        hookVariationsMutation.mutate({ id: scriptId });
+        setIsRouting(false);
+        return;
+      }
+      case "write_viral_script":
+      default:
+        beginWriteFlow(trimmed);
+        setIsRouting(false);
+    }
+  };
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-              Try an example
-            </p>
-            {EXAMPLE_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => {
-                  setDescription(prompt);
-                  textareaRef.current?.focus();
-                }}
-                className="w-full text-left px-4 py-3 rounded-xl border border-border bg-card hover:border-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-950/20 transition-all text-sm text-muted-foreground hover:text-foreground"
-              >
-                <span className="line-clamp-2">{prompt}</span>
-              </button>
-            ))}
-          </div>
+  const runCoachFlow = async (capabilityId?: CoachCapabilityId) => {
+    const trimmed = description.trim();
+    if (!capabilityId && !trimmed) return;
+
+    setIsRouting(true);
+    setAgentMessage("Understanding what you want to do...");
+
+    try {
+      const action = await resolveIntentMutation.mutateAsync({
+        message: trimmed || "Write a viral script from my idea",
+        capabilityId,
+        activeScriptId: result?.id,
+        attachedPlanCardId: attachedContext?.planCardId,
+      });
+
+      posthog?.capture("ai_coach_agent_routed", {
+        tool: action.tool,
+        source: action.source,
+        confidence: action.confidence,
+      });
+
+      await executeCoachAction(action, trimmed);
+    } catch {
+      toast.error("Could not route your request. Writing a new script instead.");
+      beginWriteFlow(trimmed || description.trim());
+      setIsRouting(false);
+    }
+  };
+
+  const loadScript = async (id: number) => {
+    try {
+      const data = await utils.studio.get.fetch({ id });
+      applyScriptResult(data);
+      setHistoryOpen(false);
+      posthog?.capture("ai_coach_script_loaded", { script_id: id });
+    } catch {
+      toast.error("Could not load that script");
+    }
+  };
+
+  const attachPlanCard = (card: PlanCardOption) => {
+    setAttachedContext((prev) => ({
+      ...prev,
+      planCardId: card.id,
+      planCardTitle: card.title,
+      planCardDay: card.day,
+    }));
+    setDescription(buildPlanPrefill(card));
+    posthog?.capture("ai_coach_context_attached", {
+      type: "plan_card",
+      plan_card_id: card.id,
+    });
+  };
+
+  const attachAudienceSignal = (signal: {
+    id: number;
+    source: "reddit" | "quora" | "web";
+    title: string;
+    snippet: string | null;
+    sourceUrl: string;
+  }) => {
+    setAttachedContext((prev) => ({
+      ...prev,
+      audienceSignalId: signal.id,
+      audienceSignalTitle: signal.title,
+      audienceSignalSource: signal.source,
+    }));
+    posthog?.capture("ai_coach_context_attached", {
+      type: "audience_signal",
+      audience_signal_id: signal.id,
+      source: signal.source,
+    });
+    if (!description.trim()) {
+      setDescription(`Write a viral script answering: "${signal.title}"`);
+    }
+  };
+
+  const clearPlanContext = () => {
+    setAttachedContext((prev) => {
+      if (!prev) return null;
+      const next = { ...prev };
+      delete next.planCardId;
+      delete next.planCardTitle;
+      delete next.planCardDay;
+      const hasAudience = Boolean(next.audienceSignalId);
+      return hasAudience ? next : null;
+    });
+  };
+
+  const clearAudienceContext = () => {
+    setAttachedContext((prev) => {
+      if (!prev) return null;
+      const next = { ...prev };
+      delete next.audienceSignalId;
+      delete next.audienceSignalTitle;
+      delete next.audienceSignalSource;
+      const hasPlan = Boolean(next.planCardId);
+      return hasPlan ? next : null;
+    });
+  };
+
+  const handleCapability = (id: CoachCapabilityId) => {
+    void runCoachFlow(id);
+  };
+
+  const historyPanel = (
+    <AiCoachHistoryPanel
+      scripts={recentScripts}
+      activeScriptId={result?.id ?? null}
+      onSelect={(id) => void loadScript(id)}
+      onNewScript={reset}
+      loading={historyLoading}
+    />
+  );
+
+  const shellLayout = (content: ReactNode) => (
+    <div className={mobileCreate ? "flex min-h-[70vh]" : "-mx-2 flex min-h-[80vh] sm:-mx-4"}>
+      <aside className="hidden w-72 shrink-0 border-r lg:block">{historyPanel}</aside>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-end gap-2 border-b px-3 py-2 lg:hidden">
+          <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <History className="h-3.5 w-3.5" />
+                Recent scripts
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[min(100vw-2rem,20rem)] p-0">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Recent scripts</SheetTitle>
+              </SheetHeader>
+              {historyPanel}
+            </SheetContent>
+          </Sheet>
         </div>
+        {content}
       </div>
+    </div>
+  );
+
+  if (phase === "idle") {
+    return shellLayout(
+      <AiCoachCommandShell
+        description={description}
+        onDescriptionChange={setDescription}
+        onSubmit={() => void runCoachFlow()}
+        isBusy={isRouting || resolveIntentMutation.isPending || analyzeMutation.isPending}
+        attachedContext={attachedContext}
+        planCards={planCards}
+        audienceSignals={audienceSignals}
+        audienceSignalsLoading={audienceSignalsLoading}
+        onAttachPlanCard={attachPlanCard}
+        onAttachAudienceSignal={attachAudienceSignal}
+        onClearPlanContext={clearPlanContext}
+        onClearAudienceContext={clearAudienceContext}
+        onCapability={handleCapability}
+        suggestions={suggestions}
+        onSuggestionClick={setDescription}
+      />
     );
   }
 
   if (phase === "analyzing" || phase === "generating") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+    const isRefining = refineMutation.isPending;
+    const isHookVariations = hookVariationsMutation.isPending;
+    const showCoachProgress =
+      phase === "generating" && generateMutation.isPending && !isRefining && !isHookVariations;
+
+    if (showCoachProgress || phase === "analyzing") {
+      const steps = phase === "analyzing" ? analyzingSteps : coachProgressSteps;
+      const subheadline =
+        phase === "analyzing"
+          ? agentMessage ?? "Checking context before writing your script"
+          : `Tailored to your idea. Usually 20 to 40 seconds.`;
+
+      return shellLayout(
+        <AgentProgressPanel
+          steps={steps}
+          subheadline={subheadline}
+          footer={phase === "generating" ? COACH_AGENT_FOOTER : undefined}
+          badgeLabel={phase === "analyzing" ? "Understanding" : "Writing"}
+        />
+      );
+    }
+
+    const statusTitle = isRefining
+      ? "Refining your script..."
+      : isHookVariations
+        ? "Generating new hook ideas..."
+        : "Working on your script...";
+
+    return shellLayout(
+      <div className="flex flex-col items-center justify-center px-4 py-16">
         <div className="w-full max-w-2xl">
-          <div className="bg-card border border-border rounded-2xl p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <Loader2 className="h-8 w-8 text-violet-600 animate-spin" />
+          <div className="rounded-2xl border border-border bg-card p-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <div>
-                <p className="font-semibold">
-                  {phase === "analyzing" ? "Researching your idea..." : "Writing your script..."}
-                </p>
+                <p className="font-semibold">{statusTitle}</p>
                 <p className="text-sm text-muted-foreground">
-                  {phase === "analyzing" ? "Checking context before writing" : "Building your HEIT script"}
+                  {agentMessage ?? "This usually takes a few seconds"}
                 </p>
               </div>
             </div>
           </div>
-          <p className="text-center text-sm text-muted-foreground mt-4 italic line-clamp-2">
-            &ldquo;{description.slice(0, 80)}
-            {description.length > 80 ? "..." : ""}&rdquo;
-          </p>
         </div>
       </div>
     );
   }
 
   if (phase === "clarifying" && analysis) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+    return shellLayout(
+      <div className="flex flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-2xl space-y-4">
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-800 dark:bg-blue-950/30">
+            <p className="mb-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
               Here&apos;s what I understood
             </p>
-            <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">{analysis.understood}</p>
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex-1 h-1.5 bg-blue-200 dark:bg-blue-900 rounded-full">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${analysis.confidence}%` }} />
+            <p className="text-sm leading-relaxed text-blue-800 dark:text-blue-200">{analysis.understood}</p>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-blue-200 dark:bg-blue-900">
+                <div
+                  className="h-full rounded-full bg-blue-500"
+                  style={{ width: `${analysis.confidence}%` }}
+                />
               </div>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{analysis.confidence}% confident</span>
+              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                {analysis.confidence}% confident
+              </span>
             </div>
           </div>
 
-          {analysis.factCheck?.warning && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-900 dark:text-amber-100">
+          {analysis.factCheck?.warning ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
               {analysis.factCheck.warning}
             </div>
-          )}
+          ) : null}
 
           {clarifications.map((c, i) => (
-            <div key={c.question} className="bg-card border border-border rounded-2xl p-5">
-              <p className="text-sm font-semibold mb-2">{c.question}</p>
+            <div key={c.question} className="rounded-2xl border border-border bg-card p-5">
+              <p className="mb-2 text-sm font-semibold">{c.question}</p>
               <Textarea
                 value={c.answer}
                 onChange={(e) =>
@@ -288,19 +696,19 @@ export default function AiCoach() {
               className="flex-1"
               onClick={() => {
                 setPhase("generating");
-                generateMutation.mutate({ description, clarifications: [] });
+                generateMutation.mutate(buildGenerateInput({ clarifications: [] }));
               }}
             >
               Skip
             </Button>
             <Button
-              className="flex-1 bg-violet-600 hover:bg-violet-700"
+              className="flex-1"
               onClick={() => {
                 setPhase("generating");
-                generateMutation.mutate({ description, clarifications });
+                generateMutation.mutate(buildGenerateInput({ clarifications }));
               }}
             >
-              Write my script
+              Write my viral script
             </Button>
           </div>
         </div>
@@ -309,7 +717,7 @@ export default function AiCoach() {
   }
 
   if (phase === "result" && result) {
-    return (
+    return shellLayout(
       <AiCoachResultView
         result={result}
         editMode={editMode}
@@ -325,17 +733,14 @@ export default function AiCoach() {
         onReset={reset}
         onToggleEdit={() => setEditMode(true)}
         onSaveEdits={() => {
-          setResult({
-            ...result,
+          updateMutation.mutate({
+            id: result.id,
             hook: editDraft.hook,
             explain: editDraft.explain,
             illustrate: editDraft.illustrate,
             teach: editDraft.teach,
             cta: editDraft.cta,
-            body: combineBodyFromSections(editDraft),
-            callToAction: editDraft.cta || editDraft.teach,
           });
-          setEditMode(false);
         }}
         onCancelEdit={() => {
           setEditDraft({
@@ -353,6 +758,11 @@ export default function AiCoach() {
         onApplyHook={(hook) => applyHookMutation.mutate({ id: result.id, hook })}
         onDismissHookVariations={() => setHookVariations(null)}
         refinePending={refineMutation.isPending}
+        savePending={updateMutation.isPending}
+        onSaveToLibrary={handleSaveToLibrary}
+        saveToLibraryPending={saveToLibraryMutation.isPending && !filmNowPending}
+        onFilmNow={mobileCreate ? handleFilmNow : undefined}
+        filmNowPending={filmNowPending && saveToLibraryMutation.isPending}
       />
     );
   }

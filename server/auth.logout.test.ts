@@ -1,4 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./stripe/stripe-service", () => ({
+  getUserSubscription: vi.fn().mockResolvedValue({ plan: "free", status: "active", billingInterval: "monthly", cancelAtPeriodEnd: false, currentPeriodEnd: null }),
+  getMonthlyUsage: vi.fn().mockResolvedValue({ scrapeCount: 0, searchCount: 0, transcribeCount: 0, recreateCount: 0, rewriteCount: 0, exportCount: 0, extensionSortCount: 0, extensionSaveCount: 0, extensionTranscribeCount: 0, extensionRecreateCount: 0 }),
+  checkUsageLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 3, used: 0 }),
+  incrementUsage: vi.fn().mockResolvedValue(undefined),
+  createCheckoutSession: vi.fn(),
+  createPortalSession: vi.fn(),
+  constructWebhookEvent: vi.fn(),
+  stripe: {},
+}));
+
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";

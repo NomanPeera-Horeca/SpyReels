@@ -110,7 +110,8 @@ describe("Plan Limits", () => {
     const limits = getPlanLimits("free");
     expect(limits.scrapesPerMonth).toBe(2);
     expect(limits.transcriptionsPerMonth).toBe(3);
-    expect(limits.recreatesPerMonth).toBe(0);
+    expect(limits.recreatesPerMonth).toBe(3);
+    expect(limits.rewritesPerScript).toBe(3);
     expect(limits.savedScripts).toBe(5);
     expect(limits.teamMembers).toBe(1);
   });
@@ -257,19 +258,17 @@ describe("Usage Gating - Server-side Enforcement", () => {
     expect(used >= freeLimits.transcriptionsPerMonth).toBe(true);
   });
 
-  it("should block AI re-creation on free plan", () => {
+  it("should enforce AI re-creation limits on free plan", () => {
     const freeLimits = getPlanLimits("free");
-    expect(freeLimits.recreatesPerMonth).toBe(0);
-    // Free users should not be able to re-create at all
-    const used = 0;
+    expect(freeLimits.recreatesPerMonth).toBe(3);
+    const used = 3;
     expect(used >= freeLimits.recreatesPerMonth).toBe(true);
   });
 
-  it("should block rewrites on free plan", () => {
+  it("should enforce rewrite limits on free plan", () => {
     const freeLimits = getPlanLimits("free");
-    expect(freeLimits.rewritesPerScript).toBe(0);
-    // Free users should not be able to rewrite at all
-    const used = 0;
+    expect(freeLimits.rewritesPerScript).toBe(3);
+    const used = 3;
     expect(used >= freeLimits.rewritesPerScript).toBe(true);
   });
 

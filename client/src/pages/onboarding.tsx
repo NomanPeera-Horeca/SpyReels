@@ -1,16 +1,33 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import { OnboardingAhaView } from "@/components/OnboardingAhaView";
+import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
+import { Button } from "@/components/ui/button";
 import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { normalizeAnalyticsHandle } from "@/lib/utils";
+import {
+  ONBOARDING_AGENT_FOOTER,
+  buildOnboardingProgressSteps,
+  personalizedOnboardingStepLabels,
+} from "@shared/onboardingAgentProgress";
+import {
+  ONBOARDING_AUDIENCE_CHIPS,
+  ONBOARDING_AHA_SCRIPT_KEY,
+  ONBOARDING_NICHE_CHIPS,
+} from "@shared/onboardingFlow";
 import { usePostHog } from "@posthog/react";
-import { toast } from "sonner";
-import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
-import { Button } from "@/components/ui/button";
+import { navigateAppReplace } from "@shared/appNavigation";
+import { isMobileCreateApp } from "@/lib/mobileCreateApp";
+import { toast } from "sonner";
+import type { CoachResultScript } from "@/components/AiCoachResultView";
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
+
+type OnboardingPhase = "step1" | "step2" | "loading" | "aha";
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -22,28 +39,46 @@ function toDate(value: unknown): Date | null {
 function OnboardingShell({
   children,
   onSkip,
+  showSkip,
+  step,
 }: {
   children: React.ReactNode;
   onSkip?: () => void;
+  showSkip: boolean;
+  step: number | null;
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="inline-flex min-w-0">
             <SpyReelsWordmark size="header" />
           </Link>
-          {onSkip ? (
+          {showSkip && onSkip ? (
             <button
               type="button"
               onClick={onSkip}
-              className="rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"
+              className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
             >
-              Skip setup →
+              Skip setup
             </button>
           ) : null}
         </div>
       </header>
+
+      {step != null ? (
+        <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-5 sm:px-6">
+          {[1, 2].map((n) => (
+            <div
+              key={n}
+              className={`h-1 flex-1 rounded-full transition-colors ${
+                n <= step ? "bg-primary" : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {children}
     </div>
   );
@@ -52,15 +87,16 @@ function OnboardingShell({
 export default function OnboardingPage() {
   const posthog = usePostHog();
   const [, setLocation] = useLocation();
-  const [description, setDescription] = useState("");
-  const [isRouting, setIsRouting] = useState(false);
-  const [completionText, setCompletionText] = useState<string>(
-    "Finding the best creators for you..."
-  );
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
-  const [clarifyingAnswer, setClarifyingAnswer] = useState("");
+  const [phase, setPhase] = useState<OnboardingPhase>("step1");
+  const [niche, setNiche] = useState("");
+  const [audience, setAudience] = useState("");
+  const [ahaScript, setAhaScript] = useState<CoachResultScript | null>(null);
+  const [selectedNicheSlugs, setSelectedNicheSlugs] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [progressSteps, setProgressSteps] = useState(() =>
+    buildOnboardingProgressSteps("save_profile")
+  );
+  const pollTimerRef = useRef<number | null>(null);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
 
@@ -80,9 +116,8 @@ export default function OnboardingPage() {
     refetchOnWindowFocus: false,
   });
 
-  const completeMutation = trpc.onboarding.complete.useMutation();
+  const startCreatingMutation = trpc.onboarding.startCreating.useMutation();
   const skipMutation = trpc.onboarding.skip.useMutation();
-  const routeNicheMutation = trpc.onboarding.routeNiche.useMutation();
 
   const shouldBypassOnboarding = useMemo(() => {
     if (!user) return false;
@@ -96,14 +131,51 @@ export default function OnboardingPage() {
   }, [user, onboardingStateQuery.data]);
 
   useEffect(() => {
-    if (shouldBypassOnboarding) {
-      setLocation("/dashboard");
-    }
-  }, [setLocation, shouldBypassOnboarding]);
+    if (!shouldBypassOnboarding || phase === "aha" || phase === "loading" || phase === "step2") return;
+    if (sessionStorage.getItem(ONBOARDING_AHA_SCRIPT_KEY)) return;
+    navigateAppReplace(setLocation, "/dashboard");
+  }, [setLocation, shouldBypassOnboarding, phase]);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current != null) {
+        window.clearInterval(pollTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const state = onboardingStateQuery.data;
+    if (!state?.onboardingCompletedAt || phase !== "step1" || ahaScript) return;
+    const savedIdRaw = sessionStorage.getItem(ONBOARDING_AHA_SCRIPT_KEY);
+    if (!savedIdRaw) return;
+    const savedId = Number(savedIdRaw);
+    if (!Number.isFinite(savedId) || savedId <= 0) return;
+
+    void trpcUtils.studio.get
+      .fetch({ id: savedId })
+      .then((script) => {
+        setAhaScript(script as CoachResultScript);
+        setNiche(state.businessDescription?.trim() || niche);
+        setAudience(state.targetAudience?.trim() || audience);
+        setSelectedNicheSlugs(state.selectedNicheSlugs ?? []);
+        setPhase("aha");
+      })
+      .catch(() => {
+        sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
+        navigateAppReplace(setLocation, "/dashboard");
+      });
+  }, [
+    ahaScript,
+    audience,
+    niche,
+    onboardingStateQuery.data,
+    phase,
+    setLocation,
+    trpcUtils.studio.get,
+  ]);
 
   const onSkip = async () => {
-    setIsCompleting(true);
-    setCompletionText("Picking a great default creator for you...");
     try {
       const result = await skipMutation.mutateAsync();
       if (!result.alreadyDone) {
@@ -116,91 +188,96 @@ export default function OnboardingPage() {
         });
       }
       await trpcUtils.onboarding.getState.invalidate();
-      await trpcUtils.onboarding.getState.refetch();
-      setLocation("/research");
-    } finally {
-      setIsCompleting(false);
+      const skipDestination = isMobileCreateApp() ? "/plan" : "/research";
+      navigateAppReplace(setLocation, skipDestination);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not skip setup");
     }
   };
 
-  const handleSubmit = async () => {
-    const fullDescription =
-      clarifyingQuestion && clarifyingAnswer.trim()
-        ? `${description.trim()}. ${clarifyingAnswer.trim()}`
-        : description.trim();
-
-    if (fullDescription.length < 6) {
-      setSubmitError("Add a few more words so we know your niche.");
-      return;
+  const stopProgressPoll = () => {
+    if (pollTimerRef.current != null) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
     }
+  };
 
-    if (clarifyingQuestion && !clarifyingAnswer.trim()) {
-      setSubmitError("Answer the question above to continue.");
-      return;
-    }
+  const startProgressPoll = (businessDescription: string, targetAudience: string) => {
+    stopProgressPoll();
+    const labels = personalizedOnboardingStepLabels({
+      niche: businessDescription,
+      audience: targetAudience,
+    });
+    setProgressSteps(buildOnboardingProgressSteps("save_profile", undefined, labels));
+
+    void trpcUtils.onboarding.getGenerationProgress
+      .fetch(undefined, { staleTime: 0 })
+      .then((progress) => {
+        if (progress?.steps?.length) setProgressSteps(progress.steps);
+      })
+      .catch(() => undefined);
+
+    pollTimerRef.current = window.setInterval(() => {
+      void trpcUtils.onboarding.getGenerationProgress
+        .fetch(undefined, { staleTime: 0 })
+        .then((progress) => {
+          if (!progress?.steps?.length) return;
+          setProgressSteps(progress.steps);
+        })
+        .catch(() => {
+          // Ignore transient poll errors while the mutation is still running.
+        });
+    }, 800);
+  };
+
+  const runStartCreating = async () => {
+    const businessDescription = niche.trim();
+    const targetAudience = audience.trim();
+    if (businessDescription.length < 3 || targetAudience.length < 3) return;
 
     setSubmitError(null);
-    setIsRouting(true);
-    posthog?.capture("onboarding_submit_started", {
-      has_clarifying_answer: Boolean(clarifyingAnswer.trim()),
-      description_length: fullDescription.length,
-    });
+    setPhase("loading");
+    startProgressPoll(businessDescription, targetAudience);
+
     try {
-      const result = await routeNicheMutation.mutateAsync({
-        businessDescription: fullDescription,
+      const result = await startCreatingMutation.mutateAsync({
+        businessDescription,
+        targetAudience,
       });
 
-      if (result.clarifyingQuestion && !clarifyingAnswer.trim()) {
-        setClarifyingQuestion(result.clarifyingQuestion);
-        setSubmitError("We need one detail about your niche or audience, then tap the button again.");
-        posthog?.capture("onboarding_clarifying_question_shown");
-        return;
+      stopProgressPoll();
+
+      if (!result.script) {
+        throw new Error("Script generation failed. Please try again.");
       }
 
-      posthog?.capture("onboarding_route_success", {
-        niche_count: result.selectedSlugs.length,
-      });
+      setAhaScript(result.script as CoachResultScript);
+      setSelectedNicheSlugs(result.selectedNicheSlugs);
+      sessionStorage.setItem(ONBOARDING_AHA_SCRIPT_KEY, String(result.script.id));
+      setPhase("aha");
 
-      posthog?.capture("onboarding_niches_selected", {
-        niche_slugs: result.selectedSlugs,
-        count: result.selectedSlugs.length,
-        method: "text_input",
-      });
-      setIsCompleting(true);
-      setCompletionText("Finding the best creators for you...");
-      const completeResult = await completeMutation.mutateAsync({
-        selectedNicheSlugs: result.selectedSlugs,
-        businessDescription: fullDescription,
-      });
-      if (!completeResult.alreadyComplete) {
+      if (!result.alreadyComplete) {
         posthog?.capture("onboarding_completed", {
-          niches_selected: result.selectedSlugs.length,
+          niches_selected: result.selectedNicheSlugs.length,
           creators_selected: 0,
-          demo_creator_handle: normalizeAnalyticsHandle(
-            completeResult.demoCreatorHandle ?? ""
-          ),
-          demo_seeded: Boolean(completeResult.demoJobId),
+          demo_creator_handle: normalizeAnalyticsHandle(result.demoCreatorHandle ?? ""),
+          demo_seeded: Boolean(result.demoJobId),
+          first_script_id: result.script.id,
         });
-        posthog?.capture("onboarding_complete_success", {
-          demo_seeded: Boolean(completeResult.demoJobId),
+        posthog?.capture("onboarding_first_script_ready", {
+          script_id: result.script.id,
         });
       }
+
       await trpcUtils.onboarding.getState.invalidate();
-      await trpcUtils.onboarding.getState.refetch();
-      setLocation("/research");
+      void trpcUtils.studio.list.invalidate();
     } catch (err) {
-      console.error("Onboarding submit failed", err);
-      const message =
-        err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      stopProgressPoll();
+      console.error("Onboarding start creating failed", err);
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setSubmitError(message);
-      toast.error("Could not finish setup", { description: message });
-      posthog?.capture("onboarding_submit_failed", {
-        message: message.slice(0, 200),
-        stage: isCompleting ? "complete" : "route",
-      });
-      setIsCompleting(false);
-    } finally {
-      setIsRouting(false);
+      toast.error("Could not create your first script", { description: message });
+      setPhase("step2");
     }
   };
 
@@ -213,144 +290,148 @@ export default function OnboardingPage() {
   }
 
   if (!user) return null;
-  if (shouldBypassOnboarding) return null;
+  if (shouldBypassOnboarding && phase !== "aha" && phase !== "loading" && phase !== "step2") return null;
 
-  if (isRouting || isCompleting || completeMutation.isPending || skipMutation.isPending) {
-    const progressTitle = isRouting && !isCompleting
-      ? "Understanding your niche..."
-      : completionText;
-    const progressHint = isRouting && !isCompleting
-      ? "Usually 10 to 30 seconds. Please keep this tab open."
-      : "This takes a few seconds";
+  if (phase === "loading" || startCreatingMutation.isPending) {
     return (
-      <OnboardingShell>
-        <div className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center px-6 py-16 text-center">
-          <div className="space-y-4">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-              <Loader2 className="h-7 w-7 animate-spin text-primary" />
-            </div>
-            <h2 className="text-3xl tracking-tight text-foreground">{progressTitle}</h2>
-            <p className="max-w-lg text-sm text-muted-foreground">{progressHint}</p>
-          </div>
-        </div>
+      <OnboardingShell showSkip={false} step={null}>
+        <AgentProgressPanel
+          steps={progressSteps}
+          subheadline={`Tailored for ${audience.trim().slice(0, 48) || "your audience"}. Usually 20 to 40 seconds.`}
+          footer={ONBOARDING_AGENT_FOOTER}
+          badgeLabel="Creating"
+        />
       </OnboardingShell>
     );
   }
 
-  return (
-    <OnboardingShell onSkip={onSkip}>
-      <main className="mx-auto w-full max-w-6xl px-6 pb-12">
-        <header className="mb-8 space-y-3 pt-8">
-          <h1 className="text-4xl font-semibold tracking-tight">
-            What do you <span className="italic text-primary">create</span>?
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Stop guessing. See exactly what&apos;s making creators go viral in your niche. Then make
-            that.
-          </p>
-        </header>
+  if (phase === "aha" && ahaScript) {
+    return (
+      <OnboardingShell showSkip={false} step={null}>
+        <OnboardingAhaView
+          script={ahaScript}
+          niche={niche.trim() || "Your niche"}
+          audience={audience.trim() || "Your audience"}
+          selectedNicheSlugs={selectedNicheSlugs}
+        />
+      </OnboardingShell>
+    );
+  }
 
-        <div className="mb-6 max-w-2xl">
-          <p className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
-            Complete this sentence
-          </p>
-          <div className="flex flex-wrap items-baseline gap-3 text-xl font-medium">
-            <span className="whitespace-nowrap text-foreground">I create content about</span>
+  const stepNumber = phase === "step2" ? 2 : 1;
+
+  return (
+    <OnboardingShell onSkip={onSkip} showSkip step={stepNumber}>
+      <main className="mx-auto w-full max-w-2xl px-4 pb-10 pt-6 sm:px-6">
+        {phase === "step1" ? (
+          <>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+              What do you create content about?
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your niche shapes every script the AI writes for you.
+            </p>
             <input
               type="text"
-              value={description}
+              value={niche}
               onChange={(e) => {
-                setDescription(e.target.value);
+                setNiche(e.target.value);
                 setSubmitError(null);
-                setClarifyingQuestion(null);
-                setClarifyingAnswer("");
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && description.trim().length >= 6 && !isRouting) {
-                  handleSubmit();
-                }
+                if (e.key === "Enter" && niche.trim().length >= 3) setPhase("step2");
               }}
-              placeholder="first-time home buyers in Houston..."
+              placeholder="e.g. Fitness, Personal Finance, AI Tools..."
               maxLength={200}
               autoFocus
               autoComplete="off"
-              className="min-w-[220px] flex-1 border-b-2 border-primary bg-transparent px-1 py-0.5 text-xl font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/80 caret-primary"
+              className="mt-5 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition focus:border-primary"
             />
-          </div>
-        </div>
-
-        <p className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
-          Try an example
-        </p>
-        <div className="mb-8 flex max-w-2xl flex-wrap gap-2">
-          {[
-            "fitness for busy moms",
-            "my restaurant in Houston",
-            "real estate tips for first-time buyers",
-            "skincare for people with acne",
-            "business coaching for freelancers",
-            "travel on a budget",
-          ].map((example) => (
-            <button
-              key={example}
-              type="button"
-              disabled={isRouting || isCompleting}
-              onClick={() => {
-                setDescription(example);
-                setSubmitError(null);
-                setClarifyingQuestion(null);
-                setClarifyingAnswer("");
-              }}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-
-        {clarifyingQuestion ? (
-          <div className="mb-8 max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-5">
-            <p className="mb-3 text-sm font-medium text-primary">{clarifyingQuestion}</p>
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Popular niches
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {ONBOARDING_NICHE_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setNiche(chip)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    niche === chip
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+            <div className="mt-8 flex justify-end">
+              <Button
+                type="button"
+                disabled={niche.trim().length < 3}
+                onClick={() => setPhase("step2")}
+              >
+                Continue
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Who are you talking to?</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Be specific. &quot;Busy moms who want to lose weight&quot; beats &quot;women.&quot;
+            </p>
             <input
               type="text"
-              value={clarifyingAnswer}
-              onChange={(e) => setClarifyingAnswer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && clarifyingAnswer.trim().length >= 3 && !isRouting) {
-                  handleSubmit();
-                }
+              value={audience}
+              onChange={(e) => {
+                setAudience(e.target.value);
+                setSubmitError(null);
               }}
-              placeholder="Your niche or who you create for..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && audience.trim().length >= 3) void runStartCreating();
+              }}
+              placeholder="e.g. Busy moms who want to lose 20 lbs..."
+              maxLength={200}
               autoFocus
-              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
+              autoComplete="off"
+              className="mt-5 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none transition focus:border-primary"
             />
-          </div>
-        ) : null}
-
-        {submitError ? (
-          <p className="mb-4 max-w-2xl text-sm text-destructive">{submitError}</p>
-        ) : null}
-
-        <div className="sticky bottom-0 mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/90 px-1 py-4 backdrop-blur">
-          <Button
-            type="button"
-            disabled={description.trim().length < 6 || isRouting || isCompleting}
-            onClick={handleSubmit}
-            className="gap-2"
-          >
-            {isRouting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Finding creators...
-              </>
-            ) : (
-              <>
-                Show me what&apos;s working
-                <ArrowRight className="h-4 w-4" />
-              </>
-            )}
-          </Button>
-        </div>
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Common audiences
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {ONBOARDING_AUDIENCE_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setAudience(chip)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    audience === chip
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+            {submitError ? <p className="mt-4 text-sm text-destructive">{submitError}</p> : null}
+            <div className="mt-8 flex flex-wrap justify-between gap-3">
+              <Button type="button" variant="outline" onClick={() => setPhase("step1")}>
+                Back
+              </Button>
+              <Button
+                type="button"
+                disabled={audience.trim().length < 3 || startCreatingMutation.isPending}
+                onClick={() => void runStartCreating()}
+              >
+                Start creating
+              </Button>
+            </div>
+          </>
+        )}
       </main>
     </OnboardingShell>
   );

@@ -7,13 +7,18 @@ import {
   parseProductionNotes,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
+import { HOOK_VARIATION_LABELS, VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
   ArrowLeft,
   Clock,
   Copy,
   MapPin,
+  BookmarkPlus,
+  Video,
+  Music2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
 
 export type CoachResultScript = {
   id: number;
@@ -116,6 +121,13 @@ type AiCoachResultViewProps = {
   onApplyHook: (hook: string) => void;
   onDismissHookVariations: () => void;
   refinePending: boolean;
+  savePending?: boolean;
+  onSaveToLibrary?: () => void;
+  saveToLibraryPending?: boolean;
+  onFilmNow?: () => void;
+  filmNowPending?: boolean;
+  /** Read-only embed (onboarding aha): hides edit, refine, hook tools, and top actions. */
+  previewMode?: boolean;
 };
 
 export function AiCoachResultView({
@@ -136,12 +148,19 @@ export function AiCoachResultView({
   onApplyHook,
   onDismissHookVariations,
   refinePending,
+  savePending,
+  onSaveToLibrary,
+  saveToLibraryPending,
+  onFilmNow,
+  filmNowPending,
+  previewMode = false,
 }: AiCoachResultViewProps) {
   const refineInputRef = useRef<HTMLInputElement>(null);
   const formatKey = result.contentFormat ?? "";
   const formatLabel =
     result.formatLabel ?? PLAN_FORMAT_LABELS[formatKey] ?? formatKey.replace(/-/g, " ");
   const production = parseProductionNotes(result.productionNotes);
+  const hookOnScreenText = production?.hookOnScreenText?.trim() || "";
 
   const sections: CoachScriptSections = {
     explain: result.explain,
@@ -155,6 +174,7 @@ export function AiCoachResultView({
       title: result.title,
       hook: result.hook,
       sections,
+      userFriendly: true,
     });
     try {
       await navigator.clipboard.writeText(text);
@@ -168,15 +188,42 @@ export function AiCoachResultView({
     <div className="min-h-full bg-[#fafafa] dark:bg-gray-950/40 -mx-2 sm:-mx-4 px-2 sm:px-4 py-6">
       <div className="max-w-[1120px] mx-auto px-2 sm:px-4">
         <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
-          <button
-            type="button"
-            onClick={onReset}
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            New idea
-          </button>
-          <div className="flex gap-2 flex-wrap">
+            {!previewMode ? (
+              <button
+                type="button"
+                onClick={onReset}
+                className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                New script
+              </button>
+            ) : (
+              <div />
+            )}
+            {!previewMode ? (
+            <div className="flex gap-2 flex-wrap justify-end">
+              {onFilmNow ? (
+                <button
+                  type="button"
+                  onClick={onFilmNow}
+                  disabled={filmNowPending}
+                  className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-60"
+                >
+                  <Video className="h-4 w-4" />
+                  {filmNowPending ? "Opening teleprompter..." : "Film now"}
+                </button>
+              ) : null}
+              {onSaveToLibrary ? (
+                <button
+                  type="button"
+                  onClick={onSaveToLibrary}
+                  disabled={saveToLibraryPending}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5" />
+                  {saveToLibraryPending ? "Saving..." : "Save to library"}
+                </button>
+              ) : null}
             <button
               type="button"
               onClick={copyScript}
@@ -186,6 +233,7 @@ export function AiCoachResultView({
               Copy script
             </button>
           </div>
+            ) : null}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
@@ -223,10 +271,12 @@ export function AiCoachResultView({
               <section className="rounded-2xl p-5 border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500">
                 <div className="flex gap-2.5 items-start mb-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
-                    H
+                    1
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">Hook</div>
+                    <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                      {VIRAL_SCRIPT_SECTION_LABELS.hook}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       First 2 seconds. Stop the scroll. No warm-up.
                     </p>
@@ -243,16 +293,29 @@ export function AiCoachResultView({
                     {result.hook}
                   </div>
                 )}
-                {!editMode && (
+                {!editMode && hookOnScreenText ? (
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_100px] sm:items-start">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        On-screen text (first 2 sec)
+                      </p>
+                      <div className="mt-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold dark:border-gray-700 dark:bg-gray-900">
+                        {hookOnScreenText}
+                      </div>
+                    </div>
+                    <ReelPreviewPhone onScreenText={hookOnScreenText} compact />
+                  </div>
+                ) : null}
+                {!editMode && !previewMode ? (
                   <button
                     type="button"
                     className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
                     onClick={onRequestHookVariations}
                     disabled={hookVariationsPending}
                   >
-                    {hookVariationsPending ? "Generating..." : "Try 3 alternative hooks"}
+                    {hookVariationsPending ? "Generating..." : "Try 3 new hook ideas"}
                   </button>
-                )}
+                ) : null}
                 {hookVariations && (
                   <div className="mt-3 space-y-2">
                     {Object.entries(hookVariations).map(([type, text]) => (
@@ -261,7 +324,9 @@ export function AiCoachResultView({
                         className="flex items-start gap-2 p-3 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">{type}</p>
+                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">
+                            {HOOK_VARIATION_LABELS[type as keyof typeof HOOK_VARIATION_LABELS] ?? type}
+                          </p>
                           <p className="text-sm">{text}</p>
                         </div>
                         <button
@@ -285,10 +350,10 @@ export function AiCoachResultView({
               </section>
 
               <HeitSection
-                badge="E"
+                badge="2"
                 badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label="Explain"
-                subtitle="Name the problem. Show it is bigger than they think. Build tension. Do not solve it yet."
+                label={VIRAL_SCRIPT_SECTION_LABELS.problem}
+                subtitle="Name the problem. Show it is bigger than they think. Build tension."
                 cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
                 value={editMode ? editDraft.explain : result.explain}
                 editMode={editMode}
@@ -296,9 +361,9 @@ export function AiCoachResultView({
               />
 
               <HeitSection
-                badge="I"
+                badge="3"
                 badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label="Illustrate"
+                label={VIRAL_SCRIPT_SECTION_LABELS.story}
                 subtitle="One specific story or example. Concrete details so they see themselves in it."
                 cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
                 value={editMode ? editDraft.illustrate : result.illustrate}
@@ -307,9 +372,9 @@ export function AiCoachResultView({
               />
 
               <HeitSection
-                badge="T"
+                badge="4"
                 badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label="Teach"
+                label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
                 subtitle="ONE clear takeaway. Not a list. One thing they should do differently."
                 cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
                 value={editMode ? editDraft.teach : result.teach}
@@ -319,9 +384,9 @@ export function AiCoachResultView({
               />
 
               <HeitSection
-                badge="CTA"
+                badge="5"
                 badgeClass="bg-orange-500 text-white"
-                label="Call to Action"
+                label={VIRAL_SCRIPT_SECTION_LABELS.cta}
                 subtitle="Tell them exactly what to do next. One thing only."
                 cardClass="border-orange-200 bg-orange-50 border-l-[3px] border-l-orange-500 dark:bg-orange-950/30 dark:border-orange-800"
                 labelClass="text-orange-700 dark:text-orange-300"
@@ -332,16 +397,18 @@ export function AiCoachResultView({
               />
             </div>
 
+            {!previewMode ? (
             <div className="pt-2 space-y-3">
               <div className="flex gap-2 flex-wrap">
                 {editMode ? (
                   <>
                     <button
                       type="button"
-                      className="text-sm font-medium px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700"
+                      className="text-sm font-medium px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60"
                       onClick={onSaveEdits}
+                      disabled={savePending}
                     >
-                      Save edits
+                      {savePending ? "Saving..." : "Save script"}
                     </button>
                     <button
                       type="button"
@@ -384,6 +451,7 @@ export function AiCoachResultView({
                 />
               )}
             </div>
+            ) : null}
           </main>
 
           <aside className="space-y-4 lg:sticky lg:top-6">
@@ -423,14 +491,64 @@ export function AiCoachResultView({
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.voiceTone}</p>
                 </div>
               )}
-              {production?.music && (
+              {production?.instagramAudio && production.instagramAudio.length > 0 ? (
                 <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Music2 className="h-3.5 w-3.5" />
+                    Instagram audio
+                  </p>
+                  <div className="space-y-2">
+                    {production.instagramAudio.map((pick, i) => (
+                      <div
+                        key={`${pick.searchHint}-${i}`}
+                        className="rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-3"
+                      >
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          {i === 0 ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wide bg-violet-600 text-white px-2 py-0.5 rounded-full">
+                              Use this
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase tracking-wide bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-0.5 rounded-full">
+                              Backup
+                            </span>
+                          )}
+                          {pick.isTrending ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-orange-600 dark:text-orange-400">
+                              Trending
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">
+                          {pick.title}
+                          {pick.artist ? (
+                            <span className="font-normal text-muted-foreground"> · {pick.artist}</span>
+                          ) : null}
+                        </p>
+                        <p className="text-xs font-medium text-violet-700 dark:text-violet-300 mt-1">
+                          Search in Reels: &quot;{pick.searchHint}&quot;
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                          {pick.matchReason}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {production.musicMix ? (
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
+                      {production.musicMix}
+                    </p>
+                  ) : null}
+                </div>
+              ) : production?.music ? (
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                    <Music2 className="h-3.5 w-3.5" />
                     Music
                   </p>
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.music}</p>
                 </div>
-              )}
+              ) : null}
               {production?.bRoll && production.bRoll.length > 0 && (
                 <div className="mb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
@@ -453,7 +571,10 @@ export function AiCoachResultView({
                   </span>
                 </div>
               )}
-              {!production?.setup && !production?.voiceTone && !production?.music && (
+              {!production?.setup &&
+                !production?.voiceTone &&
+                !production?.music &&
+                !production?.instagramAudio?.length && (
                 <p className="text-sm text-muted-foreground">
                   Production directions will appear here after generation.
                 </p>
@@ -476,7 +597,7 @@ export function AiCoachResultView({
                 className="flex items-center gap-2 w-full text-left text-sm font-medium text-violet-600 hover:text-violet-700 hover:underline py-2"
               >
                 <ArrowLeft className="h-4 w-4 shrink-0" />
-                New idea
+                New script
               </button>
             </div>
           </aside>

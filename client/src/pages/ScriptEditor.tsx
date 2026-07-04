@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
-import { useRoute, useLocation } from "wouter";
+import { useAppBack } from "@/hooks/useAppBack";
+import { useRoute, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
   Save,
@@ -79,6 +80,7 @@ import {
   isStatusOnlyScriptUpdate,
   type ScriptEditorBaseline,
 } from "@/lib/scriptEditorBaseline";
+import { shouldAutoOpenFilm } from "@shared/scriptFilm";
 
 /** Parse a date string/Date to a Date object for the calendar picker */
 function parseDateValue(
@@ -94,6 +96,8 @@ type ActiveTool = null | "rewrite" | "angle" | "selection";
 export default function ScriptEditor() {
   const [, params] = useRoute("/scripts/:id");
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const handleBack = useAppBack("/scripts");
   const scriptId = params?.id ? parseInt(params.id) : null;
 
   const [editedContent, setEditedContent] = useState("");
@@ -103,6 +107,7 @@ export default function ScriptEditor() {
   const [postTime, setPostTime] = useState("09:00");
   const [savedBaseline, setSavedBaseline] = useState<ScriptEditorBaseline | null>(null);
   const [showTeleprompter, setShowTeleprompter] = useState(false);
+  const filmAutoOpenRef = useRef(false);
   const [activeTab, setActiveTab] = useState<"edit" | "versions">("edit");
 
   // AI tool states
@@ -181,6 +186,20 @@ export default function ScriptEditor() {
       setCaptionStyle((script as { captionStyle: string }).captionStyle);
     }
   }, [script?.id]);
+
+  useEffect(() => {
+    filmAutoOpenRef.current = false;
+  }, [scriptId]);
+
+  useEffect(() => {
+    if (!script || !editedContent.trim() || filmAutoOpenRef.current) return;
+    if (!shouldAutoOpenFilm(searchString)) return;
+    filmAutoOpenRef.current = true;
+    setShowTeleprompter(true);
+    if (scriptId) {
+      navigate(`/scripts/${scriptId}`, { replace: true });
+    }
+  }, [script, editedContent, searchString, scriptId, navigate]);
 
   const posthog = usePostHog();
 
@@ -440,7 +459,7 @@ export default function ScriptEditor() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/scripts")}
+              onClick={handleBack}
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>

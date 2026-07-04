@@ -645,7 +645,7 @@ export function TeleprompterMode({
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* Top Control Bar */}
-      <div className="shrink-0 bg-black/90 border-b border-white/10 px-4 py-2 flex items-center justify-between backdrop-blur-sm">
+      <div className="shrink-0 bg-black/90 border-b border-white/10 px-4 py-2 pt-safe flex items-center justify-between backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -982,7 +982,7 @@ export function TeleprompterMode({
       </div>
 
       {/* Bottom hints */}
-      <div className="shrink-0 bg-black/90 border-t border-white/10 px-4 py-1.5 flex items-center justify-center gap-6 text-[10px] text-white/30">
+      <div className="shrink-0 bg-black/90 border-t border-white/10 px-4 py-1.5 pb-safe flex items-center justify-center gap-6 text-[10px] text-white/30">
         {voiceMode ? (
           <>
             <span className="text-primary/60">Voice Mode Active</span>

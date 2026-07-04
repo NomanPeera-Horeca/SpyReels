@@ -1,5 +1,6 @@
 import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
 import posthogRollup from "@posthog/rollup-plugin";
+import { VitePWA } from "vite-plugin-pwa";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
@@ -152,7 +153,79 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+const SPYREELS_PWA_ICON_192 = "/pwa/icon-192.png";
+const SPYREELS_PWA_ICON_512 = "/pwa/icon-512.png";
+
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector(),
+  VitePWA({
+    registerType: "autoUpdate",
+    includeAssets: [],
+    manifest: {
+      name: "SpyReels",
+      short_name: "SpyReels",
+      description:
+        "Write viral scripts, film with teleprompter, and manage content on the go.",
+      theme_color: "#7c3aed",
+      background_color: "#121218",
+      display: "standalone",
+      orientation: "portrait-primary",
+      scope: "/",
+      start_url: "/plan",
+      categories: ["productivity", "social"],
+      icons: [
+        {
+          src: SPYREELS_PWA_ICON_192,
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "any",
+        },
+        {
+          src: SPYREELS_PWA_ICON_512,
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "any",
+        },
+        {
+          src: SPYREELS_PWA_ICON_512,
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
+        },
+      ],
+    },
+    workbox: {
+      navigateFallback: "/index.html",
+      navigateFallbackDenylist: [/^\/api\//],
+      globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      runtimeCaching: [
+        {
+          urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+          handler: "CacheFirst",
+          options: {
+            cacheName: "google-fonts-cache",
+            expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+          },
+        },
+        {
+          urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+          handler: "CacheFirst",
+          options: {
+            cacheName: "gstatic-fonts-cache",
+            expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+          },
+        },
+      ],
+    },
+    devOptions: {
+      enabled: false,
+    },
+  }),
+];
 
 const discoveryV1EnabledForClient = parseDiscoveryV1Enabled(
   process.env.DISCOVERY_V1_ENABLED ?? process.env.VITE_DISCOVERY_V1_ENABLED,
@@ -179,7 +252,7 @@ export default defineConfig(({ mode }) => {
           releaseName: "spyreels",
           deleteAfterUpload: true,
         },
-      })
+      }) as Plugin
     );
   }
 

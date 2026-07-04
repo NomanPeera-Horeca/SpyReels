@@ -54,7 +54,7 @@ import {
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
@@ -68,6 +68,12 @@ import {
   useTheme,
 } from "@/contexts/ThemeContext";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
+import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
@@ -84,7 +90,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/scripts": "Your AI-generated scripts library",
   "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
-  "/studio": "AI personal brand coach for HEIT scripts",
+  "/studio": "AI Coach for viral Reel scripts",
   "/library":
     "Saved reel transcripts and scripts (from research, collects, and the script tools)",
   "/saved": "Reels you bookmarked for later",
@@ -96,6 +102,117 @@ const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
+
+type SidebarNavItem = {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+  badge?: "new";
+  featured?: boolean;
+};
+
+type SidebarNavSection = {
+  id: string;
+  label: string;
+  items: SidebarNavItem[];
+};
+
+function buildNavSections(): SidebarNavSection[] {
+  return [
+    {
+      id: "create",
+      label: "Create",
+      items: [
+        { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
+        { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
+        { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
+        { icon: FileText, label: "My Scripts", path: "/scripts" },
+        { icon: Library, label: "Transcripts & Scripts", path: "/library" },
+        { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
+      ],
+    },
+    {
+      id: "discover",
+      label: "Discover",
+      items: [
+        ...(isDiscoveryV1Enabled
+          ? [
+              { icon: Compass, label: "Discovery", path: "/discovery" as const },
+              {
+                icon: Users,
+                label: "Discover Creators",
+                path: "/discover-creators" as const,
+              },
+            ]
+          : []),
+        { icon: Search, label: "Spy Viral Reels", path: "/research" },
+        { icon: Inbox, label: "Collected Reels", path: "/collected" },
+        { icon: Radar, label: "Creator Radar", path: "/history" },
+        { icon: Bookmark, label: "Saved Reels", path: "/saved" },
+      ],
+    },
+    {
+      id: "overview",
+      label: "Overview",
+      items: [{ icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" }],
+    },
+    {
+      id: "account",
+      label: "Account",
+      items: [
+        { icon: Settings, label: "Settings", path: "/settings" },
+        { icon: CreditCard, label: "Billing", path: "/billing" },
+      ],
+    },
+  ];
+}
+
+function isSidebarPathActive(location: string, path: string): boolean {
+  if (path === "/research") {
+    return location === "/research" || location === "/";
+  }
+  if (path === "/scripts") {
+    return location === "/scripts" || location.startsWith("/scripts/");
+  }
+  if (path === "/admin") {
+    return location === "/admin" || location.startsWith("/admin/");
+  }
+  return location === path;
+}
+
+function SidebarNicheCard({
+  nicheLabel,
+  targetAudience,
+}: {
+  nicheLabel: string;
+  targetAudience: string | null;
+}) {
+  return (
+    <div className="mx-2 mb-2 rounded-xl border border-sidebar-border bg-background px-3 py-2.5 group-data-[collapsible=icon]:hidden">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Your niche
+      </p>
+      <p className="text-sm font-semibold leading-tight text-foreground">{nicheLabel}</p>
+      {targetAudience ? (
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{targetAudience}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function NavBadge({ active, kind }: { active: boolean; kind: "new" }) {
+  if (kind !== "new") return null;
+  return (
+    <span
+      className={cn(
+        "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground"
+      )}
+    >
+      NEW
+    </span>
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -147,6 +264,7 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   useActivityHeartbeat(Boolean(user));
   const [location, setLocation] = useLocation();
+  const searchString = useSearch();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { activeJob: activeRunningJob } = useActiveScrapeJob();
@@ -154,33 +272,29 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { themePreference, setThemePreference, switchable } = useTheme();
+  const navSections = buildNavSections();
+  const flatNavItems = navSections.flatMap((section) => section.items);
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    ...(isDiscoveryV1Enabled
-      ? [
-          { icon: Compass, label: "Discovery", path: "/discovery" as const },
-          {
-            icon: Users,
-            label: "Discover Creators",
-            path: "/discover-creators" as const,
-          },
-        ]
-      : []),
-    { icon: Search, label: "Spy Viral Reels", path: "/research" },
-    { icon: Inbox, label: "Collected Reels", path: "/collected" },
-    { icon: Radar, label: "Creator Radar", path: "/history" },
-    { icon: FileText, label: "My Scripts", path: "/scripts" },
-    { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-    { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
-    { icon: Sparkles, label: "AI Coach", path: "/studio" },
-    { icon: Library, label: "Transcripts & Scripts", path: "/library" },
-    { icon: Bookmark, label: "Saved Reels", path: "/saved" },
-    { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
-    { icon: Settings, label: "Settings", path: "/settings" },
-    { icon: CreditCard, label: "Billing", path: "/billing" },
-  ];
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+
+  const nicheLabel = (() => {
+    const slugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
+    const first = typeof slugs[0] === "string" ? slugs[0].trim() : "";
+    if (first) return formatReelTaxonomyLabel(first);
+    return "Content creator";
+  })();
+
+  const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
+
+  const activeMenuItem =
+    flatNavItems.find((item) => isSidebarPathActive(location, item.path)) ??
+    adminMenuItems.find((item) => isSidebarPathActive(location, item.path));
+
+  useEffect(() => {
+    recordAppNavigation(getCurrentAppPath());
+  }, [location, searchString]);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -254,81 +368,85 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
+          {!isCollapsed ? (
+            <SidebarNicheCard nicheLabel={nicheLabel} targetAudience={targetAudience} />
+          ) : null}
+
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <Fragment key={item.path}>
-                    {item.label === "Dashboard" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Overview
-                      </div>
-                    )}
-                    {item.path === "/research" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Discover
-                      </div>
-                    )}
-                    {item.label === "My Scripts" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Create
-                      </div>
-                    )}
-                    {item.label === "Settings" && (
-                      <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Account
-                      </div>
-                    )}
-                    <SidebarMenuItem>
-                      {(() => {
-                        const mockupTooltip = SIDEBAR_NAV_TOOLTIPS[item.path];
-                        const button = (
-                          <SidebarMenuButton
-                            isActive={isActive}
-                            onClick={() => {
-                              if (!isActive) setLocation(item.path);
-                            }}
-                            tooltip={mockupTooltip ? undefined : item.label}
-                            className="h-10 transition-all font-normal"
-                          >
-                            <item.icon
-                              className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                            />
-                            <span>{item.label}</span>
-                          </SidebarMenuButton>
-                        );
-                        return mockupTooltip ? (
+              {navSections.map((section) => (
+                <Fragment key={section.id}>
+                  <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                    {section.label}
+                  </div>
+                  {section.items.map((item) => {
+                    const isActive = isSidebarPathActive(location, item.path);
+                    const mockupTooltip = SIDEBAR_NAV_TOOLTIPS[item.path];
+                    const button = (
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => {
+                          if (!isActive) setLocation(item.path);
+                        }}
+                        tooltip={mockupTooltip ? undefined : item.label}
+                        className={cn(
+                          "h-10 transition-all font-normal",
+                          isActive &&
+                            "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground [&>svg]:text-primary-foreground",
+                          !isActive &&
+                            item.featured &&
+                            "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary data-[active=true]:bg-primary/10"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                        {item.badge ? <NavBadge active={isActive} kind={item.badge} /> : null}
+                      </SidebarMenuButton>
+                    );
+
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        {mockupTooltip ? (
                           <Tooltip content={mockupTooltip} side="right">
                             {button}
                           </Tooltip>
                         ) : (
                           button
-                        );
-                      })()}
-                    </SidebarMenuItem>
-                  </Fragment>
-                );
-              })}
-              {user?.email === import.meta.env.VITE_ADMIN_EMAIL &&
-                adminMenuItems.map(item => {
-                  const isActive = location === item.path;
-                  return (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-10 transition-all font-normal"
-                      >
-                        <item.icon
-                          className={`h-4 w-4 ${isActive ? "text-primary" : "text-purple-400"}`}
-                        />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </Fragment>
+              ))}
+              {user?.email === import.meta.env.VITE_ADMIN_EMAIL ? (
+                <>
+                  <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                    Admin
+                  </div>
+                  {adminMenuItems.map((item) => {
+                    const isActive = isSidebarPathActive(location, item.path);
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => {
+                            if (!isActive) setLocation(item.path);
+                          }}
+                          tooltip={item.label}
+                          className={cn(
+                            "h-10 transition-all font-normal",
+                            isActive &&
+                              "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground [&>svg]:text-primary-foreground"
+                          )}
+                        >
+                          <item.icon className={`h-4 w-4 ${isActive ? "" : "text-purple-400"}`} />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </>
+              ) : null}
             </SidebarMenu>
           </SidebarContent>
 
@@ -402,7 +520,7 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="sticky top-0 z-40 flex min-h-mobile-header items-center justify-between border-b bg-background/95 px-2 pt-safe backdrop-blur supports-[backdrop-filter]:backdrop-blur">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
@@ -415,7 +533,10 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-4 pb-safe-main px-safe md:p-6 md:pb-6">
+          <PwaInstallBanner />
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

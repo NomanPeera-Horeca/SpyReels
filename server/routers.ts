@@ -56,6 +56,7 @@ import {
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { planRouter, studioRouter } from "./routers/planCoachRouter";
+import { audienceResearchRouter } from "./routers/audienceResearchRouter";
 import {
   buildPanelUserReport,
   panelUserFiltersSchema,
@@ -86,6 +87,10 @@ import {
   parseCalendarHint,
   pickAutoPostSchedule,
 } from "./ideaScriptExtras";
+import { runOnboardingStartCreating } from "./onboardingStartCreating";
+import { expandHookToScript } from "./hookGeneratorExpandScript";
+import { buildHookTeaserPartial } from "@shared/hookGenerator";
+import { getOnboardingGenerationProgress } from "./onboardingGenerationProgress";
 import { ONBOARDING_NICHES } from "@/data/onboardingNiches";
 import {
   createScrapeJob,
@@ -364,10 +369,11 @@ const HOOK_GENERATOR_JSON_SCHEMA = {
           type: "object",
           properties: {
             hook: { type: "string" },
+            onScreenText: { type: "string" },
             pattern: { type: "string" },
             reasoning: { type: "string" },
           },
-          required: ["hook", "pattern", "reasoning"],
+          required: ["hook", "onScreenText", "pattern", "reasoning"],
           additionalProperties: false,
         },
       },
@@ -380,12 +386,18 @@ const HOOK_GENERATOR_JSON_SCHEMA = {
 const hookGeneratorRouter = router({
   generate: publicProcedure
     .input(z.object({
-      niche: z.string().min(2).max(500),
-      targetAudience: z.string().min(2).max(500),
+      content: z.string().min(10).max(500),
+      hookStyle: z.string().max(64).optional(),
+      videoFormat: z.string().max(64).optional(),
+      tone: z.string().max(64).optional(),
     }))
     .mutation(async ({ input }) => {
       try {
       const startedAt = Date.now();
+      const reelContent = input.content.trim();
+      const styleHint = input.hookStyle?.trim() || "mix of viral patterns";
+      const formatHint = input.videoFormat?.trim() || "talking head";
+      const toneHint = input.tone?.trim() || "direct and authentic";
       const response = await invokeLLM({
         messages: [
           {
@@ -398,26 +410,31 @@ const hookGeneratorRouter = router({
             role: "user",
             content: `Write viral Instagram Reels hooks.
 
-Video idea: "${input.niche}"
-Target audience: "${input.targetAudience}"
+Reel content (idea, outline, or script draft): "${reelContent}"
+Hook style preference: ${styleHint}
+Video format: ${formatHint}
+Tone: ${toneHint}
 
 INPUT INTERPRETATION:
-The user gave a video idea and a target audience. Use both:
-- WHAT they're making content about → the video idea above
-- WHO their likely audience is → the target audience above
-- WHAT specific angle or hook would resonate with that audience watching that video
+- Use the reel content for topic, angle, and specific details
+- Infer the target audience from the content when not stated explicitly
 
-CRITICAL RULES:
-- Each hook is 6 to 14 words. Vary the length across the set.
+SPOKEN HOOK RULES (field: hook):
+- 6 to 14 words. Vary length across the set.
+- This is what the creator SAYS on camera in the first 2 seconds.
 - Use specific numbers, dollar amounts, or time frames where natural.
-- Each hook must work as the FIRST sentence spoken or shown on screen.
-- Optimize for the 2-second scroll-stop, not engagement throughout.
 - No em dashes anywhere.
 - No clichés: avoid "Did you know", "Here is the thing", "Get ready", "Wait until you see", "POV:", "Tell me why", "Imagine if", "What if I told you".
 - Each hook should feel like a real creator wrote it, not AI.
-- Match the language, jargon, and pain points of "${input.targetAudience}".
 
-PATTERN MIX (use these as inspiration, not a strict checklist):
+ON-SCREEN TEXT RULES (field: onScreenText):
+- 3 to 7 words, maximum 30 characters total.
+- ALL CAPS or Title Case for emphasis. Short punchy phrase.
+- Must use DIFFERENT words than the spoken hook (complementary, not duplicate).
+- Designed for white text on a semi-transparent black box in the upper third of a vertical Reel.
+- Must fit Instagram safe zone (center 80%, avoid bottom UI strip).
+
+PATTERN MIX (use as inspiration):
 
 Cost reveal: "I was paying $4,000 a month on X until I changed this"
 Mistake call-out: "Stop doing X if you actually want Y"
@@ -431,25 +448,25 @@ Authority flip: "I am a [credential]. Here is what your [field] will not tell yo
 Question hook: "Why does X never work the way they promise?"
 
 QUALITY CHECK before outputting:
-- Would a real creator making this video actually say this on camera?
-- Would this resonate with ${input.targetAudience}?
-- Are the first 3 words attention-grabbing?
-- Does it promise a specific payoff or reveal?
-- Is it meaningfully different from the other hooks?
-- Does it avoid sounding like AI?
+- Would a real creator making this video actually say the spoken hook on camera?
+- Is onScreenText short enough to read in under 2 seconds on a phone?
+- Are onScreenText words different from the spoken hook?
+- Are the first 3 words of the spoken hook attention-grabbing?
+- Is each hook meaningfully different from the others?
 
 Return JSON with this exact structure:
 {
   "hooks": [
     {
-      "hook": "<the hook line, 6 to 14 words, no quotes, no em dashes>",
+      "hook": "<spoken line, 6 to 14 words>",
+      "onScreenText": "<3 to 7 words, max 30 chars, different from spoken>",
       "pattern": "<one of: cost_reveal | mistake_callout | result_first | curiosity_loop | contrarian | specific_number | personal_stake | time_bound | authority_flip | question_hook>",
-      "reasoning": "<one short sentence explaining why this works for this specific video>"
+      "reasoning": "<one short sentence explaining why this works>"
     }
   ]
 }
 
-The hooks array must contain exactly 10 unique items. No two hooks should sound similar in structure or wording. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
+The hooks array must contain exactly 10 unique items. No two hooks should sound similar. Do not use em dashes anywhere. Do not include any text outside the JSON object.`
           },
         ],
         response_format: {
@@ -460,7 +477,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       const raw = String(response.choices[0]?.message?.content ?? "").trim();
 
-      let parsed: { hooks?: Array<{ hook?: unknown; pattern?: unknown; reasoning?: unknown }> };
+      let parsed: { hooks?: Array<{ hook?: unknown; onScreenText?: unknown; pattern?: unknown; reasoning?: unknown }> };
       try {
         parsed = sanitizeAiOutputDeep(JSON.parse(raw));
       } catch {
@@ -479,6 +496,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       const hooks = parsed.hooks.slice(0, 10).map(h => ({
         hook: String(h.hook ?? "").trim(),
+        onScreenText: String(h.onScreenText ?? "").trim().slice(0, 30),
         pattern: String(h.pattern ?? "").trim(),
         reasoning: String(h.reasoning ?? "").trim(),
       })).filter(h => h.hook.length > 0);
@@ -492,8 +510,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       const sessionToken = Buffer.from(
         JSON.stringify({
-          niche: input.niche,
-          targetAudience: input.targetAudience,
+          content: reelContent,
           hooks,
           ts: Date.now(),
         })
@@ -504,8 +521,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         event: "hook_generator_completed",
         properties: {
           pipeline: "hook_generator",
-          video_idea: input.niche.slice(0, 500),
-          target_audience: input.targetAudience.slice(0, 500),
+          video_idea: reelContent.slice(0, 500),
           hooks_count: hooks.length,
           first_hook: hooks[0]?.hook?.slice(0, 200) ?? null,
           duration_ms: Date.now() - startedAt,
@@ -513,9 +529,14 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         },
       });
 
+      const locked = hooks.slice(2);
       return {
         free: hooks.slice(0, 2),
         lockedCount: Math.max(0, hooks.length - 2),
+        teasers: locked.map((h) => ({
+          pattern: h.pattern,
+          partial: buildHookTeaserPartial(h.hook),
+        })),
         sessionToken,
       };
       } catch (error) {
@@ -538,9 +559,10 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
     }))
     .mutation(async ({ ctx, input }) => {
       let session: {
+        content?: string;
         niche?: string;
         targetAudience?: string;
-        hooks?: Array<{ hook: string; pattern: string; reasoning: string }>;
+        hooks?: Array<{ hook: string; onScreenText?: string; pattern: string; reasoning: string }>;
         ts?: number;
       };
       try {
@@ -552,12 +574,19 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
         });
       }
 
+      const reelContent =
+        typeof session.content === "string" && session.content.trim()
+          ? session.content.trim()
+          : typeof session.niche === "string" && session.niche.trim()
+            ? session.niche.trim()
+            : "";
+
       const targetAudience =
         typeof session.targetAudience === "string" && session.targetAudience.trim()
           ? session.targetAudience.trim()
-          : "Instagram audience";
+          : "Instagram Reels viewers";
 
-      if (!session.niche || !session.hooks || !session.ts || Date.now() - session.ts > 1000 * 60 * 30) {
+      if (!reelContent || !session.hooks || !session.ts || Date.now() - session.ts > 1000 * 60 * 30) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Session expired. Please regenerate your hooks.",
@@ -580,7 +609,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       const insertResult = await db.insert(hookGeneratorLeads).values({
         email: input.email,
-        niche: session.niche,
+        niche: reelContent,
         targetAudience,
         hooksGenerated: session.hooks,
         utmSource: input.utmSource ?? null,
@@ -594,7 +623,7 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
       try {
         await sendHookGeneratorHooksEmail(
           input.email,
-          session.niche,
+          reelContent,
           session.hooks,
           targetAudience
         );
@@ -608,9 +637,35 @@ The hooks array must contain exactly 10 unique items. No two hooks should sound 
 
       return {
         hooks: session.hooks,
-        niche: session.niche,
+        content: reelContent,
       };
       }),
+
+  expandToScript: protectedProcedure
+    .input(z.object({
+      reelContent: z.string().min(10).max(500),
+      hook: z.string().min(3).max(500),
+      onScreenText: z.string().min(2).max(30),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await expandHookToScript({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          openId: ctx.user.openId,
+          reelContent: input.reelContent.trim(),
+          hook: input.hook.trim(),
+          onScreenText: input.onScreenText.trim(),
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error("[Hook generator] expandToScript failed:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: formatIdeaScriptErrorForUser(error, "script"),
+        });
+      }
+    }),
 });
 
 function firstDayOfNextMonthUtc(): string {
@@ -5000,6 +5055,30 @@ The hook MUST be 7-10 words. Count them.`),
       }),
 
     /**
+     * 2-step onboarding finish: save niche + audience, generate first script, then mark complete.
+     */
+    startCreating: protectedProcedure
+      .input(
+        z.object({
+          businessDescription: z.string().min(3).max(500),
+          targetAudience: z.string().min(3).max(500),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return runOnboardingStartCreating({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          openId: ctx.user.openId,
+          businessDescription: input.businessDescription,
+          targetAudience: input.targetAudience,
+        });
+      }),
+
+    getGenerationProgress: protectedProcedure.query(({ ctx }) => {
+      return getOnboardingGenerationProgress(ctx.user.id);
+    }),
+
+    /**
      * Finalizes /onboarding: records the user's niche picks, optionally
      * seeds a demo scrape for the creator they chose, and stamps the
      * completion timestamp. Robust to every failure mode — per the
@@ -6700,6 +6779,7 @@ The hook MUST be 7-10 words. Count them.`),
 
   plan: planRouter,
   studio: studioRouter,
+  audienceResearch: audienceResearchRouter,
 });
 
 export type AppRouter = typeof appRouter;

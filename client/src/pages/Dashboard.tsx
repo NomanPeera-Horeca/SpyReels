@@ -88,6 +88,8 @@ import {
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { REEL_NICHE_VALUES, formatReelTaxonomyLabel } from "@shared/reelNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
+import { resolveFromParamFallback } from "@shared/appNavigation";
+import { useAppBack } from "@/hooks/useAppBack";
 
 type SortOption =
   | "views_desc"
@@ -315,6 +317,7 @@ export default function Dashboard() {
     const params = new URLSearchParams(searchString);
     return params.get("from") || null;
   }, [searchString]);
+  const handleDashboardBack = useAppBack(resolveFromParamFallback(fromPage));
   const urlFeaturedReelId = useMemo(() => {
     const params = new URLSearchParams(searchString);
     const raw = params.get("featuredReelId");
@@ -1346,8 +1349,8 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-1">{message}</p>
           <div className="mt-5 flex items-center justify-center gap-2">
             <Button onClick={() => featuredDataQuery.refetch()}>Retry</Button>
-            <Button variant="outline" onClick={() => setLocation("/")}>
-              Back to Spy Viral Reels
+            <Button variant="outline" onClick={handleDashboardBack}>
+              Back
             </Button>
           </div>
         </div>
@@ -1966,14 +1969,7 @@ export default function Dashboard() {
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0 mt-1 shrink-0"
-                    onClick={() => {
-                      if (fromPage === "history") setLocation("/history");
-                      else if (fromPage === "research") setLocation("/");
-                      else if (fromPage === "dashboard") setLocation("/dashboard");
-                      else if (fromPage === "discover-creators")
-                        setLocation("/discover-creators");
-                      else setLocation("/history");
-                    }}
+                    onClick={handleDashboardBack}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
@@ -2097,20 +2093,8 @@ export default function Dashboard() {
             ) : (
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <Tooltip content="Back to Spy Viral Reels">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => {
-                      if (fromPage === "history") {
-                        setLocation("/history");
-                      } else if (fromPage === "research") {
-                        setLocation("/");
-                      } else if (fromPage === "dashboard") {
-                        setLocation("/dashboard");
-                      } else if (fromPage === "discover-creators") {
-                        setLocation("/discover-creators");
-                      } else {
-                        setLocation("/history");
-                      }
-                    }}>
+                  <Tooltip content="Back">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleDashboardBack}>
                       <ArrowLeft className="h-4 w-4" />
                     </Button>
                   </Tooltip>
