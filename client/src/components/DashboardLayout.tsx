@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
@@ -215,6 +215,50 @@ function NavBadge({ active, kind }: { active: boolean; kind: "new" }) {
   );
 }
 
+function SidebarNavLink({
+  item,
+  isActive,
+  mockupTooltip,
+}: {
+  item: SidebarNavItem;
+  isActive: boolean;
+  mockupTooltip?: string;
+}) {
+  const menuButton = (
+    <SidebarMenuButton
+      asChild
+      isActive={isActive}
+      tooltip={mockupTooltip ? undefined : item.label}
+      className={cn(
+        "h-10 transition-all font-normal",
+        isActive &&
+          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground [&>svg]:text-primary-foreground",
+        !isActive &&
+          item.featured &&
+          "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary data-[active=true]:bg-primary/10"
+      )}
+    >
+      <Link href={item.path}>
+        <item.icon className="h-4 w-4" />
+        <span>{item.label}</span>
+        {item.badge ? <NavBadge active={isActive} kind={item.badge} /> : null}
+      </Link>
+    </SidebarMenuButton>
+  );
+
+  return (
+    <SidebarMenuItem>
+      {mockupTooltip ? (
+        <Tooltip content={mockupTooltip} side="right">
+          {menuButton}
+        </Tooltip>
+      ) : (
+        menuButton
+      )}
+    </SidebarMenuItem>
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -264,7 +308,7 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   useActivityHeartbeat(Boolean(user));
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const searchString = useSearch();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -380,43 +424,14 @@ function DashboardLayoutContent({
                   <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
                     {section.label}
                   </div>
-                  {section.items.map((item) => {
-                    const isActive = isSidebarPathActive(location, item.path);
-                    const mockupTooltip = SIDEBAR_NAV_TOOLTIPS[item.path];
-                    const button = (
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() => {
-                          if (!isActive) setLocation(item.path);
-                        }}
-                        tooltip={mockupTooltip ? undefined : item.label}
-                        className={cn(
-                          "h-10 transition-all font-normal",
-                          isActive &&
-                            "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground [&>svg]:text-primary-foreground",
-                          !isActive &&
-                            item.featured &&
-                            "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary data-[active=true]:bg-primary/10"
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
-                        {item.badge ? <NavBadge active={isActive} kind={item.badge} /> : null}
-                      </SidebarMenuButton>
-                    );
-
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        {mockupTooltip ? (
-                          <Tooltip content={mockupTooltip} side="right">
-                            {button}
-                          </Tooltip>
-                        ) : (
-                          button
-                        )}
-                      </SidebarMenuItem>
-                    );
-                  })}
+                  {section.items.map((item) => (
+                    <SidebarNavLink
+                      key={item.path}
+                      item={item}
+                      isActive={isSidebarPathActive(location, item.path)}
+                      mockupTooltip={SIDEBAR_NAV_TOOLTIPS[item.path]}
+                    />
+                  ))}
                 </Fragment>
               ))}
               {user?.email === import.meta.env.VITE_ADMIN_EMAIL ? (
@@ -429,10 +444,8 @@ function DashboardLayoutContent({
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
+                          asChild
                           isActive={isActive}
-                          onClick={() => {
-                            if (!isActive) setLocation(item.path);
-                          }}
                           tooltip={item.label}
                           className={cn(
                             "h-10 transition-all font-normal",
@@ -440,8 +453,10 @@ function DashboardLayoutContent({
                               "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground [&>svg]:text-primary-foreground"
                           )}
                         >
-                          <item.icon className={`h-4 w-4 ${isActive ? "" : "text-purple-400"}`} />
-                          <span>{item.label}</span>
+                          <Link href={item.path}>
+                            <item.icon className={`h-4 w-4 ${isActive ? "" : "text-purple-400"}`} />
+                            <span>{item.label}</span>
+                          </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );

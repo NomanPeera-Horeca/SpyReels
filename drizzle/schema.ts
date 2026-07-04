@@ -832,6 +832,12 @@ export const planCards = mysqlTable(
     researchSignal: text("researchSignal"),
     status: varchar("status", { length: 16 }).notNull().default("pending"),
     goal: varchar("goal", { length: 32 }),
+    /** ai_pick = SpyReels calendar card; user_spark = Spark Deck capture */
+    sourceType: varchar("sourceType", { length: 16 }).notNull().default("ai_pick"),
+    sourceReelId: int("sourceReelId"),
+    sourceFeaturedReelId: int("sourceFeaturedReelId"),
+    sourceReelHandle: varchar("sourceReelHandle", { length: 128 }),
+    userRawNote: text("userRawNote"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

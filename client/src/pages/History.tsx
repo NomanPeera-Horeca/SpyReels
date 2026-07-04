@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocation } from "wouter";
+import { AppLink } from "@/components/AppLink";
 import {
   Radar,
   Film,
@@ -247,12 +248,11 @@ export default function History() {
             ) : null}
           </p>
         </div>
-        <Button
-          onClick={() => setLocation("/research")}
-          className="shrink-0"
-        >
-          New research
-          <ArrowRight className="ml-2 h-4 w-4" />
+        <Button asChild className="shrink-0">
+          <AppLink href="/research">
+            New research
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </AppLink>
         </Button>
       </div>
 
@@ -315,8 +315,8 @@ export default function History() {
                 that scrape window.
               </p>
             </div>
-            <Button variant="outline" onClick={() => setLocation("/research")}>
-              Open Spy Viral Reels
+            <Button asChild variant="outline">
+              <AppLink href="/research">Open Spy Viral Reels</AppLink>
             </Button>
           </CardContent>
         </Card>

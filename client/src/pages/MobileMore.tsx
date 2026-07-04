@@ -1,5 +1,5 @@
-import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AppLink } from "@/components/AppLink";
 import {
   ChevronRight,
   CreditCard,
@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 
 const DESKTOP_URL = "https://spyreels.ai/dashboard";
 
+const navRowClass =
+  "flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/50";
+
 export default function MobileMore() {
-  const [, setLocation] = useLocation();
   const { user } = useAuth();
 
   return (
@@ -53,45 +55,29 @@ export default function MobileMore() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/50"
-          onClick={() => setLocation("/studio")}
-        >
+        <AppLink href="/studio" className={navRowClass}>
           <Sparkles className="h-5 w-5 text-primary" />
           <span className="flex-1 text-sm font-medium">AI Coach</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 border-t px-4 py-4 text-left transition-colors hover:bg-muted/50"
-          onClick={() => setLocation("/ideas")}
-        >
+        </AppLink>
+        <AppLink href="/ideas" className={`${navRowClass} border-t`}>
           <Lightbulb className="h-5 w-5 text-amber-500" />
           <span className="flex-1 text-sm font-medium">Idea to Script</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
+        </AppLink>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/50"
-          onClick={() => setLocation("/settings")}
-        >
+        <AppLink href="/settings" className={navRowClass}>
           <Settings className="h-5 w-5 text-muted-foreground" />
           <span className="flex-1 text-sm font-medium">Settings</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 border-t px-4 py-4 text-left transition-colors hover:bg-muted/50"
-          onClick={() => setLocation("/billing")}
-        >
+        </AppLink>
+        <AppLink href="/billing" className={`${navRowClass} border-t`}>
           <CreditCard className="h-5 w-5 text-muted-foreground" />
           <span className="flex-1 text-sm font-medium">Billing</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
+        </AppLink>
       </div>
 
       {user?.email ? (

@@ -14,6 +14,7 @@ import { buildPlanProgressSteps, PLAN_AGENT_FOOTER } from "@shared/planAgentProg
 import { audienceSourceLabel } from "@shared/audienceResearch";
 import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
 import { HelpTipBadge } from "@/components/HelpTipBadge";
+import { SparkDeckSection, type SparkPlanCard } from "@/components/SparkDeckSection";
 import Tooltip from "@/components/Tooltip";
 import {
   formatTooltip,
@@ -21,20 +22,7 @@ import {
   PLAN_FORMAT_LABELS,
 } from "@/lib/studioContentHelp";
 
-type PlanCard = {
-  id: number;
-  day: number;
-  funnelStage: string;
-  contentFormat: string;
-  platform: string;
-  title: string;
-  hook: string;
-  angle: string;
-  filmingLocation: string;
-  researchSignal: string | null;
-  status: string;
-  goal: string | null;
-};
+type PlanCard = SparkPlanCard;
 
 const GOALS = [
   { value: "grow", label: "Grow my audience", description: "Maximize reach and follower count" },
@@ -144,6 +132,9 @@ function PlanCardItem({
             tip={formatTooltip(card.contentFormat)}
             className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
           />
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            SpyReels pick
+          </span>
           <span className="ml-auto text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             Day {card.day}
           </span>
@@ -249,7 +240,9 @@ export default function ThirtyDayPlan() {
   const [showOnboardingPlanHint, setShowOnboardingPlanHint] = useState(false);
 
   const cardsQuery = trpc.plan.listCards.useQuery();
-  const cards = cardsQuery.data?.cards ?? [];
+  const sparkCards = cardsQuery.data?.sparkCards ?? [];
+  const calendarCards = cardsQuery.data?.calendarCards ?? cardsQuery.data?.cards?.filter((c) => c.sourceType !== "user_spark" && c.day > 0) ?? [];
+  const hasBoardContent = sparkCards.length > 0 || calendarCards.length > 0;
   const audienceQuery = trpc.audienceResearch.list.useQuery(undefined, {
     enabled: phase === "board",
     staleTime: 120_000,
@@ -263,8 +256,8 @@ export default function ThirtyDayPlan() {
   });
 
   useEffect(() => {
-    if (cards.length > 0 && phase === "setup") setPhase("board");
-  }, [cards.length, phase]);
+    if (hasBoardContent && phase === "setup") setPhase("board");
+  }, [hasBoardContent, phase]);
 
   const generateMutation = trpc.plan.generate.useMutation({
     onSuccess: () => {
@@ -311,7 +304,7 @@ export default function ThirtyDayPlan() {
   const planAutostartRef = useRef(false);
   useEffect(() => {
     if (planAutostartRef.current) return;
-    if (cards.length > 0) return;
+    if (calendarCards.length > 0 || sparkCards.length > 0) return;
     if (sessionStorage.getItem(ONBOARDING_PLAN_AUTOSTART_KEY) !== "1") return;
     planAutostartRef.current = true;
     sessionStorage.removeItem(ONBOARDING_PLAN_AUTOSTART_KEY);
@@ -319,40 +312,46 @@ export default function ThirtyDayPlan() {
     setSelectedPlatforms(["instagram"]);
     setPhase("setup");
     setShowOnboardingPlanHint(true);
-  }, [cards.length]);
-
-  function handleGenerate() {
-    if (!selectedPlatforms.length) return;
-    setPhase("generating");
-    generateMutation.mutate({ goal, platforms: selectedPlatforms });
-  }
+  }, [calendarCards.length, sparkCards.length]);
 
   function handleWriteScript(card: PlanCard) {
+    const isSpark = card.sourceType === "user_spark" || card.day === 0;
     sessionStorage.setItem(
       STUDIO_PREFILL_KEY,
-      `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`
+      isSpark
+        ? `Spark idea: ${card.title}\n\n${card.userRawNote ?? card.angle}\n\nHook idea: "${card.hook}"`
+        : `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`
     );
     sessionStorage.setItem(
       STUDIO_PREFILL_META_KEY,
       JSON.stringify({
         planCardId: card.id,
         planCardTitle: card.title,
-        planCardDay: card.day,
+        planCardDay: isSpark ? null : card.day,
       })
     );
     setLocation("/studio");
   }
 
-  const filteredCards =
-    filterFunnel === "all" ? cards : cards.filter((c) => c.funnelStage === filterFunnel);
+  const filteredCalendarCards =
+    filterFunnel === "all"
+      ? calendarCards
+      : calendarCards.filter((c) => c.funnelStage === filterFunnel);
   const weeks = [
-    { label: "Week 1", cards: filteredCards.filter((c) => c.day <= 7) },
-    { label: "Week 2", cards: filteredCards.filter((c) => c.day >= 8 && c.day <= 14) },
-    { label: "Week 3", cards: filteredCards.filter((c) => c.day >= 15 && c.day <= 21) },
-    { label: "Week 4", cards: filteredCards.filter((c) => c.day >= 22) },
+    { label: "Week 1", cards: filteredCalendarCards.filter((c) => c.day <= 7) },
+    { label: "Week 2", cards: filteredCalendarCards.filter((c) => c.day >= 8 && c.day <= 14) },
+    { label: "Week 3", cards: filteredCalendarCards.filter((c) => c.day >= 15 && c.day <= 21) },
+    { label: "Week 4", cards: filteredCalendarCards.filter((c) => c.day >= 22) },
   ];
-  const approvedCount = cards.filter((c) => c.status === "approved").length;
+  const allCards = useMemo(() => [...sparkCards, ...calendarCards], [sparkCards, calendarCards]);
+  const approvedCount = allCards.filter((c) => c.status === "approved").length;
   const anySelected = selectedIds.size > 0;
+
+  function handleGenerate() {
+    if (!selectedPlatforms.length) return;
+    setPhase("generating");
+    generateMutation.mutate({ goal, platforms: selectedPlatforms });
+  }
 
   if (phase === "setup") {
     return (
@@ -467,7 +466,7 @@ export default function ThirtyDayPlan() {
           <h1 className="text-2xl sm:text-3xl font-bold">30-Day Content Plan</h1>
           <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
             <span className="text-emerald-600 font-medium">✓ {approvedCount} approved</span>
-            <span>{cards.filter((c) => c.status === "pending").length} to review</span>
+            <span>{allCards.filter((c) => c.status === "pending").length} to review</span>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => setPhase("setup")}>
@@ -531,50 +530,54 @@ export default function ThirtyDayPlan() {
         </div>
       ) : null}
 
-      <div className="flex gap-2 flex-wrap items-center">
-        {["all", "tofu", "mofu", "bofu"].map((f) => {
-          const label = f === "all" ? "All" : f.toUpperCase();
-          const tip = FUNNEL_FILTER_TIPS[f];
-          const button = (
-            <button
-              type="button"
-              onClick={() => setFilterFunnel(f)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                filterFunnel === f
-                  ? "bg-violet-600 text-white"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              } ${tip ? "cursor-help underline decoration-dotted underline-offset-2" : ""}`}
-            >
-              {label}
-            </button>
-          );
-          if (tip) {
-            return (
-              <Tooltip key={f} content={tip}>
-                {button}
-              </Tooltip>
-            );
+      {cardsQuery.isLoading && (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+        </div>
+      )}
+
+      {!cardsQuery.isLoading && !hasBoardContent && (
+        <div className="border border-border rounded-lg p-8 text-center">
+          <Film className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+          <p className="text-muted-foreground">No plan yet. Generate your first 30-day plan or save sparks from reels.</p>
+          <Button className="mt-4" onClick={() => setPhase("setup")}>
+            Get started
+          </Button>
+        </div>
+      )}
+
+      {!cardsQuery.isLoading && phase === "board" && (
+        <SparkDeckSection
+          sparkCards={sparkCards}
+          selectedIds={selectedIds}
+          anySelected={anySelected}
+          adjustingId={adjustingId}
+          adjustText={adjustText}
+          isRegenerating={regenerateMutation.isPending}
+          onToggleSelect={(id) =>
+            setSelectedIds((prev) => {
+              const n = new Set(prev);
+              if (n.has(id)) n.delete(id);
+              else n.add(id);
+              return n;
+            })
           }
-          return (
-            <span key={f} className="inline-flex">
-              {button}
-            </span>
-          );
-        })}
-        <Tooltip
-          content={
-            <span>
-              <strong>Formats on each card</strong> (hover the gray badge): Talking Head, Voiceover,
-              BTS, Tutorial, Trending, or Faceless. Each is a different way to film the idea.
-            </span>
+          onWriteScript={handleWriteScript}
+          onStartAdjust={(id) => {
+            setAdjustingId(id);
+            setAdjustText("");
+          }}
+          onCancelAdjust={() => {
+            setAdjustingId(null);
+            setAdjustText("");
+          }}
+          onAdjustTextChange={setAdjustText}
+          onAdjustSubmit={() =>
+            regenerateMutation.mutate({ ids: [adjustingId!], feedback: adjustText })
           }
-        >
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help ml-1">
-            <HelpCircle className="h-3.5 w-3.5" />
-            Format guide
-          </span>
-        </Tooltip>
-      </div>
+          onCardsChanged={() => void utils.plan.listCards.invalidate()}
+        />
+      )}
 
       {approvedCount > 0 && !anySelected && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -590,7 +593,7 @@ export default function ThirtyDayPlan() {
             size="sm"
             className="bg-emerald-600 hover:bg-emerald-700"
             onClick={() => {
-              const first = cards.find((c) => c.status === "approved");
+              const first = allCards.find((c) => c.status === "approved");
               if (first) handleWriteScript(first);
             }}
           >
@@ -599,21 +602,71 @@ export default function ThirtyDayPlan() {
         </div>
       )}
 
-      {cardsQuery.isLoading && (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-        </div>
-      )}
-
-      {!cardsQuery.isLoading && cards.length === 0 && (
-        <div className="border border-border rounded-lg p-8 text-center">
-          <Film className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground">No plan yet. Generate your first 30-day plan.</p>
-          <Button className="mt-4" onClick={() => setPhase("setup")}>
-            Get started
+      {calendarCards.length === 0 && sparkCards.length > 0 && !cardsQuery.isLoading && (
+        <div className="rounded-xl border border-dashed border-violet-300 dark:border-violet-700 px-4 py-6 text-center">
+          <p className="text-sm font-medium mb-1">Ready for a full month of SpyReels picks?</p>
+          <p className="text-xs text-muted-foreground mb-4">
+            Generate your SpyReels 30-day calendar. Your Spark Deck stays put.
+          </p>
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={() => setPhase("setup")}>
+            Generate 30-day calendar
           </Button>
         </div>
       )}
+
+      {calendarCards.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-bold">Your SpyReels 30-day calendar</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              AI picks tailored to your niche. Approve ideas, then Write Script.
+            </p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            {["all", "tofu", "mofu", "bofu"].map((f) => {
+              const label = f === "all" ? "All" : f.toUpperCase();
+              const tip = FUNNEL_FILTER_TIPS[f];
+              const button = (
+                <button
+                  type="button"
+                  onClick={() => setFilterFunnel(f)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                    filterFunnel === f
+                      ? "bg-violet-600 text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  } ${tip ? "cursor-help underline decoration-dotted underline-offset-2" : ""}`}
+                >
+                  {label}
+                </button>
+              );
+              if (tip) {
+                return (
+                  <Tooltip key={f} content={tip}>
+                    {button}
+                  </Tooltip>
+                );
+              }
+              return (
+                <span key={f} className="inline-flex">
+                  {button}
+                </span>
+              );
+            })}
+            <Tooltip
+              content={
+                <span>
+                  <strong>Formats on each card</strong> (hover the gray badge): Talking Head, Voiceover,
+                  BTS, Tutorial, Trending, or Faceless. Each is a different way to film the idea.
+                </span>
+              }
+            >
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help ml-1">
+                <HelpCircle className="h-3.5 w-3.5" />
+                Format guide
+              </span>
+            </Tooltip>
+          </div>
 
       {weeks.map(
         (week) =>
@@ -658,6 +711,8 @@ export default function ThirtyDayPlan() {
               </div>
             </div>
           )
+      )}
+        </div>
       )}
 
       {anySelected && (

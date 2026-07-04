@@ -38,12 +38,15 @@ import {
   Timer,
   Mic,
   Calendar as CalendarIcon,
+  Lightbulb,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 const FIRST_SCRIPT_NUDGE_DISMISSED_KEY = "spyreels_first_script_nudge_dismissed";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
 import { useFeatureLock } from "@/components/UpgradeSidesheet";
+import { SparkCaptureStrip } from "@/components/SparkCaptureStrip";
 import {
   inspirationPanelCopy,
   mergeRemakeability,
@@ -280,6 +283,8 @@ export type InlineWorkflowProps = {
   saveForInspirationBusy?: boolean;
   /** Dashboard only: mirrors `saved.checkBatch` for Save for Inspiration UI */
   inspirationReelIsSaved?: boolean;
+  /** Stored as research context when user saves a spark from this reel */
+  reelCaption?: string;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -298,6 +303,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     onSaveForInspiration,
     saveForInspirationBusy = false,
     inspirationReelIsSaved = false,
+    reelCaption,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -759,6 +765,14 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
         </span>
       </div>
 
+      <SparkCaptureStrip
+        reelHandle={handle}
+        reelCaption={reelCaption}
+        {...(reelSource === "featured"
+          ? { featuredReelId: featuredReelId! }
+          : { reelId: reelId! })}
+      />
+
       <div className="p-4">
         {/* ── Section 1: Transcript ── */}
         {isTranscribing ? (
@@ -826,6 +840,17 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
                 gradeLevel: gradeLevel as any,
                 targetDuration: targetDuration as any,
                 addCues,
+              });
+            }}
+            onRewriteWithAngle={(angle) => {
+              if (!activeScriptId) return;
+              setIsRewriting(true);
+              rewriteMutation.mutate({
+                scriptId: activeScriptId,
+                gradeLevel: gradeLevel as any,
+                targetDuration: targetDuration as any,
+                addCues,
+                angle,
               });
             }}
             onReset={() => setActiveScriptId(null)}
@@ -1108,6 +1133,32 @@ export function SearchInlineWorkflow({
     );
   };
 
+  const handleRewriteWithAngle = (angle: string) => {
+    if (!generatedScript) return;
+    setIsRewriting(true);
+    recreateMutation.mutate(
+      {
+        transcript: transcriptText,
+        caption: reel.caption,
+        topic: angle,
+        gradeLevel: gradeLevel as any,
+      },
+      {
+        onSuccess: (data: any) => {
+          setGeneratedScript(data.generatedScript);
+          setViralStructure(data.viralStructure);
+          setEditedScript(data.generatedScript);
+          setIsRewriting(false);
+          toast.success("Script rewritten with new angle!");
+        },
+        onError: (err: any) => {
+          setIsRewriting(false);
+          toast.error(`Rewrite failed: ${err.message}`);
+        },
+      }
+    );
+  };
+
   const handleCopyScript = () => {
     navigator.clipboard.writeText(displayScript).then(() => {
       toast.success("Script copied to clipboard");
@@ -1275,6 +1326,7 @@ export function SearchInlineWorkflow({
             setAddCues={setAddCues}
             isRewriting={isRewriting}
             onRewrite={handleRewrite}
+            onRewriteWithAngle={handleRewriteWithAngle}
             onReset={() => { setGeneratedScript(""); setEditedScript(""); setViralStructure(null); }}
             onCopyScript={handleCopyScript}
             showTeleprompter={showTeleprompter}
@@ -1632,6 +1684,7 @@ function CompletedScriptSection({
   setAddCues,
   isRewriting,
   onRewrite,
+  onRewriteWithAngle,
   onReset,
   onCopyScript,
   showTeleprompter,
@@ -1674,6 +1727,7 @@ function CompletedScriptSection({
   setAddCues: (v: boolean) => void;
   isRewriting: boolean;
   onRewrite: () => void;
+  onRewriteWithAngle: (angle: string) => void;
   onReset: () => void;
   onCopyScript: () => void;
   showTeleprompter: boolean;
@@ -1699,6 +1753,17 @@ function CompletedScriptSection({
   onSeePlans?: () => void;
 }) {
   const cuesLock = useFeatureLock("aiCues");
+  const [showAngleInput, setShowAngleInput] = useState(false);
+  const [angleInput, setAngleInput] = useState("");
+
+  const handleApplyAngle = () => {
+    const trimmed = angleInput.trim();
+    if (!trimmed) return;
+    onRewriteWithAngle(trimmed);
+    setShowAngleInput(false);
+    setAngleInput("");
+  };
+
   return (
     <div ref={sectionRef}>
       {showFirstScriptUpgradeNudge && onDismissFirstScriptUpgradeNudge && onSeePlans ? (
@@ -1840,6 +1905,19 @@ function CompletedScriptSection({
         </div>
 
         <Button
+          variant={showAngleInput ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs"
+          disabled={isRewriting}
+          onClick={() => {
+            setShowAngleInput(!showAngleInput);
+            if (showAngleInput) setAngleInput("");
+          }}
+        >
+          <Lightbulb className="mr-1 h-3 w-3" /> New Angle
+        </Button>
+
+        <Button
           variant="default"
           size="sm"
           className="h-7 text-xs ml-auto bg-primary hover:bg-primary/90"
@@ -1853,6 +1931,53 @@ function CompletedScriptSection({
           )}
         </Button>
       </div>
+
+      {showAngleInput && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 p-2.5 rounded-lg border border-primary/20 bg-primary/5">
+          <Lightbulb className="h-3.5 w-3.5 text-primary shrink-0" />
+          <Input
+            placeholder="New angle or topic (e.g. beginner mistakes, controversial take, personal story)..."
+            value={angleInput}
+            onChange={(e) => setAngleInput(e.target.value)}
+            className="h-8 text-xs flex-1 min-w-[200px] bg-card"
+            autoFocus
+            disabled={isRewriting}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && angleInput.trim()) {
+                handleApplyAngle();
+              }
+              if (e.key === "Escape") {
+                setShowAngleInput(false);
+                setAngleInput("");
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            className="h-8 text-xs"
+            disabled={isRewriting || !angleInput.trim()}
+            onClick={handleApplyAngle}
+          >
+            {isRewriting ? (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <Lightbulb className="mr-1 h-3 w-3" />
+            )}
+            Rewrite with angle
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              setShowAngleInput(false);
+              setAngleInput("");
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
       {/* Script content - editable or read-only */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">

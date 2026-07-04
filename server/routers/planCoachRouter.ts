@@ -133,6 +133,15 @@ async function generatePlanCardBatch(args: {
   return cards;
 }
 
+function sparkTitleFromNote(note: string): string {
+  const trimmed = note.trim();
+  if (!trimmed) return "New spark";
+  const firstLine = trimmed.split(/\n/)[0]?.trim() ?? trimmed;
+  const firstSentence = firstLine.split(/[.!?]/)[0]?.trim() ?? firstLine;
+  const title = firstSentence || firstLine;
+  return title.slice(0, 120) || "New spark";
+}
+
 function mapPlanCardRow(row: typeof planCards.$inferSelect) {
   return {
     id: row.id,
@@ -147,6 +156,12 @@ function mapPlanCardRow(row: typeof planCards.$inferSelect) {
     researchSignal: row.researchSignal,
     status: row.status,
     goal: row.goal,
+    sourceType: row.sourceType,
+    sourceReelId: row.sourceReelId,
+    sourceFeaturedReelId: row.sourceFeaturedReelId,
+    sourceReelHandle: row.sourceReelHandle,
+    userRawNote: row.userRawNote,
+    createdAt: row.createdAt,
   };
 }
 
@@ -314,7 +329,14 @@ export const planRouter = router({
           .sort((a, b) => a[0] - b[0])
           .map(([, card]) => card);
 
-        await db.delete(planCards).where(eq(planCards.workspaceId, ctx.workspaceId));
+        await db
+          .delete(planCards)
+          .where(
+            and(
+              eq(planCards.workspaceId, ctx.workspaceId),
+              eq(planCards.sourceType, "ai_pick")
+            )
+          );
 
         const values = dedupedCards
           .slice(0, 30)
@@ -332,6 +354,7 @@ export const planRouter = router({
             researchSignal: c.researchSignal ? String(c.researchSignal).slice(0, 2000) : null,
             status: "pending",
             goal: input.goal,
+            sourceType: "ai_pick" as const,
           }))
           .sort((a, b) => a.day - b.day);
 
@@ -378,9 +401,82 @@ export const planRouter = router({
       .select()
       .from(planCards)
       .where(eq(planCards.workspaceId, ctx.workspaceId))
-      .orderBy(asc(planCards.day));
-    return { cards: rows.map(mapPlanCardRow) };
+      .orderBy(asc(planCards.day), desc(planCards.createdAt));
+
+    const sparkRows = rows.filter((row) => row.sourceType === "user_spark" || row.day === 0);
+    const calendarRows = rows.filter((row) => row.sourceType !== "user_spark" && row.day > 0);
+    const sparkCards = sparkRows
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(mapPlanCardRow);
+    const calendarCards = calendarRows
+      .slice()
+      .sort((a, b) => a.day - b.day)
+      .map(mapPlanCardRow);
+
+    return {
+      cards: [...sparkCards, ...calendarCards],
+      sparkCards,
+      calendarCards,
+    };
   }),
+
+  captureSpark: protectedProcedure
+    .input(
+      z
+        .object({
+          note: z.string().min(3).max(2000),
+          reelId: z.number().optional(),
+          featuredReelId: z.number().optional(),
+          reelHandle: z.string().max(128).optional(),
+          reelCaption: z.string().max(2000).optional(),
+        })
+        .refine((v) => !(v.reelId != null && v.featuredReelId != null), {
+          message: "Pass reelId or featuredReelId, not both",
+        })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const note = input.note.trim();
+      const title = sparkTitleFromNote(note);
+      const hook =
+        note.length <= 200 ? note : `${note.slice(0, 197).trimEnd()}...`;
+
+      const insertResult = await db.insert(planCards).values({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          day: 0,
+          funnelStage: "tofu",
+          contentFormat: "talking-head",
+          platform: "instagram",
+          title,
+          hook,
+          angle: note,
+          filmingLocation: "Wherever you film",
+          researchSignal: input.reelCaption ? input.reelCaption.slice(0, 2000) : null,
+          status: "pending",
+          goal: null,
+          sourceType: "user_spark",
+          sourceReelId: input.reelId ?? null,
+          sourceFeaturedReelId: input.featuredReelId ?? null,
+          sourceReelHandle: input.reelHandle?.replace(/^@/, "").slice(0, 128) ?? null,
+          userRawNote: note,
+        });
+
+      const cardId = insertResult[0]?.insertId;
+      if (!cardId) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to save spark" });
+      }
+
+      const [row] = await db.select().from(planCards).where(eq(planCards.id, cardId)).limit(1);
+      if (!row) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to load saved spark" });
+      }
+
+      return { card: mapPlanCardRow(row) };
+    }),
 
   updateStatus: protectedProcedure
     .input(

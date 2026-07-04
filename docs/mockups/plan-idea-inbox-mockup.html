@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels - Spark Deck + 30-Day Plan (Interactive Mockup)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f4f5; --fg: #18181b; --muted: #71717a; --card: #ffffff; --border: #e4e4e7;
+      --primary: #7c3aed; --primary-soft: rgba(124, 58, 237, 0.08); --primary-border: rgba(124, 58, 237, 0.25);
+      --emerald: #059669; --emerald-soft: rgba(5, 150, 105, 0.08);
+      --amber: #d97706; --amber-soft: rgba(217, 119, 6, 0.1);
+      --spark: #ea580c; --spark-soft: rgba(234, 88, 12, 0.08); --spark-border: rgba(234, 88, 12, 0.22);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
+
+    .chrome { position: sticky; top: 0; z-index: 200; background: #fff; border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .chrome-top { padding: 10px 16px 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+    .chrome-title { font-size: 13px; font-weight: 700; }
+    .chrome-sub { font-size: 11px; color: var(--muted); flex: 1; min-width: 200px; }
+    .tab-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 10px; }
+    .tab-row button { border: 1px solid var(--border); background: var(--card); color: var(--fg); border-radius: 999px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .tab-row button.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+    .callout { margin: 0 16px 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary-soft); border: 1px solid var(--primary-border); font-size: 12px; color: #5b21b6; line-height: 1.55; }
+    .callout strong { color: var(--fg); }
+
+    .screen { display: none; padding: 16px; max-width: 1200px; margin: 0 auto; }
+    .screen.active { display: block; }
+
+    .app-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 680px; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--card); }
+    @media (max-width: 900px) { .app-shell { grid-template-columns: 1fr; } .sidebar { display: none; } }
+    .sidebar { background: #fafafa; border-right: 1px solid var(--border); padding: 14px 10px; }
+    .sidebar-brand { font-weight: 800; font-size: 14px; padding: 4px 8px 14px; }
+    .sidebar-section { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 12px 8px 4px; }
+    .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--muted); margin-bottom: 2px; cursor: pointer; }
+    .sidebar-item.active { background: var(--primary); color: #fff; font-weight: 600; }
+    .sidebar-item .badge-new { margin-left: auto; font-size: 9px; font-weight: 800; background: var(--primary); color: #fff; padding: 2px 6px; border-radius: 999px; }
+    .sidebar-item.active .badge-new { background: rgba(255,255,255,0.25); }
+    .main { padding: 16px 18px; overflow: auto; }
+
+    .btn { border: none; border-radius: 10px; padding: 10px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--fg); }
+    .btn-ghost { background: transparent; color: var(--muted); font-weight: 600; }
+    .btn-sm { padding: 6px 10px; font-size: 11px; border-radius: 8px; }
+    .btn-link { background: none; border: none; color: var(--primary); font-weight: 700; cursor: pointer; padding: 0; font-size: inherit; text-decoration: underline; }
+
+    /* Toast */
+    .toast-stack { position: fixed; bottom: 20px; right: 20px; z-index: 500; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+    .toast {
+      background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.12); animation: toastIn 0.28s ease;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .toast-icon { width: 28px; height: 28px; border-radius: 999px; background: var(--emerald-soft); color: var(--emerald); display: grid; place-items: center; font-size: 14px; flex-shrink: 0; }
+    .toast-body { flex: 1; min-width: 0; }
+    .toast-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .toast-msg { font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .toast-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .toast-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px; }
+
+    /* Reel modal */
+    .modal-backdrop { background: rgba(0,0,0,0.35); border-radius: 12px; padding: 20px; display: flex; align-items: flex-start; justify-content: center; min-height: 560px; }
+    .modal { width: 100%; max-width: 640px; background: var(--card); border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.12); overflow: hidden; }
+    .modal-header { display: flex; gap: 12px; padding: 14px; border-bottom: 1px solid var(--border); }
+    .modal-thumb { width: 88px; height: 120px; border-radius: 8px; background: linear-gradient(160deg,#cbd5e1,#94a3b8); flex-shrink: 0; position: relative; }
+    .modal-thumb::after { content: "43s"; position: absolute; bottom: 4px; right: 4px; font-size: 9px; font-weight: 700; color: #fff; background: rgba(0,0,0,0.65); padding: 2px 5px; border-radius: 4px; }
+    .modal-caption { font-size: 12px; line-height: 1.45; }
+    .modal-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+    .capture-strip { margin: 12px 14px 0; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--primary-border); background: var(--primary-soft); }
+    .capture-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+    .capture-row { display: flex; gap: 8px; }
+    .capture-input { flex: 1; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; background: #fff; }
+    .modal-body { padding: 12px 14px 16px; border-top: 1px solid var(--border); margin-top: 12px; }
+    .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .transcript-box { font-size: 11px; color: var(--muted); background: #fafafa; border: 1px solid var(--border); border-radius: 10px; padding: 10px; line-height: 1.5; }
+
+    /* Plan */
+    .plan-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .plan-header h1 { font-size: 22px; font-weight: 700; }
+    .plan-stats { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .plan-stats .ok { color: var(--emerald); font-weight: 600; }
+    .plan-stats .spark-count { color: var(--spark); font-weight: 600; }
+
+    .banner-ready { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; border: 1px solid rgba(5,150,105,0.25); background: var(--emerald-soft); }
+    .banner-ready p { font-size: 13px; font-weight: 600; }
+    .banner-ready span { font-size: 11px; color: var(--muted); font-weight: 400; display: block; margin-top: 2px; }
+
+    /* Spark Deck - contained, does not push AI plan */
+    .spark-deck-panel {
+      border: 1px solid var(--spark-border); border-radius: 14px; background: linear-gradient(180deg, #fff7ed 0%, #fff 40%);
+      padding: 12px 12px 10px; margin-bottom: 18px;
+    }
+    .spark-deck-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .spark-deck-head h2 { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 6px; }
+    .spark-deck-head h2 .emoji { font-size: 18px; }
+    .spark-sub { font-size: 11px; color: var(--muted); flex: 1; min-width: 180px; }
+    .spark-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .expand-toggle {
+      font-size: 10px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: #fff; cursor: pointer; color: var(--muted);
+    }
+    .expand-toggle.on { border-color: var(--spark-border); background: var(--spark-soft); color: var(--spark); }
+
+    .spark-scroll-wrap {
+      overflow-x: auto; overflow-y: hidden; padding-bottom: 6px;
+      scrollbar-width: thin;
+    }
+    .spark-scroll-wrap.expanded {
+      overflow-y: auto; max-height: 520px;
+    }
+    .spark-track {
+      display: grid; grid-auto-flow: column; grid-auto-columns: 220px; gap: 10px;
+      grid-template-rows: repeat(1, auto);
+    }
+    .spark-scroll-wrap.expanded .spark-track {
+      grid-auto-flow: dense;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-auto-columns: unset;
+      grid-template-rows: repeat(3, auto);
+    }
+
+    .ai-plan-panel {
+      border-top: 2px solid var(--border); padding-top: 16px;
+    }
+    .ai-plan-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .ai-plan-head h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .lane-pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); border: 1px solid var(--primary-border); }
+    .lane-pill.spark { background: var(--spark-soft); color: var(--spark); border-color: var(--spark-border); }
+    .ai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+    .plan-card { border: 2px solid var(--border); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; min-height: 200px; }
+    .plan-card.spark { border-color: var(--spark-border); }
+    .plan-card.approved { border-color: rgba(5,150,105,0.45); background: var(--emerald-soft); }
+    .plan-card.new-card { animation: cardPop 0.35s ease; border-color: var(--emerald); box-shadow: 0 0 0 3px rgba(5,150,105,0.15); }
+    @keyframes cardPop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+    .add-card {
+      border: 2px dashed var(--spark-border); border-radius: 12px; min-height: 200px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 14px; text-align: center; cursor: pointer; background: #fff;
+    }
+    .add-card:hover { background: var(--spark-soft); }
+    .add-card .plus { font-size: 22px; color: var(--spark); font-weight: 300; }
+    .add-card p { font-size: 12px; font-weight: 700; color: var(--spark); }
+    .add-card span { font-size: 10px; color: var(--muted); }
+
+    .card-source { display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; font-size: 10px; font-weight: 600; color: var(--spark); }
+    .mini-thumb { width: 22px; height: 30px; border-radius: 4px; background: linear-gradient(160deg,#cbd5e1,#64748b); flex-shrink: 0; }
+    .card-body { padding: 8px 10px; flex: 1; }
+    .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .tag { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #f4f4f5; color: var(--muted); }
+    .tag.tofu { background: #e0f2fe; color: #0369a1; }
+    .tag.day { margin-left: auto; }
+    .tag.fresh { background: #d1fae5; color: #047857; }
+    .card-title { font-size: 13px; font-weight: 700; line-height: 1.35; margin-bottom: 4px; }
+    .card-hook { font-size: 11px; font-style: italic; color: var(--muted); line-height: 1.4; margin-bottom: 6px; }
+    .card-note { font-size: 10px; color: #57534e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 8px; }
+    .card-actions { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+    .card-actions .btn { width: 100%; text-align: center; padding: 8px; font-size: 11px; }
+    .btn-write { border: 1px solid rgba(124,58,237,0.3); color: #6d28d9; background: #fff; }
+    .btn-write.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* Add idea overlay */
+    .overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; padding: 20px; }
+    .overlay.open { display: flex; }
+    .add-modal {
+      width: 100%; max-width: 480px; background: #fff; border-radius: 16px; border: 1px solid var(--border);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.15); overflow: hidden;
+    }
+    .add-modal-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+    .add-modal-head h3 { font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .add-modal-head p { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .add-modal-body { padding: 16px 18px; }
+    .add-modal-body label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+    .add-modal-body textarea {
+      width: 100%; min-height: 110px; border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.5;
+    }
+    .add-modal-body .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
+    .add-modal-foot { padding: 12px 18px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); background: #fafafa; }
+
+    .demo-note { margin-top: 14px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; font-size: 12px; line-height: 1.55; }
+    .demo-note strong { color: var(--fg); }
+  </style>
+</head>
+<body>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <div class="overlay" id="addIdeaOverlay" role="dialog" aria-modal="true" aria-labelledby="addIdeaTitle">
+    <div class="add-modal">
+      <div class="add-modal-head">
+        <h3 id="addIdeaTitle"><span>✦</span> Drop your spark</h3>
+        <p>AI will shape this into a title + hook later. No script until you hit Write Script.</p>
+      </div>
+      <div class="add-modal-body">
+        <label for="addIdeaText">What's the idea?</label>
+        <textarea id="addIdeaText" placeholder="e.g. Why most HVAC owners underprice their first commercial job..."></textarea>
+        <p class="hint">Rough notes are fine. Saves to Spark Deck on your 30-Day Plan.</p>
+      </div>
+      <div class="add-modal-foot">
+        <button type="button" class="btn btn-ghost" id="addIdeaCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="addIdeaSave">Save to Spark Deck</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chrome">
+    <div class="chrome-top">
+      <div class="chrome-title">Spark Deck + 30-Day Plan (interactive mockup)</div>
+      <div class="chrome-sub">Click buttons. Toasts fire. Try Save to Plan, Add my idea, expand Spark Deck.</div>
+    </div>
+    <div class="tab-row">
+      <button type="button" class="tab active" data-screen="watch">1. Save from reel + toast</button>
+      <button type="button" class="tab" data-screen="plan">2. 30-Day Plan (Spark Deck + AI)</button>
+      <button type="button" class="tab" data-screen="add">3. Add my idea modal</button>
+    </div>
+    <div class="callout" id="callout">
+      <strong>Try it:</strong> Click <strong>Save to Plan</strong> on the reel. Toast tells you exactly where the idea went, with a link to open 30-Day Plan.
+    </div>
+  </div>
+
+  <!-- SCREEN 1 -->
+  <section class="screen active" id="screen-watch">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">SpyReels</div>
+        <div class="sidebar-section">Discover</div>
+        <div class="sidebar-item active">Dashboard</div>
+        <div class="sidebar-item" data-goto="plan">30-Day Plan</div>
+      </aside>
+      <div class="main">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">You clicked reel #25 in the grid.</p>
+        <div class="modal-backdrop">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-thumb"></div>
+              <div>
+                <div class="modal-caption">Keep it professional, keep it moving... #hvac</div>
+                <div class="modal-stats"><span>21.2K views</span><span>723 likes</span></div>
+              </div>
+            </div>
+            <div class="capture-strip">
+              <div class="capture-label">💡 Got an idea from this reel?</div>
+              <div class="capture-row">
+                <input class="capture-input" id="reelIdeaInput" type="text" placeholder="What would YOU say about this?" />
+                <button type="button" class="btn btn-primary" id="btnSaveFromReel">Save to Plan</button>
+              </div>
+            </div>
+            <div class="modal-body">
+              <div class="section-label">Transcript</div>
+              <div class="transcript-box">00:00 We lost a $500,000 job because my office looked like a frat house...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-note"><strong>Toast copy:</strong> "Spark saved" + "Find it in 30-Day Plan → Spark Deck" + button <strong>Open 30-Day Plan</strong>. User stays on the reel.</div>
+  </section>
+
+  <!-- SCREEN 2 -->
+  <section class="screen" id="screen-plan">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">SpyReels</div>
+        <div class="sidebar-section">Create</div>
+        <div class="sidebar-item active">30-Day Plan</div>
+        <div class="sidebar-item">AI Coach</div>
+      </aside>
+      <div class="main">
+        <div class="plan-header">
+          <div>
+            <h1>30-Day Content Plan</h1>
+            <div class="plan-stats">
+              <span class="ok">✓ 4 approved</span> ·
+              <span class="spark-count" id="sparkCountLabel">3 sparks in deck</span> ·
+              24 AI ideas below
+            </div>
+          </div>
+          <button type="button" class="btn btn-outline">Regenerate AI plan</button>
+        </div>
+
+        <div class="banner-ready">
+          <div>
+            <p>4 ideas approved, ready to script</p>
+            <span>Sparks and AI cards share the same Write Script flow.</span>
+          </div>
+          <button type="button" class="btn btn-primary">Write first script</button>
+        </div>
+
+        <!-- SPARK DECK: fixed panel, horizontal scroll, optional 3-row expand -->
+        <div class="spark-deck-panel">
+          <div class="spark-deck-head">
+            <h2><span class="emoji">✦</span> Spark Deck</h2>
+            <span class="spark-sub">Ideas you caught while researching. Separate from your AI calendar.</span>
+            <div class="spark-controls">
+              <button type="button" class="expand-toggle" id="expandDeck">Expand (3 rows)</button>
+            </div>
+          </div>
+          <div class="spark-scroll-wrap" id="sparkScroll">
+            <div class="spark-track" id="sparkTrack">
+              <!-- Add first -->
+              <div class="add-card" id="btnAddMyIdea" role="button" tabindex="0">
+                <div class="plus">+</div>
+                <p>Add my idea</p>
+                <span>Always first. No scrolling to find it.</span>
+              </div>
+
+              <article class="plan-card spark" id="cardFromReel">
+                <div class="card-source"><span class="mini-thumb"></span> @hvac_pro · 2 min ago</div>
+                <div class="card-body">
+                  <div class="card-tags"><span class="tag">Spark</span><span class="tag fresh" id="freshTag" style="display:none">Just saved</span></div>
+                  <div class="card-title" id="cardFromReelTitle">Office looked unprofessional, lost huge job</div>
+                  <div class="card-hook">"We lost a $500k contract because my shop looked like a frat house."</div>
+                  <div class="card-note" id="cardFromReelNote">Your note: Same angle for my HVAC business.</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-write">Write Script</button>
+                  <button type="button" class="btn btn-ghost">Change this idea</button>
+                </div>
+              </article>
+
+              <article class="plan-card spark approved">
+                <div class="card-source"><span class="mini-thumb"></span> @fitness · yesterday</div>
+                <div class="card-body">
+                  <div class="card-tags"><span class="tag">Spark</span><span class="tag fresh">Approved</span></div>
+                  <div class="card-title">Beginner deadlift mistakes</div>
+                  <div class="card-hook">"Stop doing this on deadlift day."</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-write primary">Write Script</button>
+                  <button type="button" class="btn btn-ghost">Change this idea</button>
+                </div>
+              </article>
+
+              <article class="plan-card spark">
+                <div class="card-body">
+                  <div class="card-tags"><span class="tag">Spark</span><span class="tag">Typed</span></div>
+                  <div class="card-title">Why I stopped discounting installs</div>
+                  <div class="card-hook">"Discounting feels like winning until you check your margin."</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-write">Write Script</button>
+                  <button type="button" class="btn btn-ghost">Change this idea</button>
+                </div>
+              </article>
+
+              <article class="plan-card spark">
+                <div class="card-body">
+                  <div class="card-tags"><span class="tag">Spark</span></div>
+                  <div class="card-title">Customer horror story: no callback</div>
+                  <div class="card-hook">"I called back in 5 minutes. They already booked someone else."</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-write">Write Script</button>
+                  <button type="button" class="btn btn-ghost">Change this idea</button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI PLAN: always starts here, never pushed down by sparks -->
+        <div class="ai-plan-panel">
+          <div class="ai-plan-head">
+            <h2>Your SpyReels 30-day calendar</h2>
+            <span class="lane-pill">SpyReels pick</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:auto;">Week 1 · fixed below Spark Deck</span>
+          </div>
+          <div class="ai-grid">
+            <article class="plan-card">
+              <div class="card-body">
+                <div class="card-tags"><span class="tag tofu">TOFU</span><span class="tag">Talking Head</span><span class="tag day">Day 3</span></div>
+                <div class="card-title">3 signs your HVAC quote is too low</div>
+                <div class="card-hook">"If you are guessing your prices, you are leaving money on the table."</div>
+              </div>
+              <div class="card-actions">
+                <button type="button" class="btn btn-write">Write Script</button>
+                <button type="button" class="btn btn-ghost">Change this idea</button>
+              </div>
+            </article>
+            <article class="plan-card approved">
+              <div class="card-body">
+                <div class="card-tags"><span class="tag tofu">MOFU</span><span class="tag day">Day 5</span></div>
+                <div class="card-title">What I wish I knew before hiring techs</div>
+                <div class="card-hook">"Your first hire will make or break your summer season."</div>
+              </div>
+              <div class="card-actions">
+                <button type="button" class="btn btn-write primary">Write Script</button>
+                <button type="button" class="btn btn-ghost">Change this idea</button>
+              </div>
+            </article>
+            <article class="plan-card">
+              <div class="card-body">
+                <div class="card-tags"><span class="tag tofu">TOFU</span><span class="tag day">Day 7</span></div>
+                <div class="card-title">The tool every new tech forgets on day one</div>
+                <div class="card-hook">"This $12 item saves you an embarrassing callback."</div>
+              </div>
+              <div class="card-actions">
+                <button type="button" class="btn btn-write">Write Script</button>
+                <button type="button" class="btn btn-ghost">Change this idea</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-note">
+      <strong>Spark Deck vs AI plan:</strong> Sparks live in a capped panel (1 row scroll, expand to 3 rows max).
+      Your AI calendar always starts at the same place. Saving 20 sparks does not bury Week 1.
+    </div>
+  </section>
+
+  <!-- SCREEN 3: standalone add modal demo -->
+  <section class="screen" id="screen-add">
+    <div style="max-width:520px;margin:40px auto;text-align:center;">
+      <p style="font-size:14px;margin-bottom:16px;color:var(--muted);">This is what opens when you click <strong>Add my idea</strong> (first card on Spark Deck).</p>
+      <button type="button" class="btn btn-primary" id="openAddDemo">Open "Add my idea" modal</button>
+    </div>
+    <div class="add-modal" style="max-width:480px;margin:0 auto;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,0.08);">
+      <div class="add-modal-head">
+        <h3><span>✦</span> Drop your spark</h3>
+        <p>AI will shape this into a title + hook later. No script until you hit Write Script.</p>
+      </div>
+      <div class="add-modal-body">
+        <label>What's the idea?</label>
+        <textarea readonly style="background:#fafafa;">Why most small HVAC shops lose commercial bids before they even quote...</textarea>
+        <p class="hint">On save: toast + new card appears second in deck (after Add my idea).</p>
+      </div>
+      <div class="add-modal-foot">
+        <button type="button" class="btn btn-ghost">Cancel</button>
+        <button type="button" class="btn btn-primary" id="demoAddSave">Save to Spark Deck</button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const toastStack = document.getElementById("toastStack");
+    const addOverlay = document.getElementById("addIdeaOverlay");
+    const addIdeaText = document.getElementById("addIdeaText");
+    const sparkTrack = document.getElementById("sparkTrack");
+    const sparkScroll = document.getElementById("sparkScroll");
+    let sparkCount = 3;
+
+    function showToast(opts) {
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.innerHTML = `
+        <div class="toast-icon">${opts.icon || "✓"}</div>
+        <div class="toast-body">
+          <div class="toast-title">${opts.title}</div>
+          <div class="toast-msg">${opts.message}</div>
+          ${opts.actions ? `<div class="toast-actions">${opts.actions}</div>` : ""}
+        </div>
+        <button type="button" class="toast-close" aria-label="Dismiss">×</button>
+      `;
+      toastStack.appendChild(el);
+      el.querySelector(".toast-close").onclick = () => el.remove();
+      if (opts.onOpenPlan) {
+        el.querySelector("[data-open-plan]")?.addEventListener("click", () => {
+          goToScreen("plan");
+          el.remove();
+        });
+      }
+      setTimeout(() => { if (el.parentNode) el.remove(); }, opts.duration || 8000);
+    }
+
+    function toastSparkSaved(source) {
+      showToast({
+        title: "Spark saved",
+        message: `Your idea is in <strong>30-Day Plan → Spark Deck</strong>. Refine it anytime. No script yet.`,
+        actions: `<button type="button" class="btn btn-sm btn-primary" data-open-plan>Open 30-Day Plan</button>`,
+        onOpenPlan: true,
+      });
+    }
+
+    function goToScreen(id) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.screen === id));
+      document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + id));
+      const notes = {
+        watch: "<strong>Try it:</strong> Click <strong>Save to Plan</strong>. Toast shows where the idea lives.",
+        plan: "<strong>Spark Deck</strong> is separate from AI calendar. <strong>Add my idea</strong> is always first. Click Expand for 3 rows.",
+        add: "<strong>Add my idea</strong> opens this modal from the plan board. Save shows toast + new card.",
+      };
+      document.getElementById("callout").innerHTML = notes[id] || "";
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => goToScreen(tab.dataset.screen));
+    });
+
+    document.querySelectorAll("[data-goto]").forEach((el) => {
+      el.addEventListener("click", () => goToScreen(el.dataset.goto));
+    });
+
+    document.getElementById("btnSaveFromReel").addEventListener("click", () => {
+      const text = document.getElementById("reelIdeaInput").value.trim();
+      if (!text) {
+        showToast({ icon: "!", title: "Add a quick note", message: "Even one sentence is enough.", duration: 4000 });
+        return;
+      }
+      document.getElementById("cardFromReelNote").textContent = "Your note: " + text;
+      document.getElementById("freshTag").style.display = "inline";
+      document.getElementById("cardFromReel").classList.add("new-card");
+      toastSparkSaved("reel");
+    });
+
+    document.getElementById("btnAddMyIdea").addEventListener("click", openAddModal);
+    document.getElementById("btnAddMyIdea").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openAddModal(); }
+    });
+    document.getElementById("openAddDemo").addEventListener("click", openAddModal);
+
+    function openAddModal() {
+      addOverlay.classList.add("open");
+      addIdeaText.value = "";
+      addIdeaText.focus();
+    }
+
+    document.getElementById("addIdeaCancel").addEventListener("click", () => addOverlay.classList.remove("open"));
+    addOverlay.addEventListener("click", (e) => { if (e.target === addOverlay) addOverlay.classList.remove("open"); });
+
+    function insertSparkCard(title, hook, tag) {
+      const card = document.createElement("article");
+      card.className = "plan-card spark new-card";
+      card.innerHTML = `
+        <div class="card-body">
+          <div class="card-tags"><span class="tag">Spark</span><span class="tag fresh">Just saved</span>${tag ? `<span class="tag">${tag}</span>` : ""}</div>
+          <div class="card-title">${title}</div>
+          <div class="card-hook">${hook}</div>
+        </div>
+        <div class="card-actions">
+          <button type="button" class="btn btn-write">Write Script</button>
+          <button type="button" class="btn btn-ghost">Change this idea</button>
+        </div>
+      `;
+      const addBtn = document.getElementById("btnAddMyIdea");
+      addBtn.insertAdjacentElement("afterend", card);
+      sparkCount++;
+      document.getElementById("sparkCountLabel").textContent = sparkCount + " sparks in deck";
+    }
+
+    document.getElementById("addIdeaSave").addEventListener("click", () => {
+      const text = addIdeaText.value.trim();
+      if (!text) return;
+      addOverlay.classList.remove("open");
+      const title = text.length > 48 ? text.slice(0, 45) + "..." : text;
+      insertSparkCard(title, `"${text.slice(0, 80)}${text.length > 80 ? "..." : ""}"`, "Typed");
+      toastSparkSaved("typed");
+      goToScreen("plan");
+    });
+
+    document.getElementById("demoAddSave").addEventListener("click", () => {
+      insertSparkCard("Why small HVAC shops lose commercial bids", '"Before they even send the quote..."', "Typed");
+      toastSparkSaved("typed");
+      goToScreen("plan");
+    });
+
+    document.getElementById("expandDeck").addEventListener("click", function () {
+      const on = sparkScroll.classList.toggle("expanded");
+      this.classList.toggle("on", on);
+      this.textContent = on ? "Collapse to 1 row" : "Expand (3 rows)";
+    });
+  </script>
+</body>
+</html>

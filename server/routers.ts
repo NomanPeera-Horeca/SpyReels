@@ -3251,6 +3251,7 @@ Return JSON only:
           gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
           targetDuration: z.enum(["any", "15", "30", "45", "60", "90"]),
           addCues: z.boolean().default(true),
+          angle: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -3290,13 +3291,29 @@ Return JSON only:
           reelTranscript = t?.transcript ?? "";
         }
 
+        const trimmedAngle = input.angle?.trim() ?? "";
+        let storedTopic = existingScript.topic || "SAME_TOPIC";
+        let promptAngle: string | undefined;
+        if (trimmedAngle) {
+          const aud = (ctx.user.targetAudience ?? "").trim();
+          const biz = (ctx.user.businessDescription ?? "").trim();
+          if (aud) {
+            promptAngle = `Write about: ${trimmedAngle}. Adapt it for ${aud}.`;
+          } else if (biz) {
+            promptAngle = `Write about: ${trimmedAngle}. From the perspective of ${biz}.`;
+          } else {
+            promptAngle = trimmedAngle;
+          }
+          storedTopic = trimmedAngle;
+        }
+
         // Create a new script entry for the rewrite
         const newScriptId = await createRecreatedScript({
           reelId: existingScript.reelId,
           featuredReelId: existingScript.featuredReelId,
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
-          topic: existingScript.topic || "SAME_TOPIC",
+          topic: storedTopic,
           gradeLevel: input.gradeLevel,
           status: "processing",
         });
@@ -3310,7 +3327,8 @@ Return JSON only:
           reelCaption,
           input.gradeLevel,
           input.targetDuration,
-          effectiveAddCues
+          effectiveAddCues,
+          promptAngle
         ).catch((err: unknown) => {
           console.error(`Script rewrite ${newScriptId} failed:`, err);
         });
@@ -8326,7 +8344,8 @@ async function runScriptRewrite(
   caption: string,
   gradeLevel: string,
   targetDuration: string,
-  addCues: boolean
+  addCues: boolean,
+  angle?: string
 ): Promise<void> {
   try {
     const gradeLevelInstruction = gradeLevel === "auto"
@@ -8348,6 +8367,14 @@ async function runScriptRewrite(
       cuesInstruction = buildDeliveryCuesPromptSection();
     }
 
+    const angleBlock = angle
+      ? `\n**NEW ANGLE/TOPIC:**\n${angle}\n`
+      : "";
+    const topicInstruction = angle
+      ? "Rewrite the script for the NEW ANGLE/TOPIC above. Keep the proven viral structure but change the subject, examples, and message to match the new angle."
+      : "Rewrite the script maintaining the same topic, message, and viral structure.";
+    const captionBlock = caption ? `\n**SOURCE REEL CAPTION:**\n${caption}\n` : "";
+
     const rewritePrompt = `You are an expert Instagram Reels scriptwriter. Rewrite the following script with the specified adjustments.
 
 **CURRENT SCRIPT:**
@@ -8356,18 +8383,18 @@ ${existingScript}
 ${viralStructure ? `**VIRAL STRUCTURE (preserve this pattern):**\n${JSON.stringify(viralStructure, null, 2)}` : ""}
 
 ${originalTranscript ? `**ORIGINAL VIRAL TRANSCRIPT (for reference):**\n${originalTranscript}` : ""}
-
+${captionBlock}${angleBlock}
 **READABILITY REQUIREMENT:**
 ${gradeLevelInstruction}
 ${durationInstruction}
 ${cuesInstruction}
 
 **INSTRUCTIONS:**
-1. Rewrite the script maintaining the same topic, message, and viral structure.
+1. ${topicInstruction}
 2. Adjust the vocabulary and sentence complexity to match the target grade level.
 3. ${targetDuration !== "any" ? `Adjust the length to fit approximately ${targetDuration} seconds of speaking time.` : "Keep similar length."}
 4. ${addCues ? "Add delivery cues in [BRACKETS] throughout to guide performance. Make cues specific and actionable." : "Do NOT add any delivery cues or stage directions."}
-5. Keep the same hook pattern, body structure, transition, and CTA style.
+5. Keep the same hook pattern type, body pacing style, transition technique, and CTA style from the viral structure.
 6. Write as natural spoken text with short paragraphs for natural pauses.
 7. Do NOT include labels like "Hook:" or "Body:" - just write the flowing script${addCues ? " with [CUES] inline" : ""}.`;
 

@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
+import { AppLink } from "@/components/AppLink";
 import {
   Eye,
   Heart,
@@ -1406,27 +1407,35 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center shrink-0">
               <Button
+                asChild
                 size="lg"
                 className="gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-900/20 hover:opacity-95"
-                onClick={() => {
-                  posthog?.capture("dashboard_hero_cta", { action: "spy_creator" });
-                  setLocation("/research");
-                }}
               >
-                <Search className="h-4 w-4" aria-hidden />
-                Spy a creator
+                <AppLink
+                  href="/research"
+                  onClick={() => {
+                    posthog?.capture("dashboard_hero_cta", { action: "spy_creator" });
+                  }}
+                >
+                  <Search className="h-4 w-4" aria-hidden />
+                  Spy a creator
+                </AppLink>
               </Button>
               <Button
+                asChild
                 size="lg"
                 variant="outline"
                 className="gap-2 border-border/60 bg-background/50 backdrop-blur-sm"
-                onClick={() => {
-                  posthog?.capture("dashboard_hero_cta", { action: "creator_radar" });
-                  setLocation("/history");
-                }}
               >
-                <Radar className="h-4 w-4" aria-hidden />
-                Creator Radar
+                <AppLink
+                  href="/history"
+                  onClick={() => {
+                    posthog?.capture("dashboard_hero_cta", { action: "creator_radar" });
+                  }}
+                >
+                  <Radar className="h-4 w-4" aria-hidden />
+                  Creator Radar
+                </AppLink>
               </Button>
             </div>
           </div>
@@ -1485,44 +1494,51 @@ export default function Dashboard() {
                 ) : (
                   <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
                     Transcripts and scripts you create show up in{" "}
-                    <button
-                      type="button"
+                    <AppLink
+                      href="/library"
                       className="font-medium text-primary underline-offset-4 hover:underline"
                       onClick={() => {
                         posthog?.capture("dashboard_empty_state_library_link");
-                        setLocation("/library");
                       }}
                     >
                       Library
-                    </button>
+                    </AppLink>
                     . Start with Spy a creator when you are ready.
                   </p>
                 )}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2 border-t border-white/5 pt-4 sm:justify-start lg:border-0 lg:pt-0 lg:justify-end">
                 <Button
+                  asChild
                   variant="outline"
                   size="sm"
                   className="gap-1.5 border-border/50 bg-background/40"
-                  onClick={() => {
-                    posthog?.capture("dashboard_hero_shortcut", { to: "library" });
-                    setLocation("/library");
-                  }}
                 >
-                  <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                  Library
+                  <AppLink
+                    href="/library"
+                    onClick={() => {
+                      posthog?.capture("dashboard_hero_shortcut", { to: "library" });
+                    }}
+                  >
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                    Library
+                  </AppLink>
                 </Button>
                 <Button
+                  asChild
                   variant="outline"
                   size="sm"
                   className="gap-1.5 border-border/50 bg-background/40"
-                  onClick={() => {
-                    posthog?.capture("dashboard_hero_shortcut", { to: "ideas" });
-                    setLocation("/ideas");
-                  }}
                 >
-                  <Lightbulb className="h-3.5 w-3.5" aria-hidden />
-                  Idea to Script
+                  <AppLink
+                    href="/ideas"
+                    onClick={() => {
+                      posthog?.capture("dashboard_hero_shortcut", { to: "ideas" });
+                    }}
+                  >
+                    <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+                    Idea to Script
+                  </AppLink>
                 </Button>
               </div>
             </div>
@@ -1554,11 +1570,10 @@ export default function Dashboard() {
             At a glance
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <button
-              type="button"
-              onClick={() => setLocation("/history")}
+            <AppLink
+              href="/history"
               className={cn(
-                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "block rounded-xl border border-border/40 bg-card p-4 text-left no-underline text-inherit transition-colors",
                 "hover:border-primary/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
               )}
             >
@@ -1571,12 +1586,11 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{formatNumber(totalReelsScraped)}</p>
               )}
               <p className="text-xs text-muted-foreground">Reels researched</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocation("/scripts")}
+            </AppLink>
+            <AppLink
+              href="/scripts"
               className={cn(
-                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "block rounded-xl border border-border/40 bg-card p-4 text-left no-underline text-inherit transition-colors",
                 "hover:border-emerald-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
               )}
             >
@@ -1589,12 +1603,11 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{scripts.length}</p>
               )}
               <p className="text-xs text-muted-foreground">Scripts created</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocation("/saved")}
+            </AppLink>
+            <AppLink
+              href="/saved"
               className={cn(
-                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "block rounded-xl border border-border/40 bg-card p-4 text-left no-underline text-inherit transition-colors",
                 "hover:border-amber-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
               )}
             >
@@ -1607,12 +1620,11 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{savedReels.length}</p>
               )}
               <p className="text-xs text-muted-foreground">Saved reels</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocation("/collected")}
+            </AppLink>
+            <AppLink
+              href="/collected"
               className={cn(
-                "rounded-xl border border-border/40 bg-card p-4 text-left transition-colors",
+                "block rounded-xl border border-border/40 bg-card p-4 text-left no-underline text-inherit transition-colors",
                 "hover:border-violet-500/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
               )}
             >
@@ -1625,7 +1637,7 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{collectedReels.length}</p>
               )}
               <p className="text-xs text-muted-foreground">Collected reels</p>
-            </button>
+            </AppLink>
           </div>
         </section>
 
@@ -1634,13 +1646,12 @@ export default function Dashboard() {
             Shortcuts
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <button
-              type="button"
+            <AppLink
+              href="/research"
               onClick={() => {
                 posthog?.capture("dashboard_shortcut_tile", { to: "research" });
-                setLocation("/research");
               }}
-              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-accent/25 hover:shadow-md hover:shadow-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-primary/30 hover:bg-accent/25 hover:shadow-md hover:shadow-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-500/15">
@@ -1650,14 +1661,13 @@ export default function Dashboard() {
               </div>
               <p className="mt-3 font-semibold text-foreground">Spy Viral Reels</p>
               <p className="mt-1 text-sm text-muted-foreground">Paste a handle and pull ranked reels for any public account.</p>
-            </button>
-            <button
-              type="button"
+            </AppLink>
+            <AppLink
+              href="/collected"
               onClick={() => {
                 posthog?.capture("dashboard_shortcut_tile", { to: "collected" });
-                setLocation("/collected");
               }}
-              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-violet-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25"
+              className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-violet-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
@@ -1667,14 +1677,13 @@ export default function Dashboard() {
               </div>
               <p className="mt-3 font-semibold text-foreground">Collected Reels</p>
               <p className="mt-1 text-sm text-muted-foreground">From Telegram, ready to transcribe and turn into scripts.</p>
-            </button>
-            <button
-              type="button"
+            </AppLink>
+            <AppLink
+              href="/library"
               onClick={() => {
                 posthog?.capture("dashboard_shortcut_tile", { to: "library" });
-                setLocation("/library");
               }}
-              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-cyan-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/25"
+              className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-cyan-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/25"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/12">
@@ -1684,14 +1693,13 @@ export default function Dashboard() {
               </div>
               <p className="mt-3 font-semibold text-foreground">Library</p>
               <p className="mt-1 text-sm text-muted-foreground">All transcripts and scripts in one scrollable place.</p>
-            </button>
-            <button
-              type="button"
+            </AppLink>
+            <AppLink
+              href="/ideas"
               onClick={() => {
                 posthog?.capture("dashboard_shortcut_tile", { to: "ideas" });
-                setLocation("/ideas");
               }}
-              className="group rounded-2xl border border-border/50 bg-card p-5 text-left transition-all hover:border-amber-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/25"
+              className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-amber-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/25"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/12">
@@ -1701,7 +1709,7 @@ export default function Dashboard() {
               </div>
               <p className="mt-3 font-semibold text-foreground">Idea to Script</p>
               <p className="mt-1 text-sm text-muted-foreground">Turn a rough idea into a full reel script with AI polish.</p>
-            </button>
+            </AppLink>
           </div>
         </section>
 
@@ -1713,12 +1721,12 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground">Click a row to open that session</p>
             </div>
             {jobs.length > 5 ? (
-              <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={() => setLocation("/history")}>
-                View all in Creator Radar
+              <Button asChild variant="ghost" size="sm" className="text-xs text-primary">
+                <AppLink href="/history">View all in Creator Radar</AppLink>
               </Button>
             ) : jobs.length > 0 ? (
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setLocation("/history")}>
-                Open Creator Radar
+              <Button asChild variant="ghost" size="sm" className="text-xs text-muted-foreground">
+                <AppLink href="/history">Open Creator Radar</AppLink>
               </Button>
             ) : null}
           </div>
@@ -1839,18 +1847,17 @@ export default function Dashboard() {
               <h2 id="dash-scripts-heading" className="text-sm font-semibold text-foreground">
                 Recent scripts
               </h2>
-              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setLocation("/scripts")}>
-                View all
+              <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
+                <AppLink href="/scripts">View all</AppLink>
               </Button>
             </div>
             <div className="flex flex-col gap-2">
               {scripts.slice(0, 3).map((script) => (
-                <button
+                <AppLink
                   key={script.id}
-                  type="button"
-                  onClick={() => setLocation(`/scripts/${script.id}`)}
+                  href={`/scripts/${script.id}`}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl border border-border/30 bg-card p-3 text-left transition-colors",
+                    "flex items-center gap-3 rounded-xl border border-border/30 bg-card p-3 text-left no-underline text-inherit transition-colors",
                     "hover:border-primary/25 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                   )}
                 >
@@ -1867,7 +1874,7 @@ export default function Dashboard() {
                   <Badge variant={script.status === "approved" ? "default" : "secondary"} className="shrink-0 text-[10px]">
                     {script.status}
                   </Badge>
-                </button>
+                </AppLink>
               ))}
             </div>
           </section>
@@ -2697,6 +2704,7 @@ export default function Dashboard() {
                           reelSource="featured"
                           featuredReelId={reel.id}
                           handle={displayScrapeHandle || job?.handle || ""}
+                          reelCaption={reel.caption ?? undefined}
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
@@ -2728,6 +2736,7 @@ export default function Dashboard() {
                           reelSource="user_job"
                           reelId={reel.id}
                           handle={displayScrapeHandle || job?.handle || ""}
+                          reelCaption={reel.caption ?? undefined}
                           hasTranscription={hasTranscription}
                           isProcessing={isProcessing}
                           isTranscriptionQueued={isTxQueued}
@@ -3331,6 +3340,7 @@ export default function Dashboard() {
                   reelSource="featured"
                   featuredReelId={reel.id}
                   handle={displayScrapeHandle || job?.handle || ""}
+                  reelCaption={reel.caption ?? undefined}
                   hasTranscription={hasTranscription}
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}
@@ -3362,6 +3372,7 @@ export default function Dashboard() {
                   reelSource="user_job"
                   reelId={reel.id}
                   handle={displayScrapeHandle || job?.handle || ""}
+                  reelCaption={reel.caption ?? undefined}
                   hasTranscription={hasTranscription}
                   isProcessing={isProcessing}
                   isTranscriptionQueued={isTxQueued}

@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 
 const TABS: Array<{
   id: MobileCreateTabId;
@@ -54,10 +54,8 @@ function MobileNicheBar({
 
 function MobileTabBar({
   activeTab,
-  onNavigate,
 }: {
   activeTab: MobileCreateTabId;
-  onNavigate: (path: string) => void;
 }) {
   return (
     <nav
@@ -69,19 +67,16 @@ function MobileTabBar({
           const active = tab.id === activeTab;
           const Icon = tab.icon;
           return (
-            <button
+            <Link
               key={tab.id}
-              type="button"
-              onClick={() => {
-                if (!active) onNavigate(tab.path);
-              }}
+              href={tab.path}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition-colors",
                 active
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              aria-current={active ? "page" : undefined}
             >
               <span
                 className={cn(
@@ -92,7 +87,7 @@ function MobileTabBar({
                 <Icon className="h-[18px] w-[18px]" />
               </span>
               <span>{tab.label}</span>
-            </button>
+            </Link>
           );
         })}
       </div>
@@ -120,7 +115,7 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
 }
 
 function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const searchString = useSearch();
   const activeTab = mobileCreateTabForPath(location);
   const isScriptDetail =
@@ -155,7 +150,7 @@ function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
-      <MobileTabBar activeTab={activeTab} onNavigate={setLocation} />
+      <MobileTabBar activeTab={activeTab} />
     </div>
   );
 }
