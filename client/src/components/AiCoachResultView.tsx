@@ -160,7 +160,10 @@ export function AiCoachResultView({
   const formatLabel =
     result.formatLabel ?? PLAN_FORMAT_LABELS[formatKey] ?? formatKey.replace(/-/g, " ");
   const production = parseProductionNotes(result.productionNotes);
-  const hookOnScreenText = production?.hookOnScreenText?.trim() || "";
+  const hookOnScreenText =
+    production?.hookOnScreenText?.trim() ||
+    production?.textOverlay?.trim() ||
+    "";
 
   const sections: CoachScriptSections = {
     explain: result.explain,

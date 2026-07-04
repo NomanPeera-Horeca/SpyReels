@@ -11,7 +11,15 @@ import {
   coachScriptIsComplete,
   combineBodyFromSections,
   sectionsFromGenerated,
+  type CoachScriptSections,
 } from "@shared/coachScriptSections";
+import {
+  COACH_LENGTH_AND_HOOK_RULES,
+  COACH_MAX_TOTAL_WORDS,
+  coachScriptWithinBudget,
+  coachScriptWordCount,
+  durationLabelFromWordCount,
+} from "@shared/coachScriptLength";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
@@ -183,35 +191,36 @@ export async function generateCoachScriptForWorkspace(args: {
     });
   }
 
-  const platformRaw = String(generated.platform ?? "both");
-  const platform = ["instagram", "tiktok", "both"].includes(platformRaw) ? platformRaw : "both";
-
-  const sections = sectionsFromGenerated(generated);
-  const bodyCombined = combineBodyFromSections(sections);
-  const ctaText = sections.cta || sections.teach || String(generated.callToAction ?? "");
-
   args.onPhase?.("production_notes");
 
-  const coachPayload = buildProductionNotesJson(generated.productionCoach, sections, {
-    contentFormat: String(generated.contentFormat ?? "talking-head"),
+  const finalized = await finalizeCoachGenerated(generated);
+  const { generated: finalGenerated, sections, hook, estimatedDuration } = finalized;
+  const productionCoach = normalizeProductionCoach(finalGenerated.productionCoach);
+
+  const platformRaw = String(finalGenerated.platform ?? "both");
+  const platform = ["instagram", "tiktok", "both"].includes(platformRaw) ? platformRaw : "both";
+
+  const bodyCombined = combineBodyFromSections(sections);
+  const ctaText = sections.cta || sections.teach || String(finalGenerated.callToAction ?? "");
+
+  const coachPayload = buildProductionNotesJson(productionCoach, sections, {
+    contentFormat: String(finalGenerated.contentFormat ?? "talking-head"),
   });
 
   const insertResult = await db.insert(coachScripts).values({
     userId: args.userId,
     workspaceId: args.workspaceId,
     planCardId: args.planCardId ?? null,
-    title: String(generated.title ?? "Untitled script").slice(0, 256),
-    hook: String(generated.hook),
+    title: String(finalGenerated.title ?? "Untitled script").slice(0, 256),
+    hook,
     body: bodyCombined,
     callToAction: ctaText,
     platform,
-    tone: String(generated.tone ?? "conversational").slice(0, 64),
-    estimatedDuration: generated.estimatedDuration
-      ? String(generated.estimatedDuration).slice(0, 64)
-      : null,
-    contentType: generated.contentType ? String(generated.contentType).slice(0, 64) : null,
-    contentFormat: generated.contentFormat ? String(generated.contentFormat).slice(0, 64) : null,
-    formatLabel: generated.formatLabel ? String(generated.formatLabel).slice(0, 128) : null,
+    tone: String(finalGenerated.tone ?? "conversational").slice(0, 64),
+    estimatedDuration,
+    contentType: finalGenerated.contentType ? String(finalGenerated.contentType).slice(0, 64) : null,
+    contentFormat: finalGenerated.contentFormat ? String(finalGenerated.contentFormat).slice(0, 64) : null,
+    formatLabel: finalGenerated.formatLabel ? String(finalGenerated.formatLabel).slice(0, 128) : null,
     productionNotes: coachPayload,
   });
 
@@ -229,6 +238,92 @@ export async function generateCoachScriptForWorkspace(args: {
     await incrementUsage(args.userId, "recreateCount");
   }
   return mapCoachScriptRow(row);
+}
+
+function pickCoachString(obj: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function normalizeProductionCoach(coach: unknown): Record<string, unknown> {
+  const base =
+    coach && typeof coach === "object" ? { ...(coach as Record<string, unknown>) } : {};
+  const hookOnScreen =
+    pickCoachString(base, "hookOnScreenText", "hook_on_screen_text") ||
+    pickCoachString(base, "textOverlay", "text_overlay");
+  if (hookOnScreen) {
+    const capped = hookOnScreen.slice(0, 30);
+    base.hookOnScreenText = capped;
+    if (!pickCoachString(base, "textOverlay", "text_overlay")) {
+      base.textOverlay = capped;
+    }
+  }
+  return base;
+}
+
+async function tightenCoachScriptPayload(
+  generated: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const hook = String(generated.hook ?? "");
+  const sections = sectionsFromGenerated(generated);
+  const words = coachScriptWordCount(hook, sections);
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: withAiFormattingRules(
+          "You shorten Reel scripts. Return only valid JSON with the same fields as the input."
+        ),
+      },
+      {
+        role: "user",
+        content: `This HEIT script is too long (${words} spoken words; max ${COACH_MAX_TOTAL_WORDS}). Shorten every section. Keep the hook punchy with a specific number or sharp claim. Preserve meaning.
+
+${COACH_LENGTH_AND_HOOK_RULES}
+
+Return JSON with: title, hook, explain, illustrate, teach, cta, contentType, contentFormat, formatLabel, platform, tone, productionCoach (include hookOnScreenText).
+
+Current script:
+${JSON.stringify({ title: generated.title, hook, ...sections, productionCoach: generated.productionCoach }, null, 2)}`,
+      },
+    ],
+    maxTokens: 2048,
+    response_format: { type: "json_object" },
+  });
+
+  const raw = String(response.choices[0]?.message?.content ?? "{}");
+  return normalizeCoachScriptPayload(parseLlmJson<Record<string, unknown>>(raw, generated));
+}
+
+async function finalizeCoachGenerated(
+  generated: Record<string, unknown>
+): Promise<{
+  generated: Record<string, unknown>;
+  sections: CoachScriptSections;
+  hook: string;
+  estimatedDuration: string;
+}> {
+  let payload = generated;
+  let hook = String(payload.hook ?? "");
+  let sections = sectionsFromGenerated(payload);
+
+  if (!coachScriptWithinBudget(hook, sections)) {
+    payload = await tightenCoachScriptPayload(payload);
+    hook = String(payload.hook ?? "");
+    sections = sectionsFromGenerated(payload);
+  }
+
+  const totalWords = coachScriptWordCount(hook, sections);
+  return {
+    generated: payload,
+    sections,
+    hook,
+    estimatedDuration: durationLabelFromWordCount(totalWords),
+  };
 }
 
 export async function convertRoughScriptForWorkspace(args: {

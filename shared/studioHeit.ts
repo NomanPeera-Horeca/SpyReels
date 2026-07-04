@@ -1,4 +1,5 @@
 // Prompts from BrandScript AI export (30-Day Plan + AI Coach). Do not change JSON shapes.
+import { COACH_LENGTH_AND_HOOK_RULES } from "@shared/coachScriptLength";
 
 export function buildStudioDateContext(now = new Date()): string {
   const year = now.getFullYear();
@@ -132,6 +133,8 @@ ${brandDescription ? `- About their brand: ${brandDescription}` : ""}
 
 ${topicRules}
 
+${COACH_LENGTH_AND_HOOK_RULES}
+
 Produce a full HEIT script with production directions. Return ONLY valid JSON:
 {
   "contentType": "testimonial | hot-take | story | behind-the-scenes | transformation | educational | trend | rant | announcement",
@@ -165,7 +168,8 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
     "bRoll": [
       { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
     ],
-    "textOverlay": "Specific text overlay for hook moment — what words, when, style"
+    "textOverlay": "Same as hookOnScreenText — max 30 chars for first 2 sec",
+    "hookOnScreenText": "ALL CAPS on-screen hook text, max 30 characters, first 2 seconds"
   },
   "title": "Short catchy working title",
   "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
