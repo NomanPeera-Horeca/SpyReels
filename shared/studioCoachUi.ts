@@ -69,6 +69,24 @@ export function buildPlanPrefill(card: {
   return `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`;
 }
 
+/** Prefill for Spark Deck cards so AI Coach follows product/marketing intent in rough notes. */
+export function buildSparkPrefill(card: {
+  title: string;
+  hook: string;
+  angle: string;
+  userRawNote?: string | null;
+}): string {
+  const note = (card.userRawNote ?? card.angle).trim();
+  return `Write a viral script from this Spark Deck idea.
+
+Creator goal (ground truth — follow even if it mentions a product, tool, or brand):
+${note}
+
+Hook direction: "${card.hook}"
+
+If the note says not to name a tool or product on camera, use soft-sell or problem-discovery style without naming it.`;
+}
+
 export type StudioPrefillMeta = {
   planCardId?: number;
   planCardTitle?: string;

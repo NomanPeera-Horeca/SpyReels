@@ -246,6 +246,15 @@ import {
   HEIT_FRAMEWORK,
 } from "@shared/ideaScriptHeit";
 import {
+  buildRecreateTopicPrompt,
+  buildRecreateDefaultTopicPrompt,
+  RECREATE_EXPLICIT_ANGLE_RULES,
+  RECREATE_DEFAULT_TOPIC_RULES,
+} from "@shared/recreateAnglePrompt";
+import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
+import { getCreatorCoachProfile } from "./planCoachProfile";
+import { getOrFetchAudienceSignals } from "./audienceResearch/service";
+import {
   buildIdeaScriptCompletedProps,
   buildIdeaScriptFailedProps,
   buildRemakeScriptCompletedProps,
@@ -3193,15 +3202,32 @@ Return JSON only:
         const biz = (ctx.user.businessDescription ?? "").trim();
         const aud = (ctx.user.targetAudience ?? "").trim();
 
-        // promptAngle = what runScriptGeneration receives (drives the prompt)
+        const hasExplicitUserAngle = typed.length > 0;
+
         let promptAngle: string;
-        if (typed && aud) promptAngle = `Write about: ${typed}. Adapt it for ${aud}.`;
-        else if (typed) promptAngle = typed;
-        else if (aud && biz)
-          promptAngle = `Adapt this script for ${aud}, from the perspective of ${biz}.`;
-        else if (aud) promptAngle = `Adapt this script for ${aud}.`;
-        else if (biz) promptAngle = `From the perspective of ${biz}.`;
-        else promptAngle = "SAME_TOPIC";
+        if (hasExplicitUserAngle) {
+          promptAngle = buildRecreateTopicPrompt({
+            angle: typed,
+            targetAudience: aud || null,
+            businessDescription: biz || null,
+          });
+        } else if (aud || biz) {
+          const profile = await getCreatorCoachProfile(ctx.user.id);
+          const { signals } = await getOrFetchAudienceSignals({
+            workspaceId: ctx.workspaceId,
+            nicheSlug: profile.nicheSlug,
+            nicheLabel: profile.niche,
+            targetAudience: profile.targetAudience,
+          });
+          promptAngle = buildRecreateDefaultTopicPrompt({
+            niche: profile.niche,
+            targetAudience: profile.targetAudience,
+            businessDescription: biz || profile.brandDescription,
+            audienceResearchBlock: formatAudienceSignalsForPrompt(signals.slice(0, 5)),
+          });
+        } else {
+          promptAngle = "SAME_TOPIC";
+        }
 
         // storedTopic = what we persist to recreated_scripts.topic (for display, NOT the prompt)
         let storedTopic: string;
@@ -3295,16 +3321,15 @@ Return JSON only:
         const trimmedAngle = input.angle?.trim() ?? "";
         let storedTopic = existingScript.topic || "SAME_TOPIC";
         let promptAngle: string | undefined;
-        if (trimmedAngle) {
+        const hasExplicitUserAngle = trimmedAngle.length > 0;
+        if (hasExplicitUserAngle) {
           const aud = (ctx.user.targetAudience ?? "").trim();
           const biz = (ctx.user.businessDescription ?? "").trim();
-          if (aud) {
-            promptAngle = `Write about: ${trimmedAngle}. Adapt it for ${aud}.`;
-          } else if (biz) {
-            promptAngle = `Write about: ${trimmedAngle}. From the perspective of ${biz}.`;
-          } else {
-            promptAngle = trimmedAngle;
-          }
+          promptAngle = buildRecreateTopicPrompt({
+            angle: trimmedAngle,
+            targetAudience: aud || null,
+            businessDescription: biz || null,
+          });
           storedTopic = trimmedAngle;
         }
 
@@ -3329,7 +3354,8 @@ Return JSON only:
           input.gradeLevel,
           input.targetDuration,
           effectiveAddCues,
-          promptAngle
+          promptAngle,
+          hasExplicitUserAngle
         ).catch((err: unknown) => {
           console.error(`Script rewrite ${newScriptId} failed:`, err);
         });
@@ -7987,7 +8013,17 @@ function formatRetentionTactics(tactics: unknown): string | null {
   return tactics.map(t => String(t).split("_").join(" ")).join(", ");
 }
 
-function buildV13ContextBlock(reel: any): string {
+function hasExplicitUserAngleInTopic(topic: string): boolean {
+  return (
+    topic.includes("Creator's chosen angle") ||
+    topic.includes("Creator goal (ground truth")
+  );
+}
+
+function buildV13ContextBlock(
+  reel: any,
+  options?: { explicitUserAngle?: boolean }
+): string {
   const lines: string[] = [];
   const {
     niche: rawNiche = null,
@@ -8013,15 +8049,23 @@ function buildV13ContextBlock(reel: any): string {
 
   if (lines.length === 0) return "";
 
+  const applyBlock = options?.explicitUserAngle
+    ? `**APPLY THIS WHEN WRITING:**
+- The creator provided their own angle. Use ONLY hook pattern and retention tactics from the source reel. Do NOT reuse the source reel's niche, content type, subject matter, or vocabulary.
+- Transfer STRUCTURE and ENGAGEMENT MECHANICS, not the literal topic from the classifier or transcript.
+- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type adapted to the creator's angle.
+- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script.`
+    : `**APPLY THIS WHEN WRITING:**
+- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type (e.g., contrarian = open with a controversial stance; question = open with a challenging question; stat = open with a surprising number).
+- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script (e.g., cliffhanger = withhold key info until late; pattern_interrupt = abrupt shift in pace; specific_numbers = concrete data points).
+- The content type and niche guide the tone and vocabulary.
+- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.`;
+
   return `
 **PRE-ANALYZED SOURCE REEL CONTEXT (from our classifier):**
 ${lines.join("\n")}
 
-**APPLY THIS WHEN WRITING:**
-- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type (e.g., contrarian = open with a controversial stance; question = open with a challenging question; stat = open with a surprising number).
-- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script (e.g., cliffhanger = withhold key info until late; pattern_interrupt = abrupt shift in pace; specific_numbers = concrete data points).
-- The content type and niche guide the tone and vocabulary.
-- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.
+${applyBlock}
 
 `;
 }
@@ -8172,7 +8216,7 @@ Return ONLY valid JSON, no markdown formatting.`;
       : `Write at a Grade ${gradeLevel} reading level. Use simple vocabulary and short sentences appropriate for that grade level.`;
 
     const isSameTopic = topic === "SAME_TOPIC";
-    const v13Context = buildV13ContextBlock(reel);
+    const v13Context = buildV13ContextBlock(reel, { explicitUserAngle: !isSameTopic });
     const cuesInstruction = addCues ? buildDeliveryCuesPromptSection() : "";
     const scriptFormatClosing = addCues
       ? `Write the script as natural spoken text. Add delivery cues in [BRACKETS] throughout using the cue types above. Place each cue at the START of the line it applies to. Every 2-3 spoken lines should include a cue.
@@ -8218,6 +8262,8 @@ ${originalTranscript}
 
 **NEW TOPIC/ANGLE:**
 ${topic}
+
+${hasExplicitUserAngleInTopic(topic) ? RECREATE_EXPLICIT_ANGLE_RULES : RECREATE_DEFAULT_TOPIC_RULES}
 
 **READABILITY REQUIREMENT:**
 ${gradeLevelInstruction}${cuesInstruction}
@@ -8376,7 +8422,8 @@ async function runScriptRewrite(
   gradeLevel: string,
   targetDuration: string,
   addCues: boolean,
-  angle?: string
+  angle?: string,
+  explicitUserAngle = false
 ): Promise<void> {
   try {
     const gradeLevelInstruction = gradeLevel === "auto"
@@ -8399,10 +8446,12 @@ async function runScriptRewrite(
     }
 
     const angleBlock = angle
-      ? `\n**NEW ANGLE/TOPIC:**\n${angle}\n`
+      ? `\n**NEW ANGLE/TOPIC:**\n${angle}\n${explicitUserAngle ? `\n${RECREATE_EXPLICIT_ANGLE_RULES}\n` : ""}`
       : "";
     const topicInstruction = angle
-      ? "Rewrite the script for the NEW ANGLE/TOPIC above. Keep the proven viral structure but change the subject, examples, and message to match the new angle."
+      ? explicitUserAngle
+        ? "Rewrite the script for the NEW ANGLE/TOPIC above. The angle is ground truth for subject and message. Keep the proven viral structure but change the subject, examples, and message to match the new angle. Ignore the literal topic of the current script and source transcript unless the angle asks for it."
+        : "Rewrite the script for the NEW ANGLE/TOPIC above. Keep the proven viral structure but change the subject, examples, and message to match the new angle."
       : "Rewrite the script maintaining the same topic, message, and viral structure.";
     const captionBlock = caption ? `\n**SOURCE REEL CAPTION:**\n${caption}\n` : "";
 

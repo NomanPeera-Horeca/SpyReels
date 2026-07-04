@@ -36,6 +36,25 @@ Critical rules:
 - Never sound like AI. Sound like a real person talking to a friend.
 - Scripts must be specific to the creator's niche, not generic.`;
 
+/** When the creator gives an explicit angle, topic, or Spark note with specific intent. */
+export const COACH_EXPLICIT_ANGLE_RULES = `Explicit angle mode:
+- The raw idea or attached plan/spark note defines WHAT the video is about. Niche and audience define WHO it is for and HOW to speak.
+- If the idea names a product, SaaS, app, tool, or brand (examples: SpyReels, their own software), serve that marketing or product-story goal.
+- If the creator says not to name the tool on camera, use problem-first or curiosity content without the brand name.
+- Meta instructions (for example "for SpyReels", "promo for my tool") are ground truth even when the niche profile points elsewhere.
+- The explicit angle wins over default niche assumptions and over any source reel subject.`;
+
+/** When no explicit angle: niche, audience, Reddit/Quora research, and plan context pick the topic. */
+export const COACH_DEFAULT_TOPIC_RULES = `Default topic mode (no explicit creator angle):
+- Choose WHAT the video is about from niche, target audience, brand description, and the Reddit/Quora/web research block when provided.
+- Ground hooks and problems in real audience pains and questions from research. Cite the platform or thread tone when relevant.
+- When a 30-day plan card is attached, its title, angle, hook, funnel stage (TOFU/MOFU/BOFU), and researchSignal are ground truth for this script.
+- TOFU may use broader pains (content, marketing, growth) even for a niche audience. MOFU and BOFU go deeper. Rotate sub-topics so the feed does not repeat one theme.
+- Scripts must be specific to the creator's world, not generic advice.`;
+
+/** @deprecated Use COACH_EXPLICIT_ANGLE_RULES or COACH_DEFAULT_TOPIC_RULES via buildCoachPrompt options. */
+export const COACH_TOPIC_INTENT_RULES = `${COACH_EXPLICIT_ANGLE_RULES}\n\n${COACH_DEFAULT_TOPIC_RULES}`;
+
 export function buildAnalysisPrompt(
   description: string,
   niche: string,
@@ -54,6 +73,10 @@ ${brandDescription ? `- About their brand: ${brandDescription}` : ""}
 Raw idea: "${description}"
 
 Identify gaps, ambiguous references, or missing context that would cause wrong assumptions.
+
+${COACH_EXPLICIT_ANGLE_RULES}
+
+If the idea mentions a product, tool, or brand but you would otherwise default to generic niche content, lower confidence and ask one sharp clarifying question about the intended angle.
 
 CRITICAL: Do NOT flag personal claims the creator makes about themselves. Only flag external claims (news stories, brand announcements, viral rumors, third-party stats).
 
@@ -81,7 +104,8 @@ export function buildCoachPrompt(
   targetAudience: string,
   brandDescription?: string | null,
   clarifications?: Array<{ question: string; answer: string }>,
-  audienceResearchBlock?: string
+  audienceResearchBlock?: string,
+  options?: { explicitUserAngle?: boolean }
 ): string {
   const clarificationBlock =
     clarifications && clarifications.length > 0
@@ -90,6 +114,10 @@ export function buildCoachPrompt(
   const audienceBlock = audienceResearchBlock?.trim()
     ? `\n\n${audienceResearchBlock.trim()}`
     : "";
+
+  const topicRules = options?.explicitUserAngle
+    ? COACH_EXPLICIT_ANGLE_RULES
+    : COACH_DEFAULT_TOPIC_RULES;
 
   return `A content creator just shared this raw idea:
 
@@ -101,6 +129,8 @@ Creator profile:
 - Niche: ${niche}
 - Target Audience: ${targetAudience}
 ${brandDescription ? `- About their brand: ${brandDescription}` : ""}
+
+${topicRules}
 
 Produce a full HEIT script with production directions. Return ONLY valid JSON:
 {

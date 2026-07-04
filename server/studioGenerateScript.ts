@@ -115,6 +115,10 @@ export async function generateCoachScriptForWorkspace(args: {
   args.onPhase?.("write_script");
 
   let effectiveDescription = args.description;
+  let explicitUserAngle =
+    args.description.includes("Creator goal (ground truth") ||
+    args.description.includes("Creator's chosen angle");
+
   if (args.planCardId) {
     const [planCard] = await db
       .select()
@@ -124,16 +128,28 @@ export async function generateCoachScriptForWorkspace(args: {
       )
       .limit(1);
     if (planCard) {
-      const planBlock = [
-        `30-day plan Day ${planCard.day}: ${planCard.title}`,
-        `Angle: ${planCard.angle}`,
-        `Hook idea: ${planCard.hook}`,
-        planCard.filmingLocation ? `Filming location: ${planCard.filmingLocation}` : null,
-        planCard.researchSignal ? `Research signal: ${planCard.researchSignal}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      effectiveDescription = `${args.description}\n\n--- Approved plan context (ground truth) ---\n${planBlock}`;
+      const isSpark = planCard.sourceType === "user_spark" || planCard.day === 0;
+      if (isSpark) {
+        explicitUserAngle = true;
+      }
+      const planBlock = isSpark
+        ? [
+            `Spark Deck idea: ${planCard.title}`,
+            `Creator note (ground truth): ${planCard.userRawNote ?? planCard.angle}`,
+            `Hook direction: ${planCard.hook}`,
+            planCard.researchSignal
+              ? `Inspired by reel caption: ${planCard.researchSignal}`
+              : null,
+          ]
+        : [
+            `30-day plan Day ${planCard.day}: ${planCard.title}`,
+            `Funnel stage: ${planCard.funnelStage ?? "tofu"}`,
+            `Angle: ${planCard.angle}`,
+            `Hook idea: ${planCard.hook}`,
+            planCard.filmingLocation ? `Filming location: ${planCard.filmingLocation}` : null,
+            planCard.researchSignal ? `Research signal: ${planCard.researchSignal}` : null,
+          ];
+      effectiveDescription = `${args.description}\n\n--- Approved plan context (ground truth) ---\n${planBlock.filter(Boolean).join("\n")}`;
     }
   }
 
@@ -148,7 +164,8 @@ export async function generateCoachScriptForWorkspace(args: {
           profile.targetAudience,
           profile.brandDescription,
           args.clarifications,
-          audienceResearchBlock
+          audienceResearchBlock,
+          { explicitUserAngle }
         ),
       },
     ],

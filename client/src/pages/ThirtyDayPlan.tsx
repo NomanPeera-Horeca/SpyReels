@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
 import { ONBOARDING_PLAN_AUTOSTART_KEY } from "@shared/onboardingFlow";
-import { STUDIO_PREFILL_META_KEY } from "@shared/studioCoachUi";
+import { STUDIO_PREFILL_META_KEY, buildSparkPrefill } from "@shared/studioCoachUi";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -319,7 +319,7 @@ export default function ThirtyDayPlan() {
     sessionStorage.setItem(
       STUDIO_PREFILL_KEY,
       isSpark
-        ? `Spark idea: ${card.title}\n\n${card.userRawNote ?? card.angle}\n\nHook idea: "${card.hook}"`
+        ? buildSparkPrefill(card)
         : `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`
     );
     sessionStorage.setItem(
