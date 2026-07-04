@@ -11,6 +11,10 @@ import {
   COACH_SYSTEM_PROMPT,
 } from "@shared/studioHeit";
 import {
+  detectsClearCreativeFormat,
+  filterCoachClarificationQuestions,
+} from "@shared/coachAnalyze";
+import {
   buildProductionNotesJson,
   coachScriptIsComplete,
   combineBodyFromSections,
@@ -681,13 +685,21 @@ export const studioRouter = router({
       const analysis = parseJsonFromLlm<Record<string, unknown>>(raw, {});
       const fc = (analysis.factCheck as Record<string, unknown>) ?? {};
 
+      let confidence = typeof analysis.confidence === "number" ? analysis.confidence : 90;
+      let questions = Array.isArray(analysis.questions)
+        ? analysis.questions.map(String).slice(0, 2)
+        : [];
+
+      questions = filterCoachClarificationQuestions(input.description, questions);
+      if (detectsClearCreativeFormat(input.description) && questions.length === 0) {
+        confidence = Math.max(confidence, 88);
+      }
+
       return {
-        confidence: typeof analysis.confidence === "number" ? analysis.confidence : 90,
+        confidence,
         understood: String(analysis.understood ?? ""),
         gaps: Array.isArray(analysis.gaps) ? analysis.gaps.map(String) : [],
-        questions: Array.isArray(analysis.questions)
-          ? analysis.questions.map(String).slice(0, 2)
-          : [],
+        questions,
         factCheck: {
           hasClaim: Boolean(fc.hasClaim),
           status: String(fc.status ?? "unverified"),

@@ -1,5 +1,6 @@
 // Prompts from BrandScript AI export (30-Day Plan + AI Coach). Do not change JSON shapes.
 import { COACH_LENGTH_AND_HOOK_RULES } from "@shared/coachScriptLength";
+import { COACH_ANALYSIS_RULES } from "@shared/coachAnalyze";
 
 export function buildStudioDateContext(now = new Date()): string {
   const year = now.getFullYear();
@@ -75,9 +76,7 @@ Raw idea: "${description}"
 
 Identify gaps, ambiguous references, or missing context that would cause wrong assumptions.
 
-${COACH_EXPLICIT_ANGLE_RULES}
-
-If the idea mentions a product, tool, or brand but you would otherwise default to generic niche content, lower confidence and ask one sharp clarifying question about the intended angle.
+${COACH_ANALYSIS_RULES}
 
 CRITICAL: Do NOT flag personal claims the creator makes about themselves. Only flag external claims (news stories, brand announcements, viral rumors, third-party stats).
 

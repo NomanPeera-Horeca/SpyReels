@@ -36,6 +36,7 @@ import {
   buildCoachScriptProgressSteps,
 } from "@shared/coachAgentProgress";
 import type { AgentProgressStep } from "@shared/agentProgress";
+import { shouldSkipCoachAnalyze } from "@shared/coachAnalyze";
 
 type FactCheck = {
   hasClaim: boolean;
@@ -364,6 +365,11 @@ export default function AiCoach() {
       plan_card_id: attachedContext?.planCardId ?? null,
     });
     setAgentMessage("Writing your viral script...");
+    if (shouldSkipCoachAnalyze(trimmed, { planCardId: attachedContext?.planCardId })) {
+      setPhase("generating");
+      generateMutation.mutate(buildGenerateInput({ description: trimmed }));
+      return;
+    }
     setPhase("analyzing");
     analyzeMutation.mutate({ description: trimmed });
   };
