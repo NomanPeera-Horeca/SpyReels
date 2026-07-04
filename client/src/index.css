@@ -245,6 +245,22 @@
     padding: 0.2rem;
   }
 
+  .dashboard-toolbar-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 639px) {
+    .dashboard-toolbar-scroll {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 0.125rem;
+    }
+
+    .dashboard-toolbar-scroll > * {
+      flex-shrink: 0;
+    }
+  }
+
   [data-sidebar="menu-button"][data-active="true"] {
     border-radius: calc(var(--radius) - 2px);
     box-shadow: inset 0 0 0 1px oklch(0.65 0.2 285 / 0.28);

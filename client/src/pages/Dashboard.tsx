@@ -86,7 +86,6 @@ import {
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
-import { REEL_NICHE_VALUES, formatReelTaxonomyLabel } from "@shared/reelNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
@@ -327,7 +326,6 @@ export default function Dashboard() {
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
-  const [nicheFilter, setNicheFilter] = useState<string>("all");
   /**
    * Grid is the default view as of Commit 7. The previous mode
    * (list|grid) is remembered per-browser in localStorage so users
@@ -365,7 +363,6 @@ export default function Dashboard() {
 
   const resetDashboardFilters = useCallback(() => {
     setDateFilter("all");
-    setNicheFilter("all");
   }, []);
 
   const prevJobStatusRef = useRef<string | undefined>(undefined);
@@ -546,10 +543,6 @@ export default function Dashboard() {
   const featuredDataQuery = trpc.featured.getDashboardData.useQuery(
     {
       featuredAccountId: featuredAccountId!,
-      niche:
-        nicheFilter === "all"
-          ? undefined
-          : (nicheFilter as (typeof REEL_NICHE_VALUES)[number]),
     },
     { enabled: isFeaturedView }
   );
@@ -715,10 +708,6 @@ export default function Dashboard() {
   const reelsQuery = trpc.reels.list.useQuery(
     {
       jobId: jobId!,
-      niche:
-        nicheFilter === "all"
-          ? undefined
-          : (nicheFilter as (typeof REEL_NICHE_VALUES)[number]),
     },
     {
       enabled:
@@ -1900,12 +1889,6 @@ export default function Dashboard() {
   /* Demo banner removed from UI; re-enable by uncommenting this block.
   const showDemoBanner = !!job?.isDemo && !user?.hasDismissedDemoBanner;
   */
-  const canShowAiBadge =
-    !!job?.classifiedNicheSlug &&
-    !!job?.classifiedConfidence &&
-    (job.classifiedConfidence === "high" ||
-      job.classifiedConfidence === "medium" ||
-      job.classifiedConfidence === "low");
   const isFirstVisitDashboard = user?.hasCompletedFirstSpy === false;
 
   const reelsInSpyWindow =
@@ -1961,7 +1944,7 @@ export default function Dashboard() {
               card with a large avatar + follower / engagement / posting-
               time stats; the user-scrape flow keeps its condensed header.
               The sort/filter/view-toggle cluster on the right is shared. */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+          <div className="mb-6 flex flex-col gap-4">
             {isFeaturedView ? (
               <div className="flex items-start gap-3 min-w-0">
                 <Tooltip content="Back">
@@ -2020,12 +2003,6 @@ export default function Dashboard() {
                         })()}
                       </h1>
                     )}
-                    {canShowAiBadge && (
-                      <AiBadge
-                        nicheSlug={job.classifiedNicheSlug!}
-                        confidence={job.classifiedConfidence as BadgeConfidence}
-                      />
-                    )}
                   </div>
                   {featuredData?.account.displayName && (
                     <p className="text-sm text-muted-foreground">
@@ -2081,24 +2058,17 @@ export default function Dashboard() {
                       })()
                     )}
                   </p>
-                  {job && job.classifiedNicheSlug && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      <span className="text-primary">
-                        {toReadableNiche(job.classifiedNicheSlug)}
-                      </span>
-                    </p>
-                  )}
                 </div>
               </div>
             ) : (
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <Tooltip content="Back">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleDashboardBack}>
-                      <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 gap-3">
+                <Tooltip content="Back">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 p-0" onClick={handleDashboardBack}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
                     {isUserJobH1Pending ? (
                       <div
                         className="h-7 w-40 max-w-[min(100%,20rem)] rounded-md bg-muted animate-pulse"
@@ -2118,12 +2088,6 @@ export default function Dashboard() {
                         })()}
                       </h1>
                     )}
-                    {canShowAiBadge && (
-                      <AiBadge
-                        nicheSlug={job.classifiedNicheSlug!}
-                        confidence={job.classifiedConfidence as BadgeConfidence}
-                      />
-                    )}
                     {job && (
                       <Tooltip content="All reels collected. Open Creator Radar and refresh the creator to pull new reels.">
                         <Badge
@@ -2138,9 +2102,8 @@ export default function Dashboard() {
                       </Tooltip>
                     )}
                   </div>
-                </div>
                 {job && (
-                  <p className="text-sm text-muted-foreground ml-11">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {job.status === "completed" && reelsLoading && reelsData.length === 0 ? (
                       "Loading reels…"
                     ) : (
@@ -2153,19 +2116,13 @@ export default function Dashboard() {
                     {followerCount > 0 && job.status === "completed" && !(reelsLoading && reelsData.length === 0) && (
                       <> &middot; {formatNumber(followerCount)} followers</>
                     )}
-                    {job.classifiedNicheSlug && (
-                      <>
-                        {" "}
-                        &middot;{" "}
-                        <span className="text-primary">{toReadableNiche(job.classifiedNicheSlug)}</span>
-                      </>
-                    )}
                   </p>
                 )}
+                </div>
               </div>
             )}
 
-            <div className="flex items-center gap-2 ml-11 sm:ml-0 flex-wrap">
+            <div className="dashboard-toolbar-scroll flex w-full min-w-0 flex-wrap items-center gap-2">
               {canDisplayJobReels && reelsData.length > 0 && (
                 <>
                   {!isFirstVisitDashboard ? (
@@ -2173,7 +2130,7 @@ export default function Dashboard() {
                   <Tooltip content="Filter reels by date posted">
                     <div>
                       <Select value={dateFilter} onValueChange={setDateFilter}>
-                        <SelectTrigger className="w-[130px] sm:w-[150px] h-9 bg-card text-sm">
+                        <SelectTrigger className="h-9 w-full min-w-[8.5rem] max-w-[9.5rem] bg-card text-sm sm:w-[150px]">
                           <SelectValue placeholder="Date range" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2189,28 +2146,10 @@ export default function Dashboard() {
                     </div>
                   </Tooltip>
 
-                  <Tooltip content="Filter reels by AI-assigned niche">
-                    <div>
-                      <Select value={nicheFilter} onValueChange={setNicheFilter}>
-                        <SelectTrigger className="w-[min(100%,11rem)] min-w-[9rem] h-9 bg-card text-sm">
-                          <SelectValue placeholder="Niche" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Niches</SelectItem>
-                          {REEL_NICHE_VALUES.map((v) => (
-                            <SelectItem key={v} value={v}>
-                              {formatReelTaxonomyLabel(v)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </Tooltip>
-
                   <Tooltip content="Change how reels are sorted">
                     <div>
                       <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                        <SelectTrigger className="h-9 w-[min(100%,20rem)] min-w-[16rem] max-w-none bg-card text-sm">
+                        <SelectTrigger className="h-9 w-full min-w-0 max-w-full bg-card text-sm sm:min-w-[14rem] sm:max-w-[20rem]">
                           <SelectValue placeholder="Sort by..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -2554,7 +2493,7 @@ export default function Dashboard() {
                       className={`${
                         isFirstVisitDashboard
                           ? "flex flex-col gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer"
-                          : `flex items-center gap-2 sm:gap-3 p-2 sm:p-3 hover:bg-accent/25 transition-colors cursor-pointer ${
+                          : `flex items-start gap-2 sm:items-center sm:gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer ${
                               isExpanded ? "bg-accent/20 border-b border-border/40" : ""
                             }`
                       }`}
@@ -2573,7 +2512,7 @@ export default function Dashboard() {
                       </span>
 
                       {/* Thumbnail */}
-                      <div className="relative shrink-0 w-14 h-18 rounded-md overflow-hidden bg-muted">
+                      <div className="relative h-[4.5rem] w-14 shrink-0 overflow-hidden rounded-md bg-muted">
                         {reel.thumbnailUrl ? (
                           <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
@@ -2614,7 +2553,7 @@ export default function Dashboard() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           <V13ReelClassificationBadges
-                            niche={reel.niche}
+                            niche={null}
                             hookPattern={reel.hookPattern}
                             productionFormat={
                               "productionFormat" in reel ? reel.productionFormat : null
@@ -2660,7 +2599,7 @@ export default function Dashboard() {
 
                       {!isFirstVisitDashboard ? (
                         <div
-                          className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end"
+                          className="flex shrink-0 flex-wrap items-center justify-end gap-0.5 self-center sm:gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ReelActionButtons
@@ -2821,7 +2760,7 @@ export default function Dashboard() {
           {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
             <div key="grid" className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch">
                 {sortedReels.map((reel, index) => {
                   const isModalOpen = gridModalReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
@@ -2888,7 +2827,7 @@ export default function Dashboard() {
                     <div
                       key={reel.id}
                       ref={setReelRowRef(reel.id)}
-                      className={`workspace-reel-card group relative overflow-hidden ${
+                      className={`workspace-reel-card group relative flex h-full flex-col overflow-hidden ${
                         isFirstVisitDashboard
                           ? index === 0
                             ? "rounded-xl ring-2 ring-primary/40"
@@ -2917,11 +2856,11 @@ export default function Dashboard() {
                             Start here
                           </div>
                         ) : null}
-                        {reel.engagementRate > 0 && (
+                        {reel.engagementRate > 0 && !(isFirstVisitDashboard && index === 0) ? (
                           <div className="absolute left-2 bottom-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
                             {reel.engagementRate.toFixed(2)}%
                           </div>
-                        )}
+                        ) : null}
                         {/* Bookmark overlay (spec #1)  -  always visible so
                             state is discoverable without hover. */}
                         <button
@@ -2988,7 +2927,7 @@ export default function Dashboard() {
                       <div className="px-2.5 pt-2 pb-0 shrink-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <V13ReelClassificationBadges
-                            niche={reel.niche}
+                            niche={null}
                             hookPattern={reel.hookPattern}
                             productionFormat={
                               "productionFormat" in reel ? reel.productionFormat : null
@@ -3007,9 +2946,9 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      <div className="p-2.5 space-y-2 shrink-0">
+                      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-2">
                         <div
-                          className="cursor-pointer space-y-2"
+                          className="min-h-0 flex-1 cursor-pointer space-y-2"
                           onClick={() => setGridModalReelId(reel.id)}
                         >
                           <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
@@ -3038,6 +2977,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {oneClickRemake ? (
+                          <div className="mt-auto shrink-0 pt-2">
                           <ReelActionButtons
                             source={source}
                             reelId={reel.id}
@@ -3063,6 +3003,7 @@ export default function Dashboard() {
                             onMakeVersion={() => {}}
                             onOpenMyScript={() => {}}
                           />
+                          </div>
                         ) : null}
                       </div>
                     </div>
@@ -3093,24 +3034,7 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length === 0 && nicheFilter !== "all" ? (
-            <div className="border border-border/50 bg-card rounded-lg p-8">
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
-                <Film className="h-12 w-12 text-muted-foreground/30" />
-                <div className="space-y-2 max-w-md">
-                  <p className="text-foreground font-medium">No reels in this niche</p>
-                  <p className="text-sm text-muted-foreground">
-                    Try All Niches to see every reel from this spy.
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => setNicheFilter("all")}>
-                  Show all niches
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
-          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length === 0 && nicheFilter === "all" ? (
+          {job?.status === "completed" && !reelsLoading && sortedReels.length === 0 && reelsData.length === 0 ? (
             <div className="border border-border/50 bg-card rounded-lg p-8">
               <div className="flex flex-col items-center justify-center gap-4">
                 <Film className="h-12 w-12 text-muted-foreground/30" />
