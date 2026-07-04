@@ -3,6 +3,7 @@ import {
   APP_NAV_STACK_KEY,
   getCurrentAppPath,
   navigateAppBack,
+  navigateAppReplace,
   recordAppNavigation,
   resolveFromParamFallback,
 } from "@shared/appNavigation";
@@ -89,5 +90,50 @@ describe("appNavigation", () => {
     navigateAppBack(setLocation, "/plan");
 
     expect(calls).toEqual([{ path: "/plan", replace: true }]);
+  });
+
+  it("replace swaps scraping for dashboard so back skips the loading gate", () => {
+    const calls: Array<{ path: string; replace?: boolean }> = [];
+    const setLocation = (path: string, options?: { replace?: boolean }) => {
+      calls.push({ path, replace: options?.replace });
+    };
+
+    recordAppNavigation("/research");
+    recordAppNavigation("/scraping?jobId=627&from=research");
+    navigateAppReplace(setLocation, "/dashboard?jobId=627&from=research");
+
+    expect(JSON.parse(sessionStore.get(APP_NAV_STACK_KEY) ?? "[]")).toEqual([
+      "/research",
+      "/dashboard?jobId=627&from=research",
+    ]);
+
+    vi.stubGlobal("window", {
+      location: { pathname: "/dashboard", search: "?jobId=627&from=research" },
+      history: { length: 2, replaceState: vi.fn(), back: vi.fn() },
+    });
+
+    navigateAppBack(setLocation, "/research");
+
+    expect(calls[calls.length - 1]).toEqual({ path: "/research", replace: true });
+  });
+
+  it("skips transient scraping route when stack still contains it", () => {
+    const calls: Array<{ path: string; replace?: boolean }> = [];
+    const setLocation = (path: string, options?: { replace?: boolean }) => {
+      calls.push({ path, replace: options?.replace });
+    };
+
+    recordAppNavigation("/research");
+    recordAppNavigation("/scraping?jobId=627&from=research");
+    recordAppNavigation("/dashboard?jobId=627&from=research");
+
+    vi.stubGlobal("window", {
+      location: { pathname: "/dashboard", search: "?jobId=627&from=research" },
+      history: { length: 2, replaceState: vi.fn(), back: vi.fn() },
+    });
+
+    navigateAppBack(setLocation, "/research");
+
+    expect(calls[calls.length - 1]).toEqual({ path: "/research", replace: true });
   });
 });

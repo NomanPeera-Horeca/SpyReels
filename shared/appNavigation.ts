@@ -27,6 +27,14 @@ function writeNavStack(stack: string[]): void {
   }
 }
 
+/** Loading gates that should not appear when the user taps back from a destination screen. */
+const TRANSIENT_APP_ROUTES = new Set(["/scraping"]);
+
+function isTransientAppRoute(path: string): boolean {
+  const pathname = (path.split("?")[0] || "/").trim() || "/";
+  return TRANSIENT_APP_ROUTES.has(pathname);
+}
+
 /** Track in-app route changes so back buttons can restore the previous screen. */
 export function recordAppNavigation(path: string): void {
   const normalized = path.trim() || "/";
@@ -87,9 +95,13 @@ export function navigateAppBack(setLocation: SetLocationFn, fallback: string): v
 
   if (stack.length >= 2) {
     stack.pop();
-    const target = stack[stack.length - 1];
+    let target = stack[stack.length - 1] ?? "";
+    while (target && isTransientAppRoute(target) && stack.length >= 2) {
+      stack.pop();
+      target = stack[stack.length - 1] ?? "";
+    }
     writeNavStack(stack);
-    if (target && target !== current) {
+    if (target && target !== current && !isTransientAppRoute(target)) {
       setLocation(target, { replace: true });
       return;
     }
@@ -105,5 +117,13 @@ export function navigateAppBack(setLocation: SetLocationFn, fallback: string): v
 
 /** Use replace for gate redirects and transient loading screens. */
 export function navigateAppReplace(setLocation: SetLocationFn, path: string): void {
-  setLocation(path, { replace: true });
+  const normalized = path.trim() || "/";
+  const stack = readNavStack();
+  if (stack.length > 0) {
+    stack[stack.length - 1] = normalized;
+  } else {
+    stack.push(normalized);
+  }
+  writeNavStack(stack);
+  setLocation(normalized, { replace: true });
 }
