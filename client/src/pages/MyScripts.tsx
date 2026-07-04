@@ -53,6 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { savedScriptOpenPath } from "@/lib/scriptOpenPath";
 
 type ViewMode = "grid" | "kanban" | "calendar";
 
@@ -537,7 +538,7 @@ export default function MyScripts() {
                     onDragStart={() => handleDragStart(script.id)}
                     className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors group overflow-hidden"
                     style={{ ...miniAccent, backgroundColor: "hsl(var(--card))" }}
-                    onClick={() => navigate(`/scripts/${script.id}`)}
+                    onClick={() => navigate(savedScriptOpenPath(script))}
                   >
                     <div className="flex items-start justify-between gap-1">
                       <h4 className="text-xs font-medium truncate flex-1">{script.title}</h4>
@@ -604,7 +605,7 @@ export default function MyScripts() {
                     onDragStart={() => handleDragStart(script.id)}
                     className="bg-card rounded-md border border-border/30 p-3 cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
                     style={uaStyle}
-                    onClick={() => navigate(`/scripts/${script.id}`)}
+                    onClick={() => navigate(savedScriptOpenPath(script))}
                   >
                     <h4 className="text-xs font-medium truncate">{script.title}</h4>
                     <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
@@ -711,7 +712,7 @@ function ScriptCard({
         ...(accentStyles ?? {}),
         backgroundColor: "hsl(var(--card))",
       }}
-      onClick={() => navigate(`/scripts/${script.id}`)}
+      onClick={() => navigate(savedScriptOpenPath(script))}
     >
       <div className="p-4">
         {/* Header */}
@@ -739,7 +740,7 @@ function ScriptCard({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/scripts/${script.id}`);
+                  navigate(savedScriptOpenPath(script));
                 }}
               >
                 <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit
@@ -1020,7 +1021,7 @@ function CalendarView({
                             onDragStart={(e) => {
                               e.dataTransfer.setData("text/plain", script.id.toString());
                             }}
-                            onClick={() => navigate(`/scripts/${script.id}`)}
+                            onClick={() => navigate(savedScriptOpenPath(script))}
                             className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer transition-colors ${
                               stripe
                                 ? "text-foreground"
@@ -1074,7 +1075,7 @@ function CalendarView({
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/plain", script.id.toString());
                   }}
-                  onClick={() => navigate(`/scripts/${script.id}`)}
+                  onClick={() => navigate(savedScriptOpenPath(script))}
                   className="px-3 py-1.5 rounded-md bg-card border border-border/30 text-xs cursor-grab active:cursor-grabbing hover:border-primary/30 transition-colors overflow-hidden"
                   style={
                     stripe

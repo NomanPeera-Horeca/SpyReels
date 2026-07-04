@@ -100,28 +100,21 @@ export function normalizeCoachScriptPayload(
     const illustrate = stringifySection(parsed.illustrate);
     body = [explain, illustrate].filter(Boolean).join("\n\n");
   }
-  const callToAction = pickString(
-    parsed,
-    "callToAction",
-    "call_to_action",
-    "cta",
-    "teach",
-    "T"
-  );
   const explain = pickString(parsed, "explain", "Explain", "E");
   const illustrate = pickString(parsed, "illustrate", "Illustrate", "I");
   const teach = pickString(parsed, "teach", "Teach");
   const cta = pickString(parsed, "cta", "CTA");
+  const callToActionRaw = pickString(parsed, "callToAction", "call_to_action");
 
   return {
     ...parsed,
     hook,
     body: body || [explain, illustrate].filter(Boolean).join("\n\n"),
-    callToAction: cta || teach || callToAction,
+    callToAction: cta || teach || callToActionRaw,
     explain,
     illustrate,
     teach,
-    cta: cta || callToAction,
+    cta: cta || (callToActionRaw && callToActionRaw !== teach ? callToActionRaw : ""),
   };
 }
 

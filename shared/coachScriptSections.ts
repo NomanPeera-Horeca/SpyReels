@@ -49,7 +49,11 @@ export function sectionsFromGenerated(generated: Record<string, unknown>): Coach
   const explain = pickString(generated, "explain", "Explain");
   const illustrate = pickString(generated, "illustrate", "Illustrate");
   const teach = pickString(generated, "teach", "Teach", "T");
-  const cta = pickString(generated, "cta", "callToAction", "call_to_action");
+  const ctaDirect = pickString(generated, "cta", "CTA");
+  const callToAction = pickString(generated, "callToAction", "call_to_action");
+  const cta =
+    ctaDirect ||
+    (callToAction && callToAction !== teach ? callToAction : "");
 
   if (explain || illustrate || teach || cta) {
     const bodyFallback = pickString(generated, "body");
@@ -69,7 +73,7 @@ export function sectionsFromGenerated(generated: Record<string, unknown>): Coach
     explain: legacy.explain,
     illustrate: legacy.illustrate,
     teach: combinedCta,
-    cta: combinedCta,
+    cta: "",
   };
 }
 
@@ -93,20 +97,27 @@ export function parseCoachScriptSections(args: {
 }): CoachScriptSections {
   const notes = parseProductionNotes(args.productionNotes);
   if (notes?.sections) {
+    const teach = notes.sections.teach?.trim() ?? "";
+    const ctaStored = notes.sections.cta?.trim() ?? "";
+    const callToAction = args.callToAction.trim();
+    const cta =
+      ctaStored ||
+      (callToAction && callToAction !== teach ? callToAction : "");
     return {
       explain: notes.sections.explain ?? "",
       illustrate: notes.sections.illustrate ?? "",
-      teach: notes.sections.teach ?? "",
-      cta: notes.sections.cta ?? args.callToAction,
+      teach,
+      cta,
     };
   }
 
   const legacy = splitLegacyBody(args.body);
+  const callToAction = args.callToAction.trim();
   return {
     explain: legacy.explain,
     illustrate: legacy.illustrate,
-    teach: args.callToAction,
-    cta: args.callToAction,
+    teach: callToAction,
+    cta: "",
   };
 }
 
@@ -131,11 +142,15 @@ export function coachScriptIsComplete(generated: Record<string, unknown>): boole
   const hook = pickString(generated, "hook", "H");
   const sections = sectionsFromGenerated(generated);
   const hasBody =
-    Boolean(sections.explain) ||
-    Boolean(sections.illustrate) ||
-    Boolean(pickString(generated, "body"));
-  const hasClose = Boolean(sections.teach || sections.cta || pickString(generated, "callToAction"));
-  return Boolean(hook && hasBody && hasClose);
+    Boolean(sections.explain.trim()) &&
+    Boolean(sections.illustrate.trim());
+  const hasTakeaway = Boolean(sections.teach.trim());
+  const hasCta = Boolean(sections.cta.trim());
+  const distinctClose =
+    hasTakeaway &&
+    hasCta &&
+    sections.cta.trim() !== sections.teach.trim();
+  return Boolean(hook && hasBody && distinctClose);
 }
 
 export function flattenCoachScriptForCopy(args: {

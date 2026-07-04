@@ -486,6 +486,7 @@ export const savedScripts = mysqlTable(
     }),
   reelId: int("reelId"), // optional - linked to original reel
   recreatedScriptId: int("recreatedScriptId"), // optional - linked to recreated script
+  coachScriptId: int("coachScriptId"), // optional - structured AI Coach / Studio script
   title: varchar("title", { length: 256 }).notNull(),
   content: text("content").notNull(), // current script text
   originalContent: text("originalContent"), // original AI-generated text for reference
@@ -522,6 +523,7 @@ export const savedScripts = mysqlTable(
       table.userId,
       table.recreatedScriptId
     ),
+    coachScriptIdx: index("idx_saved_scripts_coach_script").on(table.coachScriptId),
   })
 );
 

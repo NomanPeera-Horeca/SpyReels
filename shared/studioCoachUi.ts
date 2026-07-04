@@ -55,6 +55,20 @@ export const COACH_EXAMPLE_PROMPTS = [
   "My client doubled revenue in 90 days. Write a viral script about the one change.",
 ];
 
+export type CoachSuggestion = {
+  prompt: string;
+  planCardId?: number;
+};
+
+export function buildPlanPrefill(card: {
+  day: number;
+  title: string;
+  hook: string;
+  angle: string;
+}): string {
+  return `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`;
+}
+
 export type StudioPrefillMeta = {
   planCardId?: number;
   planCardTitle?: string;

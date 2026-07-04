@@ -32,7 +32,7 @@ import {
   getOrFetchAudienceSignals,
 } from "../audienceResearch/service";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
-import { generateCoachScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
+import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
 import {
   completeAgentProgress,
   failAgentProgress,
@@ -626,6 +626,23 @@ export const studioRouter = router({
       });
     }),
 
+  convertRough: protectedProcedure
+    .input(
+      z.object({
+        roughScript: z.string().min(20).max(12000),
+        workingTitle: z.string().max(256).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return convertRoughScriptWithProgress({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        openId: ctx.user.openId,
+        roughScript: input.roughScript,
+        workingTitle: input.workingTitle,
+      });
+    }),
+
   refine: protectedProcedure
     .input(
       z.object({
@@ -885,8 +902,9 @@ export const studioRouter = router({
         wordCount: countWords(content),
         status: "draft",
         notes: "Saved from AI Coach",
+        coachScriptId: script.id,
       });
 
-      return { savedScriptId: savedId };
+      return { savedScriptId: savedId, coachScriptId: script.id };
     }),
 });

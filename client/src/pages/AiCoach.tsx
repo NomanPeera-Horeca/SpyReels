@@ -4,9 +4,11 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
 import {
+  buildPlanPrefill,
   parseStudioPrefillMeta,
   STUDIO_PREFILL_META_KEY,
   type CoachCapabilityId,
+  type CoachSuggestion,
   type StudioPrefillMeta,
 } from "@shared/studioCoachUi";
 import type { CoachAction } from "@shared/studioCoachAgent";
@@ -62,10 +64,6 @@ type PlanCardOption = {
   status: string;
 };
 
-function buildPlanPrefill(card: PlanCardOption): string {
-  return `Day ${card.day} plan idea: ${card.title}\n\n${card.angle}\n\nHook idea: "${card.hook}"`;
-}
-
 export default function AiCoach() {
   const posthog = usePostHog();
   const [, setLocation] = useLocation();
@@ -97,6 +95,7 @@ export default function AiCoach() {
   const pendingFilmRef = useRef(false);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [isRouting, setIsRouting] = useState(false);
+  const [activeCapability, setActiveCapability] = useState<CoachCapabilityId | null>(null);
 
   const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(undefined, {
     staleTime: 30_000,
@@ -111,11 +110,12 @@ export default function AiCoach() {
   const audienceSignals = audienceData?.signals ?? [];
   const recentScripts = historyData?.scripts ?? [];
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<CoachSuggestion[]>(() => {
     const approved = planCards.filter((c) => c.status === "approved").slice(0, 3);
-    const fromPlan = approved.map(
-      (c) => `Write a viral script for my Day ${c.day} plan idea: "${c.title}"`
-    );
+    const fromPlan = approved.map((c) => ({
+      prompt: `Write a viral script for my Day ${c.day} plan idea: "${c.title}"`,
+      planCardId: c.id,
+    }));
     if (fromPlan.length >= 2) return fromPlan;
     return [];
   }, [planCards]);
@@ -302,6 +302,7 @@ export default function AiCoach() {
     setAttachedContext(null);
     setAgentMessage(null);
     setIsRouting(false);
+    setActiveCapability(null);
     setSavedLibraryScriptId(null);
     pendingFilmRef.current = false;
     setFilmNowPending(false);
@@ -537,7 +538,66 @@ export default function AiCoach() {
   };
 
   const handleCapability = (id: CoachCapabilityId) => {
-    void runCoachFlow(id);
+    setActiveCapability(id);
+
+    switch (id) {
+      case "from_plan": {
+        const card =
+          planCards.find((c) => c.status === "approved") ?? planCards[0];
+        if (!card) {
+          toast.message("Generate a 30-day plan first, then come back here.");
+          return;
+        }
+        attachPlanCard(card);
+        toast.message("Plan idea attached. Hit the arrow when you are ready to write.");
+        return;
+      }
+      case "refine_script": {
+        const scriptId = recentScripts[0]?.id;
+        if (!scriptId) {
+          toast.message("Write a script first, then refine it here.");
+          return;
+        }
+        void loadScript(scriptId);
+        toast.message("Script loaded. Add a refine note below it, then submit.");
+        return;
+      }
+      case "hook_ideas": {
+        const scriptId = recentScripts[0]?.id;
+        if (!scriptId) {
+          toast.message("Write a script first, then try new hook ideas.");
+          return;
+        }
+        void loadScript(scriptId);
+        toast.message("Script loaded. Tap New hook ideas on your script when ready.");
+        return;
+      }
+      case "write_script":
+      default:
+        toast.message("Describe your idea, then hit the arrow to write your script.");
+    }
+  };
+
+  const handleSuggestionClick = (item: CoachSuggestion) => {
+    if (item.planCardId != null) {
+      const card = planCards.find((c) => c.id === item.planCardId);
+      if (card) {
+        attachPlanCard(card);
+        setActiveCapability("from_plan");
+        return;
+      }
+    }
+    setDescription(item.prompt);
+    setActiveCapability("write_script");
+  };
+
+  const handleSubmit = () => {
+    const trimmed = description.trim();
+    if (trimmed.length < 10) {
+      toast.error("Add a bit more detail about your idea (at least 10 characters).");
+      return;
+    }
+    void runCoachFlow();
   };
 
   const historyPanel = (
@@ -580,7 +640,7 @@ export default function AiCoach() {
       <AiCoachCommandShell
         description={description}
         onDescriptionChange={setDescription}
-        onSubmit={() => void runCoachFlow()}
+        onSubmit={handleSubmit}
         isBusy={isRouting || resolveIntentMutation.isPending || analyzeMutation.isPending}
         attachedContext={attachedContext}
         planCards={planCards}
@@ -591,8 +651,9 @@ export default function AiCoach() {
         onClearPlanContext={clearPlanContext}
         onClearAudienceContext={clearAudienceContext}
         onCapability={handleCapability}
+        activeCapability={activeCapability}
         suggestions={suggestions}
-        onSuggestionClick={setDescription}
+        onSuggestionClick={handleSuggestionClick}
       />
     );
   }

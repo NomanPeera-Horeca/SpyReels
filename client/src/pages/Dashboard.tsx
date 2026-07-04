@@ -48,10 +48,8 @@ import {
 import {
   InlineWorkflow,
   formatNumber,
-  formatDuration,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
-import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   ReelActionButtons,
@@ -89,6 +87,8 @@ import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
+import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 
 type SortOption =
   | "views_desc"
@@ -2493,7 +2493,7 @@ export default function Dashboard() {
                       className={`${
                         isFirstVisitDashboard
                           ? "flex flex-col gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer"
-                          : `flex items-start gap-2 sm:items-center sm:gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer ${
+                          : `flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-3 hover:bg-accent/25 transition-colors cursor-pointer ${
                               isExpanded ? "bg-accent/20 border-b border-border/40" : ""
                             }`
                       }`}
@@ -2505,9 +2505,9 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center sm:gap-3">
                       {/* Rank */}
-                      <span className="text-sm font-mono text-muted-foreground w-5 sm:w-6 text-right shrink-0 hidden sm:block">
+                      <span className="hidden w-5 shrink-0 text-right font-mono text-sm text-muted-foreground sm:block sm:w-6">
                         {index + 1}
                       </span>
 
@@ -2596,10 +2596,11 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
+                      </div>
 
                       {!isFirstVisitDashboard ? (
                         <div
-                          className="flex shrink-0 flex-wrap items-center justify-end gap-0.5 self-center sm:gap-1"
+                          className="flex w-full shrink-0 flex-col items-stretch gap-1 sm:w-auto sm:min-w-[11rem] sm:self-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ReelActionButtons
@@ -2635,7 +2636,7 @@ export default function Dashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-muted-foreground"
+                            className="hidden h-8 w-8 shrink-0 p-0 text-muted-foreground sm:inline-flex"
                             onClick={(e) => {
                               e.stopPropagation();
                               setExpandedReelId(isExpanded ? null : reel.id);
@@ -2645,7 +2646,6 @@ export default function Dashboard() {
                           </Button>
                         </div>
                       ) : null}
-                      </div>
 
                       {isFirstVisitDashboard ? (
                         <div className="w-full" onClick={(e) => e.stopPropagation()}>
@@ -2760,7 +2760,7 @@ export default function Dashboard() {
           {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
             <div key="grid" className="space-y-3">
-              <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch">
+              <div className={WORKSPACE_REEL_GRID_CLASS}>
                 {sortedReels.map((reel, index) => {
                   const isModalOpen = gridModalReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
@@ -2824,138 +2824,101 @@ export default function Dashboard() {
                       : undefined;
 
                   return (
-                    <div
-                      key={reel.id}
-                      ref={setReelRowRef(reel.id)}
-                      className={`workspace-reel-card group relative flex h-full flex-col overflow-hidden ${
-                        isFirstVisitDashboard
-                          ? index === 0
-                            ? "rounded-xl ring-2 ring-primary/40"
-                            : "opacity-45"
-                          : isModalOpen
-                            ? "ring-2 ring-primary/35"
-                            : ""
-                      }`}
-                    >
-                      <div
-                        className="relative aspect-[9/14] cursor-pointer overflow-hidden"
-                        onClick={() => setGridModalReelId(reel.id)}
-                      >
-                        <DashboardReelGridMedia
-                          className="relative h-full w-full"
-                          thumbnailUrl={reel.thumbnailUrl}
-                          videoUrl={reel.videoUrl}
-                          shortcode={reel.shortcode}
-                          reelId={reel.id}
-                        />
-                        <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
-                          #{index + 1}
-                        </div>
-                        {isFirstVisitDashboard && index === 0 ? (
-                          <div className="absolute inset-x-2 bottom-2 rounded bg-primary/90 px-2 py-1 text-center text-[10px] font-semibold text-primary-foreground">
-                            Start here
+                    <div key={reel.id} ref={setReelRowRef(reel.id)}>
+                      <WorkspaceReelGridTile
+                        className={
+                          isFirstVisitDashboard
+                            ? index === 0
+                              ? "rounded-xl ring-2 ring-primary/40"
+                              : "opacity-45"
+                            : undefined
+                        }
+                        isActive={!isFirstVisitDashboard && isModalOpen}
+                        index={index}
+                        thumbnailUrl={reel.thumbnailUrl}
+                        videoUrl={reel.videoUrl}
+                        shortcode={reel.shortcode}
+                        reelId={reel.id}
+                        engagementRate={reel.engagementRate}
+                        duration={reel.duration}
+                        reelUrl={reel.reelUrl}
+                        onMediaClick={() => setGridModalReelId(reel.id)}
+                        highlightBanner={
+                          isFirstVisitDashboard && index === 0 ? "Start here" : null
+                        }
+                        topRight={
+                          isFirstVisitDashboard ? null : (
+                            <button
+                              type="button"
+                              className={`rounded-full p-1.5 backdrop-blur transition-colors ${
+                                isSaved
+                                  ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                                  : "bg-black/55 text-white/90 hover:bg-black/75"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isFeaturedView) {
+                                  toggleSave.mutate({ featuredReelId: reel.id });
+                                } else {
+                                  toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                                }
+                              }}
+                              disabled={toggleSave.isPending}
+                              title={isSaved ? "Remove from saved" : "Save reel"}
+                              aria-label={isSaved ? "Remove from saved" : "Save reel"}
+                            >
+                              {isSaved ? (
+                                <BookmarkCheck className="h-3.5 w-3.5" />
+                              ) : (
+                                <Bookmark className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          )
+                        }
+                        statusChip={
+                          hasTranscription && !isNoSpeech ? (
+                            <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                              Transcribed
+                            </span>
+                          ) : isNoSpeech ? (
+                            <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                              No voice
+                            </span>
+                          ) : isProcessingForTile ? (
+                            <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                              Processing
+                            </span>
+                          ) : null
+                        }
+                        badges={
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <V13ReelClassificationBadges
+                              niche={null}
+                              hookPattern={reel.hookPattern}
+                              productionFormat={
+                                "productionFormat" in reel ? reel.productionFormat : null
+                              }
+                              viralFlag={reel.viralFlag}
+                              confidence={reel.confidence}
+                            />
+                            <BrandCoachBadge
+                              source={
+                                isFeaturedView
+                                  ? { kind: "featured", featuredReelId: reel.id }
+                                  : { kind: "reel", reelId: reel.id }
+                              }
+                              hasTranscript={hasTranscription && !isNoSpeech}
+                            />
                           </div>
-                        ) : null}
-                        {reel.engagementRate > 0 && !(isFirstVisitDashboard && index === 0) ? (
-                          <div className="absolute left-2 bottom-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                            {reel.engagementRate.toFixed(2)}%
-                          </div>
-                        ) : null}
-                        {/* Bookmark overlay (spec #1)  -  always visible so
-                            state is discoverable without hover. */}
-                        <button
-                          type="button"
-                          className={`absolute right-2 top-2 rounded-full p-1.5 backdrop-blur transition-colors ${
-                            isSaved
-                              ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
-                              : "bg-black/55 text-white/90 hover:bg-black/75"
-                          } ${isFirstVisitDashboard ? "hidden" : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isFeaturedView) {
-                              toggleSave.mutate({ featuredReelId: reel.id });
-                            } else {
-                              toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
-                            }
-                          }}
-                          disabled={toggleSave.isPending}
-                          title={isSaved ? "Remove from saved" : "Save reel"}
-                          aria-label={isSaved ? "Remove from saved" : "Save reel"}
-                        >
-                          {isSaved ? (
-                            <BookmarkCheck className="h-3.5 w-3.5" />
-                          ) : (
-                            <Bookmark className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                        {/* External IG link (spec #4)  -  smaller icon, no
-                            label, moved to bottom-right so it doesn't
-                            compete with the bookmark above. */}
-                        <a
-                          href={reel.reelUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute right-2 bottom-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
-                          title="Open on Instagram"
-                          aria-label="Open on Instagram"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                        {reel.duration && (
-                          <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
-                            {formatDuration(reel.duration)}
-                          </span>
-                        )}
-                        {hasTranscription && !isNoSpeech && (
-                          <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                            Transcribed
-                          </span>
-                        )}
-                        {isNoSpeech && (
-                          <span className="absolute left-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
-                            No voice
-                          </span>
-                        )}
-                        {isProcessingForTile && (
-                          <span className="absolute left-2 top-10 rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950 animate-pulse">
-                            Processing
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="px-2.5 pt-2 pb-0 shrink-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <V13ReelClassificationBadges
-                            niche={null}
-                            hookPattern={reel.hookPattern}
-                            productionFormat={
-                              "productionFormat" in reel ? reel.productionFormat : null
-                            }
-                            viralFlag={reel.viralFlag}
-                            confidence={reel.confidence}
-                          />
-                          <BrandCoachBadge
-                            source={
-                              isFeaturedView
-                                ? { kind: "featured", featuredReelId: reel.id }
-                                : { kind: "reel", reelId: reel.id }
-                            }
-                            hasTranscript={hasTranscription && !isNoSpeech}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-2">
-                        <div
-                          className="min-h-0 flex-1 cursor-pointer space-y-2"
-                          onClick={() => setGridModalReelId(reel.id)}
-                        >
-                          <p className="text-xs text-foreground line-clamp-2 min-h-[2rem]">
+                        }
+                        caption={
+                          <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
                             {reel.caption || (
-                              <span className="text-muted-foreground italic">No caption</span>
+                              <span className="italic text-muted-foreground">No caption</span>
                             )}
                           </p>
+                        }
+                        stats={
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                             <span>{formatNumber(reel.viewCount)} views</span>
                             <span aria-hidden>·</span>
@@ -2965,7 +2928,7 @@ export default function Dashboard() {
                             {reel.engagementRate > 0 && (
                               <>
                                 <span aria-hidden>·</span>
-                                <span className="text-emerald-400 font-medium">
+                                <span className="font-medium text-emerald-400">
                                   {reel.engagementRate.toFixed(2)}%
                                 </span>
                               </>
@@ -2975,37 +2938,37 @@ export default function Dashboard() {
                               {formatPostedTime(reel.postedAt, userTimezone)}
                             </span>
                           </div>
-                        </div>
-                        {oneClickRemake ? (
-                          <div className="mt-auto shrink-0 pt-2">
-                          <ReelActionButtons
-                            source={source}
-                            reelId={reel.id}
-                            reelUrl={reel.reelUrl}
-                            isSaved={isSaved}
-                            hasTranscription={hasTranscription}
-                            isProcessing={isProcessingForTile}
-                            isFailed={isFailed}
-                            recreateState={recreateSt}
-                            isQueued={isTxQueued}
-                            isNoSpeech={isNoSpeech}
-                            hideBookmark
-                            hideExternalLink
-                            oneClickRemake={oneClickRemake}
-                            firstVisitMode={isFirstVisitDashboard}
-                            onToggleSave={() =>
-                              isFeaturedView
-                                ? toggleSave.mutate({ featuredReelId: reel.id })
-                                : toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
-                            }
-                            onTranscribe={() => {}}
-                            onExpand={() => setGridModalReelId(reel.id)}
-                            onMakeVersion={() => {}}
-                            onOpenMyScript={() => {}}
-                          />
-                          </div>
-                        ) : null}
-                      </div>
+                        }
+                        actions={
+                          oneClickRemake ? (
+                            <ReelActionButtons
+                              source={source}
+                              reelId={reel.id}
+                              reelUrl={reel.reelUrl}
+                              isSaved={isSaved}
+                              hasTranscription={hasTranscription}
+                              isProcessing={isProcessingForTile}
+                              isFailed={isFailed}
+                              recreateState={recreateSt}
+                              isQueued={isTxQueued}
+                              isNoSpeech={isNoSpeech}
+                              hideBookmark
+                              hideExternalLink
+                              oneClickRemake={oneClickRemake}
+                              firstVisitMode={isFirstVisitDashboard}
+                              onToggleSave={() =>
+                                isFeaturedView
+                                  ? toggleSave.mutate({ featuredReelId: reel.id })
+                                  : toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                              }
+                              onTranscribe={() => {}}
+                              onExpand={() => setGridModalReelId(reel.id)}
+                              onMakeVersion={() => {}}
+                              onOpenMyScript={() => {}}
+                            />
+                          ) : null
+                        }
+                      />
                     </div>
                   );
                 })}

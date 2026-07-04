@@ -22,8 +22,10 @@ import {
   COACH_CAPABILITIES,
   COACH_EXAMPLE_PROMPTS,
   type CoachCapabilityId,
+  type CoachSuggestion,
   type StudioPrefillMeta,
 } from "@shared/studioCoachUi";
+import { cn } from "@/lib/utils";
 import { audienceSourceLabel } from "@shared/audienceResearch";
 import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
 
@@ -58,8 +60,9 @@ type AiCoachCommandShellProps = {
   onClearPlanContext: () => void;
   onClearAudienceContext: () => void;
   onCapability: (id: CoachCapabilityId) => void;
-  suggestions: string[];
-  onSuggestionClick: (text: string) => void;
+  activeCapability: CoachCapabilityId | null;
+  suggestions: CoachSuggestion[];
+  onSuggestionClick: (item: CoachSuggestion) => void;
 };
 
 export function AiCoachCommandShell({
@@ -76,6 +79,7 @@ export function AiCoachCommandShell({
   onClearPlanContext,
   onClearAudienceContext,
   onCapability,
+  activeCapability,
   suggestions,
   onSuggestionClick,
 }: AiCoachCommandShellProps) {
@@ -224,7 +228,12 @@ export function AiCoachCommandShell({
             key={cap.id}
             type="button"
             onClick={() => onCapability(cap.id)}
-            className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              activeCapability === cap.id
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+            )}
             title={cap.hint}
           >
             {cap.label}
@@ -236,14 +245,19 @@ export function AiCoachCommandShell({
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Suggested prompts
         </p>
-        {(suggestions.length ? suggestions : COACH_EXAMPLE_PROMPTS).map((prompt) => (
+        {(suggestions.length
+          ? suggestions
+          : COACH_EXAMPLE_PROMPTS.map(
+              (prompt): CoachSuggestion => ({ prompt })
+            )
+        ).map((item) => (
           <button
-            key={prompt}
+            key={item.planCardId != null ? `plan-${item.planCardId}` : item.prompt}
             type="button"
-            onClick={() => onSuggestionClick(prompt)}
+            onClick={() => onSuggestionClick(item)}
             className="w-full rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
           >
-            <span className="line-clamp-2">{prompt}</span>
+            <span className="line-clamp-2">{item.prompt}</span>
           </button>
         ))}
       </div>

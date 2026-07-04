@@ -70,7 +70,7 @@ import {
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
-import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -279,12 +279,11 @@ function DashboardLayoutContent({
     staleTime: 60_000,
   });
 
-  const nicheLabel = (() => {
-    const slugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
-    const first = typeof slugs[0] === "string" ? slugs[0].trim() : "";
-    if (first) return formatReelTaxonomyLabel(first);
-    return "Content creator";
-  })();
+  const nicheLabel = resolvePrimaryNicheLabel({
+    businessDescription: onboardingStateQuery.data?.businessDescription,
+    targetAudience: onboardingStateQuery.data?.targetAudience,
+    selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
+  });
 
   const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
 

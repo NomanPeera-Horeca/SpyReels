@@ -17,7 +17,6 @@ import {
 import {
   Bookmark,
   BookmarkCheck,
-  ExternalLink,
   Eye,
   Heart,
   MessageCircle,
@@ -47,9 +46,10 @@ import {
   InlineWorkflow,
   formatNumber,
   formatPostedTime,
-  formatDuration,
 } from "@/components/InlineWorkflow";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   ReelActionButtons,
@@ -939,7 +939,7 @@ export default function SavedReels() {
               )}
 
               {viewMode === "grid" && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className={WORKSPACE_REEL_GRID_CLASS}>
                   {items.map((item, index) => {
                     const reel = item.reel;
                     const engagementRate = engagementPercent(item);
@@ -999,34 +999,22 @@ export default function SavedReels() {
                         : undefined;
 
                     return (
-                      <div
+                      <WorkspaceReelGridTile
                         key={item.id}
-                        className={`group relative rounded-lg border bg-card transition-colors ${
-                          isModalOpen ? "border-primary/40" : "border-border/40 hover:border-border/70"
-                        }`}
-                      >
-                        <div
-                          className="relative aspect-[9/14] cursor-pointer overflow-hidden"
-                          onClick={() => setGridModalSavedId(item.id)}
-                        >
-                          <DashboardReelGridMedia
-                            className="relative h-full w-full"
-                            thumbnailUrl={reel.thumbnailUrl}
-                            videoUrl={reel.videoUrl}
-                            shortcode={reel.shortcode}
-                            reelId={item.source === "scraped" ? reel.id : undefined}
-                          />
-                          <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                            #{index + 1}
-                          </div>
-                          {engagementRate > 0 && (
-                            <div className="absolute bottom-2 left-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                              {engagementRate.toFixed(2)}%
-                            </div>
-                          )}
+                        index={index}
+                        isActive={isModalOpen}
+                        thumbnailUrl={reel.thumbnailUrl}
+                        videoUrl={reel.videoUrl}
+                        shortcode={reel.shortcode}
+                        reelId={item.source === "scraped" ? reel.id : undefined}
+                        engagementRate={engagementRate}
+                        duration={reel.duration}
+                        reelUrl={reel.reelUrl}
+                        onMediaClick={() => setGridModalSavedId(item.id)}
+                        topRight={
                           <button
                             type="button"
-                            className="absolute right-2 top-2 rounded-full p-1.5 backdrop-blur transition-colors bg-emerald-500/90 text-white hover:bg-emerald-500"
+                            className="rounded-full bg-emerald-500/90 p-1.5 text-white backdrop-blur transition-colors hover:bg-emerald-500"
                             onClick={(e) => {
                               e.stopPropagation();
                               onToggleSave(item);
@@ -1037,64 +1025,59 @@ export default function SavedReels() {
                           >
                             <BookmarkCheck className="h-3.5 w-3.5" />
                           </button>
-                          <a
-                            href={reel.reelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute bottom-2 right-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
-                            title="Open on Instagram"
-                            aria-label="Open on Instagram"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                          {reel.duration ? (
-                            <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                              {formatDuration(reel.duration)}
-                            </span>
-                          ) : null}
-                          {hasTranscription && !isNoSpeech && (
-                            <span className="absolute left-2 top-10 rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                        }
+                        statusChip={
+                          hasTranscription && !isNoSpeech ? (
+                            <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
                               Transcribed
                             </span>
-                          )}
-                          {isNoSpeech && (
-                            <span className="absolute left-2 top-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                          ) : isNoSpeech ? (
+                            <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
                               No voice
                             </span>
-                          )}
-                          {isProcessing && (
-                            <span className="absolute left-2 top-10 animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                          ) : isProcessingForStrip ? (
+                            <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
                               Processing
                             </span>
-                          )}
-                        </div>
-
-                        <div className="shrink-0 space-y-2 p-2.5">
-                          <div className="cursor-pointer space-y-2" onClick={() => setGridModalSavedId(item.id)}>
-                            <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
-                              {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                              <span>{formatNumber(reel.viewCount)} views</span>
-                              <span aria-hidden>·</span>
-                              <span>{formatNumber(reel.likeCount)} likes</span>
-                              <span aria-hidden>·</span>
-                              <span>{formatNumber(reel.commentCount)} comments</span>
-                              {engagementRate > 0 && (
-                                <>
-                                  <span aria-hidden>·</span>
-                                  <span className="font-medium text-emerald-400">
-                                    {engagementRate.toFixed(2)}%
-                                  </span>
-                                </>
-                              )}
-                              <span aria-hidden>·</span>
-                              <span className="text-muted-foreground">
-                                {formatPostedTime(reel.postedAt, userTimezone)}
-                              </span>
-                            </div>
+                          ) : null
+                        }
+                        badges={
+                          <BrandCoachBadge
+                            source={
+                              item.source === "featured" && item.featuredReelId != null
+                                ? { kind: "featured", featuredReelId: item.featuredReelId }
+                                : { kind: "reel", reelId: reel.id }
+                            }
+                            hasTranscript={hasTranscription && !isNoSpeech}
+                          />
+                        }
+                        caption={
+                          <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+                            {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
+                          </p>
+                        }
+                        stats={
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                            <span>{formatNumber(reel.viewCount)} views</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.likeCount)} likes</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatNumber(reel.commentCount)} comments</span>
+                            {engagementRate > 0 && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="font-medium text-emerald-400">
+                                  {engagementRate.toFixed(2)}%
+                                </span>
+                              </>
+                            )}
+                            <span aria-hidden>·</span>
+                            <span className="text-muted-foreground">
+                              {formatPostedTime(reel.postedAt, userTimezone)}
+                            </span>
                           </div>
+                        }
+                        actions={
                           <ReelActionButtons
                             source={reelActionSource(item)}
                             reelId={reel.id}
@@ -1117,8 +1100,8 @@ export default function SavedReels() {
                             onMakeVersion={() => {}}
                             onOpenMyScript={() => {}}
                           />
-                        </div>
-                      </div>
+                        }
+                      />
                     );
                   })}
                 </div>

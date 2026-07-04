@@ -5,7 +5,7 @@ import { MobileAppLayoutSkeleton } from "@/components/MobileAppLayoutSkeleton";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
-import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import {
   MOBILE_CREATE_TAB_PATHS,
   mobileCreateTabForPath,
@@ -130,12 +130,11 @@ function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   });
 
-  const nicheLabel = (() => {
-    const slugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
-    const first = typeof slugs[0] === "string" ? slugs[0].trim() : "";
-    if (first) return formatReelTaxonomyLabel(first);
-    return "Content creator";
-  })();
+  const nicheLabel = resolvePrimaryNicheLabel({
+    businessDescription: onboardingStateQuery.data?.businessDescription,
+    targetAudience: onboardingStateQuery.data?.targetAudience,
+    selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
+  });
 
   const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
 

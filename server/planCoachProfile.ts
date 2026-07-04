@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { getOnboardingState } from "./db";
 import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { resolvePrimaryNicheSlug } from "@shared/primaryNiche";
 
 export type CreatorCoachProfile = {
   niche: string;
@@ -19,9 +20,12 @@ export async function getCreatorCoachProfile(userId: number): Promise<CreatorCoa
   }
 
   const slugs = state.selectedNicheSlugs ?? [];
-  const firstSlug = typeof slugs[0] === "string" ? slugs[0].trim() : "";
-  const nicheSlug = firstSlug || "business";
-  const niche = firstSlug ? formatReelTaxonomyLabel(firstSlug) : "Content creator";
+  const nicheSlug = resolvePrimaryNicheSlug({
+    businessDescription: state.businessDescription,
+    targetAudience: state.targetAudience,
+    selectedNicheSlugs: slugs,
+  });
+  const niche = formatReelTaxonomyLabel(nicheSlug);
   const targetAudience = state.targetAudience?.trim() || "General audience";
   const brandDescription = state.businessDescription?.trim() || null;
 

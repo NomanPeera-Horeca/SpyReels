@@ -77,6 +77,7 @@ import {
   inferOnboardingSlugsFromDescription,
   shouldAskCreatorContextQuestion,
 } from "../shared/onboardingDescription";
+import { mergeInferredNicheSlugs } from "../shared/primaryNiche";
 import {
   assignScriptingTag,
   buildSaveAssistantMessage,
@@ -4932,6 +4933,40 @@ The hook MUST be 7-10 words. Count them.`),
         }
 
         await updateUserPersonalization(ctx.user.id, patch);
+
+        const state = await getOnboardingState(ctx.user.id);
+        const nextBusiness =
+          businessDescription !== undefined
+            ? businessDescription
+            : state?.businessDescription?.trim() ?? null;
+        const nextAudience =
+          targetAudience !== undefined
+            ? targetAudience
+            : state?.targetAudience?.trim() ?? null;
+
+        if (nextBusiness) {
+          const combined = [nextBusiness, nextAudience].filter(Boolean).join(" ");
+          const inferred = inferOnboardingSlugsFromDescription(combined);
+          const existing = state?.selectedNicheSlugs ?? [];
+          const merged = mergeInferredNicheSlugs(inferred, existing);
+          const changed =
+            merged.length !== existing.length ||
+            merged.some((slug, index) => slug !== existing[index]);
+          if (changed && merged.length > 0) {
+            const db = await getDb();
+            if (!db) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Database unavailable",
+              });
+            }
+            await db
+              .update(users)
+              .set({ selectedNicheSlugs: merged })
+              .where(eq(users.id, ctx.user.id));
+          }
+        }
+
         return { success: true as const };
       }),
   }),

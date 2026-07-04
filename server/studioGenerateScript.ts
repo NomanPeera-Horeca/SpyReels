@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   buildCoachPrompt,
+  buildConvertRoughScriptPrompt,
   buildStudioDateContext,
   COACH_SYSTEM_PROMPT,
 } from "@shared/studioHeit";
@@ -11,7 +12,7 @@ import {
   combineBodyFromSections,
   sectionsFromGenerated,
 } from "@shared/coachScriptSections";
-import { coachScripts } from "../drizzle/schema";
+import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
 import { getCreatorCoachProfile, type CreatorCoachProfile } from "./planCoachProfile";
@@ -113,13 +114,36 @@ export async function generateCoachScriptForWorkspace(args: {
 
   args.onPhase?.("write_script");
 
+  let effectiveDescription = args.description;
+  if (args.planCardId) {
+    const [planCard] = await db
+      .select()
+      .from(planCards)
+      .where(
+        and(eq(planCards.id, args.planCardId), eq(planCards.workspaceId, args.workspaceId))
+      )
+      .limit(1);
+    if (planCard) {
+      const planBlock = [
+        `30-day plan Day ${planCard.day}: ${planCard.title}`,
+        `Angle: ${planCard.angle}`,
+        `Hook idea: ${planCard.hook}`,
+        planCard.filmingLocation ? `Filming location: ${planCard.filmingLocation}` : null,
+        planCard.researchSignal ? `Research signal: ${planCard.researchSignal}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      effectiveDescription = `${args.description}\n\n--- Approved plan context (ground truth) ---\n${planBlock}`;
+    }
+  }
+
   const response = await invokeLLM({
     messages: [
       { role: "system", content: withAiFormattingRules(`${COACH_SYSTEM_PROMPT}\n\n${buildStudioDateContext()}`) },
       {
         role: "user",
         content: buildCoachPrompt(
-          args.description,
+          effectiveDescription,
           profile.niche,
           profile.targetAudience,
           profile.brandDescription,
@@ -188,4 +212,41 @@ export async function generateCoachScriptForWorkspace(args: {
     await incrementUsage(args.userId, "recreateCount");
   }
   return mapCoachScriptRow(row);
+}
+
+export async function convertRoughScriptForWorkspace(args: {
+  userId: number;
+  workspaceId: string;
+  openId: string;
+  roughScript: string;
+  workingTitle?: string;
+  skipUsageCheck?: boolean;
+  onPhase?: (phase: "hook_angle" | "write_script" | "production_notes") => void;
+}): Promise<GeneratedCoachScript> {
+  const trimmed = args.roughScript.trim();
+  if (trimmed.length < 20) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Paste at least a few sentences so we can structure your script.",
+    });
+  }
+
+  const profile = await getCreatorCoachProfile(args.userId);
+  const description = buildConvertRoughScriptPrompt(
+    trimmed,
+    profile.niche,
+    profile.targetAudience,
+    profile.brandDescription,
+    args.workingTitle
+  );
+
+  return generateCoachScriptForWorkspace({
+    userId: args.userId,
+    workspaceId: args.workspaceId,
+    openId: args.openId,
+    description,
+    skipUsageCheck: args.skipUsageCheck,
+    profileOverride: profile,
+    onPhase: args.onPhase,
+  });
 }

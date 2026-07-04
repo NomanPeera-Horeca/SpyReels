@@ -1,81 +1,98 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { ClipboardPaste, Save, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
+import { ClipboardPaste, Sparkles, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { PostDateTimePicker } from "@/components/PostDateTimePicker";
+import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import { useAgentProgressPoll } from "@/hooks/useAgentProgressPoll";
+import {
+  COACH_AGENT_FOOTER,
+  buildCoachScriptProgressSteps,
+} from "@shared/coachAgentProgress";
 
 export default function PasteScript() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [postDate, setPostDate] = useState<Date | undefined>(new Date());
-  const [postTime, setPostTime] = useState("09:00");
-  const [status, setStatus] = useState<"draft" | "approved">("draft");
-  const [saving, setSaving] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
 
-  const prefsQuery = trpc.preferences.get.useQuery();
-  const userTimezone = prefsQuery.data?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const convertMutation = trpc.studio.convertRough.useMutation({
+    onSuccess: (script) => {
+      setConverting(false);
+      toast.success("Production script ready in Studio");
+      navigate(`/studio?script=${script.id}`);
+    },
+    onError: (err) => {
+      setConverting(false);
+      toast.error(err.message || "Could not convert your script");
+    },
+  });
 
-  const saveScript = trpc.scripts.save.useMutation();
+  const fetchProgress = useCallback(
+    () => utils.studio.getGenerationProgress.fetch(undefined, { staleTime: 0 }),
+    [utils.studio.getGenerationProgress]
+  );
 
-  const handleSave = async (overrideStatus?: "draft" | "approved") => {
-    if (!content.trim()) {
-      toast.error("Please paste your script content first");
+  const initialSteps = useMemo(() => buildCoachScriptProgressSteps("read_profile"), []);
+  const progressSteps = useAgentProgressPoll({
+    enabled: converting,
+    initialSteps,
+    fetchProgress,
+  });
+
+  const handleConvert = () => {
+    const trimmed = content.trim();
+    if (trimmed.length < 20) {
+      toast.error("Paste at least a few sentences so we can structure your script");
       return;
     }
-    const finalStatus = overrideStatus || status;
-    setSaving(true);
-    try {
-      const result = await saveScript.mutateAsync({
-        title: title.trim() || "Pasted Script",
-        content: content.trim(),
-        sourceHandle: undefined,
-        reelId: undefined,
-        recreatedScriptId: undefined,
-        gradeLevel: "auto",
-        status: finalStatus,
-        postDate: postDate ? postDate.toISOString() : undefined,
-        postTime: postTime || undefined,
-      });
-      toast.success(
-        finalStatus === "approved"
-          ? "Script approved & saved! Opening in editor..."
-          : "Script saved as draft! Opening in editor..."
-      );
-      navigate(`/scripts/${result.id}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save script");
-    } finally {
-      setSaving(false);
-    }
+    setConverting(true);
+    convertMutation.mutate({
+      roughScript: trimmed,
+      workingTitle: title.trim() || undefined,
+    });
   };
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const estimatedDuration = Math.round(wordCount / 2.5);
 
+  if (converting) {
+    return (
+      <div className="mx-auto max-w-2xl py-8">
+        <AgentProgressPanel
+          steps={progressSteps}
+          subheadline="Restructuring your draft into Hook, story, takeaway, CTA, and production notes."
+          footer={COACH_AGENT_FOOTER}
+          badgeLabel="Converting"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
           <ClipboardPaste className="h-5 w-5 text-primary" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">Paste Your Script</h1>
           <p className="text-sm text-muted-foreground">
-            Already have a script from ChatGPT or elsewhere? Paste it here to edit, plan, and schedule.
+            Paste a rough draft from ChatGPT, Docs, or Notes. We turn it into the same production
+            script layout you get from AI Coach.
           </p>
         </div>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium mb-1.5 block">Script Title</label>
+          <label className="mb-1.5 block text-sm font-medium">Working title (optional)</label>
           <Input
-            placeholder="e.g. My Morning Routine Reel"
+            placeholder="e.g. The silent killer in every restaurant kitchen"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="bg-card"
@@ -83,56 +100,39 @@ export default function PasteScript() {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-sm font-medium">Script Content</label>
-            {wordCount > 0 && (
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium">Rough script draft</label>
+            {wordCount > 0 ? (
               <span className="text-xs text-muted-foreground">
-                {wordCount} words &middot; ~{estimatedDuration}s
+                {wordCount} words · ~{estimatedDuration}s
               </span>
-            )}
+            ) : null}
           </div>
           <Textarea
-            placeholder="Paste your script here...&#10;&#10;You can paste any script from ChatGPT, Google Docs, Notes, or anywhere else. Once saved, you'll be able to edit it with AI tools, set a post date, add tags, and use the teleprompter."
+            placeholder="Paste your script here...
+
+We keep your message and voice, then split it into Hook, problem setup, story, takeaway, CTA, plus filming notes."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="bg-card min-h-[300px] text-sm leading-relaxed"
+            className="min-h-[300px] bg-card text-sm leading-relaxed"
           />
         </div>
 
-        {/* Post Date + Time Picker */}
-        <div className="w-48">
-          <PostDateTimePicker
-            date={postDate}
-            onDateChange={setPostDate}
-            time={postTime}
-            onTimeChange={setPostTime}
-            timezone={userTimezone}
-          />
-          <p className="text-xs text-muted-foreground mt-1">When do you plan to post this reel?</p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3 pt-2">
           <Button
-            onClick={() => handleSave("draft")}
-            disabled={saving || !content.trim()}
-            variant="outline"
+            onClick={handleConvert}
+            disabled={convertMutation.isPending || content.trim().length < 20}
             className="gap-2"
           >
-            {saving && status === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save as Draft
-          </Button>
-          <Button
-            onClick={() => handleSave("approved")}
-            disabled={saving || !content.trim()}
-            className="gap-2"
-          >
-            {saving && status === "approved" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Approve & Save
+            {convertMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Convert to production script
           </Button>
           <p className="text-xs text-muted-foreground">
-            <Sparkles className="h-3 w-3 inline mr-1" />
-            After saving, use AI tools to rewrite, adjust grade level, add delivery cues, and more.
+            Opens in Studio with production notes, refine tools, and teleprompter when you save.
           </p>
         </div>
       </div>

@@ -1,6 +1,12 @@
 const NICHE_RULES: Array<{ pattern: RegExp; slug: string; label: string }> = [
   {
     pattern:
+      /\b(restaurants?\s+(?:equipment|equip(?:ment)?|supply|supplies|tech|software|owners?|operators?)|commercial kitchen|food service equip(?:ment)?|sell(?:ing)?(?:\s+\w+){0,4}\s+to\s+restaurants?)\b/i,
+    slug: "business-entrepreneurship",
+    label: "Business & Entrepreneurship",
+  },
+  {
+    pattern:
       /\b(real estate|realtor|mortgage|home buyer|first.?time|first home|buying (a )?home|buying home|home buying|listing|open house)\b/i,
     slug: "real-estate",
     label: "Real Estate",

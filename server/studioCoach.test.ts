@@ -11,6 +11,7 @@ import {
   parseStudioPrefillMeta,
   VIRAL_SCRIPT_SECTION_LABELS,
 } from "@shared/studioCoachUi";
+import { buildConvertRoughScriptPrompt } from "@shared/studioHeit";
 import {
   resolveCoachIntentRules,
   shouldUseLlmIntentClassifier,
@@ -68,6 +69,29 @@ describe("coachScriptSections helpers", () => {
 
   it("rejects incomplete generated scripts", () => {
     expect(coachScriptIsComplete({ hook: "Only a hook" })).toBe(false);
+  });
+
+  it("rejects scripts with duplicate teach and cta", () => {
+    expect(
+      coachScriptIsComplete({
+        hook: "Stop scrolling.",
+        explain: "Problem setup here.",
+        illustrate: "Story here.",
+        teach: "Drop a comment below.",
+        cta: "Drop a comment below.",
+      })
+    ).toBe(false);
+  });
+
+  it("rejects scripts missing illustrate", () => {
+    expect(
+      coachScriptIsComplete({
+        hook: "Stop scrolling.",
+        explain: "Problem setup here.",
+        teach: "One takeaway.",
+        cta: "Comment PLAN.",
+      })
+    ).toBe(false);
   });
 
   it("flattens scripts with creator-friendly copy labels", () => {
@@ -150,5 +174,23 @@ describe("studioCoachAgent rules", () => {
       expect(["write_script", "from_plan", "refine_script", "hook_ideas"]).toContain(cap.id);
     }
     expect(toolNames).toHaveLength(4);
+  });
+});
+
+describe("buildConvertRoughScriptPrompt", () => {
+  it("wraps rough draft with convert instructions and creator profile", () => {
+    const prompt = buildConvertRoughScriptPrompt(
+      "Most restaurants lose money on bad refrigeration.",
+      "Restaurant equipment",
+      "Restaurant owners",
+      null,
+      "Kitchen warning"
+    );
+    expect(prompt).toContain("CONVERT THIS ROUGH DRAFT");
+    expect(prompt).toContain("Most restaurants lose money");
+    expect(prompt).toContain("Working title hint: \"Kitchen warning\"");
+    expect(prompt).toContain("Restaurant equipment");
+    expect(prompt).toContain('"hook"');
+    expect(prompt).toContain("productionCoach");
   });
 });

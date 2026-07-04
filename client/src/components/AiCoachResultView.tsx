@@ -87,9 +87,9 @@ function HeitSection({
         />
       ) : (
         <div
-          className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed whitespace-pre-line ${bodyClass ?? ""} ${mediumBody ? "font-medium" : ""}`}
+          className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed whitespace-pre-line ${bodyClass ?? ""} ${mediumBody ? "font-medium" : ""} ${!value.trim() ? "text-muted-foreground italic" : ""}`}
         >
-          {value}
+          {value.trim() ? value : "Missing. Use Refine with AI below to fill this section."}
         </div>
       )}
     </section>
@@ -430,25 +430,42 @@ export function AiCoachResultView({
                     <button
                       type="button"
                       className="border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
-                      onClick={() => refineInputRef.current?.focus()}
+                      onClick={() => {
+                        if (refineInput.trim()) {
+                          onRefine();
+                          return;
+                        }
+                        refineInputRef.current?.focus();
+                      }}
                       disabled={refinePending}
                     >
-                      {refinePending ? "Refining..." : "Refine with AI"}
+                      Refine with AI
                     </button>
                   </>
                 )}
               </div>
               {!editMode && (
-                <input
-                  ref={refineInputRef}
-                  value={refineInput}
-                  onChange={(e) => onRefineInputChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && refineInput.trim()) onRefine();
-                  }}
-                  placeholder='e.g. "Make the hook more contrarian"'
-                  className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-900 placeholder:italic placeholder:text-gray-400"
-                />
+                <div className="flex gap-2">
+                  <input
+                    ref={refineInputRef}
+                    value={refineInput}
+                    onChange={(e) => onRefineInputChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && refineInput.trim() && !refinePending) onRefine();
+                    }}
+                    placeholder='e.g. "Make the hook more contrarian"'
+                    disabled={refinePending}
+                    className="min-w-0 flex-1 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-900 placeholder:italic placeholder:text-gray-400 disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={onRefine}
+                    disabled={refinePending || !refineInput.trim()}
+                    className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {refinePending ? "Refining..." : "Apply"}
+                  </button>
+                </div>
               )}
             </div>
             ) : null}

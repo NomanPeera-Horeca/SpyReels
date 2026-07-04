@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import {
   Inbox,
-  ExternalLink,
   Eye,
   Heart,
   MessageCircle,
@@ -53,9 +52,10 @@ import {
   InlineWorkflow,
   formatNumber,
   formatPostedTime,
-  formatDuration,
 } from "@/components/InlineWorkflow";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 
@@ -485,9 +485,10 @@ export default function CollectedReels() {
       mappedReelId: number | null;
       compact?: boolean;
       hideExternal?: boolean;
+      gridTile?: boolean;
     }
   ) {
-    const { mappedReelId, compact = false, hideExternal = false } = opts;
+    const { mappedReelId, compact = false, hideExternal = false, gridTile = false } = opts;
     const engagementRate = getEngagementRate(reel);
     const isPending = reel.status === "pending";
     const isFailed = reel.status === "failed";
@@ -606,24 +607,33 @@ export default function CollectedReels() {
     const hasIg = !!(reel.reelUrl ?? "").trim();
 
     return (
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-0.5 sm:gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            retryMutation.mutate({ id: reel.id });
-          }}
-          disabled={retryMutation.isPending}
-        >
-          {retryMutation.isPending ? (
-            <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3 sm:mr-1" />
-          )}
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
+      <div
+        className={
+          gridTile
+            ? "w-full"
+            : "flex shrink-0 flex-wrap items-center justify-end gap-0.5 sm:gap-1"
+        }
+        onClick={(e) => e.stopPropagation()}
+      >
+        {!gridTile ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              retryMutation.mutate({ id: reel.id });
+            }}
+            disabled={retryMutation.isPending}
+          >
+            {retryMutation.isPending ? (
+              <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3 sm:mr-1" />
+            )}
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        ) : null}
 
         <ReelActionButtons
           collectionMode
@@ -1058,7 +1068,7 @@ export default function CollectedReels() {
       )}
 
       {sortedReels.length > 0 && viewMode === "grid" && (
-        <div key="grid" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div key="grid" className={WORKSPACE_REEL_GRID_CLASS}>
           {sortedReels.map((reel, index) => {
             const mappedReelId = reel.transcriptionReelId ?? null;
             const isPending = reel.status === "pending";
@@ -1077,10 +1087,10 @@ export default function CollectedReels() {
               return (
                 <div
                   key={reel.id}
-                  className="space-y-2 rounded-lg border border-border/40 bg-card/50 p-3 text-xs text-muted-foreground"
+                  className="workspace-reel-card flex h-full flex-col justify-between gap-3 p-3 text-xs text-muted-foreground"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span>#{index + 1}</span>
+                    <span className="font-mono">#{index + 1}</span>
                     <span className="line-clamp-3 text-right">
                       {isPending
                         ? reel.errorMessage || "Fetching from Instagram…"
@@ -1117,116 +1127,76 @@ export default function CollectedReels() {
             }
 
             return (
-              <div
+              <WorkspaceReelGridTile
                 key={reel.id}
-                className={`group relative rounded-lg border bg-card transition-colors ${
-                  gridModalCollectedId === reel.id ? "border-primary/40" : "border-border/40 hover:border-border/70"
-                }`}
-              >
-                <div
-                  className="relative aspect-[9/14] cursor-pointer overflow-hidden"
-                  onClick={() => !isPending && !isFailed && setGridModalCollectedId(reel.id)}
-                >
-                  {(reel.thumbnailUrl ?? "").trim() ? (
-                    <DashboardReelGridMedia
-                      className="relative h-full w-full"
-                      thumbnailUrl={reel.thumbnailUrl}
-                      videoUrl={reel.videoUrl}
-                      shortcode={reel.shortcode}
-                      reelId={reel.transcriptionReelId ?? undefined}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">
-                      <Film className="h-8 w-8 text-muted-foreground/60" />
-                      <span className="text-[10px] text-muted-foreground">No thumbnail</span>
-                    </div>
-                  )}
-                  <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                    #{index + 1}
-                  </div>
-                  <span className="absolute left-2 top-9 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
+                index={index}
+                isActive={gridModalCollectedId === reel.id}
+                thumbnailUrl={reel.thumbnailUrl}
+                videoUrl={reel.videoUrl}
+                shortcode={reel.shortcode}
+                reelId={reel.transcriptionReelId ?? undefined}
+                engagementRate={engagementRate}
+                duration={reel.duration}
+                reelUrl={reel.reelUrl}
+                onMediaClick={() => setGridModalCollectedId(reel.id)}
+                mediaLabel={
+                  <span className="rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
                     {sourceBadge(reel)}
                   </span>
-                  {engagementRate > 0 ? (
-                    <div className="absolute bottom-2 left-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                      {engagementRate.toFixed(2)}%
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="absolute right-2 top-2 rounded-full bg-red-950/85 p-1.5 text-red-300 backdrop-blur hover:bg-red-950"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteMutation.mutate({ id: reel.id });
-                    }}
-                    disabled={deleteMutation.isPending}
-                    title="Remove from collection"
-                    aria-label="Remove from collection"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                  {reel.reelUrl ? (
-                    <a
-                      href={reel.reelUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-2 right-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
-                      title="Open on Instagram"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  ) : null}
-                  {reel.duration ? (
-                    <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                      {formatDuration(reel.duration)}
-                    </span>
-                  ) : null}
-                  {hasTranscription && !isNoSpeech && (
-                    <span className="absolute left-2 top-[4.25rem] rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+                }
+                statusChip={
+                  hasTranscription && !isNoSpeech ? (
+                    <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
                       Transcribed
                     </span>
-                  )}
-                  {hasTranscription && isNoSpeech && (
-                    <span className="absolute left-2 top-[4.25rem] rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
+                  ) : isNoSpeech ? (
+                    <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
                       No voice
                     </span>
-                  )}
-                  {isProcessing && (
-                    <span className="absolute left-2 top-[4.25rem] animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                  ) : isProcessing ? (
+                    <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
                       Processing
                     </span>
-                  )}
-                </div>
-
-                <div className="shrink-0 space-y-2 p-2.5">
-                  <div className="cursor-pointer space-y-2" onClick={() => setGridModalCollectedId(reel.id)}>
-                    <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
-                      {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                      {effectiveViews > 0 ? <span>{formatNumber(effectiveViews)} views</span> : null}
-                      {effectiveViews > 0 ? <span aria-hidden>·</span> : null}
-                      <span>{formatNumber(reel.likeCount || 0)} likes</span>
-                      <span aria-hidden>·</span>
-                      <span>{formatNumber(reel.commentCount || 0)} comments</span>
-                      {engagementRate > 0 ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span className="font-medium text-emerald-400">{engagementRate.toFixed(2)}%</span>
-                        </>
-                      ) : null}
-                      {reel.postedAt ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span className="text-muted-foreground">{formatPostedTime(reel.postedAt, userTimezone)}</span>
-                        </>
-                      ) : null}
-                    </div>
+                  ) : null
+                }
+                mediaFallback={
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">
+                    <Film className="h-8 w-8 text-muted-foreground/60" />
+                    <span className="text-[10px] text-muted-foreground">No thumbnail</span>
                   </div>
-                  {renderCollectedActions(reel, { mappedReelId, compact: true, hideExternal: true })}
-                </div>
-              </div>
+                }
+                caption={
+                  <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+                    {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
+                  </p>
+                }
+                stats={
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                    {effectiveViews > 0 ? <span>{formatNumber(effectiveViews)} views</span> : null}
+                    {effectiveViews > 0 ? <span aria-hidden>·</span> : null}
+                    <span>{formatNumber(reel.likeCount || 0)} likes</span>
+                    <span aria-hidden>·</span>
+                    <span>{formatNumber(reel.commentCount || 0)} comments</span>
+                    {engagementRate > 0 ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="font-medium text-emerald-400">{engagementRate.toFixed(2)}%</span>
+                      </>
+                    ) : null}
+                    {reel.postedAt ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span>{formatPostedTime(reel.postedAt, userTimezone)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                }
+                actions={renderCollectedActions(reel, {
+                  mappedReelId,
+                  hideExternal: true,
+                  gridTile: true,
+                })}
+              />
             );
           })}
         </div>

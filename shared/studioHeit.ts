@@ -142,8 +142,8 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "hook": "H section only. MAX 2 sentences. Zero warm-up. Written in the FORMAT's voice.",
   "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
   "illustrate": "I section only. One story, analogy, or example with concrete detail.",
-  "teach": "T section only. ONE clear takeaway or action. Not a list.",
-  "cta": "Final call to action. Tell them exactly what to do next (comment, DM, save, follow). 1-2 sentences."
+  "teach": "T section only. ONE clear takeaway or action. Not a list. Do not repeat the call to action.",
+  "cta": "Final call to action only. Tell them exactly what to do next (comment, DM, save, follow). Must be different from teach. 1-2 sentences."
 }
 
 Music rules for productionCoach.instagramAudio:
@@ -151,6 +151,26 @@ Music rules for productionCoach.instagramAudio:
 - Use real songs or original sounds that are commonly found in Instagram Reels audio search for this niche in ${new Date().getFullYear()}. Include the exact searchHint string.
 - Match audio energy to the script (calm educational vs hype vs emotional story). No vague advice like "use trending audio."
 - talking-head scripts: low-volume background tracks. trending-audio format: the sound IS the hook, say so in musicMix.`;
+}
+
+/** Turn pasted rough drafts into the same HEIT + productionNotes JSON as net-new coach scripts. */
+export function buildConvertRoughScriptPrompt(
+  roughScript: string,
+  niche: string,
+  targetAudience: string,
+  brandDescription?: string | null,
+  workingTitle?: string | null
+): string {
+  const titleHint = workingTitle?.trim()
+    ? `Working title hint: "${workingTitle.trim()}"\n\n`
+    : "";
+  const wrapped = `${titleHint}CONVERT THIS ROUGH DRAFT into a structured HEIT production script. Keep the creator's core message, facts, and voice. Fill gaps only where the draft is incomplete. Do not invent new claims.
+
+--- Rough draft ---
+${roughScript.trim()}
+--- End draft ---`;
+
+  return buildCoachPrompt(wrapped, niche, targetAudience, brandDescription);
 }
 
 export function buildPlanGenerationPrompt(
