@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
+import { snapshotFromProgressRow } from "@shared/scrapeProgressUi";
 import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -2292,21 +2294,24 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {showUpdatingReelsBanner && (
-            <div className="mb-4 flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  Updating with latest reels
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {typeof job?.timeframeDays === "number"
-                    ? `Showing what we have while we pull your last ${job.timeframeDays} days. New posts will appear automatically.`
-                    : "Showing what we have while we pull the latest posts. New reels will appear automatically."}
-                </p>
-              </div>
-            </div>
-          )}
+          {showUpdatingReelsBanner && job && jobId != null ? (
+            <ScrapeJobProgressUI
+              className="mb-4"
+              variant="banner"
+              snapshot={snapshotFromProgressRow(
+                {
+                  handle: job.handle,
+                  status: job.status,
+                  progressPercent: job.progressPercent ?? 0,
+                  reelsFound: Math.max(job.reelsFound ?? 0, reelsData.length),
+                  currentStep: job.currentStep,
+                  estimatedTotal: job.estimatedTotal,
+                  timeframeDays: job.timeframeDays,
+                },
+                jobId
+              )}
+            />
+          ) : null}
 
           {!isFeaturedView &&
           job?.status === "completed" &&

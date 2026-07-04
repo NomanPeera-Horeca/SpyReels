@@ -259,7 +259,12 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
-import { ensureReelVideoOnR2, mirrorReelVideosToR2ByIds } from "./reelVideoR2";
+import { ensureReelVideoOnR2 } from "./reelVideoR2";
+import {
+  scheduleScrapeJobPostCompleteWork,
+  scheduleScrapeReelPostCompleteWork,
+  reelIdsForJobShortcodes,
+} from "./scrapePostComplete";
 import {
   monthlyUsage,
   users,
@@ -7518,30 +7523,6 @@ async function runScrapeJob(
     await refreshViralFlagsForScrapeJob(jobId);
     const finalReelCount = await countReelsForJob(jobId);
 
-    const mirrorDb = await getDb();
-    if (mirrorDb) {
-      const reelIdsForMirror = await mirrorDb
-        .select({ id: reelsTable.id })
-        .from(reelsTable)
-        .where(eq(reelsTable.jobId, jobId))
-        .then((rows) => rows.map((r) => r.id));
-      if (reelIdsForMirror.length > 0) {
-        const mirrorResult = await mirrorReelVideosToR2ByIds(reelIdsForMirror);
-        console.log(
-          `[runScrapeJob ${jobId}] mirror-videos ok=${mirrorResult.ok} failed=${mirrorResult.failed} skipped=${mirrorResult.skipped}`
-        );
-        classifyReelsByIds(reelIdsForMirror)
-          .then((r) =>
-            console.log(
-              `[runScrapeJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
-            )
-          )
-          .catch((err) =>
-            console.error(`[runScrapeJob ${jobId}] auto-classify error:`, err)
-          );
-      }
-    }
-
     await updateScrapeJob(jobId, {
       status: "completed",
       totalReels: finalReelCount,
@@ -7555,6 +7536,7 @@ async function runScrapeJob(
       failureReason: null,
     });
     await maybeMarkFirstSpyCompleted(jobId);
+    scheduleScrapeJobPostCompleteWork(jobId);
     console.log(
       `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${finalReelCount} followers=${followerCount}`
     );
@@ -7684,36 +7666,12 @@ async function runResyncJob(
     console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
 
     if (newReels.length > 0) {
-      const classifyDb = await getDb();
-      if (classifyDb) {
-        const shortcodes = newReels.map((r) => r.shortcode);
-        const insertedIds = await classifyDb
-          .select({ id: reelsTable.id })
-          .from(reelsTable)
-          .where(
-            and(eq(reelsTable.jobId, jobId), inArray(reelsTable.shortcode, shortcodes))
-          )
-          .then((rows) => rows.map((r) => r.id));
-        if (insertedIds.length > 0) {
-          classifyReelsByIds(insertedIds)
-            .then((r) =>
-              console.log(
-                `[runResyncJob ${jobId}] auto-classify ok=${r.ok} failed=${r.failed}`
-              )
-            )
-            .catch((err) =>
-              console.error(`[runResyncJob ${jobId}] auto-classify error:`, err)
-            );
-          mirrorReelVideosToR2ByIds(insertedIds)
-            .then((r) =>
-              console.log(
-                `[runResyncJob ${jobId}] mirror-videos ok=${r.ok} failed=${r.failed} skipped=${r.skipped}`
-              )
-            )
-            .catch((err) =>
-              console.error(`[runResyncJob ${jobId}] mirror-videos error:`, err)
-            );
-        }
+      const insertedIds = await reelIdsForJobShortcodes(
+        jobId,
+        newReels.map((r) => r.shortcode)
+      );
+      if (insertedIds.length > 0) {
+        scheduleScrapeReelPostCompleteWork(insertedIds, `runResyncJob ${jobId}`);
       }
     }
   } catch (error) {

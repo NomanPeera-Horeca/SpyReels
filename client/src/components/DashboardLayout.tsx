@@ -29,6 +29,7 @@ import { getLoginUrl } from "@/const";
 import ExportJobTracker from "@/components/ExportJobTracker";
 import { ActiveScrapeJobNotice } from "@/components/ActiveScrapeJobNotice";
 import { useActiveScrapeJob } from "@/lib/activeScrapeJob";
+import { useScrapeCompletionNotifier } from "@/hooks/useScrapeCompletionNotifier";
 import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -268,6 +269,7 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { activeJob: activeRunningJob } = useActiveScrapeJob();
+  useScrapeCompletionNotifier();
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();

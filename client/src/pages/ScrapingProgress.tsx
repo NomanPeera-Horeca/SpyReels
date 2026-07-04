@@ -21,6 +21,15 @@ import {
 import { navigateAppReplace, resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
 import { formatNumber } from "@/components/InlineWorkflow";
+import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
+import {
+  navigateAfterScrapeStart,
+  navigateWhenReelsReady,
+} from "@/lib/scrapeNavigation";
+import {
+  snapshotFromProgressRow,
+  scrapeDashboardPath,
+} from "@shared/scrapeProgressUi";
 
 export default function ScrapingProgress() {
   const [, setLocation] = useLocation();
@@ -59,7 +68,6 @@ export default function ScrapingProgress() {
   const data = progressQuery.data;
   const status = data?.status;
   const reelsFound = data?.reelsFound ?? 0;
-  const progressPercent = data?.progressPercent ?? 0;
   const handle = data?.handle ?? "";
   const errorMessage = data?.errorMessage ?? null;
 
@@ -78,14 +86,6 @@ export default function ScrapingProgress() {
     }
   }, [status, jobId, fromParam, setLocation]);
 
-  // Elapsed-seconds timer for the "About X seconds remaining" copy.
-  const [elapsedSec, setElapsedSec] = useState(0);
-  useEffect(() => {
-    if (status === "completed" || status === "failed") return;
-    const interval = setInterval(() => setElapsedSec((s) => s + 1), 1000);
-    return () => clearInterval(interval);
-  }, [status]);
-
   // User-controlled tips while waiting (no auto-rotate carousel).
   const tips = useMemo(() => [...LOADING_TIPS], []);
   const [tipIndex, setTipIndex] = useState(0);
@@ -101,6 +101,19 @@ export default function ScrapingProgress() {
 
   const partialReels = partialReelsQuery.data?.reels ?? [];
 
+  // Send users to the live dashboard as soon as we have enough reels to explore.
+  useEffect(() => {
+    if (jobId == null || status === "completed" || status === "failed") return;
+    const count = Math.max(reelsFound, partialReels.length);
+    navigateWhenReelsReady({
+      jobId,
+      reelsFound: count,
+      from: fromParam,
+      setLocation,
+      replace: true,
+    });
+  }, [jobId, status, reelsFound, partialReels.length, fromParam, setLocation]);
+
   const goPrevTip = () => {
     setTipIndex((i) => (i - 1 + tips.length) % tips.length);
   };
@@ -108,24 +121,10 @@ export default function ScrapingProgress() {
     setTipIndex((i) => (i + 1) % tips.length);
   };
 
-  // Longer jobs: Instagram can take up to ~3 minutes on large accounts.
-  const expectedTotalSec = elapsedSec > 90 ? 180 : 120;
-  const remainingByTime = Math.max(0, expectedTotalSec - elapsedSec);
-  const remainingByPct =
-    progressPercent > 0
-      ? Math.max(0, Math.round((elapsedSec / Math.max(1, progressPercent)) * (100 - progressPercent)))
-      : expectedTotalSec;
-  const remainingSec = Math.min(remainingByTime, remainingByPct);
-
-  // Retry: kick off a new scrape with the same handle / timeframe and push
-  // the user to the fresh /scraping URL.
+  // Retry: kick off a new scrape with the same handle / timeframe.
   const retryMutation = trpc.scrape.start.useMutation({
     onSuccess: (d) => {
-      if ("seededFromFeatured" in d && d.seededFromFeatured) {
-        setLocation(`/dashboard?jobId=${d.jobId}&from=research`);
-        return;
-      }
-      setLocation(`/scraping?jobId=${d.jobId}&from=research`);
+      navigateAfterScrapeStart(d, setLocation, "research");
     },
     onError: (err) => {
       toast.error("Could not start again", { description: err.message });
@@ -170,11 +169,11 @@ export default function ScrapingProgress() {
   }
 
   const displayHandle = handle ? `@${handle}` : "your account";
-  const rawPct = Math.min(100, Math.max(0, progressPercent));
-  // Cap the bar at 95% while the job is in-flight; 100% is reserved for the
-  // dashboard when reels are actually in the list (see Dashboard).
-  const pctClamped =
-    status === "completed" ? rawPct : Math.min(95, rawPct);
+  const progressSnapshot =
+    data && jobId != null
+      ? snapshotFromProgressRow(data, jobId)
+      : null;
+  const readyCount = Math.max(reelsFound, partialReels.length);
 
   const handleBrowseFeatured = () => {
     navigateAppReplace(setLocation, "/research#featured-creators");
@@ -208,25 +207,31 @@ export default function ScrapingProgress() {
       </div>
 
       <div className="mt-8 space-y-2">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-            style={{ width: `${pctClamped}%` }}
-          />
-        </div>
+        {progressSnapshot ? (
+          <ScrapeJobProgressUI snapshot={progressSnapshot} variant="inline" />
+        ) : (
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-primary/40" />
+          </div>
+        )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{statusLine}</span>
-          <span>
-            {status === "completed"
-              ? "Done!"
-              : remainingSec > 0
-                ? `About ${remainingSec} second${remainingSec === 1 ? "" : "s"} left`
-                : "Almost there..."}
-          </span>
         </div>
       </div>
 
-      {(partialReels.length > 0 || reelsFound > 0) && (
+      {readyCount > 0 && jobId != null ? (
+        <div className="mt-4">
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => setLocation(scrapeDashboardPath(jobId, fromParam))}
+          >
+            Watch reels now ({readyCount} ready)
+          </Button>
+        </div>
+      ) : null}
+
+      {readyCount > 0 ? (
         <div className="mt-6 overflow-hidden rounded-xl border border-border/50 bg-card">
           <div className="flex items-center justify-between border-b border-border/50 px-4 py-2.5">
             <p className="text-xs font-medium text-foreground">Reels as they arrive</p>
@@ -258,7 +263,7 @@ export default function ScrapingProgress() {
             ) : null}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <div className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
         <div className="mb-3 flex items-center justify-between">

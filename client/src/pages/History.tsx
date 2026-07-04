@@ -38,6 +38,10 @@ import { toast } from "sonner";
 import { formatNumber } from "@/components/InlineWorkflow";
 import Tooltip from "@/components/Tooltip";
 import { seeCreatorsViralReelsCta } from "@/lib/creatorCtaCopy";
+import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
+import { listHasRunningScrapeJob } from "@/lib/activeScrapeJob";
+import { runningJobProgressSnapshot } from "@/hooks/useScrapeCompletionNotifier";
+import { isScrapeJobInFlight } from "@shared/scrapeProgressUi";
 
 type ScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
 
@@ -102,7 +106,10 @@ type LayoutMode = "gallery" | "rows";
 
 export default function History() {
   const [, setLocation] = useLocation();
-  const jobsQuery = trpc.scrape.list.useQuery();
+  const jobsQuery = trpc.scrape.list.useQuery(undefined, {
+    refetchInterval: (q) => (listHasRunningScrapeJob(q.state.data) ? 3000 : false),
+    refetchOnWindowFocus: true,
+  });
   const utils = trpc.useUtils();
 
   const [sortBy, setSortBy] = useState<SortKey>("updated");
@@ -376,7 +383,11 @@ export default function History() {
                         {job.status === "running" && (
                           <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
                         )}
-                        {job.status === "failed" ? jobStatusLabel(job) : job.status}
+                        {job.status === "failed"
+                          ? jobStatusLabel(job)
+                          : job.status === "running"
+                            ? `${job.progressPercent}%`
+                            : job.status}
                       </Badge>
                       {syncedRecently && job.status === "completed" ? (
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
@@ -404,6 +415,15 @@ export default function History() {
                     <span>{niche}</span>
                   </div>
                 )}
+
+                {isScrapeJobInFlight(job.status) ? (
+                  <div className="px-4 pt-3">
+                    <ScrapeJobProgressUI
+                      snapshot={runningJobProgressSnapshot(job)}
+                      variant="card"
+                    />
+                  </div>
+                ) : null}
 
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                   <Tooltip content="Followers captured on last profile fetch">
@@ -568,7 +588,11 @@ export default function History() {
                       <span className="font-medium text-foreground">@{job.handle}</span>
                       <Badge variant="outline" className="text-[10px] h-5">
                         {job.status === "running" && <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />}
-                        {job.status === "failed" ? jobStatusLabel(job) : job.status}
+                        {job.status === "failed"
+                          ? jobStatusLabel(job)
+                          : job.status === "running"
+                            ? `${job.progressPercent}%`
+                            : job.status}
                       </Badge>
                       {niche ? (
                         <span className="text-[10px] text-muted-foreground">{niche}</span>
@@ -586,6 +610,14 @@ export default function History() {
                   </div>
                 </div>
                 <div className="flex flex-1 flex-wrap items-center gap-4 text-xs text-muted-foreground sm:justify-center">
+                  {isScrapeJobInFlight(job.status) ? (
+                    <div className="w-full min-w-[200px] max-w-xs">
+                      <ScrapeJobProgressUI
+                        snapshot={runningJobProgressSnapshot(job)}
+                        variant="card"
+                      />
+                    </div>
+                  ) : null}
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" /> {timeAgo(job.updatedAt)}
                   </span>
