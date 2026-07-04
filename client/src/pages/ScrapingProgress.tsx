@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  CheckCircle2,
   Loader2,
-  Circle,
   Lightbulb,
   AlertTriangle,
   RefreshCw,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { LOADING_TIPS } from "@/data/loadingTips";
 import { toast } from "sonner";
@@ -21,46 +20,7 @@ import {
 } from "@shared/instagramHandle";
 import { navigateAppReplace, resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
-
-/**
- * Ordered pipeline stages shown in the multi-step list. Index matches the
- * visual order; the backend `currentStep` value is compared against `id`.
- */
-const STEPS = [
-  { id: "connecting", label: "Connected to Instagram" },
-  { id: "fetching_profile", label: "Fetched profile" },
-  { id: "pulling_reels", label: "Pulling Reels" },
-  { id: "ranking", label: "Analyzing engagement metrics" },
-  { id: "complete", label: "Ranking by virality" },
-] as const;
-
-type StepId = (typeof STEPS)[number]["id"];
-
-/** Fisher–Yates shuffle  -  pure, doesn't mutate the source array. */
-function shuffle<T>(arr: readonly T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-function stepState(
-  current: string | null | undefined,
-  stepId: StepId
-): "completed" | "active" | "pending" {
-  if (!current) return "pending";
-  if (current === "failed") return "pending";
-
-  const currentIdx = STEPS.findIndex((s) => s.id === current);
-  const thisIdx = STEPS.findIndex((s) => s.id === stepId);
-  if (currentIdx === -1) return "pending";
-
-  if (thisIdx < currentIdx) return "completed";
-  if (thisIdx === currentIdx) return current === "complete" ? "completed" : "active";
-  return "pending";
-}
+import { formatNumber } from "@/components/InlineWorkflow";
 
 export default function ScrapingProgress() {
   const [, setLocation] = useLocation();
@@ -98,9 +58,7 @@ export default function ScrapingProgress() {
 
   const data = progressQuery.data;
   const status = data?.status;
-  const currentStep = data?.currentStep ?? "pending";
   const reelsFound = data?.reelsFound ?? 0;
-  const estimatedTotal = data?.estimatedTotal ?? 30;
   const progressPercent = data?.progressPercent ?? 0;
   const handle = data?.handle ?? "";
   const errorMessage = data?.errorMessage ?? null;
@@ -128,28 +86,30 @@ export default function ScrapingProgress() {
     return () => clearInterval(interval);
   }, [status]);
 
-  // Rotating tips  -  shuffled once on mount, advanced every 7s with a fade.
-  const tips = useMemo(() => shuffle(LOADING_TIPS), []);
+  // User-controlled tips while waiting (no auto-rotate carousel).
+  const tips = useMemo(() => [...LOADING_TIPS], []);
   const [tipIndex, setTipIndex] = useState(0);
-  const [tipVisible, setTipVisible] = useState(true);
-  const tipIndexRef = useRef(0);
 
-  useEffect(() => {
-    const rotate = setInterval(() => {
-      setTipVisible(false);
-      const fadeTimer = setTimeout(() => {
-        tipIndexRef.current = (tipIndexRef.current + 1) % tips.length;
-        setTipIndex(tipIndexRef.current);
-        setTipVisible(true);
-      }, 300);
-      return () => clearTimeout(fadeTimer);
-    }, 7000);
-    return () => clearInterval(rotate);
-  }, [tips.length]);
+  const partialReelsQuery = trpc.reels.list.useQuery(
+    { jobId: jobId! },
+    {
+      enabled: jobId !== null && status !== "completed" && status !== "failed",
+      refetchInterval: status === "running" || status === "pending" ? 2000 : false,
+      refetchOnWindowFocus: false,
+    }
+  );
 
-  // "About X seconds remaining": interpolate between expected 30–45s and the
-  // progress percent, whichever estimate is more conservative.
-  const expectedTotalSec = 45;
+  const partialReels = partialReelsQuery.data?.reels ?? [];
+
+  const goPrevTip = () => {
+    setTipIndex((i) => (i - 1 + tips.length) % tips.length);
+  };
+  const goNextTip = () => {
+    setTipIndex((i) => (i + 1) % tips.length);
+  };
+
+  // Longer jobs: Instagram can take up to ~3 minutes on large accounts.
+  const expectedTotalSec = elapsedSec > 90 ? 180 : 120;
   const remainingByTime = Math.max(0, expectedTotalSec - elapsedSec);
   const remainingByPct =
     progressPercent > 0
@@ -216,84 +176,139 @@ export default function ScrapingProgress() {
   const pctClamped =
     status === "completed" ? rawPct : Math.min(95, rawPct);
 
-  return (
-    <div className="mx-auto max-w-2xl px-3 sm:px-0 pt-4 sm:pt-8 md:pt-16 pb-16">
-      <div className="mb-6 flex items-center justify-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/70 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-          </span>
-          Researching
-        </span>
-      </div>
+  const handleBrowseFeatured = () => {
+    navigateAppReplace(setLocation, "/research#featured-creators");
+  };
 
-      <div className="mb-10 text-center">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-          Analyzing {displayHandle}
+  const statusLine =
+    reelsFound > 0
+      ? `${reelsFound} reel${reelsFound === 1 ? "" : "s"} found`
+      : "Collecting and ranking reels...";
+
+  return (
+    <div className="mx-auto max-w-lg px-3 sm:px-0 pt-4 sm:pt-8 md:pt-12 pb-16">
+      <p className="mb-4 text-center text-xs text-muted-foreground">
+        Step 2 of 3 · Collecting reels
+      </p>
+
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          Pulling Reels from {displayHandle}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This usually takes 30–45 seconds
+          Instagram can take 1 to 3 minutes. Large accounts take longer.
+        </p>
+        <p className="mt-3 mx-auto max-w-md text-sm text-foreground/85">
+          When done, you will land on a ranked list of their top Reels. Pick any
+          to transcribe or remake in your voice.
         </p>
       </div>
 
-      <Card className="border-border/50 bg-card">
-        <CardContent className="pt-6">
-          <ol className="space-y-4">
-            {STEPS.map((step) => {
-              const state = stepState(currentStep, step.id);
-              const showCounter =
-                step.id === "pulling_reels" &&
-                (state === "active" || state === "completed") &&
-                reelsFound > 0;
-              const label = showCounter
-                ? `Pulling Reels (${reelsFound} of ${Math.max(reelsFound, estimatedTotal)})`
-                : step.label;
-              return <StepRow key={step.id} state={state} label={label} />;
-            })}
-          </ol>
-        </CardContent>
-      </Card>
-
-      <div className="mt-6">
-        <div
-          className={`rounded-xl border border-border/50 bg-card/50 p-4 transition-opacity duration-300 ${
-            tipVisible ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Lightbulb className="h-4 w-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold uppercase tracking-wider text-primary">
-                Reels tip
-              </div>
-              <div className="mt-1 text-sm leading-relaxed text-foreground">
-                {tips[tipIndex]}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 space-y-3">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div className="mt-8 space-y-2">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
             style={{ width: `${pctClamped}%` }}
           />
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{pctClamped}%</span>
+          <span>{statusLine}</span>
           <span>
             {status === "completed"
               ? "Done!"
               : remainingSec > 0
-                ? `About ${remainingSec} second${remainingSec === 1 ? "" : "s"} remaining`
+                ? `About ${remainingSec} second${remainingSec === 1 ? "" : "s"} left`
                 : "Almost there..."}
           </span>
         </div>
+      </div>
+
+      {(partialReels.length > 0 || reelsFound > 0) && (
+        <div className="mt-6 overflow-hidden rounded-xl border border-border/50 bg-card">
+          <div className="flex items-center justify-between border-b border-border/50 px-4 py-2.5">
+            <p className="text-xs font-medium text-foreground">Reels as they arrive</p>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+              Live
+            </span>
+          </div>
+          <ul className="max-h-36 divide-y divide-border/40 overflow-hidden">
+            {partialReels.slice(0, 5).map((reel) => (
+              <li
+                key={reel.id}
+                className="flex items-center gap-3 px-4 py-2.5 text-xs"
+              >
+                <div className="h-8 w-5 shrink-0 rounded bg-muted" />
+                <span className="min-w-0 flex-1 truncate text-foreground">
+                  {reel.caption?.trim() || "Reel collected"}
+                </span>
+                {reel.viewCount > 0 ? (
+                  <span className="shrink-0 text-muted-foreground">
+                    {formatNumber(reel.viewCount)}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+            {partialReels.length === 0 && reelsFound > 0 ? (
+              <li className="px-4 py-2.5 text-xs text-muted-foreground">
+                {reelsFound} reels collected, loading previews...
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lightbulb className="h-4 w-4 text-primary" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+              Learn while you wait
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={goPrevTip}
+              aria-label="Previous tip"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[3rem] text-center text-[10px] text-muted-foreground">
+              {tipIndex + 1} / {tips.length}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={goNextTip}
+              aria-label="Next tip"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <p className="text-sm leading-relaxed text-foreground">{tips[tipIndex]}</p>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-dashed border-border/70 bg-card/20 p-4 text-center">
+        <p className="text-xs text-muted-foreground">Do not want to wait?</p>
+        <button
+          type="button"
+          onClick={handleBrowseFeatured}
+          className="mt-2 text-sm font-medium text-primary hover:underline"
+        >
+          Browse creators we already researched →
+        </button>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Your spy session keeps running in the background
+        </p>
       </div>
 
       <div className="mt-8 text-center">
@@ -304,53 +319,10 @@ export default function ScrapingProgress() {
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-          Cancel and start over
+          Cancel
         </Button>
       </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------- */
-
-function StepRow({
-  state,
-  label,
-}: {
-  state: "completed" | "active" | "pending";
-  label: string;
-}) {
-  return (
-    <li className="flex items-center gap-3">
-      <div
-        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-          state === "completed"
-            ? "bg-emerald-500/15 text-emerald-500"
-            : state === "active"
-              ? "bg-primary/15 text-primary"
-              : "bg-muted text-muted-foreground"
-        }`}
-      >
-        {state === "completed" ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : state === "active" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Circle className="h-4 w-4" />
-        )}
-      </div>
-      <span
-        className={`text-sm ${
-          state === "pending"
-            ? "text-muted-foreground"
-            : state === "active"
-              ? "font-medium text-foreground"
-              : "text-foreground"
-        }`}
-      >
-        {label}
-      </span>
-    </li>
   );
 }
 
@@ -371,31 +343,29 @@ function ErrorState({
 }) {
   return (
     <div className="mx-auto max-w-lg px-3 sm:px-0 pt-4 sm:pt-8 md:pt-20 pb-16">
-      <Card className="border-destructive/30 bg-card">
-        <CardContent className="pt-6 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/15">
-            <AlertTriangle className="h-6 w-6 text-destructive" />
-          </div>
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-          <div className="mt-6 flex items-center justify-center gap-2">
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="mr-1.5 h-4 w-4" />
-              Back to Research
+      <div className="rounded-xl border border-destructive/30 bg-card p-6 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/15">
+          <AlertTriangle className="h-6 w-6 text-destructive" />
+        </div>
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back to Research
+          </Button>
+          {onRetry && (
+            <Button onClick={onRetry} disabled={retryPending}>
+              {retryPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+              )}
+              Try Again
             </Button>
-            {onRetry && (
-              <Button onClick={onRetry} disabled={retryPending}>
-                {retryPending ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1.5 h-4 w-4" />
-                )}
-                Try Again
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

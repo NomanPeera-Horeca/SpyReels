@@ -2229,6 +2229,7 @@ export default function Dashboard() {
                     </>
                   ) : null}
 
+                  {!isFirstVisitDashboard ? (
                   <Tooltip content="Switch between detailed list and visual grid view">
                     <div className="workspace-view-toggle inline-flex items-center">
                       <Button
@@ -2251,6 +2252,7 @@ export default function Dashboard() {
                       </Button>
                     </div>
                   </Tooltip>
+                  ) : null}
 
                   {/* Export requires a scrape_job row; hidden in featured
                       view until the catalog is wired into export. */}
@@ -2466,6 +2468,16 @@ export default function Dashboard() {
             </div>
           )}
 
+          {isFirstVisitDashboard && canDisplayJobReels && sortedReels.length > 0 && (
+            <div className="mb-5 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
+              <p className="text-sm font-medium text-foreground">Pick a Reel to remake</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Reels are sorted by what performed best. Tap one to see the hook, then hit{" "}
+                <span className="font-medium text-foreground">Remake in your voice</span>.
+              </p>
+            </div>
+          )}
+
           {/* Reels list */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "list" && (
             <div key="list" className="space-y-3">
@@ -2529,7 +2541,13 @@ export default function Dashboard() {
                   <div
                     key={reel.id}
                     ref={setReelRowRef(reel.id)}
-                    className="workspace-reel-card overflow-hidden"
+                    className={`workspace-reel-card overflow-hidden ${
+                      isFirstVisitDashboard
+                        ? index === 0
+                          ? "rounded-xl border-2 border-primary/40 bg-primary/5"
+                          : "opacity-50"
+                        : ""
+                    }`}
                   >
                     {/* Reel Row */}
                     <div
@@ -2572,6 +2590,11 @@ export default function Dashboard() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
+                        {isFirstVisitDashboard && index === 0 ? (
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Start here
+                          </p>
+                        ) : null}
                         <div className="flex items-center gap-2 mb-0.5">
                           <p className="text-sm text-foreground line-clamp-1 leading-snug">
                             {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
@@ -2866,7 +2889,13 @@ export default function Dashboard() {
                       key={reel.id}
                       ref={setReelRowRef(reel.id)}
                       className={`workspace-reel-card group relative overflow-hidden ${
-                        isModalOpen ? "ring-2 ring-primary/35" : ""
+                        isFirstVisitDashboard
+                          ? index === 0
+                            ? "rounded-xl ring-2 ring-primary/40"
+                            : "opacity-45"
+                          : isModalOpen
+                            ? "ring-2 ring-primary/35"
+                            : ""
                       }`}
                     >
                       <div
@@ -2883,6 +2912,11 @@ export default function Dashboard() {
                         <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
                           #{index + 1}
                         </div>
+                        {isFirstVisitDashboard && index === 0 ? (
+                          <div className="absolute inset-x-2 bottom-2 rounded bg-primary/90 px-2 py-1 text-center text-[10px] font-semibold text-primary-foreground">
+                            Start here
+                          </div>
+                        ) : null}
                         {reel.engagementRate > 0 && (
                           <div className="absolute left-2 bottom-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
                             {reel.engagementRate.toFixed(2)}%

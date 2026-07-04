@@ -37,6 +37,7 @@ import {
 import { toast } from "sonner";
 import { formatNumber } from "@/components/InlineWorkflow";
 import Tooltip from "@/components/Tooltip";
+import { seeCreatorsViralReelsCta } from "@/lib/creatorCtaCopy";
 
 type ScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
 
@@ -221,68 +222,31 @@ export default function History() {
 
   return (
     <div className="mx-auto max-w-7xl px-1 pb-10 pt-2 sm:px-0">
-      {/* Hero */}
-      <div className="relative mb-8 overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-violet-950/40 via-card to-cyan-950/20 p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur">
-              <Radar className="h-3.5 w-3.5 text-violet-400" />
-              Live session data
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Creator Radar
-            </h1>
-            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-              A watchlist built from your SpyReels sessions. Each tile shows follower reach, reels in your scan window,
-              and rollup engagement from Instagram.{" "}
-              <span className="text-foreground/90 font-medium">
-                Refresh pulls only new posts since your last sync.
-              </span>
-            </p>
-          </div>
-          <Button
-            onClick={() => setLocation("/research")}
-            className="relative shrink-0 bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-900/20 hover:opacity-95"
-          >
-            Spy A Creator
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Creator Radar
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Creators you have researched
+            {sortedJobs.length > 0 ? (
+              <>
+                {" "}
+                ·{" "}
+                <span className="text-foreground/85">
+                  {summary.accounts} tracked, {formatNumber(summary.reels)} reels
+                </span>
+              </>
+            ) : null}
+          </p>
         </div>
-
-        {sortedJobs.length > 0 && (
-          <div className="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Tracked</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{summary.accounts}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Reels in sessions
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                {formatNumber(summary.reels)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Audience (sum)
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                {formatNumber(summary.followers)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Views (rollup)
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                {summary.views > 0 ? formatNumber(summary.views) : "-"}
-              </p>
-            </div>
-          </div>
-        )}
+        <Button
+          onClick={() => setLocation("/research")}
+          className="shrink-0"
+        >
+          New research
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       </div>
 
       {/* Toolbar */}
@@ -504,11 +468,23 @@ export default function History() {
                   </Tooltip>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 border-t border-border/40 px-4 py-3">
-                  <p className="text-[10px] text-muted-foreground">
-                    Scan window · <span className="text-foreground/80">{job.timeframeDays}d window</span>
-                  </p>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div className="border-t border-border/40 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] text-muted-foreground">
+                      {stats?.totalViews != null && stats.totalViews > 0
+                        ? `${formatNumber(stats.totalViews)} total views in session`
+                        : `Scan window · ${job.timeframeDays}d window`}
+                    </p>
+                    {canOpenRadar ? (
+                      <span className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+                        {seeCreatorsViralReelsCta(null, job.handle, { includeArrow: true })}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div
+                    className="mt-2 flex items-center justify-end gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {job.status === "failed" && (
                       <Button
                         variant="outline"

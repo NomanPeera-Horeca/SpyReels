@@ -11,13 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -43,11 +36,16 @@ import {
   ImageIcon,
   BadgeCheck,
   ExternalLink,
+  AtSign,
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import Tooltip from "@/components/Tooltip";
 import { isLikelyInstagramRateLimitMessage } from "@/utils/instagramErrors";
+import {
+  creatorDisplayLabel,
+  seeCreatorsViralReelsCta,
+} from "@/lib/creatorCtaCopy";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -176,10 +174,6 @@ export default function Home() {
     if (previewOk) setHandleError(null);
   }, [previewOk]);
 
-  const prioritizeFeatured =
-    onboardingStateQuery.isSuccess &&
-    onboardingStateQuery.data?.hasCompletedFirstSpy !== true;
-
   const dismissHintCardMutation = trpc.onboarding.dismissHintCard.useMutation();
   const nicheGroupsQuery = trpc.featured.nicheGroups.useQuery(undefined, {
     staleTime: RESEARCH_STALE_MS,
@@ -201,14 +195,19 @@ export default function Home() {
     () => new Map(allNiches.map((niche) => [niche.slug, niche.name])),
     [allNiches]
   );
+  const onboardingNicheSlugs = onboardingStateQuery.data?.selectedNicheSlugs ?? [];
+  const singleNicheMode = onboardingNicheSlugs.length === 1;
+
   const visibleNicheTabs = useMemo(() => {
-    if (!prioritizeFeatured) return allNiches;
-    const fromOnboarding = (onboardingStateQuery.data?.selectedNicheSlugs ?? [])
+    if (singleNicheMode) return [];
+    const fromOnboarding = onboardingNicheSlugs
       .map((slug) => allNiches.find((niche) => niche.slug === slug))
       .filter((niche): niche is NicheRow => niche != null);
     if (fromOnboarding.length > 0) return fromOnboarding.slice(0, 5);
     return allNiches.slice(0, 5);
-  }, [allNiches, onboardingStateQuery.data?.selectedNicheSlugs, prioritizeFeatured]);
+  }, [allNiches, onboardingNicheSlugs, singleNicheMode]);
+
+  const showNicheTabBar = !singleNicheMode && allNiches.length > 1;
 
   const accountsBySelectedNicheQuery = trpc.featured.accountsByNiche.useQuery(
     { nicheSlug: selectedNicheSlug },
@@ -344,6 +343,13 @@ export default function Home() {
     }
   };
 
+  const scrollToFeaturedCreators = () => {
+    if (showHintCard) void dismissHint();
+    document
+      .getElementById("featured-creators")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const featuredCreators = useMemo<FeaturedCreator[]>(() => {
     if (selectedNicheSlug === "all") return allCreators;
     const nicheName = nicheNameBySlug.get(selectedNicheSlug) ?? "Featured";
@@ -361,6 +367,43 @@ export default function Home() {
     selectedNicheSlug === "all"
       ? allCreatorsError
       : accountsBySelectedNicheQuery.error?.message ?? null;
+
+  const primaryNicheLabel = useMemo(() => {
+    if (singleNicheMode) {
+      return nicheNameBySlug.get(onboardingNicheSlugs[0]!) ?? null;
+    }
+    if (selectedNicheSlug !== "all") {
+      return nicheNameBySlug.get(selectedNicheSlug) ?? null;
+    }
+    return null;
+  }, [
+    singleNicheMode,
+    onboardingNicheSlugs,
+    nicheNameBySlug,
+    selectedNicheSlug,
+  ]);
+
+  const featuredBrowsePreview = useMemo(() => {
+    if (featuredCreators.length === 0) return null;
+    const names = featuredCreators
+      .slice(0, 2)
+      .map((c) => creatorDisplayLabel(c.displayName, c.handle));
+    const rest =
+      featuredCreators.length > 2 ? `, +${featuredCreators.length - 2}` : "";
+    const nichePart = primaryNicheLabel ? ` in ${primaryNicheLabel}` : "";
+    return `${names.join(", ")}${rest}${nichePart}`;
+  }, [featuredCreators, primaryNicheLabel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#featured-creators") return;
+    const t = window.setTimeout(() => {
+      document
+        .getElementById("featured-creators")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, featuredLoading ? 600 : 200);
+    return () => window.clearTimeout(t);
+  }, [featuredLoading]);
 
   const startScrape = trpc.scrape.start.useMutation({
     onSuccess: (data, variables) => {
@@ -488,44 +531,111 @@ export default function Home() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl px-3 pt-4 sm:px-0 sm:pt-8 md:pt-10">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+      <div className="mx-auto max-w-3xl">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Spy Viral Reels
+        </p>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <Film className="h-5 w-5 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Spy Viral Reels
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            What do you want to research?
           </h1>
         </div>
-      </div>
-
-      {showHintCard && (
-        <p className="mb-5 text-sm font-medium text-muted-foreground">
-          Pick a creator to get your first viral script.
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          Pick one. You can always do the other later.
         </p>
-      )}
 
-      {activeRunningJob ? (
-        <ActiveScrapeJobNotice job={activeRunningJob} variant="banner" />
-      ) : null}
+        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-xs text-muted-foreground">
+          <span>
+            <strong className="font-medium text-foreground">1. Spy</strong> any
+            handle
+          </span>
+          <span className="hidden sm:inline text-border" aria-hidden>
+            ·
+          </span>
+          <span>
+            <strong className="font-medium text-foreground">2. Sort</strong> top
+            Reels
+          </span>
+          <span className="hidden sm:inline text-border" aria-hidden>
+            ·
+          </span>
+          <span>
+            <strong className="font-medium text-foreground">3. Remake</strong> into
+            your script
+          </span>
+        </div>
 
-      <div className="flex flex-col">
-      <div
-        className={
-          "max-w-2xl " + (prioritizeFeatured ? "order-3" : "order-1")
-        }
-      >
-        <Card className="border-border/50 bg-card">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg text-card-foreground">
-              New Spy Session
-            </CardTitle>
-            <CardDescription>
-              Provide the account details to start collecting Reels data.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+        {activeRunningJob ? (
+          <div className="mt-6">
+            <ActiveScrapeJobNotice job={activeRunningJob} variant="banner" />
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={scrollToFeaturedCreators}
+          className="mt-8 block w-full rounded-2xl border border-primary/45 bg-card p-6 text-left shadow-[0_0_0_1px_oklch(0.65_0.2_280/0.12)] transition hover:border-primary/55"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <span className="inline-flex rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                Recommended
+              </span>
+              <p className="mt-3 text-lg font-semibold text-foreground">
+                Browse creators in my niche
+              </p>
+              <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
+                We already pulled and ranked their top Reels. Pick one and remake
+                it in your voice. No waiting.
+              </p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ArrowRight className="h-5 w-5" aria-hidden />
+            </span>
+          </div>
+          {featuredBrowsePreview ? (
+            <div className="mt-5 flex items-center gap-3 border-t border-border/50 pt-5">
+              <div className="flex -space-x-2">
+                {featuredCreators.slice(0, 3).map((creator) => (
+                  <div
+                    key={creator.id}
+                    className="h-8 w-8 overflow-hidden rounded-full border-2 border-card bg-muted"
+                  >
+                    <FeaturedProfileAvatar
+                      profilePicUrl={creator.profilePicUrl}
+                      handle={creator.handle}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{featuredBrowsePreview}</p>
+            </div>
+          ) : featuredLoading ? (
+            <p className="mt-5 border-t border-border/50 pt-5 text-xs text-muted-foreground">
+              Loading creators in your niche...
+            </p>
+          ) : null}
+        </button>
+
+        <div className="mt-4 rounded-2xl border border-border/70 bg-card/50 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                Spy a specific account
+              </p>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Enter any public Instagram handle. Can take 1 to 3 minutes
+                depending on account size.
+              </p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground">
+              <AtSign className="h-5 w-5" aria-hidden />
+            </span>
+          </div>
+          <form onSubmit={handleSubmit} className="mt-5 space-y-5">
               <div className="space-y-2">
                 <Label
                   htmlFor="handle"
@@ -830,27 +940,33 @@ export default function Home() {
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+        </div>
       </div>
 
-      <Separator className={"my-10 order-2"} />
+      <Separator className="my-10" />
 
-      <section
-        id="featured-creators"
-        className={"scroll-mt-24 " + (prioritizeFeatured ? "order-1" : "order-3")}
-      >
-        {!prioritizeFeatured ? (
-          <div className="mb-5">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-              Or spy on top viral creators
-            </h2>
-          </div>
-        ) : null}
+      <section id="featured-creators" className="scroll-mt-24">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            Browse creators we already researched
+          </h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            No handle in mind? Jump straight to their top Reels. Already sorted
+            and ready to remake.
+          </p>
+          {singleNicheMode && primaryNicheLabel ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {primaryNicheLabel}
+              {!featuredLoading && featuredCreators.length > 0
+                ? ` · ${featuredCreators.length} creator${featuredCreators.length === 1 ? "" : "s"}`
+                : null}
+            </p>
+          ) : null}
+        </div>
 
-        <div className="sticky top-0 z-10 mb-5 -mx-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur">
-          <div className="flex w-max gap-2">
-            {!prioritizeFeatured ? (
+        {showNicheTabBar ? (
+          <div className="mb-5 -mx-1 overflow-x-auto px-1">
+            <div className="flex w-max gap-2">
               <button
                 type="button"
                 onClick={() => setSelectedNicheSlug("all")}
@@ -864,50 +980,28 @@ export default function Home() {
                   <span>All niches</span>
                 </Tooltip>
               </button>
-            ) : null}
-            {visibleNicheTabs.map((niche) => (
-              <button
-                key={niche.slug}
-                type="button"
-                onClick={() => setSelectedNicheSlug(niche.slug)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                  selectedNicheSlug === niche.slug
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {niche.slug === "business-entrepreneurship" ? (
-                  <Tooltip content="Entrepreneurs, founders, CEOs">
-                    <span>{niche.name}</span>
-                  </Tooltip>
-                ) : niche.slug === "marketing-sales" ? (
-                  <Tooltip content="Growth, sales, branding experts">
-                    <span>{niche.name}</span>
-                  </Tooltip>
-                ) : niche.slug === "content-marketing" ? (
-                  <Tooltip content="Creators who teach content creation">
-                    <span>{niche.name}</span>
-                  </Tooltip>
-                ) : niche.slug === "investing-crypto" ? (
-                  <Tooltip content="Stocks, crypto, wealth building">
-                    <span>{niche.name}</span>
-                  </Tooltip>
-                ) : (
-                  niche.name
-                )}
-              </button>
-            ))}
+              {visibleNicheTabs.map((niche) => (
+                <button
+                  key={niche.slug}
+                  type="button"
+                  onClick={() => setSelectedNicheSlug(niche.slug)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    selectedNicheSlug === niche.slug
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {niche.name}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {!prioritizeFeatured ? (
+        {!showNicheTabBar && !singleNicheMode && selectedNicheSlug !== "all" ? (
           <div className="mb-4 flex items-center justify-between">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-              {selectedNicheSlug === "all"
-                ? "Top creators"
-                : `Top creators · ${(
-                    nicheNameBySlug.get(selectedNicheSlug) ?? selectedNicheSlug
-                  ).toUpperCase()}`}
+            <span className="text-xs text-muted-foreground">
+              {primaryNicheLabel ?? "Featured creators"}
             </span>
             <span className="text-xs text-muted-foreground">
               Sort: Followers (high to low)
@@ -968,9 +1062,7 @@ export default function Home() {
               More creators coming to this niche soon
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {prioritizeFeatured
-                ? "Use the spy session below to research any public handle directly."
-                : "Use the spy session card above to research any handle directly."}
+              Use the spy form above to research any public handle directly.
             </p>
           </div>
         ) : (
@@ -985,73 +1077,33 @@ export default function Home() {
                 }}
                 className="rounded-xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/90"
               >
-                {!prioritizeFeatured ? (
-                  <div className="mb-3 inline-flex rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
-                    {creator.nicheName}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+                    <FeaturedProfileAvatar
+                      profilePicUrl={creator.profilePicUrl}
+                      handle={creator.handle}
+                    />
                   </div>
-                ) : null}
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
-                    <FeaturedProfileAvatar profilePicUrl={creator.profilePicUrl} handle={creator.handle} />
-                  </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-foreground">
                       {creator.displayName}
                     </p>
                     <p className="truncate font-mono text-xs text-muted-foreground">
-                      @{creator.handle}
+                      @{creator.handle} · {formatCount(creator.followerCount)}{" "}
+                      followers
                     </p>
                   </div>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-3 border-y border-border py-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        Followers
-                        <Tooltip content="Total Instagram followers as of last sync">
-                          <span>
-                            <TipDot />
-                          </span>
-                        </Tooltip>
-                      </span>
-                    </p>
-                    <p className="font-mono text-sm text-foreground">
-                      {formatCount(creator.followerCount)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        Avg ER
-                        <Tooltip content="Engagement rate = (likes + comments) / followers. Higher = more engaged audience.">
-                          <span>
-                            <TipDot />
-                          </span>
-                        </Tooltip>
-                      </span>
-                    </p>
-                    <p className="font-mono text-sm text-emerald-500">
-                      {creator.avgEngagementRate.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    <Tooltip content="Top 30 viral reels already analyzed and ready to view">
-                      <span>{creator.reelsAvailable} viral reels ready</span>
-                    </Tooltip>
-                  </span>
-                  <span className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground transition group-hover:text-primary">
-                    See Reels →
-                  </span>
+                <div className="mt-3 flex w-full items-center justify-center rounded-lg border border-border bg-background/50 py-2.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary">
+                  {seeCreatorsViralReelsCta(creator.displayName, creator.handle, {
+                    includeArrow: true,
+                  })}
                 </div>
               </button>
             ))}
           </div>
         )}
       </section>
-
-      </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 border-t border-border pt-8 sm:grid-cols-3">
         {[
