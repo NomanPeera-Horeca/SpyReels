@@ -9441,6 +9441,7 @@ async function processIdeaInBackground(ideaId: number): Promise<void> {
       audienceBlock,
       formatRules,
       goalBrief,
+      filmingFormat,
     });
 
     const structureResponse = await invokeLLM({

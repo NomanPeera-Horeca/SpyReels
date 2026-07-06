@@ -213,10 +213,12 @@ export async function generateCoachScriptForWorkspace(args: {
   const bodyCombined = combineBodyFromSections(sections);
   const ctaText = sections.cta || sections.teach || String(finalGenerated.callToAction ?? "");
 
+  const hookTypeRaw = String(finalGenerated.hookType ?? "").trim();
   const coachPayload = buildProductionNotesJson(productionCoach, sections, {
     contentFormat: String(finalGenerated.contentFormat ?? "talking-head"),
     funnelStage: funnelStage ?? undefined,
     scriptMode,
+    hookType: hookTypeRaw || undefined,
   });
 
   const insertResult = await db.insert(coachScripts).values({
