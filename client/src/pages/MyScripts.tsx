@@ -515,16 +515,24 @@ export default function MyScripts() {
       </div>
 
       {/* Search & Filters */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search scripts by title, content, or handle..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+      <div className="flex flex-col gap-1.5 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <label
+              htmlFor="my-scripts-search"
+              className="absolute left-3 top-1/2 -translate-y-1/2 cursor-text text-muted-foreground"
+            >
+              <Search className="w-4 h-4 pointer-events-none" aria-hidden />
+            </label>
+            <Input
+              id="my-scripts-search"
+              placeholder="Search scripts by title, content, or handle..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+              autoComplete="off"
+            />
+          </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5">
@@ -543,6 +551,10 @@ export default function MyScripts() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
+        {scriptsLoading ? (
+          <p className="text-xs text-muted-foreground px-1">Loading scripts...</p>
+        ) : null}
       </div>
 
       {/* Content Views */}

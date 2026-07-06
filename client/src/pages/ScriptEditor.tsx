@@ -113,6 +113,7 @@ export default function ScriptEditor() {
   const [savedBaseline, setSavedBaseline] = useState<ScriptEditorBaseline | null>(null);
   const [showTeleprompter, setShowTeleprompter] = useState(false);
   const filmAutoOpenRef = useRef(false);
+  const editorReadyCapturedRef = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<"edit" | "versions">("edit");
 
   // AI tool states
@@ -414,15 +415,52 @@ export default function ScriptEditor() {
     setShowSelectionPopup(true);
   };
 
-  const isAnyMutationPending =
-    grammarMutation.isPending ||
-    rewriteMutation.isPending ||
-    phraseSwapMutation.isPending ||
-    simplifyMutation.isPending ||
-    adjustToneMutation.isPending ||
-    makeShorterMutation.isPending ||
-    rewriteSelectionMutation.isPending ||
-    rewriteWithAngleMutation.isPending;
+  const activeAiMutation = grammarMutation.isPending
+    ? "grammar"
+    : rewriteMutation.isPending
+      ? "rewrite"
+      : phraseSwapMutation.isPending
+        ? "phrase_swap"
+        : simplifyMutation.isPending
+          ? "simplify"
+          : adjustToneMutation.isPending
+            ? "adjust_tone"
+            : makeShorterMutation.isPending
+              ? "make_shorter"
+              : rewriteSelectionMutation.isPending
+                ? "rewrite_selection"
+                : rewriteWithAngleMutation.isPending
+                  ? "rewrite_angle"
+                  : null;
+
+  const isAnyMutationPending = activeAiMutation !== null;
+
+  const AI_MUTATION_TIMEOUT_MS = 90_000;
+
+  useEffect(() => {
+    if (!script?.id || scriptQuery.isLoading) return;
+    if (editorReadyCapturedRef.current === script.id) return;
+    editorReadyCapturedRef.current = script.id;
+    posthog?.capture("script_editor_ready", { script_id: script.id });
+  }, [script?.id, scriptQuery.isLoading, posthog]);
+
+  useEffect(() => {
+    if (!isAnyMutationPending || !scriptId || !activeAiMutation) return;
+    posthog?.capture("script_editor_ai_started", {
+      script_id: scriptId,
+      tool: activeAiMutation,
+    });
+    const timeoutId = window.setTimeout(() => {
+      posthog?.capture("script_editor_mutation_timeout", {
+        script_id: scriptId,
+        tool: activeAiMutation,
+      });
+      toast.message(
+        "AI is still working. You can keep typing; we'll update the script when it finishes."
+      );
+    }, AI_MUTATION_TIMEOUT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [isAnyMutationPending, activeAiMutation, scriptId, posthog]);
 
   const wordCount = editedContent.trim().split(/\s+/).filter(Boolean).length;
   const estimatedDuration = Math.round(wordCount / 3);
@@ -1062,26 +1100,19 @@ export default function ScriptEditor() {
               )}
             </div>
 
-            {/* Processing indicator */}
             {isAnyMutationPending && (
-              <div className="px-4 py-1.5 bg-purple-500/10 border-b border-purple-500/20 flex items-center gap-2 text-xs text-purple-400 shrink-0">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                AI is working on your script... This usually takes a few
-                seconds.
+              <div className="px-4 py-2 bg-purple-500/15 border-b border-purple-500/25 flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 shrink-0">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span>
+                  AI is updating your script ({activeAiMutation?.replace(/_/g, " ")}). You can
+                  keep typing; changes apply when AI finishes.
+                </span>
               </div>
             )}
 
             {activeTab === "edit" ? (
               /* Editor */
               <div className="relative flex-1 overflow-y-auto p-4">
-                {isAnyMutationPending ? (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[1px]">
-                    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      Updating script...
-                    </div>
-                  </div>
-                ) : null}
                 <Textarea
                   ref={textareaRef}
                   value={editedContent}
@@ -1090,7 +1121,6 @@ export default function ScriptEditor() {
                   onKeyUp={e => {
                     if (e.shiftKey) handleTextSelect();
                   }}
-                  readOnly={isAnyMutationPending}
                   className="min-h-[500px] text-base leading-relaxed resize-none border-none focus-visible:ring-0 p-0 bg-transparent"
                   placeholder="Start writing your script..."
                 />
