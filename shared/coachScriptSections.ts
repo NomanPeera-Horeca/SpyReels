@@ -24,6 +24,12 @@ export type CoachProductionNotes = {
   bRoll?: Array<{ shot?: string; example?: string; canUseStock?: boolean }>;
   textOverlay?: string;
   hookOnScreenText?: string;
+  frame0OnScreenText?: string;
+  dualEncoding?: string;
+  pacingNotes?: string;
+  loopClosingNote?: string;
+  soundOffSafe?: boolean;
+  scriptMode?: string;
   contentFormat?: string;
   funnelStage?: string;
   sections?: CoachScriptSections;
@@ -124,7 +130,7 @@ export function parseCoachScriptSections(args: {
 export function buildProductionNotesJson(
   productionCoach: unknown,
   sections: CoachScriptSections,
-  extras?: { contentFormat?: string; funnelStage?: string }
+  extras?: { contentFormat?: string; funnelStage?: string; scriptMode?: string }
 ): string {
   const base =
     productionCoach && typeof productionCoach === "object"
@@ -134,6 +140,7 @@ export function buildProductionNotesJson(
     ...base,
     contentFormat: extras?.contentFormat,
     funnelStage: extras?.funnelStage,
+    scriptMode: extras?.scriptMode,
     sections,
   });
 }

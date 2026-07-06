@@ -14,12 +14,13 @@ import {
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
 import {
-  COACH_LENGTH_AND_HOOK_RULES,
-  COACH_MAX_TOTAL_WORDS,
+  buildCoachLengthAndHookRules,
+  coachMaxTotalWords,
   coachScriptWithinBudget,
   coachScriptWordCount,
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
+import { inferCoachScriptMode, type CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
@@ -126,6 +127,8 @@ export async function generateCoachScriptForWorkspace(args: {
   let explicitUserAngle =
     args.description.includes("Creator goal (ground truth") ||
     args.description.includes("Creator's chosen angle");
+  let scriptMode: CoachScriptMode = inferCoachScriptMode({ description: args.description });
+  let funnelStage: string | null = null;
 
   if (args.planCardId) {
     const [planCard] = await db
@@ -140,6 +143,13 @@ export async function generateCoachScriptForWorkspace(args: {
       if (isSpark) {
         explicitUserAngle = true;
       }
+      funnelStage = planCard.funnelStage ?? null;
+      scriptMode = inferCoachScriptMode({
+        description: args.description,
+        contentFormat: planCard.contentFormat,
+        funnelStage: planCard.funnelStage,
+        isSparkCard: isSpark,
+      });
       const planBlock = isSpark
         ? [
             `Spark Deck idea: ${planCard.title}`,
@@ -173,7 +183,7 @@ export async function generateCoachScriptForWorkspace(args: {
           profile.brandDescription,
           args.clarifications,
           audienceResearchBlock,
-          { explicitUserAngle }
+          { explicitUserAngle, scriptMode, funnelStage }
         ),
       },
     ],
@@ -193,7 +203,7 @@ export async function generateCoachScriptForWorkspace(args: {
 
   args.onPhase?.("production_notes");
 
-  const finalized = await finalizeCoachGenerated(generated);
+  const finalized = await finalizeCoachGenerated(generated, scriptMode);
   const { generated: finalGenerated, sections, hook, estimatedDuration } = finalized;
   const productionCoach = normalizeProductionCoach(finalGenerated.productionCoach);
 
@@ -205,6 +215,8 @@ export async function generateCoachScriptForWorkspace(args: {
 
   const coachPayload = buildProductionNotesJson(productionCoach, sections, {
     contentFormat: String(finalGenerated.contentFormat ?? "talking-head"),
+    funnelStage: funnelStage ?? undefined,
+    scriptMode,
   });
 
   const insertResult = await db.insert(coachScripts).values({
@@ -257,19 +269,27 @@ function normalizeProductionCoach(coach: unknown): Record<string, unknown> {
   if (hookOnScreen) {
     const capped = hookOnScreen.slice(0, 30);
     base.hookOnScreenText = capped;
+    base.frame0OnScreenText =
+      pickCoachString(base, "frame0OnScreenText", "frame_0_on_screen_text") || capped;
     if (!pickCoachString(base, "textOverlay", "text_overlay")) {
       base.textOverlay = capped;
     }
+  }
+  const visualBeat = pickCoachString(base, "hookVisualBeat", "hook_visual_beat", "visualHookBeat");
+  if (visualBeat) {
+    base.hookVisualBeat = visualBeat.slice(0, 280);
   }
   return base;
 }
 
 async function tightenCoachScriptPayload(
-  generated: Record<string, unknown>
+  generated: Record<string, unknown>,
+  mode: CoachScriptMode
 ): Promise<Record<string, unknown>> {
   const hook = String(generated.hook ?? "");
   const sections = sectionsFromGenerated(generated);
   const words = coachScriptWordCount(hook, sections);
+  const maxWords = coachMaxTotalWords(mode);
 
   const response = await invokeLLM({
     messages: [
@@ -281,11 +301,11 @@ async function tightenCoachScriptPayload(
       },
       {
         role: "user",
-        content: `This HEIT script is too long (${words} spoken words; max ${COACH_MAX_TOTAL_WORDS}). Shorten every section. Keep the hook punchy with a specific number or sharp claim. Preserve meaning.
+        content: `This HEIT script is too long (${words} spoken words; max ${maxWords}). Shorten every section. Keep open-loop structure. Preserve meaning.
 
-${COACH_LENGTH_AND_HOOK_RULES}
+${buildCoachLengthAndHookRules(mode)}
 
-Return JSON with: title, hook, explain, illustrate, teach, cta, contentType, contentFormat, formatLabel, platform, tone, productionCoach (include hookOnScreenText).
+Return JSON with: title, hook, explain, illustrate, teach, cta, contentType, contentFormat, formatLabel, platform, tone, productionCoach (include hookOnScreenText, frame0OnScreenText, pacingNotes, loopClosingNote).
 
 Current script:
 ${JSON.stringify({ title: generated.title, hook, ...sections, productionCoach: generated.productionCoach }, null, 2)}`,
@@ -300,7 +320,8 @@ ${JSON.stringify({ title: generated.title, hook, ...sections, productionCoach: g
 }
 
 async function finalizeCoachGenerated(
-  generated: Record<string, unknown>
+  generated: Record<string, unknown>,
+  mode: CoachScriptMode = "story"
 ): Promise<{
   generated: Record<string, unknown>;
   sections: CoachScriptSections;
@@ -311,8 +332,8 @@ async function finalizeCoachGenerated(
   let hook = String(payload.hook ?? "");
   let sections = sectionsFromGenerated(payload);
 
-  if (!coachScriptWithinBudget(hook, sections)) {
-    payload = await tightenCoachScriptPayload(payload);
+  if (!coachScriptWithinBudget(hook, sections, mode)) {
+    payload = await tightenCoachScriptPayload(payload, mode);
     hook = String(payload.hook ?? "");
     sections = sectionsFromGenerated(payload);
   }
@@ -322,7 +343,7 @@ async function finalizeCoachGenerated(
     generated: payload,
     sections,
     hook,
-    estimatedDuration: durationLabelFromWordCount(totalWords),
+    estimatedDuration: durationLabelFromWordCount(totalWords, mode),
   };
 }
 

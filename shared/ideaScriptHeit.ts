@@ -1,5 +1,9 @@
 /** H.E.I.T. script framework: Hook, Explain, Illustrate, Teach */
 
+import { buildRetentionAndShareRules } from "@shared/coachRetentionRules";
+import type { CoachScriptMode } from "@shared/coachScriptMode";
+import { inferCoachScriptMode } from "@shared/coachScriptMode";
+
 export const HEIT_HOOK_TYPES = ["context", "contrarian", "intrigue"] as const;
 export type HeitHookType = (typeof HEIT_HOOK_TYPES)[number];
 
@@ -10,25 +14,37 @@ export function buildHeitWriterRules(blocks: {
   audienceBlock: string;
   formatRules: string;
   goalBrief: string;
+  filmingFormat?: string | null;
 }): string {
-  const { profileBlock, audienceBlock, formatRules, goalBrief } = blocks;
+  const { profileBlock, audienceBlock, formatRules, goalBrief, filmingFormat } = blocks;
+  const scriptMode: CoachScriptMode = inferCoachScriptMode({
+    description: goalBrief,
+    contentFormat: filmingFormat ?? null,
+  });
+  const wordRule =
+    scriptMode === "loop"
+      ? "- 25-45 spoken words (8-15 seconds). Visual beats over long narration."
+      : "- 90-135 spoken words (30-45 seconds).";
+
   return `You are SpyReels' script engine using the H.E.I.T. viral framework. SpyReels analyses thousands of viral Instagram Reels. Ground hooks in proven patterns from real creators, not generic AI templates.
 ${profileBlock}
 H.E.I.T. SCRIPT STANDARDS (one flowing spoken script, in this order):
-- H (Hook): First line only. Use ONE of: context (what they will learn), contrarian (belief most disagree with), or intrigue (impossible-sounding fact).
-- E (Explain): Name a pain they already feel, then show it is worse or deeper than they thought. Create tension.
-- I (Illustrate): Metaphor, analogy, or short story with specific detail so they think "that is exactly me."
-- T (Teach): ONE simple action or belief shift. Not 3 tips, not 5 hacks. One thing they can do on their next Reel.
-- Optional final line: soft CTA (save, comment, follow) tied to the one lesson.
+- H (Hook): First line only. Open Loop A: tease outcome, do NOT reveal the best insight yet.
+- E (Explain): Open Loop B: name pain plus a surprising complication. No full payoff.
+- I (Illustrate): Close Loop B with a concrete story or visual. Main insight still withheld.
+- T (Teach): Close Loop A: ONE payoff insight at roughly 70% through the script.
+- Final lines: loop tie-back, DM-share trigger ("Send this to the friend who..."), and funnel-appropriate CTA.
 
 DELIVERY RULES:
-- 150-300 spoken words (30-60 seconds).
+${wordRule}
 - Start with the hook immediately. No "Hey guys", no warmup.
 - Short paragraphs (1-2 sentences), natural contractions, spoken rhythm.
 - No section labels like "Hook:" or "Body:" in the script.
 - Sound like a real creator, not an AI summary.
 ${audienceBlock}
 ${formatRules}
+
+${buildRetentionAndShareRules(scriptMode)}
 
 ${goalBrief}`;
 }

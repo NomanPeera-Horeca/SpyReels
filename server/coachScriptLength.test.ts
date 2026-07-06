@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   coachScriptWithinBudget,
   coachScriptWordCount,
-  COACH_MAX_TOTAL_WORDS,
+  COACH_LOOP_MAX_TOTAL_WORDS,
+  COACH_STORY_MAX_TOTAL_WORDS,
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
 
 describe("coachScriptLength", () => {
-  it("computes duration from word count", () => {
-    expect(durationLabelFromWordCount(120)).toBe("~40 seconds");
-    expect(durationLabelFromWordCount(135)).toBe("~45 seconds");
+  it("computes story duration from word count", () => {
+    expect(durationLabelFromWordCount(120, "story")).toBe("~40 seconds");
+    expect(durationLabelFromWordCount(135, "story")).toBe("~45 seconds");
+  });
+
+  it("computes loop duration from word count", () => {
+    expect(durationLabelFromWordCount(36, "loop")).toBe("~12 seconds");
+    expect(durationLabelFromWordCount(45, "loop")).toBe("~15 seconds");
   });
 
   it("flags scripts over budget", () => {
@@ -36,7 +42,19 @@ describe("coachScriptLength", () => {
       cta: "Comment SIDE if you want my 3-shift checklist.",
     };
     const total = coachScriptWordCount(hook, sections);
-    expect(total).toBeLessThanOrEqual(COACH_MAX_TOTAL_WORDS);
-    expect(coachScriptWithinBudget(hook, sections)).toBe(true);
+    expect(total).toBeLessThanOrEqual(COACH_STORY_MAX_TOTAL_WORDS);
+    expect(coachScriptWithinBudget(hook, sections, "story")).toBe(true);
+  });
+
+  it("enforces loop mode budget", () => {
+    const hook = "Still posting daily with zero views?";
+    const sections = {
+      explain: "The hook is not the problem.",
+      illustrate: "I fixed one line and doubled saves.",
+      teach: "Delay your payoff.",
+      cta: "Send this to a friend who is stuck.",
+    };
+    expect(coachScriptWordCount(hook, sections)).toBeLessThanOrEqual(COACH_LOOP_MAX_TOTAL_WORDS);
+    expect(coachScriptWithinBudget(hook, sections, "loop")).toBe(true);
   });
 });

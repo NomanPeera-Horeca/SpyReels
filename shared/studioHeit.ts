@@ -1,5 +1,8 @@
 // Prompts from BrandScript AI export (30-Day Plan + AI Coach). Do not change JSON shapes.
-import { COACH_LENGTH_AND_HOOK_RULES } from "@shared/coachScriptLength";
+import { buildCoachLengthAndHookRules } from "@shared/coachScriptLength";
+import { buildRetentionAndShareRules, resolveCoachHookTypeForPrompt } from "@shared/coachRetentionRules";
+import type { CoachScriptMode } from "@shared/coachScriptMode";
+import { coachScriptModeLabel } from "@shared/coachScriptMode";
 import { COACH_ANALYSIS_RULES } from "@shared/coachAnalyze";
 
 export function buildStudioDateContext(now = new Date()): string {
@@ -25,11 +28,14 @@ You think like a top creator, a film director, and a marketing strategist. The F
 5. TRENDING AUDIO / POV — Built around a trending sound. Script voice: POV framing.
 6. FACELESS / TEXT-ONLY — No face needed. Bold text over background footage.
 
+━━━ STACKED HOOK (frame 0) ━━━
+Every script opens with all 3 layers in the first 1.5 seconds:
+1. Visual (hookVisualBeat): mid-action, close-up, or end-result. No logo slates.
+2. Spoken (hook): verbal punch, open loop, no warm-up.
+3. On-screen text (hookOnScreenText): 5-8 words, different words than spoken, frame 0.
+
 ━━━ THE HEIT FRAMEWORK ━━━
-- H (Hook): Stop the scroll in 2 seconds. MAX 2 sentences. ZERO warm-up. Pick ONE:
-  • Context: specific outcome promise
-  • Contrarian: bold claim most people disagree with
-  • Intrigue: drop a cryptic fact with NO explanation
+- H (Hook): Layer 2 above. Open Loop A. MAX 2 sentences. ZERO warm-up. Match the pre-selected hookType.
 - E (Explain): Name the problem. Show it's bigger than they think. Build tension.
 - I (Illustrate): Story, metaphor, or analogy. Specific details. Make them see themselves.
 - T (Teach): ONE simple action or takeaway. Not 5 tips — one thing.
@@ -105,7 +111,12 @@ export function buildCoachPrompt(
   brandDescription?: string | null,
   clarifications?: Array<{ question: string; answer: string }>,
   audienceResearchBlock?: string,
-  options?: { explicitUserAngle?: boolean }
+  options?: {
+    explicitUserAngle?: boolean;
+    scriptMode?: CoachScriptMode;
+    funnelStage?: string | null;
+    contentFormat?: string | null;
+  }
 ): string {
   const clarificationBlock =
     clarifications && clarifications.length > 0
@@ -118,6 +129,15 @@ export function buildCoachPrompt(
   const topicRules = options?.explicitUserAngle
     ? COACH_EXPLICIT_ANGLE_RULES
     : COACH_DEFAULT_TOPIC_RULES;
+
+  const scriptMode = options?.scriptMode ?? "story";
+  const modeLine = `Script format: ${coachScriptModeLabel(scriptMode)}. Follow length and pacing rules for this format.`;
+
+  const resolvedHookType = resolveCoachHookTypeForPrompt({
+    contentFormat: options?.contentFormat,
+    description,
+  });
+  const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing — you must output this exact hookType value).`;
 
   return `A content creator just shared this raw idea:
 
@@ -132,10 +152,17 @@ ${brandDescription ? `- About their brand: ${brandDescription}` : ""}
 
 ${topicRules}
 
-${COACH_LENGTH_AND_HOOK_RULES}
+${modeLine}
+
+${hookTypeLine}
+
+${buildCoachLengthAndHookRules(scriptMode)}
+
+${buildRetentionAndShareRules(scriptMode, options?.funnelStage, resolvedHookType)}
 
 Produce a full HEIT script with production directions. Return ONLY valid JSON:
 {
+  "hookType": "${resolvedHookType}",
   "contentType": "testimonial | hot-take | story | behind-the-scenes | transformation | educational | trend | rant | announcement",
   "contentFormat": "talking-head | voiceover-broll | behind-the-scenes | tutorial-demo | trending-audio | faceless",
   "formatLabel": "Human-readable label e.g. 'Talking Head', 'Day-in-the-Life'",
@@ -167,12 +194,18 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
     "bRoll": [
       { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
     ],
-    "textOverlay": "Same as hookOnScreenText — max 30 chars for first 2 sec",
-    "hookOnScreenText": "ALL CAPS on-screen hook text, max 30 characters, first 2 seconds"
+    "hookVisualBeat": "Frame 0 visual: mid-action, close-up, or end-result shot (one concrete sentence)",
+    "textOverlay": "Same as hookOnScreenText — max 30 chars for frame 0",
+    "hookOnScreenText": "ALL CAPS, 5-8 words, max 30 characters, DIFFERENT words than spoken hook, frame 0 (first 0.5 sec)",
+    "frame0OnScreenText": "Same as hookOnScreenText",
+    "dualEncoding": "How on-screen text complements the spoken hook without copying it verbatim",
+    "pacingNotes": "Jump cuts every 2-4 sec, rhythmic not frantic, no filler, no dead air",
+    "loopClosingNote": "How the ending connects to the opening for seamless replay",
+    "soundOffSafe": true
   },
   "title": "Short catchy working title",
   "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
-  "hook": "H section only. MAX 2 sentences. Zero warm-up. Written in the FORMAT's voice.",
+  "hook": "H section only. Spoken Layer 2. MAX 2 sentences. Open Loop A. Match hookType. Zero warm-up.",
   "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
   "illustrate": "I section only. One story, analogy, or example with concrete detail.",
   "teach": "T section only. ONE clear takeaway or action. Not a list. Do not repeat the call to action.",
