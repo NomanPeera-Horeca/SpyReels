@@ -1,3 +1,9 @@
+import {
+  formatCoachHookTypeLabel,
+  parseCoachHookVariations,
+  type CoachHookVariation,
+} from "@shared/hookTypes";
+
 export type CoachScriptSections = {
   explain: string;
   illustrate: string;
@@ -29,11 +35,15 @@ export type CoachProductionNotes = {
   pacingNotes?: string;
   loopClosingNote?: string;
   soundOffSafe?: boolean;
+  hookVisualBeat?: string;
+  hookType?: string;
   scriptMode?: string;
   contentFormat?: string;
   funnelStage?: string;
   sections?: CoachScriptSections;
 };
+
+export { formatCoachHookTypeLabel, parseCoachHookVariations, type CoachHookVariation };
 
 function pickString(obj: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -130,7 +140,12 @@ export function parseCoachScriptSections(args: {
 export function buildProductionNotesJson(
   productionCoach: unknown,
   sections: CoachScriptSections,
-  extras?: { contentFormat?: string; funnelStage?: string; scriptMode?: string }
+  extras?: {
+    contentFormat?: string;
+    funnelStage?: string;
+    scriptMode?: string;
+    hookType?: string;
+  }
 ): string {
   const base =
     productionCoach && typeof productionCoach === "object"
@@ -141,6 +156,7 @@ export function buildProductionNotesJson(
     contentFormat: extras?.contentFormat,
     funnelStage: extras?.funnelStage,
     scriptMode: extras?.scriptMode,
+    hookType: extras?.hookType,
     sections,
   });
 }
@@ -165,6 +181,8 @@ export function flattenCoachScriptForCopy(args: {
   hook: string;
   sections: CoachScriptSections;
   userFriendly?: boolean;
+  hookVisualBeat?: string;
+  hookOnScreenText?: string;
 }): string {
   if (args.userFriendly) {
     return flattenViralScriptForCopy(args);
@@ -195,12 +213,24 @@ export function flattenViralScriptForCopy(args: {
   title: string;
   hook: string;
   sections: CoachScriptSections;
+  hookVisualBeat?: string;
+  hookOnScreenText?: string;
 }): string {
+  const visual = args.hookVisualBeat?.trim() ?? "";
+  const onScreen = args.hookOnScreenText?.trim() ?? "";
+  const hookBlock: string[] = ["HOOK"];
+  if (visual) {
+    hookBlock.push("FRAME 0", visual);
+  }
+  hookBlock.push("SPOKEN", args.hook);
+  if (onScreen) {
+    hookBlock.push("ON-SCREEN TEXT", onScreen);
+  }
+
   const lines = [
     args.title,
     "",
-    "HOOK",
-    args.hook,
+    ...hookBlock,
     "",
     "PROBLEM SETUP",
     args.sections.explain,

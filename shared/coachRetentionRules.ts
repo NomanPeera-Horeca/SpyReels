@@ -1,31 +1,12 @@
 import type { CoachScriptMode } from "@shared/coachScriptMode";
+import {
+  COACH_HOOK_TYPES,
+  DEFAULT_COACH_HOOK_TYPE,
+  resolveCoachHookType,
+  type CoachHookType,
+} from "@shared/hookTypes";
 
-/** Canonical Coach hook types (maps to DB direct_promise / classifier via hookTypes.ts in a later step). */
-export const COACH_HOOK_TYPES = [
-  "specific_outcome",
-  "pov",
-  "contrarian",
-  "question",
-  "pain_point",
-  "story",
-  "shock_data",
-  "show_end_first",
-  "curiosity_gap",
-] as const;
-
-export type CoachHookType = (typeof COACH_HOOK_TYPES)[number];
-
-/** Universal fallback when contentFormat is null, empty, or not in the routing table. */
-export const DEFAULT_COACH_HOOK_TYPE: CoachHookType = "specific_outcome";
-
-const FORMAT_HOOK_ROUTING: Record<string, CoachHookType> = {
-  "talking-head": "specific_outcome",
-  "voiceover-broll": "show_end_first",
-  "behind-the-scenes": "pov",
-  "tutorial-demo": "show_end_first",
-  "trending-audio": "pov",
-  faceless: "curiosity_gap",
-};
+export { COACH_HOOK_TYPES, DEFAULT_COACH_HOOK_TYPE, resolveCoachHookType, type CoachHookType };
 
 const DESCRIPTION_FORMAT_SIGNALS: Array<{ pattern: RegExp; format: string }> = [
   { pattern: /\bbehind the scenes\b|\bbts\b|\bday in the life\b/i, format: "behind-the-scenes" },
@@ -43,16 +24,6 @@ export function inferContentFormatFromDescription(description: string): string |
     if (pattern.test(text)) return format;
   }
   return null;
-}
-
-/**
- * Resolve hook type from contentFormat. Hardcoded fallback — never left to the LLM.
- * If contentFormat is null, empty, or not in the routing table, returns specific_outcome.
- */
-export function resolveCoachHookType(contentFormat?: string | null): CoachHookType {
-  const key = (contentFormat ?? "").trim().toLowerCase();
-  if (!key) return DEFAULT_COACH_HOOK_TYPE;
-  return FORMAT_HOOK_ROUTING[key] ?? DEFAULT_COACH_HOOK_TYPE;
 }
 
 export function resolveCoachHookTypeForPrompt(args: {

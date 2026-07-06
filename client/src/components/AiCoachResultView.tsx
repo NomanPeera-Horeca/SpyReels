@@ -4,10 +4,13 @@ import { HelpTipBadge } from "@/components/HelpTipBadge";
 import { formatTooltip, PLAN_FORMAT_LABELS } from "@/lib/studioContentHelp";
 import {
   flattenCoachScriptForCopy,
+  parseCoachHookVariations,
   parseProductionNotes,
+  type CoachHookVariation,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
-import { HOOK_VARIATION_LABELS, VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
+import { formatCoachHookTypeLabel } from "@shared/hookTypes";
+import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
   ArrowLeft,
   Clock,
@@ -16,9 +19,11 @@ import {
   BookmarkPlus,
   Video,
   Music2,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
+import Tooltip from "@/components/Tooltip";
 
 export type CoachResultScript = {
   id: number;
@@ -36,6 +41,60 @@ export type CoachResultScript = {
   formatLabel: string | null;
   productionNotes: string | null;
 };
+
+const VISUAL_HOOK_TOOLTIP =
+  "Film this exact shot before you speak. What the viewer sees in the first second decides if they stay.";
+
+function VisualHookLabel() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        Visual hook
+      </p>
+      <Tooltip content={VISUAL_HOOK_TOOLTIP}>
+        <span className="inline-flex cursor-help text-muted-foreground" aria-label="Visual hook help">
+          <HelpCircle className="h-3.5 w-3.5" />
+        </span>
+      </Tooltip>
+    </div>
+  );
+}
+
+function HookVariationCard({
+  variation,
+  onSelect,
+}: {
+  variation: CoachHookVariation;
+  onSelect: () => void;
+}) {
+  const typeLabel = formatCoachHookTypeLabel(variation.hookType);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full text-left p-3 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
+    >
+      <span className="inline-block text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2 py-0.5 rounded-full mb-2">
+        Hook: {typeLabel}
+      </span>
+      <div className="space-y-2">
+        <div>
+          <VisualHookLabel />
+          <p className="text-sm italic text-gray-700 dark:text-gray-300 mt-1">{variation.visualHook}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Spoken hook</p>
+          <p className="text-sm font-medium mt-1">{variation.spokenHook}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">On-screen text</p>
+          <p className="text-sm font-semibold mt-1">{variation.onScreenText}</p>
+        </div>
+      </div>
+      <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mt-2">Click to use this hook</p>
+    </button>
+  );
+}
 
 type HeitSectionProps = {
   badge: string;
@@ -115,10 +174,10 @@ type AiCoachResultViewProps = {
   onToggleEdit: () => void;
   onSaveEdits: () => void;
   onCancelEdit: () => void;
-  hookVariations: { context: string; contrarian: string; intrigue: string } | null;
+  hookVariations: CoachHookVariation[] | null;
   onRequestHookVariations: () => void;
   hookVariationsPending: boolean;
-  onApplyHook: (hook: string) => void;
+  onApplyHookVariation: (variation: CoachHookVariation) => void;
   onDismissHookVariations: () => void;
   refinePending: boolean;
   savePending?: boolean;
@@ -145,7 +204,7 @@ export function AiCoachResultView({
   hookVariations,
   onRequestHookVariations,
   hookVariationsPending,
-  onApplyHook,
+  onApplyHookVariation,
   onDismissHookVariations,
   refinePending,
   savePending,
@@ -164,6 +223,10 @@ export function AiCoachResultView({
     production?.hookOnScreenText?.trim() ||
     production?.textOverlay?.trim() ||
     "";
+  const hookVisualBeat = production?.hookVisualBeat?.trim() ?? "";
+  const hookTypeLabel = production?.hookType
+    ? formatCoachHookTypeLabel(production.hookType)
+    : "";
 
   const sections: CoachScriptSections = {
     explain: result.explain,
@@ -178,6 +241,8 @@ export function AiCoachResultView({
       hook: result.hook,
       sections,
       userFriendly: true,
+      hookVisualBeat,
+      hookOnScreenText,
     });
     try {
       await navigator.clipboard.writeText(text);
@@ -261,6 +326,11 @@ export function AiCoachResultView({
                     {production.funnelStage}
                   </span>
                 )}
+                {hookTypeLabel ? (
+                  <span className="text-[11px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2.5 py-0.5 rounded-full">
+                    Hook: {hookTypeLabel}
+                  </span>
+                ) : null}
                 {result.estimatedDuration && (
                   <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <Clock className="h-3.5 w-3.5" />
@@ -272,7 +342,7 @@ export function AiCoachResultView({
 
             <div className="space-y-4">
               <section className="rounded-2xl p-5 border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500">
-                <div className="flex gap-2.5 items-start mb-3">
+                <div className="flex gap-2.5 items-start mb-4">
                   <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
                     1
                   </div>
@@ -281,75 +351,111 @@ export function AiCoachResultView({
                       {VIRAL_SCRIPT_SECTION_LABELS.hook}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      First 2 seconds. Stop the scroll. No warm-up.
+                      All 3 layers in frame 0. Visual + spoken + on-screen text.
                     </p>
                   </div>
                 </div>
-                {editMode ? (
-                  <Textarea
-                    value={editDraft.hook}
-                    onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })}
-                    className="min-h-[60px] resize-none bg-white dark:bg-gray-900 text-sm"
-                  />
-                ) : (
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed font-medium">
-                    {result.hook}
-                  </div>
-                )}
-                {!editMode && hookOnScreenText ? (
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_100px] sm:items-start">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                        On-screen text (first 2 sec)
-                      </p>
-                      <div className="mt-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold dark:border-gray-700 dark:bg-gray-900">
-                        {hookOnScreenText}
+
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px] gap-4 items-start">
+                  <div className="min-w-0">
+                    <div className="rounded-[14px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+                      <div className="px-4 py-3.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
+                        <div className="mb-2">
+                          <VisualHookLabel />
+                        </div>
+                        {editMode ? (
+                          <Textarea
+                            value={hookVisualBeat}
+                            readOnly
+                            placeholder="Regenerate or refine to add a frame 0 shot."
+                            className="min-h-[52px] resize-none text-sm italic bg-white dark:bg-gray-900"
+                          />
+                        ) : (
+                          <p
+                            className={`text-sm leading-relaxed ${hookVisualBeat ? "italic text-gray-700 dark:text-gray-300" : "text-muted-foreground italic"}`}
+                          >
+                            {hookVisualBeat ||
+                              "Add a frame 0 shot in Refine (mid-action, close-up, or end-result)."}
+                          </p>
+                        )}
+                      </div>
+                      <div className="px-4 py-3.5 border-b border-gray-200 dark:border-gray-700">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                          Spoken hook
+                        </p>
+                        {editMode ? (
+                          <Textarea
+                            value={editDraft.hook}
+                            onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })}
+                            className="min-h-[60px] resize-none bg-white dark:bg-gray-900 text-sm font-medium"
+                          />
+                        ) : (
+                          <p className="text-sm leading-relaxed font-medium text-gray-900 dark:text-gray-50">
+                            {result.hook}
+                          </p>
+                        )}
+                      </div>
+                      <div className="px-4 py-3.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+                          On-screen text
+                        </p>
+                        {hookOnScreenText ? (
+                          <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900 dark:text-gray-50">
+                            {hookOnScreenText}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">
+                            No on-screen text yet. Regenerate or refine to add frame 0 text.
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <ReelPreviewPhone onScreenText={hookOnScreenText} compact />
-                  </div>
-                ) : null}
-                {!editMode && !previewMode ? (
-                  <button
-                    type="button"
-                    className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                    onClick={onRequestHookVariations}
-                    disabled={hookVariationsPending}
-                  >
-                    {hookVariationsPending ? "Generating..." : "Try 3 new hook ideas"}
-                  </button>
-                ) : null}
-                {hookVariations && (
-                  <div className="mt-3 space-y-2">
-                    {Object.entries(hookVariations).map(([type, text]) => (
-                      <div
-                        key={type}
-                        className="flex items-start gap-2 p-3 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">
-                            {HOOK_VARIATION_LABELS[type as keyof typeof HOOK_VARIATION_LABELS] ?? type}
-                          </p>
-                          <p className="text-sm">{text}</p>
-                        </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {!editMode && !previewMode ? (
                         <button
                           type="button"
-                          className="shrink-0 bg-primary/10 text-primary px-2 py-1 rounded-lg text-xs font-semibold hover:bg-primary/15"
-                          onClick={() => onApplyHook(text)}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                          onClick={onRequestHookVariations}
+                          disabled={hookVariationsPending}
                         >
-                          Use
+                          {hookVariationsPending ? "Generating..." : "Try 3 new hook ideas"}
+                        </button>
+                      ) : null}
+                      <p className="text-[11px] text-muted-foreground min-w-0 flex-1">
+                        On-screen complements spoken (different words, same idea). Works muted.
+                      </p>
+                    </div>
+
+                    {hookVariations && hookVariations.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {hookVariations.map((variation, index) => (
+                          <HookVariationCard
+                            key={`${variation.hookType}-${index}`}
+                            variation={variation}
+                            onSelect={() => onApplyHookVariation(variation)}
+                          />
+                        ))}
+                        <button
+                          type="button"
+                          className="text-xs text-gray-500 hover:text-gray-800"
+                          onClick={onDismissHookVariations}
+                        >
+                          Dismiss
                         </button>
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="text-xs text-gray-500 hover:text-gray-800"
-                      onClick={onDismissHookVariations}
-                    >
-                      Dismiss
-                    </button>
+                    )}
                   </div>
-                )}
+
+                  {hookOnScreenText ? (
+                    <div className="flex flex-col items-center gap-1.5 sm:pt-1">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Preview
+                      </p>
+                      <ReelPreviewPhone onScreenText={hookOnScreenText} compact />
+                    </div>
+                  ) : null}
+                </div>
               </section>
 
               <HeitSection

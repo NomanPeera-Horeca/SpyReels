@@ -1,6 +1,7 @@
 // Prompts from BrandScript AI export (30-Day Plan + AI Coach). Do not change JSON shapes.
 import { buildCoachLengthAndHookRules } from "@shared/coachScriptLength";
 import { buildRetentionAndShareRules, resolveCoachHookTypeForPrompt } from "@shared/coachRetentionRules";
+import { DEFAULT_COACH_HOOK_TYPE, type CoachHookType } from "@shared/hookTypes";
 import type { CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScriptModeLabel } from "@shared/coachScriptMode";
 import { COACH_ANALYSIS_RULES } from "@shared/coachAnalyze";
@@ -334,28 +335,52 @@ Return ONLY valid JSON.`;
 }
 
 export function buildHookVariationsPrompt(
-  hook: string,
-  body: string,
-  callToAction: string,
-  niche: string,
-  targetAudience: string
+  scriptTextOrHook: string,
+  currentHookTypeOrBody?: CoachHookType | string,
+  callToAction?: string,
+  niche?: string,
+  targetAudience?: string
 ): string {
-  return `Generate 3 alternative hook variations for this script.
+  let scriptText: string;
+  let currentHookType: CoachHookType;
 
-Current hook: "${hook}"
-Script body (for context): "${body.slice(0, 300)}..."
-CTA: "${callToAction}"
-Niche: ${niche}
-Audience: ${targetAudience}
+  if (callToAction !== undefined && niche !== undefined && targetAudience !== undefined) {
+    const hook = scriptTextOrHook;
+    const body = currentHookTypeOrBody ?? "";
+    scriptText = [
+      `Hook: ${hook}`,
+      `Body: ${body.slice(0, 500)}`,
+      `CTA: ${callToAction}`,
+      `Niche: ${niche}`,
+      `Audience: ${targetAudience}`,
+    ].join("\n");
+    currentHookType = DEFAULT_COACH_HOOK_TYPE;
+  } else {
+    scriptText = scriptTextOrHook;
+    const typeArg = (currentHookTypeOrBody ?? DEFAULT_COACH_HOOK_TYPE) as CoachHookType;
+    currentHookType = typeArg;
+  }
 
-Write 3 hooks using different HEIT hook types. Each max 2 sentences.
+  return `You are SpyReels Coach. Generate 3 NEW hook variations for this script.
 
-Return ONLY valid JSON:
-{
-  "context": "Context hook — specific outcome promise",
-  "contrarian": "Contrarian hook — bold claim most disagree with",
-  "intrigue": "Intrigue hook — cryptic fact with no explanation"
-}`;
+Return ONLY valid JSON with exactly these keys: "context", "contrarian", "intrigue".
+Each key must be an object with fields:
+- "hookType": one of the 9 Coach hook types (specific_outcome, pov, contrarian, question, pain_point, story, shock_data, show_end_first, curiosity_gap)
+- "visualHook": one concise description of the Frame 0 shot (what the viewer SEES first)
+- "spokenHook": the opening line, most surprising first, no early payoff
+- "onScreenText": 5-8 words of text overlay that complement the spoken line but DO NOT copy it word for word
+
+Constraints:
+- Keep the same niche and topic as the original script.
+- Each variation must be different from the original hook and from each other.
+- "visualHook" must be a filmable shot (start mid-action, plated dish close-up, tight crop on key moment, etc.).
+- "onScreenText" appears in Frame 0. It should be readable, punchy, and under ~40 characters.
+
+Return exactly 3 variations. No prose, no explanation — ONLY the JSON object.
+
+Current script:
+${scriptText}
+Current hook type: ${currentHookType}`;
 }
 
 export const STUDIO_PREFILL_KEY = "studio_prefill";

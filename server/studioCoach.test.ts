@@ -11,7 +11,8 @@ import {
   parseStudioPrefillMeta,
   VIRAL_SCRIPT_SECTION_LABELS,
 } from "@shared/studioCoachUi";
-import { buildConvertRoughScriptPrompt } from "@shared/studioHeit";
+import { buildConvertRoughScriptPrompt, buildHookVariationsPrompt } from "@shared/studioHeit";
+import { parseCoachHookVariations } from "@shared/coachScriptSections";
 import {
   resolveCoachIntentRules,
   shouldUseLlmIntentClassifier,
@@ -135,6 +136,60 @@ describe("studioCoachAgent rules", () => {
     });
     expect(action.tool).toBe("generate_hook_ideas");
     expect(action.scriptId).toBe(42);
+  });
+
+  it("builds stacked hook variation prompt with JSON object shape", () => {
+    const prompt = buildHookVariationsPrompt(
+      "Hook: I went from 200 views to 14k.\nBody: Most creators skip frame 0.\nCTA: Comment STUCK",
+      "specific_outcome"
+    );
+    expect(prompt).toContain("3 NEW hook variations");
+    expect(prompt).toContain('"context", "contrarian", "intrigue"');
+    expect(prompt).toContain("visualHook");
+    expect(prompt).toContain("spokenHook");
+    expect(prompt).toContain("onScreenText");
+    expect(prompt).toContain("Current hook type: specific_outcome");
+  });
+
+  it("parses stacked hook variations from LLM JSON", () => {
+    const sample = {
+      context: {
+        hookType: "pov",
+        visualHook: "Tight close-up on your hands mid-pour.",
+        spokenHook: "POV: you finally cracked the algorithm.",
+        onScreenText: "THIS CHANGED EVERYTHING",
+      },
+      contrarian: {
+        hookType: "contrarian",
+        visualHook: "You shake your head at the camera.",
+        spokenHook: "Stop posting daily if you want growth.",
+        onScreenText: "POST LESS, GROW MORE",
+      },
+      intrigue: {
+        hookType: "curiosity_gap",
+        visualHook: "Blurred dashboard with one metric glowing.",
+        spokenHook: "Nobody talks about this retention trick.",
+        onScreenText: "THE METRIC THEY HIDE",
+      },
+    };
+    const parsed = parseCoachHookVariations(sample);
+    expect(parsed).toHaveLength(3);
+    for (const variation of parsed ?? []) {
+      expect(variation.visualHook.length).toBeGreaterThan(0);
+      expect(variation.spokenHook.length).toBeGreaterThan(0);
+      expect(variation.onScreenText.length).toBeGreaterThan(0);
+      expect([
+        "specific_outcome",
+        "pov",
+        "contrarian",
+        "question",
+        "pain_point",
+        "story",
+        "shock_data",
+        "show_end_first",
+        "curiosity_gap",
+      ]).toContain(variation.hookType);
+    }
   });
 
   it("routes refine language to refine_script", () => {

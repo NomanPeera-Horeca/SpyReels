@@ -164,7 +164,7 @@ export function OnboardingAhaView({
           hookVariations={null}
           onRequestHookVariations={() => {}}
           hookVariationsPending={false}
-          onApplyHook={() => {}}
+          onApplyHookVariation={() => {}}
           onDismissHookVariations={() => {}}
           refinePending={false}
         />

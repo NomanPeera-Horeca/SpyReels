@@ -20,7 +20,7 @@ import { AiCoachResultView, type CoachResultScript } from "@/components/AiCoachR
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
 import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
-import { combineBodyFromSections } from "@shared/coachScriptSections";
+import { combineBodyFromSections, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
 import { scriptFilmPath } from "@shared/scriptFilm";
 import {
   Sheet,
@@ -85,11 +85,7 @@ export default function AiCoach() {
     cta: "",
   });
   const [refineInput, setRefineInput] = useState("");
-  const [hookVariations, setHookVariations] = useState<{
-    context: string;
-    contrarian: string;
-    intrigue: string;
-  } | null>(null);
+  const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
   const [filmNowPending, setFilmNowPending] = useState(false);
@@ -275,22 +271,44 @@ export default function AiCoach() {
 
   const hookVariationsMutation = trpc.studio.hookVariations.useMutation({
     onSuccess: (data) => {
-      setHookVariations(data);
+      const parsed = parseCoachHookVariations(data);
+      if (!parsed || parsed.length === 0) {
+        const legacy = parseCoachHookVariations({
+          context: typeof data.context === "string" ? data.context : "",
+          contrarian: typeof data.contrarian === "string" ? data.contrarian : "",
+          intrigue: typeof data.intrigue === "string" ? data.intrigue : "",
+        });
+        if (legacy && legacy.length > 0) {
+          setHookVariations(legacy);
+          posthog?.capture("ai_coach_hook_variations_generated", { script_id: result?.id });
+          return;
+        }
+        toast.error("Could not read hook variations. Try again.");
+        return;
+      }
+      setHookVariations(parsed);
       posthog?.capture("ai_coach_hook_variations_generated", { script_id: result?.id });
     },
     onError: (err) => toast.error(err.message),
   });
 
-  const applyHookMutation = trpc.studio.applyHook.useMutation({
-    onSuccess: (data) => {
-      if (!result) return;
-      setResult({ ...result, hook: data.hook });
-      setEditDraft((d) => ({ ...d, hook: data.hook }));
-      setHookVariations(null);
-      void utils.studio.list.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  const applyHookVariation = (variation: CoachHookVariation) => {
+    if (!result) return;
+    const production = parseProductionNotes(result.productionNotes) ?? {};
+    const updatedNotes = JSON.stringify({
+      ...production,
+      hookVisualBeat: variation.visualHook,
+      hookOnScreenText: variation.onScreenText,
+      hookType: variation.hookType,
+    });
+    setResult({
+      ...result,
+      hook: variation.spokenHook,
+      productionNotes: updatedNotes,
+    });
+    setEditDraft((draft) => ({ ...draft, hook: variation.spokenHook }));
+    setHookVariations(null);
+  };
 
   const reset = () => {
     setPhase("idle");
@@ -822,7 +840,7 @@ export default function AiCoach() {
         hookVariations={hookVariations}
         onRequestHookVariations={() => hookVariationsMutation.mutate({ id: result.id })}
         hookVariationsPending={hookVariationsMutation.isPending}
-        onApplyHook={(hook) => applyHookMutation.mutate({ id: result.id, hook })}
+        onApplyHookVariation={applyHookVariation}
         onDismissHookVariations={() => setHookVariations(null)}
         refinePending={refineMutation.isPending}
         savePending={updateMutation.isPending}
