@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
 import { usePostHog } from "@posthog/react";
-import { Loader2, Play, RefreshCw, X } from "lucide-react";
+import { Loader2, Play, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
 import { formatVideoPreviewError } from "@/lib/videoPreviewError";
-import { toast } from "sonner";
 import {
   registerGridVideoPlayer,
   releaseGridVideoPlay,
@@ -169,7 +168,6 @@ export function DashboardReelGridMedia({
         reason: "refresh_failed",
         message: message.slice(0, 200),
       });
-      toast.error("Video preview unavailable", { description: message });
       return null;
     }
   }, [resolvedSrc, videoUrl, shortcode, reelId, refreshMutation, onVideoUrlResolved, capturePreviewEvent]);
@@ -226,12 +224,6 @@ export function DashboardReelGridMedia({
 
   const handleVideoEnded = () => {
     stopPlayback();
-  };
-
-  const handleRetry = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setVideoFailed(false);
-    await startPlayback();
   };
 
   return (
@@ -292,33 +284,16 @@ export function DashboardReelGridMedia({
               ) : null}
             </div>
           )}
-          {videoFailed ? (
-            <div
-              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/75 px-3 text-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-xs font-medium text-white">Preview unavailable</p>
-              {shortcode?.trim() ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/25"
-                  onClick={handleRetry}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Retry
-                </button>
-              ) : null}
-            </div>
-          ) : null}
           {hasResolvableVideo ? (
             <button
               type="button"
               className={cn(
                 "absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80 disabled:opacity-70",
-                isCompact ? "h-9 w-9" : "h-12 w-12"
+                isCompact ? "h-9 w-9" : "h-12 w-12",
+                videoFailed && "ring-2 ring-amber-400/80"
               )}
-              aria-label="Play video"
-              title="Play video"
+              aria-label={videoFailed ? "Play video again" : "Play video"}
+              title={videoFailed ? "Preview failed. Tap to try again." : "Play video"}
               disabled={isPreparing || refreshMutation.isPending}
               onClick={(e) => {
                 e.stopPropagation();

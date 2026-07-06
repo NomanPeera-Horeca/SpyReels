@@ -93,7 +93,8 @@ export function buildLibraryOneClickRemake(args: {
   }
   if (hookState.stage === "error") {
     return {
-      label: "Retry",
+      label: LIBRARY_REMAKE_CTA_LABEL,
+      tooltip: hookState.errorMessage?.trim() || "Last remake failed. Tap to try again.",
       onClick: () => void args.retryRemake(librarySource, startOpts),
     };
   }
