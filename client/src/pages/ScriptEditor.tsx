@@ -114,6 +114,8 @@ export default function ScriptEditor() {
   const [showTeleprompter, setShowTeleprompter] = useState(false);
   const filmAutoOpenRef = useRef(false);
   const editorReadyCapturedRef = useRef<number | null>(null);
+  const saveSilentRef = useRef(false);
+  const AUTOSAVE_DELAY_MS = 2500;
   const [activeTab, setActiveTab] = useState<"edit" | "versions">("edit");
 
   // AI tool states
@@ -159,6 +161,16 @@ export default function ScriptEditor() {
     postDate,
     postTime,
   });
+
+  const handleBackWithGuard = useCallback(() => {
+    if (isDirty) {
+      const leave = window.confirm(
+        "You have unsaved changes. Leave this page? Your latest edits may not be saved yet."
+      );
+      if (!leave) return;
+    }
+    handleBack();
+  }, [handleBack, isDirty]);
 
   useEffect(() => {
     if (!script) return;
@@ -217,7 +229,11 @@ export default function ScriptEditor() {
   const updateMutation = trpc.scripts.update.useMutation({
     onSuccess: (_data, variables) => {
       if (!isStatusOnlyScriptUpdate(variables)) {
-        posthog?.capture("script_saved", { script_id: scriptId });
+        const silent = saveSilentRef.current;
+        saveSilentRef.current = false;
+        posthog?.capture(silent ? "script_autosaved" : "script_saved", {
+          script_id: scriptId,
+        });
         setSavedBaseline({
           content: variables.content ?? "",
           title: variables.title ?? "",
@@ -225,10 +241,21 @@ export default function ScriptEditor() {
           postDateKey: variables.postDate ? variables.postDate.slice(0, 10) : null,
           postTime: variables.postTime ?? "09:00",
         });
-        toast.success("Script saved");
+        if (!silent) {
+          toast.success("Script saved");
+        }
       }
       utils.scripts.get.invalidate({ id: scriptId! });
       utils.scripts.list.invalidate();
+    },
+    onError: (_err, variables) => {
+      if (!isStatusOnlyScriptUpdate(variables)) {
+        const silent = saveSilentRef.current;
+        saveSilentRef.current = false;
+        if (!silent) {
+          toast.error("Could not save script. Try again.");
+        }
+      }
     },
   });
 
@@ -352,19 +379,23 @@ export default function ScriptEditor() {
   });
 
   // --- Handlers ---
-  const handleSave = useCallback(() => {
-    if (!scriptId) return;
-    updateMutation.mutate({
-      id: scriptId,
-      title: editedTitle,
-      content: editedContent,
-      notes: editedNotes || null,
-      postDate: postDate ? postDate.toISOString() : null,
-      postTime: postTime || null,
-      changeType: "manual_edit",
-      changeDescription: "Manual edit",
-    });
-  }, [scriptId, editedTitle, editedContent, editedNotes, postDate, postTime, updateMutation]);
+  const handleSave = useCallback(
+    (options?: { silent?: boolean }) => {
+      if (!scriptId) return;
+      saveSilentRef.current = options?.silent ?? false;
+      updateMutation.mutate({
+        id: scriptId,
+        title: editedTitle,
+        content: editedContent,
+        notes: editedNotes || null,
+        postDate: postDate ? postDate.toISOString() : null,
+        postTime: postTime || null,
+        changeType: "manual_edit",
+        changeDescription: options?.silent ? "Autosave" : "Manual edit",
+      });
+    },
+    [scriptId, editedTitle, editedContent, editedNotes, postDate, postTime, updateMutation]
+  );
 
   const handleSaveClick = useCallback(() => {
     if (updateMutation.isPending) return;
@@ -372,8 +403,27 @@ export default function ScriptEditor() {
       toast.message("No changes to save");
       return;
     }
-    handleSave();
+    handleSave({ silent: false });
   }, [updateMutation.isPending, isDirty, handleSave]);
+
+  const saveStatus: "saved" | "unsaved" | "saving" | "error" =
+    updateMutation.isPending
+      ? "saving"
+      : updateMutation.isError && isDirty
+        ? "error"
+        : isDirty
+          ? "unsaved"
+          : "saved";
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -436,6 +486,25 @@ export default function ScriptEditor() {
   const isAnyMutationPending = activeAiMutation !== null;
 
   const AI_MUTATION_TIMEOUT_MS = 90_000;
+
+  useEffect(() => {
+    if (!isDirty || !scriptId || isAnyMutationPending || updateMutation.isPending) return;
+    const timeoutId = window.setTimeout(() => {
+      handleSave({ silent: true });
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    editedContent,
+    editedTitle,
+    editedNotes,
+    postDate,
+    postTime,
+    isDirty,
+    scriptId,
+    isAnyMutationPending,
+    updateMutation.isPending,
+    handleSave,
+  ]);
 
   useEffect(() => {
     if (!script?.id || scriptQuery.isLoading) return;
@@ -502,7 +571,7 @@ export default function ScriptEditor() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleBack}
+              onClick={handleBackWithGuard}
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -532,17 +601,25 @@ export default function ScriptEditor() {
             ) : null}
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {isDirty && (
-              <span className="text-xs text-amber-500 font-medium">
-                Unsaved
+            {saveStatus === "saving" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Saving...
               </span>
+            ) : saveStatus === "saved" ? (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                Saved
+              </span>
+            ) : saveStatus === "error" ? (
+              <span className="text-xs text-destructive font-medium">Save failed</span>
+            ) : (
+              <span className="text-xs text-amber-500 font-medium">Unsaved changes</span>
             )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleSaveClick}
-              disabled={updateMutation.isPending}
-              className={!isDirty ? "opacity-70" : undefined}
+              disabled={updateMutation.isPending || !isDirty}
             >
               <Save className="w-3.5 h-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Save</span>
