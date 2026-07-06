@@ -2495,10 +2495,8 @@ export default function Dashboard() {
                     key={reel.id}
                     ref={setReelRowRef(reel.id)}
                     className={`workspace-reel-card overflow-hidden ${
-                      isFirstVisitDashboard
-                        ? index === 0
-                          ? "rounded-xl border-2 border-primary/40 bg-primary/5"
-                          : "opacity-50"
+                      isFirstVisitDashboard && index === 0
+                        ? "rounded-xl border-2 border-primary/40 bg-primary/5"
                         : ""
                     }`}
                   >
@@ -2634,7 +2632,6 @@ export default function Dashboard() {
                             isQueued={isTxQueued}
                             isNoSpeech={isNoSpeech}
                             oneClickRemake={oneClickRemake}
-                            firstVisitMode={isFirstVisitDashboard}
                             onToggleSave={() => {
                               if (isFeaturedView) {
                                 toggleSave.mutate({ featuredReelId: reel.id });
@@ -2680,7 +2677,6 @@ export default function Dashboard() {
                             isQueued={isTxQueued}
                             isNoSpeech={isNoSpeech}
                             oneClickRemake={oneClickRemake}
-                            firstVisitMode={isFirstVisitDashboard}
                             onToggleSave={() => {
                               if (isFeaturedView) {
                                 toggleSave.mutate({ featuredReelId: reel.id });
@@ -2843,13 +2839,11 @@ export default function Dashboard() {
                     <div key={reel.id} ref={setReelRowRef(reel.id)}>
                       <WorkspaceReelGridTile
                         className={
-                          isFirstVisitDashboard
-                            ? index === 0
-                              ? "rounded-xl ring-2 ring-primary/40"
-                              : "opacity-45"
+                          isFirstVisitDashboard && index === 0
+                            ? "rounded-xl ring-2 ring-primary/40"
                             : undefined
                         }
-                        isActive={!isFirstVisitDashboard && isModalOpen}
+                        isActive={isModalOpen}
                         index={index}
                         thumbnailUrl={reel.thumbnailUrl}
                         videoUrl={reel.videoUrl}
@@ -2863,8 +2857,7 @@ export default function Dashboard() {
                           isFirstVisitDashboard && index === 0 ? "Start here" : null
                         }
                         topRight={
-                          isFirstVisitDashboard ? null : (
-                            <button
+                          <button
                               type="button"
                               className={`rounded-full p-1.5 backdrop-blur transition-colors ${
                                 isSaved
@@ -2889,7 +2882,6 @@ export default function Dashboard() {
                                 <Bookmark className="h-3.5 w-3.5" />
                               )}
                             </button>
-                          )
                         }
                         statusChip={
                           hasTranscription && !isNoSpeech ? (
@@ -2971,7 +2963,6 @@ export default function Dashboard() {
                               hideBookmark
                               hideExternalLink
                               oneClickRemake={oneClickRemake}
-                              firstVisitMode={isFirstVisitDashboard}
                               onToggleSave={() =>
                                 isFeaturedView
                                   ? toggleSave.mutate({ featuredReelId: reel.id })
