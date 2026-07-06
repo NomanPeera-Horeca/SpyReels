@@ -55,6 +55,7 @@ import {
 } from "./discovery/db";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
+import { founderInterviewRouter } from "./founderInterview/router";
 import { planRouter, studioRouter } from "./routers/planCoachRouter";
 import { audienceResearchRouter } from "./routers/audienceResearchRouter";
 import {
@@ -6891,6 +6892,7 @@ The hook MUST be 7-10 words. Count them.`),
   }),
 
   outreach: outreachRouter,
+  founderInterview: founderInterviewRouter,
 
   plan: planRouter,
   studio: studioRouter,

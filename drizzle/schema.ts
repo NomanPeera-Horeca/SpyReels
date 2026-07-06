@@ -1702,3 +1702,25 @@ export type InsertOutreachEmail = typeof outreachEmails.$inferInsert;
 
 export type ScriptShareLink = typeof scriptShareLinks.$inferSelect;
 export type InsertScriptShareLink = typeof scriptShareLinks.$inferInsert;
+
+export const founderInterviewRequests = mysqlTable(
+  "founder_interview_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    countryCode: varchar("countryCode", { length: 2 }).notNull(),
+    dialCode: varchar("dialCode", { length: 8 }).notNull(),
+    phoneNational: varchar("phoneNational", { length: 20 }).notNull(),
+    phoneE164: varchar("phoneE164", { length: 24 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userUnique: uniqueIndex("uniq_founder_interview_user").on(table.userId),
+  })
+);
+
+export type FounderInterviewRequest = typeof founderInterviewRequests.$inferSelect;
+export type InsertFounderInterviewRequest = typeof founderInterviewRequests.$inferInsert;

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Founder Interview Popup + Booking Flow - SpyReels Mockup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --fg: #fafafa;
+      --muted: #a1a1aa;
+      --border: #27272a;
+      --card: #18181b;
+      --primary: #7c3aed;
+      --overlay: rgba(0, 0, 0, 0.55);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+    }
+
+    .chrome {
+      position: sticky; top: 0; z-index: 200;
+      background: #111827; color: #f9fafb;
+      border-bottom: 1px solid #374151;
+      padding: 12px 16px;
+    }
+    .chrome h1 { font-size: 14px; font-weight: 700; }
+    .chrome p { font-size: 12px; color: #9ca3af; margin-top: 4px; max-width: 820px; }
+
+    .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    .section-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* Dimmed app behind modal */
+    .scene {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      min-height: 420px;
+      background: var(--card);
+    }
+    .scene-app {
+      padding: 20px;
+      filter: blur(1px);
+      opacity: 0.45;
+      pointer-events: none;
+      user-select: none;
+    }
+    .scene-app h2 { font-size: 22px; margin-bottom: 8px; }
+    .scene-app p { color: var(--muted); font-size: 14px; }
+    .fake-card {
+      margin-top: 20px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      height: 180px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--overlay);
+    }
+
+    .modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(100% - 32px, 420px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+      z-index: 2;
+    }
+    .modal-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .modal h3 {
+      font-size: 18px;
+      font-weight: 600;
+      padding-right: 28px;
+      margin-bottom: 10px;
+    }
+    .modal p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    .modal strong { color: var(--fg); font-weight: 600; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 0 14px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    /* Flow diagram */
+    .flow {
+      margin-top: 40px;
+      display: grid;
+      gap: 16px;
+    }
+    @media (min-width: 900px) {
+      .flow { grid-template-columns: 1fr 1fr; }
+    }
+    .flow-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--card);
+      padding: 18px;
+    }
+    .flow-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .steps { list-style: none; display: grid; gap: 10px; }
+    .step {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: rgba(124, 58, 237, 0.15);
+      color: #c4b5fd;
+      font-size: 11px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+    .step strong { color: var(--fg); display: block; margin-bottom: 2px; }
+    .note {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(124, 58, 237, 0.06);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .calendly-preview {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      color: #18181b;
+    }
+    .calendly-top {
+      background: #006bff;
+      color: #fff;
+      padding: 14px 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .calendly-body { padding: 16px; font-size: 12px; color: #52525b; }
+    .calendly-slot {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e4e4e7;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #18181b;
+    }
+    .field { margin-top: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--fg);
+    }
+    .select, .phone-input {
+      width: 100%;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #09090b;
+      color: var(--fg);
+      padding: 0 10px;
+      font-size: 13px;
+    }
+    .phone-row { display: flex; gap: 8px; }
+    .dial-select {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 36px;
+      min-width: 88px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #09090b;
+      color: var(--fg);
+      font-size: 13px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .phone-input { flex: 1; }
+    .hint {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .hint strong { color: var(--fg); }
+  </style>
+</head>
+<body>
+  <header class="chrome">
+    <h1>Founder interview popup + booking flow</h1>
+    <p>Eligible users (2+ saved scripts) see a centered modal over a dimmed page. Booking opens Calendly in a new tab; SpyReels stays open in the original tab.</p>
+  </header>
+
+  <main class="page">
+    <p class="section-label">Step 1: Popup on AI Coach or Dashboard</p>
+    <div class="scene">
+      <div class="scene-app">
+        <h2>AI Coach</h2>
+        <p>User lands on /studio or /dashboard after creating at least 2 scripts.</p>
+        <div class="fake-card">Page content (dimmed behind modal)</div>
+      </div>
+      <div class="overlay" aria-hidden="true"></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button type="button" class="modal-close" title="Close for this session">&times;</button>
+        <h3 id="modal-title">Help us make SpyReels actually useful for you</h3>
+        <p>
+          I&rsquo;m Noah Perry. My CTO and I are talking to SpyReels users about how you create reels and what we should improve. Book a <strong>15-minute call</strong> and help shape what we build next.
+        </p>
+        <div style="margin-top:14px">
+          <div class="field">
+            <label for="phone">Phone number</label>
+            <div class="phone-row">
+              <button type="button" class="dial-select" aria-label="Country code">🇺🇸 +1 ▾</button>
+              <input id="phone" class="phone-input" type="tel" placeholder="555 123 4567" value="5551234567" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn">Not now</button>
+          <button type="button" class="btn btn-primary">Book a 15-minute call</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-card">
+        <h4>What happens in SpyReels</h4>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">1</span>
+            <span><strong>Popup auto-opens</strong> ~400ms after page load if user has 2+ scripts and has not dismissed it.</span>
+          </li>
+          <li class="step">
+            <span class="step-num">2</span>
+            <span><strong>User selects country + phone</strong>. Book stays disabled until the number is valid (6 to 15 digits).</span>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <span><strong>Book a 15-minute call</strong> saves the phone to SpyReels, notifies the founder (Telegram + owner notification), then opens Calendly with name, email, and phone pre-filled.</span>
+          </li>
+          <li class="step">
+            <span class="step-num">4</span>
+            <span><strong>Not now</strong> or <strong>X</strong> closes the modal. &ldquo;Not now&rdquo; never shows again. X / clicking outside hides it until the next visit (new session).</span>
+          </li>
+          <li class="step">
+            <span class="step-num">5</span>
+            <span><strong>Original SpyReels tab</strong> stays on Coach or Dashboard. User can keep working immediately.</span>
+          </li>
+        </ol>
+      </div>
+
+      <div class="flow-card">
+        <h4>What happens on Calendly (new tab)</h4>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">1</span>
+            <span><strong>Scheduling page loads</strong> at calendly.com/noman-peera/spyreels-feedback (placeholder URL you can swap later).</span>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <span><strong>User picks a date and time</strong> from your available slots (15-minute event). Name, email, and phone may already be filled from SpyReels.</span>
+          </li>
+          <li class="step">
+            <span class="step-num">4</span>
+            <span><strong>User confirms</strong> any remaining Calendly questions you configure.</span>
+          </li>
+          <li class="step">
+            <span class="step-num">5</span>
+            <span><strong>Calendly confirms</strong> the booking and sends calendar invites to you and the user. You also received their phone in SpyReels when they clicked Book.</span>
+          </li>
+          <li class="step">
+            <span class="step-num">6</span>
+            <span><strong>On call day</strong> you join via the video link in the calendar invite (Zoom/Google Meet per your Calendly setup).</span>
+          </li>
+        </ol>
+        <div class="calendly-preview">
+          <div class="calendly-top">SpyReels feedback call · 20 min</div>
+          <div class="calendly-body">
+            Select a date &amp; time
+            <div class="calendly-slot">Wed, Jul 9 · 2:00pm – 2:20pm</div>
+            <div class="calendly-slot">Thu, Jul 10 · 10:30am – 10:50am</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      <strong>Phone is saved in SpyReels</strong> (<code>founder_interview_requests</code> table) and you get a Telegram / owner notification with name, email, and full international number. Run migration <code>drizzle/0070_founder_interview_requests.sql</code> on production before deploy. On Calendly, add a custom question for phone as the first question so the <code>a1=</code> pre-fill works.
+    </p>
+  </main>
+</body>
+</html>

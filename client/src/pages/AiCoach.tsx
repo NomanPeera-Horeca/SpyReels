@@ -20,6 +20,7 @@ import { AiCoachResultView, type CoachResultScript } from "@/components/AiCoachR
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
 import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
+import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
 import { combineBodyFromSections, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
 import { scriptFilmPath } from "@shared/scriptFilm";
 import {
@@ -97,6 +98,7 @@ export default function AiCoach() {
   const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(undefined, {
     staleTime: 30_000,
   });
+  const { data: savedScriptsList } = trpc.scripts.list.useQuery({}, { staleTime: 60_000 });
   const { data: planData } = trpc.plan.listCards.useQuery(undefined, { staleTime: 60_000 });
   const { data: audienceData, isLoading: audienceSignalsLoading } = trpc.audienceResearch.list.useQuery(
     undefined,
@@ -106,6 +108,7 @@ export default function AiCoach() {
   const planCards = planData?.cards ?? [];
   const audienceSignals = audienceData?.signals ?? [];
   const recentScripts = historyData?.scripts ?? [];
+  const savedScriptsCount = savedScriptsList?.length ?? 0;
 
   const suggestions = useMemo<CoachSuggestion[]>(() => {
     const approved = planCards.filter((c) => c.status === "approved").slice(0, 3);
@@ -655,6 +658,7 @@ export default function AiCoach() {
           </Sheet>
         </div>
         {content}
+        <FounderInterviewBanner scriptsCount={savedScriptsCount} />
       </div>
     </div>
   );

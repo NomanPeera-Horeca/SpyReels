@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
+import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
 import { snapshotFromProgressRow } from "@shared/scrapeProgressUi";
 import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
@@ -1386,6 +1387,7 @@ export default function Dashboard() {
     const timeSavedHours = (timeSavedMinutes / 60).toFixed(1);
     return (
       <div className="max-w-5xl mx-auto space-y-8 px-2 sm:px-0 pb-10">
+        <FounderInterviewBanner scriptsCount={scripts.length} />
         {/* Hero: orientation + primary actions (reduces "what now?" churn) */}
         <section className="relative overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-violet-950/40 via-card to-cyan-950/20 p-6 sm:p-8">
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
