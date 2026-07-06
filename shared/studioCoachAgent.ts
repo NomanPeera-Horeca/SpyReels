@@ -1,4 +1,5 @@
 import type { CoachCapabilityId } from "./studioCoachUi";
+import { isSparkOrPlanPrefill } from "./coachAnalyze";
 
 export type CoachToolName =
   | "write_viral_script"
@@ -27,7 +28,7 @@ export type ResolveCoachIntentInput = {
 const REFINE_PATTERNS =
   /\b(refine|improve|rewrite|shorten|longer|punchier|contrarian|bold|edit|change|fix|make it|tweak)\b/i;
 const HOOK_PATTERNS =
-  /\b(hook ideas?|alternative hooks?|new hooks?|opening lines?|first line|scroll.?stop)\b/i;
+  /\b(hook ideas|alternative hooks|new hooks|generate hooks|opening lines|first line|scroll.?stop)\b/i;
 const PLAN_PATTERNS =
   /\b(30.?day|plan card|day \d+|content plan|calendar idea)\b/i;
 
@@ -72,6 +73,19 @@ export function resolveCoachIntentRules(input: ResolveCoachIntentInput): CoachAc
       source: "rule",
       planCardId: input.attachedPlanCardId ?? undefined,
       assistantMessage: "Writing your viral script.",
+    };
+  }
+
+  if (
+    (input.attachedPlanCardId != null && input.attachedPlanCardId > 0) ||
+    isSparkOrPlanPrefill(message)
+  ) {
+    return {
+      tool: "write_viral_script",
+      confidence: 95,
+      source: "rule",
+      planCardId: input.attachedPlanCardId ?? undefined,
+      assistantMessage: "Writing your viral script from this plan idea.",
     };
   }
 

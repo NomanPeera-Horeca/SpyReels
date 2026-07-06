@@ -217,6 +217,28 @@ describe("studioCoachAgent rules", () => {
     expect(action.tool).toBe("load_plan_card");
   });
 
+  it("routes 30-day plan prefill with Hook idea line to write_viral_script", () => {
+    const message = `Day 1 plan idea: Your Student Loans Are Costing You More Than Your Degree Is Worth
+
+Break down the true cost of a loan.
+
+Hook idea: "If you are taking out $40,000 in student loans right now, you will actually pay back $87,000."`;
+    const action = resolveCoachIntentRules({
+      message,
+      attachedPlanCardId: 42,
+    });
+    expect(action.tool).toBe("write_viral_script");
+    expect(action.planCardId).toBe(42);
+  });
+
+  it("does not treat plan Hook idea label as generate_hook_ideas", () => {
+    const message =
+      'Day 3 plan idea: Save money in college\n\nAngle here.\n\nHook idea: "Start with this one habit."';
+    const action = resolveCoachIntentRules({ message, attachedPlanCardId: 9 });
+    expect(action.tool).not.toBe("generate_hook_ideas");
+    expect(action.tool).toBe("write_viral_script");
+  });
+
   const toolNames: CoachToolName[] = [
     "write_viral_script",
     "refine_script",

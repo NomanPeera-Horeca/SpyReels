@@ -37,7 +37,7 @@ import {
   buildCoachScriptProgressSteps,
 } from "@shared/coachAgentProgress";
 import type { AgentProgressStep } from "@shared/agentProgress";
-import { shouldSkipCoachAnalyze } from "@shared/coachAnalyze";
+import { isSparkOrPlanPrefill, shouldSkipCoachAnalyze } from "@shared/coachAnalyze";
 
 type FactCheck = {
   hasClaim: boolean;
@@ -133,6 +133,13 @@ export default function AiCoach() {
       sessionStorage.removeItem(STUDIO_PREFILL_META_KEY);
     }
     if (prefill || meta) {
+      setPhase("idle");
+      setResult(null);
+      setEditMode(false);
+      setHookVariations(null);
+      setAnalysis(null);
+      setClarifications([]);
+      setActiveCapability("write_script");
       posthog?.capture("ai_coach_prefill_loaded", {
         has_plan_card: Boolean(meta?.planCardId),
       });
@@ -441,6 +448,11 @@ export default function AiCoach() {
         return;
       }
       case "generate_hook_ideas": {
+        if (isSparkOrPlanPrefill(trimmed)) {
+          beginWriteFlow(trimmed);
+          setIsRouting(false);
+          return;
+        }
         const scriptId = action.scriptId ?? recentScripts[0]?.id;
         if (!scriptId) {
           toast.message("Write a script first, then try new hook ideas.");
@@ -624,7 +636,9 @@ export default function AiCoach() {
       toast.error("Add a bit more detail about your idea (at least 10 characters).");
       return;
     }
-    void runCoachFlow();
+    const capability =
+      activeCapability ?? (attachedContext?.planCardId ? "write_script" : undefined);
+    void runCoachFlow(capability);
   };
 
   const historyPanel = (
