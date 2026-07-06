@@ -20,6 +20,7 @@ import {
   Video,
   Music2,
   HelpCircle,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
@@ -69,30 +70,44 @@ function HookVariationCard({
 }) {
   const typeLabel = formatCoachHookTypeLabel(variation.hookType);
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="w-full text-left p-3 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
-    >
-      <span className="inline-block text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2 py-0.5 rounded-full mb-2">
-        Hook: {typeLabel}
-      </span>
-      <div className="space-y-2">
-        <div>
-          <VisualHookLabel />
-          <p className="text-sm italic text-gray-700 dark:text-gray-300 mt-1">{variation.visualHook}</p>
+    <div className="group w-full rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-900 p-3 transition-colors hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-sm">
+      <div className="flex gap-3 items-start">
+        <div className="flex-1 min-w-0 space-y-2">
+          <span className="inline-block text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2 py-0.5 rounded-full">
+            Hook: {typeLabel}
+          </span>
+          <div>
+            <VisualHookLabel />
+            <p className="text-sm italic text-gray-700 dark:text-gray-300 mt-1">{variation.visualHook}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Spoken hook</p>
+            <p className="text-sm font-medium mt-1">{variation.spokenHook}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">On-screen text</p>
+            <p className="text-sm font-semibold mt-1">{variation.onScreenText}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Spoken hook</p>
-          <p className="text-sm font-medium mt-1">{variation.spokenHook}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">On-screen text</p>
-          <p className="text-sm font-semibold mt-1">{variation.onScreenText}</p>
-        </div>
+
+        {variation.onScreenText.trim() ? (
+          <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Preview</p>
+            <ReelPreviewPhone onScreenText={variation.onScreenText} compact />
+          </div>
+        ) : null}
       </div>
-      <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mt-2">Click to use this hook</p>
-    </button>
+
+      <div className="mt-3 flex justify-end border-t border-blue-100 dark:border-blue-900/60 pt-3">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="inline-flex items-center justify-center min-h-9 px-4 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Use this hook
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -416,10 +431,18 @@ export function AiCoachResultView({
                         <button
                           type="button"
                           className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                          onClick={onRequestHookVariations}
+                          onClick={
+                            hookVariations && hookVariations.length > 0
+                              ? onDismissHookVariations
+                              : onRequestHookVariations
+                          }
                           disabled={hookVariationsPending}
                         >
-                          {hookVariationsPending ? "Generating..." : "Try 3 new hook ideas"}
+                          {hookVariationsPending
+                            ? "Generating..."
+                            : hookVariations && hookVariations.length > 0
+                              ? "Hide hook ideas"
+                              : "Try 3 new hook ideas"}
                         </button>
                       ) : null}
                       <p className="text-[11px] text-muted-foreground min-w-0 flex-1">
@@ -429,6 +452,19 @@ export function AiCoachResultView({
 
                     {hookVariations && hookVariations.length > 0 && (
                       <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3 px-1">
+                          <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            Choose a hook ({hookVariations.length} ideas)
+                          </p>
+                          <button
+                            type="button"
+                            onClick={onDismissHookVariations}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                            Collapse
+                          </button>
+                        </div>
                         {hookVariations.map((variation, index) => (
                           <HookVariationCard
                             key={`${variation.hookType}-${index}`}
@@ -436,13 +472,6 @@ export function AiCoachResultView({
                             onSelect={() => onApplyHookVariation(variation)}
                           />
                         ))}
-                        <button
-                          type="button"
-                          className="text-xs text-gray-500 hover:text-gray-800"
-                          onClick={onDismissHookVariations}
-                        >
-                          Dismiss
-                        </button>
                       </div>
                     )}
                   </div>

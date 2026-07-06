@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Coach - Stacked Hook Strip Mockup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #111827;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --primary: #7c3aed;
+      --blue-50: #eff6ff;
+      --blue-200: #bfdbfe;
+      --blue-500: #3b82f6;
+      --blue-700: #1d4ed8;
+      --violet-soft: rgba(124, 58, 237, 0.1);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+    }
+
+    .chrome {
+      position: sticky; top: 0; z-index: 100;
+      background: #111827; color: #f9fafb;
+      border-bottom: 1px solid #374151;
+      padding: 10px 16px;
+    }
+    .chrome h1 { font-size: 13px; font-weight: 700; }
+    .chrome p { font-size: 11px; color: #9ca3af; margin-top: 4px; max-width: 720px; line-height: 1.45; }
+    .chrome-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chrome-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px; background: #1f2937; border: 1px solid #374151; color: #c4b5fd;
+    }
+
+    .page { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 24px;
+    }
+    .back { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      font-size: 13px; font-weight: 600; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--border);
+      background: var(--card); cursor: pointer;
+    }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .script-header { margin-bottom: 20px; }
+    .script-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .meta-pill {
+      font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      background: #f3f4f6; color: #374151; border: 1px solid var(--border);
+    }
+    .meta-pill.hook-type { background: var(--violet-soft); color: #6d28d9; border-color: rgba(124,58,237,0.25); }
+
+    .layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px) {
+      .hook-layout { grid-template-columns: 1fr 108px; align-items: start; }
+    }
+
+    /* Hook section card (replaces old single hook block) */
+    .hook-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--blue-200);
+      border-left: 3px solid var(--blue-500);
+      background: var(--blue-50);
+      padding: 20px;
+    }
+    .hook-card-head {
+      display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px;
+    }
+    .hook-badge {
+      width: 28px; height: 28px; border-radius: 8px; background: var(--blue-500);
+      color: #fff; font-size: 11px; font-weight: 800;
+      display: grid; place-items: center; flex-shrink: 0;
+    }
+    .hook-card-title { font-size: 14px; font-weight: 700; color: var(--blue-700); }
+    .hook-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Stacked hook strip */
+    .hook-strip {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .hook-row {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hook-row:last-child { border-bottom: none; }
+    .hook-row-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .hook-tip {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 999px; border: 1px solid #d1d5db;
+      font-size: 9px; font-weight: 800; color: var(--muted); cursor: help;
+    }
+    .hook-row-icon { font-size: 13px; line-height: 1; }
+    .hook-row-body {
+      font-size: 14px; line-height: 1.5; color: var(--fg);
+    }
+    .hook-row-body.visual {
+      font-style: italic; color: #374151;
+    }
+    .hook-row-body.spoken {
+      font-weight: 600;
+    }
+    .hook-row-body.ontext {
+      font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase;
+      font-size: 13px;
+    }
+    .hook-row.visual-row { background: #f9fafb; }
+    .hook-row.ontext-row { background: #fefefe; }
+
+    .hook-strip-footer {
+      margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .link-btn {
+      font-size: 12px; font-weight: 700; color: var(--blue-700); background: none; border: none; cursor: pointer;
+    }
+    .dual-hint {
+      font-size: 11px; color: var(--muted); flex: 1; min-width: 200px;
+    }
+
+    /* Hook variation cards (after "Try 3 new hook ideas") */
+    .hook-variations {
+      margin-top: 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .hook-variation-card {
+      border-radius: 12px; border: 1px solid #bfdbfe; background: #fff;
+      padding: 12px; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .hook-variation-card:hover {
+      border-color: #60a5fa; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+    }
+    .hook-variation-inner {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .hook-variation-body { flex: 1; min-width: 0; }
+    .hook-type-pill {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .hook-variation-preview {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      flex-shrink: 0; opacity: 0; transition: opacity 0.15s;
+    }
+    .hook-variation-card:hover .hook-variation-preview { opacity: 1; }
+    .hook-variation-preview .phone { width: 78px; }
+    .hook-variation-preview .phone-cap { font-size: 5.5px; }
+    .hook-variation-actions {
+      margin-top: 12px; padding-top: 12px; border-top: 1px solid #dbeafe;
+      display: flex; justify-content: flex-end;
+    }
+    .use-hook-btn {
+      font-size: 12px; font-weight: 700; color: #fff; background: var(--blue-700);
+      border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer;
+    }
+    .use-hook-btn:hover { background: #1d4ed8; }
+    .variations-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 0 4px 4px;
+    }
+    .variations-title { font-size: 12px; font-weight: 700; color: #374151; }
+    .collapse-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; font-weight: 700; color: #4b5563; background: none; border: none; cursor: pointer;
+    }
+    .collapse-btn:hover { color: #111827; }
+
+    .phone-col {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .phone-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    }
+    .phone {
+      width: 100px; aspect-ratio: 9/16; border-radius: 12px; border: 2px solid #9ca3af;
+      position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #312e81, #0f172a 50%, #1e293b);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    }
+    .phone-notch {
+      position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+      width: 28px; height: 4px; border-radius: 99px; background: #000; z-index: 6;
+    }
+    .phone-time {
+      position: absolute; top: 14px; left: 6px; font-size: 7px; font-weight: 700; color: #fff;
+      background: rgba(0,0,0,0.55); padding: 2px 4px; border-radius: 3px; z-index: 5;
+    }
+    .phone-cap-wrap {
+      position: absolute; top: 22%; left: 8%; right: 14%; z-index: 4; text-align: center;
+    }
+    .phone-cap-box {
+      display: inline-block; padding: 4px 5px; border-radius: 4px;
+      background: rgba(0,0,0,0.75); max-width: 100%;
+    }
+    .phone-cap {
+      font-size: 6.5px; font-weight: 800; line-height: 1.25; color: #fff;
+    }
+    .phone-visual-hint {
+      position: absolute; inset: 0; z-index: 2;
+      background: radial-gradient(circle at 50% 62%, rgba(255,255,255,0.15), transparent 55%);
+    }
+    .phone-plate {
+      position: absolute; bottom: 38%; left: 50%; transform: translateX(-50%);
+      width: 36px; height: 22px; border-radius: 50%; background: linear-gradient(135deg,#fbbf24,#f59e0b);
+      border: 2px solid rgba(255,255,255,0.3); z-index: 3;
+    }
+
+    /* Body sections (unchanged, for context) */
+    .section {
+      border-radius: var(--radius); border: 1px solid var(--border);
+      border-left: 3px solid #9ca3af; background: #f9fafb; padding: 20px;
+    }
+    .section-head { display: flex; gap: 10px; margin-bottom: 12px; }
+    .section-badge {
+      width: 28px; height: 28px; border-radius: 8px; background: #e5e7eb;
+      font-size: 11px; font-weight: 800; display: grid; place-items: center; color: #374151;
+    }
+    .section-title { font-size: 14px; font-weight: 700; }
+    .section-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .section-body {
+      border-radius: 12px; border: 1px solid var(--border); background: var(--card);
+      padding: 14px 16px; font-size: 14px; line-height: 1.55;
+    }
+
+    .note-box {
+      margin-top: 32px; padding: 14px 16px; border-radius: 12px;
+      border: 1px dashed #c4b5fd; background: #faf5ff; font-size: 12px; color: #5b21b6; line-height: 1.55;
+    }
+    .note-box strong { color: #4c1d95; }
+  </style>
+</head>
+<body>
+
+  <div class="chrome">
+    <h1>Mockup: AI Coach stacked hook strip (approve before React)</h1>
+    <p>Replaces the current hook card (spoken only + on-screen below). One card, three rows, phone preview on the right. Matches light Coach result view (#fafafa).</p>
+    <div class="chrome-badges">
+      <span class="chrome-badge">hookType badge in header</span>
+      <span class="chrome-badge">Frame 0 wording</span>
+      <span class="chrome-badge">No em dashes</span>
+      <span class="chrome-badge">Edit mode: 3 textareas later</span>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="topbar">
+      <a class="back" href="#">← New script</a>
+      <div class="actions">
+        <button class="btn">Save to library</button>
+        <button class="btn btn-primary">Film now</button>
+      </div>
+    </div>
+
+    <header class="script-header">
+      <h2 class="script-title">Why your Reels stall at 200 views</h2>
+      <div class="meta-row">
+        <span class="meta-pill">~42 seconds</span>
+        <span class="meta-pill">Talking Head</span>
+        <span class="meta-pill">Instagram Reels</span>
+        <span class="meta-pill hook-type">Hook: Specific outcome</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- SECTION 1: STACKED HOOK -->
+      <section class="hook-card">
+        <div class="hook-card-head">
+          <div class="hook-badge">1</div>
+          <div>
+            <div class="hook-card-title">Hook</div>
+            <p class="hook-card-sub">All 3 layers in frame 0. Visual + spoken + on-screen text.</p>
+          </div>
+        </div>
+
+        <div class="hook-layout" style="display: grid; gap: 16px;">
+          <div>
+            <div class="hook-strip">
+              <div class="hook-row visual-row">
+                <div class="hook-row-label">
+                  Visual hook
+                  <span
+                    class="hook-tip"
+                    title="Film this exact shot before you speak. What the viewer sees in the first second decides if they stay."
+                  >?</span>
+                </div>
+                <div class="hook-row-body visual">
+                  Start on a tight close-up of the finished plated dish, steam rising, then pull back to you mid-sentence.
+                </div>
+              </div>
+              <div class="hook-row">
+                <div class="hook-row-label">
+                  Spoken hook
+                </div>
+                <div class="hook-row-body spoken">
+                  I went from 200 views to 14,000 in 11 days. Here is the one thing I changed first.
+                </div>
+              </div>
+              <div class="hook-row ontext-row">
+                <div class="hook-row-label">
+                  On-screen text
+                </div>
+                <div class="hook-row-body ontext">
+                  200 VIEWS TO 14K IN 11 DAYS
+                </div>
+              </div>
+            </div>
+
+            <div class="hook-strip-footer">
+              <button type="button" class="link-btn">Hide hook ideas</button>
+              <span class="dual-hint">On-screen complements spoken (different words, same idea). Works muted.</span>
+            </div>
+
+            <p class="variations-demo-note">Variations expanded. Hover a card to preview on-screen text. Use Collapse or Hide hook ideas to close.</p>
+            <div class="hook-variations">
+              <div class="variations-header">
+                <span class="variations-title">Choose a hook (3 ideas)</span>
+                <button type="button" class="collapse-btn" title="Collapse">&#9650; Collapse</button>
+              </div>
+              <div class="hook-variation-card">
+                <div class="hook-variation-inner">
+                  <div class="hook-variation-body">
+                    <span class="hook-type-pill">Hook: POV</span>
+                    <div class="hook-row-label">Visual hook <span class="hook-tip" title="Film this exact shot before you speak.">?</span></div>
+                    <div class="hook-row-body visual" style="margin-bottom:8px;">Tight close-up on your hands mid-pour, steam rising off the cup.</div>
+                    <div class="hook-row-label">Spoken hook</div>
+                    <div class="hook-row-body spoken" style="margin-bottom:8px;">POV: you finally fixed your Reel hooks and views doubled.</div>
+                    <div class="hook-row-label">On-screen text</div>
+                    <div class="hook-row-body ontext">THIS CHANGED EVERYTHING</div>
+                  </div>
+                  <div class="hook-variation-preview">
+                    <span class="phone-label">Preview</span>
+                    <div class="phone">
+                      <div class="phone-notch"></div>
+                      <div class="phone-time">0:01</div>
+                      <div class="phone-cap-wrap">
+                        <div class="phone-cap-box"><div class="phone-cap">THIS CHANGED EVERYTHING</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hook-variation-actions">
+                  <button type="button" class="use-hook-btn">Use this hook</button>
+                </div>
+              </div>
+
+              <div class="hook-variation-card">
+                <div class="hook-variation-inner">
+                  <div class="hook-variation-body">
+                    <span class="hook-type-pill">Hook: Contrarian</span>
+                    <div class="hook-row-label">Visual hook <span class="hook-tip">?</span></div>
+                    <div class="hook-row-body visual" style="margin-bottom:8px;">You shake your head at camera, analytics blurred behind you.</div>
+                    <div class="hook-row-label">Spoken hook</div>
+                    <div class="hook-row-body spoken" style="margin-bottom:8px;">Stop posting every day if you want more reach.</div>
+                    <div class="hook-row-label">On-screen text</div>
+                    <div class="hook-row-body ontext">POST LESS, GROW MORE</div>
+                  </div>
+                  <div class="hook-variation-preview">
+                    <span class="phone-label">Preview</span>
+                    <div class="phone">
+                      <div class="phone-notch"></div>
+                      <div class="phone-time">0:01</div>
+                      <div class="phone-cap-wrap">
+                        <div class="phone-cap-box"><div class="phone-cap">POST LESS, GROW MORE</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hook-variation-actions">
+                  <button type="button" class="use-hook-btn">Use this hook</button>
+                </div>
+              </div>
+
+              <div class="hook-variation-card">
+                <div class="hook-variation-inner">
+                  <div class="hook-variation-body">
+                    <span class="hook-type-pill">Hook: Curiosity gap</span>
+                    <div class="hook-row-label">Visual hook <span class="hook-tip">?</span></div>
+                    <div class="hook-row-body visual" style="margin-bottom:8px;">Blurred dashboard with one glowing metric highlighted.</div>
+                    <div class="hook-row-label">Spoken hook</div>
+                    <div class="hook-row-body spoken" style="margin-bottom:8px;">Nobody talks about this retention trick on Reels.</div>
+                    <div class="hook-row-label">On-screen text</div>
+                    <div class="hook-row-body ontext">THE METRIC THEY HIDE</div>
+                  </div>
+                  <div class="hook-variation-preview">
+                    <span class="phone-label">Preview</span>
+                    <div class="phone">
+                      <div class="phone-notch"></div>
+                      <div class="phone-time">0:01</div>
+                      <div class="phone-cap-wrap">
+                        <div class="phone-cap-box"><div class="phone-cap">THE METRIC THEY HIDE</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hook-variation-actions">
+                  <button type="button" class="use-hook-btn">Use this hook</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phone-col">
+            <span class="phone-label">Preview</span>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-time">0:01</div>
+              <div class="phone-visual-hint"></div>
+              <div class="phone-plate"></div>
+              <div class="phone-cap-wrap">
+                <div class="phone-cap-box">
+                  <div class="phone-cap">200 VIEWS TO 14K IN 11 DAYS</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2+ unchanged HEIT labels -->
+      <section class="section">
+        <div class="section-head">
+          <div class="section-badge">2</div>
+          <div>
+            <div class="section-title">Problem setup</div>
+            <p class="section-sub">Name the problem. Show it is bigger than they think.</p>
+          </div>
+        </div>
+        <div class="section-body">
+          Most creators blame the algorithm. The real leak is your first 1.5 seconds: no visual interrupt, no text, soft opener.
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-badge">3</div>
+          <div>
+            <div class="section-title">Story or example</div>
+            <p class="section-sub">One concrete example with detail.</p>
+          </div>
+        </div>
+        <div class="section-body">
+          I rewrote only the hook and on-screen line on three Reels. Same topic, same length. Saves doubled on the second post.
+        </div>
+      </section>
+    </div>
+
+    <div class="note-box">
+      <strong>Approve this layout?</strong> React will read <code>productionCoach.hookVisualBeat</code>, <code>hook</code>, and <code>hookOnScreenText</code> from the script. Missing visual beat shows a dashed placeholder: "Add a frame 0 shot in Refine." hookType pill maps from JSON <code>hookType</code> (underscores to labels). Copy script will include all three hook lines.
+    </div>
+  </div>
+
+</body>
+</html>
