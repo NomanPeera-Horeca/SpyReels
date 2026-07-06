@@ -16,6 +16,11 @@ import {
   ONBOARDING_AHA_SCRIPT_KEY,
   ONBOARDING_PLAN_AUTOSTART_KEY,
 } from "@shared/onboardingFlow";
+import {
+  parseCoachHookVariations,
+  parseProductionNotes,
+  type CoachHookVariation,
+} from "@shared/coachScriptSections";
 
 type OnboardingAhaViewProps = {
   script: CoachResultScript;
@@ -53,6 +58,45 @@ export function OnboardingAhaView({
   const mobileCreate = isMobileCreateApp();
   const [filmNowPending, setFilmNowPending] = useState(false);
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
+  const [displayScript, setDisplayScript] = useState(script);
+  const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
+
+  const hookVariationsMutation = trpc.studio.hookVariations.useMutation({
+    onSuccess: (data) => {
+      const parsed = parseCoachHookVariations(data);
+      if (!parsed || parsed.length === 0) {
+        const legacy = parseCoachHookVariations({
+          context: typeof data.context === "string" ? data.context : "",
+          contrarian: typeof data.contrarian === "string" ? data.contrarian : "",
+          intrigue: typeof data.intrigue === "string" ? data.intrigue : "",
+        });
+        if (legacy && legacy.length > 0) {
+          setHookVariations(legacy);
+          return;
+        }
+        toast.error("Could not read hook variations. Try again.");
+        return;
+      }
+      setHookVariations(parsed);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const applyHookVariation = (variation: CoachHookVariation) => {
+    const production = parseProductionNotes(displayScript.productionNotes) ?? {};
+    const updatedNotes = JSON.stringify({
+      ...production,
+      hookVisualBeat: variation.visualHook,
+      hookOnScreenText: variation.onScreenText,
+      hookType: variation.hookType,
+    });
+    setDisplayScript({
+      ...displayScript,
+      hook: variation.spokenHook,
+      productionNotes: updatedNotes,
+    });
+    setHookVariations(null);
+  };
 
   const saveToLibraryMutation = trpc.studio.saveToLibrary.useMutation({
     onSuccess: (data) => {
@@ -92,7 +136,7 @@ export function OnboardingAhaView({
       return;
     }
     setFilmNowPending(true);
-    saveToLibraryMutation.mutate({ id: script.id });
+    saveToLibraryMutation.mutate({ id: displayScript.id });
   };
 
   const handleSteerPlan = () => {
@@ -144,14 +188,14 @@ export function OnboardingAhaView({
       <div className="-mx-2 sm:-mx-4">
         <AiCoachResultView
           previewMode
-          result={script}
+          result={displayScript}
           editMode={false}
           editDraft={{
-            hook: script.hook,
-            explain: script.explain,
-            illustrate: script.illustrate,
-            teach: script.teach,
-            cta: script.cta,
+            hook: displayScript.hook,
+            explain: displayScript.explain,
+            illustrate: displayScript.illustrate,
+            teach: displayScript.teach,
+            cta: displayScript.cta,
           }}
           onEditDraftChange={() => {}}
           refineInput=""
@@ -161,17 +205,17 @@ export function OnboardingAhaView({
           onToggleEdit={() => {}}
           onSaveEdits={() => {}}
           onCancelEdit={() => {}}
-          hookVariations={null}
-          onRequestHookVariations={() => {}}
-          hookVariationsPending={false}
-          onApplyHookVariation={() => {}}
-          onDismissHookVariations={() => {}}
+          hookVariations={hookVariations}
+          onRequestHookVariations={() => hookVariationsMutation.mutate({ id: displayScript.id })}
+          hookVariationsPending={hookVariationsMutation.isPending}
+          onApplyHookVariation={applyHookVariation}
+          onDismissHookVariations={() => setHookVariations(null)}
           refinePending={false}
         />
       </div>
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button type="button" className="w-full sm:w-auto" onClick={() => goStudio(`?script=${script.id}`)}>
+        <Button type="button" className="w-full sm:w-auto" onClick={() => goStudio(`?script=${displayScript.id}`)}>
           See full script
         </Button>
         {mobileCreate ? (

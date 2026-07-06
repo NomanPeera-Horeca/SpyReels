@@ -270,7 +270,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
-import { ensureReelVideoOnR2 } from "./reelVideoR2";
+import { ensureReelVideoOnR2, scheduleReelVideoMirror } from "./reelVideoR2";
 import {
   scheduleScrapeJobPostCompleteWork,
   scheduleScrapeReelPostCompleteWork,
@@ -1173,7 +1173,7 @@ export const appRouter = router({
         };
       }),
 
-    /** Fetch a fresh Instagram video URL, mirror to R2, and persist on the reel row. */
+    /** Fetch a fresh Instagram video URL for playback; mirror to R2 in the background. */
     refreshVideoUrl: protectedProcedure
       .input(
         z.object({
@@ -1208,10 +1208,10 @@ export const appRouter = router({
           });
         }
 
-        const mirrored = await ensureReelVideoOnR2(shortcode, freshData.videoUrl);
-        const videoUrl = mirrored.trim() || freshData.videoUrl.trim();
+        const videoUrl = freshData.videoUrl.trim();
 
         if (input.reelId != null) {
+          scheduleReelVideoMirror(input.reelId, shortcode, videoUrl);
           const db = await getDb();
           if (db) {
             const { reels: reelsTable } = await import("../drizzle/schema");

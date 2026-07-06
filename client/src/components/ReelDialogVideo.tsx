@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Film, Loader2, RefreshCw } from "lucide-react";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
+import { formatVideoPreviewError } from "@/lib/videoPreviewError";
 import { toast } from "sonner";
 
 type ReelDialogVideoProps = {
@@ -43,7 +44,7 @@ export function ReelDialogVideo({
       });
       return result.videoUrl.trim() || null;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Preview unavailable";
+      const message = formatVideoPreviewError(err);
       toast.error("Video preview unavailable", { description: message });
       return null;
     }

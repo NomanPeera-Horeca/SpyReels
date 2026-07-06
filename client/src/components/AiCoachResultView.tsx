@@ -1,7 +1,5 @@
 import { useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { HelpTipBadge } from "@/components/HelpTipBadge";
-import { formatTooltip, PLAN_FORMAT_LABELS } from "@/lib/studioContentHelp";
 import {
   flattenCoachScriptForCopy,
   parseCoachHookVariations,
@@ -25,6 +23,21 @@ import {
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
 import Tooltip from "@/components/Tooltip";
+
+function truncateWords(text: string, maxWords: number): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const words = trimmed.split(/\s+/);
+  if (words.length <= maxWords) return trimmed;
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function formatInstagramAudioLine(title: string, artist?: string | null): string {
+  const cleanTitle = title.trim();
+  const cleanArtist = artist?.trim();
+  if (!cleanTitle) return "";
+  return cleanArtist ? `${cleanTitle} · ${cleanArtist}` : cleanTitle;
+}
 
 export type CoachResultScript = {
   id: number;
@@ -230,9 +243,6 @@ export function AiCoachResultView({
   previewMode = false,
 }: AiCoachResultViewProps) {
   const refineInputRef = useRef<HTMLInputElement>(null);
-  const formatKey = result.contentFormat ?? "";
-  const formatLabel =
-    result.formatLabel ?? PLAN_FORMAT_LABELS[formatKey] ?? formatKey.replace(/-/g, " ");
   const production = parseProductionNotes(result.productionNotes);
   const hookOnScreenText =
     production?.hookOnScreenText?.trim() ||
@@ -326,13 +336,6 @@ export function AiCoachResultView({
                 {result.title}
               </h1>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                {formatLabel && (
-                  <HelpTipBadge
-                    label={formatLabel}
-                    tip={formatKey ? formatTooltip(formatKey) : formatTooltip("talking-head")}
-                    className="text-[11px] font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-200 px-2.5 py-0.5 rounded-full"
-                  />
-                )}
                 <span className="text-[11px] font-medium bg-gray-200/80 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2.5 py-0.5 rounded-full">
                   {platformLabel(result.platform)}
                 </span>
@@ -427,7 +430,7 @@ export function AiCoachResultView({
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {!editMode && !previewMode ? (
+                      {!editMode ? (
                         <button
                           type="button"
                           className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
@@ -621,14 +624,6 @@ export function AiCoachResultView({
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.setup}</p>
                 </div>
               )}
-              {formatLabel && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                    Format
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{formatLabel}</p>
-                </div>
-              )}
               {result.estimatedDuration && (
                 <div className="mb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
@@ -643,70 +638,17 @@ export function AiCoachResultView({
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                     Voice tone
                   </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.voiceTone}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                    {truncateWords(production.voiceTone, 20)}
+                  </p>
                 </div>
               )}
-              {production?.instagramAudio && production.instagramAudio.length > 0 ? (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <Music2 className="h-3.5 w-3.5" />
-                    Instagram audio
-                  </p>
-                  <div className="space-y-2">
-                    {production.instagramAudio.map((pick, i) => (
-                      <div
-                        key={`${pick.searchHint}-${i}`}
-                        className="rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-3"
-                      >
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          {i === 0 ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wide bg-violet-600 text-white px-2 py-0.5 rounded-full">
-                              Use this
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold uppercase tracking-wide bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-0.5 rounded-full">
-                              Backup
-                            </span>
-                          )}
-                          {pick.isTrending ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-orange-600 dark:text-orange-400">
-                              Trending
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-                          {pick.title}
-                          {pick.artist ? (
-                            <span className="font-normal text-muted-foreground"> · {pick.artist}</span>
-                          ) : null}
-                        </p>
-                        <p className="text-xs font-medium text-violet-700 dark:text-violet-300 mt-1">
-                          Search in Reels: &quot;{pick.searchHint}&quot;
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                          {pick.matchReason}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  {production.musicMix ? (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
-                      {production.musicMix}
-                    </p>
-                  ) : null}
-                </div>
-              ) : production?.music ? (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Music2 className="h-3.5 w-3.5" />
-                    Music
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.music}</p>
-                </div>
-              ) : null}
               {production?.bRoll && production.bRoll.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                <div className="mb-4 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wide bg-violet-600 text-white px-2 py-0.5 rounded-full">
+                    Film these
+                  </span>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
                     B-roll shots
                   </p>
                   <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc pl-4 space-y-1">
@@ -716,6 +658,40 @@ export function AiCoachResultView({
                   </ul>
                 </div>
               )}
+              {production?.instagramAudio && production.instagramAudio.length > 0 ? (
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Music2 className="h-3.5 w-3.5" />
+                    Instagram audio
+                  </p>
+                  <div className="space-y-1">
+                    {production.instagramAudio.map((pick, i) => {
+                      const line = formatInstagramAudioLine(pick.title, pick.artist);
+                      if (!line) return null;
+                      return (
+                        <p
+                          key={`${pick.title}-${i}`}
+                          className={
+                            i === 0
+                              ? "text-sm font-medium text-gray-900 dark:text-gray-50"
+                              : "text-sm text-muted-foreground"
+                          }
+                        >
+                          {i === 0 ? line : `Backup: ${line}`}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : production?.music ? (
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                    <Music2 className="h-3.5 w-3.5" />
+                    Instagram audio
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{production.music}</p>
+                </div>
+              ) : null}
               {production?.funnelStage && (
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
@@ -729,7 +705,8 @@ export function AiCoachResultView({
               {!production?.setup &&
                 !production?.voiceTone &&
                 !production?.music &&
-                !production?.instagramAudio?.length && (
+                !production?.instagramAudio?.length &&
+                !production?.bRoll?.length && (
                 <p className="text-sm text-muted-foreground">
                   Production directions will appear here after generation.
                 </p>

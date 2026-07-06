@@ -25,6 +25,36 @@ export function reelVideoR2Key(shortcode: string): string {
  * Oversize videos (above the mirroring cap in this module) skip upload to
  * avoid pinning large buffers in memory on small worker boxes.
  */
+/**
+ * Mirror a reel video to R2 and persist the stable URL without blocking the caller.
+ * Used after refreshVideoUrl returns an ephemeral CDN link for immediate playback.
+ */
+export function scheduleReelVideoMirror(
+  reelId: number,
+  shortcode: string,
+  sourceUrl: string
+): void {
+  const src = sourceUrl.trim();
+  if (!src || !Number.isFinite(reelId)) return;
+
+  void (async () => {
+    try {
+      const mirrored = (await ensureReelVideoOnR2(shortcode, src)).trim();
+      if (!mirrored) return;
+
+      const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+      if (!publicBase || !mirrored.startsWith(publicBase)) return;
+
+      const db = await getDb();
+      if (!db) return;
+
+      await db.update(reels).set({ videoUrl: mirrored }).where(eq(reels.id, reelId));
+    } catch (err) {
+      console.error(`[scheduleReelVideoMirror] reel id=${reelId} failed:`, err);
+    }
+  })();
+}
+
 export async function ensureReelVideoOnR2(
   shortcode: string,
   sourceUrl: string | null | undefined

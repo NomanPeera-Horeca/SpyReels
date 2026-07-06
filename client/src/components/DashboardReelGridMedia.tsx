@@ -4,6 +4,7 @@ import { Loader2, Play, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
+import { formatVideoPreviewError } from "@/lib/videoPreviewError";
 import { toast } from "sonner";
 import {
   registerGridVideoPlayer,
@@ -163,7 +164,7 @@ export function DashboardReelGridMedia({
       onVideoUrlResolved?.(next);
       return next;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Preview unavailable";
+      const message = formatVideoPreviewError(err);
       capturePreviewEvent("reel_preview_play_failed", {
         reason: "refresh_failed",
         message: message.slice(0, 200),

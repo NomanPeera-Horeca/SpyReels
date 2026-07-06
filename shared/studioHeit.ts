@@ -191,7 +191,7 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
       }
     ],
     "music": "Legacy one-line summary only if needed; prefer instagramAudio picks above",
-    "voiceTone": "Delivery style and emotion for this format",
+    "voiceTone": "Delivery style in 15-20 words max. No long paragraphs.",
     "bRoll": [
       { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
     ],
@@ -215,9 +215,9 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
 
 Music rules for productionCoach.instagramAudio:
 - Give exactly 2 picks: one primary (isTrending: true) and one backup.
-- Use real songs or original sounds that are commonly found in Instagram Reels audio search for this niche in ${new Date().getFullYear()}. Include the exact searchHint string.
-- Match audio energy to the script (calm educational vs hype vs emotional story). No vague advice like "use trending audio."
-- talking-head scripts: low-volume background tracks. trending-audio format: the sound IS the hook, say so in musicMix.`;
+- Use real songs or sounds commonly found in Instagram Reels for this niche in ${new Date().getFullYear()}.
+- Title and artist only in the UI. Keep matchReason short internally; creators know how to search in Reels.
+- Match audio energy to the script. talking-head: low-volume background. trending-audio: the sound IS the hook.`;
 }
 
 /** Turn pasted rough drafts into the same HEIT + productionNotes JSON as net-new coach scripts. */

@@ -41,12 +41,52 @@ function OnboardingShell({
   onSkip,
   showSkip,
   step,
+  variant = "standalone",
 }: {
   children: React.ReactNode;
   onSkip?: () => void;
   showSkip: boolean;
   step: number | null;
+  variant?: "standalone" | "dashboard";
 }) {
+  const progressBar =
+    step != null ? (
+      <div className="flex gap-2">
+        {[1, 2].map((n) => (
+          <div
+            key={n}
+            className={`h-1 flex-1 rounded-full transition-colors ${
+              n <= step ? "bg-primary" : "bg-muted"
+            }`}
+          />
+        ))}
+      </div>
+    ) : null;
+
+  if (variant === "dashboard") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {(progressBar || (showSkip && onSkip)) && (
+          <div className="border-b border-border/50 px-4 py-4 sm:px-6">
+            <div className="mx-auto flex w-full max-w-2xl items-center gap-4">
+              {progressBar ? <div className="min-w-0 flex-1">{progressBar}</div> : <div className="flex-1" />}
+              {showSkip && onSkip ? (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                >
+                  Skip setup
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50">
@@ -67,16 +107,7 @@ function OnboardingShell({
       </header>
 
       {step != null ? (
-        <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-5 sm:px-6">
-          {[1, 2].map((n) => (
-            <div
-              key={n}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                n <= step ? "bg-primary" : "bg-muted"
-              }`}
-            />
-          ))}
-        </div>
+        <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-5 sm:px-6">{progressBar}</div>
       ) : null}
 
       {children}
@@ -281,7 +312,16 @@ export default function OnboardingPage() {
     }
   };
 
+  const shellVariant = isMobileCreateApp() ? "standalone" : "dashboard";
+
   if (loading || onboardingStateQuery.isLoading) {
+    if (shellVariant === "dashboard") {
+      return (
+        <div className="flex flex-1 items-center justify-center py-24">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -294,7 +334,7 @@ export default function OnboardingPage() {
 
   if (phase === "loading" || startCreatingMutation.isPending) {
     return (
-      <OnboardingShell showSkip={false} step={null}>
+      <OnboardingShell showSkip={false} step={null} variant={shellVariant}>
         <AgentProgressPanel
           steps={progressSteps}
           subheadline={`Tailored for ${audience.trim().slice(0, 48) || "your audience"}. Usually 20 to 40 seconds.`}
@@ -307,7 +347,7 @@ export default function OnboardingPage() {
 
   if (phase === "aha" && ahaScript) {
     return (
-      <OnboardingShell showSkip={false} step={null}>
+      <OnboardingShell showSkip={false} step={null} variant={shellVariant}>
         <OnboardingAhaView
           script={ahaScript}
           niche={niche.trim() || "Your niche"}
@@ -321,7 +361,7 @@ export default function OnboardingPage() {
   const stepNumber = phase === "step2" ? 2 : 1;
 
   return (
-    <OnboardingShell onSkip={onSkip} showSkip step={stepNumber}>
+    <OnboardingShell onSkip={onSkip} showSkip step={stepNumber} variant={shellVariant}>
       <main className="mx-auto w-full max-w-2xl px-4 pb-10 pt-6 sm:px-6">
         {phase === "step1" ? (
           <>

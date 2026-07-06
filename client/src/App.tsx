@@ -72,6 +72,7 @@ function MobileCreateRouter() {
       <Suspense fallback={<MobileAppLayoutSkeleton />}>
         <MobileCreateRouteGuard>
           <Switch>
+            <Route path="/onboarding" component={OnboardingPage} />
             <Route path="/" component={MobileHomeRedirect} />
             <Route path="/research" component={MobileHomeRedirect} />
             <Route path="/dashboard" component={MobileHomeRedirect} />
@@ -97,6 +98,7 @@ function DesktopDashboardRouter() {
     <DashboardLayout>
       <Suspense fallback={<DashboardLayoutSkeleton />}>
         <Switch>
+          <Route path="/onboarding" component={OnboardingPage} />
           <Route path="/" component={Home} />
           <Route path="/research" component={Home} />
           <Route path="/interests" component={Interests} />
@@ -177,7 +179,6 @@ function Router() {
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/invitations/accept/:token" component={AcceptInvitation} />
         <Route path="/s/:token" component={PublicScriptView} />
-        <Route path="/onboarding" component={OnboardingPage} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
         <Route path="/hooks">
