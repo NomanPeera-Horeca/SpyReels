@@ -8,9 +8,9 @@ import {
   parseStudioPrefillMeta,
   STUDIO_PREFILL_META_KEY,
   type CoachCapabilityId,
-  type CoachSuggestion,
   type StudioPrefillMeta,
 } from "@shared/studioCoachUi";
+import { buildCoachModeActions, type CoachModeAction } from "@shared/coachModeActions";
 import type { CoachAction } from "@shared/studioCoachAgent";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,31 +94,33 @@ export default function AiCoach() {
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [isRouting, setIsRouting] = useState(false);
   const [activeCapability, setActiveCapability] = useState<CoachCapabilityId | null>(null);
+  const [pendingScriptId, setPendingScriptId] = useState<number | null>(null);
 
   const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(undefined, {
     staleTime: 30_000,
   });
   const { data: savedScriptsList } = trpc.scripts.list.useQuery({}, { staleTime: 60_000 });
   const { data: planData } = trpc.plan.listCards.useQuery(undefined, { staleTime: 60_000 });
-  const { data: audienceData, isLoading: audienceSignalsLoading } = trpc.audienceResearch.list.useQuery(
-    undefined,
-    { staleTime: 60_000 }
-  );
+  const { data: onboardingState } = trpc.onboarding.getState.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const planCards = planData?.cards ?? [];
-  const audienceSignals = audienceData?.signals ?? [];
   const recentScripts = historyData?.scripts ?? [];
   const savedScriptsCount = savedScriptsList?.length ?? 0;
 
-  const suggestions = useMemo<CoachSuggestion[]>(() => {
-    const approved = planCards.filter((c) => c.status === "approved").slice(0, 3);
-    const fromPlan = approved.map((c) => ({
-      prompt: `Write a viral script for my Day ${c.day} plan idea: "${c.title}"`,
-      planCardId: c.id,
-    }));
-    if (fromPlan.length >= 2) return fromPlan;
-    return [];
-  }, [planCards]);
+  const modeActions = useMemo(() => {
+    if (!activeCapability) return [];
+    return buildCoachModeActions({
+      capability: activeCapability,
+      nicheContext: onboardingState,
+      planCards,
+      recentScripts: recentScripts.map((script) => ({
+        id: script.id,
+        title: script.title,
+      })),
+    });
+  }, [activeCapability, onboardingState, planCards, recentScripts]);
 
   useEffect(() => {
     const prefill = sessionStorage.getItem(STUDIO_PREFILL_KEY);
@@ -139,7 +141,7 @@ export default function AiCoach() {
       setHookVariations(null);
       setAnalysis(null);
       setClarifications([]);
-      setActiveCapability("write_script");
+      setActiveCapability(meta?.planCardId ? "from_plan" : null);
       posthog?.capture("ai_coach_prefill_loaded", {
         has_plan_card: Boolean(meta?.planCardId),
       });
@@ -332,6 +334,7 @@ export default function AiCoach() {
     setAgentMessage(null);
     setIsRouting(false);
     setActiveCapability(null);
+    setPendingScriptId(null);
     setSavedLibraryScriptId(null);
     pendingFilmRef.current = false;
     setFilmNowPending(false);
@@ -486,7 +489,7 @@ export default function AiCoach() {
       const action = await resolveIntentMutation.mutateAsync({
         message: trimmed || "Write a viral script from my idea",
         capabilityId,
-        activeScriptId: result?.id,
+        activeScriptId: pendingScriptId ?? result?.id,
         attachedPlanCardId: attachedContext?.planCardId,
       });
 
@@ -515,41 +518,22 @@ export default function AiCoach() {
     }
   };
 
-  const attachPlanCard = (card: PlanCardOption) => {
+  const applyPlanContext = (card: PlanCardOption) => {
     setAttachedContext((prev) => ({
       ...prev,
       planCardId: card.id,
       planCardTitle: card.title,
       planCardDay: card.day,
     }));
-    setDescription(buildPlanPrefill(card));
     posthog?.capture("ai_coach_context_attached", {
       type: "plan_card",
       plan_card_id: card.id,
     });
   };
 
-  const attachAudienceSignal = (signal: {
-    id: number;
-    source: "reddit" | "quora" | "web";
-    title: string;
-    snippet: string | null;
-    sourceUrl: string;
-  }) => {
-    setAttachedContext((prev) => ({
-      ...prev,
-      audienceSignalId: signal.id,
-      audienceSignalTitle: signal.title,
-      audienceSignalSource: signal.source,
-    }));
-    posthog?.capture("ai_coach_context_attached", {
-      type: "audience_signal",
-      audience_signal_id: signal.id,
-      source: signal.source,
-    });
-    if (!description.trim()) {
-      setDescription(`Write a viral script answering: "${signal.title}"`);
-    }
+  const attachPlanCard = (card: PlanCardOption) => {
+    applyPlanContext(card);
+    setDescription(buildPlanPrefill(card));
   };
 
   const clearPlanContext = () => {
@@ -559,75 +543,23 @@ export default function AiCoach() {
       delete next.planCardId;
       delete next.planCardTitle;
       delete next.planCardDay;
-      const hasAudience = Boolean(next.audienceSignalId);
-      return hasAudience ? next : null;
+      return Object.keys(next).length > 0 ? next : null;
     });
   };
 
-  const clearAudienceContext = () => {
-    setAttachedContext((prev) => {
-      if (!prev) return null;
-      const next = { ...prev };
-      delete next.audienceSignalId;
-      delete next.audienceSignalTitle;
-      delete next.audienceSignalSource;
-      const hasPlan = Boolean(next.planCardId);
-      return hasPlan ? next : null;
-    });
-  };
-
-  const handleCapability = (id: CoachCapabilityId) => {
+  const handleCapabilitySelect = (id: CoachCapabilityId) => {
     setActiveCapability(id);
-
-    switch (id) {
-      case "from_plan": {
-        const card =
-          planCards.find((c) => c.status === "approved") ?? planCards[0];
-        if (!card) {
-          toast.message("Generate a 30-day plan first, then come back here.");
-          return;
-        }
-        attachPlanCard(card);
-        toast.message("Plan idea attached. Hit the arrow when you are ready to write.");
-        return;
-      }
-      case "refine_script": {
-        const scriptId = recentScripts[0]?.id;
-        if (!scriptId) {
-          toast.message("Write a script first, then refine it here.");
-          return;
-        }
-        void loadScript(scriptId);
-        toast.message("Script loaded. Add a refine note below it, then submit.");
-        return;
-      }
-      case "hook_ideas": {
-        const scriptId = recentScripts[0]?.id;
-        if (!scriptId) {
-          toast.message("Write a script first, then try new hook ideas.");
-          return;
-        }
-        void loadScript(scriptId);
-        toast.message("Script loaded. Tap New hook ideas on your script when ready.");
-        return;
-      }
-      case "write_script":
-      default:
-        toast.message("Describe your idea, then hit the arrow to write your script.");
-    }
   };
 
-  const handleSuggestionClick = (item: CoachSuggestion) => {
-    if (item.planCardId != null) {
-      const card = planCards.find((c) => c.id === item.planCardId);
-      if (card) {
-        attachPlanCard(card);
-        setActiveCapability("from_plan");
-        return;
-      }
+  const handleActionApplied = (action: CoachModeAction) => {
+    setActiveCapability(action.capability);
+    if (action.planCardId != null) {
+      const card = planCards.find((c) => c.id === action.planCardId);
+      if (card) applyPlanContext(card);
+    } else {
+      clearPlanContext();
     }
-    setDescription(item.prompt);
-    setActiveCapability("write_script");
+    setPendingScriptId(action.scriptId ?? null);
   };
 
   const handleSubmit = () => {
@@ -685,17 +617,11 @@ export default function AiCoach() {
         onSubmit={handleSubmit}
         isBusy={isRouting || resolveIntentMutation.isPending || analyzeMutation.isPending}
         attachedContext={attachedContext}
-        planCards={planCards}
-        audienceSignals={audienceSignals}
-        audienceSignalsLoading={audienceSignalsLoading}
-        onAttachPlanCard={attachPlanCard}
-        onAttachAudienceSignal={attachAudienceSignal}
         onClearPlanContext={clearPlanContext}
-        onClearAudienceContext={clearAudienceContext}
-        onCapability={handleCapability}
         activeCapability={activeCapability}
-        suggestions={suggestions}
-        onSuggestionClick={handleSuggestionClick}
+        onCapabilitySelect={handleCapabilitySelect}
+        modeActions={modeActions}
+        onActionApplied={handleActionApplied}
       />
     );
   }
