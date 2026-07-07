@@ -48,25 +48,40 @@ export const founderInterviewRouter = router({
       }
       const now = new Date();
 
-      await db
-        .insert(founderInterviewRequests)
-        .values({
-          userId: ctx.user.id,
-          countryCode: country.code,
-          dialCode: country.dialCode,
-          phoneNational,
-          phoneE164,
-          updatedAt: now,
-        })
-        .onDuplicateKeyUpdate({
-          set: {
+      try {
+        await db
+          .insert(founderInterviewRequests)
+          .values({
+            userId: ctx.user.id,
             countryCode: country.code,
             dialCode: country.dialCode,
             phoneNational,
             phoneE164,
             updatedAt: now,
-          },
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              countryCode: country.code,
+              dialCode: country.dialCode,
+              phoneNational,
+              phoneE164,
+              updatedAt: now,
+            },
+          });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[founderInterview.submitInterest] insert failed:", err);
+        if (/founder_interview_requests|doesn't exist|ER_NO_SUCH_TABLE/i.test(message)) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Phone capture is temporarily unavailable. You can still book on Calendly.",
+          });
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not save your phone number. Try again in a moment.",
         });
+      }
 
       const userLabel = ctx.user.name?.trim() || "SpyReels user";
       const emailLabel = ctx.user.email?.trim() || "no email on file";
