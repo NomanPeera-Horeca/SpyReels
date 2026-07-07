@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferCoachScriptMode } from "@shared/coachScriptMode";
+import { coachScriptModeForPlanCard, inferCoachScriptMode } from "@shared/coachScriptMode";
 
 describe("inferCoachScriptMode", () => {
   it("picks loop for behind-the-scenes format", () => {
@@ -36,5 +36,29 @@ describe("inferCoachScriptMode", () => {
         funnelStage: "mofu",
       })
     ).toBe("story");
+  });
+
+  it("calendar plan cards always use story length even for voiceover-broll", () => {
+    expect(
+      coachScriptModeForPlanCard({
+        description: "Day 1 plan idea: student loans",
+        contentFormat: "voiceover-broll",
+        funnelStage: "tofu",
+        sourceType: "ai_pick",
+        day: 1,
+      })
+    ).toBe("story");
+  });
+
+  it("spark deck cards can still use loop mode for BTS format", () => {
+    expect(
+      coachScriptModeForPlanCard({
+        description: "Spark Deck idea",
+        contentFormat: "behind-the-scenes",
+        funnelStage: "tofu",
+        sourceType: "user_spark",
+        day: 0,
+      })
+    ).toBe("loop");
   });
 });

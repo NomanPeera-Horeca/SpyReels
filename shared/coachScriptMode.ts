@@ -45,3 +45,21 @@ export function inferCoachScriptMode(input: {
 export function coachScriptModeLabel(mode: CoachScriptMode): string {
   return mode === "loop" ? "Loop Reel (8-15 sec)" : "Story Reel (30-45 sec)";
 }
+
+/** 30-day calendar cards are full HEIT scripts; filming format is not loop length. */
+export function coachScriptModeForPlanCard(args: {
+  description: string;
+  contentFormat?: string | null;
+  funnelStage?: string | null;
+  sourceType?: string | null;
+  day: number;
+}): CoachScriptMode {
+  const isSpark = args.sourceType === "user_spark" || args.day === 0;
+  if (!isSpark && args.day > 0) return "story";
+  return inferCoachScriptMode({
+    description: args.description,
+    contentFormat: args.contentFormat,
+    funnelStage: args.funnelStage,
+    isSparkCard: isSpark,
+  });
+}

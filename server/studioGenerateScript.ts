@@ -20,7 +20,7 @@ import {
   coachScriptWordCount,
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
-import { inferCoachScriptMode, type CoachScriptMode } from "@shared/coachScriptMode";
+import { coachScriptModeForPlanCard, inferCoachScriptMode, type CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
@@ -144,11 +144,12 @@ export async function generateCoachScriptForWorkspace(args: {
         explicitUserAngle = true;
       }
       funnelStage = planCard.funnelStage ?? null;
-      scriptMode = inferCoachScriptMode({
+      scriptMode = coachScriptModeForPlanCard({
         description: args.description,
         contentFormat: planCard.contentFormat,
         funnelStage: planCard.funnelStage,
-        isSparkCard: isSpark,
+        sourceType: planCard.sourceType,
+        day: planCard.day,
       });
       const planBlock = isSpark
         ? [
