@@ -27,7 +27,7 @@ const TABS: Array<{
   icon: typeof Sparkles;
 }> = [
   { id: "today", label: "Today", path: MOBILE_CREATE_TAB_PATHS.today, icon: CalendarDays },
-  { id: "write", label: "Write", path: MOBILE_CREATE_TAB_PATHS.write, icon: Sparkles },
+  { id: "write", label: "AI Coach", path: MOBILE_CREATE_TAB_PATHS.write, icon: Sparkles },
   { id: "scripts", label: "Scripts", path: MOBILE_CREATE_TAB_PATHS.scripts, icon: FileText },
   { id: "more", label: "More", path: MOBILE_CREATE_TAB_PATHS.more, icon: MoreHorizontal },
 ];

@@ -4,7 +4,6 @@ import {
   ChevronRight,
   CreditCard,
   ExternalLink,
-  Lightbulb,
   Monitor,
   Settings,
   Sparkles,
@@ -60,11 +59,13 @@ export default function MobileMore() {
           <span className="flex-1 text-sm font-medium">AI Coach</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </AppLink>
+        {/* Idea to Script paused
         <AppLink href="/ideas" className={`${navRowClass} border-t`}>
           <Lightbulb className="h-5 w-5 text-amber-500" />
           <span className="flex-1 text-sm font-medium">Idea to Script</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </AppLink>
+        */}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">

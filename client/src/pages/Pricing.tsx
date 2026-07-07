@@ -97,8 +97,9 @@ const PLAN_COPY: Record<
         items: [
           "3 Reel transcripts per month",
           "3 AI script re-creations per month",
-          "3 Idea-to-Script generations per month",
+          "3 AI Personal Brand Coach scripts per month",
           "3 rewrites per script",
+          "30-day content plan with Spark Deck",
         ],
       },
       {
@@ -142,13 +143,14 @@ const PLAN_COPY: Record<
         items: [
           "30 Reel transcripts per month",
           "15 AI script re-creations per month",
-          "15 Idea-to-Script generations per month",
+          "15 AI Personal Brand Coach scripts per month",
           "SpyReels Bot full access on Telegram",
         ],
       },
       {
         label: "Plan and ship",
         items: [
+          "30-day content plan with Spark Deck",
           "50 saved scripts",
           "Content calendar view",
           "Kanban workflow board (Idea -> Filmed -> Posted)",
@@ -203,11 +205,11 @@ const PLAN_COPY: Record<
         ],
       },
       {
-        label: "Pro script studio",
+        label: "AI Personal Brand Coach",
         items: [
           "200 Reel transcripts per month",
           "100 AI script re-creations per month",
-          "100 Idea-to-Script generations per month",
+          "100 AI Personal Brand Coach scripts per month",
           "10 rewrites per script",
           "AI delivery cues + on-camera coaching notes",
         ],
@@ -269,7 +271,7 @@ const PLAN_COPY: Record<
         items: [
           "1,000 Reel transcripts per month",
           "500 AI script re-creations per month",
-          "500 Idea-to-Script generations per month",
+          "500 AI Personal Brand Coach scripts per month",
           "Unlimited rewrites per script",
         ],
       },
@@ -373,7 +375,7 @@ const FEATURE_SECTIONS: {
         business: 500,
       },
       {
-        label: "Idea-to-Script generations/month",
+        label: "AI Personal Brand Coach scripts/month",
         free: 3,
         starter: 15,
         pro: 100,
@@ -437,6 +439,13 @@ const FEATURE_SECTIONS: {
         starter: 50,
         pro: 500,
         business: "Unlimited",
+      },
+      {
+        label: "30-day content plan + Spark Deck",
+        free: true,
+        starter: true,
+        pro: true,
+        business: true,
       },
       {
         label: "Calendar view",

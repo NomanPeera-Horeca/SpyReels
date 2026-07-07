@@ -8,9 +8,9 @@ export type CrawlerPageSnapshot = {
 
 const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
   "/": {
-    h1: "Instagram Reels spy tool for nano and micro creators",
+    h1: "Instagram Reels tool for research, planning, and scripts",
     summary:
-      "SpyReels helps you research competitor Reels, transcribe hooks, and generate scripts in your voice. Try free.",
+      "SpyReels finds viral Reels in your niche, plans 30 days of content, and writes scripts with AI Personal Brand Coach. Try free.",
   },
   "/pricing": {
     h1: "SpyReels pricing for Instagram creators",
@@ -34,7 +34,7 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
   "/about": {
     h1: "About SpyReels and Noah Perry",
     summary:
-      "SpyReels builds AI tools that help creators under 50K find viral Reels and write scripts in their own voice.",
+      "SpyReels helps creators under 50K find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
   },
   "/contact": {
     h1: "Contact SpyReels",

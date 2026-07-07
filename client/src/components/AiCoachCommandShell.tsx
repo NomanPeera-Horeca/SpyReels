@@ -100,7 +100,7 @@ export function AiCoachCommandShell({
         <div className="mb-6 text-center sm:mb-8">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary sm:mb-5">
             <Sparkles className="h-4 w-4" />
-            AI Personal Brand Coach
+            AI Coach
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
             What do you want to create today?
@@ -179,7 +179,7 @@ export function AiCoachCommandShell({
 
         <div className="mt-6">
           <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
-            Try AI Personal Brand Coach for...
+            Try AI Coach for...
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             {COACH_CAPABILITIES.map((cap) => (

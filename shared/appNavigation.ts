@@ -75,7 +75,7 @@ export function resolveFromParamFallback(from: string | null | undefined): strin
     case "collected":
       return "/collected";
     case "ideas":
-      return "/ideas";
+      return "/studio";
     default:
       return "/research";
   }

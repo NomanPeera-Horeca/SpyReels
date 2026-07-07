@@ -169,7 +169,7 @@ const plugins = [
       name: "SpyReels",
       short_name: "SpyReels",
       description:
-        "Write viral scripts, film with teleprompter, and manage content on the go.",
+        "Plan 30 days of Reels, write scripts with AI Personal Brand Coach, and film with the teleprompter on the go.",
       theme_color: "#7c3aed",
       background_color: "#121218",
       display: "standalone",

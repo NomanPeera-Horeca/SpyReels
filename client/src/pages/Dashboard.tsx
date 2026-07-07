@@ -47,7 +47,7 @@ import {
   Sparkles,
   Radar,
   BookOpen,
-  Lightbulb,
+  CalendarDays,
 } from "lucide-react";
 import {
   InlineWorkflow,
@@ -1533,13 +1533,13 @@ export default function Dashboard() {
                   className="gap-1.5 border-border/50 bg-background/40"
                 >
                   <AppLink
-                    href="/ideas"
+                    href="/plan"
                     onClick={() => {
-                      posthog?.capture("dashboard_hero_shortcut", { to: "ideas" });
+                      posthog?.capture("dashboard_hero_shortcut", { to: "plan" });
                     }}
                   >
-                    <Lightbulb className="h-3.5 w-3.5" aria-hidden />
-                    Idea to Script
+                    <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+                    30-Day Plan
                   </AppLink>
                 </Button>
               </div>
@@ -1697,20 +1697,20 @@ export default function Dashboard() {
               <p className="mt-1 text-sm text-muted-foreground">All transcripts and scripts in one scrollable place.</p>
             </AppLink>
             <AppLink
-              href="/ideas"
+              href="/studio"
               onClick={() => {
-                posthog?.capture("dashboard_shortcut_tile", { to: "ideas" });
+                posthog?.capture("dashboard_shortcut_tile", { to: "studio" });
               }}
               className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-amber-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/25"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/12">
-                  <Lightbulb className="h-5 w-5 text-amber-500" aria-hidden />
+                  <Sparkles className="h-5 w-5 text-amber-500" aria-hidden />
                 </div>
                 <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-              <p className="mt-3 font-semibold text-foreground">Idea to Script</p>
-              <p className="mt-1 text-sm text-muted-foreground">Turn a rough idea into a full reel script with AI polish.</p>
+              <p className="mt-3 font-semibold text-foreground">AI Coach</p>
+              <p className="mt-1 text-sm text-muted-foreground">Write viral scripts with niche-aware prompts and delivery notes.</p>
             </AppLink>
           </div>
         </section>

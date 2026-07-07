@@ -34,6 +34,8 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Affiliate = lazy(() => import("./pages/Affiliate"));
 const About = lazy(() => import("./pages/About"));
 const ViralReelFinder = lazy(() => import("./pages/ViralReelFinder"));
+const ThirtyDayContentPlanFeature = lazy(() => import("./pages/ThirtyDayContentPlanFeature"));
+const AiPersonalBrandCoachFeature = lazy(() => import("./pages/AiPersonalBrandCoachFeature"));
 const BlogList = lazy(() => import("./pages/BlogList"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const BlogEditor = lazy(() => import("./pages/BlogEditor"));
@@ -41,7 +43,8 @@ const Extension = lazy(() => import("./pages/Extension"));
 const CollectedReels = lazy(() => import("./pages/CollectedReels"));
 const Discovery = lazy(() => import("./pages/Discovery"));
 const CreatorDiscovery = lazy(() => import("./pages/CreatorDiscovery"));
-const IdeaToScript = lazy(() => import("./pages/IdeaToScript"));
+// Idea to Script paused: keep page file, route redirects to /studio
+// const IdeaToScript = lazy(() => import("./pages/IdeaToScript"));
 const ThirtyDayPlan = lazy(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazy(() => import("./pages/AiCoach"));
 const Library = lazy(() => import("./pages/Library"));
@@ -80,7 +83,7 @@ function MobileCreateRouter() {
             <Route path="/studio" component={AiCoach} />
             <Route path="/scripts" component={MyScripts} />
             <Route path="/scripts/:id" component={ScriptEditor} />
-            <Route path="/ideas" component={IdeaToScript} />
+            <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
             <Route path="/more" component={MobileMore} />
             <Route path="/settings" component={Settings} />
             <Route path="/workspace/settings" component={WorkspaceSettings} />
@@ -118,7 +121,7 @@ function DesktopDashboardRouter() {
           <Route path="/scripts" component={MyScripts} />
           <Route path="/scripts/:id" component={ScriptEditor} />
           <Route path="/collected" component={CollectedReels} />
-          <Route path="/ideas" component={IdeaToScript} />
+          <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
           <Route path="/library" component={Library} />
@@ -181,6 +184,8 @@ function Router() {
         <Route path="/s/:token" component={PublicScriptView} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
+        <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
+        <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />
         <Route path="/hooks">
           {() => {
             if (typeof window !== "undefined") {

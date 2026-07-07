@@ -13,7 +13,7 @@ import {
 
 const ABOUT_TITLE = "About SpyReels and Noah Perry";
 const ABOUT_DESCRIPTION =
-  "Learn about SpyReels and founder Noah Perry. We build AI tools that help nano and micro Instagram creators find viral content and write scripts in their own voice.";
+  "Learn about SpyReels and founder Noah Perry. We help nano and micro creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.";
 const ABOUT_CANONICAL = `${SPYREELS_SITE_URL}/about`;
 
 function formatDisplayDate(value: Date): string {
@@ -98,13 +98,13 @@ export default function About() {
         </h1>
 
         <p className="text-lg text-muted-foreground leading-relaxed mb-10">
-          SpyReels is an AI-powered Instagram Reels intelligence platform built by Noah Perry for nano and micro creators under 50K followers. We help creators find what is working in their niche and turn it into scripts they can actually use.
+          SpyReels is an AI-powered Instagram Reels platform built by Noah Perry for nano and micro creators under 50K followers. We help you find what is working in your niche, plan 30 days of content, and write scripts with AI Personal Brand Coach that sound like you.
         </p>
 
         <section className="mb-10">
           <h2 className="text-2xl font-semibold mb-4">About SpyReels</h2>
           <p className="text-muted-foreground leading-relaxed">
-            SpyReels shows you which Reels are winning in your niche, transcribes them, and helps you write new scripts based on proven structures. It is built for creators who want clarity, not another generic AI writing tool.
+            SpyReels shows you which Reels are winning in your niche, transcribes them, and helps you ship a full content system: 30-day calendar, Spark Deck ideas, script studio, and teleprompter. It is built for creators who want clarity, not another generic AI writing tool.
           </p>
         </section>
 

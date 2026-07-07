@@ -46,7 +46,11 @@ const HOME_FAQ: FaqItem[] = [
   },
   {
     q: "How fast can I actually get a script?",
-    a: "Most users go from picking a creator to having a ready-to-film script in under 10 minutes. Research takes about 2 minutes, transcription takes about 1 minute, and AI script generation takes about 30 seconds.",
+    a: "Most users go from niche setup to a ready-to-film script in under 10 minutes. Research takes about 2 minutes, your 30-day plan fills in ideas, and AI Personal Brand Coach writes the script in about 30 seconds.",
+  },
+  {
+    q: "What is AI Personal Brand Coach?",
+    a: "AI Personal Brand Coach is SpyReels script studio. It writes viral Reel scripts in your voice using niche-aware prompts, plan cards, and proven HEIT structure. Brand Coach on Pro plans is different: it scores how viral an existing Reel is.",
   },
   {
     q: "Do I need to be a big creator for this to work?",
@@ -323,6 +327,66 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: faqSchema(FINDER_FAQ),
         },
       ];
+    case "/features/30-day-content-plan":
+      return [
+        {
+          id: "plan-feature-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            {
+              name: "Features",
+              item: `${SPYREELS_SITE_URL}/features/30-day-content-plan`,
+            },
+            {
+              name: "30-Day Content Plan",
+              item: `${SPYREELS_SITE_URL}/features/30-day-content-plan`,
+            },
+          ]),
+        },
+        {
+          id: "plan-feature-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SpyReels 30-Day Content Plan",
+            applicationCategory: "BusinessApplication",
+            operatingSystem: "Web Browser",
+            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            description:
+              "30-day Instagram Reels content calendar with Spark Deck and AI script writing.",
+          },
+        },
+      ];
+    case "/features/ai-personal-brand-coach":
+      return [
+        {
+          id: "coach-feature-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            {
+              name: "Features",
+              item: `${SPYREELS_SITE_URL}/features/ai-personal-brand-coach`,
+            },
+            {
+              name: "AI Personal Brand Coach",
+              item: `${SPYREELS_SITE_URL}/features/ai-personal-brand-coach`,
+            },
+          ]),
+        },
+        {
+          id: "coach-feature-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SpyReels AI Personal Brand Coach",
+            applicationCategory: "BusinessApplication",
+            operatingSystem: "Web Browser",
+            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            description:
+              "AI script studio for Instagram Reels with niche-aware prompts and HEIT structure.",
+          },
+        },
+      ];
     case "/free-tools/viral-hooks":
       return [
         {
@@ -468,6 +532,8 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/",
   "/pricing",
   "/features/viral-reel-finder",
+  "/features/30-day-content-plan",
+  "/features/ai-personal-brand-coach",
   "/free-tools/viral-hooks",
   "/affiliate",
   "/about",

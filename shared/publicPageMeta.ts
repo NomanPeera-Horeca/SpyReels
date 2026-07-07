@@ -63,9 +63,9 @@ export function isPrivateAppPath(pathname: string): boolean {
 
 export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/": {
-    title: "Instagram Reels Spy Tool | Research, Transcribe, and Script | SpyReels",
+    title: "Instagram Reels Tool | Research, Plan, Script, and Film | SpyReels",
     description:
-      "Instagram Reels spy tool for nano and micro creators. See competitor Reels ranked by views and engagement, transcribe hooks, and generate scripts in your voice. Try free.",
+      "SpyReels finds viral Reels in your niche, plans 30 days of content, and writes scripts with your AI Personal Brand Coach. Research, transcribe, film with teleprompter. Try free.",
   },
   "/extension": {
     title: "Chrome Extension for Instagram Reels | Sort, Transcribe, and Save",
@@ -97,6 +97,16 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
     description:
       "Find viral Instagram Reels by views and engagement rate. Transcribe hooks and generate scripts. Free tier for nano and micro creators.",
   },
+  "/features/30-day-content-plan": {
+    title: "30-Day Instagram Content Plan | SpyReels",
+    description:
+      "Build a 30-day Instagram Reels content calendar tailored to your niche. Spark Deck ideas, approve cards, and write scripts in one click. Try SpyReels free.",
+  },
+  "/features/ai-personal-brand-coach": {
+    title: "AI Personal Brand Coach for Instagram Reels | SpyReels",
+    description:
+      "Write viral Instagram Reels scripts in your voice with AI Personal Brand Coach. Niche-aware prompts, HEIT structure, hooks, and production notes. Try free.",
+  },
   "/affiliate": {
     title: "SpyReels Affiliate Program - 20% Recurring Commission for 12 Months",
     description:
@@ -110,7 +120,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/about": {
     title: "About SpyReels and Noah Perry",
     description:
-      "Learn about SpyReels and founder Noah Perry. We build AI tools that help nano and micro Instagram creators find viral content and write scripts in their own voice.",
+      "Learn about SpyReels and founder Noah Perry. We help nano and micro creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
   },
   "/terms": {
     title: "Terms of Service - SpyReels",

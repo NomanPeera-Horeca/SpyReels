@@ -19,7 +19,7 @@ import { PublicFooter } from "@/components/PublicFooter";
 import {
   Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
-  Sparkles, Eye, EyeOff, BarChart3, Download, Bot, Layers,
+  Sparkles, Eye, EyeOff, Download, Bot,
   Check, X, Crown, Rocket, Building2, Star, BookOpen
 } from "lucide-react";
 
@@ -78,11 +78,27 @@ const FEATURES = [
     bg: "bg-emerald-500/10",
   },
   {
-    icon: Bot,
-    title: "Get a ready-to-film script in under 2 minutes",
-    description: "AI reverse-engineers the viral formula and rewrites it in your voice for your niche. You get a complete script with delivery cues, hook, body, and CTA. Ready to film.",
+    icon: Calendar,
+    title: "Plan 30 days of content in one sitting",
+    description: "SpyReels builds a 30-day content calendar tailored to your niche and goal. Approve ideas on the Spark Deck, then write scripts from any card in one click.",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10",
+    link: "/features/30-day-content-plan",
+  },
+  {
+    icon: Sparkles,
+    title: "Write scripts with your AI Personal Brand Coach",
+    description: "Pick a mode, choose a niche-aware prompt, and get a full HEIT script with hook, story, CTA, and production notes. Refine, add hooks, or start from your 30-day plan.",
     color: "text-amber-400",
     bg: "bg-amber-500/10",
+    link: "/features/ai-personal-brand-coach",
+  },
+  {
+    icon: Bot,
+    title: "Remake any viral Reel in your voice",
+    description: "AI reverse-engineers the viral formula and rewrites it for your niche. You get a complete script with delivery cues, hook, body, and CTA. Ready to film in under 2 minutes.",
+    color: "text-violet-400",
+    bg: "bg-violet-500/10",
   },
   {
     icon: FileText,
@@ -133,22 +149,27 @@ function FeatureCard({ feature }: { feature: FeatureItem }) {
 const STEPS = [
   {
     number: "01",
-    title: "Pick a creator winning in your niche",
-    description: "Enter their Instagram handle. SpyReels pulls every Reel they have posted, sorted by what is actually performing. You see their top 10 viral Reels in seconds.",
+    title: "Set your niche and see what wins",
+    description: "Enter a competitor handle or describe your niche. SpyReels ranks viral Reels by views and engagement so you know what to study before you film.",
     icon: Eye,
   },
   {
     number: "02",
-    title: 'Hit "Remake this into your voice" on the one that blew up',
-    description:
-      "One click. SpyReels transcribes it word for word and writes your version automatically: hook, script, delivery cues. Done in under 2 minutes.",
-    icon: BarChart3,
+    title: "Build your 30-day content plan",
+    description: "Generate a calendar of ideas tailored to your audience. Save sparks from research, approve cards on the Spark Deck, and always know what to post next.",
+    icon: Calendar,
   },
   {
     number: "03",
-    title: "Get your script and film it today",
-    description: "AI takes their viral formula and writes your version. Your niche, your voice, your angle. Teleprompter included. Most creators film within an hour of getting the script.",
+    title: "Write scripts with AI Personal Brand Coach",
+    description: "Pick a mode, start from a plan card or a viral pattern, and get a full script with hooks, story, CTA, and production notes in your voice.",
     icon: Sparkles,
+  },
+  {
+    number: "04",
+    title: "Film today with the teleprompter",
+    description: "Open the built-in teleprompter, record with delivery cues visible, and ship your Reel while the idea is still fresh. Most creators film within an hour.",
+    icon: Film,
   },
 ];
 
@@ -164,7 +185,11 @@ const FAQ = [
   },
   {
     q: "How fast can I actually get a script?",
-    a: "Most users go from picking a creator to having a ready-to-film script in under 10 minutes. Research takes about 2 minutes, transcription takes about 1 minute, and AI script generation takes about 30 seconds.",
+    a: "Most users go from niche setup to a ready-to-film script in under 10 minutes. Research takes about 2 minutes, your 30-day plan fills in ideas, and AI Personal Brand Coach writes the script in about 30 seconds.",
+  },
+  {
+    q: "What is AI Personal Brand Coach?",
+    a: "AI Personal Brand Coach is SpyReels script studio. It writes viral Reel scripts in your voice using niche-aware prompts, plan cards, and proven HEIT structure. Brand Coach on Pro plans is different: it scores how viral an existing Reel is.",
   },
   {
     q: "Do I need to be a big creator for this to work?",
@@ -184,9 +209,9 @@ const FAQ = [
 // Landing Page
 // ═══════════════════════════════════════════════════════════════
 const HOME_TITLE =
-  "Instagram Reels Spy Tool | Research, Transcribe, and Script | SpyReels";
+  "Instagram Reels Tool | Research, Plan, Script, and Film | SpyReels";
 const HOME_DESCRIPTION =
-  "Instagram Reels spy tool for nano and micro creators. See competitor Reels ranked by views and engagement, transcribe hooks, and generate scripts in your voice. Try free.";
+  "SpyReels finds viral Reels in your niche, plans 30 days of content, and writes scripts with your AI Personal Brand Coach. Research, transcribe, film with teleprompter. Try free.";
 
 export default function LandingPage() {
   useCanonical("/");
@@ -233,7 +258,7 @@ export default function LandingPage() {
         description: "Free tier available",
       },
       description:
-        "Instagram Reels spy tool with analytics, transcription, and AI script generation for nano and micro creators.",
+        "Instagram Reels tool with viral research, 30-day content planning, AI Personal Brand Coach scripts, and teleprompter for nano and micro creators.",
     });
 
     injectSchemaScript("home-faq-schema", {
@@ -420,7 +445,7 @@ export default function LandingPage() {
                 </span>
               </h1>
               <p className="text-lg sm:text-xl text-muted-foreground mb-4 leading-relaxed mx-auto lg:mx-0 max-w-2xl lg:max-w-xl">
-                SpyReels ranks competitor Reels by performance, transcribes them word for word, and writes you a ready-to-film script based on the same formula. Most creators go from research to filming in under 10 minutes.
+                SpyReels ranks competitor Reels by performance, plans 30 days of content for your niche, and writes ready-to-film scripts with your AI Personal Brand Coach. Most creators go from research to filming in under 10 minutes.
               </p>
               <p className="text-sm text-amber-400 font-medium mb-8">
                 While you are reading this, other creators in your niche are already using this.
@@ -515,6 +540,8 @@ export default function LandingPage() {
                 <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />See every viral Reel in your niche in 60 seconds</li>
                 <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Know exactly what works before you film anything</li>
                 <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Transcribe any Reel in one click, word for word</li>
+                <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Plan 30 days of content with AI ideas</li>
+                <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Write scripts with AI Personal Brand Coach</li>
                 <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Get a ready-to-film script in under 2 minutes</li>
                 <li className="flex items-start gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Post with confidence knowing the formula works</li>
               </ul>
@@ -662,19 +689,10 @@ export default function LandingPage() {
               Every feature is built around one goal: getting you from zero ideas to ready-to-film script as fast as possible.
             </p>
           </div>
-          <div className="space-y-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {FEATURES.slice(0, 3).map((feature) => (
-                <FeatureCard key={feature.title} feature={feature} />
-              ))}
-            </div>
-            <div className="flex w-full justify-center">
-              <div className="grid w-full max-w-4xl grid-cols-1 sm:grid-cols-2 gap-6">
-                {FEATURES.slice(3, 5).map((feature) => (
-                  <FeatureCard key={feature.title} feature={feature} />
-                ))}
-              </div>
-            </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map((feature) => (
+              <FeatureCard key={feature.title} feature={feature} />
+            ))}
           </div>
         </div>
       </section>
@@ -683,13 +701,13 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-20 sm:py-28 bg-card/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4 text-primary border-primary/30 px-3 py-1">Simple 3-step workflow</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">From zero ideas to ready-to-film in 10 minutes</h2>
+            <Badge variant="outline" className="mb-4 text-primary border-primary/30 px-3 py-1">Simple 4-step workflow</Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">From niche research to ready-to-film in 10 minutes</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
               No more hours scrolling for inspiration. This is the workflow top creators wish they had when they started.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
             {STEPS.map((step, i) => (
               <div key={step.number} className="relative">
                 {i < STEPS.length - 1 && (

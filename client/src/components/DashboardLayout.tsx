@@ -41,7 +41,6 @@ import {
   Settings,
   CreditCard,
   Inbox,
-  Lightbulb,
   CalendarDays,
   Sparkles,
   Library,
@@ -89,7 +88,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/history":
     "Creator Radar: live reel stats from each spy session. Refresh pulls new posts since last sync (fresh window, not a full backfill).",
   "/scripts": "Your AI-generated scripts library",
-  "/ideas": "Turn a rough idea into a viral-ready script",
+  // "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
   "/studio": "AI Coach for viral Reel scripts",
   "/library":
@@ -126,7 +125,7 @@ function buildNavSections(): SidebarNavSection[] {
       items: [
         { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
-        { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
+        // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
         { icon: FileText, label: "My Scripts", path: "/scripts" },
         { icon: Library, label: "Transcripts & Scripts", path: "/library" },
         { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },

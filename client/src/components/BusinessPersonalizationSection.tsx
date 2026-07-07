@@ -112,7 +112,7 @@ export function BusinessPersonalizationSection() {
 
       <p className="mb-4 text-xs text-muted-foreground">
         Tell us what you do and who you create for. SpyReels uses this to
-        personalize Idea to Script and Remake now drafts so they fit your offer and audience.
+        personalize AI Coach and Remake now drafts so they fit your offer and audience.
       </p>
 
       {isLoading ? (

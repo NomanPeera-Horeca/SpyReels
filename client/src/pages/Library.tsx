@@ -187,7 +187,7 @@ export default function Library() {
           <span className="text-foreground/90 font-medium">Transcripts</span> are text extracted
           from reels you researched or collected.&nbsp;
           <span className="text-foreground/90 font-medium">Scripts</span> are drafts you saved,
-          AI remakes, or outputs from Idea to Script.
+          AI remakes, or scripts from AI Coach.
         </p>
       </div>
 
@@ -645,15 +645,15 @@ function ScriptsView({ data, isLoading, isError, errorMessage, onRetry, onCopy, 
         </div>
         <h3 className="text-lg font-semibold mb-1 text-foreground">No scripts yet</h3>
         <p className="text-muted-foreground text-sm max-w-md leading-relaxed">
-          Save from the reel workflow, use Re-create, or Idea to Script. Everything you keep
+          Save from the reel workflow, use Re-create, or write in AI Coach. Everything you keep
           lands in the Scripts tab here.
         </p>
         <div className="flex flex-wrap gap-2 justify-center mt-6">
           <Button variant="default" className="shadow-sm" onClick={() => setLocation("/scripts")}>
             My Scripts
           </Button>
-          <Button variant="outline" className="border-border/70" onClick={() => setLocation("/ideas")}>
-            Idea to Script
+          <Button variant="outline" className="border-border/70" onClick={() => setLocation("/studio")}>
+            AI Coach
           </Button>
         </div>
       </div>

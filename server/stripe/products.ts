@@ -100,7 +100,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "2 handle scrapes/month",
       "3 transcriptions/month",
       "3 AI re-creates/month",
-      "3 Idea to Script/month",
+      "3 AI Personal Brand Coach scripts/month",
       "5 saved scripts",
       "Basic teleprompter",
       "Chrome extension (limited)",

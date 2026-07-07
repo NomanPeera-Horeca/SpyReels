@@ -116,6 +116,8 @@ async function startServer() {
         { loc: "/free-tools", priority: "0.8", changefreq: "weekly" },
         { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
         { loc: "/features/viral-reel-finder", priority: "0.8", changefreq: "weekly" },
+        { loc: "/features/30-day-content-plan", priority: "0.8", changefreq: "weekly" },
+        { loc: "/features/ai-personal-brand-coach", priority: "0.8", changefreq: "weekly" },
         { loc: "/pricing", priority: "0.8", changefreq: "monthly" },
         { loc: "/blog", priority: "0.8", changefreq: "daily" },
         { loc: "/affiliate", priority: "0.6", changefreq: "monthly" },

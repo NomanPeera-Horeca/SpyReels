@@ -82,7 +82,7 @@ export function PwaInstallBanner() {
           <p className="text-sm font-medium text-foreground">Install SpyReels on your phone</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {showIosHint && !canInstall
-              ? "Tap Share, then Add to Home Screen for quick access to scripts and ideas on the go."
+              ? "Tap Share, then Add to Home Screen for quick access to your 30-day plan and scripts on the go."
               : "Add SpyReels to your home screen for a full-screen app experience."}
           </p>
           {canInstall ? (
