@@ -28,7 +28,7 @@ export type CoachCapability = {
 export const COACH_CAPABILITIES: CoachCapability[] = [
   {
     id: "write_script",
-    label: "Write viral script",
+    label: "Write new script",
     hint: "Turn a raw idea into a ready-to-film Reel script",
   },
   {

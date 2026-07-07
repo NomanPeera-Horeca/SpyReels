@@ -27,6 +27,8 @@ type AiCoachCommandShellProps = {
   onCapabilitySelect: (id: CoachCapabilityId) => void;
   modeActions: CoachModeAction[];
   onActionApplied: (action: CoachModeAction) => void;
+  heroSubhead: string;
+  writePanelHeader: string;
 };
 
 export function AiCoachCommandShell({
@@ -40,6 +42,8 @@ export function AiCoachCommandShell({
   onCapabilitySelect,
   modeActions,
   onActionApplied,
+  heroSubhead,
+  writePanelHeader,
 }: AiCoachCommandShellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -105,9 +109,7 @@ export function AiCoachCommandShell({
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
             What do you want to create today?
           </h1>
-          <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-            Turn any idea into a viral script you can film today.
-          </p>
+          <p className="mt-2 text-base text-muted-foreground sm:text-lg">{heroSubhead}</p>
         </div>
 
         <div
@@ -157,7 +159,7 @@ export function AiCoachCommandShell({
                 className="h-9 w-9 rounded-xl"
                 onClick={onSubmit}
                 disabled={submitDisabled}
-                aria-label="Write viral script"
+                aria-label="Write script"
               >
                 {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "→"}
               </Button>
@@ -204,7 +206,9 @@ export function AiCoachCommandShell({
           {activeCapability ? (
             <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card">
               <p className="border-b border-border px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {COACH_MODE_PANEL_HEADERS[activeCapability]}
+                {activeCapability === "write_script"
+                  ? writePanelHeader
+                  : COACH_MODE_PANEL_HEADERS[activeCapability]}
               </p>
               {modeActions.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">

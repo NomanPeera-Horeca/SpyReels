@@ -11,6 +11,10 @@ import {
   type StudioPrefillMeta,
 } from "@shared/studioCoachUi";
 import { buildCoachModeActions, type CoachModeAction } from "@shared/coachModeActions";
+import {
+  buildIdeaStarterHeroSubhead,
+  buildIdeaStarterPanelHeader,
+} from "@shared/ideaStarterPrompts";
 import type { CoachAction } from "@shared/studioCoachAgent";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -121,6 +125,15 @@ export default function AiCoach() {
       })),
     });
   }, [activeCapability, onboardingState, planCards, recentScripts]);
+
+  const heroSubhead = useMemo(
+    () => buildIdeaStarterHeroSubhead(onboardingState),
+    [onboardingState]
+  );
+  const writePanelHeader = useMemo(
+    () => buildIdeaStarterPanelHeader(onboardingState),
+    [onboardingState]
+  );
 
   useEffect(() => {
     const prefill = sessionStorage.getItem(STUDIO_PREFILL_KEY);
@@ -622,6 +635,8 @@ export default function AiCoach() {
         onCapabilitySelect={handleCapabilitySelect}
         modeActions={modeActions}
         onActionApplied={handleActionApplied}
+        heroSubhead={heroSubhead}
+        writePanelHeader={writePanelHeader}
       />
     );
   }
