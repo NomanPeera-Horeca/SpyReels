@@ -89,6 +89,7 @@ export async function generateCoachScriptForWorkspace(args: {
   profileOverride?: CreatorCoachProfile;
   audienceResearchBlock?: string;
   onPhase?: (phase: "hook_angle" | "write_script" | "production_notes") => void;
+  scriptModeOverride?: CoachScriptMode;
 }): Promise<GeneratedCoachScript> {
   if (!args.skipUsageCheck) {
     const usageCheck = await checkUsageLimit(args.userId, "recreateCount", args.openId);
@@ -127,7 +128,8 @@ export async function generateCoachScriptForWorkspace(args: {
   let explicitUserAngle =
     args.description.includes("Creator goal (ground truth") ||
     args.description.includes("Creator's chosen angle");
-  let scriptMode: CoachScriptMode = inferCoachScriptMode({ description: args.description });
+  let scriptMode: CoachScriptMode =
+    args.scriptModeOverride ?? inferCoachScriptMode({ description: args.description });
   let funnelStage: string | null = null;
 
   if (args.planCardId) {

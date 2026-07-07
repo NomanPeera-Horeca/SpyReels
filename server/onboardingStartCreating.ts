@@ -20,6 +20,7 @@ import {
   initOnboardingGenerationProgress,
   setOnboardingGenerationStep,
 } from "./onboardingGenerationProgress";
+import { coachScriptModeForOnboarding } from "@shared/coachScriptMode";
 import { generateCoachScriptForWorkspace, type GeneratedCoachScript } from "./studioGenerateScript";
 import {
   buildFirstOnboardingScriptPrompt,
@@ -143,6 +144,7 @@ export async function runOnboardingStartCreating(args: {
       openId: args.openId,
       description,
       skipUsageCheck: true,
+      scriptModeOverride: coachScriptModeForOnboarding(),
       profileOverride: profile,
       audienceResearchBlock,
       onPhase: (phase) => {

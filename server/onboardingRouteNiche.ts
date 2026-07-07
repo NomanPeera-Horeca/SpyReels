@@ -115,7 +115,8 @@ export function buildFirstOnboardingScriptPrompt(businessDescription: string, ta
     "Write my first viral Instagram Reels script that I can film today.",
     `Niche / topic: ${businessDescription.trim()}.`,
     `Audience: ${targetAudience.trim()}.`,
-    "Use talking-head format. Scroll-stopping hook in the first 2 seconds.",
+    "Use talking-head format as a 30-45 second Story Reel (not a short 8-15 second loop).",
+    "Scroll-stopping hook in the first 2 seconds.",
     "Include production notes with specific Instagram Reels audio picks.",
   ].join(" ");
 }

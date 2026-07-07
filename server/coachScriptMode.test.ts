@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coachScriptModeForPlanCard, inferCoachScriptMode } from "@shared/coachScriptMode";
+import { coachScriptModeForOnboarding, coachScriptModeForPlanCard, inferCoachScriptMode } from "@shared/coachScriptMode";
 
 describe("inferCoachScriptMode", () => {
   it("picks loop for behind-the-scenes format", () => {
@@ -34,6 +34,16 @@ describe("inferCoachScriptMode", () => {
         description: "Day 12 plan idea",
         contentFormat: "talking-head",
         funnelStage: "mofu",
+      })
+    ).toBe("story");
+  });
+
+  it("onboarding first script always uses story length", () => {
+    expect(coachScriptModeForOnboarding()).toBe("story");
+    expect(
+      inferCoachScriptMode({
+        description:
+          "Write my first viral Instagram Reels script. Use talking-head format. personal brand content",
       })
     ).toBe("story");
   });

@@ -29,9 +29,11 @@ export function inferCoachScriptMode(input: {
   const fmt = (input.contentFormat ?? "").toLowerCase().trim();
   if (LOOP_CONTENT_FORMATS.has(fmt)) return "loop";
 
+  const lower = input.description.toLowerCase();
+  if (lower.includes("talking-head") || lower.includes("talking head")) return "story";
+
   if (detectsClearCreativeFormat(input.description)) return "loop";
 
-  const lower = input.description.toLowerCase();
   if (LOOP_DESCRIPTION_SIGNALS.some((signal) => lower.includes(signal))) return "loop";
 
   if (fmt === "talking-head" || fmt === "tutorial-demo") return "story";
@@ -44,6 +46,11 @@ export function inferCoachScriptMode(input: {
 
 export function coachScriptModeLabel(mode: CoachScriptMode): string {
   return mode === "loop" ? "Loop Reel (8-15 sec)" : "Story Reel (30-45 sec)";
+}
+
+/** First onboarding script is always a full story Reel, not a short loop. */
+export function coachScriptModeForOnboarding(): CoachScriptMode {
+  return "story";
 }
 
 /** 30-day calendar cards are full HEIT scripts; filming format is not loop length. */
