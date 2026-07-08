@@ -155,7 +155,7 @@ export function AiCoachCommandShell({
                 <CalendarDays className="h-3 w-3" />
                 {attachedContext.planCardDay
                   ? `Day ${attachedContext.planCardDay}`
-                  : attachedContext.planCardTitle.slice(0, 24)}
+                  : "Spark"}
                 <button type="button" onClick={onClearPlanContext} aria-label="Remove plan context">
                   <X className="h-3 w-3" />
                 </button>

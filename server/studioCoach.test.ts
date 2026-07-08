@@ -8,6 +8,7 @@ import {
 import {
   COACH_CAPABILITIES,
   COACH_EXAMPLE_PROMPTS,
+  buildSparkPrefill,
   parseStudioPrefillMeta,
   VIRAL_SCRIPT_SECTION_LABELS,
 } from "@shared/studioCoachUi";
@@ -31,6 +32,29 @@ describe("studioCoachUi", () => {
   it("returns null for invalid prefill meta", () => {
     expect(parseStudioPrefillMeta("not-json")).toBeNull();
     expect(parseStudioPrefillMeta(null)).toBeNull();
+  });
+
+  it("builds a clean Spark prefill without LLM instruction boilerplate", () => {
+    const prefill = buildSparkPrefill({
+      title: "The morning routine of a CEO running a company in 11 Countries",
+      hook: "The morning routine of a CEO running a company in 11 Countries",
+      angle: "The morning routine of a CEO running a company in 11 Countries",
+      userRawNote: "The morning routine of a CEO running a company in 11 Countries",
+    });
+    expect(prefill).toBe("The morning routine of a CEO running a company in 11 Countries");
+    expect(prefill.toLowerCase()).not.toContain("ground truth");
+    expect(prefill.toLowerCase()).not.toContain("soft-sell");
+  });
+
+  it("includes a distinct creator note under the Spark title", () => {
+    const prefill = buildSparkPrefill({
+      title: "Morning CEO routine",
+      hook: "Watch this",
+      angle: "Ops angle",
+      userRawNote: "Show how I prep before calls across 11 countries",
+    });
+    expect(prefill).toContain("Morning CEO routine");
+    expect(prefill).toContain("Show how I prep before calls across 11 countries");
   });
 
   it("exposes creator-friendly section labels without HEIT jargon", () => {
@@ -236,6 +260,17 @@ describe("studioCoachAgent rules", () => {
   });
 
   it("routes Spark Deck prefill under from_plan to write_viral_script", () => {
+    const message = "The morning routine of a CEO running a company in 11 Countries";
+    const action = resolveCoachIntentRules({
+      message,
+      capabilityId: "from_plan",
+      attachedPlanCardId: 99,
+    });
+    expect(action.tool).toBe("write_viral_script");
+    expect(action.planCardId).toBe(99);
+  });
+
+  it("still routes legacy Spark Deck template text to write_viral_script", () => {
     const message = `Write a viral script from this Spark Deck idea.
 
 Creator goal (ground truth — follow even if it mentions a product, tool, or brand):
