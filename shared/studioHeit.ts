@@ -210,7 +210,7 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
   "illustrate": "I section only. One story, analogy, or example with concrete detail.",
   "teach": "T section only. ONE clear takeaway or action. Not a list. Do not repeat the call to action.",
-  "cta": "Final call to action only. Tell them exactly what to do next (comment, DM, save, follow). Must be different from teach. 1-2 sentences."
+  "cta": "OPTIONAL. Empty string when the Reel should end on teach. If present: one natural next action for a cold viewer, different from teach. Never invent personal names or insider nicknames in the CTA."
 }
 
 Music rules for productionCoach.instagramAudio:

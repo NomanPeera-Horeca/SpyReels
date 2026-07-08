@@ -92,6 +92,18 @@ describe("coachScriptSections helpers", () => {
     expect(complete).toBe(true);
   });
 
+  it("allows complete scripts with no CTA", () => {
+    expect(
+      coachScriptIsComplete({
+        hook: "Stop buying equipment before you do this.",
+        explain: "First-time owners fit gear first, then complain about labor.",
+        illustrate: "We mapped flow before the fryer landed.",
+        teach: "Design the path before you buy the machines.",
+        cta: "",
+      })
+    ).toBe(true);
+  });
+
   it("rejects incomplete generated scripts", () => {
     expect(coachScriptIsComplete({ hook: "Only a hook" })).toBe(false);
   });

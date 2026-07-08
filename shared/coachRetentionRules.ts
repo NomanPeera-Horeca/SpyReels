@@ -36,15 +36,21 @@ export function resolveCoachHookTypeForPrompt(args: {
   return resolveCoachHookType(inferred);
 }
 
-function funnelCtaRules(funnelStage?: string | null): string {
+/** CTA is optional. AI must decide whether a close action belongs. */
+export function buildOptionalCtaRules(funnelStage?: string | null): string {
   const stage = (funnelStage ?? "tofu").toLowerCase();
-  if (stage === "bofu") {
-    return `- Funnel: BOFU. CTA must use a comment keyword for a resource (example: "Comment CHECKLIST for the free guide").`;
-  }
-  if (stage === "mofu") {
-    return `- Funnel: MOFU. CTA must ask to SAVE this Reel before they need it again.`;
-  }
-  return `- Funnel: TOFU. CTA must use a comment keyword tied to the pain (example: "Comment STUCK if this is you").`;
+  return `CTA DECISION (optional — do NOT force a CTA on every script):
+- First decide: does this Reel need a call to action, or should it end on the takeaway?
+- Skip CTA (return "" for cta) when the Reel is belief-shift, story, POV, or pure value and a forced ask would feel fake.
+- Never invent insider CTAs that only make sense to the creator's team (bad example: "Comment ADAM" / "Send this to your Adam").
+- Never invent a person's name, team role, or private nickname in the CTA unless that person is the subject of the script and the audience already knows them.
+- If you include a CTA, it must be different from teach, 1 sentence, and doable by a cold viewer.
+- Prefer no CTA over a weak CTA.
+- When a CTA helps:
+  - TOFU (${stage === "tofu" ? "this script" : "awareness"}): soft engagement only if natural (save / send to a specific cold audience role). Example: "Save this if you are planning a kitchen build."
+  - MOFU: save for later when the tip is reference material.
+  - BOFU: one clear lead action (comment keyword or DM) only when the script is selling or offering a resource.
+- Funnel hint for this script: ${stage.toUpperCase()}. Still skip CTA if it would feel bolted on.`;
 }
 
 export function buildStackedHookRules(hookType: CoachHookType): string {
@@ -108,15 +114,14 @@ RETENTION STRUCTURE (mandatory — nested open loops mapped to HEIT sections):
 - explain: Open Loop B. Add a surprising complication or what most people get wrong. Still withhold the main payoff.
 - illustrate: Close Loop B. Resolve the complication with one concrete story, example, or visual beat. Main insight still withheld.
 - teach: Close Loop A. Deliver the ONE insight you saved for roughly 70% through the script. This is the payoff.
-- cta: Loop tie-back plus action. Must differ from teach. Include a DM-share trigger (see below).
+- cta: OPTIONAL. Only if a natural next action helps. Otherwise return an empty string for cta and end on teach.
 ${loopEnding}
 
-DM SHARE (mandatory — Instagram's strongest organic signal):
-- Include one line that makes a viewer think of a specific friend to forward this to.
-- Pattern: "Send this to the [specific person] who still [exact pain]."
-- Speak to ONE person, not "everyone" or "you guys."
+OPTIONAL SHARE LINE (only when CTA is present and natural):
+- You may include a send-to-someone line only when the audience role is clear and cold (example: "Send this to a first-time owner still guessing on equipment.").
+- Never invent personal names, internal nicknames, or team references the cold viewer does not know.
 
-${funnelCtaRules(funnelStage)}
+${buildOptionalCtaRules(funnelStage)}
 
 PRODUCTION RETENTION (productionCoach fields):
 - hookVisualBeat: required. One sentence: what the viewer SEES in frame 0 (mid-action, close-up, or result shot).

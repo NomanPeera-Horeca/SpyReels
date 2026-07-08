@@ -95,7 +95,7 @@ export function buildCoachLengthAndHookRules(mode: CoachScriptMode): string {
 - explain: max ${limits.explain} words, max 2 sentences. Open Loop B.
 - illustrate: max ${limits.illustrate} words. Close Loop B only.
 - teach: max ${limits.teach} words. Close Loop A payoff only. ONE insight.
-- cta: max ${limits.cta} words. Loop tie-back plus share or comment CTA.
+- cta: OPTIONAL. Empty string allowed. If present, max ${limits.cta} words. Never force a weak CTA.
 - estimatedDuration in JSON must match total word count (~${COACH_WORDS_PER_SECOND} words per second, ${durationHint}). Do not lie about duration.
 
 HOOK strength (mandatory — not soft guru copy):

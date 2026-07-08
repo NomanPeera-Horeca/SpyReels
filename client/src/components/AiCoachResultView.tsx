@@ -524,18 +524,20 @@ export function AiCoachResultView({
                 mediumBody
               />
 
-              <HeitSection
-                badge="5"
-                badgeClass="bg-orange-500 text-white"
-                label={VIRAL_SCRIPT_SECTION_LABELS.cta}
-                subtitle="Tell them exactly what to do next. One thing only."
-                cardClass="border-orange-200 bg-orange-50 border-l-[3px] border-l-orange-500 dark:bg-orange-950/30 dark:border-orange-800"
-                labelClass="text-orange-700 dark:text-orange-300"
-                value={editMode ? editDraft.cta : result.cta}
-                editMode={editMode}
-                onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
-                mediumBody
-              />
+              {editMode || result.cta.trim() ? (
+                <HeitSection
+                  badge="5"
+                  badgeClass="bg-orange-500 text-white"
+                  label={VIRAL_SCRIPT_SECTION_LABELS.cta}
+                  subtitle="Optional. Only when a natural next step helps a cold viewer."
+                  cardClass="border-orange-200 bg-orange-50 border-l-[3px] border-l-orange-500 dark:bg-orange-950/30 dark:border-orange-800"
+                  labelClass="text-orange-700 dark:text-orange-300"
+                  value={editMode ? editDraft.cta : result.cta}
+                  editMode={editMode}
+                  onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
+                  mediumBody
+                />
+              ) : null}
             </div>
 
             {!previewMode ? (

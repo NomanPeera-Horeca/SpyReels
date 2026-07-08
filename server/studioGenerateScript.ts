@@ -214,7 +214,9 @@ export async function generateCoachScriptForWorkspace(args: {
   const platform = ["instagram", "tiktok", "both"].includes(platformRaw) ? platformRaw : "both";
 
   const bodyCombined = combineBodyFromSections(sections);
-  const ctaText = sections.cta || sections.teach || String(finalGenerated.callToAction ?? "");
+  // DB column is NOT NULL; when AI skips CTA, store teach as close text only.
+  // UI reads optional CTA from productionNotes.sections.cta.
+  const ctaText = sections.cta.trim() || sections.teach || String(finalGenerated.callToAction ?? "");
 
   const hookTypeRaw = String(finalGenerated.hookType ?? "").trim();
   const coachPayload = buildProductionNotesJson(productionCoach, sections, {

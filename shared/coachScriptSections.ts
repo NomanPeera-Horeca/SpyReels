@@ -168,12 +168,10 @@ export function coachScriptIsComplete(generated: Record<string, unknown>): boole
     Boolean(sections.explain.trim()) &&
     Boolean(sections.illustrate.trim());
   const hasTakeaway = Boolean(sections.teach.trim());
-  const hasCta = Boolean(sections.cta.trim());
-  const distinctClose =
-    hasTakeaway &&
-    hasCta &&
-    sections.cta.trim() !== sections.teach.trim();
-  return Boolean(hook && hasBody && distinctClose);
+  // CTA is optional. If present, it must differ from teach.
+  const cta = sections.cta.trim();
+  const ctaOk = !cta || cta !== sections.teach.trim();
+  return Boolean(hook && hasBody && hasTakeaway && ctaOk);
 }
 
 export function flattenCoachScriptForCopy(args: {
@@ -201,10 +199,10 @@ export function flattenCoachScriptForCopy(args: {
     "",
     "TEACH",
     args.sections.teach,
-    "",
-    "CALL TO ACTION",
-    args.sections.cta,
   ];
+  if (args.sections.cta.trim()) {
+    lines.push("", "CALL TO ACTION", args.sections.cta);
+  }
   return lines.filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
 }
 
@@ -240,10 +238,10 @@ export function flattenViralScriptForCopy(args: {
     "",
     "KEY TAKEAWAY",
     args.sections.teach,
-    "",
-    "CALL TO ACTION",
-    args.sections.cta,
   ];
+  if (args.sections.cta.trim()) {
+    lines.push("", "CALL TO ACTION", args.sections.cta);
+  }
   return lines.filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
 }
 
