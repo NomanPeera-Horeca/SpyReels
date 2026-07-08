@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeatureRequestCard } from "@/components/FeatureRequestCard";
 
 const DESKTOP_URL = "https://spyreels.ai/dashboard";
 
@@ -80,6 +81,8 @@ export default function MobileMore() {
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </AppLink>
       </div>
+
+      <FeatureRequestCard />
 
       {user?.email ? (
         <p className="text-center text-xs text-muted-foreground">{user.email}</p>

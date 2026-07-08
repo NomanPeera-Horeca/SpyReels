@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
 import { InterestsEditorSection } from "@/components/InterestsEditorSection";
 import { BusinessPersonalizationSection } from "@/components/BusinessPersonalizationSection";
+import { FeatureRequestCard } from "@/components/FeatureRequestCard";
 import {
   Select,
   SelectContent,
@@ -120,6 +121,8 @@ export default function Settings() {
           Settings
         </h1>
       </div>
+
+      <FeatureRequestCard />
 
       <div className="rounded-lg border border-border/50 bg-card p-5">
         <h2 className="mb-1 text-sm font-semibold text-foreground">

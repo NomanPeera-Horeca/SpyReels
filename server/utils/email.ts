@@ -210,3 +210,57 @@ export async function sendScriptGenerationReportEmail(
     tags: [{ name: "template", value: "script_generation_report" }],
   });
 }
+
+const FEATURE_REQUEST_INBOX = "noah.perry@spyreels.ai";
+
+export async function sendFeatureRequestEmail(args: {
+  title: string;
+  details: string;
+  userId: number;
+  userName: string | null;
+  userEmail: string | null;
+}): Promise<void> {
+  const safeTitle = args.title.trim();
+  const safeDetails = args.details.trim();
+  const displayName = args.userName?.trim() || "SpyReels user";
+  const replyTo = args.userEmail?.trim() || FEATURE_REQUEST_INBOX;
+
+  const text = [
+    `Feature request: ${safeTitle}`,
+    "",
+    safeDetails,
+    "",
+    "---",
+    `From: ${displayName}`,
+    `Email: ${args.userEmail?.trim() || "not set"}`,
+    `User ID: ${args.userId}`,
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
+      <h2 style="margin: 0 0 16px;">Feature request</h2>
+      <p style="margin: 0 0 8px;"><strong>Title:</strong> ${escapeHtml(safeTitle)}</p>
+      <p style="margin: 0 0 16px; white-space: pre-wrap; line-height: 1.6;">${escapeHtml(safeDetails)}</p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+      <p style="margin: 0; line-height: 1.6; color: #4b5563; font-size: 14px;">
+        From: ${escapeHtml(displayName)}<br />
+        Email: ${escapeHtml(args.userEmail?.trim() || "not set")}<br />
+        User ID: ${args.userId}
+      </p>
+    </div>
+  `;
+
+  const result = await getResend().emails.send({
+    from: "SpyReels <noah.perry@mail.spyreels.ai>",
+    to: FEATURE_REQUEST_INBOX,
+    replyTo,
+    subject: `Feature request: ${safeTitle.slice(0, 80)}`,
+    text,
+    html,
+    tags: [{ name: "template", value: "feature_request" }],
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+}
