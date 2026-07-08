@@ -154,7 +154,9 @@ export default function AiCoach() {
       setHookVariations(null);
       setAnalysis(null);
       setClarifications([]);
-      setActiveCapability(meta?.planCardId ? "from_plan" : null);
+      // Prefill the composer; keep the suggestion list closed until the user
+      // explicitly clicks Write new script / From 30-day plan / etc.
+      setActiveCapability(null);
       posthog?.capture("ai_coach_prefill_loaded", {
         has_plan_card: Boolean(meta?.planCardId),
       });
@@ -425,6 +427,13 @@ export default function AiCoach() {
 
     switch (action.tool) {
       case "load_plan_card": {
+        // Never replace a Spark or plan prompt the user already filled and submitted.
+        // Old from_plan routing did that and looped without generating a script.
+        if (trimmed.length >= 10 && isSparkOrPlanPrefill(trimmed)) {
+          beginWriteFlow(trimmed);
+          setIsRouting(false);
+          return;
+        }
         const card =
           planCards.find((c) => c.id === action.planCardId) ??
           planCards.find((c) => c.status === "approved") ??
@@ -560,12 +569,11 @@ export default function AiCoach() {
     });
   };
 
-  const handleCapabilitySelect = (id: CoachCapabilityId) => {
+  const handleCapabilitySelect = (id: CoachCapabilityId | null) => {
     setActiveCapability(id);
   };
 
   const handleActionApplied = (action: CoachModeAction) => {
-    setActiveCapability(action.capability);
     if (action.planCardId != null) {
       const card = planCards.find((c) => c.id === action.planCardId);
       if (card) applyPlanContext(card);
@@ -573,6 +581,8 @@ export default function AiCoach() {
       clearPlanContext();
     }
     setPendingScriptId(action.scriptId ?? null);
+    // Keep prompt filled; close the list until the user opens a mode again.
+    setActiveCapability(null);
   };
 
   const handleSubmit = () => {
@@ -581,8 +591,12 @@ export default function AiCoach() {
       toast.error("Add a bit more detail about your idea (at least 10 characters).");
       return;
     }
+    // Spark Deck or plan day already in the box: always write.
+    // from_plan alone is only for picking a day when the box is empty.
     const capability =
-      activeCapability ?? (attachedContext?.planCardId ? "write_script" : undefined);
+      attachedContext?.planCardId != null || isSparkOrPlanPrefill(trimmed)
+        ? "write_script"
+        : (activeCapability ?? undefined);
     void runCoachFlow(capability);
   };
 

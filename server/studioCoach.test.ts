@@ -209,12 +209,48 @@ describe("studioCoachAgent rules", () => {
     expect(shouldUseLlmIntentClassifier(action)).toBe(false);
   });
 
-  it("routes from_plan capability to load_plan_card", () => {
+  it("routes from_plan with empty composer to load_plan_card", () => {
     const action = resolveCoachIntentRules({
       message: "",
       capabilityId: "from_plan",
     });
     expect(action.tool).toBe("load_plan_card");
+  });
+
+  it("routes from_plan with attached plan card to write_viral_script", () => {
+    const action = resolveCoachIntentRules({
+      message: "Day 1 plan idea: Cortisol loop\n\nAngle here.\n\nHook idea: \"You are eating less.\"",
+      capabilityId: "from_plan",
+      attachedPlanCardId: 12,
+    });
+    expect(action.tool).toBe("write_viral_script");
+    expect(action.planCardId).toBe(12);
+  });
+
+  it("routes from_plan with filled prompt and no attach to write_viral_script", () => {
+    const action = resolveCoachIntentRules({
+      message: "Why cortisol makes you retain water in a calorie deficit",
+      capabilityId: "from_plan",
+    });
+    expect(action.tool).toBe("write_viral_script");
+  });
+
+  it("routes Spark Deck prefill under from_plan to write_viral_script", () => {
+    const message = `Write a viral script from this Spark Deck idea.
+
+Creator goal (ground truth — follow even if it mentions a product, tool, or brand):
+The morning routine of a CEO running a company in 11 Countries
+
+Hook direction: "The morning routine of a CEO running a company in 11 Countries"
+
+If the note says not to name a tool or product on camera, use soft-sell or problem-discovery style without naming it.`;
+    const action = resolveCoachIntentRules({
+      message,
+      capabilityId: "from_plan",
+      attachedPlanCardId: 99,
+    });
+    expect(action.tool).toBe("write_viral_script");
+    expect(action.planCardId).toBe(99);
   });
 
   it("routes 30-day plan prefill with Hook idea line to write_viral_script", () => {

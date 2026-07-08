@@ -203,7 +203,7 @@ export function buildIdeaStarterPanelHeader(ctx: StarterPromptContext | null | u
 
 export function buildIdeaStarterHeroSubhead(ctx: StarterPromptContext | null | undefined): string {
   const topic = displayTopicLabel(ctx);
-  const audience = ctx?.targetAudience?.trim();
+  const audience = ctx?.targetAudience?.trim().replace(/^for\s+/i, "").trim();
   if (audience) {
     return `Turn a ${topic} idea into a script tailored for ${audience}.`;
   }

@@ -12,7 +12,6 @@ import {
   type CoachModeAction,
 } from "@shared/coachModeActions";
 import { cn } from "@/lib/utils";
-import { useMobileCreateAppContext } from "@/contexts/MobileCreateAppContext";
 import { useAutoGrowTextarea } from "@/hooks/useAutoGrowTextarea";
 import { streamComposerText } from "@/lib/streamComposerText";
 
@@ -24,7 +23,7 @@ type AiCoachCommandShellProps = {
   attachedContext: StudioPrefillMeta | null;
   onClearPlanContext: () => void;
   activeCapability: CoachCapabilityId | null;
-  onCapabilitySelect: (id: CoachCapabilityId) => void;
+  onCapabilitySelect: (id: CoachCapabilityId | null) => void;
   modeActions: CoachModeAction[];
   onActionApplied: (action: CoachModeAction) => void;
   heroSubhead: string;
@@ -47,7 +46,7 @@ export function AiCoachCommandShell({
 }: AiCoachCommandShellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
-  const mobileCreate = useMobileCreateAppContext();
+  const modePanelRef = useRef<HTMLDivElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [promptReady, setPromptReady] = useState(false);
 
@@ -67,6 +66,21 @@ export function AiCoachCommandShell({
     setPromptReady(description.trim().length >= 10);
   }, [description, isStreaming]);
 
+  // Click outside the mode pills + suggestion list closes the listicle.
+  useEffect(() => {
+    if (!activeCapability) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !modePanelRef.current) return;
+      if (modePanelRef.current.contains(target)) return;
+      onCapabilitySelect(null);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [activeCapability, onCapabilitySelect]);
+
   const handleActionClick = async (action: CoachModeAction) => {
     if (isStreaming || isBusy) return;
     streamAbortRef.current?.abort();
@@ -80,6 +94,7 @@ export function AiCoachCommandShell({
       });
       if (!controller.signal.aborted) {
         onActionApplied(action);
+        onCapabilitySelect(null);
       }
     } finally {
       if (streamAbortRef.current === controller) {
@@ -90,13 +105,10 @@ export function AiCoachCommandShell({
   };
 
   const submitDisabled = !promptReady || isBusy || isStreaming;
-  const enterHint = isStreaming
-    ? ""
-    : promptReady
-      ? "Prompt ready. Edit if you want, then press Enter or → to write your script."
-      : activeCapability
-        ? "Pick a suggestion, or type your own idea"
-        : "Pick a mode below to see suggestions";
+
+  const handleModeClick = (id: CoachCapabilityId) => {
+    onCapabilitySelect(activeCapability === id ? null : id);
+  };
 
   return (
     <div className="flex min-h-[calc(80vh-4rem)] flex-1 items-center justify-center px-4 py-8 sm:px-6">
@@ -124,14 +136,11 @@ export function AiCoachCommandShell({
               value={description}
               onChange={(e) => onDescriptionChange(e.target.value)}
               onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  (e.metaKey || e.ctrlKey) &&
-                  description.trim() &&
-                  !submitDisabled
-                ) {
-                  onSubmit();
-                }
+                if (e.key !== "Enter" || submitDisabled || !description.trim()) return;
+                // Enter / Cmd+Enter submit when ready; Shift+Enter inserts a newline.
+                if (e.shiftKey || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                onSubmit();
               }}
               disabled={isStreaming}
               placeholder="Describe your idea, or pick a mode below..."
@@ -167,19 +176,7 @@ export function AiCoachCommandShell({
           </div>
         </div>
 
-        <p
-          className={cn(
-            "mt-2 min-h-[18px] text-center text-xs text-muted-foreground",
-            promptReady && !isStreaming && "font-semibold text-primary"
-          )}
-        >
-          {enterHint}
-        </p>
-        <p className="mt-1 text-right text-xs text-muted-foreground">
-          {mobileCreate ? "Tap the arrow to write your script" : "Cmd + Enter to write script"}
-        </p>
-
-        <div className="mt-6">
+        <div className="mt-6" ref={modePanelRef}>
           <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
             Try AI Coach for...
           </p>
@@ -188,7 +185,7 @@ export function AiCoachCommandShell({
               <button
                 key={cap.id}
                 type="button"
-                onClick={() => onCapabilitySelect(cap.id)}
+                onClick={() => handleModeClick(cap.id)}
                 disabled={isStreaming}
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",

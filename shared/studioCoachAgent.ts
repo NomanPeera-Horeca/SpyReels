@@ -37,6 +37,21 @@ export function resolveCoachIntentRules(input: ResolveCoachIntentInput): CoachAc
   const lower = message.toLowerCase();
 
   if (input.capabilityId === "from_plan") {
+    // Submit with a filled prompt (or attached day) means write, not re-attach.
+    // load_plan_card is only for picking a day when the box is still empty.
+    const hasPlanAttached =
+      input.attachedPlanCardId != null && input.attachedPlanCardId > 0;
+    if (hasPlanAttached || isSparkOrPlanPrefill(message) || message.length >= 10) {
+      return {
+        tool: "write_viral_script",
+        confidence: 95,
+        source: "rule",
+        planCardId: input.attachedPlanCardId ?? undefined,
+        assistantMessage: hasPlanAttached
+          ? "Writing your script from this plan idea."
+          : "Writing your script.",
+      };
+    }
     return {
       tool: "load_plan_card",
       confidence: 95,
