@@ -102,8 +102,10 @@ export async function generateCoachScriptWithProgress(args: {
       onPhase: (phase) => {
         if (phase === "write_script") {
           setCoachStep(args.userId, "write_script", "hook_angle");
+        } else if (phase === "quality_check") {
+          setCoachStep(args.userId, "quality_check", "write_script");
         } else if (phase === "production_notes") {
-          setCoachStep(args.userId, "production_notes", "write_script");
+          setCoachStep(args.userId, "production_notes", "quality_check");
         }
       },
     });
@@ -165,8 +167,10 @@ export async function convertRoughScriptWithProgress(args: {
       onPhase: (phase) => {
         if (phase === "write_script") {
           setCoachStep(args.userId, "write_script", "hook_angle");
+        } else if (phase === "quality_check") {
+          setCoachStep(args.userId, "quality_check", "write_script");
         } else if (phase === "production_notes") {
-          setCoachStep(args.userId, "production_notes", "write_script");
+          setCoachStep(args.userId, "production_notes", "quality_check");
         }
       },
     });

@@ -6,6 +6,7 @@ export type CoachScriptProgressStepId =
   | "find_viral"
   | "hook_angle"
   | "write_script"
+  | "quality_check"
   | "production_notes";
 
 const STEP_ORDER: CoachScriptProgressStepId[] = [
@@ -14,6 +15,7 @@ const STEP_ORDER: CoachScriptProgressStepId[] = [
   "find_viral",
   "hook_angle",
   "write_script",
+  "quality_check",
   "production_notes",
 ];
 
@@ -29,6 +31,8 @@ export function defaultCoachScriptStepLabel(stepId: CoachScriptProgressStepId): 
       return "Picking a scroll-stopping hook angle";
     case "write_script":
       return "Writing your viral script";
+    case "quality_check":
+      return "AI Coach Judge checking if this makes sense to viewers";
     case "production_notes":
       return "Adding film-ready production notes";
     default:
@@ -62,6 +66,7 @@ export function personalizedCoachScriptStepLabels(args: {
     find_viral: `Finding what's going viral in ${nicheShort}`,
     hook_angle: "Picking a scroll-stopping hook angle",
     write_script: "Writing your viral script",
+    quality_check: "AI Coach Judge checking if this makes sense to viewers",
     production_notes:
       "Adding film-ready production notes (Instagram audio, B-roll, how to film)",
   };

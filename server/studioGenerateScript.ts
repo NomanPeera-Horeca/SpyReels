@@ -31,6 +31,7 @@ import { checkUsageLimit, incrementUsage } from "./stripe/stripe-service";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { normalizeCoachScriptPayload, parseLlmJson } from "./utils/parseLlmJson";
 import { parseCoachScriptSections } from "@shared/coachScriptSections";
+import { judgeAndImproveCoachScript } from "./coachScriptJudge";
 
 export type GeneratedCoachScript = {
   id: number;
@@ -88,7 +89,7 @@ export async function generateCoachScriptForWorkspace(args: {
   skipUsageCheck?: boolean;
   profileOverride?: CreatorCoachProfile;
   audienceResearchBlock?: string;
-  onPhase?: (phase: "hook_angle" | "write_script" | "production_notes") => void;
+  onPhase?: (phase: "hook_angle" | "write_script" | "quality_check" | "production_notes") => void;
   scriptModeOverride?: CoachScriptMode;
 }): Promise<GeneratedCoachScript> {
   if (!args.skipUsageCheck) {
@@ -195,12 +196,32 @@ export async function generateCoachScriptForWorkspace(args: {
   });
 
   const raw = String(response.choices[0]?.message?.content ?? "{}");
-  const generated = normalizeCoachScriptPayload(parseLlmJson<Record<string, unknown>>(raw, {}));
+  let generated = normalizeCoachScriptPayload(parseLlmJson<Record<string, unknown>>(raw, {}));
   if (!coachScriptIsComplete(generated)) {
     console.warn("[studio.generate] incomplete LLM payload", raw.slice(0, 800));
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "AI returned an incomplete script. Please try again.",
+    });
+  }
+
+  args.onPhase?.("quality_check");
+  const judged = await judgeAndImproveCoachScript({
+    generated,
+    ctx: {
+      description: effectiveDescription,
+      niche: profile.niche,
+      targetAudience: profile.targetAudience,
+      brandDescription: profile.brandDescription,
+      clarifications: args.clarifications,
+    },
+    onRewrite: () => args.onPhase?.("quality_check"),
+  });
+  generated = judged.generated;
+  if (!coachScriptIsComplete(generated)) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "AI returned an incomplete script after quality review. Please try again.",
     });
   }
 
@@ -361,7 +382,7 @@ export async function convertRoughScriptForWorkspace(args: {
   roughScript: string;
   workingTitle?: string;
   skipUsageCheck?: boolean;
-  onPhase?: (phase: "hook_angle" | "write_script" | "production_notes") => void;
+  onPhase?: (phase: "hook_angle" | "write_script" | "quality_check" | "production_notes") => void;
 }): Promise<GeneratedCoachScript> {
   const trimmed = args.roughScript.trim();
   if (trimmed.length < 20) {
