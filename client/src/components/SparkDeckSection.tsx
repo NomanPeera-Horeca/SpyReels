@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ export type SparkPlanCard = {
   sourceFeaturedReelId: number | null;
   sourceReelHandle: string | null;
   userRawNote: string | null;
+  coachScriptId?: number | null;
 };
 
 type SparkDeckCardProps = {
@@ -32,8 +33,12 @@ type SparkDeckCardProps = {
   isAdjusting: boolean;
   adjustText: string;
   isRegenerating: boolean;
+  isDismissing: boolean;
   onToggle: () => void;
   onWriteScript: () => void;
+  onViewScript: () => void;
+  onWriteAnother: () => void;
+  onDismiss: () => void;
   onStartAdjust: () => void;
   onCancelAdjust: () => void;
   onAdjustTextChange: (text: string) => void;
@@ -47,29 +52,37 @@ function SparkDeckCard({
   isAdjusting,
   adjustText,
   isRegenerating,
+  isDismissing,
   onToggle,
   onWriteScript,
+  onViewScript,
+  onWriteAnother,
+  onDismiss,
   onStartAdjust,
   onCancelAdjust,
   onAdjustTextChange,
   onAdjustSubmit,
 }: SparkDeckCardProps) {
+  const scriptReady = card.coachScriptId != null && card.coachScriptId > 0;
+
   const statusBorder = isAdjusting
     ? "border-amber-400 bg-amber-50/30 dark:bg-amber-950/20"
-    : card.status === "approved"
+    : scriptReady
       ? "border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20"
-      : card.status === "rejected"
-        ? "border-red-400 bg-red-50/40 dark:bg-red-950/20"
-        : selected
-          ? "border-violet-500"
-          : "border-border bg-card";
+      : card.status === "approved"
+        ? "border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20"
+        : card.status === "rejected"
+          ? "border-red-400 bg-red-50/40 dark:bg-red-950/20"
+          : selected
+            ? "border-violet-500"
+            : "border-border bg-card";
 
   return (
     <div
-      className={`relative min-w-[240px] max-w-[260px] shrink-0 rounded-xl border-2 transition-all duration-150 group ${isAdjusting ? "" : "cursor-pointer"} ${statusBorder}`}
-      onClick={isAdjusting ? undefined : onToggle}
+      className={`relative min-w-[240px] max-w-[260px] shrink-0 rounded-xl border-2 transition-all duration-150 group ${isAdjusting || scriptReady ? "" : "cursor-pointer"} ${statusBorder}`}
+      onClick={isAdjusting || scriptReady ? undefined : onToggle}
     >
-      {!isAdjusting && (
+      {!isAdjusting && !scriptReady && (
         <div
           className={`absolute top-2.5 left-2.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
             selected
@@ -83,8 +96,22 @@ function SparkDeckCard({
         </div>
       )}
 
-      <div className={`p-3 ${isAdjusting ? "pt-3" : "pt-8"}`}>
-        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+      <button
+        type="button"
+        className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+        aria-label="Dismiss spark"
+        title="Dismiss spark"
+        disabled={isDismissing || isAdjusting}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss();
+        }}
+      >
+        {isDismissing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+      </button>
+
+      <div className={`p-3 ${isAdjusting || scriptReady ? "pt-3" : "pt-8"}`}>
+        <div className="flex items-center gap-1.5 flex-wrap mb-2 pr-7">
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
             Spark
           </span>
@@ -97,11 +124,15 @@ function SparkDeckCard({
               Typed
             </span>
           )}
-          {card.status === "approved" && (
+          {scriptReady ? (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 ml-auto">
+              Script ready
+            </span>
+          ) : card.status === "approved" ? (
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 ml-auto">
               Approved
             </span>
-          )}
+          ) : null}
         </div>
 
         <p className="text-sm font-semibold leading-snug line-clamp-2 mb-1.5">{card.title}</p>
@@ -109,7 +140,7 @@ function SparkDeckCard({
           &ldquo;{card.hook}&rdquo;
         </p>
 
-        {isAdjusting && (
+        {isAdjusting && !scriptReady && (
           <div className="mt-2" onClick={(e) => e.stopPropagation()}>
             <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-1.5">
               What needs to change?
@@ -145,18 +176,43 @@ function SparkDeckCard({
 
       {!isAdjusting && (
         <div className="px-3 pb-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full text-xs border-violet-200 text-violet-700 hover:bg-violet-50"
-            onClick={onWriteScript}
-          >
-            Write Script
-          </Button>
-          <Button type="button" variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={onStartAdjust}>
-            Change this idea
-          </Button>
+          {scriptReady ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                onClick={onViewScript}
+              >
+                View Script
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full text-xs border-violet-200 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300"
+                onClick={onWriteAnother}
+              >
+                Write another
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full text-xs border-violet-200 text-violet-700 hover:bg-violet-50"
+                onClick={onWriteScript}
+              >
+                Write Script
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={onStartAdjust}>
+                Change this idea
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -238,6 +294,7 @@ type SparkDeckSectionProps = {
   isRegenerating: boolean;
   onToggleSelect: (id: number) => void;
   onWriteScript: (card: SparkPlanCard) => void;
+  onViewScript: (card: SparkPlanCard) => void;
   onStartAdjust: (id: number) => void;
   onCancelAdjust: () => void;
   onAdjustTextChange: (text: string) => void;
@@ -254,6 +311,7 @@ export function SparkDeckSection({
   isRegenerating,
   onToggleSelect,
   onWriteScript,
+  onViewScript,
   onStartAdjust,
   onCancelAdjust,
   onAdjustTextChange,
@@ -262,6 +320,26 @@ export function SparkDeckSection({
 }: SparkDeckSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
+
+  const dismissMutation = trpc.plan.dismissSpark.useMutation({
+    onSuccess: () => {
+      toast.success("Spark dismissed");
+      setDismissingId(null);
+      onCardsChanged();
+    },
+    onError: (err) => {
+      setDismissingId(null);
+      toast.error(err.message);
+    },
+  });
+
+  const handleDismiss = (card: SparkPlanCard) => {
+    const ok = window.confirm(`Remove "${card.title}" from your Spark Deck?`);
+    if (!ok) return;
+    setDismissingId(card.id);
+    dismissMutation.mutate({ id: card.id });
+  };
 
   return (
     <section className="rounded-xl border border-violet-200/80 bg-violet-50/30 dark:border-violet-900 dark:bg-violet-950/20 p-4">
@@ -310,8 +388,12 @@ export function SparkDeckSection({
             isAdjusting={adjustingId === card.id}
             adjustText={adjustingId === card.id ? adjustText : ""}
             isRegenerating={isRegenerating}
+            isDismissing={dismissingId === card.id && dismissMutation.isPending}
             onToggle={() => onToggleSelect(card.id)}
             onWriteScript={() => onWriteScript(card)}
+            onViewScript={() => onViewScript(card)}
+            onWriteAnother={() => setShowAddModal(true)}
+            onDismiss={() => handleDismiss(card)}
             onStartAdjust={() => onStartAdjust(card.id)}
             onCancelAdjust={onCancelAdjust}
             onAdjustTextChange={onAdjustTextChange}

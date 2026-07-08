@@ -146,7 +146,10 @@ function sparkTitleFromNote(note: string): string {
   return title.slice(0, 120) || "New spark";
 }
 
-function mapPlanCardRow(row: typeof planCards.$inferSelect) {
+function mapPlanCardRow(
+  row: typeof planCards.$inferSelect,
+  extras?: { coachScriptId?: number | null }
+) {
   return {
     id: row.id,
     day: row.day,
@@ -165,6 +168,7 @@ function mapPlanCardRow(row: typeof planCards.$inferSelect) {
     sourceFeaturedReelId: row.sourceFeaturedReelId,
     sourceReelHandle: row.sourceReelHandle,
     userRawNote: row.userRawNote,
+    coachScriptId: extras?.coachScriptId ?? null,
     createdAt: row.createdAt,
   };
 }
@@ -375,7 +379,7 @@ export const planRouter = router({
         completeAgentProgress(PLAN_FLOW, ctx.user.id);
 
         return {
-          cards: inserted.map(mapPlanCardRow),
+          cards: inserted.map((row) => mapPlanCardRow(row)),
           audienceSignals: audienceSignalsList.map((signal) => ({
             id: signal.id ?? 0,
             source: signal.source,
@@ -409,14 +413,42 @@ export const planRouter = router({
 
     const sparkRows = rows.filter((row) => row.sourceType === "user_spark" || row.day === 0);
     const calendarRows = rows.filter((row) => row.sourceType !== "user_spark" && row.day > 0);
+
+    const allIds = rows.map((row) => row.id);
+    const scriptByPlanCardId = new Map<number, number>();
+    if (allIds.length > 0) {
+      const linkedScripts = await db
+        .select({
+          id: coachScripts.id,
+          planCardId: coachScripts.planCardId,
+        })
+        .from(coachScripts)
+        .where(
+          and(
+            eq(coachScripts.workspaceId, ctx.workspaceId),
+            inArray(coachScripts.planCardId, allIds)
+          )
+        )
+        .orderBy(desc(coachScripts.createdAt));
+      for (const script of linkedScripts) {
+        if (script.planCardId == null) continue;
+        if (!scriptByPlanCardId.has(script.planCardId)) {
+          scriptByPlanCardId.set(script.planCardId, script.id);
+        }
+      }
+    }
+
+    const withScript = (row: typeof planCards.$inferSelect) =>
+      mapPlanCardRow(row, { coachScriptId: scriptByPlanCardId.get(row.id) ?? null });
+
     const sparkCards = sparkRows
       .slice()
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map(mapPlanCardRow);
+      .map(withScript);
     const calendarCards = calendarRows
       .slice()
       .sort((a, b) => a.day - b.day)
-      .map(mapPlanCardRow);
+      .map(withScript);
 
     return {
       cards: [...sparkCards, ...calendarCards],
@@ -424,6 +456,41 @@ export const planRouter = router({
       calendarCards,
     };
   }),
+
+  dismissSpark: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [card] = await db
+        .select()
+        .from(planCards)
+        .where(
+          and(eq(planCards.id, input.id), eq(planCards.workspaceId, ctx.workspaceId))
+        )
+        .limit(1);
+
+      if (!card) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Spark not found" });
+      }
+
+      const isSpark = card.sourceType === "user_spark" || card.day === 0;
+      if (!isSpark) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only Spark Deck ideas can be dismissed here.",
+        });
+      }
+
+      await db
+        .delete(planCards)
+        .where(
+          and(eq(planCards.id, input.id), eq(planCards.workspaceId, ctx.workspaceId))
+        );
+
+      return { success: true as const, id: input.id };
+    }),
 
   captureSpark: protectedProcedure
     .input(
@@ -513,7 +580,7 @@ export const planRouter = router({
           )
         );
 
-      return { cards: updated.map(mapPlanCardRow) };
+      return { cards: updated.map((row) => mapPlanCardRow(row)) };
     }),
 
   regenerate: protectedProcedure

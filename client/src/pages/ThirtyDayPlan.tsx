@@ -333,6 +333,14 @@ export default function ThirtyDayPlan() {
     setLocation("/studio");
   }
 
+  function handleViewScript(card: PlanCard) {
+    if (card.coachScriptId == null || card.coachScriptId <= 0) {
+      toast.error("No script found for this spark yet.");
+      return;
+    }
+    setLocation(`/studio?script=${card.coachScriptId}`);
+  }
+
   const filteredCalendarCards =
     filterFunnel === "all"
       ? calendarCards
@@ -563,6 +571,7 @@ export default function ThirtyDayPlan() {
             })
           }
           onWriteScript={handleWriteScript}
+          onViewScript={handleViewScript}
           onStartAdjust={(id) => {
             setAdjustingId(id);
             setAdjustText("");
