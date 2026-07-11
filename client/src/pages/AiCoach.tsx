@@ -42,6 +42,11 @@ import {
 } from "@shared/coachAgentProgress";
 import type { AgentProgressStep } from "@shared/agentProgress";
 import { isSparkOrPlanPrefill, shouldSkipCoachAnalyze } from "@shared/coachAnalyze";
+import {
+  formatCoachSaveScheduleLabel,
+  pickDefaultPostSchedule,
+  postDateFromPlanDay,
+} from "@shared/coachScriptSave";
 
 type FactCheck = {
   hasClaim: boolean;
@@ -93,6 +98,9 @@ export default function AiCoach() {
   const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
+  const [postDate, setPostDate] = useState<Date | undefined>(() => pickDefaultPostSchedule().postDate);
+  const [postTime, setPostTime] = useState("09:00");
+  const [saveNotes, setSaveNotes] = useState("");
   const [filmNowPending, setFilmNowPending] = useState(false);
   const pendingFilmRef = useRef(false);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
@@ -271,11 +279,15 @@ export default function AiCoach() {
   });
 
   const saveToLibraryMutation = trpc.studio.saveToLibrary.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setSavedLibraryScriptId(data.savedScriptId);
+      void utils.scripts.list.invalidate();
+      void utils.library.scripts.invalidate();
       posthog?.capture("ai_coach_saved_to_library", {
         script_id: result?.id,
         saved_script_id: data.savedScriptId,
+        with_date: variables.addToCalendar ?? true,
+        updated: data.updated ?? false,
       });
       if (pendingFilmRef.current) {
         pendingFilmRef.current = false;
@@ -287,7 +299,13 @@ export default function AiCoach() {
         setLocation(scriptFilmPath(data.savedScriptId));
         return;
       }
-      toast.success("Saved to My Scripts library");
+      const label =
+        variables.addToCalendar && postDate
+          ? formatCoachSaveScheduleLabel(postDate, variables.postTime ?? postTime)
+          : null;
+      toast.success(
+        label ? `Saved to My Scripts for ${label}` : "Saved to My Scripts"
+      );
     },
     onError: (err) => {
       pendingFilmRef.current = false;
@@ -295,6 +313,31 @@ export default function AiCoach() {
       toast.error(err.message);
     },
   });
+
+  useEffect(() => {
+    if (!result) return;
+
+    const existing = savedScriptsList?.find((s) => s.coachScriptId === result.id);
+    if (existing) {
+      setSavedLibraryScriptId(existing.id);
+      setPostDate(existing.postDate ? new Date(existing.postDate) : pickDefaultPostSchedule().postDate);
+      setPostTime(existing.postTime || "09:00");
+      setSaveNotes(existing.notes && existing.notes !== "Saved from AI Coach" ? existing.notes : "");
+      return;
+    }
+
+    setSavedLibraryScriptId(null);
+    const planCard = planCards.find((c) => c.id === attachedContext?.planCardId);
+    if (planCard?.day) {
+      setPostDate(postDateFromPlanDay(planCard.day));
+      setPostTime("09:00");
+    } else {
+      const defaults = pickDefaultPostSchedule();
+      setPostDate(defaults.postDate);
+      setPostTime(defaults.postTime);
+    }
+    setSaveNotes("");
+  }, [result?.id, savedScriptsList, attachedContext?.planCardId, planCards]);
 
   const hookVariationsMutation = trpc.studio.hookVariations.useMutation({
     onSuccess: (data) => {
@@ -351,6 +394,9 @@ export default function AiCoach() {
     setActiveCapability(null);
     setPendingScriptId(null);
     setSavedLibraryScriptId(null);
+    setPostDate(pickDefaultPostSchedule().postDate);
+    setPostTime("09:00");
+    setSaveNotes("");
     pendingFilmRef.current = false;
     setFilmNowPending(false);
   };
@@ -389,10 +435,32 @@ export default function AiCoach() {
     setLocation(scriptFilmPath(savedScriptId));
   };
 
-  const handleSaveToLibrary = () => {
+  const saveCoachScript = (withDate: boolean) => {
     if (!result) return;
     pendingFilmRef.current = false;
-    saveToLibraryMutation.mutate({ id: result.id });
+    saveToLibraryMutation.mutate({
+      id: result.id,
+      addToCalendar: withDate,
+      postDate: withDate && postDate ? postDate.toISOString().slice(0, 10) : undefined,
+      postTime: withDate ? postTime : undefined,
+      notes: saveNotes.trim() || undefined,
+    });
+  };
+
+  const handleSaveToMyScripts = () => {
+    if (savedLibraryScriptId) {
+      handleOpenMyScripts();
+      return;
+    }
+    saveCoachScript(true);
+  };
+
+  const handleOpenMyScripts = () => {
+    if (savedLibraryScriptId) {
+      setLocation(`/scripts/${savedLibraryScriptId}`);
+      return;
+    }
+    setLocation("/scripts");
   };
 
   const handleFilmNow = () => {
@@ -403,7 +471,13 @@ export default function AiCoach() {
     }
     pendingFilmRef.current = true;
     setFilmNowPending(true);
-    saveToLibraryMutation.mutate({ id: result.id });
+    saveToLibraryMutation.mutate({
+      id: result.id,
+      addToCalendar: true,
+      postDate: postDate ? postDate.toISOString().slice(0, 10) : undefined,
+      postTime,
+      notes: saveNotes.trim() || undefined,
+    });
   };
 
   const beginWriteFlow = (trimmed: string) => {
@@ -817,8 +891,22 @@ export default function AiCoach() {
         onDismissHookVariations={() => setHookVariations(null)}
         refinePending={refineMutation.isPending}
         savePending={updateMutation.isPending}
-        onSaveToLibrary={handleSaveToLibrary}
-        saveToLibraryPending={saveToLibraryMutation.isPending && !filmNowPending}
+        scheduleSave={{
+          postDate,
+          onPostDateChange: setPostDate,
+          postTime,
+          onPostTimeChange: setPostTime,
+          notes: saveNotes,
+          onNotesChange: setSaveNotes,
+          savedScriptId: savedLibraryScriptId,
+          isSaving: saveToLibraryMutation.isPending && !filmNowPending,
+          onSave: saveCoachScript,
+          onOpenMyScripts: handleOpenMyScripts,
+        }}
+        onSaveToMyScripts={handleSaveToMyScripts}
+        saveToMyScriptsPending={saveToLibraryMutation.isPending && !filmNowPending}
+        savedScriptId={savedLibraryScriptId}
+        onOpenMyScripts={handleOpenMyScripts}
         onFilmNow={mobileCreate ? handleFilmNow : undefined}
         filmNowPending={filmNowPending && saveToLibraryMutation.isPending}
       />

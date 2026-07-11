@@ -57,6 +57,7 @@ import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { founderInterviewRouter } from "./founderInterview/router";
 import { featureRequestRouter } from "./featureRequest/router";
+import { coachScriptFeedbackRouter } from "./coachScriptFeedback/router";
 import { planRouter, studioRouter } from "./routers/planCoachRouter";
 import { audienceResearchRouter } from "./routers/audienceResearchRouter";
 import {
@@ -67,6 +68,11 @@ import {
   buildTrafficConversionReport,
   trafficReportFiltersSchema,
 } from "./adminTrafficMetrics";
+import {
+  buildCoachScriptQualityDownload,
+  buildCoachScriptQualityReport,
+  coachScriptQualityFiltersSchema,
+} from "./adminCoachScriptQuality";
 
 const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   limit: true,
@@ -6890,11 +6896,29 @@ The hook MUST be 7-10 words. Count them.`),
           recentScripts,
         };
       }),
+
+    coachScriptQualitySummary: adminPanelProcedure
+      .input(coachScriptQualityFiltersSchema.optional())
+      .query(async ({ input }) => {
+        return buildCoachScriptQualityReport(coachScriptQualityFiltersSchema.parse(input ?? {}));
+      }),
+
+    coachScriptQualityDownload: adminPanelProcedure
+      .input(
+        coachScriptQualityFiltersSchema.extend({
+          format: z.enum(["html", "csv"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { format, ...filters } = input;
+        return buildCoachScriptQualityDownload({ filters, format });
+      }),
   }),
 
   outreach: outreachRouter,
   founderInterview: founderInterviewRouter,
   featureRequest: featureRequestRouter,
+  coachScriptFeedback: coachScriptFeedbackRouter,
 
   plan: planRouter,
   studio: studioRouter,

@@ -40,7 +40,20 @@ export type CoachProductionNotes = {
   scriptMode?: string;
   contentFormat?: string;
   funnelStage?: string;
+  sourceDescription?: string;
+  coachJudge?: CoachScriptJudgeMeta;
   sections?: CoachScriptSections;
+};
+
+export type CoachScriptJudgeMeta = {
+  overallScore?: number;
+  hookEffectiveness?: number;
+  viewerSense?: number;
+  nicheFit?: number;
+  skipRatePrediction?: number;
+  ctaQuality?: number;
+  verdictPass?: boolean;
+  regenCount?: number;
 };
 
 export { formatCoachHookTypeLabel, parseCoachHookVariations, type CoachHookVariation };
@@ -145,6 +158,8 @@ export function buildProductionNotesJson(
     funnelStage?: string;
     scriptMode?: string;
     hookType?: string;
+    sourceDescription?: string;
+    coachJudge?: CoachScriptJudgeMeta;
   }
 ): string {
   const base =
@@ -157,6 +172,8 @@ export function buildProductionNotesJson(
     funnelStage: extras?.funnelStage,
     scriptMode: extras?.scriptMode,
     hookType: extras?.hookType,
+    sourceDescription: extras?.sourceDescription,
+    coachJudge: extras?.coachJudge,
     sections,
   });
 }

@@ -245,6 +245,17 @@ export async function generateCoachScriptForWorkspace(args: {
     funnelStage: funnelStage ?? undefined,
     scriptMode,
     hookType: hookTypeRaw || undefined,
+    sourceDescription: effectiveDescription.trim().slice(0, 2000),
+    coachJudge: {
+      overallScore: judged.judge.overallScore,
+      hookEffectiveness: judged.judge.hookEffectiveness,
+      viewerSense: judged.judge.viewerSense,
+      nicheFit: judged.judge.nicheFit,
+      skipRatePrediction: judged.judge.skipRatePrediction,
+      ctaQuality: judged.judge.ctaQuality,
+      verdictPass: judged.judge.verdictPass,
+      regenCount: judged.regenCount,
+    },
   });
 
   const insertResult = await db.insert(coachScripts).values({

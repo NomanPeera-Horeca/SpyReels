@@ -22,6 +22,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
+import { cn } from "@/lib/utils";
+import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
+import {
+  CoachScriptSchedulePanel,
+  type CoachScriptSchedulePanelProps,
+} from "@/components/CoachScriptSchedulePanel";
 import Tooltip from "@/components/Tooltip";
 
 function truncateWords(text: string, maxWords: number): string {
@@ -209,8 +215,11 @@ type AiCoachResultViewProps = {
   onDismissHookVariations: () => void;
   refinePending: boolean;
   savePending?: boolean;
-  onSaveToLibrary?: () => void;
-  saveToLibraryPending?: boolean;
+  scheduleSave?: Omit<CoachScriptSchedulePanelProps, "className">;
+  onSaveToMyScripts?: () => void;
+  saveToMyScriptsPending?: boolean;
+  savedScriptId?: number | null;
+  onOpenMyScripts?: () => void;
   onFilmNow?: () => void;
   filmNowPending?: boolean;
   /** Read-only embed (onboarding aha): hides edit, refine, hook tools, and top actions. */
@@ -236,8 +245,11 @@ export function AiCoachResultView({
   onDismissHookVariations,
   refinePending,
   savePending,
-  onSaveToLibrary,
-  saveToLibraryPending,
+  scheduleSave,
+  onSaveToMyScripts,
+  saveToMyScriptsPending,
+  savedScriptId,
+  onOpenMyScripts,
   onFilmNow,
   filmNowPending,
   previewMode = false,
@@ -306,15 +318,24 @@ export function AiCoachResultView({
                   {filmNowPending ? "Opening teleprompter..." : "Film now"}
                 </button>
               ) : null}
-              {onSaveToLibrary ? (
+              {onSaveToMyScripts ? (
                 <button
                   type="button"
-                  onClick={onSaveToLibrary}
-                  disabled={saveToLibraryPending}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+                  onClick={onSaveToMyScripts}
+                  disabled={saveToMyScriptsPending}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border disabled:opacity-60",
+                    savedScriptId
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  )}
                 >
                   <BookmarkPlus className="h-3.5 w-3.5" />
-                  {saveToLibraryPending ? "Saving..." : "Save to library"}
+                  {saveToMyScriptsPending
+                    ? "Saving..."
+                    : savedScriptId
+                      ? "Saved · My Scripts"
+                      : "Save to My Scripts"}
                 </button>
               ) : null}
             <button
@@ -541,6 +562,7 @@ export function AiCoachResultView({
             </div>
 
             {!previewMode ? (
+              <>
             <div className="pt-2 space-y-3">
               <div className="flex gap-2 flex-wrap">
                 {editMode ? (
@@ -611,6 +633,9 @@ export function AiCoachResultView({
                 </div>
               )}
             </div>
+
+              <CoachScriptFeedback coachScriptId={result.id} />
+              </>
             ) : null}
           </main>
 
@@ -714,6 +739,10 @@ export function AiCoachResultView({
                 </p>
               )}
             </div>
+
+            {!previewMode && scheduleSave ? (
+              <CoachScriptSchedulePanel {...scheduleSave} />
+            ) : null}
 
             <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
               <h2 className="text-sm font-bold mb-3">Quick Actions</h2>

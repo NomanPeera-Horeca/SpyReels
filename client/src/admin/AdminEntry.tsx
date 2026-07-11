@@ -7,6 +7,7 @@ import { isAdminPanelClient } from "./isAdminClient";
 import BlogStudioPage from "./pages/BlogStudioPage";
 import CreatorsPage from "./pages/CreatorsPage";
 import EmailsPage from "./pages/EmailsPage";
+import ScriptQualityPage from "./pages/ScriptQualityPage";
 import TrafficPage from "./pages/TrafficPage";
 import SeoHubPage, { type SeoHubSub } from "./pages/seo/SeoHubPage";
 import UserDetailPage from "./pages/UserDetailPage";
@@ -26,6 +27,7 @@ function parseSeoSub(loc: string): "redirect" | "invalid" | SeoHubSub {
 
 function adminTabFromPath(loc: string): string | null {
   if (loc.startsWith("/admin/traffic")) return "traffic";
+  if (loc.startsWith("/admin/script-quality")) return "script-quality";
   if (loc.startsWith("/admin/blogs")) return "blogs";
   if (loc.startsWith("/admin/creators")) return "creators";
   if (loc.startsWith("/admin/emails")) return "emails";
@@ -92,6 +94,8 @@ export default function AdminEntry() {
   const child =
     tab === "traffic" ? (
       <TrafficPage />
+    ) : tab === "script-quality" ? (
+      <ScriptQualityPage />
     ) : tab === "blogs" ? (
       <BlogStudioPage />
     ) : tab === "creators" ? (

@@ -1724,3 +1724,34 @@ export const founderInterviewRequests = mysqlTable(
 
 export type FounderInterviewRequest = typeof founderInterviewRequests.$inferSelect;
 export type InsertFounderInterviewRequest = typeof founderInterviewRequests.$inferInsert;
+
+/** User thumbs feedback on AI Coach scripts (quality loop for founder review). */
+export const coachScriptFeedback = mysqlTable(
+  "coach_script_feedback",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    coachScriptId: int("coachScriptId")
+      .notNull()
+      .references(() => coachScripts.id, { onDelete: "cascade" }),
+    rating: varchar("rating", { length: 8 }).notNull(),
+    reason: varchar("reason", { length: 32 }),
+    note: varchar("note", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userScriptUnique: uniqueIndex("uniq_coach_script_feedback_user_script").on(
+      table.userId,
+      table.coachScriptId
+    ),
+    createdIdx: index("idx_coach_script_feedback_created").on(table.createdAt),
+  })
+);
+
+export type CoachScriptFeedback = typeof coachScriptFeedback.$inferSelect;
+export type InsertCoachScriptFeedback = typeof coachScriptFeedback.$inferInsert;

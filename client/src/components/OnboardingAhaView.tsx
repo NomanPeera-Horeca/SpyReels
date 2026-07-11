@@ -136,7 +136,10 @@ export function OnboardingAhaView({
       return;
     }
     setFilmNowPending(true);
-    saveToLibraryMutation.mutate({ id: displayScript.id });
+    saveToLibraryMutation.mutate({
+      id: displayScript.id,
+      addToCalendar: true,
+    });
   };
 
   const handleSteerPlan = () => {

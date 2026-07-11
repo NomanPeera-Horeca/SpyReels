@@ -1599,6 +1599,20 @@ export async function getSavedScript(id: number): Promise<SavedScript | undefine
   return result[0];
 }
 
+export async function getSavedScriptByCoachScriptId(
+  coachScriptId: number,
+  workspaceId: string
+): Promise<SavedScript | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .select()
+    .from(savedScripts)
+    .where(and(eq(savedScripts.coachScriptId, coachScriptId), eq(savedScripts.workspaceId, workspaceId)))
+    .limit(1);
+  return row;
+}
+
 export async function getSavedScriptsByWorkspace(workspaceId: string): Promise<SavedScript[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

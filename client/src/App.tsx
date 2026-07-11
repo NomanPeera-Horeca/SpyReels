@@ -131,6 +131,7 @@ function DesktopDashboardRouter() {
           <Route path="/workspace/settings" component={WorkspaceSettings} />
           <Route path="/billing" component={Billing} />
           <Route path="/admin/traffic" component={AdminEntry} />
+          <Route path="/admin/script-quality" component={AdminEntry} />
           <Route path="/admin/blogs/:slug?" component={AdminEntry} />
           <Route path="/admin/creators/:segment?" component={AdminEntry} />
           <Route path="/admin/users/:userId" component={AdminEntry} />

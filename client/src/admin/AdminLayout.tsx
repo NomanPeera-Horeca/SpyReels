@@ -3,6 +3,7 @@ import { Link } from "wouter";
 
 const TABS: { id: string; label: string; href: string }[] = [
   { id: "traffic", label: "Traffic", href: "/admin/traffic" },
+  { id: "script-quality", label: "Script Quality", href: "/admin/script-quality" },
   { id: "blogs", label: "Blog Studio", href: "/admin/blogs" },
   { id: "creators", label: "Creators", href: "/admin/creators" },
   { id: "emails", label: "Emails", href: "/admin/emails" },

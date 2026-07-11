@@ -264,3 +264,78 @@ export async function sendFeatureRequestEmail(args: {
     throw new Error(result.error.message);
   }
 }
+
+export async function sendCoachScriptFeedbackEmail(args: {
+  rating: "up" | "down";
+  reasonLabel: string | null;
+  note: string | null;
+  scriptId: number;
+  scriptTitle: string;
+  scriptHook: string;
+  userId: number;
+  userName: string | null;
+  userEmail: string | null;
+}): Promise<void> {
+  const displayName = args.userName?.trim() || "SpyReels user";
+  const replyTo = args.userEmail?.trim() || FEATURE_REQUEST_INBOX;
+  const ratingLabel = args.rating === "up" ? "Thumbs up" : "Thumbs down";
+  const studioUrl = `https://spyreels.ai/studio?script=${args.scriptId}`;
+
+  const text = [
+    `AI Coach script feedback: ${ratingLabel}`,
+    "",
+    `Script: ${args.scriptTitle}`,
+    `Hook: ${args.scriptHook}`,
+    `Studio: ${studioUrl}`,
+    args.reasonLabel ? `Reason: ${args.reasonLabel}` : null,
+    args.note ? `Note: ${args.note}` : null,
+    "",
+    "---",
+    `From: ${displayName}`,
+    `Email: ${args.userEmail?.trim() || "not set"}`,
+    `User ID: ${args.userId}`,
+    `Script ID: ${args.scriptId}`,
+  ]
+    .filter((line) => line != null)
+    .join("\n");
+
+  const html = `
+    <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
+      <h2 style="margin: 0 0 16px;">AI Coach script feedback: ${escapeHtml(ratingLabel)}</h2>
+      <p style="margin: 0 0 8px;"><strong>Script:</strong> ${escapeHtml(args.scriptTitle)}</p>
+      <p style="margin: 0 0 8px;"><strong>Hook:</strong> ${escapeHtml(args.scriptHook.slice(0, 280))}</p>
+      <p style="margin: 0 0 8px;"><a href="${studioUrl}">Open in Studio</a></p>
+      ${
+        args.reasonLabel
+          ? `<p style="margin: 0 0 8px;"><strong>Reason:</strong> ${escapeHtml(args.reasonLabel)}</p>`
+          : ""
+      }
+      ${
+        args.note
+          ? `<p style="margin: 0 0 16px; white-space: pre-wrap; line-height: 1.6;">${escapeHtml(args.note)}</p>`
+          : ""
+      }
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+      <p style="margin: 0; line-height: 1.6; color: #4b5563; font-size: 14px;">
+        From: ${escapeHtml(displayName)}<br />
+        Email: ${escapeHtml(args.userEmail?.trim() || "not set")}<br />
+        User ID: ${args.userId}<br />
+        Script ID: ${args.scriptId}
+      </p>
+    </div>
+  `;
+
+  const result = await getResend().emails.send({
+    from: "SpyReels <noah.perry@mail.spyreels.ai>",
+    to: FEATURE_REQUEST_INBOX,
+    replyTo,
+    subject: `${ratingLabel}: ${args.scriptTitle.slice(0, 80)}`,
+    text,
+    html,
+    tags: [{ name: "template", value: "coach_script_feedback" }],
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+}

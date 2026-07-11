@@ -27,7 +27,7 @@ import {
 import { coachScripts, planCards } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb, createSavedScript } from "../db";
+import { getDb, createSavedScript, getSavedScriptByCoachScriptId, updateSavedScript, ensureDefaultTags } from "../db";
 import { getCreatorCoachProfile } from "../planCoachProfile";
 import { resolveCoachIntent } from "../studioCoachAgent";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
@@ -37,6 +37,7 @@ import {
 } from "../audienceResearch/service";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
+import { assignScriptingTag, pickAutoPostSchedule } from "../ideaScriptExtras";
 import {
   completeAgentProgress,
   failAgentProgress,
@@ -1044,7 +1045,21 @@ export const studioRouter = router({
     }),
 
   saveToLibrary: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(
+      z.object({
+        id: z.number(),
+        addToCalendar: z.boolean().optional().default(true),
+        postDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        postTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+        notes: z.string().trim().max(2000).optional().nullable(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
       const db = await getDb();
@@ -1067,19 +1082,59 @@ export const studioRouter = router({
         hook: script.hook,
         sections,
       });
+      const wordCount = countWords(content);
 
+      const schedule = input.addToCalendar
+        ? input.postDate
+          ? {
+              postDate: new Date(`${input.postDate}T12:00:00`),
+              postTime: input.postTime ?? "09:00",
+            }
+          : pickAutoPostSchedule()
+        : null;
+
+      const notesTrimmed = input.notes?.trim() ?? "";
+      const notes = notesTrimmed || "Saved from AI Coach";
+
+      const existing = await getSavedScriptByCoachScriptId(script.id, ctx.workspaceId);
+
+      if (existing) {
+        await updateSavedScript(existing.id, {
+          title: script.title,
+          content,
+          wordCount,
+          postDate: schedule?.postDate ?? null,
+          postTime: schedule?.postTime ?? null,
+          notes,
+        });
+        return {
+          savedScriptId: existing.id,
+          coachScriptId: script.id,
+          updated: true as const,
+        };
+      }
+
+      await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
       const savedId = await createSavedScript({
         userId: ctx.user.id,
         workspaceId: ctx.workspaceId,
         title: script.title,
         content,
         originalContent: content,
-        wordCount: countWords(content),
+        wordCount,
         status: "draft",
-        notes: "Saved from AI Coach",
+        notes,
         coachScriptId: script.id,
+        postDate: schedule?.postDate ?? null,
+        postTime: schedule?.postTime ?? null,
       });
 
-      return { savedScriptId: savedId, coachScriptId: script.id };
+      await assignScriptingTag(savedId, ctx.workspaceId, ctx.user.id);
+
+      return {
+        savedScriptId: savedId,
+        coachScriptId: script.id,
+        updated: false as const,
+      };
     }),
 });

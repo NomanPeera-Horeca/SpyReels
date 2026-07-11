@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Studio: Save to My Scripts + Schedule panel (approval mockup)</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #18181c;
+      --card: #1e1e24;
+      --border: #2e2e36;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --primary: #7c3aed;
+      --primary-hover: #6d28d9;
+      --violet-soft: rgba(124, 58, 237, 0.15);
+      --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.12);
+      --emerald: #34d399;
+      --tag-scripting: #8b5cf6;
+      --tag-rehearsing: #3b82f6;
+      --tag-custom: #be123c;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* Approval header */
+    .approval-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #1a1033;
+      border-bottom: 1px solid rgba(124, 58, 237, 0.35);
+      padding: 14px 20px;
+    }
+
+    .approval-bar h1 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .approval-bar p {
+      font-size: 13px;
+      color: #c4b5fd;
+      max-width: 72ch;
+    }
+
+    .state-tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .state-tab {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .state-tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .callout-new {
+      display: inline-flex;
+      align-items: center;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fde68a;
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      padding: 1px 5px;
+      border-radius: 999px;
+    }
+
+    /* App shell */
+    .app {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: calc(100vh - 120px);
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      padding: 16px 12px;
+      background: var(--surface);
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 15px;
+      margin-bottom: 16px;
+      padding: 0 8px;
+    }
+
+    .nav-section {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 12px 8px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .nav-item.active {
+      background: var(--violet-soft);
+      color: #ddd6fe;
+      font-weight: 600;
+    }
+
+    .nav-badge {
+      font-size: 9px;
+      font-weight: 800;
+      background: var(--primary);
+      color: white;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* Studio main */
+    .studio {
+      padding: 20px 24px 40px;
+      overflow-x: auto;
+    }
+
+    .studio-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .back-link {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-saved {
+      background: rgba(52, 211, 153, 0.12);
+      border-color: rgba(52, 211, 153, 0.4);
+      color: var(--emerald);
+    }
+
+    .btn.hidden { display: none; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 248px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    /* Script column */
+    .script-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #27272a;
+      color: #d4d4d8;
+    }
+
+    .pill.violet { background: var(--violet-soft); color: #c4b5fd; }
+
+    .section-card {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--blue);
+      border-radius: 16px;
+      background: var(--blue-soft);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .section-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--blue);
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .section-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: #93c5fd;
+    }
+
+    .hook-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #e4e4e7;
+    }
+
+    .hook-box + .hook-box { margin-top: 8px; }
+
+    .hook-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .feedback-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: var(--card);
+      margin-top: 16px;
+    }
+
+    .feedback-card p { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+
+    .thumb-row { display: flex; gap: 8px; }
+
+    .thumb-btn {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    /* Right sidebar */
+    .aside-stack { display: flex; flex-direction: column; gap: 10px; }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+      padding: 12px;
+    }
+
+    .panel h2 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .panel-section {
+      margin-bottom: 10px;
+    }
+
+    .panel-section:last-child { margin-bottom: 0; }
+
+    .panel-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .prod-text {
+      font-size: 12px;
+      color: #d4d4d8;
+      line-height: 1.45;
+    }
+
+    /* NEW schedule panel (compact) */
+    .schedule-panel {
+      border-color: rgba(124, 58, 237, 0.45);
+      box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.12);
+      padding: 10px 11px;
+    }
+
+    .schedule-panel .panel-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .schedule-panel .panel-head h2 {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .hint-text {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+
+    .datetime-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    .date-btn, .time-select {
+      width: 100%;
+      font-size: 11px;
+      padding: 5px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+    }
+
+    .time-select { margin-bottom: 0; }
+
+    .notes-area {
+      width: 100%;
+      min-height: 44px;
+      max-height: 56px;
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      resize: none;
+      font-family: inherit;
+      line-height: 1.35;
+    }
+
+    .save-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .save-cta {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 9px;
+      border: none;
+      background: var(--primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .save-cta.secondary {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 10px;
+      padding: 2px 0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .saved-banner {
+      display: none;
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      background: rgba(52, 211, 153, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      font-size: 10px;
+      color: var(--emerald);
+      line-height: 1.35;
+    }
+
+    .saved-banner.visible { display: block; }
+
+    .saved-banner a {
+      color: var(--emerald);
+      font-weight: 700;
+    }
+
+    /* Spec footer */
+    .spec {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 24px 48px;
+      border-top: 1px solid var(--border);
+    }
+
+    .spec h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .spec ul {
+      font-size: 13px;
+      color: var(--muted);
+      padding-left: 20px;
+    }
+
+    .spec li { margin-bottom: 8px; }
+
+    .spec table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 16px;
+    }
+
+    .spec th, .spec td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    .spec th { background: var(--surface); color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <div class="approval-bar">
+    <h1>Approval mockup: Studio save + schedule panel</h1>
+    <p>
+      Proposed change: add Tags, Post date, Preferred time, and Notes to the Studio right sidebar (same as Script Editor).
+      Rename "Save to library" to "Save to My Scripts". One save puts the script on your calendar-ready pipeline.
+    </p>
+    <div class="state-tabs">
+      <button type="button" class="state-tab active" data-state="before">Before save (default)</button>
+      <button type="button" class="state-tab" data-state="after">After save (saved state)</button>
+    </div>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">SpyReels</div>
+      <div class="nav-section">Create</div>
+      <div class="nav-item active">AI Coach <span class="nav-badge">NEW</span></div>
+      <div class="nav-item">30-Day Plan</div>
+      <div class="nav-item">My Scripts</div>
+      <div class="nav-item">Transcripts &amp; Scripts</div>
+    </aside>
+
+    <main class="studio">
+      <div class="studio-top">
+        <a href="#" class="back-link">&larr; New script</a>
+        <div class="actions">
+          <button type="button" class="btn">Copy script</button>
+          <button type="button" class="btn btn-primary" id="top-save-btn">Save to My Scripts</button>
+          <button type="button" class="btn btn-saved hidden" id="top-saved-btn">Saved &middot; Open in My Scripts</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Left: script (abbreviated) -->
+        <div>
+          <h1 class="script-title">CEO Morning Routine Across 11 Countries</h1>
+          <div class="pills">
+            <span class="pill">Instagram + TikTok</span>
+            <span class="pill violet">Hook: Intrigue</span>
+            <span class="pill">~33 seconds</span>
+          </div>
+
+          <div class="section-card">
+            <div class="section-head">
+              <div class="step-num">1</div>
+              <div>
+                <div class="section-label">Hook</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:2px;">Visual + spoken + on-screen text</div>
+              </div>
+            </div>
+            <div class="hook-box">
+              <div class="hook-label">Spoken hook</div>
+              I run 11 countries from one phone. This is the 6 AM routine that keeps me sane.
+            </div>
+            <div class="hook-box">
+              <div class="hook-label">On-screen text</div>
+              11 countries. 1 phone.
+            </div>
+          </div>
+
+          <div class="section-card" style="border-left-color:#8b5cf6;background:rgba(124,58,237,0.08);">
+            <div class="section-head">
+              <div class="step-num" style="background:#7c3aed;">2</div>
+              <div><div class="section-label" style="color:#c4b5fd;">Problem setup</div></div>
+            </div>
+            <div class="hook-box">Most founders think more countries means more chaos. It actually means more systems.</div>
+          </div>
+
+          <div class="feedback-card">
+            <p>Was this script useful?</p>
+            <div class="thumb-row">
+              <button type="button" class="thumb-btn">Yes</button>
+              <button type="button" class="thumb-btn">No</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: production notes + NEW schedule panel -->
+        <div class="aside-stack">
+          <div class="panel">
+            <h2>Production Notes</h2>
+            <div class="panel-section">
+              <div class="panel-label">Setup</div>
+              <p class="prod-text">Start with phone at counter height. Natural morning light from a window.</p>
+            </div>
+            <div class="panel-section">
+              <div class="panel-label">Duration</div>
+              <p class="prod-text">~33 seconds</p>
+            </div>
+            <div class="panel-section">
+              <div class="panel-label">Voice tone</div>
+              <p class="prod-text">Calm, confident, insider reveal.</p>
+            </div>
+          </div>
+
+          <div class="panel schedule-panel">
+            <div class="panel-head">
+              <h2>Schedule &amp; save</h2>
+              <span class="callout-new">New</span>
+            </div>
+            <p class="hint-text" id="schedule-hint">Adds to My Scripts with your filming date.</p>
+
+            <div class="panel-section">
+              <div class="panel-label">Post date</div>
+              <div class="datetime-row">
+                <div>
+                  <div class="field-label">Date</div>
+                  <button type="button" class="date-btn" id="date-display">Jul 11, 2026</button>
+                </div>
+                <div>
+                  <div class="field-label">Time</div>
+                  <select class="time-select" id="time-select">
+                    <option>9:00 AM</option>
+                    <option>12:00 PM</option>
+                    <option>6:00 PM</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-section">
+              <div class="panel-label">Notes</div>
+              <textarea class="notes-area" placeholder="Optional filming notes..." id="notes-field">Film before lunch rush.</textarea>
+            </div>
+
+            <div class="save-row">
+              <button type="button" class="save-cta" id="sidebar-save-btn">Save to My Scripts</button>
+              <button type="button" class="save-cta secondary" id="skip-date-btn">Save without date</button>
+            </div>
+
+            <div class="saved-banner" id="saved-banner">
+              Saved for Jul 11, 9 AM. <a href="#">Open in My Scripts</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <section class="spec">
+    <h3>What you are approving</h3>
+    <ul>
+      <li><strong>New panel</strong> on Studio result screen: Post date, Preferred time, Notes (no tags in Studio; tag in My Scripts if needed).</li>
+      <li><strong>Primary CTA</strong> in sidebar + top bar: "Save to My Scripts" (replaces "Save to library").</li>
+      <li><strong>Default date:</strong> next weekday or plan card day if script came from 30-Day Plan.</li>
+      <li><strong>After save:</strong> banner + "Open in My Scripts". No duplicate rows if saved again (update existing).</li>
+      <li><strong>Secondary:</strong> "Save without date" for archive-only (optional, can hide if you prefer one button).</li>
+    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Today</th>
+          <th>After this change</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Save dumps script into Transcripts &amp; Scripts list with no date</td>
+          <td>Save sets post date, lands on My Scripts calendar</td>
+        </tr>
+        <tr>
+          <td>Schedule only in Script Editor after extra click</td>
+          <td>Schedule on the same screen where you review the script</td>
+        </tr>
+        <tr>
+          <td>Button says "Save to library"</td>
+          <td>Button says "Save to My Scripts"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px;">Open questions for you</h3>
+    <ul>
+      <li>Keep <strong>Save without date</strong> as secondary, or one button only?</li>
+      <li>Should top bar save use sidebar values, or remove top save and only save from panel?</li>
+      <li>From 30-Day Plan scripts: pre-fill date from plan card day automatically?</li>
+    </ul>
+  </section>
+
+  <script>
+    const tabs = document.querySelectorAll(".state-tab");
+    const topSave = document.getElementById("top-save-btn");
+    const topSaved = document.getElementById("top-saved-btn");
+    const sidebarSave = document.getElementById("sidebar-save-btn");
+    const skipDate = document.getElementById("skip-date-btn");
+    const banner = document.getElementById("saved-banner");
+    const scheduleHint = document.getElementById("schedule-hint");
+
+    function setState(mode) {
+      const saved = mode === "after";
+      topSave.classList.toggle("hidden", saved);
+      topSaved.classList.toggle("hidden", !saved);
+      sidebarSave.textContent = saved ? "Update My Scripts" : "Save to My Scripts";
+      skipDate.classList.toggle("hidden", saved);
+      banner.classList.toggle("visible", saved);
+      scheduleHint.textContent = saved
+        ? "Linked to My Scripts. Edit date or notes, then Update."
+        : "Adds to My Scripts with your filming date.";
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        tabs.forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        setState(tab.dataset.state);
+      });
+    });
+
+    function mockSave() {
+      tabs.forEach((t) => t.classList.remove("active"));
+      document.querySelector('[data-state="after"]').classList.add("active");
+      setState("after");
+    }
+
+    sidebarSave.addEventListener("click", mockSave);
+    topSave.addEventListener("click", mockSave);
+    skipDate.addEventListener("click", () => {
+      document.getElementById("date-display").textContent = "No date set";
+      mockSave();
+    });
+  </script>
+</body>
+</html>
