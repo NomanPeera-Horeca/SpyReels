@@ -634,6 +634,16 @@ export default function ScriptEditor() {
                 {script.status === "approved" ? "Unapprove" : "Approve"}
               </span>
             </Button>
+            {script.coachScriptId != null && script.coachScriptId > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/studio?script=${script.coachScriptId}`)}
+              >
+                <Wand2 className="w-3.5 h-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Open in Studio</span>
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"

@@ -1,10 +1,4 @@
-/** Open structured Studio scripts in /studio; legacy flat scripts stay in ScriptEditor. */
-export function savedScriptOpenPath(script: {
-  id: number;
-  coachScriptId?: number | null;
-}): string {
-  if (script.coachScriptId != null && script.coachScriptId > 0) {
-    return `/studio?script=${script.coachScriptId}`;
-  }
+/** My Scripts always opens the Script Editor for filming; use Studio from the editor when needed. */
+export function savedScriptOpenPath(script: { id: number }): string {
   return `/scripts/${script.id}`;
 }

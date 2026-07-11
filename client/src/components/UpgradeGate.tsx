@@ -22,6 +22,7 @@ import { useLocation } from "wouter";
 import { Crown, Lock, Sparkles, ArrowRight, Zap, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 
 // ─── Feature definitions ────────────────────────────────────────
 interface FeatureGateConfig {
@@ -122,6 +123,22 @@ export function useUpgradeCheck(feature: string) {
   const gate = FEATURE_GATES[feature];
 
   if (!gate) return { allowed: true, loading: false, currentPlan };
+
+  const isUnlimitedUser =
+    user?.role === "admin" ||
+    isAdminPanelClient(user) ||
+    (import.meta.env.VITE_OWNER_OPEN_ID &&
+      user?.openId === import.meta.env.VITE_OWNER_OPEN_ID);
+
+  if (isUnlimitedUser) {
+    return {
+      allowed: true,
+      loading: false,
+      currentPlan: subQuery.data?.plan || "pro",
+      requiredPlan: gate.minPlan,
+      gate,
+    };
+  }
 
   const currentIdx = PLAN_ORDER.indexOf(currentPlan);
   const requiredIdx = PLAN_ORDER.indexOf(gate.minPlan);
