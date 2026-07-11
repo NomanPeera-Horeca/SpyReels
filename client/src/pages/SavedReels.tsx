@@ -1171,6 +1171,7 @@ export default function SavedReels() {
                       ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
                       : undefined
                   }
+                  onRemakeSaved={() => setGridModalSavedId(null)}
                 />
               ) : item.reelId != null ? (
                 <InlineWorkflow
@@ -1195,6 +1196,7 @@ export default function SavedReels() {
                       ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
                       : undefined
                   }
+                  onRemakeSaved={() => setGridModalSavedId(null)}
                 />
               ) : null;
             })()

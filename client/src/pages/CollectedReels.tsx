@@ -1275,6 +1275,7 @@ export default function CollectedReels() {
                   ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
                   : undefined
               }
+              onRemakeSaved={() => setGridModalCollectedId(null)}
             />
           ) : (
             renderExpandedTranscribeOnly(gridModalRow)
@@ -1293,6 +1294,7 @@ function CollectedReelWorkflow({
   postedAt,
   reelClassification,
   recreateEntrySignal,
+  onRemakeSaved,
 }: {
   collectedReelId: number;
   reelId: number;
@@ -1301,6 +1303,7 @@ function CollectedReelWorkflow({
   postedAt: Date | string;
   reelClassification?: ReelClassificationLike;
   recreateEntrySignal?: { nonce: number; openScriptId?: number };
+  onRemakeSaved?: () => void;
 }) {
   const utils = trpc.useUtils();
   const transcriptionQuery = trpc.collected.transcriptionStatus.useQuery(
@@ -1357,6 +1360,7 @@ function CollectedReelWorkflow({
       userTimezone={userTimezone}
       postedAt={postedAt}
       recreateEntrySignal={recreateEntrySignal}
+      onRemakeSaved={onRemakeSaved}
     />
   );
 }

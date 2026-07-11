@@ -3359,6 +3359,7 @@ export default function Dashboard() {
                         }
                       : undefined
                   }
+                  onRemakeSaved={() => setGridModalReelId(null)}
                 />
               ) : (
                 <InlineWorkflow
@@ -3391,6 +3392,7 @@ export default function Dashboard() {
                         }
                       : undefined
                   }
+                  onRemakeSaved={() => setGridModalReelId(null)}
                 />
               );
             })()

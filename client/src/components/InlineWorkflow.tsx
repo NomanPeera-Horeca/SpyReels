@@ -31,7 +31,6 @@ import {
   BookmarkCheck,
   Link2,
   Check,
-  Save,
   Tag,
   Pencil,
   RefreshCw,
@@ -42,6 +41,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  STUDIO_REMAKE_SCHEDULE_KEY,
+  type StudioRemakeSchedulePrefill,
+} from "@shared/remakeStudioImport";
 
 const FIRST_SCRIPT_NUDGE_DISMISSED_KEY = "spyreels_first_script_nudge_dismissed";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
@@ -285,6 +288,8 @@ export type InlineWorkflowProps = {
   inspirationReelIsSaved?: boolean;
   /** Stored as research context when user saves a spark from this reel */
   reelCaption?: string;
+  /** Close grid modal or collapse panel after save / Open in Studio */
+  onRemakeSaved?: () => void;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
@@ -304,6 +309,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     saveForInspirationBusy = false,
     inspirationReelIsSaved = false,
     reelCaption,
+    onRemakeSaved,
     onTranscribe,
     userTimezone,
     postedAt,
@@ -339,7 +345,6 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   const [saveDate, setSaveDate] = useState<Date | undefined>(undefined);
   const [saveTime, setSaveTime] = useState("09:00");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [pendingSaveIntent, setPendingSaveIntent] = useState<"draft" | "approved" | null>(null);
   const [, navigate] = useLocation();
   const trpcUtils = trpc.useUtils();
 
@@ -454,15 +459,28 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   }, []);
 
   const saveMutation = trpc.scripts.save.useMutation({
-    onSuccess: (data, variables) => {
-      const approved = variables.status === "approved";
-      toast.success(approved ? "Script approved and saved!" : "Script saved as draft");
-      navigate(`/scripts/${data.id}`);
+    onSuccess: () => {
+      toast.success("Script approved and saved to My Scripts");
       void trpcUtils.scripts.list.invalidate();
       void trpcUtils.library.scripts.invalidate();
+      onRemakeSaved?.();
     },
     onError: () => toast.error("Failed to save script"),
-    onSettled: () => setPendingSaveIntent(null),
+  });
+
+  const importRemakeMutation = trpc.studio.importRemake.useMutation({
+    onSuccess: (data) => {
+      const schedulePrefill: StudioRemakeSchedulePrefill = {
+        postDate: saveDate ? saveDate.toISOString().slice(0, 10) : undefined,
+        postTime: saveTime || undefined,
+        notes: saveNotes.trim() || undefined,
+      };
+      sessionStorage.setItem(STUDIO_REMAKE_SCHEDULE_KEY, JSON.stringify(schedulePrefill));
+      onRemakeSaved?.();
+      navigate(`/studio?script=${data.id}`);
+      toast.success("Opened in Studio");
+    },
+    onError: (err) => toast.error(err.message || "Could not open in Studio"),
   });
 
   const t = transcriptionQuery.data;
@@ -663,16 +681,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     toast.success("SRT file downloaded");
   }, [segments, displayReelId, srtLock]);
 
-  const handleSave = (statusIntent: "draft" | "approved") => {
+  const handleApproveSave = () => {
     const content = editMode ? editedScript : generatedScript;
     if (!content.trim()) {
       toast.error("No script content to save");
       return;
     }
-    setPendingSaveIntent(statusIntent);
-    // `scripts.save` only indexes by user-scrape reelId today; featured
-    // saves simply omit it (the source handle + recreatedScriptId still
-    // give us enough provenance in the library).
     saveMutation.mutate({
       reelId: reelSource === "user_job" ? reelId : undefined,
       recreatedScriptId: activeScriptId || undefined,
@@ -684,8 +698,21 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       postTime: saveTime || undefined,
       notes: saveNotes || undefined,
       tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
-      status: statusIntent,
+      status: "approved",
     } as any);
+  };
+
+  const handleOpenInStudio = () => {
+    const content = editMode ? editedScript : generatedScript;
+    if (!content.trim()) {
+      toast.error("No script content to open in Studio");
+      return;
+    }
+    importRemakeMutation.mutate({
+      script: content,
+      title: saveTitle.trim() || `Script from @${handle}`,
+      sourceHandle: handle || undefined,
+    });
   };
 
   const toggleTag = (tagId: number) => {
@@ -869,9 +896,10 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             selectedTagIds={selectedTagIds}
             toggleTag={toggleTag}
             tags={tagsQuery.data}
-            pendingSaveIntent={pendingSaveIntent}
-            onSave={handleSave}
+            onApproveSave={handleApproveSave}
+            onOpenInStudio={handleOpenInStudio}
             isSaving={saveMutation.isPending}
+            isOpeningStudio={importRemakeMutation.isPending}
             userTimezone={userTimezone}
             showFirstScriptUpgradeNudge={showFirstScriptNudge}
             onDismissFirstScriptUpgradeNudge={dismissFirstScriptNudge}
@@ -996,6 +1024,7 @@ export interface SearchInlineWorkflowProps {
   onTranscribe: () => void;
   userTimezone: string;
   recreateMutation: any;
+  onRemakeSaved?: () => void;
 }
 
 export function SearchInlineWorkflow({
@@ -1006,6 +1035,7 @@ export function SearchInlineWorkflow({
   onTranscribe,
   userTimezone,
   recreateMutation,
+  onRemakeSaved,
 }: SearchInlineWorkflowProps) {
   const [, navigate] = useLocation();
   const trpcUtils = trpc.useUtils();
@@ -1032,20 +1062,32 @@ export function SearchInlineWorkflow({
   const [saveDate, setSaveDate] = useState<Date | undefined>(undefined);
   const [saveTime, setSaveTime] = useState("09:00");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [pendingSaveIntent, setPendingSaveIntent] = useState<"draft" | "approved" | null>(null);
 
   const tagsQuery = trpc.tags.list.useQuery();
 
   const saveMutation = trpc.scripts.save.useMutation({
-    onSuccess: (data, variables) => {
-      const approved = variables.status === "approved";
-      toast.success(approved ? "Script approved and saved!" : "Script saved as draft");
-      navigate(`/scripts/${data.id}`);
+    onSuccess: () => {
+      toast.success("Script approved and saved to My Scripts");
       void trpcUtils.scripts.list.invalidate();
       void trpcUtils.library.scripts.invalidate();
+      onRemakeSaved?.();
     },
     onError: () => toast.error("Failed to save script"),
-    onSettled: () => setPendingSaveIntent(null),
+  });
+
+  const importRemakeMutation = trpc.studio.importRemake.useMutation({
+    onSuccess: (data) => {
+      const schedulePrefill: StudioRemakeSchedulePrefill = {
+        postDate: saveDate ? saveDate.toISOString().slice(0, 10) : undefined,
+        postTime: saveTime || undefined,
+        notes: saveNotes.trim() || undefined,
+      };
+      sessionStorage.setItem(STUDIO_REMAKE_SCHEDULE_KEY, JSON.stringify(schedulePrefill));
+      onRemakeSaved?.();
+      navigate(`/studio?script=${data.id}`);
+      toast.success("Opened in Studio");
+    },
+    onError: (err) => toast.error(err.message || "Could not open in Studio"),
   });
 
   const segments: Segment[] = transcript?.segments || [];
@@ -1200,13 +1242,12 @@ export function SearchInlineWorkflow({
     toast.success("SRT file downloaded");
   }, [segments, reel.shortcode, srtLock]);
 
-  const handleSave = (statusIntent: "draft" | "approved") => {
+  const handleApproveSave = () => {
     const content = editMode ? editedScript : generatedScript;
     if (!content.trim()) {
       toast.error("No script content to save");
       return;
     }
-    setPendingSaveIntent(statusIntent);
     saveMutation.mutate({
       title: saveTitle.trim() || `Script from @${reel.ownerUsername}`,
       content,
@@ -1216,8 +1257,21 @@ export function SearchInlineWorkflow({
       postTime: saveTime || undefined,
       notes: saveNotes || undefined,
       tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
-      status: statusIntent,
+      status: "approved",
     } as any);
+  };
+
+  const handleOpenInStudio = () => {
+    const content = editMode ? editedScript : generatedScript;
+    if (!content.trim()) {
+      toast.error("No script content to open in Studio");
+      return;
+    }
+    importRemakeMutation.mutate({
+      script: content,
+      title: saveTitle.trim() || `Script from @${reel.ownerUsername}`,
+      sourceHandle: reel.ownerUsername || undefined,
+    });
   };
 
   const toggleTag = (tagId: number) => {
@@ -1343,9 +1397,10 @@ export function SearchInlineWorkflow({
             selectedTagIds={selectedTagIds}
             toggleTag={toggleTag}
             tags={tagsQuery.data}
-            pendingSaveIntent={pendingSaveIntent}
-            onSave={handleSave}
+            onApproveSave={handleApproveSave}
+            onOpenInStudio={handleOpenInStudio}
             isSaving={saveMutation.isPending}
+            isOpeningStudio={importRemakeMutation.isPending}
             userTimezone={userTimezone}
           />
         )}
@@ -1701,9 +1756,10 @@ function CompletedScriptSection({
   selectedTagIds,
   toggleTag,
   tags,
-  pendingSaveIntent,
-  onSave,
+  onApproveSave,
+  onOpenInStudio,
   isSaving,
+  isOpeningStudio,
   userTimezone,
   showFirstScriptUpgradeNudge = false,
   onDismissFirstScriptUpgradeNudge,
@@ -1743,9 +1799,10 @@ function CompletedScriptSection({
   selectedTagIds: number[];
   toggleTag: (id: number) => void;
   tags?: { id: number; name: string; color: string }[];
-  pendingSaveIntent: "draft" | "approved" | null;
-  onSave: (statusIntent: "draft" | "approved") => void;
+  onApproveSave: () => void;
+  onOpenInStudio: () => void;
   isSaving: boolean;
+  isOpeningStudio: boolean;
   userTimezone: string;
   sectionRef?: React.Ref<HTMLDivElement>;
   showFirstScriptUpgradeNudge?: boolean;
@@ -2150,22 +2207,22 @@ function CompletedScriptSection({
           <Button
             variant="outline"
             className="flex-1 h-10"
-            onClick={() => onSave("draft")}
-            disabled={isSaving}
+            onClick={onOpenInStudio}
+            disabled={isOpeningStudio || isSaving}
           >
-            {isSaving && pendingSaveIntent === "draft" ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+            {isOpeningStudio ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening...</>
             ) : (
-              <><Save className="mr-2 h-4 w-4" /> Save as Draft</>
+              <><Wand2 className="mr-2 h-4 w-4" /> Open in Studio</>
             )}
           </Button>
           <Button
             className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={() => onSave("approved")}
-            disabled={isSaving}
+            onClick={onApproveSave}
+            disabled={isSaving || isOpeningStudio}
           >
-            {isSaving && pendingSaveIntent === "approved" ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Approving...</>
+            {isSaving ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
             ) : (
               <><Check className="mr-2 h-4 w-4" /> Approve & Save</>
             )}

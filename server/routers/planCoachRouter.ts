@@ -37,6 +37,7 @@ import {
 } from "../audienceResearch/service";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
+import { importRemakeScriptToStudioForWorkspace } from "../importRemakeToStudio";
 import { assignScriptingTag, pickAutoPostSchedule } from "../ideaScriptExtras";
 import {
   completeAgentProgress,
@@ -816,6 +817,24 @@ export const studioRouter = router({
         openId: ctx.user.openId,
         roughScript: input.roughScript,
         workingTitle: input.workingTitle,
+      });
+    }),
+
+  importRemake: protectedProcedure
+    .input(
+      z.object({
+        script: z.string().min(20).max(12000),
+        title: z.string().max(256).optional(),
+        sourceHandle: z.string().max(128).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return importRemakeScriptToStudioForWorkspace({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        flatScript: input.script,
+        title: input.title,
+        sourceHandle: input.sourceHandle,
       });
     }),
 

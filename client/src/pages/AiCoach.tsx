@@ -47,6 +47,10 @@ import {
   pickDefaultPostSchedule,
   postDateFromPlanDay,
 } from "@shared/coachScriptSave";
+import {
+  parseStudioRemakeSchedulePrefill,
+  STUDIO_REMAKE_SCHEDULE_KEY,
+} from "@shared/remakeStudioImport";
 
 type FactCheck = {
   hasClaim: boolean;
@@ -316,6 +320,20 @@ export default function AiCoach() {
 
   useEffect(() => {
     if (!result) return;
+
+    const raw = sessionStorage.getItem(STUDIO_REMAKE_SCHEDULE_KEY);
+    const prefill = parseStudioRemakeSchedulePrefill(raw);
+    if (prefill) {
+      sessionStorage.removeItem(STUDIO_REMAKE_SCHEDULE_KEY);
+      setSavedLibraryScriptId(null);
+      if (prefill.postDate) {
+        const parsed = new Date(`${prefill.postDate}T12:00:00`);
+        if (!Number.isNaN(parsed.getTime())) setPostDate(parsed);
+      }
+      if (prefill.postTime) setPostTime(prefill.postTime);
+      setSaveNotes(prefill.notes ?? "");
+      return;
+    }
 
     const existing = savedScriptsList?.find((s) => s.coachScriptId === result.id);
     if (existing) {

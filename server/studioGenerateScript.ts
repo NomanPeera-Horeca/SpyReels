@@ -52,7 +52,7 @@ export type GeneratedCoachScript = {
   productionNotes: string | null;
 };
 
-function mapCoachScriptRow(row: typeof coachScripts.$inferSelect): GeneratedCoachScript {
+export function mapCoachScriptRow(row: typeof coachScripts.$inferSelect): GeneratedCoachScript {
   const sections = parseCoachScriptSections({
     body: row.body,
     callToAction: row.callToAction,
