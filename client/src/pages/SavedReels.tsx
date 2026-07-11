@@ -48,7 +48,7 @@ import {
   formatNumber,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
-import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
@@ -139,6 +139,8 @@ function savedItemToLibraryRemakeSource(item: SavedItem): LibraryRemakeSource | 
 const RECREATE_BATCH_STALE_MS = 300_000;
 const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
+const SAVED_REELS_INITIAL_VISIBLE = 48;
+const SAVED_REELS_VISIBLE_STEP = 48;
 
 export default function SavedReels() {
   const posthog = usePostHog();
@@ -226,6 +228,7 @@ export default function SavedReels() {
   }, []);
 
   const [sortBy, setSortBy] = useState("date");
+  const [visibleLimit, setVisibleLimit] = useState(SAVED_REELS_INITIAL_VISIBLE);
   const [batchTranscribing, setBatchTranscribing] = useState(false);
   const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<string>>(() => new Set());
 
@@ -269,7 +272,7 @@ export default function SavedReels() {
       }
       return brandCoachBatch.prefetchedForReel(item.reel.id);
     },
-    [brandCoachBatch]
+    [brandCoachBatch.prefetchedForFeatured, brandCoachBatch.prefetchedForReel]
   );
 
   const recreateScrapedQuery = trpc.recreate.checkBatch.useQuery(
@@ -456,6 +459,7 @@ export default function SavedReels() {
 
   useEffect(() => {
     setGridModalSavedId(null);
+    setVisibleLimit(SAVED_REELS_INITIAL_VISIBLE);
   }, [viewMode]);
 
   /** Clear optimistic pending rows when saved.list refetches to completed/failed (same idea as Dashboard). */
@@ -502,12 +506,30 @@ export default function SavedReels() {
     }
   }, [savedReels, sortBy]);
 
-  const groupedByHandle: Record<string, SavedItem[]> = {};
-  for (const item of sortedReels) {
-    const groupKey = `${item.source}:${item.job.handle}`;
-    if (!groupedByHandle[groupKey]) groupedByHandle[groupKey] = [];
-    groupedByHandle[groupKey].push(item);
-  }
+  const displayedReels = useMemo(
+    () => sortedReels.slice(0, visibleLimit),
+    [sortedReels, visibleLimit]
+  );
+
+  const groupedByHandle = useMemo(() => {
+    const groups: Record<string, SavedItem[]> = {};
+    for (const item of displayedReels) {
+      const groupKey = `${item.source}:${item.job.handle}`;
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(item);
+    }
+    return groups;
+  }, [displayedReels]);
+
+  const hasMoreReels = sortedReels.length > visibleLimit;
+
+  useEffect(() => {
+    setVisibleLimit((prev) =>
+      sortedReels.length <= SAVED_REELS_INITIAL_VISIBLE
+        ? SAVED_REELS_INITIAL_VISIBLE
+        : Math.min(prev, sortedReels.length)
+    );
+  }, [sortedReels.length]);
 
   const gridModalItem = useMemo(
     () => (gridModalSavedId == null ? null : sortedReels.find((i) => i.id === gridModalSavedId) ?? null),
@@ -793,13 +815,9 @@ export default function SavedReels() {
                           </span>
 
                           <div className="relative h-18 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-                            <DashboardReelGridMedia
-                              size="compact"
+                            <ReelGridThumbnail
                               className="relative h-full w-full"
                               thumbnailUrl={reel.thumbnailUrl}
-                              videoUrl={reel.videoUrl}
-                              shortcode={reel.shortcode}
-                              reelId={item.source === "scraped" ? reel.id : undefined}
                             />
                             {reel.duration ? (
                               <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[9px] font-mono text-white">
@@ -1136,6 +1154,18 @@ export default function SavedReels() {
             </div>
           );
         })}
+
+      {hasMoreReels && (
+        <div className="mb-10 flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setVisibleLimit((n) => n + SAVED_REELS_VISIBLE_STEP)}
+          >
+            Show more ({sortedReels.length - visibleLimit} remaining)
+          </Button>
+        </div>
+      )}
 
       <GridReelWorkflowDialog
         open={gridModalItem != null}

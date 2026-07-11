@@ -2853,6 +2853,7 @@ export default function Dashboard() {
                             ? "rounded-xl ring-2 ring-primary/40"
                             : undefined
                         }
+                        interactiveMedia
                         isActive={isModalOpen}
                         index={index}
                         thumbnailUrl={reel.thumbnailUrl}

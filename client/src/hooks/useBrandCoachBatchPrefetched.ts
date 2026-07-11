@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import type { BrandCoachCachedScore } from "@/components/BrandCoachBadge";
@@ -44,5 +44,8 @@ export function useBrandCoachBatchPrefetched(opts: {
     [batchQuery.data, batchReady, brandCoachLock.loading, brandCoachLock.locked]
   );
 
-  return { prefetchedForReel, prefetchedForFeatured };
+  return useMemo(
+    () => ({ prefetchedForReel, prefetchedForFeatured }),
+    [prefetchedForFeatured, prefetchedForReel]
+  );
 }

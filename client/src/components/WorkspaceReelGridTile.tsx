@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { cn } from "@/lib/utils";
 import { formatWorkspaceReelDuration } from "@/lib/workspaceReelGridLayout";
 
@@ -25,6 +26,8 @@ export type WorkspaceReelGridTileProps = {
   stats: ReactNode;
   actions: ReactNode;
   mediaFallback?: ReactNode;
+  /** When false (default), renders a lazy thumbnail only. Set true for inline grid playback. */
+  interactiveMedia?: boolean;
 };
 
 /**
@@ -53,6 +56,7 @@ export function WorkspaceReelGridTile({
   stats,
   actions,
   mediaFallback,
+  interactiveMedia = false,
 }: WorkspaceReelGridTileProps) {
   const showEngagement =
     engagementRate > 0 && !(highlightBanner && index === 0);
@@ -70,13 +74,20 @@ export function WorkspaceReelGridTile({
         onClick={onMediaClick}
       >
         {(thumbnailUrl ?? "").trim() ? (
-          <DashboardReelGridMedia
-            className="relative h-full w-full"
-            thumbnailUrl={thumbnailUrl}
-            videoUrl={videoUrl}
-            shortcode={shortcode}
-            reelId={reelId}
-          />
+          interactiveMedia ? (
+            <DashboardReelGridMedia
+              className="relative h-full w-full"
+              thumbnailUrl={thumbnailUrl}
+              videoUrl={videoUrl}
+              shortcode={shortcode}
+              reelId={reelId}
+            />
+          ) : (
+            <ReelGridThumbnail
+              className="relative h-full w-full"
+              thumbnailUrl={thumbnailUrl}
+            />
+          )
         ) : (
           mediaFallback
         )}

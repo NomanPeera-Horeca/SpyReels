@@ -53,7 +53,7 @@ import {
   formatNumber,
   formatPostedTime,
 } from "@/components/InlineWorkflow";
-import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
@@ -974,13 +974,9 @@ export default function CollectedReels() {
                   <div className="relative h-18 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
                     {(reel.thumbnailUrl ?? "").trim() ? (
                       <>
-                        <DashboardReelGridMedia
-                          size="compact"
+                        <ReelGridThumbnail
                           className="relative h-full w-full"
                           thumbnailUrl={reel.thumbnailUrl}
-                          videoUrl={reel.videoUrl}
-                          shortcode={reel.shortcode}
-                          reelId={reel.transcriptionReelId ?? undefined}
                         />
                         <span className="pointer-events-none absolute right-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
                           {sourceBadge(reel)}
