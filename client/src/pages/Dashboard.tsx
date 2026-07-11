@@ -91,6 +91,7 @@ import {
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
+import { scriptFilmPath } from "@shared/scriptFilm";
 import { useAppBack } from "@/hooks/useAppBack";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
@@ -412,18 +413,21 @@ export default function Dashboard() {
       nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
     }));
   }, [viewMode]);
-  const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
-    if (viewMode === "grid") {
-      setGridModalReelId(reelId);
-    } else {
+  const triggerOpenMyScript = useCallback(
+    (reelId: number, openScriptId: number) => {
+      if (viewMode === "grid") {
+        setLocation(scriptFilmPath(openScriptId));
+        return;
+      }
       setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
-    }
-    setRecreatePulse((prev) => ({
-      reelId,
-      openScriptId,
-      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
-    }));
-  }, [viewMode]);
+      setRecreatePulse((prev) => ({
+        reelId,
+        openScriptId,
+        nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+      }));
+    },
+    [viewMode, setLocation]
+  );
   const setReelRowRef = useCallback((id: number) => (el: HTMLDivElement | null) => {
     if (el) reelRowElsRef.current.set(id, el);
     else reelRowElsRef.current.delete(id);
@@ -2502,7 +2506,7 @@ export default function Dashboard() {
                   | undefined;
                 const alreadyTranscribed = hasTranscription && !isNoSpeech;
                 const oneClickRemake =
-                  librarySource != null && hookState != null
+                  librarySource != null
                     ? buildLibraryOneClickRemake({
                         openScriptReelId: reel.id,
                         jobId: librarySource.source === "user" ? jobId! : undefined,
@@ -2513,7 +2517,7 @@ export default function Dashboard() {
                         classification: reelClassificationFromRow(reel),
                         batchRecreateSt: recreateSt,
                         batchEntry,
-                        hookState,
+                        hookState: getRemakeState(libraryRemakeKey(librarySource)),
                         librarySource,
                         startRemake,
                         retryRemake,
@@ -2851,9 +2855,9 @@ export default function Dashboard() {
                     | RecreateBatchEntry
                     | undefined;
                   const alreadyTranscribed = hasTranscription && !isNoSpeech;
-                  const oneClickRemake =
-                    librarySource != null && hookState != null
-                      ? buildLibraryOneClickRemake({
+                    const oneClickRemake =
+                      librarySource != null
+                        ? buildLibraryOneClickRemake({
                           openScriptReelId: reel.id,
                           jobId: librarySource.source === "user" ? jobId! : undefined,
                           isNoSpeech,
@@ -2863,7 +2867,7 @@ export default function Dashboard() {
                           classification: reelClassificationFromRow(reel),
                           batchRecreateSt: recreateSt,
                           batchEntry,
-                          hookState,
+                          hookState: getRemakeState(libraryRemakeKey(librarySource)),
                           librarySource,
                           startRemake,
                           retryRemake,

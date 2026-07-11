@@ -30,6 +30,7 @@ import {
   List,
 } from "lucide-react";
 import { mergeRemakeability } from "@/lib/remakeability";
+import { scriptFilmPath } from "@shared/scriptFilm";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import {
   useLibraryRemakeChain,
@@ -214,20 +215,23 @@ export default function SavedReels() {
     }));
   }, []);
 
-  const triggerOpenMyScript = useCallback((reelId: number, openScriptId: number) => {
-    const list = savedReelsRef.current;
-    const item = list.find((s) => s.reel.id === reelId);
-    if (viewModeRef.current === "grid") {
-      if (item) setGridModalSavedId(item.id);
-    } else {
+  const triggerOpenMyScript = useCallback(
+    (reelId: number, openScriptId: number) => {
+      if (viewModeRef.current === "grid") {
+        setLocation(scriptFilmPath(openScriptId));
+        return;
+      }
+      const list = savedReelsRef.current;
+      const item = list.find((s) => s.reel.id === reelId);
       if (item) setExpandedSavedId(item.id);
-    }
-    setRecreatePulse((prev) => ({
-      reelId,
-      nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
-      openScriptId,
-    }));
-  }, []);
+      setRecreatePulse((prev) => ({
+        reelId,
+        nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
+        openScriptId,
+      }));
+    },
+    [setLocation]
+  );
 
   const [sortBy, setSortBy] = useState("date");
   const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
@@ -784,7 +788,7 @@ export default function SavedReels() {
                     );
                     const alreadyTranscribed = hasTranscription && !isNoSpeech;
                     const oneClickRemake =
-                      librarySource != null && hookState != null
+                      librarySource != null
                         ? buildLibraryOneClickRemake({
                             openScriptReelId: reel.id,
                             jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
@@ -795,7 +799,7 @@ export default function SavedReels() {
                             classification: reelClassificationFromRow(reel),
                             batchRecreateSt: recreateSt,
                             batchEntry,
-                            hookState,
+                            hookState: getRemakeState(libraryRemakeKey(librarySource)),
                             librarySource,
                             startRemake,
                             retryRemake,
@@ -1024,7 +1028,7 @@ export default function SavedReels() {
                     );
                     const alreadyTranscribed = hasTranscription && !isNoSpeech;
                     const oneClickRemake =
-                      librarySource != null && hookState != null
+                      librarySource != null
                         ? buildLibraryOneClickRemake({
                             openScriptReelId: reel.id,
                             jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
@@ -1035,7 +1039,7 @@ export default function SavedReels() {
                             classification: reelClassificationFromRow(reel),
                             batchRecreateSt: recreateSt,
                             batchEntry,
-                            hookState,
+                            hookState: getRemakeState(libraryRemakeKey(librarySource)),
                             librarySource,
                             startRemake,
                             retryRemake,

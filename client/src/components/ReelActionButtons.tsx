@@ -212,7 +212,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
         <>
           {inspirationSaveCta && isSaved ? (
             <Tooltip content="Remove from saved">
-              <span className="block w-full">
+              <span className="pointer-events-auto block w-full">
                 <Button
                   type="button"
                   variant="secondary"
@@ -235,7 +235,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                   : (oneClickRemake.tooltip ?? oneClickRemake.label)
               }
             >
-              <span className="block w-full">
+              <span className="pointer-events-auto block w-full">
                 <Button
                   type="button"
                   variant={

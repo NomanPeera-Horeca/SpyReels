@@ -142,11 +142,17 @@ export function WorkspaceReelGridTile({
       {badges ? <div className="shrink-0 px-2.5 pb-0 pt-2">{badges}</div> : null}
 
       <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-2">
-        <div className="min-h-0 flex-1 cursor-pointer space-y-2" onClick={onMediaClick}>
+        <div className="min-h-0 flex-1 space-y-2">
           {caption}
           {stats}
         </div>
-        <div className="mt-auto shrink-0 pt-2">{actions}</div>
+        <div
+          className="relative z-20 mt-auto shrink-0 pt-2"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {actions}
+        </div>
       </div>
     </div>
   );
