@@ -42,6 +42,7 @@ import {
 } from "@/lib/oneClickRemakeAction";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
+import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
 import {
   InlineWorkflow,
   formatNumber,
@@ -72,9 +73,18 @@ function reelRecreateState(
 }
 
 function transcriptionIsNoSpeech(
-  t: { status?: string; transcript?: string | null; segments?: unknown } | null | undefined
+  t:
+    | {
+        status?: string;
+        transcript?: string | null;
+        segments?: unknown;
+        hasSpeech?: boolean;
+      }
+    | null
+    | undefined
 ): boolean {
   if (!t || t.status !== "completed") return false;
+  if (typeof t.hasSpeech === "boolean") return !t.hasSpeech;
   const segs = t.segments;
   const n = Array.isArray(segs) ? segs.length : 0;
   return !String(t.transcript ?? "").trim() && n === 0;
@@ -245,6 +255,21 @@ export default function SavedReels() {
         ),
       ],
     [savedReels]
+  );
+
+  const brandCoachBatch = useBrandCoachBatchPrefetched({
+    reelIds: scrapedReelIds,
+    featuredReelIds,
+  });
+
+  const brandCoachPrefetchedScore = useCallback(
+    (item: SavedItem): ReturnType<typeof brandCoachBatch.prefetchedForReel> => {
+      if (item.source === "featured" && item.featuredReelId != null) {
+        return brandCoachBatch.prefetchedForFeatured(item.featuredReelId);
+      }
+      return brandCoachBatch.prefetchedForReel(item.reel.id);
+    },
+    [brandCoachBatch]
   );
 
   const recreateScrapedQuery = trpc.recreate.checkBatch.useQuery(
@@ -816,6 +841,7 @@ export default function SavedReels() {
                                     : { kind: "reel", reelId: reel.id }
                                 }
                                 hasTranscript={hasTranscription && !isNoSpeech}
+                                prefetchedScore={brandCoachPrefetchedScore(item)}
                               />
                             </div>
                             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -1049,6 +1075,7 @@ export default function SavedReels() {
                                 : { kind: "reel", reelId: reel.id }
                             }
                             hasTranscript={hasTranscription && !isNoSpeech}
+                            prefetchedScore={brandCoachPrefetchedScore(item)}
                           />
                         }
                         caption={

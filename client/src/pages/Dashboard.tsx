@@ -68,6 +68,7 @@ import {
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useFeatureLock } from "@/components/UpgradeSidesheet";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
+import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { normalizeAnalyticsHandle, cn } from "@/lib/utils";
 import Tooltip from "@/components/Tooltip";
@@ -936,6 +937,10 @@ export default function Dashboard() {
     }
   );
   const recreateMap = recreateBatchQuery.data || {};
+
+  const brandCoachBatch = useBrandCoachBatchPrefetched(
+    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds }
+  );
 
   const libraryRemakeOnStageChange = useCallback(
     (
@@ -2580,6 +2585,11 @@ export default function Dashboard() {
                                 : { kind: "reel", reelId: reel.id }
                             }
                             hasTranscript={hasTranscription && !isNoSpeech}
+                            prefetchedScore={
+                              isFeaturedView
+                                ? brandCoachBatch.prefetchedForFeatured(reel.id)
+                                : brandCoachBatch.prefetchedForReel(reel.id)
+                            }
                           />
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
@@ -2916,6 +2926,11 @@ export default function Dashboard() {
                                   : { kind: "reel", reelId: reel.id }
                               }
                               hasTranscript={hasTranscription && !isNoSpeech}
+                              prefetchedScore={
+                                isFeaturedView
+                                  ? brandCoachBatch.prefetchedForFeatured(reel.id)
+                                  : brandCoachBatch.prefetchedForReel(reel.id)
+                              }
                             />
                           </div>
                         }

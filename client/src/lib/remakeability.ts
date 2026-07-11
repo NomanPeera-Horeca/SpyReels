@@ -14,6 +14,11 @@ export type TranscriptionLike = {
   status?: string | null;
   transcript?: string | null;
   segments?: unknown;
+  startedAt?: string | Date | null;
+  /** saved.list summary fields (no transcript/segments payload) */
+  hasSpeech?: boolean;
+  wordCount?: number;
+  musicHeavy?: boolean;
 } | null | undefined;
 
 /** Tier 2 fields from reels / featured_reels (nullable until classified). */
@@ -44,6 +49,17 @@ export function transcriptionIsNotRemakeable(
   if (st === "processing" || st === "pending") return { notRemakeable: false };
   if (st === "failed") return { notRemakeable: false };
   if (st !== "completed") return { notRemakeable: false };
+
+  if (typeof t.wordCount === "number") {
+    if (t.wordCount === 0) return { notRemakeable: false };
+    if (t.wordCount < 8) {
+      return { notRemakeable: true, reason: "too_short" };
+    }
+    if (t.musicHeavy) {
+      return { notRemakeable: true, reason: "music_heavy" };
+    }
+    return { notRemakeable: false };
+  }
 
   const combined = combinedTranscriptText(t);
   if (!combined) return { notRemakeable: false };

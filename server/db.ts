@@ -2591,22 +2591,30 @@ export async function getBrandCoachScoresBatch(opts: {
   if (!db) return { byReelId, byFeaturedReelId };
 
   if (opts.reelIds && opts.reelIds.length > 0) {
-    const rows = await db
-      .select()
-      .from(brandCoachScores)
-      .where(inArray(brandCoachScores.reelId, opts.reelIds));
-    for (const row of rows) {
-      if (row.reelId != null) byReelId[row.reelId] = row;
+    const CHUNK = 200;
+    for (let i = 0; i < opts.reelIds.length; i += CHUNK) {
+      const chunk = opts.reelIds.slice(i, i + CHUNK);
+      const rows = await db
+        .select()
+        .from(brandCoachScores)
+        .where(inArray(brandCoachScores.reelId, chunk));
+      for (const row of rows) {
+        if (row.reelId != null) byReelId[row.reelId] = row;
+      }
     }
   }
 
   if (opts.featuredReelIds && opts.featuredReelIds.length > 0) {
-    const rows = await db
-      .select()
-      .from(brandCoachScores)
-      .where(inArray(brandCoachScores.featuredReelId, opts.featuredReelIds));
-    for (const row of rows) {
-      if (row.featuredReelId != null) byFeaturedReelId[row.featuredReelId] = row;
+    const CHUNK = 200;
+    for (let i = 0; i < opts.featuredReelIds.length; i += CHUNK) {
+      const chunk = opts.featuredReelIds.slice(i, i + CHUNK);
+      const rows = await db
+        .select()
+        .from(brandCoachScores)
+        .where(inArray(brandCoachScores.featuredReelId, chunk));
+      for (const row of rows) {
+        if (row.featuredReelId != null) byFeaturedReelId[row.featuredReelId] = row;
+      }
     }
   }
 

@@ -36,16 +36,7 @@ type BrandCoachSource =
   | { kind: "reel"; reelId: number }
   | { kind: "featured"; featuredReelId: number };
 
-interface BrandCoachBadgeProps {
-  source: BrandCoachSource;
-  /** Smaller variant for compact card layouts. */
-  size?: "sm" | "md";
-  className?: string;
-  /** Whether the reel has a transcript - drives the nudge in the dialog. */
-  hasTranscript?: boolean;
-}
-
-interface CachedScore {
+export type BrandCoachCachedScore = {
   overallScore: number;
   hookScore: number;
   retentionScore: number;
@@ -58,6 +49,20 @@ interface CachedScore {
   suggestions: string[];
   reasoning: string;
   usedTranscript: boolean;
+};
+
+interface BrandCoachBadgeProps {
+  source: BrandCoachSource;
+  /** Smaller variant for compact card layouts. */
+  size?: "sm" | "md";
+  className?: string;
+  /** Whether the reel has a transcript - drives the nudge in the dialog. */
+  hasTranscript?: boolean;
+  /**
+   * When set, skips per-tile brandCoach.get. undefined = still loading batch;
+   * null = batch loaded, no cached score for this reel.
+   */
+  prefetchedScore?: BrandCoachCachedScore | null;
 }
 
 function colorFor(score: number) {
@@ -70,7 +75,7 @@ function colorFor(score: number) {
   return "border-rose-400/35 bg-rose-400/10 text-rose-300";
 }
 
-function verdictLabel(v: CachedScore["verdict"]) {
+function verdictLabel(v: BrandCoachCachedScore["verdict"]) {
   return v === "viral" ? "Viral pattern"
     : v === "strong" ? "Strong"
     : v === "average" ? "Average"
@@ -82,6 +87,7 @@ export function BrandCoachBadge({
   size = "sm",
   className,
   hasTranscript,
+  prefetchedScore,
 }: BrandCoachBadgeProps) {
   const { locked, loading: gateLoading } = useFeatureLock("brandCoach");
   const { open: openUpgrade } = useUpgrade();
@@ -92,8 +98,10 @@ export function BrandCoachBadge({
       ? { reelId: source.reelId }
       : { featuredReelId: source.featuredReelId };
 
+  const useBatchScore = prefetchedScore !== undefined;
+
   const getQuery = trpc.brandCoach.get.useQuery(queryInput, {
-    enabled: !gateLoading && !locked,
+    enabled: !gateLoading && !locked && !useBatchScore,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -101,6 +109,7 @@ export function BrandCoachBadge({
   const scoreMutation = trpc.brandCoach.score.useMutation({
     onSuccess: (data) => {
       utils.brandCoach.get.setData(queryInput, data);
+      void utils.brandCoach.getBatch.invalidate();
       // Auto-transcribe may have run on the server, so refresh the
       // caches that surface transcription status in parent UI.
       if (source.kind === "reel") {
@@ -117,12 +126,15 @@ export function BrandCoachBadge({
     },
   });
 
-  const cached = getQuery.data as CachedScore | null | undefined;
+  const cached = (useBatchScore ? prefetchedScore : getQuery.data) as
+    | BrandCoachCachedScore
+    | null
+    | undefined;
 
   const heightClass = size === "sm" ? "h-6 px-1.5" : "h-7 px-2";
   const textClass = size === "sm" ? "text-[10px]" : "text-xs";
 
-  if (gateLoading) {
+  if (gateLoading || (useBatchScore && prefetchedScore === undefined)) {
     return null;
   }
 
@@ -217,7 +229,7 @@ function BrandCoachDetailDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  score: CachedScore;
+  score: BrandCoachCachedScore;
   hasTranscript?: boolean;
   onRescore?: () => void;
   rescorePending?: boolean;
@@ -331,7 +343,7 @@ function ScoreCircle({
   verdict,
 }: {
   score: number;
-  verdict: CachedScore["verdict"];
+  verdict: BrandCoachCachedScore["verdict"];
 }) {
   const ring =
     score >= 85 ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300"

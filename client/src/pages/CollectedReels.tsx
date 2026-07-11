@@ -59,6 +59,7 @@ import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
+import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
 
 type CollectedRow = inferRouterOutputs<AppRouter>["collected"]["list"][number];
 type ViewMode = "list" | "grid";
@@ -435,6 +436,8 @@ export default function CollectedReels() {
   );
 
   const recreateMap = recreateBatchQuery.data || {};
+
+  const brandCoachBatch = useBrandCoachBatchPrefetched({ reelIds: mappedReelIds });
 
   const libraryRemakeOnStageChange = useCallback(
     (
@@ -1188,6 +1191,7 @@ export default function CollectedReels() {
                     <BrandCoachBadge
                       source={{ kind: "reel", reelId: mappedReelId }}
                       hasTranscript={hasTranscription && !isNoSpeech}
+                      prefetchedScore={brandCoachBatch.prefetchedForReel(mappedReelId)}
                     />
                   ) : null
                 }

@@ -99,6 +99,8 @@ import {
 import { runOnboardingStartCreating } from "./onboardingStartCreating";
 import { expandHookToScript } from "./hookGeneratorExpandScript";
 import { buildHookTeaserPartial } from "@shared/hookGenerator";
+import { toSavedListTranscriptionSummary } from "@shared/savedListTranscription";
+import type { SavedListTranscriptionSummary } from "@shared/savedListTranscription";
 import { getOnboardingGenerationProgress } from "./onboardingGenerationProgress";
 import { ONBOARDING_NICHES } from "@/data/onboardingNiches";
 import {
@@ -3701,7 +3703,7 @@ Return JSON only:
           followerCount: number;
           featuredAccountId: number | null;
         };
-        transcription?: Transcription;
+        transcription?: SavedListTranscriptionSummary;
       };
 
       const scrapedItems: ListedSaved[] = scraped.map((s) => ({
@@ -3737,7 +3739,7 @@ Return JSON only:
           followerCount: s.job.followerCount ?? 0,
           featuredAccountId: null,
         },
-        transcription: s.transcription,
+        transcription: toSavedListTranscriptionSummary(s.transcription),
       }));
 
       const featuredItems: ListedSaved[] = featured.map((f) => ({
@@ -3773,7 +3775,7 @@ Return JSON only:
           followerCount: f.featuredAccount.followerCount ?? 0,
           featuredAccountId: f.featuredAccount.id,
         },
-        transcription: f.transcription,
+        transcription: toSavedListTranscriptionSummary(f.transcription),
       }));
 
       const discoverItems: ListedSaved[] = discover.map((d) => ({
@@ -3809,7 +3811,7 @@ Return JSON only:
           followerCount: d.job.followerCount,
           featuredAccountId: d.job.featuredAccountId,
         },
-        transcription: d.transcription,
+        transcription: toSavedListTranscriptionSummary(d.transcription),
       }));
 
       const combined = [...scrapedItems, ...featuredItems, ...discoverItems].sort(
