@@ -56,6 +56,10 @@ import {
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import {
+  REEL_LIBRARY_INITIAL_VISIBLE,
+  REEL_LIBRARY_VISIBLE_STEP,
+} from "@/lib/reelLibraryPagination";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
@@ -200,6 +204,7 @@ export default function CollectedReels() {
   }, []);
 
   const [sortBy, setSortBy] = useState("date_newest");
+  const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   const [dateFilter, setDateFilter] = useState("all");
   const [urlInput, setUrlInput] = useState("");
   const [addingUrl, setAddingUrl] = useState(false);
@@ -322,7 +327,12 @@ export default function CollectedReels() {
 
   useEffect(() => {
     setGridModalCollectedId(null);
+    setVisibleLimit(REEL_LIBRARY_INITIAL_VISIBLE);
   }, [viewMode]);
+
+  useEffect(() => {
+    setVisibleLimit(REEL_LIBRARY_INITIAL_VISIBLE);
+  }, [dateFilter, sortBy]);
 
   const runCollectTranscribe = useCallback(
     (item: CollectedRow, opts: { expand: boolean }) => {
@@ -405,16 +415,31 @@ export default function CollectedReels() {
     }
   }, [filteredReels, sortBy]);
 
+  const displayedReels = useMemo(
+    () => sortedReels.slice(0, visibleLimit),
+    [sortedReels, visibleLimit]
+  );
+
+  const hasMoreReels = sortedReels.length > visibleLimit;
+
+  useEffect(() => {
+    setVisibleLimit((prev) =>
+      sortedReels.length <= REEL_LIBRARY_INITIAL_VISIBLE
+        ? REEL_LIBRARY_INITIAL_VISIBLE
+        : Math.min(prev, sortedReels.length)
+    );
+  }, [sortedReels.length]);
+
   const mappedReelIds = useMemo(
     () =>
       [
         ...new Set(
-          sortedReels
+          displayedReels
             .map((r) => r.transcriptionReelId)
             .filter((id): id is number => id != null && id > 0)
         ),
       ],
-    [sortedReels]
+    [displayedReels]
   );
 
   const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
@@ -936,7 +961,7 @@ export default function CollectedReels() {
 
       {sortedReels.length > 0 && viewMode === "list" && (
         <div key="list" className="space-y-1">
-          {sortedReels.map((reel, index) => {
+          {displayedReels.map((reel, index) => {
             const effectiveViews = getEffectiveViews(reel);
             const engagementRate = getEngagementRate(reel);
             const mappedReelId = reel.transcriptionReelId ?? null;
@@ -1114,7 +1139,7 @@ export default function CollectedReels() {
 
       {sortedReels.length > 0 && viewMode === "grid" && (
         <div key="grid" className={WORKSPACE_REEL_GRID_CLASS}>
-          {sortedReels.map((reel, index) => {
+          {displayedReels.map((reel, index) => {
             const mappedReelId = reel.transcriptionReelId ?? null;
             const isPending = reel.status === "pending";
             const isFailed = reel.status === "failed";
@@ -1235,6 +1260,18 @@ export default function CollectedReels() {
               />
             );
           })}
+        </div>
+      )}
+
+      {hasMoreReels && sortedReels.length > 0 && (
+        <div className="mb-10 flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setVisibleLimit((n) => n + REEL_LIBRARY_VISIBLE_STEP)}
+          >
+            Show more ({sortedReels.length - visibleLimit} remaining)
+          </Button>
         </div>
       )}
 

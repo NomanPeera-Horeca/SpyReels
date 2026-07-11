@@ -20,7 +20,7 @@ import { trpc } from "@/lib/trpc";
 import type { AppRouter } from "../../../server/routers";
 import { formatNumber, InlineWorkflow } from "@/components/InlineWorkflow";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
-import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -217,8 +217,6 @@ function DiscoverRemakeButton({
 function DiscoverReelCard({
   reel,
   rank,
-  isPlaying,
-  onPlayChange,
   remakeState,
   saveState,
   onRemakeStart,
@@ -228,8 +226,6 @@ function DiscoverReelCard({
 }: {
   reel: ViralReel;
   rank: number;
-  isPlaying: boolean;
-  onPlayChange: (playing: boolean) => void;
   remakeState: DiscoverRemakeState;
   saveState: DiscoverSaveState;
   onRemakeStart: () => void;
@@ -245,13 +241,9 @@ function DiscoverReelCard({
   return (
     <div className="group relative rounded-lg border border-border/40 bg-card transition-colors hover:border-border/70">
       <div className="relative aspect-[9/14] overflow-hidden">
-        <DashboardReelGridMedia
+        <ReelGridThumbnail
           thumbnailUrl={reel.thumbnailUrl}
-          videoUrl={reel.videoUrl}
-          shortcode={reel.shortcode}
           className="relative h-full w-full"
-          playing={isPlaying}
-          onPlayingChange={onPlayChange}
           fallbackLabel={`@${reel.owner.username}`}
         />
         <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white pointer-events-none">
@@ -453,8 +445,6 @@ function CreatorBehindReelCard({
 function ReelGrid({
   reels,
   rankForReel,
-  playingShortcode,
-  onPlayShortcodeChange,
   getRemakeState,
   getSaveState,
   onRemakeStart,
@@ -464,8 +454,6 @@ function ReelGrid({
 }: {
   reels: ViralReel[];
   rankForReel: (reel: ViralReel) => number;
-  playingShortcode: string | null;
-  onPlayShortcodeChange: (shortcode: string | null) => void;
   getRemakeState: (shortcode: string) => DiscoverRemakeState;
   getSaveState: (shortcode: string) => DiscoverSaveState;
   onRemakeStart: (reel: ViralReel) => void;
@@ -482,10 +470,6 @@ function ReelGrid({
           key={reel.shortcode}
           reel={reel}
           rank={rankForReel(reel)}
-          isPlaying={playingShortcode === reel.shortcode}
-          onPlayChange={(playing) =>
-            onPlayShortcodeChange(playing ? reel.shortcode : null)
-          }
           remakeState={getRemakeState(reel.shortcode)}
           saveState={getSaveState(reel.shortcode)}
           onRemakeStart={() => onRemakeStart(reel)}
@@ -699,7 +683,6 @@ export default function Discovery() {
   const [result, setResult] = useState<DiscoveryResultPayload | null>(null);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [reelPage, setReelPage] = useState(1);
-  const [playingShortcode, setPlayingShortcode] = useState<string | null>(null);
   const [replayedAt, setReplayedAt] = useState<Date | null>(null);
   const [loadingReplayId, setLoadingReplayId] = useState<number | null>(null);
   const [textareaFocused, setTextareaFocused] = useState(false);
@@ -759,7 +742,6 @@ export default function Discovery() {
     if (job.status === "completed") {
       setActiveJobId(null);
       setReelPage(1);
-      setPlayingShortcode(null);
       setReplayedAt(null);
       setHideRecentDropdown(true);
       void recentSearchesQuery.refetch();
@@ -776,7 +758,6 @@ export default function Discovery() {
       setActiveJobId(data.jobId);
       setResult(null);
       setReelPage(1);
-      setPlayingShortcode(null);
       setReplayedAt(null);
       setHideRecentDropdown(true);
       setTextareaFocused(false);
@@ -882,7 +863,6 @@ export default function Discovery() {
     setActiveJobId(null);
     setResult(null);
     setReelPage(1);
-    setPlayingShortcode(null);
     setReplayedAt(null);
     setLoadingReplayId(null);
     setHideRecentDropdown(true);
@@ -899,7 +879,6 @@ export default function Discovery() {
       const data = await trpcUtils.discovery.getSearch.fetch({ id: item.id });
       setResult(data);
       setReelPage(1);
-      setPlayingShortcode(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load saved search");
       setReplayedAt(null);
@@ -939,7 +918,6 @@ export default function Discovery() {
 
   const handlePageChange = (page: number) => {
     setReelPage(page);
-    setPlayingShortcode(null);
   };
 
   const triggerOpenDiscoverScript = useCallback(
@@ -1121,8 +1099,6 @@ export default function Discovery() {
                   <ReelGrid
                     reels={paginatedTier1}
                     rankForReel={rankForReel}
-                    playingShortcode={playingShortcode}
-                    onPlayShortcodeChange={setPlayingShortcode}
                     getRemakeState={getRemakeState}
                     getSaveState={getSaveState}
                     onRemakeStart={startRemake}
@@ -1145,8 +1121,6 @@ export default function Discovery() {
                     <ReelGrid
                       reels={paginatedTier2}
                       rankForReel={rankForReel}
-                      playingShortcode={playingShortcode}
-                      onPlayShortcodeChange={setPlayingShortcode}
                       getRemakeState={getRemakeState}
                       getSaveState={getSaveState}
                       onRemakeStart={startRemake}

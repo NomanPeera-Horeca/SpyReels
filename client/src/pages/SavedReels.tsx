@@ -49,6 +49,10 @@ import {
   formatPostedTime,
 } from "@/components/InlineWorkflow";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import {
+  REEL_LIBRARY_INITIAL_VISIBLE,
+  REEL_LIBRARY_VISIBLE_STEP,
+} from "@/lib/reelLibraryPagination";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
@@ -139,8 +143,6 @@ function savedItemToLibraryRemakeSource(item: SavedItem): LibraryRemakeSource | 
 const RECREATE_BATCH_STALE_MS = 300_000;
 const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
-const SAVED_REELS_INITIAL_VISIBLE = 48;
-const SAVED_REELS_VISIBLE_STEP = 48;
 
 export default function SavedReels() {
   const posthog = usePostHog();
@@ -228,7 +230,7 @@ export default function SavedReels() {
   }, []);
 
   const [sortBy, setSortBy] = useState("date");
-  const [visibleLimit, setVisibleLimit] = useState(SAVED_REELS_INITIAL_VISIBLE);
+  const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   const [batchTranscribing, setBatchTranscribing] = useState(false);
   const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<string>>(() => new Set());
 
@@ -238,80 +240,6 @@ export default function SavedReels() {
     transcribeInFlightRef.current = Math.max(0, transcribeInFlightRef.current - 1);
     setTranscribeInFlightBumper((n) => n + 1);
   }, []);
-
-  const scrapedReelIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          savedReels.filter((i) => isUserJobSavedItem(i)).map((i) => i.reelId!)
-        ),
-      ],
-    [savedReels]
-  );
-  const featuredReelIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          savedReels
-            .filter((i) => i.source === "featured" && i.featuredReelId != null)
-            .map((i) => i.featuredReelId!)
-        ),
-      ],
-    [savedReels]
-  );
-
-  const brandCoachBatch = useBrandCoachBatchPrefetched({
-    reelIds: scrapedReelIds,
-    featuredReelIds,
-  });
-
-  const brandCoachPrefetchedScore = useCallback(
-    (item: SavedItem): ReturnType<typeof brandCoachBatch.prefetchedForReel> => {
-      if (item.source === "featured" && item.featuredReelId != null) {
-        return brandCoachBatch.prefetchedForFeatured(item.featuredReelId);
-      }
-      return brandCoachBatch.prefetchedForReel(item.reel.id);
-    },
-    [brandCoachBatch.prefetchedForFeatured, brandCoachBatch.prefetchedForReel]
-  );
-
-  const recreateScrapedQuery = trpc.recreate.checkBatch.useQuery(
-    { reelIds: scrapedReelIds },
-    {
-      enabled: scrapedReelIds.length > 0,
-      staleTime: RECREATE_BATCH_STALE_MS,
-      refetchInterval: (query) => {
-        const d = query.state.data;
-        if (!d) return false;
-        for (const v of Object.values(d)) {
-          if (v && (v.status === "pending" || v.status === "processing")) {
-            return RECREATE_BATCH_POLL_MS;
-          }
-        }
-        return false;
-      },
-    }
-  );
-  const recreateFeaturedQuery = trpc.recreate.checkBatch.useQuery(
-    { featuredReelIds },
-    {
-      enabled: featuredReelIds.length > 0,
-      staleTime: RECREATE_BATCH_STALE_MS,
-      refetchInterval: (query) => {
-        const d = query.state.data;
-        if (!d) return false;
-        for (const v of Object.values(d)) {
-          if (v && (v.status === "pending" || v.status === "processing")) {
-            return RECREATE_BATCH_POLL_MS;
-          }
-        }
-        return false;
-      },
-    }
-  );
-
-  const scrapedRecreateMap = recreateScrapedQuery.data || {};
-  const featuredRecreateMap = recreateFeaturedQuery.data || {};
 
   const libraryRemakeOnStageChange = useCallback(
     (
@@ -459,7 +387,7 @@ export default function SavedReels() {
 
   useEffect(() => {
     setGridModalSavedId(null);
-    setVisibleLimit(SAVED_REELS_INITIAL_VISIBLE);
+    setVisibleLimit(REEL_LIBRARY_INITIAL_VISIBLE);
   }, [viewMode]);
 
   /** Clear optimistic pending rows when saved.list refetches to completed/failed (same idea as Dashboard). */
@@ -523,10 +451,84 @@ export default function SavedReels() {
 
   const hasMoreReels = sortedReels.length > visibleLimit;
 
+  const visibleScrapedReelIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          displayedReels.filter((i) => isUserJobSavedItem(i)).map((i) => i.reelId!)
+        ),
+      ],
+    [displayedReels]
+  );
+  const visibleFeaturedReelIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          displayedReels
+            .filter((i) => i.source === "featured" && i.featuredReelId != null)
+            .map((i) => i.featuredReelId!)
+        ),
+      ],
+    [displayedReels]
+  );
+
+  const brandCoachBatch = useBrandCoachBatchPrefetched({
+    reelIds: visibleScrapedReelIds,
+    featuredReelIds: visibleFeaturedReelIds,
+  });
+
+  const brandCoachPrefetchedScore = useCallback(
+    (item: SavedItem): ReturnType<typeof brandCoachBatch.prefetchedForReel> => {
+      if (item.source === "featured" && item.featuredReelId != null) {
+        return brandCoachBatch.prefetchedForFeatured(item.featuredReelId);
+      }
+      return brandCoachBatch.prefetchedForReel(item.reel.id);
+    },
+    [brandCoachBatch.prefetchedForFeatured, brandCoachBatch.prefetchedForReel]
+  );
+
+  const recreateScrapedQuery = trpc.recreate.checkBatch.useQuery(
+    { reelIds: visibleScrapedReelIds },
+    {
+      enabled: visibleScrapedReelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (v && (v.status === "pending" || v.status === "processing")) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+  const recreateFeaturedQuery = trpc.recreate.checkBatch.useQuery(
+    { featuredReelIds: visibleFeaturedReelIds },
+    {
+      enabled: visibleFeaturedReelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (v && (v.status === "pending" || v.status === "processing")) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+
+  const scrapedRecreateMap = recreateScrapedQuery.data || {};
+  const featuredRecreateMap = recreateFeaturedQuery.data || {};
+
   useEffect(() => {
     setVisibleLimit((prev) =>
-      sortedReels.length <= SAVED_REELS_INITIAL_VISIBLE
-        ? SAVED_REELS_INITIAL_VISIBLE
+      sortedReels.length <= REEL_LIBRARY_INITIAL_VISIBLE
+        ? REEL_LIBRARY_INITIAL_VISIBLE
         : Math.min(prev, sortedReels.length)
     );
   }, [sortedReels.length]);
@@ -1160,7 +1162,7 @@ export default function SavedReels() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => setVisibleLimit((n) => n + SAVED_REELS_VISIBLE_STEP)}
+            onClick={() => setVisibleLimit((n) => n + REEL_LIBRARY_VISIBLE_STEP)}
           >
             Show more ({sortedReels.length - visibleLimit} remaining)
           </Button>

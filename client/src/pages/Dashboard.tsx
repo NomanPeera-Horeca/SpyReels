@@ -93,6 +93,10 @@ import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationB
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import {
+  REEL_LIBRARY_INITIAL_VISIBLE,
+  REEL_LIBRARY_VISIBLE_STEP,
+} from "@/lib/reelLibraryPagination";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 
 type SortOption =
@@ -331,6 +335,7 @@ export default function Dashboard() {
   }, [searchString]);
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   /**
    * Grid is the default view as of Commit 7. The previous mode
    * (list|grid) is remembered per-browser in localStorage so users
@@ -898,50 +903,6 @@ export default function Dashboard() {
     goingViralSlugs.length > 0 &&
     (goingViralQuery.isPending || (goingViralQuery.data?.length ?? 0) > 0);
 
-  const reelIds = useMemo(() => reelsData.map((r: any) => r.id), [reelsData]);
-  /**
-   * `saved.checkBatch` accepts a strict XOR of `reelIds` vs `featuredReelIds`
-   * (see Commit 3b). We branch the input based on the current view so the
-   * returned map is keyed consistently with whatever id we'll feed into
-   * `saved.toggle` from the bookmark button.
-   */
-  const savedBatchQuery = trpc.saved.checkBatch.useQuery(
-    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
-    { enabled: reelIds.length > 0, staleTime: DASHBOARD_SNAPSHOT_STALE_MS }
-  );
-  const savedMap = savedBatchQuery.data || {};
-
-  /**
-   * Latest recreated script id + status per reel (user). Drives the
-   * strip: Make My Version / Generating / Open My Script. Same XOR
-   * contract as saved.checkBatch.
-   */
-  const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
-    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds },
-    {
-      enabled: reelIds.length > 0,
-      staleTime: RECREATE_BATCH_STALE_MS,
-      refetchInterval: (query) => {
-        const d = query.state.data;
-        if (!d) return false;
-        for (const v of Object.values(d)) {
-          if (
-            v &&
-            (v.status === "pending" || v.status === "processing")
-          ) {
-            return RECREATE_BATCH_POLL_MS;
-          }
-        }
-        return false;
-      },
-    }
-  );
-  const recreateMap = recreateBatchQuery.data || {};
-
-  const brandCoachBatch = useBrandCoachBatchPrefetched(
-    isFeaturedView ? { featuredReelIds: reelIds } : { reelIds }
-  );
-
   const libraryRemakeOnStageChange = useCallback(
     (
       source: LibraryRemakeSource,
@@ -1069,6 +1030,54 @@ export default function Dashboard() {
     }
   }, [filteredReels, sortBy]);
 
+  const displayedReels = useMemo(
+    () => sortedReels.slice(0, visibleLimit),
+    [sortedReels, visibleLimit]
+  );
+
+  const visibleReelIds = useMemo(
+    () => displayedReels.map((r: { id: number }) => r.id),
+    [displayedReels]
+  );
+
+  const hasMoreReels = sortedReels.length > visibleLimit;
+
+  /**
+   * `saved.checkBatch` accepts a strict XOR of `reelIds` vs `featuredReelIds`
+   * (see Commit 3b). Scoped to visible tiles so large dashboards stay responsive.
+   */
+  const savedBatchQuery = trpc.saved.checkBatch.useQuery(
+    isFeaturedView ? { featuredReelIds: visibleReelIds } : { reelIds: visibleReelIds },
+    { enabled: visibleReelIds.length > 0, staleTime: DASHBOARD_SNAPSHOT_STALE_MS }
+  );
+  const savedMap = savedBatchQuery.data || {};
+
+  const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
+    isFeaturedView ? { featuredReelIds: visibleReelIds } : { reelIds: visibleReelIds },
+    {
+      enabled: visibleReelIds.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (
+            v &&
+            (v.status === "pending" || v.status === "processing")
+          ) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+  const recreateMap = recreateBatchQuery.data || {};
+
+  const brandCoachBatch = useBrandCoachBatchPrefetched(
+    isFeaturedView ? { featuredReelIds: visibleReelIds } : { reelIds: visibleReelIds }
+  );
+
   const gridModalReel = useMemo(
     () =>
       gridModalReelId == null
@@ -1132,6 +1141,11 @@ export default function Dashboard() {
       return;
     }
 
+    const targetIndex = sortedReels.findIndex((r) => r.id === targetId);
+    if (targetIndex >= 0) {
+      setVisibleLimit((prev) => Math.max(prev, targetIndex + 1));
+    }
+
     if (viewMode === "grid") {
       setGridModalReelId(targetId);
     } else {
@@ -1162,7 +1176,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     setGridModalReelId(null);
+    setVisibleLimit(REEL_LIBRARY_INITIAL_VISIBLE);
   }, [viewMode]);
+
+  useEffect(() => {
+    setVisibleLimit(REEL_LIBRARY_INITIAL_VISIBLE);
+  }, [dateFilter, sortBy]);
+
+  useEffect(() => {
+    setVisibleLimit((prev) =>
+      sortedReels.length <= REEL_LIBRARY_INITIAL_VISIBLE
+        ? REEL_LIBRARY_INITIAL_VISIBLE
+        : Math.min(prev, sortedReels.length)
+    );
+  }, [sortedReels.length]);
 
   const transcribeInFlightRef = useRef(0);
   const [, setTranscribeInFlightBumper] = useState(0);
@@ -2439,7 +2466,7 @@ export default function Dashboard() {
           {/* Reels list */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "list" && (
             <div key="list" className="space-y-3">
-              {sortedReels.map((reel, index) => {
+              {displayedReels.map((reel, index) => {
                 const isExpanded = expandedReelId === reel.id;
                 const hasTranscription = reel.transcription?.status === "completed";
                 const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
@@ -2783,7 +2810,7 @@ export default function Dashboard() {
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
             <div key="grid" className="space-y-3">
               <div className={WORKSPACE_REEL_GRID_CLASS}>
-                {sortedReels.map((reel, index) => {
+                {displayedReels.map((reel, index) => {
                   const isModalOpen = gridModalReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
                   const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
@@ -2853,7 +2880,6 @@ export default function Dashboard() {
                             ? "rounded-xl ring-2 ring-primary/40"
                             : undefined
                         }
-                        interactiveMedia
                         isActive={isModalOpen}
                         index={index}
                         thumbnailUrl={reel.thumbnailUrl}
@@ -2996,6 +3022,18 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {hasMoreReels && canDisplayJobReels && sortedReels.length > 0 && (
+            <div className="mb-6 flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setVisibleLimit((n) => n + REEL_LIBRARY_VISIBLE_STEP)}
+              >
+                Show more ({sortedReels.length - visibleLimit} remaining)
+              </Button>
             </div>
           )}
 
