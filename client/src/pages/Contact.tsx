@@ -117,7 +117,7 @@ export default function Contact() {
             <Sparkles className="h-4 w-4" />
             We are here to help
           </div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
             Contact SpyReels
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
@@ -139,7 +139,7 @@ export default function Contact() {
                   </p>
                   <a
                     href={`mailto:${CONTACT_EMAIL}`}
-                    className="mt-1 block text-xl font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline sm:text-2xl"
+                    className="mt-1 block break-all text-xl font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline sm:text-2xl"
                   >
                     {CONTACT_EMAIL}
                   </a>
@@ -180,8 +180,7 @@ export default function Contact() {
                   <Button
                     asChild
                     variant="ghost"
-                    size="sm"
-                    className="mt-4 h-auto justify-start px-0 text-primary hover:bg-transparent hover:text-primary/80"
+                    className="mt-4 min-h-10 justify-start px-0 text-primary hover:bg-transparent hover:text-primary/80"
                   >
                     <a href={section.href}>
                       {section.cta}

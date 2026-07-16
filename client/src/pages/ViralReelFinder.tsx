@@ -149,7 +149,7 @@ export default function ViralReelFinder() {
           By Noah Perry · Updated {updatedLabel}
         </p>
 
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-6">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
           Viral Reel Finder for Instagram Creators
         </h1>
 
@@ -185,11 +185,11 @@ export default function ViralReelFinder() {
           </p>
         </section>
 
-        <div className="flex flex-col sm:flex-row gap-4 mb-12">
-          <Button asChild size="lg">
+        <div className="mb-12 flex flex-col gap-4 sm:flex-row">
+          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
             <Link href="/free-tools/viral-hooks">Try free</Link>
           </Button>
-          <Button asChild size="lg" variant="outline">
+          <Button asChild size="lg" variant="outline" className="min-h-10 w-full sm:w-auto">
             <Link href="/pricing">See pricing</Link>
           </Button>
         </div>
@@ -313,12 +313,12 @@ export default function ViralReelFinder() {
           </div>
         </section>
 
-        <section className="mb-10 rounded-2xl border border-border bg-card/50 p-8 text-center">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">Start finding viral Reels in your niche</h2>
-          <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
+        <section className="mb-10 rounded-2xl border border-border bg-card/50 p-5 text-center sm:p-8">
+          <h2 className="mb-4 text-2xl font-semibold text-foreground">Start finding viral Reels in your niche</h2>
+          <p className="mx-auto mb-6 max-w-xl text-muted-foreground">
             Stop guessing what to film. Research winners, transcribe hooks, and ship your next Reel with confidence.
           </p>
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
             <a href={getLoginUrl()}>Try SpyReels free</a>
           </Button>
         </section>

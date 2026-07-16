@@ -348,23 +348,23 @@ export default function Affiliate() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <PublicHeader />
 
       {/* ─── 1. Hero ─── */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="pointer-events-none absolute left-1/2 top-0 h-[600px] w-[800px] -translate-x-1/2 rounded-full bg-primary/10 blur-[120px]" />
+        <div className="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[min(100%,28rem)] -translate-x-1/2 rounded-full bg-primary/10 blur-[80px] sm:h-[600px] sm:w-[800px] sm:blur-[120px]" />
         <div className="relative mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pt-24 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <Badge
               variant="outline"
-              className="mb-6 border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary"
+              className="mb-6 max-w-full whitespace-normal border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary"
             >
-              <Sparkles className="mr-2 h-3.5 w-3.5" />
+              <Sparkles className="mr-2 h-3.5 w-3.5 shrink-0" />
               SpyReels Partner Program
             </Badge>
-            <h1 className="mb-6 text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="mb-6 text-2xl font-bold leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
               SpyReels Affiliate Program - 20 Percent Recurring Commission
             </h1>
             <p className="mb-8 text-lg leading-relaxed text-muted-foreground sm:text-xl">
@@ -376,7 +376,7 @@ export default function Affiliate() {
               <Button
                 size="lg"
                 asChild
-                className="h-12 gap-2 px-8 text-base shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30"
+                className="h-12 w-full gap-2 px-8 text-base shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
               >
                 <a
                   href={REWARDFUL_SIGNUP_URL}
@@ -391,7 +391,7 @@ export default function Affiliate() {
                 size="lg"
                 variant="outline"
                 onClick={handleScrollToCalculator}
-                className="h-12 gap-2 px-8 text-base"
+                className="h-12 w-full gap-2 px-8 text-base sm:w-auto"
               >
                 See how much you can earn
               </Button>
@@ -408,7 +408,7 @@ export default function Affiliate() {
       <section id="calculator" className="border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-10 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               How much could you earn?
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -571,7 +571,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               Why SpyReels converts better
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -609,7 +609,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               Climb the commission ladder
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -677,7 +677,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               What you get when you join
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -722,7 +722,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               How it works
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -754,7 +754,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               Built for these audiences
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -797,7 +797,7 @@ export default function Affiliate() {
               >
                 <Sparkles className="mr-1.5 h-3 w-3" /> Launch Bonus
               </Badge>
-              <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+              <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
                 First 100 partners get the Launch Bonus
               </h2>
               <p className="mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -828,7 +828,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
           <div className="mb-10 text-center">
-            <h2 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 className="mb-3 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               Frequently asked questions
             </h2>
             <p className="text-base text-muted-foreground sm:text-lg">
@@ -885,7 +885,7 @@ export default function Affiliate() {
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-28 lg:px-8">
           <Building2 className="mx-auto mb-6 h-10 w-10 text-primary" />
-          <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-5xl">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-4xl">
             Stop scrolling. Start earning.
           </h2>
           <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -895,7 +895,7 @@ export default function Affiliate() {
           <Button
             asChild
             size="lg"
-            className="h-12 gap-2 px-8 text-base shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30"
+            className="h-12 w-full gap-2 px-8 text-base shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
           >
             <a
               href={REWARDFUL_SIGNUP_URL}

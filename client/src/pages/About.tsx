@@ -93,7 +93,7 @@ export default function About() {
           By Noah Perry · Updated {updatedLabel}
         </p>
 
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-6">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
           About SpyReels and Noah Perry
         </h1>
 

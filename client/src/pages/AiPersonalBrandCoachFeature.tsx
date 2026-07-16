@@ -132,17 +132,17 @@ export default function AiPersonalBrandCoachFeature() {
           By Noah Perry · Updated {updatedLabel}
         </p>
 
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-6">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
           AI Personal Brand Coach for Instagram Reels
         </h1>
 
-        <p className="text-lg text-muted-foreground leading-relaxed mb-8">{DIRECT_ANSWER}</p>
+        <p className="mb-8 text-lg leading-relaxed text-muted-foreground">{DIRECT_ANSWER}</p>
 
-        <div className="flex flex-col sm:flex-row gap-4 mb-12">
-          <Button asChild size="lg">
+        <div className="mb-12 flex flex-col gap-4 sm:flex-row">
+          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
             <a href={getLoginUrl()}>Try SpyReels free</a>
           </Button>
-          <Button asChild size="lg" variant="outline">
+          <Button asChild size="lg" variant="outline" className="min-h-10 w-full sm:w-auto">
             <Link href="/features/30-day-content-plan">30-day content plan</Link>
           </Button>
         </div>
@@ -201,12 +201,12 @@ export default function AiPersonalBrandCoachFeature() {
           </div>
         </section>
 
-        <section className="mb-10 rounded-2xl border border-border bg-card/50 p-8 text-center">
+        <section className="mb-10 rounded-2xl border border-border bg-card/50 p-5 text-center sm:p-8">
           <h2 className="text-2xl font-semibold mb-4 text-foreground">Write your next Reel script</h2>
           <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
             Niche-aware prompts, proven structure, and production notes in one workflow.
           </p>
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
             <a href={getLoginUrl()}>Open AI Personal Brand Coach</a>
           </Button>
         </section>

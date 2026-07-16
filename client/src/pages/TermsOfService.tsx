@@ -52,7 +52,7 @@ export default function TermsOfService() {
       <PublicHeader />
 
       <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Terms of Service</h1>
+        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">Terms of Service</h1>
         <p className="text-muted-foreground mb-10">Last updated: March 7, 2026</p>
 
         <div className="prose prose-invert prose-sm max-w-none space-y-8 text-muted-foreground [&_h2]:text-foreground [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mt-10 [&_h2]:mb-4 [&_h3]:text-foreground [&_h3]:font-medium [&_h3]:mt-6 [&_h3]:mb-2 [&_strong]:text-foreground [&_a]:text-primary [&_a]:underline">
