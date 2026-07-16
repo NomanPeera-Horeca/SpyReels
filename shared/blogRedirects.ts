@@ -21,12 +21,14 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
   ],
   "guide-find-viral-reels-your-niche": [
     "guide-spy-on-competitor-instagram-reels",
-    "spyreels-vs-viralfindr",
+    "guide-how-many-views-viral-instagram",
+    "guide-reverse-engineer-viral-reels",
     "best-instagram-reels-tools-2026",
   ],
   "guide-instagram-reels-script-generator": [
     "guide-instagram-reels-hook-examples",
     "guide-instagram-reels-script-template",
+    "guide-instagram-reels-hook-ideas-2026",
     "best-instagram-reels-tools-2026",
   ],
   "guide-instagram-reels-hook-examples": [

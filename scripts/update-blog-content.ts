@@ -39,9 +39,10 @@ async function main() {
       slug: "guide-spy-on-competitor-instagram-reels",
       getContent: () => extractInlineContentFromSeedBlogs(seedSource, "guide-spy-on-competitor-instagram-reels"),
     },
-    {
+  {
       slug: "guide-instagram-reels-script-generator",
-      getContent: () => extractInlineContentFromSeedBlogs(seedSource, "guide-instagram-reels-script-generator"),
+      getContent: () =>
+        readFileSync(join(root, "seed", "articles", "26-guide-instagram-reels-script-generator.md"), "utf8").trim(),
     },
     {
       slug: "guide-why-reels-get-no-views",
