@@ -12,18 +12,26 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 
-const PAGE_TITLE = "Viral Reel Finder for Instagram | SpyReels";
+const PAGE_TITLE = "Reel Finder for Viral Instagram Reels | SpyReels";
 const PAGE_DESCRIPTION =
-  "Find viral Instagram Reels by views and engagement rate. Transcribe hooks and generate scripts. Free tier for nano and micro creators.";
+  "Use the SpyReels reel finder to rank viral Instagram Reels by views and engagement, then transcribe hooks and script faster. Free tier for nano creators.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
 const DIRECT_ANSWER =
-  "A viral reel finder is a tool that helps you discover the top-performing Reels in any niche or from any Instagram creator. SpyReels surfaces viral Reels sorted by view count, engagement rate, and save rate, then automatically transcribes them so you can study the exact hook, body, and script structure. Built for nano and micro creators under 50,000 followers, the platform combines curated quality with deep per-reel analysis. Free tier available, no credit card required.";
+  "A reel finder (also called a viral reel finder) ranks Instagram Reels by performance so you can study winners instead of scrolling the feed. SpyReels is a reel finder for public creator accounts: sort by views and engagement, then transcribe hooks and rewrite scripts for your niche. Built for nano and micro creators under 50,000 followers. Free tier available, no credit card required.";
 
 const FAQ_ITEMS = [
   {
+    q: "What is a reel finder?",
+    a: "A reel finder is a tool that surfaces Instagram Reels worth studying, usually sorted by views, likes, comments, or engagement rate. SpyReels works as a viral reel finder for any public handle so you can open top performers fast and move into transcription and scripting.",
+  },
+  {
     q: "What is a viral reel finder?",
-    a: "A viral reel finder is a tool that shows you which Instagram Reels are performing best in a niche or on a specific account. SpyReels ranks Reels by views and engagement, then adds transcripts so you can study hooks and structure instead of guessing from the feed.",
+    a: "A viral reel finder is a reel finder focused on high-performing Reels. SpyReels ranks Reels by views and engagement, then adds transcripts so you can study hooks and structure instead of guessing from the feed.",
+  },
+  {
+    q: "Where do I find my Reels on Instagram versus with SpyReels?",
+    a: "On Instagram, your own Reels live on your profile grid and in Profile, then Content or Professional dashboard views depending on account type. SpyReels does not replace that. It is a reel finder for researching other public creators so you can study viral patterns, not a place to browse your personal saved folder.",
   },
   {
     q: "How is SpyReels different from manual Instagram search?",
@@ -150,14 +158,14 @@ export default function ViralReelFinder() {
         </p>
 
         <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
-          Viral Reel Finder for Instagram Creators
+          Reel Finder for Viral Instagram Reels
         </h1>
 
         <p className="text-lg text-muted-foreground leading-relaxed mb-8">{DIRECT_ANSWER}</p>
 
         <section className="mb-10 space-y-4 text-muted-foreground leading-relaxed">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">
-            What is a viral reel finder (and an Instagram viral reel finder)?
+          <h2 className="mb-2 text-2xl font-semibold text-foreground">
+            What is a reel finder (and a viral reel finder)?
           </h2>
           <p>
             A <strong>viral reel finder</strong> is software that ranks Instagram Reels by performance signals such as views, likes, comments, and engagement rate so you can see winners fast. An <strong>Instagram viral reel finder</strong> does the same job inside the Reels format instead of mixing posts, stories, and unrelated clips. A general <strong>reel finder</strong> helps you <strong>find viral reels</strong> from public accounts you choose, not random hashtag noise.

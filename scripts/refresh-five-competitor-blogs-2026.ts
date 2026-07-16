@@ -27,8 +27,9 @@ const UPDATES = [
   },
   {
     slug: "guide-viralfindr-alternative",
+    metaTitle: "ViralFindr Free Alternative 2026 | SpyReels",
     metaDescription:
-      "Best ViralFindr alternative in 2026 for creators who need transcription, hook breakdown, and AI scripts. Honest SpyReels comparison and switch steps.",
+      "Best ViralFindr free alternative in 2026 for creators who need transcription, hook breakdown, and AI scripts. Honest SpyReels comparison and switch steps.",
     articleFile: "12-guide-viralfindr-alternative.md",
   },
   {
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
     await updateBlogPost(existing[0].id, {
       content: loadArticle(row.articleFile),
       metaDescription: row.metaDescription,
+      ...("metaTitle" in row && row.metaTitle ? { metaTitle: row.metaTitle } : {}),
       updatedAt: new Date(),
     });
     console.log(`Updated id=${existing[0].id} slug=${row.slug}`);

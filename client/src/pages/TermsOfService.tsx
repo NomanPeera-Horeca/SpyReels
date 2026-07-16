@@ -17,7 +17,7 @@ export default function TermsOfService() {
 
   useEffect(() => {
     applyStandardPageMeta({
-      title: "Terms of Service - SpyReels",
+      title: "Terms of Service for SpyReels Instagram Tools",
       description:
         "SpyReels Terms of Service. Rules for using our Instagram Reels analytics, transcription, and AI script tools.",
       canonicalUrl: TERMS_CANONICAL,

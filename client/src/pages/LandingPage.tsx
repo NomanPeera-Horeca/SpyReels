@@ -208,8 +208,7 @@ const FAQ = [
 // ═══════════════════════════════════════════════════════════════
 // Landing Page
 // ═══════════════════════════════════════════════════════════════
-const HOME_TITLE =
-  "Instagram Reels Tool | Research, Plan, Script, and Film | SpyReels";
+const HOME_TITLE = "Instagram Reels Research & Script Tool | SpyReels";
 const HOME_DESCRIPTION =
   "SpyReels finds viral Reels in your niche, plans 30 days of content, and writes scripts with your AI Personal Brand Coach. Research, transcribe, film with teleprompter. Try free.";
 

@@ -11,7 +11,7 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 
-const ABOUT_TITLE = "About SpyReels and Noah Perry";
+const ABOUT_TITLE = "About SpyReels: Instagram Reels Tool by Noah Perry";
 const ABOUT_DESCRIPTION =
   "Learn about SpyReels and founder Noah Perry. We help nano and micro creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.";
 const ABOUT_CANONICAL = `${SPYREELS_SITE_URL}/about`;

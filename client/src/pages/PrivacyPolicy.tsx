@@ -17,7 +17,7 @@ export default function PrivacyPolicy() {
 
   useEffect(() => {
     applyStandardPageMeta({
-      title: "Privacy Policy - SpyReels",
+      title: "Privacy Policy: How SpyReels Protects Your Data",
       description:
         "SpyReels Privacy Policy. How we collect, use, and protect your data when you use our Instagram Reels tools.",
       canonicalUrl: PRIVACY_CANONICAL,

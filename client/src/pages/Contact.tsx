@@ -50,7 +50,7 @@ const contactSections = [
   },
 ];
 
-const CONTACT_TITLE = "Contact SpyReels";
+const CONTACT_TITLE = "Contact SpyReels: Support, Press & Partnerships";
 const CONTACT_DESCRIPTION =
   "Contact SpyReels for product support, press, partnerships, or bug reports. We typically respond within 24 hours.";
 const CONTACT_CANONICAL = `${SPYREELS_SITE_URL}/contact`;

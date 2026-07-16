@@ -268,8 +268,7 @@ const FAQ_ITEMS = [
   },
 ];
 
-const AFFILIATE_TITLE =
-  "SpyReels Affiliate Program - 20% Recurring Commission for 12 Months";
+const AFFILIATE_TITLE = "SpyReels Affiliate Program: 20% Recurring | SpyReels";
 const AFFILIATE_DESCRIPTION =
   "Join the SpyReels affiliate program. Earn 20 percent recurring commission for 12 months on every signup. 60-day cookie. Free to join.";
 const AFFILIATE_CANONICAL = `${SPYREELS_SITE_URL}/affiliate`;
