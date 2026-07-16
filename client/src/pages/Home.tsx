@@ -1012,10 +1012,14 @@ export default function Home() {
         {featuredLoading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, idx) => (
-              <div key={idx} className="rounded-xl border border-border bg-card p-4">
+              <div
+                key={idx}
+                className="min-h-[11.5rem] rounded-xl border border-border bg-card p-4"
+                aria-hidden
+              >
                 <div className="mb-3 h-5 w-36 animate-pulse rounded bg-muted" />
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-muted" />
                   <div className="flex-1 space-y-2">
                     <div className="h-3 w-32 animate-pulse rounded bg-muted" />
                     <div className="h-3 w-24 animate-pulse rounded bg-muted" />

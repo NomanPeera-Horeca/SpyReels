@@ -86,6 +86,8 @@ export function WorkspaceReelGridTile({
             <ReelGridThumbnail
               className="relative h-full w-full"
               thumbnailUrl={thumbnailUrl}
+              width={360}
+              height={560}
             />
           )
         ) : (
@@ -120,7 +122,7 @@ export function WorkspaceReelGridTile({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 right-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur hover:bg-black/75"
+            className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 p-0 text-white/90 backdrop-blur hover:bg-black/75"
             title="Open on Instagram"
             aria-label="Open on Instagram"
           >
@@ -139,7 +141,7 @@ export function WorkspaceReelGridTile({
         ) : null}
       </div>
 
-      {badges ? <div className="shrink-0 px-2.5 pb-0 pt-2">{badges}</div> : null}
+      <div className="min-h-7 shrink-0 px-2.5 pb-0 pt-2">{badges ?? null}</div>
 
       <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-2">
         <div className="min-h-0 flex-1 space-y-2">
@@ -147,7 +149,7 @@ export function WorkspaceReelGridTile({
           {stats}
         </div>
         <div
-          className="relative z-20 mt-auto shrink-0 pt-2"
+          className="relative z-20 mt-auto min-h-10 shrink-0 pt-2"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >

@@ -188,14 +188,14 @@ function SidebarNicheCard({
   targetAudience: string | null;
 }) {
   return (
-    <div className="mx-2 mb-2 rounded-xl border border-sidebar-border bg-background px-3 py-2.5 group-data-[collapsible=icon]:hidden">
+    <div className="mx-2 mb-2 min-h-[4.75rem] rounded-xl border border-sidebar-border bg-background px-3 py-2.5 group-data-[collapsible=icon]:hidden">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Your niche
       </p>
       <p className="text-sm font-semibold leading-tight text-foreground">{nicheLabel}</p>
-      {targetAudience ? (
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{targetAudience}</p>
-      ) : null}
+      <p className="mt-0.5 line-clamp-2 min-h-[2rem] text-xs text-muted-foreground">
+        {targetAudience || "\u00a0"}
+      </p>
     </div>
   );
 }

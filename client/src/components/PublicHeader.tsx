@@ -88,6 +88,8 @@ export function PublicHeader() {
                       <img
                         src={SPYREELS_LOGO_URL}
                         alt="SpyReels"
+                        width={32}
+                        height={32}
                         className="h-8 w-8"
                       />
                       SpyReels
@@ -157,7 +159,11 @@ export function PublicHeader() {
                 <img
                   src={SPYREELS_LOGO_URL}
                   alt="SpyReels logo, Instagram Reels spy tool"
+                  width={36}
+                  height={36}
                   className="h-9 w-9"
+                  fetchPriority="high"
+                  decoding="async"
                 />
                 <span className="text-lg font-semibold tracking-tight">
                   SpyReels

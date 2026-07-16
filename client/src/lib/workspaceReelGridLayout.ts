@@ -1,6 +1,7 @@
-/** Shared responsive grid for workspace reel tiles (Dashboard, Collected, Saved). */
+/** Shared responsive grid for workspace reel tiles (Dashboard, Collected, Saved).
+ * Phones stay 1 column so primary CTAs remain thumb-friendly (~390–430px). */
 export const WORKSPACE_REEL_GRID_CLASS =
-  "grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch";
+  "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-stretch";
 
 export function formatWorkspaceReelDuration(seconds: number): string {
   if (seconds >= 3600) {

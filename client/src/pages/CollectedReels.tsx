@@ -61,6 +61,7 @@ import {
   REEL_LIBRARY_INITIAL_VISIBLE,
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
+import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
@@ -945,11 +946,7 @@ export default function CollectedReels() {
         </Button>
       </div>
 
-      {collectedQuery.isLoading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      )}
+      {collectedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
 
       {!collectedQuery.isLoading && collectedRows.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1010,6 +1007,8 @@ export default function CollectedReels() {
                         <ReelGridThumbnail
                           className="relative h-full w-full"
                           thumbnailUrl={reel.thumbnailUrl}
+                          width={56}
+                          height={72}
                         />
                         <span className="pointer-events-none absolute right-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
                           {sourceBadge(reel)}

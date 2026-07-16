@@ -873,7 +873,7 @@ export default function Pricing() {
     <div className="min-h-screen bg-background pb-28 text-foreground">
       <PublicHeader />
 
-      <section className="relative overflow-hidden border-b border-border/50">
+      <section className="relative min-h-[28rem] overflow-hidden border-b border-border/50 sm:min-h-[32rem]">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-6xl px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8">
           <Badge

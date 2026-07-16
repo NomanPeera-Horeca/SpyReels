@@ -179,6 +179,9 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     firstVisitMode && oneClickRemake?.tone === "inspiration";
   const inspirationSaveCta =
     oneClickRemake?.tone === "inspiration" && !collectionMode;
+  /** Compact grid tiles need ~40px+ height for reliable phone taps. */
+  const compactPrimaryCtaClass =
+    "min-h-10 h-auto w-full justify-center px-3 py-2 text-xs font-semibold leading-snug whitespace-normal text-center";
 
   return (
     <div
@@ -217,7 +220,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                   type="button"
                   variant="secondary"
                   size={firstVisitMode ? "default" : "sm"}
-                  className="h-7 w-full justify-center text-xs px-3"
+                  className="min-h-10 h-auto w-full justify-center text-xs px-3"
                   onClick={onToggleSave}
                   disabled={!!saveBusy}
                   title="Saved for inspiration"
@@ -248,14 +251,16 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
                   size={firstVisitMode ? "default" : "sm"}
                   className={
                     inspirationOnlyFirstVisit
-                      ? "h-7 w-full justify-center text-xs text-muted-foreground hover:text-foreground"
+                      ? "min-h-10 h-auto w-full justify-center px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
                       : useReadyPrimary
-                        ? "h-7 w-full justify-center text-xs px-3 font-semibold shadow-sm"
+                        ? `${compact ? compactPrimaryCtaClass : "h-7 w-full justify-center text-xs px-3 font-semibold shadow-sm"} shadow-sm`
                         : useFilledPrimary
                           ? firstVisitPrimaryBtnClass
                           : firstVisitMode && oneClickRemake.tone === "inspiration"
-                            ? "h-7 w-full justify-center text-xs px-2 border-primary/30 text-primary hover:bg-primary/10"
-                            : `h-7 text-xs px-3 w-full justify-center ${
+                            ? "min-h-10 h-auto w-full justify-center px-2 py-2 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                            : compact
+                              ? `${compactPrimaryCtaClass} border-primary/30 text-primary hover:bg-primary/10`
+                              : `h-7 text-xs px-3 w-full justify-center ${
                               oneClickRemake.tone === "inspiration"
                                 ? "border-primary/30 text-primary hover:bg-primary/10"
                                 : "border-primary/30 text-primary hover:bg-primary/10"

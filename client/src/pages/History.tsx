@@ -297,8 +297,34 @@ export default function History() {
       </div>
 
       {jobsQuery.isLoading && (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        <div
+          className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+          role="status"
+          aria-label="Loading creators"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex min-h-[17rem] flex-col overflow-hidden rounded-2xl border border-border/50 bg-card"
+              aria-hidden
+            >
+              <div className="flex items-start gap-4 border-b border-border/40 bg-muted/15 p-4">
+                <div className="h-14 w-14 shrink-0 animate-pulse rounded-2xl bg-muted" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-muted/80" />
+                </div>
+              </div>
+              <div className="flex-1 space-y-3 p-4">
+                <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="h-10 animate-pulse rounded-lg bg-muted/70" />
+                  <div className="h-10 animate-pulse rounded-lg bg-muted/70" />
+                </div>
+                <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

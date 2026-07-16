@@ -245,6 +245,8 @@ function DiscoverReelCard({
           thumbnailUrl={reel.thumbnailUrl}
           className="relative h-full w-full"
           fallbackLabel={`@${reel.owner.username}`}
+          width={360}
+          height={560}
         />
         <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white pointer-events-none">
           #{rank}

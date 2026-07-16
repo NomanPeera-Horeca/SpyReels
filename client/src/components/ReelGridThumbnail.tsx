@@ -7,10 +7,15 @@ export function ReelGridThumbnail({
   thumbnailUrl,
   className,
   fallbackLabel,
+  width,
+  height,
 }: {
   thumbnailUrl: string | null | undefined;
   className?: string;
   fallbackLabel?: string;
+  /** Intrinsic size hint for CLS (does not force CSS size when className sets layout). */
+  width?: number;
+  height?: number;
 }) {
   const [failed, setFailed] = useState(false);
   const thumb = (thumbnailUrl ?? "").trim();
@@ -37,6 +42,8 @@ export function ReelGridThumbnail({
     <img
       src={thumb}
       alt=""
+      width={width ?? 360}
+      height={height ?? 560}
       loading="lazy"
       decoding="async"
       className={cn(

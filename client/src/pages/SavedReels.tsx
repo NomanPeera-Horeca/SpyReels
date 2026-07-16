@@ -55,6 +55,7 @@ import {
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
@@ -599,11 +600,11 @@ export default function SavedReels() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-1 sm:px-0">
+    <div className="mx-auto max-w-7xl px-2 sm:px-0">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <Bookmark className="h-6 w-6 text-primary" />
+          <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">
+            <Bookmark className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
             Saved Reels
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -624,7 +625,7 @@ export default function SavedReels() {
               type="button"
               size="sm"
               variant={viewMode === "list" ? "default" : "ghost"}
-              className="h-8 px-2.5 text-xs"
+              className="min-h-9 px-3 text-xs"
               onClick={() => setViewModeTracked("list")}
             >
               <List className="mr-1 h-3.5 w-3.5" />
@@ -634,7 +635,7 @@ export default function SavedReels() {
               type="button"
               size="sm"
               variant={viewMode === "grid" ? "default" : "ghost"}
-              className="h-8 px-2.5 text-xs"
+              className="min-h-9 px-3 text-xs"
               onClick={() => setViewModeTracked("grid")}
             >
               <Grid3X3 className="mr-1 h-3.5 w-3.5" />
@@ -685,11 +686,7 @@ export default function SavedReels() {
         </div>
       )}
 
-      {savedQuery.isLoading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      )}
+      {savedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
 
       {!savedQuery.isLoading && savedReels.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -824,6 +821,8 @@ export default function SavedReels() {
                             <ReelGridThumbnail
                               className="relative h-full w-full"
                               thumbnailUrl={reel.thumbnailUrl}
+                              width={56}
+                              height={72}
                             />
                             {reel.duration ? (
                               <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[9px] font-mono text-white">
@@ -1064,7 +1063,7 @@ export default function SavedReels() {
                         topRight={
                           <button
                             type="button"
-                            className="rounded-full bg-emerald-500/90 p-1.5 text-white backdrop-blur transition-colors hover:bg-emerald-500"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/90 text-white backdrop-blur transition-colors hover:bg-emerald-500"
                             onClick={(e) => {
                               e.stopPropagation();
                               onToggleSave(item);
@@ -1073,7 +1072,7 @@ export default function SavedReels() {
                             title="Remove from saved"
                             aria-label="Remove from saved"
                           >
-                            <BookmarkCheck className="h-3.5 w-3.5" />
+                            <BookmarkCheck className="h-4 w-4" />
                           </button>
                         }
                         statusChip={
@@ -1110,10 +1109,6 @@ export default function SavedReels() {
                         stats={
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                             <span>{formatNumber(reel.viewCount)} views</span>
-                            <span aria-hidden>·</span>
-                            <span>{formatNumber(reel.likeCount)} likes</span>
-                            <span aria-hidden>·</span>
-                            <span>{formatNumber(reel.commentCount)} comments</span>
                             {engagementRate > 0 && (
                               <>
                                 <span aria-hidden>·</span>
@@ -1122,8 +1117,22 @@ export default function SavedReels() {
                                 </span>
                               </>
                             )}
-                            <span aria-hidden>·</span>
-                            <span className="text-muted-foreground">
+                            <span className="hidden sm:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden sm:inline">
+                              {formatNumber(reel.likeCount)} likes
+                            </span>
+                            <span className="hidden md:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden md:inline">
+                              {formatNumber(reel.commentCount)} comments
+                            </span>
+                            <span className="hidden sm:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden sm:inline text-muted-foreground">
                               {formatPostedTime(reel.postedAt, userTimezone)}
                             </span>
                           </div>

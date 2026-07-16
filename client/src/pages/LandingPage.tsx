@@ -485,7 +485,9 @@ export default function LandingPage() {
               <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/20 bg-card">
                 <video
                   src={HERO_VIDEO_URL}
-                  className="block w-full h-auto aspect-[9/16] object-cover"
+                  width={340}
+                  height={604}
+                  className="block aspect-[9/16] h-auto w-full object-cover"
                   controls
                   autoPlay
                   muted
@@ -727,7 +729,15 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="relative rounded-xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/10 max-w-5xl mx-auto">
-            <img src={WORKFLOW_IMG} alt="SpyReels Instagram Reels spy tool workflow from research to script" className="w-full" loading="lazy" />
+            <img
+              src={WORKFLOW_IMG}
+              alt="SpyReels Instagram Reels spy tool workflow from research to script"
+              className="h-auto w-full"
+              width={1200}
+              height={675}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
       </section>

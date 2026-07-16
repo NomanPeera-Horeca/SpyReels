@@ -99,6 +99,7 @@ import {
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 
 type SortOption =
   | "views_desc"
@@ -2406,7 +2407,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Reels list loading: 95% until the list query finishes (then 100% = data rendered) */}
+          {/* Reels list loading: sized grid skeletons to match final tile layout (CLS). */}
           {job?.status === "completed" && reelsLoading && (
             <div className="space-y-4">
               <div className="space-y-2">
@@ -2418,29 +2419,7 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-muted-foreground">Almost there...</p>
               </div>
-              <div className="space-y-1">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="rounded-lg border border-border/30 p-2 sm:p-3 bg-card/50 flex items-center gap-2 sm:gap-3 animate-pulse"
-                  >
-                    <span className="hidden sm:block w-5 sm:w-6 h-4 bg-muted rounded" />
-                    <div className="w-14 h-18 rounded-md bg-muted shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="h-4 bg-muted rounded w-3/4" />
-                      <div className="flex gap-3">
-                        <div className="h-3 bg-muted rounded w-16" />
-                        <div className="h-3 bg-muted rounded w-12" />
-                        <div className="h-3 bg-muted rounded w-14" />
-                      </div>
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <div className="h-8 w-8 bg-muted rounded" />
-                      <div className="h-8 w-8 bg-muted rounded" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <WorkspaceReelGridSkeleton count={8} />
             </div>
           )}
 
@@ -2562,9 +2541,17 @@ export default function Dashboard() {
                       {/* Thumbnail */}
                       <div className="relative h-[4.5rem] w-14 shrink-0 overflow-hidden rounded-md bg-muted">
                         {reel.thumbnailUrl ? (
-                          <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <img
+                            src={reel.thumbnailUrl}
+                            alt=""
+                            width={56}
+                            height={72}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center">
+                          <div className="flex h-full w-full items-center justify-center">
                             <Film className="h-4 w-4 text-muted-foreground/50" />
                           </div>
                         )}
