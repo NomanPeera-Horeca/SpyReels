@@ -614,7 +614,7 @@ function BlogPostView({ slug }: { slug: string }) {
             <div className="flex items-center gap-4">
               <Popover open={shareOpen} onOpenChange={setShareOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                  <button className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
                     <Share2 className="h-4 w-4" /> Share
                   </button>
                 </PopoverTrigger>
@@ -683,15 +683,15 @@ function BlogPostView({ slug }: { slug: string }) {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="max-w-[720px] w-full">
-          <div className="rounded-2xl overflow-hidden h-[400px] mb-8 border border-border/50 relative">
+          <div className="relative mb-8 h-48 overflow-hidden rounded-2xl border border-border/50 sm:h-72 md:h-[400px]">
             {post.coverImageUrl ? (
-              <img src={post.coverImageUrl} alt={post.title} className="w-full h-full object-cover" />
+              <img src={post.coverImageUrl} alt={post.title} className="h-full w-full object-cover" />
             ) : (
               <div
-                className="w-full h-full flex items-end p-8"
+                className="flex h-full w-full items-end p-6 sm:p-8"
                 style={{ background: "linear-gradient(135deg, #7C3AED 0%, #4C1D95 55%, #111827 100%)" }}
               >
-                <p className="text-white/95 text-xl sm:text-2xl font-semibold max-w-xl">{post.title}</p>
+                <p className="max-w-xl text-lg font-semibold text-white/95 sm:text-xl md:text-2xl">{post.title}</p>
               </div>
             )}
           </div>
@@ -726,7 +726,7 @@ function BlogPostView({ slug }: { slug: string }) {
             <span>{bylineReadMinutes} min read</span>
           </div>
 
-          <h1 className="text-[36px] sm:text-[42px] leading-tight font-semibold mb-4">{post.title}</h1>
+          <h1 className="mb-4 text-2xl font-semibold leading-tight sm:text-[36px] md:text-[42px]">{post.title}</h1>
 
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-b border-border/50 pb-6 mb-8">
             <div className="flex items-center gap-2">

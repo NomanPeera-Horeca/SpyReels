@@ -113,7 +113,7 @@ export default function BlogList() {
             </div>
             <a
               href={getLoginUrl()}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 whitespace-nowrap shrink-0"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 shrink-0"
             >
               Try Free <ArrowRight className="h-4 w-4" />
             </a>

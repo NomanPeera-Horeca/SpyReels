@@ -229,26 +229,26 @@ export default function History() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-1 pb-10 pt-2 sm:px-0">
+    <div className="mx-auto max-w-7xl px-2 pb-10 pt-2 sm:px-0">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             Creator Radar
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Creators you have researched
             {sortedJobs.length > 0 ? (
-              <>
+              <span className="hidden sm:inline">
                 {" "}
                 ·{" "}
                 <span className="text-foreground/85">
                   {summary.accounts} tracked, {formatNumber(summary.reels)} reels
                 </span>
-              </>
+              </span>
             ) : null}
           </p>
         </div>
-        <Button asChild className="shrink-0">
+        <Button asChild className="min-h-10 w-full shrink-0 sm:w-auto">
           <AppLink href="/research">
             New research
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -261,7 +261,7 @@ export default function History() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sort</span>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-            <SelectTrigger className="h-9 w-[200px] border-border/60 bg-card text-xs">
+            <SelectTrigger className="min-h-9 h-10 w-full max-w-[220px] border-border/60 bg-card text-xs sm:h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -277,7 +277,7 @@ export default function History() {
             type="button"
             variant={layout === "gallery" ? "secondary" : "ghost"}
             size="sm"
-            className="h-8 px-3 text-xs"
+            className="min-h-9 px-3 text-xs"
             onClick={() => setLayout("gallery")}
           >
             <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
@@ -287,7 +287,7 @@ export default function History() {
             type="button"
             variant={layout === "rows" ? "secondary" : "ghost"}
             size="sm"
-            className="h-8 px-3 text-xs"
+            className="min-h-9 px-3 text-xs"
             onClick={() => setLayout("rows")}
           >
             <List className="mr-1.5 h-3.5 w-3.5" />
@@ -425,7 +425,7 @@ export default function History() {
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" /> Sync {timeAgo(job.updatedAt)}
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="hidden items-center gap-1 sm:flex">
                         <Calendar className="h-3 w-3" /> {formatDate(job.createdAt)}
                       </span>
                     </div>
@@ -471,7 +471,7 @@ export default function History() {
                     </div>
                   </Tooltip>
                   <Tooltip content="Instagram view counts summed for reels in this session (when available).">
-                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <Eye className="h-3 w-3" /> Views
                       </div>
@@ -481,7 +481,7 @@ export default function History() {
                     </div>
                   </Tooltip>
                   <Tooltip content="Totals across reels in this session">
-                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <Heart className="h-3 w-3" /> Likes
                       </div>
@@ -491,7 +491,7 @@ export default function History() {
                     </div>
                   </Tooltip>
                   <Tooltip content="Totals across reels in this session">
-                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <MessageCircle className="h-3 w-3" /> Comments
                       </div>
@@ -516,13 +516,13 @@ export default function History() {
 
                 <div className="border-t border-border/40 px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="hidden text-[10px] text-muted-foreground sm:block">
                       {stats?.totalViews != null && stats.totalViews > 0
                         ? `${formatNumber(stats.totalViews)} total views in session`
                         : `Scan window · ${job.timeframeDays}d window`}
                     </p>
                     {canOpenRadar ? (
-                      <span className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+                      <span className="inline-flex min-h-10 items-center rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary">
                         {seeCreatorsViralReelsCta(null, job.handle, { includeArrow: true })}
                       </span>
                     ) : null}
@@ -535,7 +535,7 @@ export default function History() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 gap-1 text-xs"
+                        className="min-h-9 gap-1 text-xs"
                         onClick={(e) => handleFailedRetry(e, job.id)}
                         disabled={resyncMutation.isPending}
                       >
@@ -549,7 +549,7 @@ export default function History() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 gap-1 text-xs"
+                        className="min-h-9 gap-1 text-xs"
                         onClick={(e) => handleResync(e, job.id)}
                         disabled={resyncMutation.isPending}
                       >
@@ -562,7 +562,7 @@ export default function History() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      className="h-10 w-10 p-0 text-muted-foreground hover:text-destructive"
                       onClick={(e) => handleDelete(e, job.id, job.handle)}
                       disabled={deleteMutation.isPending}
                       title="Remove from Creator Radar"
@@ -627,10 +627,14 @@ export default function History() {
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                       <span>{formatNumber(job.followerCount || 0)} followers</span>
                       <span>{job.totalReels} reels</span>
-                      <span>{job.timeframeDays}d window</span>
-                      {stats?.totalViews ? <span>{formatNumber(stats.totalViews)} views</span> : null}
+                      <span className="hidden sm:inline">{job.timeframeDays}d window</span>
+                      {stats?.totalViews ? (
+                        <span className="hidden sm:inline">{formatNumber(stats.totalViews)} views</span>
+                      ) : null}
                       {stats?.avgEngagementPct != null ? (
-                        <span className="text-emerald-400">{stats.avgEngagementPct.toFixed(2)}% avg ER</span>
+                        <span className="hidden text-emerald-400 sm:inline">
+                          {stats.avgEngagementPct.toFixed(2)}% avg ER
+                        </span>
                       ) : null}
                     </div>
                   </div>
@@ -659,7 +663,7 @@ export default function History() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 gap-1.5 text-xs"
+                      className="min-h-9 gap-1.5 text-xs"
                       onClick={(e) => handleFailedRetry(e, job.id)}
                       disabled={resyncMutation.isPending}
                     >
@@ -671,7 +675,7 @@ export default function History() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 gap-1.5 text-xs"
+                      className="min-h-9 gap-1.5 text-xs"
                       onClick={(e) => handleResync(e, job.id)}
                       disabled={resyncMutation.isPending}
                     >
@@ -680,18 +684,18 @@ export default function History() {
                     </Button>
                   )}
                   {canOpenRadar ? (
-                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => openJob(job)}>
+                    <Button variant="outline" size="sm" className="min-h-9 text-xs" onClick={() => openJob(job)}>
                       Open
                     </Button>
                   ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    className="h-10 w-10 p-0 text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleDelete(e, job.id, job.handle)}
                     disabled={deleteMutation.isPending}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>

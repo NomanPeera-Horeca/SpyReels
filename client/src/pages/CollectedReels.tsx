@@ -521,7 +521,7 @@ export default function CollectedReels() {
     return (
       <button
         type="button"
-        className="rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur transition-colors hover:bg-destructive/90 hover:text-white"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur transition-colors hover:bg-destructive/90 hover:text-white"
         onClick={(e) => {
           e.stopPropagation();
           deleteMutation.mutate({ id: reelId });
@@ -530,7 +530,7 @@ export default function CollectedReels() {
         title="Remove from collection"
         aria-label="Remove from collection"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-4 w-4" />
       </button>
     );
   }
@@ -554,7 +554,7 @@ export default function CollectedReels() {
       if (gridTile) {
         return (
           <div className="w-full" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" className="h-7 w-full justify-center text-xs" disabled>
+            <Button variant="outline" size="sm" className="min-h-10 w-full justify-center text-xs" disabled>
               <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Fetching...
             </Button>
           </div>
@@ -586,7 +586,7 @@ export default function CollectedReels() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 w-full justify-center text-xs"
+              className="min-h-10 w-full justify-center text-xs"
               onClick={() => retryMutation.mutate({ id: reel.id })}
               disabled={retryMutation.isPending}
             >
@@ -778,11 +778,11 @@ export default function CollectedReels() {
   const engagementPctForPreview = (r: CollectedRow) => getEngagementRate(r) ?? 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-1 sm:px-0">
+    <div className="mx-auto max-w-7xl px-2 sm:px-0">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <Inbox className="h-6 w-6 text-primary" />
+          <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">
+            <Inbox className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
             Collected Reels
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -797,7 +797,7 @@ export default function CollectedReels() {
               type="button"
               size="sm"
               variant={viewMode === "list" ? "default" : "ghost"}
-              className="h-8 px-2.5 text-xs"
+              className="min-h-9 px-3 text-xs"
               onClick={() => setViewModeTracked("list")}
             >
               <List className="mr-1 h-3.5 w-3.5" /> List
@@ -806,7 +806,7 @@ export default function CollectedReels() {
               type="button"
               size="sm"
               variant={viewMode === "grid" ? "default" : "ghost"}
-              className="h-8 px-2.5 text-xs"
+              className="min-h-9 px-3 text-xs"
               onClick={() => setViewModeTracked("grid")}
             >
               <Grid3X3 className="mr-1 h-3.5 w-3.5" /> Grid
@@ -1237,21 +1237,39 @@ export default function CollectedReels() {
                 stats={
                   isReady ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                      {effectiveViews > 0 ? <span>{formatNumber(effectiveViews)} views</span> : null}
-                      {effectiveViews > 0 ? <span aria-hidden>·</span> : null}
-                      <span>{formatNumber(reel.likeCount || 0)} likes</span>
-                      <span aria-hidden>·</span>
-                      <span>{formatNumber(reel.commentCount || 0)} comments</span>
+                      {effectiveViews > 0 ? (
+                        <span>{formatNumber(effectiveViews)} views</span>
+                      ) : null}
                       {engagementRate > 0 ? (
                         <>
-                          <span aria-hidden>·</span>
-                          <span className="font-medium text-emerald-400">{engagementRate.toFixed(2)}%</span>
+                          {effectiveViews > 0 ? <span aria-hidden>·</span> : null}
+                          <span className="font-medium text-emerald-400">
+                            {engagementRate.toFixed(2)}%
+                          </span>
                         </>
                       ) : null}
+                      {(effectiveViews > 0 || engagementRate > 0) ? (
+                        <span className="hidden sm:inline" aria-hidden>
+                          ·
+                        </span>
+                      ) : null}
+                      <span className="hidden sm:inline">
+                        {formatNumber(reel.likeCount || 0)} likes
+                      </span>
+                      <span className="hidden md:inline" aria-hidden>
+                        ·
+                      </span>
+                      <span className="hidden md:inline">
+                        {formatNumber(reel.commentCount || 0)} comments
+                      </span>
                       {reel.postedAt ? (
                         <>
-                          <span aria-hidden>·</span>
-                          <span>{formatPostedTime(reel.postedAt, userTimezone)}</span>
+                          <span className="hidden sm:inline" aria-hidden>
+                            ·
+                          </span>
+                          <span className="hidden sm:inline">
+                            {formatPostedTime(reel.postedAt, userTimezone)}
+                          </span>
                         </>
                       ) : null}
                     </div>

@@ -380,7 +380,7 @@ export default function HookGenerator() {
                         key={chip}
                         type="button"
                         onClick={() => setTone(chip)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                        className={`inline-flex min-h-9 items-center rounded-full border px-3.5 text-xs font-semibold transition-colors ${
                           tone === chip
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border text-muted-foreground hover:text-foreground"
@@ -397,7 +397,7 @@ export default function HookGenerator() {
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full gap-2"
+                  className="min-h-12 w-full gap-2"
                   disabled={generateMutation.isPending || content.trim().length < 10}
                 >
                   {generateMutation.isPending ? (

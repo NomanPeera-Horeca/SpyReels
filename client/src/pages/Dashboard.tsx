@@ -2218,11 +2218,11 @@ export default function Dashboard() {
 
                   {!isFirstVisitDashboard ? (
                   <Tooltip content="Switch between detailed list and visual grid view">
-                    <div className="workspace-view-toggle inline-flex items-center">
+                    <div className="workspace-view-toggle inline-flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
                       <Button
                         variant={viewMode === "list" ? "default" : "ghost"}
                         size="sm"
-                        className="h-7 px-2 text-xs"
+                        className="min-h-9 px-3 text-xs"
                         onClick={() => setViewModeTracked("list")}
                       >
                         <List className="h-3.5 w-3.5 mr-1" />
@@ -2231,7 +2231,7 @@ export default function Dashboard() {
                       <Button
                         variant={viewMode === "grid" ? "default" : "ghost"}
                         size="sm"
-                        className="h-7 px-2 text-xs"
+                        className="min-h-9 px-3 text-xs"
                         onClick={() => setViewModeTracked("grid")}
                       >
                         <Grid3X3 className="h-3.5 w-3.5 mr-1" />
@@ -2887,7 +2887,7 @@ export default function Dashboard() {
                         topRight={
                           <button
                               type="button"
-                              className={`rounded-full p-1.5 backdrop-blur transition-colors ${
+                              className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur transition-colors ${
                                 isSaved
                                   ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
                                   : "bg-black/55 text-white/90 hover:bg-black/75"
@@ -2905,9 +2905,9 @@ export default function Dashboard() {
                               aria-label={isSaved ? "Remove from saved" : "Save reel"}
                             >
                               {isSaved ? (
-                                <BookmarkCheck className="h-3.5 w-3.5" />
+                                <BookmarkCheck className="h-4 w-4" />
                               ) : (
-                                <Bookmark className="h-3.5 w-3.5" />
+                                <Bookmark className="h-4 w-4" />
                               )}
                             </button>
                         }
@@ -2962,10 +2962,6 @@ export default function Dashboard() {
                         stats={
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                             <span>{formatNumber(reel.viewCount)} views</span>
-                            <span aria-hidden>·</span>
-                            <span>{formatNumber(reel.likeCount)} likes</span>
-                            <span aria-hidden>·</span>
-                            <span>{formatNumber(reel.commentCount)} comments</span>
                             {reel.engagementRate > 0 && (
                               <>
                                 <span aria-hidden>·</span>
@@ -2974,8 +2970,22 @@ export default function Dashboard() {
                                 </span>
                               </>
                             )}
-                            <span aria-hidden>·</span>
-                            <span className="text-muted-foreground">
+                            <span className="hidden sm:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden sm:inline">
+                              {formatNumber(reel.likeCount)} likes
+                            </span>
+                            <span className="hidden md:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden md:inline">
+                              {formatNumber(reel.commentCount)} comments
+                            </span>
+                            <span className="hidden sm:inline" aria-hidden>
+                              ·
+                            </span>
+                            <span className="hidden sm:inline text-muted-foreground">
                               {formatPostedTime(reel.postedAt, userTimezone)}
                             </span>
                           </div>
@@ -2993,6 +3003,7 @@ export default function Dashboard() {
                               recreateState={recreateSt}
                               isQueued={isTxQueued}
                               isNoSpeech={isNoSpeech}
+                              compact
                               hideBookmark
                               hideExternalLink
                               oneClickRemake={oneClickRemake}

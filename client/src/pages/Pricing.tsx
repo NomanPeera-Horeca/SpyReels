@@ -915,7 +915,7 @@ export default function Pricing() {
             </Button>
           </div>
 
-          <div className="mt-10 grid gap-3 sm:grid-cols-4">
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {STATS.map(stat => (
               <div
                 key={stat.label}
@@ -1266,22 +1266,24 @@ export default function Pricing() {
         </div>
 
         <Card className="overflow-hidden border-border bg-card">
-          <CardContent className="p-0">
-            <div className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border bg-card/70 px-4 py-3 text-sm font-semibold">
-              <span>Decision point</span>
-              <span className="text-primary">SpyReels</span>
-              <span className="text-muted-foreground">Meedro</span>
-            </div>
-            {COMPETITOR_ROWS.map(row => (
-              <div
-                key={row.label}
-                className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border px-4 py-3 text-sm last:border-b-0"
-              >
-                <span className="font-medium text-foreground">{row.label}</span>
-                <span className="text-foreground">{row.spyreels}</span>
-                <span className="text-muted-foreground">{row.meedro}</span>
+          <CardContent className="overflow-x-auto p-0">
+            <div className="min-w-[32rem]">
+              <div className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border bg-card/70 px-4 py-3 text-sm font-semibold">
+                <span>Decision point</span>
+                <span className="text-primary">SpyReels</span>
+                <span className="text-muted-foreground">Meedro</span>
               </div>
-            ))}
+              {COMPETITOR_ROWS.map(row => (
+                <div
+                  key={row.label}
+                  className="grid grid-cols-[1.2fr_1fr_1fr] border-b border-border px-4 py-3 text-sm last:border-b-0"
+                >
+                  <span className="font-medium text-foreground">{row.label}</span>
+                  <span className="text-foreground">{row.spyreels}</span>
+                  <span className="text-muted-foreground">{row.meedro}</span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </section>
@@ -1545,7 +1547,7 @@ export default function Pricing() {
               No card. Upgrade when ready.
             </p>
           </div>
-          <Button size="sm" onClick={() => handleCheckout("free")}>
+          <Button size="sm" className="min-h-10 shrink-0" onClick={() => handleCheckout("free")}>
             Start Free, No Card
           </Button>
         </div>
@@ -1576,13 +1578,13 @@ export default function Pricing() {
               <button
                 type="button"
                 onClick={() => setIsAnnual(v => !v)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
+                className={`relative h-7 w-12 rounded-full transition-colors ${
                   isAnnual ? "bg-primary" : "bg-muted"
                 }`}
                 aria-label="Toggle annual billing"
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
                     isAnnual ? "translate-x-5" : "translate-x-0.5"
                   }`}
                 />

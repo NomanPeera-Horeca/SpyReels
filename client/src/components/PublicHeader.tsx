@@ -73,7 +73,7 @@ export function PublicHeader() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="md:hidden"
+                    className="h-10 w-10 md:hidden"
                     aria-label="Open menu"
                   >
                     <Menu className="h-5 w-5" />
@@ -107,9 +107,9 @@ export function PublicHeader() {
                                   ? onFreeToolsClick
                                   : closeMobileNav
                               }
-                              className={`rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-accent ${
+                              className={`inline-flex min-h-10 items-center rounded-lg px-3 text-sm transition-colors hover:bg-accent ${
                                 item.highlight
-                                  ? "flex items-center gap-2 text-primary"
+                                  ? "gap-2 text-primary"
                                   : "text-foreground"
                               }`}
                             >
@@ -125,7 +125,7 @@ export function PublicHeader() {
                         <SheetClose asChild key={item.href}>
                           <a
                             href={item.href}
-                            className="rounded-lg px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-accent"
+                            className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm text-foreground transition-colors hover:bg-accent"
                           >
                             {item.label}
                           </a>
@@ -213,14 +213,14 @@ export function PublicHeader() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleStart("login")}
-                className="bg-transparent"
+                className="min-h-10 bg-transparent"
               >
                 <span className="hidden sm:inline">
                   {user ? "Dashboard" : "Log In"}
                 </span>
                 <span className="sm:hidden">{user ? "App" : "Log In"}</span>
               </Button>
-              <Button size="sm" onClick={() => handleStart("signup")}>
+              <Button size="sm" className="min-h-10" onClick={() => handleStart("signup")}>
                 <span className="hidden sm:inline">
                   {user ? "Open App" : "Start Free"}
                 </span>

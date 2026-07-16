@@ -530,16 +530,16 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-6xl px-3 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+    <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mx-auto max-w-3xl">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Spy Viral Reels
         </p>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+        <div className="mt-2 flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <Film className="h-5 w-5 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="min-w-0 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             What do you want to research?
           </h1>
         </div>
@@ -547,7 +547,7 @@ export default function Home() {
           Pick one. You can always do the other later.
         </p>
 
-        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-xs text-muted-foreground">
+        <div className="mt-5 flex flex-col gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
           <span>
             <strong className="font-medium text-foreground">1. Spy</strong> any
             handle
@@ -577,7 +577,7 @@ export default function Home() {
         <button
           type="button"
           onClick={scrollToFeaturedCreators}
-          className="mt-8 block w-full rounded-2xl border border-primary/45 bg-card p-6 text-left shadow-[0_0_0_1px_oklch(0.65_0.2_280/0.12)] transition hover:border-primary/55"
+          className="mt-8 block w-full rounded-2xl border border-primary/45 bg-card p-4 text-left shadow-[0_0_0_1px_oklch(0.65_0.2_280/0.12)] transition hover:border-primary/55 sm:p-6"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -620,7 +620,7 @@ export default function Home() {
           ) : null}
         </button>
 
-        <div className="mt-4 rounded-2xl border border-border/70 bg-card/50 p-6">
+        <div className="mt-4 rounded-2xl border border-border/70 bg-card/50 p-4 sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-lg font-semibold text-foreground">
@@ -714,7 +714,7 @@ export default function Home() {
                   onKeyDown={handleProfileCardKeyDown}
                 >
                   {profileCardCanStartSpy && (
-                    <span className="absolute top-3 right-3 flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                    <span className="absolute top-3 right-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
                       Click to start
                       <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
                     </span>
@@ -797,7 +797,7 @@ export default function Home() {
                             followers
                           </p>
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center sm:block">
                           <p className="font-bold text-foreground">
                             {formatCount(profile.followingCount)}
                           </p>
@@ -811,7 +811,7 @@ export default function Home() {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="flex items-center gap-1 text-primary hover:underline ml-auto"
+                            className="ml-auto hidden items-center gap-1 text-primary hover:underline sm:flex"
                           >
                             <ExternalLink className="h-3 w-3" />
                             <span className="text-[10px] truncate max-w-[120px]">
@@ -852,7 +852,7 @@ export default function Home() {
                         type="button"
                         variant="secondary"
                         size="sm"
-                        className="shrink-0"
+                        className="min-h-10 w-full shrink-0 sm:w-auto"
                         onClick={() =>
                           document
                             .getElementById("featured-creators")
@@ -970,7 +970,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setSelectedNicheSlug("all")}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                className={`inline-flex min-h-9 items-center rounded-full border px-3.5 text-xs font-medium transition ${
                   selectedNicheSlug === "all"
                     ? "border-primary/40 bg-primary/10 text-primary"
                     : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -985,7 +985,7 @@ export default function Home() {
                   key={niche.slug}
                   type="button"
                   onClick={() => setSelectedNicheSlug(niche.slug)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  className={`inline-flex min-h-9 items-center rounded-full border px-3.5 text-xs font-medium transition ${
                     selectedNicheSlug === niche.slug
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border bg-card text-muted-foreground hover:text-foreground"
@@ -1098,7 +1098,7 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 flex w-full items-center justify-center rounded-lg border border-border bg-background/50 py-2.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary">
+                <div className="mt-3 flex min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background/50 px-3 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary">
                   {seeCreatorsViralReelsCta(creator.displayName, creator.handle, {
                     includeArrow: true,
                   })}
@@ -1109,7 +1109,7 @@ export default function Home() {
         )}
       </section>
 
-      <div className="mt-10 grid grid-cols-1 gap-4 border-t border-border pt-8 sm:grid-cols-3">
+      <div className="mt-10 hidden grid-cols-1 gap-4 border-t border-border pt-8 sm:grid sm:grid-cols-3">
         {[
           {
             label: "Spy",
