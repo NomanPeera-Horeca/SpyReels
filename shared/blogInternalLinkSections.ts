@@ -26,6 +26,7 @@ export const BLOG_POST_TITLES: Record<string, string> = {
   "guide-instagram-reels-hook-patterns-data": "Instagram Reels hook patterns (data)",
   "guide-transcribe-instagram-reels-analysis": "Transcribe Instagram Reels for analysis",
   "guide-how-to-go-viral-on-instagram-reels-2026": "How to go viral on Instagram Reels in 2026",
+  "guide-how-many-views-viral-instagram": "How many views is considered viral on Instagram",
   "guide-instagram-reels-hook-ideas-2026": "Instagram Reels hook ideas and templates",
   "guide-instagram-reels-content-strategy-under-10k": "Instagram Reels content strategy under 10K",
   "guide-spyreels-review-2026": "SpyReels review 2026",

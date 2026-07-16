@@ -122,6 +122,7 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "guide-instagram-reels-analytics-tool",
     "guide-alex-hormozi-instagram-reels-analysis",
     "guide-reverse-engineer-viral-reels",
+    "guide-how-many-views-viral-instagram",
   ],
   "guide-instagram-reels-hook-patterns-data": [
     "guide-instagram-reels-hook-examples",
@@ -140,6 +141,13 @@ export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
     "guide-reverse-engineer-viral-reels",
     "guide-grow-instagram-reels-under-10k",
     "guide-instagram-reels-hook-ideas-2026",
+    "guide-how-many-views-viral-instagram",
+  ],
+  "guide-how-many-views-viral-instagram": [
+    "guide-instagram-reels-engagement-rate",
+    "guide-how-to-go-viral-on-instagram-reels-2026",
+    "guide-why-reels-get-no-views",
+    "guide-find-viral-reels-your-niche",
   ],
   "guide-instagram-reels-hook-ideas-2026": [
     "guide-instagram-reels-hook-examples",
