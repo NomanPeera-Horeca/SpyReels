@@ -350,7 +350,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -429,50 +429,59 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-primary/8 rounded-full blur-[120px] pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-12">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
+        <div className="pointer-events-none absolute top-0 left-1/2 h-[420px] w-[min(100%,28rem)] -translate-x-1/2 rounded-full bg-primary/8 blur-[80px] sm:h-[600px] sm:w-[800px] sm:blur-[120px]" />
+        <div className="relative mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 sm:pt-24 lg:px-8">
+          <div className="grid min-w-0 items-center gap-10 lg:grid-cols-2 lg:gap-12">
             {/* Left: Copy + CTAs */}
-            <div className="text-center lg:text-left">
-              <Badge variant="outline" className="mb-6 text-primary border-primary/30 px-4 py-1.5 text-sm">
-                <Star className="h-3.5 w-3.5 mr-2" />
+            <div className="min-w-0 text-center lg:text-left">
+              <Badge
+                variant="outline"
+                className="mb-6 max-w-full whitespace-normal px-3 py-1.5 text-left text-sm text-primary border-primary/30 sm:px-4"
+              >
+                <Star className="mr-2 h-3.5 w-3.5 shrink-0" />
                 12,000+ creators are already using SpyReels
               </Badge>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
+              <h1 className="mb-6 text-4xl font-bold leading-[1.1] tracking-tight break-words sm:text-5xl lg:text-6xl">
                 The Instagram Reels spy tool for creators who ask: why are their Reels getting{" "}
                 <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
                   100K views and yours get 200?
                 </span>
               </h1>
-              <p className="text-lg sm:text-xl text-muted-foreground mb-4 leading-relaxed mx-auto lg:mx-0 max-w-2xl lg:max-w-xl">
+              <p className="mx-auto mb-4 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl lg:mx-0 lg:max-w-xl">
                 SpyReels ranks competitor Reels by performance, plans 30 days of content for your niche, and writes ready-to-film scripts with your AI Personal Brand Coach. Most creators go from research to filming in under 10 minutes.
               </p>
-              <p className="text-sm text-amber-400 font-medium mb-8">
+              <p className="mb-8 text-sm font-medium text-amber-400">
                 While you are reading this, other creators in your niche are already using this.
               </p>
-              <div className="flex flex-col sm:flex-row items-center lg:justify-start justify-center gap-4 mb-6">
-                <Button size="lg" onClick={handleGetStarted} className="text-base px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+              <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
+                <Button size="lg" onClick={handleGetStarted} className="h-12 px-8 text-base shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30">
                   Start Free. No Credit Card.
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                <a href="#how-it-works" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
                   See how it works <ChevronDown className="h-4 w-4" />
                 </a>
               </div>
               <p className="text-xs text-muted-foreground/70">Free plan includes 2 account research sessions, 3 transcriptions, and 5 saved scripts per month</p>
-              <p className="mt-4 text-sm text-muted-foreground">
+              <p className="mt-4 flex flex-col items-center gap-2 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
                 <Link href="/pricing" className="text-primary hover:underline">
                   See SpyReels pricing
                 </Link>
-                {" · "}
+                <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden>
+                  ·
+                </span>
                 <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
                   Try our free viral hook generator
                 </Link>
-                {" · "}
+                <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden>
+                  ·
+                </span>
                 <Link href="/blog" className="text-primary hover:underline">
                   Read our Instagram growth blog
                 </Link>
-                {" · "}
+                <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden>
+                  ·
+                </span>
                 <Link href="/affiliate" className="text-primary hover:underline">
                   Join the SpyReels affiliate program
                 </Link>
@@ -480,9 +489,9 @@ export default function LandingPage() {
             </div>
 
             {/* Right: Hero demo video (9:16 vertical) */}
-            <div className="relative mx-auto w-full max-w-[340px]">
-              <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-primary/5 to-transparent rounded-3xl blur-2xl pointer-events-none" />
-              <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-2xl shadow-primary/20 bg-card">
+            <div className="relative mx-auto w-full max-w-[min(100%,340px)] overflow-hidden">
+              <div className="pointer-events-none absolute -inset-4 rounded-3xl bg-gradient-to-tr from-primary/20 via-primary/5 to-transparent blur-2xl" />
+              <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-card shadow-2xl shadow-primary/20">
                 <video
                   src={HERO_VIDEO_URL}
                   width={340}
@@ -744,12 +753,12 @@ export default function LandingPage() {
 
       {/* The real reason section */}
       <section className="py-20 sm:py-28">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl overflow-hidden px-4 sm:px-6 lg:px-8">
           <div className="relative">
-            <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-pink-500/10 to-amber-500/10 rounded-2xl blur-xl" />
-            <Card className="relative bg-card border-border/50">
+            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-primary/20 via-pink-500/10 to-amber-500/10 blur-xl" />
+            <Card className="relative border-border/50 bg-card">
               <CardContent className="p-8 sm:p-12">
-                <Badge variant="outline" className="mb-6 text-primary border-primary/30 px-3 py-1">The truth about going viral</Badge>
+                <Badge variant="outline" className="mb-6 max-w-full whitespace-normal text-primary border-primary/30 px-3 py-1">The truth about going viral</Badge>
                 <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-foreground">
                   The creators winning on Instagram are not more talented than you.
                 </h2>

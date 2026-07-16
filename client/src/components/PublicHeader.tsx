@@ -64,10 +64,10 @@ export function PublicHeader() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 pt-safe backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 overflow-x-hidden border-b border-border/50 bg-background/80 pt-safe backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex h-16 min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
                   <Button
@@ -155,17 +155,17 @@ export function PublicHeader() {
                   </div>
                 </SheetContent>
               </Sheet>
-              <Link href="/" className="flex items-center gap-3">
+              <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <img
                   src={SPYREELS_LOGO_URL}
                   alt="SpyReels logo, Instagram Reels spy tool"
                   width={36}
                   height={36}
-                  className="h-9 w-9"
+                  className="h-9 w-9 shrink-0"
                   fetchPriority="high"
                   decoding="async"
                 />
-                <span className="text-lg font-semibold tracking-tight">
+                <span className="truncate text-lg font-semibold tracking-tight">
                   SpyReels
                 </span>
               </Link>
@@ -208,19 +208,19 @@ export function PublicHeader() {
               })}
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleStart("login")}
-                className="min-h-10 bg-transparent"
+                className="min-h-10 bg-transparent px-2.5 sm:px-3"
               >
                 <span className="hidden sm:inline">
                   {user ? "Dashboard" : "Log In"}
                 </span>
                 <span className="sm:hidden">{user ? "App" : "Log In"}</span>
               </Button>
-              <Button size="sm" className="min-h-10" onClick={() => handleStart("signup")}>
+              <Button size="sm" className="min-h-10 px-2.5 sm:px-3" onClick={() => handleStart("signup")}>
                 <span className="hidden sm:inline">
                   {user ? "Open App" : "Start Free"}
                 </span>
