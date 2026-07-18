@@ -199,6 +199,8 @@ export function OnboardingAhaView({
             illustrate: displayScript.illustrate,
             teach: displayScript.teach,
             cta: displayScript.cta,
+            hookVisualBeat: "",
+            hookOnScreenText: "",
           }}
           onEditDraftChange={() => {}}
           refineInput=""

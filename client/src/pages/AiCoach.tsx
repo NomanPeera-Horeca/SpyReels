@@ -97,6 +97,8 @@ export default function AiCoach() {
     illustrate: "",
     teach: "",
     cta: "",
+    hookVisualBeat: "",
+    hookOnScreenText: "",
   });
   const [refineInput, setRefineInput] = useState("");
   const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
@@ -179,12 +181,18 @@ export default function AiCoach() {
 
   const applyScriptResult = (data: CoachResultScript) => {
     setResult(data);
+    const production = parseProductionNotes(data.productionNotes) ?? {};
     setEditDraft({
       hook: data.hook,
       explain: data.explain,
       illustrate: data.illustrate,
       teach: data.teach,
       cta: data.cta,
+      hookVisualBeat: production.hookVisualBeat?.trim() ?? "",
+      hookOnScreenText:
+        production.hookOnScreenText?.trim() ||
+        production.textOverlay?.trim() ||
+        "",
     });
     setPhase("result");
     setEditMode(false);
@@ -387,6 +395,8 @@ export default function AiCoach() {
       ...production,
       hookVisualBeat: variation.visualHook,
       hookOnScreenText: variation.onScreenText,
+      frame0OnScreenText: variation.onScreenText,
+      textOverlay: variation.onScreenText,
       hookType: variation.hookType,
     });
     setResult({
@@ -394,7 +404,12 @@ export default function AiCoach() {
       hook: variation.spokenHook,
       productionNotes: updatedNotes,
     });
-    setEditDraft((draft) => ({ ...draft, hook: variation.spokenHook }));
+    setEditDraft((draft) => ({
+      ...draft,
+      hook: variation.spokenHook,
+      hookVisualBeat: variation.visualHook,
+      hookOnScreenText: variation.onScreenText,
+    }));
     setHookVariations(null);
   };
 
@@ -453,7 +468,7 @@ export default function AiCoach() {
     setLocation(scriptFilmPath(savedScriptId));
   };
 
-  const saveCoachScript = (withDate: boolean) => {
+  const saveCoachScript = (withDate: boolean, extras?: { caption: string; hashtags: string[] }) => {
     if (!result) return;
     pendingFilmRef.current = false;
     saveToLibraryMutation.mutate({
@@ -462,6 +477,8 @@ export default function AiCoach() {
       postDate: withDate && postDate ? postDate.toISOString().slice(0, 10) : undefined,
       postTime: withDate ? postTime : undefined,
       notes: saveNotes.trim() || undefined,
+      generatedCaption: extras?.caption?.trim() || undefined,
+      generatedHashtags: extras?.hashtags?.length ? extras.hashtags : undefined,
     });
   };
 
@@ -890,15 +907,23 @@ export default function AiCoach() {
             illustrate: editDraft.illustrate,
             teach: editDraft.teach,
             cta: editDraft.cta,
+            hookVisualBeat: editDraft.hookVisualBeat,
+            hookOnScreenText: editDraft.hookOnScreenText,
           });
         }}
         onCancelEdit={() => {
+          const production = parseProductionNotes(result.productionNotes) ?? {};
           setEditDraft({
             hook: result.hook,
             explain: result.explain,
             illustrate: result.illustrate,
             teach: result.teach,
             cta: result.cta,
+            hookVisualBeat: production.hookVisualBeat?.trim() ?? "",
+            hookOnScreenText:
+              production.hookOnScreenText?.trim() ||
+              production.textOverlay?.trim() ||
+              "",
           });
           setEditMode(false);
         }}
@@ -910,6 +935,7 @@ export default function AiCoach() {
         refinePending={refineMutation.isPending}
         savePending={updateMutation.isPending}
         scheduleSave={{
+          coachScriptId: result.id,
           postDate,
           onPostDateChange: setPostDate,
           postTime,
@@ -917,6 +943,10 @@ export default function AiCoach() {
           notes: saveNotes,
           onNotesChange: setSaveNotes,
           savedScriptId: savedLibraryScriptId,
+          initialCaption:
+            savedScriptsList?.find((s) => s.coachScriptId === result.id)?.generatedCaption ?? null,
+          initialHashtagsJson:
+            savedScriptsList?.find((s) => s.coachScriptId === result.id)?.generatedHashtags ?? null,
           isSaving: saveToLibraryMutation.isPending && !filmNowPending,
           onSave: saveCoachScript,
           onOpenMyScripts: handleOpenMyScripts,

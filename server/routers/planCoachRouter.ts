@@ -38,7 +38,12 @@ import {
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
 import { importRemakeScriptToStudioForWorkspace } from "../importRemakeToStudio";
-import { assignScriptingTag, pickAutoPostSchedule } from "../ideaScriptExtras";
+import {
+  assignScriptingTag,
+  enrichIdeaSavedScriptInBackground,
+  generateCaptionForScriptContent,
+  pickAutoPostSchedule,
+} from "../ideaScriptExtras";
 import {
   completeAgentProgress,
   failAgentProgress,
@@ -1013,6 +1018,29 @@ export const studioRouter = router({
       return mapCoachScriptRow(row);
     }),
 
+  /** 30s Apple Music / iTunes preview for Instagram audio title+artist picks. */
+  resolveAudioPreview: protectedProcedure
+    .input(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        artist: z.string().trim().max(200).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const { resolveItunesAudioPreview } = await import("../itunesAudioPreview");
+      const preview = await resolveItunesAudioPreview({
+        title: input.title,
+        artist: input.artist,
+      });
+      if (!preview) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No audio preview found. Search this track in Instagram Reels audio.",
+        });
+      }
+      return preview;
+    }),
+
   update: protectedProcedure
     .input(
       z.object({
@@ -1022,6 +1050,8 @@ export const studioRouter = router({
         illustrate: z.string().max(8000),
         teach: z.string().max(4000),
         cta: z.string().max(2000),
+        hookVisualBeat: z.string().max(2000).optional(),
+        hookOnScreenText: z.string().max(200).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1042,11 +1072,29 @@ export const studioRouter = router({
         teach: input.teach.trim(),
         cta: input.cta.trim(),
       };
-      const notes = parseProductionNotes(script.productionNotes);
-      const productionNotes = buildProductionNotesJson(notes ?? {}, sections, {
-        contentFormat: script.contentFormat ?? undefined,
-        funnelStage: notes?.funnelStage,
-      });
+      const notes = parseProductionNotes(script.productionNotes) ?? {};
+      const onScreen =
+        input.hookOnScreenText !== undefined
+          ? input.hookOnScreenText.trim()
+          : notes.hookOnScreenText?.trim() || notes.textOverlay?.trim() || "";
+      const visualBeat =
+        input.hookVisualBeat !== undefined
+          ? input.hookVisualBeat.trim()
+          : notes.hookVisualBeat?.trim() || "";
+      const productionNotes = buildProductionNotesJson(
+        {
+          ...notes,
+          hookVisualBeat: visualBeat,
+          hookOnScreenText: onScreen,
+          frame0OnScreenText: onScreen,
+          textOverlay: onScreen || notes.textOverlay,
+        },
+        sections,
+        {
+          contentFormat: script.contentFormat ?? undefined,
+          funnelStage: notes.funnelStage,
+        }
+      );
 
       await db
         .update(coachScripts)
@@ -1063,6 +1111,42 @@ export const studioRouter = router({
       return mapCoachScriptRow(updated);
     }),
 
+  generateCaption: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [script] = await db
+        .select()
+        .from(coachScripts)
+        .where(eq(coachScripts.id, input.id))
+        .limit(1);
+      if (!script) throw new TRPCError({ code: "NOT_FOUND", message: "Script not found" });
+
+      const sections = parseCoachScriptSections({
+        body: script.body,
+        callToAction: script.callToAction,
+        productionNotes: script.productionNotes,
+      });
+      const content = flattenViralScriptForCopy({
+        title: script.title,
+        hook: script.hook,
+        sections,
+      });
+
+      try {
+        return await generateCaptionForScriptContent(content);
+      } catch (err) {
+        console.error(`[studio.generateCaption] failed for coach script ${input.id}:`, err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not generate caption. Try again.",
+        });
+      }
+    }),
+
   saveToLibrary: protectedProcedure
     .input(
       z.object({
@@ -1077,6 +1161,8 @@ export const studioRouter = router({
           .regex(/^\d{2}:\d{2}$/)
           .optional(),
         notes: z.string().trim().max(2000).optional().nullable(),
+        generatedCaption: z.string().trim().max(5000).optional().nullable(),
+        generatedHashtags: z.array(z.string().trim().max(100)).max(15).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1115,6 +1201,21 @@ export const studioRouter = router({
       const notesTrimmed = input.notes?.trim() ?? "";
       const notes = notesTrimmed || "Saved from AI Coach";
 
+      const captionTrimmed = input.generatedCaption?.trim() || "";
+      const hashtagsClean = (input.generatedHashtags ?? [])
+        .map((h) => h.replace(/^#/, "").trim())
+        .filter(Boolean)
+        .slice(0, 10);
+      const captionFields =
+        captionTrimmed || hashtagsClean.length > 0
+          ? {
+              generatedCaption: captionTrimmed || null,
+              generatedHashtags:
+                hashtagsClean.length > 0 ? JSON.stringify(hashtagsClean) : null,
+              captionStyle: "educational" as const,
+            }
+          : null;
+
       const existing = await getSavedScriptByCoachScriptId(script.id, ctx.workspaceId);
 
       if (existing) {
@@ -1125,7 +1226,13 @@ export const studioRouter = router({
           postDate: schedule?.postDate ?? null,
           postTime: schedule?.postTime ?? null,
           notes,
+          ...(captionFields ?? {}),
         });
+        if (!captionFields && !existing.generatedCaption) {
+          enrichIdeaSavedScriptInBackground(existing.id, content).catch((err) =>
+            console.error(`[studio.saveToLibrary] Background caption failed for ${existing.id}:`, err)
+          );
+        }
         return {
           savedScriptId: existing.id,
           coachScriptId: script.id,
@@ -1146,9 +1253,16 @@ export const studioRouter = router({
         coachScriptId: script.id,
         postDate: schedule?.postDate ?? null,
         postTime: schedule?.postTime ?? null,
+        ...(captionFields ?? {}),
       });
 
       await assignScriptingTag(savedId, ctx.workspaceId, ctx.user.id);
+
+      if (!captionFields) {
+        enrichIdeaSavedScriptInBackground(savedId, content).catch((err) =>
+          console.error(`[studio.saveToLibrary] Background caption failed for ${savedId}:`, err)
+        );
+      }
 
       return {
         savedScriptId: savedId,

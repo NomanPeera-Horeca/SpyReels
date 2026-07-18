@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   flattenCoachScriptForCopy,
@@ -29,6 +29,14 @@ import {
   type CoachScriptSchedulePanelProps,
 } from "@/components/CoachScriptSchedulePanel";
 import Tooltip from "@/components/Tooltip";
+import { InstagramAudioPreviewList } from "@/components/InstagramAudioPreviewList";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 function truncateWords(text: string, maxWords: number): string {
   const trimmed = text.trim();
@@ -36,13 +44,6 @@ function truncateWords(text: string, maxWords: number): string {
   const words = trimmed.split(/\s+/);
   if (words.length <= maxWords) return trimmed;
   return `${words.slice(0, maxWords).join(" ")}…`;
-}
-
-function formatInstagramAudioLine(title: string, artist?: string | null): string {
-  const cleanTitle = title.trim();
-  const cleanArtist = artist?.trim();
-  if (!cleanTitle) return "";
-  return cleanArtist ? `${cleanTitle} · ${cleanArtist}` : cleanTitle;
 }
 
 export type CoachResultScript = {
@@ -196,11 +197,17 @@ function platformLabel(platform: string): string {
   return platform;
 }
 
+export type AiCoachEditDraft = CoachScriptSections & {
+  hook: string;
+  hookVisualBeat: string;
+  hookOnScreenText: string;
+};
+
 type AiCoachResultViewProps = {
   result: CoachResultScript;
   editMode: boolean;
-  editDraft: CoachScriptSections & { hook: string };
-  onEditDraftChange: (draft: CoachScriptSections & { hook: string }) => void;
+  editDraft: AiCoachEditDraft;
+  onEditDraftChange: (draft: AiCoachEditDraft) => void;
   refineInput: string;
   onRefineInputChange: (value: string) => void;
   onRefine: () => void;
@@ -255,15 +262,40 @@ export function AiCoachResultView({
   previewMode = false,
 }: AiCoachResultViewProps) {
   const refineInputRef = useRef<HTMLInputElement>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
-  const hookOnScreenText =
+  const savedOnScreenText =
     production?.hookOnScreenText?.trim() ||
     production?.textOverlay?.trim() ||
     "";
-  const hookVisualBeat = production?.hookVisualBeat?.trim() ?? "";
+  const savedVisualBeat = production?.hookVisualBeat?.trim() ?? "";
+  const hookOnScreenText = editMode ? editDraft.hookOnScreenText : savedOnScreenText;
+  const hookVisualBeat = editMode ? editDraft.hookVisualBeat : savedVisualBeat;
   const hookTypeLabel = production?.hookType
     ? formatCoachHookTypeLabel(production.hookType)
     : "";
+
+  useEffect(() => {
+    if (saveToMyScriptsPending) {
+      wasSavingRef.current = true;
+      return;
+    }
+    if (wasSavingRef.current) {
+      wasSavingRef.current = false;
+      if (savedScriptId != null) {
+        setScheduleOpen(false);
+      }
+    }
+  }, [saveToMyScriptsPending, savedScriptId]);
+
+  const openScheduleSave = () => {
+    if (scheduleSave) {
+      setScheduleOpen(true);
+      return;
+    }
+    onSaveToMyScripts?.();
+  };
 
   const sections: CoachScriptSections = {
     explain: result.explain,
@@ -318,10 +350,10 @@ export function AiCoachResultView({
                   {filmNowPending ? "Opening teleprompter..." : "Film now"}
                 </button>
               ) : null}
-              {onSaveToMyScripts ? (
+              {scheduleSave || onSaveToMyScripts ? (
                 <button
                   type="button"
-                  onClick={onSaveToMyScripts}
+                  onClick={openScheduleSave}
                   disabled={saveToMyScriptsPending}
                   className={cn(
                     "inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border disabled:opacity-60",
@@ -404,9 +436,11 @@ export function AiCoachResultView({
                         </div>
                         {editMode ? (
                           <Textarea
-                            value={hookVisualBeat}
-                            readOnly
-                            placeholder="Regenerate or refine to add a frame 0 shot."
+                            value={editDraft.hookVisualBeat}
+                            onChange={(e) =>
+                              onEditDraftChange({ ...editDraft, hookVisualBeat: e.target.value })
+                            }
+                            placeholder="What the viewer sees in frame 0 (mid-action, close-up, or result)."
                             className="min-h-[52px] resize-none text-sm italic bg-white dark:bg-gray-900"
                           />
                         ) : (
@@ -438,7 +472,20 @@ export function AiCoachResultView({
                         <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
                           On-screen text
                         </p>
-                        {hookOnScreenText ? (
+                        {editMode ? (
+                          <Textarea
+                            value={editDraft.hookOnScreenText}
+                            onChange={(e) =>
+                              onEditDraftChange({
+                                ...editDraft,
+                                hookOnScreenText: e.target.value.toUpperCase(),
+                              })
+                            }
+                            placeholder="BOLD TEXT FOR MUTED VIEWERS"
+                            maxLength={60}
+                            className="min-h-[44px] resize-none bg-white dark:bg-gray-900 text-sm font-extrabold uppercase tracking-wide"
+                          />
+                        ) : hookOnScreenText ? (
                           <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900 dark:text-gray-50">
                             {hookOnScreenText}
                           </p>
@@ -687,28 +734,14 @@ export function AiCoachResultView({
               )}
               {production?.instagramAudio && production.instagramAudio.length > 0 ? (
                 <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
                     <Music2 className="h-3.5 w-3.5" />
                     Instagram audio
                   </p>
-                  <div className="space-y-1">
-                    {production.instagramAudio.map((pick, i) => {
-                      const line = formatInstagramAudioLine(pick.title, pick.artist);
-                      if (!line) return null;
-                      return (
-                        <p
-                          key={`${pick.title}-${i}`}
-                          className={
-                            i === 0
-                              ? "text-sm font-medium text-gray-900 dark:text-gray-50"
-                              : "text-sm text-muted-foreground"
-                          }
-                        >
-                          {i === 0 ? line : `Backup: ${line}`}
-                        </p>
-                      );
-                    })}
-                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-2">
+                    Play a 30s preview when Apple Music has a match. Always confirm the exact sound in Instagram Reels.
+                  </p>
+                  <InstagramAudioPreviewList picks={production.instagramAudio} />
                 </div>
               ) : production?.music ? (
                 <div className="mb-4">
@@ -740,10 +773,6 @@ export function AiCoachResultView({
               )}
             </div>
 
-            {!previewMode && scheduleSave ? (
-              <CoachScriptSchedulePanel {...scheduleSave} />
-            ) : null}
-
             <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
               <h2 className="text-sm font-bold mb-3">Quick Actions</h2>
               <button
@@ -766,6 +795,20 @@ export function AiCoachResultView({
           </aside>
         </div>
       </div>
+
+      {!previewMode && scheduleSave ? (
+        <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
+          <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-4 pt-10">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Schedule &amp; save</SheetTitle>
+              <SheetDescription>
+                Add this script to My Scripts with your filming date.
+              </SheetDescription>
+            </SheetHeader>
+            <CoachScriptSchedulePanel {...scheduleSave} />
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   );
 }
