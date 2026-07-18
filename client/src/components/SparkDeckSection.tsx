@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Plus, Sparkles, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ export type SparkPlanCard = {
   userRawNote: string | null;
   coachScriptId?: number | null;
 };
+
+function sparkOriginalIdea(card: SparkPlanCard): string {
+  return (card.userRawNote?.trim() || card.angle?.trim() || "").trim();
+}
 
 type SparkDeckCardProps = {
   card: SparkPlanCard;
@@ -64,6 +68,9 @@ function SparkDeckCard({
   onAdjustSubmit,
 }: SparkDeckCardProps) {
   const scriptReady = card.coachScriptId != null && card.coachScriptId > 0;
+  const [ideaExpanded, setIdeaExpanded] = useState(false);
+  const originalIdea = sparkOriginalIdea(card);
+  const ideaNeedsExpand = originalIdea.length > 140;
 
   const statusBorder = isAdjusting
     ? "border-amber-400 bg-amber-50/30 dark:bg-amber-950/20"
@@ -135,10 +142,58 @@ function SparkDeckCard({
           ) : null}
         </div>
 
-        <p className="text-sm font-semibold leading-snug line-clamp-2 mb-1.5">{card.title}</p>
-        <p className="text-xs italic text-muted-foreground line-clamp-2 leading-relaxed mb-2">
-          &ldquo;{card.hook}&rdquo;
-        </p>
+        {scriptReady ? (
+          <div className="mb-2">
+            {card.title?.trim() ? (
+              <p className="text-sm font-semibold leading-snug line-clamp-2 mb-1.5">{card.title}</p>
+            ) : null}
+            {originalIdea ? (
+              <div className="rounded-lg border border-emerald-200/80 bg-background/70 dark:border-emerald-900 dark:bg-background/40 px-2.5 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-1">
+                  Your idea
+                </p>
+                <p
+                  className={`text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap ${
+                    ideaExpanded || !ideaNeedsExpand ? "" : "line-clamp-3"
+                  }`}
+                >
+                  {originalIdea}
+                </p>
+                {ideaNeedsExpand ? (
+                  <button
+                    type="button"
+                    className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIdeaExpanded((v) => !v);
+                    }}
+                  >
+                    {ideaExpanded ? (
+                      <>
+                        Show less <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        Show full idea <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-xs italic text-muted-foreground line-clamp-2 leading-relaxed">
+                &ldquo;{card.hook}&rdquo;
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="text-sm font-semibold leading-snug line-clamp-2 mb-1.5">{card.title}</p>
+            <p className="text-xs italic text-muted-foreground line-clamp-2 leading-relaxed mb-2">
+              &ldquo;{card.hook}&rdquo;
+            </p>
+          </>
+        )}
 
         {isAdjusting && !scriptReady && (
           <div className="mt-2" onClick={(e) => e.stopPropagation()}>

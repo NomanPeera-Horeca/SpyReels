@@ -18,7 +18,9 @@ import {
   Video,
   Music2,
   HelpCircle,
+  ChevronDown,
   ChevronUp,
+  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
@@ -263,8 +265,10 @@ export function AiCoachResultView({
 }: AiCoachResultViewProps) {
   const refineInputRef = useRef<HTMLInputElement>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [originalIdeaOpen, setOriginalIdeaOpen] = useState(true);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
+  const originalIdea = production?.sourceDescription?.trim() || "";
   const savedOnScreenText =
     production?.hookOnScreenText?.trim() ||
     production?.textOverlay?.trim() ||
@@ -410,6 +414,34 @@ export function AiCoachResultView({
                 )}
               </div>
             </header>
+
+            {originalIdea ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/25 overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-950/40 transition-colors"
+                  onClick={() => setOriginalIdeaOpen((v) => !v)}
+                  aria-expanded={originalIdeaOpen}
+                >
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
+                    <Lightbulb className="h-4 w-4 shrink-0" />
+                    Original idea
+                  </span>
+                  {originalIdeaOpen ? (
+                    <ChevronUp className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
+                  )}
+                </button>
+                {originalIdeaOpen ? (
+                  <div className="px-4 pb-4">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                      {originalIdea}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="space-y-4">
               <section className="rounded-2xl p-5 border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500">
