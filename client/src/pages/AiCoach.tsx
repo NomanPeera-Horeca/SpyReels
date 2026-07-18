@@ -25,8 +25,9 @@ import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
 import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
 import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
-import { combineBodyFromSections, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
+import { combineBodyFromSections, flattenCoachScriptForCopy, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
 import { scriptFilmPath } from "@shared/scriptFilm";
+import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import {
   Sheet,
   SheetContent,
@@ -114,9 +115,12 @@ export default function AiCoach() {
   const [activeCapability, setActiveCapability] = useState<CoachCapabilityId | null>(null);
   const [pendingScriptId, setPendingScriptId] = useState<number | null>(null);
 
-  const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(undefined, {
-    staleTime: 30_000,
-  });
+  const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(
+    { limit: 50 },
+    {
+      staleTime: 30_000,
+    }
+  );
   const { data: savedScriptsList } = trpc.scripts.list.useQuery({}, { staleTime: 60_000 });
   const { data: planData } = trpc.plan.listCards.useQuery(undefined, { staleTime: 60_000 });
   const { data: onboardingState } = trpc.onboarding.getState.useQuery(undefined, {
@@ -936,6 +940,21 @@ export default function AiCoach() {
         savePending={updateMutation.isPending}
         scheduleSave={{
           coachScriptId: result.id,
+          scriptContent: flattenCoachScriptForCopy({
+            title: result.title,
+            hook: result.hook,
+            sections: {
+              explain: result.explain,
+              illustrate: result.illustrate,
+              teach: result.teach,
+              cta: result.cta,
+            },
+            userFriendly: true,
+          }),
+          niche: resolvePrimaryNicheLabel({
+            businessDescription: onboardingState?.businessDescription,
+            selectedNicheSlugs: onboardingState?.selectedNicheSlugs,
+          }) || undefined,
           postDate,
           onPostDateChange: setPostDate,
           postTime,

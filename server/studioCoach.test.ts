@@ -338,19 +338,27 @@ Hook idea: "If you are taking out $40,000 in student loans right now, you will a
 });
 
 describe("buildConvertRoughScriptPrompt", () => {
-  it("wraps rough draft with convert instructions and creator profile", () => {
+  it("asks for production notes only and forbids rewriting spoken lines", () => {
     const prompt = buildConvertRoughScriptPrompt(
       "Most restaurants lose money on bad refrigeration.",
       "Restaurant equipment",
       "Restaurant owners",
       null,
-      "Kitchen warning"
+      "Kitchen warning",
+      {
+        hook: "Most restaurants lose money on bad refrigeration.",
+        explain: "Operators only check the invoice total.",
+        illustrate: "One broken walk-in wiped a weekend of prep.",
+        teach: "Track cold-hold variance every shift.",
+        cta: "",
+      }
     );
-    expect(prompt).toContain("CONVERT THIS ROUGH DRAFT");
+    expect(prompt).toContain("Do NOT rewrite");
     expect(prompt).toContain("Most restaurants lose money");
     expect(prompt).toContain("Working title hint: \"Kitchen warning\"");
     expect(prompt).toContain("Restaurant equipment");
-    expect(prompt).toContain('"hook"');
     expect(prompt).toContain("productionCoach");
+    expect(prompt).toContain("Never invent or return spoken script fields");
+    expect(prompt).not.toContain("CONVERT THIS ROUGH DRAFT");
   });
 });

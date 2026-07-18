@@ -220,24 +220,94 @@ Music rules for productionCoach.instagramAudio:
 - Match audio energy to the script. talking-head: low-volume background. trending-audio: the sound IS the hook.`;
 }
 
-/** Turn pasted rough drafts into the same HEIT + productionNotes JSON as net-new coach scripts. */
+/** Paste → Studio: keep spoken lines verbatim; generate only missing production fields. */
 export function buildConvertRoughScriptPrompt(
   roughScript: string,
   niche: string,
   targetAudience: string,
   brandDescription?: string | null,
-  workingTitle?: string | null
+  workingTitle?: string | null,
+  lockedSections?: {
+    hook: string;
+    explain: string;
+    illustrate: string;
+    teach: string;
+    cta: string;
+  }
 ): string {
   const titleHint = workingTitle?.trim()
-    ? `Working title hint: "${workingTitle.trim()}"\n\n`
+    ? `Working title hint: "${workingTitle.trim()}"\n`
     : "";
-  const wrapped = `${titleHint}CONVERT THIS ROUGH DRAFT into a structured HEIT production script. Keep the creator's core message, facts, and voice. Fill gaps only where the draft is incomplete. Do not invent new claims.
+  const locked = lockedSections
+    ? `HOOK:\n${lockedSections.hook}\n\nPROBLEM SETUP:\n${lockedSections.explain}\n\nSTORY OR EXAMPLE:\n${lockedSections.illustrate}\n\nKEY TAKEAWAY:\n${lockedSections.teach}\n\nCALL TO ACTION:\n${lockedSections.cta || "(none)"}`
+    : roughScript.trim();
 
---- Rough draft ---
-${roughScript.trim()}
---- End draft ---`;
+  return `The creator pasted a FINAL spoken Reel script. Keep every spoken word as-is. Do NOT rewrite, paraphrase, shorten, or "improve" the dialogue.
 
-  return buildCoachPrompt(wrapped, niche, targetAudience, brandDescription);
+${buildStudioDateContext()}
+
+Creator profile:
+- Niche: ${niche}
+- Target Audience: ${targetAudience}
+${brandDescription ? `- Brand: ${brandDescription}` : ""}
+${titleHint}
+LOCKED SPOKEN SCRIPT (verbatim — never change these lines):
+<<<
+${locked}
+>>>
+
+Generate ONLY the Studio fields that are missing from a plain paste: metadata + film-ready production notes.
+
+Return ONLY valid JSON with this shape (no hook/explain/illustrate/teach/cta keys):
+{
+  "title": "Short catchy working title (use the title hint when provided)",
+  "contentType": "testimonial | hot-take | story | behind-the-scenes | transformation | educational | trend | rant | announcement",
+  "contentFormat": "talking-head | voiceover-broll | behind-the-scenes | tutorial-demo | trending-audio | faceless",
+  "formatLabel": "Human-readable label e.g. 'Talking Head'",
+  "platform": "instagram | tiktok | both",
+  "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
+  "hookType": "One of the SpyReels hook types that fits this script",
+  "productionCoach": {
+    "device": "iPhone | Android | GoPro",
+    "cameraSettings": "2-3 sentences specific to format and device",
+    "setup": "One sentence: exactly where to position camera for this format",
+    "musicMix": "One sentence: exact volume and when to duck or fade",
+    "instagramAudio": [
+      {
+        "title": "Exact track name as shown in Instagram Reels audio library",
+        "artist": "Artist or original sound creator name",
+        "searchHint": "Exact phrase the creator should paste into Instagram Reels audio search",
+        "matchReason": "One sentence: why this audio fits THIS script",
+        "isTrending": true
+      },
+      {
+        "title": "Backup track name",
+        "artist": "Artist name",
+        "searchHint": "Backup search phrase",
+        "matchReason": "When to use this instead",
+        "isTrending": false
+      }
+    ],
+    "music": "Legacy one-line summary only if needed; prefer instagramAudio",
+    "voiceTone": "Delivery style in 15-20 words max",
+    "bRoll": [
+      { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
+    ],
+    "hookVisualBeat": "Frame 0 visual: mid-action, close-up, or end-result shot (one concrete sentence)",
+    "textOverlay": "Same as hookOnScreenText — max 30 chars for frame 0",
+    "hookOnScreenText": "ALL CAPS, 5-8 words, max 30 characters, DIFFERENT words than spoken hook",
+    "frame0OnScreenText": "Same as hookOnScreenText",
+    "dualEncoding": "How on-screen text complements the spoken hook without copying it",
+    "pacingNotes": "Jump cuts every 2-4 sec, rhythmic not frantic, no filler",
+    "loopClosingNote": "How the ending connects to the opening for seamless replay",
+    "soundOffSafe": true
+  }
+}
+
+Rules:
+- Never invent or return spoken script fields (hook, explain, illustrate, teach, cta).
+- hookOnScreenText must use DIFFERENT words than the spoken hook.
+- Be specific to this niche and this script. Zero generic filler.`;
 }
 
 export function buildPlanGenerationPrompt(

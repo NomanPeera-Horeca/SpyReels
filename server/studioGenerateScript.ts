@@ -32,6 +32,7 @@ import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { normalizeCoachScriptPayload, parseLlmJson } from "./utils/parseLlmJson";
 import { parseCoachScriptSections } from "@shared/coachScriptSections";
 import { judgeAndImproveCoachScript } from "./coachScriptJudge";
+import { buildCoachSectionsFromRemakeScript } from "@shared/remakeStudioImport";
 
 export type GeneratedCoachScript = {
   id: number;
@@ -399,26 +400,123 @@ export async function convertRoughScriptForWorkspace(args: {
   if (trimmed.length < 20) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Paste at least a few sentences so we can structure your script.",
+      message: "Paste at least a few sentences so we can open your script in Studio.",
     });
   }
 
-  const profile = await getCreatorCoachProfile(args.userId);
-  const description = buildConvertRoughScriptPrompt(
-    trimmed,
-    profile.niche,
-    profile.targetAudience,
-    profile.brandDescription,
-    args.workingTitle
-  );
+  if (!args.skipUsageCheck) {
+    const usageCheck = await checkUsageLimit(args.userId, "recreateCount", args.openId);
+    if (!usageCheck.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `You've reached your monthly AI script limit (${usageCheck.used}/${usageCheck.limit}). Upgrade for more.`,
+      });
+    }
+  }
 
-  return generateCoachScriptForWorkspace({
+  const profile = await getCreatorCoachProfile(args.userId);
+  args.onPhase?.("write_script");
+
+  const mapped = buildCoachSectionsFromRemakeScript(trimmed);
+  const hook = mapped.hook || trimmed.slice(0, 500);
+  const sections = mapped.sections;
+  const bodyCombined = mapped.body || trimmed;
+  const ctaText = mapped.callToAction || sections.teach || hook;
+
+  args.onPhase?.("production_notes");
+
+  const notesResponse = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: withAiFormattingRules(
+          "You add film-ready production notes for SpyReels Studio. Never rewrite spoken script lines. Return JSON only."
+        ),
+      },
+      {
+        role: "user",
+        content: buildConvertRoughScriptPrompt(
+          trimmed,
+          profile.niche,
+          profile.targetAudience,
+          profile.brandDescription,
+          args.workingTitle,
+          {
+            hook,
+            explain: sections.explain,
+            illustrate: sections.illustrate,
+            teach: sections.teach,
+            cta: sections.cta,
+          }
+        ),
+      },
+    ],
+    maxTokens: 2048,
+    response_format: { type: "json_object" },
+  });
+
+  const notesRaw = String(notesResponse.choices[0]?.message?.content ?? "{}");
+  const notesPayload = normalizeCoachScriptPayload(
+    parseLlmJson<Record<string, unknown>>(notesRaw, {})
+  );
+  const productionCoach = normalizeProductionCoach(notesPayload.productionCoach);
+  const title =
+    args.workingTitle?.trim() ||
+    String(notesPayload.title ?? "").trim() ||
+    hook.slice(0, 80) ||
+    "Pasted script";
+  const platformRaw = String(notesPayload.platform ?? "both");
+  const platform = ["instagram", "tiktok", "both"].includes(platformRaw) ? platformRaw : "both";
+  const hookTypeRaw = String(notesPayload.hookType ?? "").trim();
+  const contentFormat = String(notesPayload.contentFormat ?? "talking-head").slice(0, 64);
+  const estimatedDuration = durationLabelFromWordCount(mapped.wordCount, "story");
+
+  const coachPayload = buildProductionNotesJson(productionCoach, sections, {
+    contentFormat,
+    scriptMode: "paste_import",
+    hookType: hookTypeRaw || undefined,
+    sourceDescription: trimmed.slice(0, 2000),
+  });
+
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  const insertResult = await db.insert(coachScripts).values({
     userId: args.userId,
     workspaceId: args.workspaceId,
-    openId: args.openId,
-    description,
-    skipUsageCheck: args.skipUsageCheck,
-    profileOverride: profile,
-    onPhase: args.onPhase,
+    planCardId: null,
+    title: title.slice(0, 256),
+    hook,
+    body: bodyCombined,
+    callToAction: ctaText,
+    platform,
+    tone: String(notesPayload.tone ?? "conversational").slice(0, 64),
+    estimatedDuration,
+    contentType: notesPayload.contentType ? String(notesPayload.contentType).slice(0, 64) : "paste_import",
+    contentFormat,
+    formatLabel: notesPayload.formatLabel
+      ? String(notesPayload.formatLabel).slice(0, 128)
+      : "Pasted script",
+    productionNotes: (() => {
+      const parsed = JSON.parse(coachPayload) as Record<string, unknown>;
+      parsed.importSource = "paste";
+      parsed.sourcePasteScript = trimmed;
+      return JSON.stringify(parsed);
+    })(),
   });
+
+  const scriptId = insertResult[0]?.insertId;
+  if (!scriptId) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to save script" });
+  }
+
+  const [row] = await db.select().from(coachScripts).where(eq(coachScripts.id, scriptId)).limit(1);
+  if (!row) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to load script" });
+  }
+
+  if (!args.skipUsageCheck) {
+    await incrementUsage(args.userId, "recreateCount");
+  }
+  return mapCoachScriptRow(row);
 }

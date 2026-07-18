@@ -62,15 +62,24 @@ document.getElementById("seo-crawler-snapshot")?.remove();
 
 const queryClient = new QueryClient();
 
+let redirectingToLogin = false;
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
+  if (redirectingToLogin) return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const code = error.data?.code;
+  const isUnauthorized =
+    code === "UNAUTHORIZED" || error.message === UNAUTHED_ERR_MSG;
 
   if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  redirectingToLogin = true;
+  const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.href = getLoginUrl({
+    returnTo: returnTo.startsWith("/") ? returnTo : "/studio",
+  });
 };
 
 queryClient.getQueryCache().subscribe(event => {

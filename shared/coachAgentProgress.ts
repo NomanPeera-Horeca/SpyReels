@@ -19,6 +19,13 @@ const STEP_ORDER: CoachScriptProgressStepId[] = [
   "production_notes",
 ];
 
+/** Paste Convert: keep spoken words; only generate missing production fields. */
+const PASTE_CONVERT_STEP_ORDER: CoachScriptProgressStepId[] = [
+  "read_profile",
+  "write_script",
+  "production_notes",
+];
+
 export function defaultCoachScriptStepLabel(stepId: CoachScriptProgressStepId): string {
   switch (stepId) {
     case "read_profile":
@@ -54,6 +61,26 @@ export function buildCoachScriptProgressSteps(
   );
 }
 
+export function buildPasteConvertProgressSteps(
+  activeStepId: CoachScriptProgressStepId,
+  completedThrough?: CoachScriptProgressStepId,
+  labels?: Partial<Record<CoachScriptProgressStepId, string>>
+): AgentProgressStep[] {
+  return buildProgressSteps(
+    PASTE_CONVERT_STEP_ORDER,
+    activeStepId,
+    completedThrough,
+    labels,
+    (id) => {
+      if (id === "write_script") return "Keeping your pasted words in Studio layout";
+      if (id === "production_notes") {
+        return "Adding film-ready production notes (visual hook, on-screen text, B-roll, audio)";
+      }
+      return defaultCoachScriptStepLabel(id);
+    }
+  );
+}
+
 export function personalizedCoachScriptStepLabels(args: {
   niche: string;
   audience: string;
@@ -74,3 +101,6 @@ export function personalizedCoachScriptStepLabels(args: {
 
 export const COACH_AGENT_FOOTER =
   "You won't need to do this research manually again.";
+
+export const PASTE_CONVERT_FOOTER =
+  "Your spoken lines stay as pasted. We only fill filming directions Studio needs.";

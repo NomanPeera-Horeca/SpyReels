@@ -9,8 +9,8 @@ import { useLocation } from "wouter";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { useAgentProgressPoll } from "@/hooks/useAgentProgressPoll";
 import {
-  COACH_AGENT_FOOTER,
-  buildCoachScriptProgressSteps,
+  PASTE_CONVERT_FOOTER,
+  buildPasteConvertProgressSteps,
 } from "@shared/coachAgentProgress";
 
 export default function PasteScript() {
@@ -23,7 +23,7 @@ export default function PasteScript() {
   const convertMutation = trpc.studio.convertRough.useMutation({
     onSuccess: (script) => {
       setConverting(false);
-      toast.success("Production script ready in Studio");
+      toast.success("Opened in Studio with your words and production notes");
       navigate(`/studio?script=${script.id}`);
     },
     onError: (err) => {
@@ -37,7 +37,7 @@ export default function PasteScript() {
     [utils.studio.getGenerationProgress]
   );
 
-  const initialSteps = useMemo(() => buildCoachScriptProgressSteps("read_profile"), []);
+  const initialSteps = useMemo(() => buildPasteConvertProgressSteps("read_profile"), []);
   const progressSteps = useAgentProgressPoll({
     enabled: converting,
     initialSteps,
@@ -47,7 +47,7 @@ export default function PasteScript() {
   const handleConvert = () => {
     const trimmed = content.trim();
     if (trimmed.length < 20) {
-      toast.error("Paste at least a few sentences so we can structure your script");
+      toast.error("Paste at least a few sentences so we can open your script in Studio");
       return;
     }
     setConverting(true);
@@ -65,9 +65,9 @@ export default function PasteScript() {
       <div className="mx-auto max-w-2xl py-8">
         <AgentProgressPanel
           steps={progressSteps}
-          subheadline="Restructuring your draft into Hook, story, takeaway, CTA, and production notes."
-          footer={COACH_AGENT_FOOTER}
-          badgeLabel="Converting"
+          subheadline="Your spoken lines stay as pasted. We only add visual hook, on-screen text, B-roll, and audio notes."
+          footer={PASTE_CONVERT_FOOTER}
+          badgeLabel="Opening Studio"
         />
       </div>
     );
@@ -82,8 +82,8 @@ export default function PasteScript() {
         <div>
           <h1 className="text-2xl font-bold">Paste Your Script</h1>
           <p className="text-sm text-muted-foreground">
-            Paste a rough draft from ChatGPT, Docs, or Notes. We turn it into the same production
-            script layout you get from AI Coach.
+            Paste a finished draft from ChatGPT, Docs, or Notes. We keep your spoken lines and only
+            add the Studio pieces that are missing: production notes, visual hook, and on-screen text.
           </p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function PasteScript() {
           <Textarea
             placeholder="Paste your script here...
 
-We keep your message and voice, then split it into Hook, problem setup, story, takeaway, CTA, plus filming notes."
+We keep your words. Studio only adds filming directions that are not in the paste."
             value={content}
             onChange={(e) => setContent(e.target.value)}
             className="min-h-[300px] bg-card text-sm leading-relaxed"
@@ -129,10 +129,10 @@ We keep your message and voice, then split it into Hook, problem setup, story, t
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Convert to production script
+            Open in Studio
           </Button>
           <p className="text-xs text-muted-foreground">
-            Opens in Studio with production notes, refine tools, and teleprompter when you save.
+            Spoken lines stay as pasted. We generate production notes, then open Studio.
           </p>
         </div>
       </div>

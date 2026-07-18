@@ -5,6 +5,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { TIME_OPTIONS } from "@/components/InlineWorkflow";
 import { formatCoachSaveScheduleLabel } from "@shared/coachScriptSave";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,8 @@ export type CoachScriptSaveExtras = {
 
 export type CoachScriptSchedulePanelProps = {
   coachScriptId: number;
+  scriptContent: string;
+  niche?: string;
   postDate: Date | undefined;
   onPostDateChange: (date: Date | undefined) => void;
   postTime: string;
@@ -58,6 +61,8 @@ export type CoachScriptSchedulePanelProps = {
 
 export function CoachScriptSchedulePanel({
   coachScriptId,
+  scriptContent,
+  niche: nicheProp,
   postDate,
   onPostDateChange,
   postTime,
@@ -78,15 +83,71 @@ export function CoachScriptSchedulePanel({
 
   const [caption, setCaption] = useState(initialCaption?.trim() ?? "");
   const [hashtags, setHashtags] = useState<string[]>(() => parseHashtagsJson(initialHashtagsJson));
+  const [captionStyle, setCaptionStyle] = useState("educational");
+  const [captionLength, setCaptionLength] = useState("auto");
+  const [captionNiche, setCaptionNiche] = useState(nicheProp?.trim() ?? "");
+  const [captionBrandTag, setCaptionBrandTag] = useState("");
   const autoStartedForId = useRef<number | null>(null);
 
-  const generateCaptionMutation = trpc.studio.generateCaption.useMutation({
+  const scriptsCaptionMutation = trpc.scripts.generateCaption.useMutation({
     onSuccess: (data) => {
       setCaption(data.caption);
       setHashtags(data.hashtags);
+      toast.success("Caption generated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(err.message || "Caption generation failed"),
   });
+
+  const studioCaptionMutation = trpc.studio.generateCaption.useMutation({
+    onSuccess: (data) => {
+      setCaption(data.caption);
+      setHashtags(data.hashtags);
+      toast.success("Caption generated");
+    },
+    onError: (err) => toast.error(err.message || "Caption generation failed"),
+  });
+
+  const captionPending = scriptsCaptionMutation.isPending || studioCaptionMutation.isPending;
+
+  const runGenerateCaption = () => {
+    const content = scriptContent.trim();
+    if (!content) {
+      toast.error("Script content is empty");
+      return;
+    }
+    if (savedScriptId) {
+      scriptsCaptionMutation.mutate({
+        scriptId: savedScriptId,
+        content,
+        style: captionStyle as
+          | "storytelling"
+          | "question"
+          | "cta"
+          | "educational"
+          | "curiosity"
+          | "bold"
+          | "relatable",
+        captionLength: captionLength as "auto" | "short" | "medium" | "long",
+        niche: captionNiche.trim() || undefined,
+        brandHashtag: captionBrandTag.trim() || undefined,
+      });
+      return;
+    }
+    studioCaptionMutation.mutate({
+      id: coachScriptId,
+      style: captionStyle as
+        | "storytelling"
+        | "question"
+        | "cta"
+        | "educational"
+        | "curiosity"
+        | "bold"
+        | "relatable",
+      captionLength: captionLength as "auto" | "short" | "medium" | "long",
+      niche: captionNiche.trim() || undefined,
+      brandHashtag: captionBrandTag.trim() || undefined,
+    });
+  };
 
   useEffect(() => {
     const nextCaption = initialCaption?.trim() ?? "";
@@ -97,19 +158,24 @@ export function CoachScriptSchedulePanel({
   }, [coachScriptId, initialCaption, initialHashtagsJson]);
 
   useEffect(() => {
+    if (nicheProp?.trim() && !captionNiche.trim()) {
+      setCaptionNiche(nicheProp.trim());
+    }
+  }, [nicheProp, captionNiche]);
+
+  useEffect(() => {
     if (autoStartedForId.current === coachScriptId) return;
     if (caption.trim() || hashtags.length > 0) {
       autoStartedForId.current = coachScriptId;
       return;
     }
-    if (generateCaptionMutation.isPending) return;
+    if (captionPending || !scriptContent.trim()) return;
     autoStartedForId.current = coachScriptId;
-    generateCaptionMutation.mutate({ id: coachScriptId });
+    runGenerateCaption();
     // Intentionally only when panel mounts / script changes with empty caption.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coachScriptId, caption, hashtags.length]);
+  }, [coachScriptId, caption, hashtags.length, scriptContent, savedScriptId]);
 
-  const captionPending = generateCaptionMutation.isPending;
   const hashtagsText = hashtags.map((t) => `#${t}`).join(" ");
 
   const copyText = async (text: string, success: string) => {
@@ -204,7 +270,7 @@ export function CoachScriptSchedulePanel({
             type="button"
             className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
             disabled={captionPending}
-            onClick={() => generateCaptionMutation.mutate({ id: coachScriptId })}
+            onClick={runGenerateCaption}
           >
             {captionPending ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -214,6 +280,43 @@ export function CoachScriptSchedulePanel({
             {captionPending ? "Writing..." : caption ? "Regenerate" : "Generate"}
           </button>
         </div>
+
+        <select
+          value={captionStyle}
+          onChange={(e) => setCaptionStyle(e.target.value)}
+          className="w-full text-[11px] rounded-md border bg-background px-2 py-1.5 mb-1.5"
+        >
+          <option value="educational">Educational / Value</option>
+          <option value="storytelling">Storytelling</option>
+          <option value="question">Question-Based</option>
+          <option value="cta">CTA-Focused</option>
+          <option value="curiosity">Curiosity Gap</option>
+          <option value="bold">Bold / Controversial</option>
+          <option value="relatable">Relatable / Funny</option>
+        </select>
+        <select
+          value={captionLength}
+          onChange={(e) => setCaptionLength(e.target.value)}
+          className="w-full text-[11px] rounded-md border bg-background px-2 py-1.5 mb-1.5"
+        >
+          <option value="auto">Auto (adapts to script length)</option>
+          <option value="short">Short (5-7 lines)</option>
+          <option value="medium">Medium (8-12 lines)</option>
+          <option value="long">Long (13+ lines)</option>
+        </select>
+        <Input
+          value={captionNiche}
+          onChange={(e) => setCaptionNiche(e.target.value)}
+          placeholder="Your niche (e.g., fitness, marketing)"
+          className="h-7 text-[11px] mb-1.5"
+        />
+        <Input
+          value={captionBrandTag}
+          onChange={(e) => setCaptionBrandTag(e.target.value)}
+          placeholder="Brand hashtag (optional)"
+          className="h-7 text-[11px] mb-2"
+        />
+
         {captionPending && !caption ? (
           <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-4 text-[11px] text-muted-foreground flex items-center gap-2">
             <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />

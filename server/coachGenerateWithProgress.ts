@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import {
   buildCoachScriptProgressSteps,
+  buildPasteConvertProgressSteps,
   personalizedCoachScriptStepLabels,
   type CoachScriptProgressStepId,
 } from "@shared/coachAgentProgress";
@@ -138,24 +139,22 @@ export async function convertRoughScriptWithProgress(args: {
   initAgentProgress({
     flow: FLOW,
     userId: args.userId,
-    steps: buildCoachScriptProgressSteps("read_profile"),
+    steps: buildPasteConvertProgressSteps("read_profile"),
   });
 
   try {
-    setCoachStep(args.userId, "read_profile");
     const profile = await getCreatorCoachProfile(args.userId);
-    const labels = personalizedCoachScriptStepLabels({
-      niche: profile.niche,
-      audience: profile.targetAudience,
-    });
-    initAgentProgress({
-      flow: FLOW,
-      userId: args.userId,
-      steps: buildCoachScriptProgressSteps("audience_research", "read_profile", labels),
-    });
-
-    setCoachStep(args.userId, "find_viral", "audience_research");
-    setCoachStep(args.userId, "hook_angle", "find_viral");
+    const labels = {
+      ...personalizedCoachScriptStepLabels({
+        niche: profile.niche,
+        audience: profile.targetAudience,
+      }),
+      write_script: "Keeping your pasted words in Studio layout",
+      production_notes:
+        "Adding film-ready production notes (visual hook, on-screen text, B-roll, audio)",
+    };
+    setPasteConvertStep(args.userId, "read_profile", undefined, labels);
+    setPasteConvertStep(args.userId, "write_script", "read_profile", labels);
 
     const script = await convertRoughScriptForWorkspace({
       userId: args.userId,
@@ -166,16 +165,14 @@ export async function convertRoughScriptWithProgress(args: {
       skipUsageCheck: args.skipUsageCheck,
       onPhase: (phase) => {
         if (phase === "write_script") {
-          setCoachStep(args.userId, "write_script", "hook_angle");
-        } else if (phase === "quality_check") {
-          setCoachStep(args.userId, "quality_check", "write_script");
+          setPasteConvertStep(args.userId, "write_script", "read_profile", labels);
         } else if (phase === "production_notes") {
-          setCoachStep(args.userId, "production_notes", "quality_check");
+          setPasteConvertStep(args.userId, "production_notes", "write_script", labels);
         }
       },
     });
 
-    setCoachStep(args.userId, "production_notes", "production_notes");
+    setPasteConvertStep(args.userId, "production_notes", "production_notes", labels);
     completeAgentProgress(FLOW, args.userId);
     return script;
   } catch (err) {
@@ -190,4 +187,23 @@ export async function convertRoughScriptWithProgress(args: {
   } finally {
     scheduleClearAgentProgress(FLOW, args.userId);
   }
+}
+
+function setPasteConvertStep(
+  userId: number,
+  activeStepId: CoachScriptProgressStepId,
+  completedThrough?: CoachScriptProgressStepId,
+  labels?: Partial<Record<CoachScriptProgressStepId, string>>
+) {
+  const current = getAgentProgress(FLOW, userId);
+  if (!current || current.status !== "running") return;
+  const mergedLabels = {
+    ...Object.fromEntries(current.steps.map((step) => [step.id, step.label])),
+    ...labels,
+  } as Partial<Record<CoachScriptProgressStepId, string>>;
+  setAgentProgressSteps({
+    flow: FLOW,
+    userId,
+    steps: buildPasteConvertProgressSteps(activeStepId, completedThrough, mergedLabels),
+  });
 }

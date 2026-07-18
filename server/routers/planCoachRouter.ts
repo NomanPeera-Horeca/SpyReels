@@ -41,9 +41,9 @@ import { importRemakeScriptToStudioForWorkspace } from "../importRemakeToStudio"
 import {
   assignScriptingTag,
   enrichIdeaSavedScriptInBackground,
-  generateCaptionForScriptContent,
   pickAutoPostSchedule,
 } from "../ideaScriptExtras";
+import { generateSeoInstagramCaption } from "../generateSeoCaption";
 import {
   completeAgentProgress,
   failAgentProgress,
@@ -184,7 +184,8 @@ function mapCoachScriptSummary(row: typeof coachScripts.$inferSelect) {
   return {
     id: row.id,
     title: row.title,
-    hookPreview: row.hook.slice(0, 120),
+    hookPreview: row.hook.slice(0, 280),
+    bodyPreview: row.body.slice(0, 400),
     planCardId: row.planCardId,
     contentFormat: row.contentFormat,
     formatLabel: row.formatLabel,
@@ -1112,7 +1113,18 @@ export const studioRouter = router({
     }),
 
   generateCaption: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(
+      z.object({
+        id: z.number(),
+        style: z
+          .enum(["storytelling", "question", "cta", "educational", "curiosity", "bold", "relatable"])
+          .optional()
+          .default("educational"),
+        captionLength: z.enum(["auto", "short", "medium", "long"]).optional().default("auto"),
+        niche: z.string().max(200).optional(),
+        brandHashtag: z.string().max(100).optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
       const db = await getDb();
@@ -1136,8 +1148,34 @@ export const studioRouter = router({
         sections,
       });
 
+      const profile = await getCreatorCoachProfile(ctx.user.id);
+
       try {
-        return await generateCaptionForScriptContent(content);
+        const result = await generateSeoInstagramCaption({
+          content,
+          style: input.style,
+          captionLength: input.captionLength,
+          niche: input.niche?.trim() || profile.niche,
+          brandHashtag: input.brandHashtag,
+          targetAudience: profile.targetAudience,
+        });
+
+        const existing = await getSavedScriptByCoachScriptId(script.id, ctx.workspaceId);
+        if (existing) {
+          await updateSavedScript(existing.id, {
+            generatedCaption: result.caption,
+            generatedHashtags: JSON.stringify(result.hashtags),
+            captionStyle: result.style,
+          } as any);
+        }
+
+        return {
+          caption: result.caption,
+          hashtags: result.hashtags,
+          primaryKeyword: result.primaryKeyword,
+          hookType: result.hookType,
+          style: result.style,
+        };
       } catch (err) {
         console.error(`[studio.generateCaption] failed for coach script ${input.id}:`, err);
         throw new TRPCError({
