@@ -227,6 +227,7 @@ import {
   searchReelsByHandle,
   runWithScrapeCallContext,
 } from "./instagram";
+import { isDurableReelVideoUrl } from "./reelVideoR2";
 import {
   enqueueCollectedReelIngest,
   enqueueCollectedReelRefresh,
@@ -4623,15 +4624,21 @@ The hook MUST be 7-10 words. Count them.`),
         }
         activeTranscriptions++;
         try {
-        // Always fetch fresh URL to avoid expired Instagram video URLs
+        // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails.
         const freshData = await fetchReelByShortcode(input.shortcode);
-        if (!freshData?.videoUrl) {
+        let videoUrl = freshData?.videoUrl ?? null;
+        if (!videoUrl && isDurableReelVideoUrl(input.videoUrl)) {
+          console.warn(
+            `[search.transcribe] fresh URL unavailable for ${input.shortcode}; falling back to durable stored videoUrl`
+          );
+          videoUrl = input.videoUrl!.trim();
+        }
+        if (!videoUrl) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Could not retrieve video URL for this reel.",
           });
         }
-        let videoUrl = freshData.videoUrl;
 
         // Call the new Deepgram-based transcription pipeline
         // This handles: download + retry + ffmpeg + Deepgram Nova-3 + classify
@@ -7811,14 +7818,21 @@ export async function runTranscription(
   activeTranscriptions++;
   try {
     await updateTranscription(transcriptionId, { startedAt: new Date() });
-    // Always fetch fresh URL to avoid expired Instagram video URLs
+    // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails
+    // (e.g. ScrapeCreators 402) so we can still transcribe mirrored reels.
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
-    if (!initialFresh?.videoUrl) {
+    let videoUrl = initialFresh?.videoUrl ?? null;
+    if (!videoUrl && isDurableReelVideoUrl(reel.videoUrl)) {
+      console.warn(
+        `[runTranscription] fresh URL unavailable for ${reel.shortcode}; falling back to durable stored videoUrl`
+      );
+      videoUrl = reel.videoUrl!.trim();
+    }
+    if (!videoUrl) {
       throw new Error(
         "Could not retrieve video URL for this reel. The video may no longer be available."
       );
     }
-    let videoUrl = initialFresh.videoUrl;
 
     // Call the new Deepgram-based transcription pipeline
     const { transcribeReel } = await import("./services/transcribeReel.js");
@@ -7905,16 +7919,20 @@ export async function runFeaturedReelTranscription(reel: {
   }
   activeTranscriptions++;
   try {
-    // Instagram CDN URLs in the catalog can be stale; refetching guards
-    // against the "video unavailable" trap when the backfill runs weeks
-    // after the initial scrape.
+    // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails.
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
-    if (!initialFresh?.videoUrl) {
+    let videoUrl = initialFresh?.videoUrl ?? null;
+    if (!videoUrl && isDurableReelVideoUrl(reel.videoUrl)) {
+      console.warn(
+        `[runFeaturedReelTranscription] fresh URL unavailable for ${reel.shortcode}; falling back to durable stored videoUrl`
+      );
+      videoUrl = reel.videoUrl!.trim();
+    }
+    if (!videoUrl) {
       throw new Error(
         "Could not retrieve video URL for this reel. The video may no longer be available."
       );
     }
-    const videoUrl = initialFresh.videoUrl;
 
     const { transcribeReel } = await import("./services/transcribeReel.js");
     const result = await transcribeReel({ videoUrl, shortcode: reel.shortcode });

@@ -15,6 +15,25 @@ export function reelVideoR2Key(shortcode: string): string {
 }
 
 /**
+ * True when a stored videoUrl is durable enough to use for transcription
+ * without re-fetching Instagram (R2 mirror). Ephemeral CDN links return false.
+ */
+export function isDurableReelVideoUrl(url: string | null | undefined): boolean {
+  const u = (url ?? "").trim();
+  if (!u) return false;
+
+  const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+  if (publicBase && u.startsWith(publicBase)) return true;
+
+  // Fallback patterns when env is unset in tests or older mirrored rows.
+  if (u.includes("/reel-videos/") && (u.includes(".r2.dev/") || u.includes("cloudflarestorage.com"))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Copy an Instagram-hosted reel MP4 to R2; return a durable public URL.
  * On unavailable R2 credentials, CDN failure, oversize payload, or any
  * unexpected error → returns original `sourceUrl` so callers can persist
