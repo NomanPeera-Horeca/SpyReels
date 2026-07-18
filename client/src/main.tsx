@@ -63,40 +63,7 @@ document.getElementById("seo-crawler-snapshot")?.remove();
 const queryClient = new QueryClient();
 
 let redirectingToLogin = false;
-
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
-  if (redirectingToLogin) return;
-
-  const code = error.data?.code;
-  const isUnauthorized =
-    code === "UNAUTHORIZED" || error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  redirectingToLogin = true;
-  const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  window.location.href = getLoginUrl({
-    returnTo: returnTo.startsWith("/") ? returnTo : "/studio",
-  });
-};
-
-queryClient.getQueryCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
-  }
-});
-
-queryClient.getMutationCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
-  }
-});
+let confirmingSession = false;
 
 const trpcClient = trpc.createClient({
   links: [
@@ -117,6 +84,77 @@ const trpcClient = trpc.createClient({
       },
     }),
   ],
+});
+
+/**
+ * Only hard-redirect to Google when the session is actually gone.
+ * Studio fires many protected calls (script generate/refine + 60s heartbeats).
+ * A single transient UNAUTHORIZED must not wipe in-progress work.
+ */
+const redirectToLoginIfUnauthorized = (error: unknown) => {
+  if (!(error instanceof TRPCClientError)) return;
+  if (typeof window === "undefined") return;
+  if (redirectingToLogin || confirmingSession) return;
+
+  const code = error.data?.code;
+  const isUnauthorized =
+    code === "UNAUTHORIZED" || error.message === UNAUTHED_ERR_MSG;
+
+  if (!isUnauthorized) return;
+
+  confirmingSession = true;
+  void (async () => {
+    try {
+      const me = await trpcClient.auth.me.query();
+      if (me) {
+        console.warn(
+          "[Auth] UNAUTHORIZED from an API call but session cookie is still valid; not redirecting"
+        );
+        return;
+      }
+
+      redirectingToLogin = true;
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.location.href = getLoginUrl({
+        returnTo: returnTo.startsWith("/") ? returnTo : "/studio",
+      });
+    } catch (confirmError) {
+      console.error("[Auth] Session confirm failed; redirecting to login", confirmError);
+      redirectingToLogin = true;
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.location.href = getLoginUrl({
+        returnTo: returnTo.startsWith("/") ? returnTo : "/studio",
+      });
+    } finally {
+      confirmingSession = false;
+    }
+  })();
+};
+
+queryClient.getQueryCache().subscribe(event => {
+  if (event.type === "updated" && event.action.type === "error") {
+    const error = event.query.state.error;
+    redirectToLoginIfUnauthorized(error);
+    console.error("[API Query Error]", error);
+  }
+});
+
+queryClient.getMutationCache().subscribe(event => {
+  if (event.type === "updated" && event.action.type === "error") {
+    const error = event.mutation.state.error;
+    const path = event.mutation.options.mutationKey?.[0];
+    const procedure =
+      Array.isArray(path) && typeof path[0] === "string" && typeof path[1] === "string"
+        ? `${path[0]}.${path[1]}`
+        : "";
+    // Heartbeat is analytics only; never treat its failures as a logout signal.
+    if (procedure === "activity.recordHeartbeat") {
+      console.warn("[API Mutation Error] activity.recordHeartbeat (ignored for auth redirect)", error);
+      return;
+    }
+    redirectToLoginIfUnauthorized(error);
+    console.error("[API Mutation Error]", error);
+  }
 });
 
 createRoot(document.getElementById("root")!).render(

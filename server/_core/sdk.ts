@@ -109,18 +109,24 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const signedInAt = new Date();
     const user = await db.getUserByOpenId(session.openId);
 
     if (!user) {
       throw ForbiddenError("User not found");
     }
 
-    const { recordUserActivity } = await import("../userActivity");
-    await recordUserActivity(user.openId);
-
-    const refreshed = await db.getUserByOpenId(session.openId);
-    return refreshed ?? user;
+    // Activity analytics must never kill a valid session. Studio heartbeats and
+    // long script jobs hit this path often; a DB blip previously became UNAUTHORIZED
+    // and forced a hard Google re-login.
+    try {
+      const { recordUserActivity } = await import("../userActivity");
+      await recordUserActivity(user.openId);
+      const refreshed = await db.getUserByOpenId(session.openId);
+      return refreshed ?? user;
+    } catch (error) {
+      console.warn("[Auth] recordUserActivity failed; keeping session", String(error));
+      return user;
+    }
   }
 }
 

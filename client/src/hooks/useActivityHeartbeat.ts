@@ -17,7 +17,15 @@ export function useActivityHeartbeat(enabled: boolean) {
       const now = Date.now();
       if (now - lastSentRef.current < HEARTBEAT_INTERVAL_MS - 5000) return;
       lastSentRef.current = now;
-      heartbeat.mutate({ seconds: HEARTBEAT_SECONDS });
+      // Analytics only: never surface errors that could look like a session drop.
+      heartbeat.mutate(
+        { seconds: HEARTBEAT_SECONDS },
+        {
+          onError: () => {
+            /* intentional no-op */
+          },
+        }
+      );
     };
 
     send();
