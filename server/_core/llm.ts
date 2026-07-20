@@ -181,6 +181,63 @@ const normalizeMessage = (message: Message) => {
   };
 };
 
+type AnthropicTextBlock = { type: "text"; text: string };
+type AnthropicImageBlock = {
+  type: "image";
+  source:
+    | { type: "url"; url: string }
+    | {
+        type: "base64";
+        media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+        data: string;
+      };
+};
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicImageBlock;
+
+const DATA_URL_PATTERN = /^data:(image\/(?:jpeg|png|gif|webp));base64,(.+)$/;
+
+const toAnthropicContentBlock = (part: MessageContent): AnthropicContentBlock => {
+  if (typeof part === "string") {
+    return { type: "text", text: part };
+  }
+  if (part.type === "text") {
+    return { type: "text", text: part.text };
+  }
+  if (part.type === "image_url") {
+    const url = part.image_url.url;
+    const dataUrlMatch = DATA_URL_PATTERN.exec(url);
+    if (dataUrlMatch) {
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: dataUrlMatch[1] as
+            | "image/jpeg"
+            | "image/png"
+            | "image/gif"
+            | "image/webp",
+          data: dataUrlMatch[2],
+        },
+      };
+    }
+    return { type: "image", source: { type: "url", url } };
+  }
+  // file_url and any other unsupported part types are not yet mapped to a
+  // native Anthropic block type. Fall back to a text description rather
+  // than silently dropping the part.
+  return { type: "text", text: JSON.stringify(part) };
+};
+
+const toAnthropicContent = (
+  content: MessageContent | MessageContent[]
+): string | AnthropicContentBlock[] => {
+  const blocks = ensureArray(content).map(toAnthropicContentBlock);
+  if (blocks.length === 1 && blocks[0].type === "text") {
+    return blocks[0].text;
+  }
+  return blocks;
+};
+
 const normalizeToolChoice = (
   toolChoice: ToolChoice | undefined,
   tools: Tool[] | undefined
@@ -297,7 +354,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   const normalizedMessages = nonSystemMessages.map(m => ({
     role: m.role as "user" | "assistant",
-    content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+    content: toAnthropicContent(m.content),
   }));
 
   const normalizedResponseFormat = normalizeResponseFormat({
