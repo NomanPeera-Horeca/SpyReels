@@ -1663,6 +1663,34 @@ export const creatorDiscoveryJobs = mysqlTable(
 export type CreatorDiscoveryJob = typeof creatorDiscoveryJobs.$inferSelect;
 export type InsertCreatorDiscoveryJob = typeof creatorDiscoveryJobs.$inferInsert;
 
+export const viralityDiagnosticJobs = mysqlTable(
+  "virality_diagnostic_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    handle: varchar("handle", { length: 128 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    reelsFound: int("reelsFound").default(0).notNull(),
+    reelsAnalyzed: int("reelsAnalyzed").default(0).notNull(),
+    resultJson: json("resultJson"),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_virality_diagnostic_jobs_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type ViralityDiagnosticJob = typeof viralityDiagnosticJobs.$inferSelect;
+export type InsertViralityDiagnosticJob =
+  typeof viralityDiagnosticJobs.$inferInsert;
+
 export const discoveryResults = mysqlTable("discovery_results", {
   id: int("id").primaryKey().autoincrement(),
   searchId: int("searchId")
