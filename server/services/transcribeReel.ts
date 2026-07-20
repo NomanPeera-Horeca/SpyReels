@@ -90,7 +90,7 @@ function isNoSpeech(text: string): boolean {
   return false;
 }
 
-async function downloadVideo(
+export async function downloadVideo(
   videoUrl: string,
   shortcode: string
 ): Promise<Buffer | TranscriptionResult> {
