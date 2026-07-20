@@ -370,6 +370,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     ? `${systemPrompt}\n\nRespond with valid JSON only. No markdown, no explanation.`
     : systemPrompt;
 
+  const forcedSchemaTool =
+    normalizedResponseFormat?.type === "json_schema"
+      ? {
+          name: normalizedResponseFormat.json_schema.name,
+          description: `Return the response in the ${normalizedResponseFormat.json_schema.name} shape.`,
+          input_schema: normalizedResponseFormat.json_schema.schema as any,
+          strict: normalizedResponseFormat.json_schema.strict ?? false,
+        }
+      : null;
+  const forcedToolChoice = forcedSchemaTool
+    ? ({ type: "tool" as const, name: forcedSchemaTool.name })
+    : undefined;
   const maxTokensResolved = maxTokensParam ?? max_tokensParam ?? 8192;
   const modelsToTry = model ? [model] : [DEFAULT_LLM_MODEL, FALLBACK_LLM_MODEL];
   const retryDelaysMs = [1500, 3000, 6000];
@@ -391,6 +403,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
           ...(typeof temperature === "number" ? { temperature } : {}),
           ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
           messages: normalizedMessages,
+          ...(forcedSchemaTool
+            ? { tools: [forcedSchemaTool], tool_choice: forcedToolChoice }
+            : {}),
         });
         break modelLoop;
       } catch (err) {
@@ -417,9 +432,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     throw lastError instanceof Error ? lastError : new Error("LLM request failed");
   }
 
+  const toolUseContent = forcedSchemaTool
+    ? response.content.find(
+        b => b.type === "tool_use" && b.name === forcedSchemaTool.name
+      )
+    : undefined;
   const textContent = response.content.find(b => b.type === "text");
   const rawTextValue =
-    textContent && textContent.type === "text" ? textContent.text : "";
+    toolUseContent && toolUseContent.type === "tool_use"
+      ? JSON.stringify(toolUseContent.input)
+      : textContent && textContent.type === "text"
+      ? textContent.text
+      : "";
   const textValue = sanitizeAiOutput(rawTextValue);
 
   return {
