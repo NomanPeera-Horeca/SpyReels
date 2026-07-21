@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
 
 /** Do not buffer larger videos server-side — mirrors best-effort only. */
-const MAX_VIDEO_DOWNLOAD_BYTES = 120 * 1024 * 1024; // 120 MiB
+export const MAX_VIDEO_DOWNLOAD_BYTES = 120 * 1024 * 1024; // 120 MiB
 
 const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const MIRROR_BATCH_SIZE = 2;
