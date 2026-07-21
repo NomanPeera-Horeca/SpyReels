@@ -56,6 +56,7 @@ import {
 import { countViralityDiagnosticJobsThisMonth } from "./virality/db";
 import { runViralityDiagnosticJob } from "./virality/runJob";
 import { runTikTokScrapeJob } from "./tiktokScrape/runJob";
+import { runTikTokTranscription } from "./tiktokScrape/runTranscription";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { founderInterviewRouter } from "./founderInterview/router";
@@ -117,6 +118,7 @@ import {
   getReelById,
   createTranscription,
   getTranscriptionByReelId,
+  getTranscriptionByTiktokVideoId,
   updateTranscription,
   getTranscriptionsByJobId,
   createRecreatedScript,
@@ -281,6 +283,13 @@ import {
 } from "./analytics/posthogServer";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { transcribeAudio } from "./_core/voiceTranscription";
+import { analyzeHook } from "./analyzeHook";
+import {
+  acquireTranscriptionSlot,
+  getActiveTranscriptions,
+  MAX_CONCURRENT_TRANSCRIPTIONS,
+  releaseTranscriptionSlot,
+} from "./transcriptionSemaphore";
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
@@ -333,13 +342,6 @@ import crypto from "crypto";
 
 /** Batched IN() for saved.checkBatch; keeps chunks under typical MySQL placeholder limits. */
 const SAVED_CHECK_BATCH = 200;
-
-// Transcription queue - cap concurrent transcriptions to prevent memory exhaustion
-// and to avoid cascading Instagram CDN rate-limits on batch kickoffs (e.g.
-// "Transcribe All" from a single Render IP). Used by search.transcribe AND
-// runTranscription (which backs both transcribe.start and collectedReels.transcribe).
-let activeTranscriptions = 0;
-const MAX_CONCURRENT_TRANSCRIPTIONS = 3;
 
 /**
  * Parse a date string safely to avoid timezone shift.
@@ -2262,15 +2264,26 @@ Return JSON only:
           .object({
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
+            tiktokVideoId: z.number().optional(),
           })
           .refine(
-            (d) => (d.reelId != null) !== (d.featuredReelId != null),
-            { message: "Provide exactly one of reelId or featuredReelId" }
+            (d) =>
+              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
+                (id) => id != null
+              ).length === 1,
+            {
+              message:
+                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+            }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" =
-          input.featuredReelId != null ? "featured" : "user";
+        const source: "user" | "featured" | "tiktok" =
+          input.featuredReelId != null
+            ? "featured"
+            : input.tiktokVideoId != null
+              ? "tiktok"
+              : "user";
 
         // ────────────────────────────────────────────────────────────
         // Featured branch — cache-first (Commit 4b). The catalog owns
@@ -2322,7 +2335,8 @@ Return JSON only:
               });
             }
           }
-          const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
+          const queuePending =
+            getActiveTranscriptions() >= MAX_CONCURRENT_TRANSCRIPTIONS;
           await updateFeaturedReelTranscription(fr.id, {
             transcriptionStatus: "processing",
           });
@@ -2336,6 +2350,106 @@ Return JSON only:
           });
           return {
             transcriptionId: fr.id,
+            status: "processing" as const,
+            queuePending,
+          };
+        }
+
+        if (source === "tiktok") {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+
+          const rows = await db
+            .select()
+            .from(tiktokVideos)
+            .where(eq(tiktokVideos.id, input.tiktokVideoId!))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "TikTok video not found",
+            });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+
+          const existing = await getTranscriptionByTiktokVideoId(video.id);
+          if (existing && existing.status === "completed") {
+            return {
+              transcriptionId: existing.id,
+              status: "completed" as const,
+            };
+          }
+          if (existing && existing.status === "processing") {
+            return {
+              transcriptionId: existing.id,
+              status: "processing" as const,
+              queuePending: false,
+            };
+          }
+
+          const bypassTranscribeLimit =
+            await isFirstRemakeUsageBypassEligible(
+              ctx.user.id,
+              ctx.user.hasCompletedFirstSpy,
+              "transcribeCount"
+            );
+          if (!bypassTranscribeLimit) {
+            const usageCheck = await checkUsageLimit(
+              ctx.user.id,
+              "transcribeCount",
+              ctx.user.openId
+            );
+            if (!usageCheck.allowed) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+              });
+            }
+          }
+
+          if (existing && existing.status === "failed") {
+            await db
+              .delete(transcriptions)
+              .where(eq(transcriptions.id, existing.id));
+          }
+
+          const transcriptionId = await createTranscription({
+            reelId: null,
+            featuredReelId: null,
+            tiktokVideoId: video.id,
+            workspaceId: ctx.workspaceId,
+            status: "processing",
+            queuedAt: new Date(),
+          });
+
+          await incrementUsage(ctx.user.id, "transcribeCount");
+
+          const queuePending =
+            getActiveTranscriptions() >= MAX_CONCURRENT_TRANSCRIPTIONS;
+          runTikTokTranscription(transcriptionId, {
+            id: video.id,
+            awemeId: video.awemeId,
+            videoUrl: video.videoUrl,
+            videoPageUrl: video.videoPageUrl,
+            caption: video.caption,
+            thumbnailUrl: video.thumbnailUrl,
+          }).catch((error) => {
+            console.error(
+              `TikTok transcription ${transcriptionId} failed:`,
+              error
+            );
+          });
+
+          return {
+            transcriptionId,
             status: "processing" as const,
             queuePending,
           };
@@ -2403,7 +2517,8 @@ Return JSON only:
 
         await incrementUsage(ctx.user.id, "transcribeCount");
 
-        const queuePending = activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS;
+        const queuePending =
+          getActiveTranscriptions() >= MAX_CONCURRENT_TRANSCRIPTIONS;
         runTranscription(transcriptionId, reelForRun).catch((err) => {
           console.error(`Transcription ${transcriptionId} failed:`, err);
         });
@@ -2417,17 +2532,26 @@ Return JSON only:
           .object({
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
+            tiktokVideoId: z.number().optional(),
           })
           .refine(
-            (d) => (d.reelId != null) !== (d.featuredReelId != null),
-            { message: "Provide exactly one of reelId or featuredReelId" }
+            (d) =>
+              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
+                (id) => id != null
+              ).length === 1,
+            {
+              message:
+                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+            }
           )
       )
       .query(async ({ input }) => {
         const transcription =
           input.featuredReelId != null
             ? await getTranscriptionByFeaturedReelId(input.featuredReelId)
-            : await getTranscriptionByReelId(input.reelId!);
+            : input.tiktokVideoId != null
+              ? await getTranscriptionByTiktokVideoId(input.tiktokVideoId)
+              : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
   }),
@@ -4575,10 +4699,7 @@ Return JSON only:
           });
         }
         await incrementUsage(ctx.user.id, "transcribeCount");
-        while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
-          await new Promise(r => setTimeout(r, 2000));
-        }
-        activeTranscriptions++;
+        await acquireTranscriptionSlot();
         try {
         // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails.
         const freshData = await fetchReelByShortcode(input.shortcode);
@@ -4631,7 +4752,7 @@ Return JSON only:
           segments: result.segments,
         };
         } finally {
-          activeTranscriptions--;
+          releaseTranscriptionSlot();
         }
       }),
 
@@ -7959,10 +8080,7 @@ export async function runTranscription(
   // uses. Prevents cascading Instagram CDN rate-limits when batch kickoffs
   // (e.g. "Transcribe All" on Saved Reels) fan out many reels in parallel
   // from our single Render IP.
-  while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  activeTranscriptions++;
+  await acquireTranscriptionSlot();
   try {
     await updateTranscription(transcriptionId, { startedAt: new Date() });
     // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails
@@ -8045,7 +8163,7 @@ export async function runTranscription(
       errorMessage: message,
     });
   } finally {
-    activeTranscriptions--;
+    releaseTranscriptionSlot();
   }
 }
 
@@ -8061,10 +8179,7 @@ export async function runFeaturedReelTranscription(reel: {
   shortcode: string;
   videoUrl: string | null;
 }): Promise<void> {
-  while (activeTranscriptions >= MAX_CONCURRENT_TRANSCRIPTIONS) {
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  activeTranscriptions++;
+  await acquireTranscriptionSlot();
   try {
     // Prefer a fresh Instagram URL; fall back to durable R2 when vendor refresh fails.
     const initialFresh = await fetchReelByShortcode(reel.shortcode);
@@ -8130,66 +8245,7 @@ export async function runFeaturedReelTranscription(reel: {
       transcriptionStatus: "failed",
     });
   } finally {
-    activeTranscriptions--;
-  }
-}
-
-/** Analyze the hook (first 3 seconds) of a reel */
-async function analyzeHook(
-  transcript: string,
-  caption: string,
-  thumbnailUrl: string,
-  segments?: Array<{ start: number; end: number; text: string }>
-): Promise<string> {
-  let first3sText = "";
-  if (segments && segments.length > 0) {
-    first3sText = segments
-      .filter((s) => s.start < 3)
-      .map((s) => s.text)
-      .join(" ")
-      .trim();
-  }
-
-  const prompt = `You are an expert social media content analyst specializing in Instagram Reels.
-
-Analyze the HOOK of this Instagram Reel (the first 3 seconds that capture attention).
-
-**Caption:** ${caption}
-
-**Full Transcript:** ${transcript}
-
-**Audio in first 3 seconds:** ${first3sText || "No speech detected in first 3 seconds"}
-
-Please provide a concise analysis with these sections:
-
-**Audio Hook:** What is said or heard in the first 3 seconds? Identify the specific words, sounds, or music that grab attention.
-
-**Visual Hook (Inferred):** Based on the caption, transcript context, and thumbnail, what visual elements likely appear in the first 3 seconds?
-
-**Hook Type:** Classify the hook type (e.g., Question, Bold Statement, Pattern Interrupt, Curiosity Gap, Controversy, Story Opening, Tutorial Promise, etc.)
-
-**Effectiveness Score:** Rate 1-10 with brief reasoning.
-
-**Improvement Suggestion:** One specific way to make this hook stronger.
-
-Keep the analysis concise and actionable.`;
-
-  try {
-    const result = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: withAiFormattingRules(
-            "You are a social media content strategist."
-          ),
-        },
-        { role: "user", content: prompt },
-      ],
-    });
-
-    return (result.choices[0]?.message?.content as string) || "Analysis unavailable";
-  } catch (error) {
-    return "Hook analysis failed. Transcript is still available above.";
+    releaseTranscriptionSlot();
   }
 }
 

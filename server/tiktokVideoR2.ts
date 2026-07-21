@@ -11,6 +11,23 @@ export function tiktokVideoR2Key(awemeId: string): string {
   return `tiktok-videos/${safe}.mp4`;
 }
 
+export function isDurableTiktokVideoUrl(
+  url: string | null | undefined
+): boolean {
+  const u = (url ?? "").trim();
+  if (!u) return false;
+
+  const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+  if (publicBase && u.startsWith(publicBase)) return true;
+
+  // Fallback patterns when env is unset in tests or older mirrored rows.
+  if (u.includes("/tiktok-videos/") && (u.includes(".r2.dev/") || u.includes("cloudflarestorage.com"))) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function ensureTiktokVideoOnR2(
   awemeId: string,
   sourceUrl: string | null | undefined

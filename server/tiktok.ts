@@ -136,10 +136,62 @@ export interface TikTokVideoData {
   ownerUsername: string;
 }
 
+export interface TikTokVideoInfo {
+  videoUrl: string;
+}
+
 export interface TikTokScrapeResult {
   videos: TikTokVideoData[];
   followerCount: number;
   profilePicUrl: string;
+}
+
+export async function fetchTikTokVideoInfo(
+  videoPageUrl: string
+): Promise<TikTokVideoInfo | null> {
+  const url = videoPageUrl.trim();
+  if (!url) return null;
+
+  const maxTries = 5;
+  for (let attempt = 1; attempt <= maxTries; attempt++) {
+    try {
+      const { status, data } = await scGet("/v2/tiktok/video", { url });
+      if (
+        status === 200 &&
+        data &&
+        typeof data === "object" &&
+        (data as any).success !== false
+      ) {
+        const video = (data as any).aweme_detail?.video;
+        const videoUrl =
+          video?.download_no_watermark_addr?.url_list?.[0] ||
+          video?.play_addr?.url_list?.[0] ||
+          "";
+        if (typeof videoUrl === "string" && videoUrl.trim()) {
+          return { videoUrl: videoUrl.trim() };
+        }
+      }
+
+      if (status === 404 || responseLooksNotFound(status, data)) {
+        return null;
+      }
+
+      if (attempt < maxTries) {
+        await sleep(status === 429 ? 2000 * attempt : 1000 * attempt);
+      }
+    } catch (error) {
+      if (attempt >= maxTries) {
+        console.warn(
+          `[TikTok] Failed to fetch video info for ${url}:`,
+          error instanceof Error ? error.message : error
+        );
+        return null;
+      }
+      await sleep(1000 * attempt);
+    }
+  }
+
+  return null;
 }
 
 async function fetchTikTokProfile(
