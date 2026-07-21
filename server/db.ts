@@ -1027,6 +1027,7 @@ export function transcriptionViewFromFeaturedReelRow(
     id: fr.id,
     reelId: null,
     featuredReelId: fr.id,
+    tiktokVideoId: null,
     workspaceId: null,
     transcript,
     segments: segments as Transcription["segments"],

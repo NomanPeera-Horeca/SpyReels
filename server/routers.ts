@@ -55,6 +55,7 @@ import {
 } from "./discovery/db";
 import { countViralityDiagnosticJobsThisMonth } from "./virality/db";
 import { runViralityDiagnosticJob } from "./virality/runJob";
+import { runTikTokScrapeJob } from "./tiktokScrape/runJob";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { founderInterviewRouter } from "./founderInterview/router";
@@ -314,6 +315,8 @@ import {
   creatorDiscoverySearches,
   creatorDiscoveryJobs,
   viralityDiagnosticJobs,
+  tiktokScrapeJobs,
+  tiktokVideos,
 } from "../drizzle/schema";
 import type { Transcription, Reel, User } from "../drizzle/schema";
 import { eq, ne, desc, asc, sql, and, inArray, not, getTableColumns, isNotNull, or, like } from "drizzle-orm";
@@ -6874,6 +6877,197 @@ Return JSON only:
       .mutation(async ({ input }) => {
         const { format, ...filters } = input;
         return buildCoachScriptQualityDownload({ filters, format });
+      }),
+  }),
+
+  tiktokScrape: router({
+    start: protectedProcedure
+      .input(
+        z.object({
+          handle: z.string().min(1).max(128),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const usageCheck = await checkUsageLimit(
+          ctx.user.id,
+          "scrapeCount",
+          ctx.user.openId
+        );
+        if (!usageCheck.allowed) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `You have reached your monthly account research limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+          });
+        }
+
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const handle = input.handle.replace(/^@/, "").trim().toLowerCase();
+        const insertResult = await db.insert(tiktokScrapeJobs).values({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          handle,
+          status: "pending",
+        });
+        const jobId = insertResult[0].insertId;
+        if (!jobId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create TikTok scrape job",
+          });
+        }
+
+        await incrementUsage(ctx.user.id, "scrapeCount");
+
+        runTikTokScrapeJob(
+          jobId,
+          ctx.user.id,
+          ctx.workspaceId,
+          handle
+        ).catch((error) => {
+          console.error(`TikTok scrape job ${jobId} failed:`, error);
+        });
+
+        return { jobId };
+      }),
+
+    progress: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const rows = await db
+          .select()
+          .from(tiktokScrapeJobs)
+          .where(eq(tiktokScrapeJobs.id, input.jobId))
+          .limit(1);
+        const job = rows[0];
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        }
+        if (job.workspaceId !== ctx.workspaceId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        return {
+          status: job.status,
+          currentStep: job.currentStep,
+          videosFound: job.videosFound,
+          estimatedTotal: job.estimatedTotal,
+          progressPercent: job.progressPercent,
+          errorMessage: job.errorMessage,
+          handle: job.handle,
+        };
+      }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      return db
+        .select()
+        .from(tiktokScrapeJobs)
+        .where(eq(tiktokScrapeJobs.workspaceId, ctx.workspaceId))
+        .orderBy(desc(tiktokScrapeJobs.createdAt));
+    }),
+
+    videos: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const jobRows = await db
+          .select()
+          .from(tiktokScrapeJobs)
+          .where(eq(tiktokScrapeJobs.id, input.jobId))
+          .limit(1);
+        const job = jobRows[0];
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        }
+        if (job.workspaceId !== ctx.workspaceId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const rows = await db
+          .select()
+          .from(tiktokVideos)
+          .where(eq(tiktokVideos.jobId, input.jobId))
+          .orderBy(desc(tiktokVideos.postedAt));
+
+        return {
+          followerCount: job.followerCount,
+          videos: rows.map((video) => {
+            const raw =
+              job.followerCount > 0
+                ? ((video.likeCount +
+                    video.commentCount +
+                    video.shareCount) /
+                    job.followerCount) *
+                  100
+                : 0;
+            return {
+              ...video,
+              engagementRate: Math.round(raw * 100) / 100,
+            };
+          }),
+        };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const jobRows = await db
+          .select()
+          .from(tiktokScrapeJobs)
+          .where(eq(tiktokScrapeJobs.id, input.jobId))
+          .limit(1);
+        const job = jobRows[0];
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        }
+        if (job.workspaceId !== ctx.workspaceId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        await db
+          .delete(tiktokVideos)
+          .where(eq(tiktokVideos.jobId, input.jobId));
+        await db
+          .delete(tiktokScrapeJobs)
+          .where(eq(tiktokScrapeJobs.id, input.jobId));
+        return { success: true };
       }),
   }),
 
