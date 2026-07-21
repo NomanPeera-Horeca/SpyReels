@@ -7,6 +7,7 @@ import { computeViralScore } from "../discovery/scoring";
 import { downloadVideo } from "../services/transcribeReel";
 import { extractFrames } from "../services/extractFrames";
 import { analyzeReelFrames } from "../services/analyzeReelFrames";
+import { synthesizeViralityDiagnosis } from "./synthesizeDiagnosis";
 
 const CONCURRENCY = 2;
 const MAX_REELS = 30;
@@ -120,12 +121,14 @@ export async function runViralityDiagnosticJob(
       (r): r is ReelDiagnosticResult => r !== null
     );
 
+    const diagnosis = await synthesizeViralityDiagnosis(successfulResults);
+
     await db
       .update(viralityDiagnosticJobs)
       .set({
         status: "completed",
         reelsAnalyzed: successfulResults.length,
-        resultJson: { reels: successfulResults },
+        resultJson: { reels: successfulResults, diagnosis },
       })
       .where(eq(viralityDiagnosticJobs.id, jobId));
   } catch (err) {
