@@ -43,6 +43,7 @@ const Extension = lazy(() => import("./pages/Extension"));
 const CollectedReels = lazy(() => import("./pages/CollectedReels"));
 const Discovery = lazy(() => import("./pages/Discovery"));
 const CreatorDiscovery = lazy(() => import("./pages/CreatorDiscovery"));
+const ViralityDiagnostic = lazy(() => import("./pages/ViralityDiagnostic"));
 // Idea to Script paused: keep page file, route redirects to /studio
 // const IdeaToScript = lazy(() => import("./pages/IdeaToScript"));
 const ThirtyDayPlan = lazy(() => import("./pages/ThirtyDayPlan"));
@@ -116,6 +117,9 @@ function DesktopDashboardRouter() {
             ) : (
               <Redirect to="/dashboard" />
             )}
+          </Route>
+          <Route path="/my-virality-report">
+            <ViralityDiagnostic />
           </Route>
           <Route path="/saved" component={SavedReels} />
           <Route path="/scripts" component={MyScripts} />

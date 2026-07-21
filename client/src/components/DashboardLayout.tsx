@@ -51,6 +51,7 @@ import {
   Radar,
   Sun,
   Users,
+  TrendingUp,
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
@@ -83,6 +84,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/discovery": "Describe your niche, find viral reels in your niche",
   "/discover-creators":
     "Describe your niche, find peer creators worth studying and remaking",
+  "/my-virality-report":
+    "See why your reels do or don't go viral, based on your own posting history.",
   "/research": "Spy on any public Instagram creator",
   "/collected": "Individual reels you've saved from past research",
   "/history":
@@ -149,6 +152,11 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Inbox, label: "Collected Reels", path: "/collected" },
         { icon: Radar, label: "Creator Radar", path: "/history" },
         { icon: Bookmark, label: "Saved Reels", path: "/saved" },
+        {
+          icon: TrendingUp,
+          label: "My Virality Report",
+          path: "/my-virality-report" as const,
+        },
       ],
     },
     {
