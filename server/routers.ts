@@ -3368,19 +3368,30 @@ Return JSON only:
           .object({
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
+            tiktokVideoId: z.number().optional(),
             topic: z.string().max(2000).optional().default(""),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
             /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
             addCues: z.boolean().optional().default(true),
           })
           .refine(
-            (d) => (d.reelId != null) !== (d.featuredReelId != null),
-            { message: "Provide exactly one of reelId or featuredReelId" }
+            (d) =>
+              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
+                (id) => id != null
+              ).length === 1,
+            {
+              message:
+                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+            }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" =
-          input.featuredReelId != null ? "featured" : "user";
+        const source: "user" | "featured" | "tiktok" =
+          input.featuredReelId != null
+            ? "featured"
+            : input.tiktokVideoId != null
+              ? "tiktok"
+              : "user";
         let caption = "";
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
         let reelForGeneration: any;
@@ -3393,6 +3404,32 @@ Return JSON only:
           caption = fr.caption ?? "";
           reelForGeneration = fr;
           transcription = await getTranscriptionByFeaturedReelId(input.featuredReelId!);
+        } else if (source === "tiktok") {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+          const rows = await db
+            .select()
+            .from(tiktokVideos)
+            .where(eq(tiktokVideos.id, input.tiktokVideoId!))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "TikTok video not found",
+            });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          caption = video.caption ?? "";
+          reelForGeneration = video;
+          transcription = await getTranscriptionByTiktokVideoId(video.id);
         } else {
           const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
           caption = reel.caption ?? "";
@@ -3470,6 +3507,7 @@ Return JSON only:
         const scriptId = await createRecreatedScript({
           reelId: source === "user" ? input.reelId! : null,
           featuredReelId: source === "featured" ? input.featuredReelId! : null,
+          tiktokVideoId: source === "tiktok" ? input.tiktokVideoId! : null,
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
           topic: storedTopic,
@@ -3491,7 +3529,8 @@ Return JSON only:
           reelForGeneration,
           promptAngle,
           input.gradeLevel,
-          effectiveAddCues
+          effectiveAddCues,
+          source === "tiktok" ? "TikTok video" : "Instagram Reel"
         ).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
@@ -8344,7 +8383,7 @@ Place cues at the START of the line they apply to. Every 2-3 lines should have a
 }
 
 /** Background job: analyze viral structure and generate a new script */
-async function runScriptGeneration(
+export async function runScriptGeneration(
   scriptId: number,
   userId: number,
   originalTranscript: string,
@@ -8353,13 +8392,14 @@ async function runScriptGeneration(
   reel: any,
   topic: string,
   gradeLevel: string,
-  addCues: boolean
+  addCues: boolean,
+  platformLabel: "Instagram Reel" | "TikTok video" = "Instagram Reel"
 ): Promise<void> {
   try {
     // Step 1: Analyze viral structure
-    const structurePrompt = `You are an expert viral content analyst specializing in Instagram Reels scripts.
+    const structurePrompt = `You are an expert viral content analyst specializing in ${platformLabel} scripts.
 
-Analyze the following viral Reel transcript and identify its exact structure. Return a JSON object with these fields:
+Analyze the following viral ${platformLabel} transcript and identify its exact structure. Return a JSON object with these fields:
 
 {
   "hook": {
@@ -8478,7 +8518,7 @@ Use short paragraphs to indicate natural pauses.
 Do NOT include any labels like "Hook:" or "Body:" - just write the flowing script.`;
 
     const scriptPrompt = isSameTopic
-      ? `You are an expert Instagram Reels scriptwriter. Rewrite the following viral Reel script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original, not a copy.
+      ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original, not a copy.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
@@ -8502,7 +8542,7 @@ ${gradeLevelInstruction}${cuesInstruction}
 9. Do NOT just swap synonyms. Genuinely rephrase and restructure sentences while keeping the meaning.
 
 ${scriptFormatClosing}`
-      : `You are an expert Instagram Reels scriptwriter. Using the EXACT viral structure from a proven viral Reel, write a NEW script on a different topic.
+      : `You are an expert ${platformLabel} scriptwriter. Using the EXACT viral structure from a proven viral ${platformLabel}, write a NEW script on a different topic.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
@@ -8531,7 +8571,7 @@ ${scriptFormatClosing}`;
 
     const scriptResponse = await invokeLLM({
       messages: [
-        { role: "system", content: withAiFormattingRules("You are an expert Instagram Reels scriptwriter. Write natural, spoken scripts that match viral patterns.") },
+        { role: "system", content: withAiFormattingRules(`You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that match viral patterns.`) },
         { role: "user", content: scriptPrompt },
       ],
     });
