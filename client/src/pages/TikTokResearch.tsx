@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Clock } from "lucide-react";
+import { Loader2, Clock, Play, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
@@ -204,13 +204,22 @@ function VideoCard({
       actions={
         <div className="space-y-2">
           <Button
+            variant={script?.status === "completed" ? "default" : "outline"}
             size="sm"
-            className="w-full"
+            className={
+              script?.status === "completed"
+                ? "min-h-9 h-auto w-full justify-center px-2.5 py-2 text-xs font-semibold leading-snug whitespace-normal text-center shadow-sm"
+                : "min-h-9 h-auto w-full justify-center px-2.5 py-2 text-xs font-semibold leading-snug whitespace-normal text-center border-primary/30 text-primary hover:bg-primary/10"
+            }
             onClick={startRemake}
             disabled={isTranscribing || isGenerating || noSpeech}
           >
-            {(isTranscribing || isGenerating) && (
+            {isTranscribing || isGenerating ? (
               <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : script?.status === "completed" && !showScript ? (
+              <Play className="mr-2 h-3.5 w-3.5 fill-current" />
+            ) : (
+              <Wand2 className="mr-2 h-3.5 w-3.5" />
             )}
             {buttonLabel}
           </Button>

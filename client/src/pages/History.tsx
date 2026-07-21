@@ -451,11 +451,11 @@ export default function History() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-base font-semibold text-foreground">@{job.handle}</span>
-                      <Badge variant="outline" className="gap-1 text-[10px] capitalize">
+                      <Badge variant="outline" className="gap-1 text-xs capitalize">
                         {job.platform === "instagram" ? (
-                          <Instagram className="h-2.5 w-2.5" />
+                          <Instagram className="h-3 w-3" />
                         ) : (
-                          <Music2 className="h-2.5 w-2.5" />
+                          <Music2 className="h-3 w-3" />
                         )}
                         {job.platform}
                       </Badge>
@@ -709,11 +709,11 @@ export default function History() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-foreground">@{job.handle}</span>
-                      <Badge variant="outline" className="h-5 gap-1 text-[10px] capitalize">
+                      <Badge variant="outline" className="h-6 gap-1 text-xs capitalize">
                         {job.platform === "instagram" ? (
-                          <Instagram className="h-2.5 w-2.5" />
+                          <Instagram className="h-3 w-3" />
                         ) : (
-                          <Music2 className="h-2.5 w-2.5" />
+                          <Music2 className="h-3 w-3" />
                         )}
                         {job.platform}
                       </Badge>
