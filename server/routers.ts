@@ -7045,6 +7045,7 @@ Return JSON only:
       .input(
         z.object({
           handle: z.string().min(1).max(128),
+          timeframe: z.enum(["30", "90", "180"]).default("30"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -7089,7 +7090,8 @@ Return JSON only:
           jobId,
           ctx.user.id,
           ctx.workspaceId,
-          handle
+          handle,
+          { timeframeDays: Number(input.timeframe) }
         ).catch((error) => {
           console.error(`TikTok scrape job ${jobId} failed:`, error);
         });

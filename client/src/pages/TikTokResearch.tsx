@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
-import { Loader2, Heart, MessageCircle, Share2, Eye } from "lucide-react";
+import { Loader2, Heart, MessageCircle, Share2, Eye, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { useUsageGate } from "@/hooks/useUsageGate";
 
 type TikTokVideoRow = {
   id: number;
@@ -201,7 +211,9 @@ function VideoCard({ video }: { video: TikTokVideoRow }) {
 
 export default function TikTokResearch() {
   const [handle, setHandle] = useState("");
+  const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const scrapeGate = useUsageGate("scrapeCount");
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -270,43 +282,112 @@ export default function TikTokResearch() {
     const trimmed = handle.trim().replace(/^@/, "");
     if (!trimmed) return;
     setActiveJobId(null);
-    startMutation.mutate({ handle: trimmed });
+    startMutation.mutate({ handle: trimmed, timeframe });
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">TikTok Research</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Paste a TikTok handle to find their top-performing videos, get
-          transcripts, and generate scripts in your own voice.
-        </p>
-      </div>
+    <div className="mt-5 space-y-5">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleSubmit();
+        }}
+        className="space-y-5"
+      >
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="tiktok-handle">TikTok Handle</Label>
+            <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
+              Paste handle here
+            </span>
+          </div>
+          <div className="relative rounded-xl ring-1 ring-primary/70 shadow-[0_0_0_3px_hsl(var(--primary)/0.08),0_10px_30px_hsl(var(--primary)/0.12)] transition focus-within:ring-2 focus-within:ring-primary">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-primary">
+              @
+            </span>
+            <Input
+              id="tiktok-handle"
+              value={handle}
+              onChange={(event) => setHandle(event.target.value)}
+              placeholder="e.g. khaby.lame"
+              disabled={isRunning}
+              className="h-12 border-primary/30 bg-primary/5 pl-10"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Paste the TikTok username without the @ symbol. The account must be
+            public.
+          </p>
+        </div>
 
-      <div className="flex gap-2 max-w-md">
-        <Input
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          placeholder="TikTok handle, e.g. khaby.lame"
-          disabled={isRunning}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSubmit();
-          }}
-        />
-        <Button onClick={handleSubmit} disabled={isRunning || !handle.trim()}>
-          {isRunning ? (
+        <div className="space-y-2">
+          <Label htmlFor="tiktok-timeframe">Timeframe</Label>
+          <Select
+            value={timeframe}
+            onValueChange={(value) =>
+              setTimeframe(value as "30" | "90" | "180")
+            }
+            disabled={isRunning}
+          >
+            <SelectTrigger id="tiktok-timeframe" className="h-11 bg-background">
+              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+              <SelectItem value="180">Last 180 days</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            TikTok videos posted within this window will be collected.
+          </p>
+        </div>
+
+        {!scrapeGate.isLoading && !scrapeGate.allowed ? (
+          <UpgradePrompt
+            action="scrapeCount"
+            used={scrapeGate.used}
+            limit={scrapeGate.limit}
+            planRequired={scrapeGate.planRequired}
+            variant="inline"
+          />
+        ) : null}
+
+        {!scrapeGate.isLoading &&
+        scrapeGate.allowed &&
+        scrapeGate.limit > 0 ? (
+          <p className="text-center text-xs text-muted-foreground">
+            {scrapeGate.used}/{scrapeGate.limit} account research sessions this
+            month
+          </p>
+        ) : null}
+
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 w-full text-base font-medium"
+          disabled={
+            isRunning ||
+            !handle.trim() ||
+            startMutation.isPending ||
+            scrapeGate.isLoading ||
+            !scrapeGate.allowed
+          }
+        >
+          {isRunning || startMutation.isPending ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Researching...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Starting...
             </>
           ) : (
-            "Research"
+            "Start spying on TikTok"
           )}
         </Button>
-      </div>
+      </form>
 
       {isRunning ? (
-        <div className="rounded-lg border border-border/40 bg-card p-6 space-y-2 max-w-md">
+        <div className="rounded-lg border border-border/40 bg-background/60 p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {job?.videosFound ? (
@@ -319,16 +400,26 @@ export default function TikTokResearch() {
       ) : null}
 
       {job?.status === "failed" ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive max-w-md">
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
           {job.errorMessage || "Research failed"}
         </div>
       ) : null}
 
       {job?.status === "completed" && videosQuery.data ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {videosQuery.data.videos.map((video) => (
-            <VideoCard key={video.id} video={video} />
-          ))}
+        <div className="space-y-4 border-t border-border/50 pt-5">
+          <div>
+            <h3 className="font-semibold text-foreground">
+              {videosQuery.data.videos.length} TikTok videos found
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Transcribe any video, then generate a script from it.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {videosQuery.data.videos.map((video) => (
+              <VideoCard key={video.id} video={video} />
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

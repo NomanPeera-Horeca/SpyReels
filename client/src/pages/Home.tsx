@@ -38,6 +38,7 @@ import {
   BadgeCheck,
   ExternalLink,
   AtSign,
+  Music2,
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -533,23 +534,7 @@ export default function Home() {
   };
 
   return (
-    <div className="w-full min-w-0">
-      <div className="mx-auto w-full max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
-        <Tabs
-          value={platform}
-          onValueChange={(value) =>
-            setPlatform(value as "instagram" | "tiktok")
-          }
-        >
-          <TabsList>
-            <TabsTrigger value="instagram">Instagram</TabsTrigger>
-            <TabsTrigger value="tiktok">TikTok</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      {platform === "instagram" ? (
-        <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+    <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mx-auto max-w-3xl">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Spy Viral Reels
@@ -576,7 +561,7 @@ export default function Home() {
           </span>
           <span>
             <strong className="font-medium text-foreground">2. Sort</strong> top
-            Reels
+            {platform === "instagram" ? " Reels" : " videos"}
           </span>
           <span className="hidden sm:inline text-border" aria-hidden>
             ·
@@ -587,12 +572,13 @@ export default function Home() {
           </span>
         </div>
 
-        {activeRunningJob ? (
+        {platform === "instagram" && activeRunningJob ? (
           <div className="mt-6">
             <ActiveScrapeJobNotice job={activeRunningJob} variant="banner" />
           </div>
         ) : null}
 
+        {platform === "instagram" ? (
         <button
           type="button"
           onClick={scrollToFeaturedCreators}
@@ -638,6 +624,7 @@ export default function Home() {
             </p>
           ) : null}
         </button>
+        ) : null}
 
         <div className="mt-4 rounded-2xl border border-border/70 bg-card/50 p-4 sm:p-6">
           <div className="flex items-start justify-between gap-3">
@@ -646,16 +633,46 @@ export default function Home() {
                 Spy a specific account
               </p>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Enter any public Instagram handle. Can take 1 to 3 minutes
-                depending on account size.
+                {platform === "instagram"
+                  ? "Enter any public Instagram handle. Can take 1 to 3 minutes depending on account size."
+                  : "Enter any public TikTok handle to find top-performing videos, transcripts, and script ideas."}
               </p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground">
-              <AtSign className="h-5 w-5" aria-hidden />
+              {platform === "instagram" ? (
+                <AtSign className="h-5 w-5" aria-hidden />
+              ) : (
+                <Music2 className="h-5 w-5" aria-hidden />
+              )}
             </span>
           </div>
+
+          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Choose a platform
+              </p>
+              <p className="text-xs text-muted-foreground">
+                The rest of your Research page stays in one place.
+              </p>
+            </div>
+            <Tabs
+              value={platform}
+              onValueChange={(value) =>
+                setPlatform(value as "instagram" | "tiktok")
+              }
+            >
+              <TabsList className="grid w-full grid-cols-2 sm:w-64">
+                <TabsTrigger value="instagram">Instagram</TabsTrigger>
+                <TabsTrigger value="tiktok">TikTok</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {platform === "instagram" ? (
           <form onSubmit={handleSubmit} className="mt-5 space-y-5">
               <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
                 <Label
                   htmlFor="handle"
                   className="text-sm font-medium text-card-foreground"
@@ -669,8 +686,12 @@ export default function Home() {
                     </Tooltip>
                   </span>
                 </Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
+                    Paste handle here
+                  </span>
+                </div>
+                <div className="relative rounded-xl ring-1 ring-primary/70 shadow-[0_0_0_3px_hsl(var(--primary)/0.08),0_10px_30px_hsl(var(--primary)/0.12)] transition focus-within:ring-2 focus-within:ring-primary">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                   <Input
                     id="handle"
                     placeholder="e.g. natgeo"
@@ -689,7 +710,7 @@ export default function Home() {
                         setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
                       }
                     }}
-                    className="pl-10 h-11 bg-background"
+                    className="h-12 border-primary/30 bg-primary/5 pl-10"
                     aria-invalid={Boolean(handleError)}
                     aria-describedby={handleError ? "handle-error" : undefined}
                   />
@@ -953,15 +974,20 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    Start Spying
+                    Start spying on Instagram
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </>
                 )}
               </Button>
             </form>
+          ) : (
+            <TikTokResearch />
+          )}
         </div>
       </div>
 
+      {platform === "instagram" ? (
+      <>
       <Separator className="my-10" />
 
       <section id="featured-creators" className="scroll-mt-24">
@@ -1156,11 +1182,8 @@ export default function Home() {
           </div>
         ))}
       </div>
-
-        </div>
-      ) : (
-        <TikTokResearch />
-      )}
+      </>
+      ) : null}
     </div>
   );
 }
