@@ -7143,11 +7143,83 @@ Return JSON only:
         });
       }
 
-      return db
+      const jobs = await db
         .select()
         .from(tiktokScrapeJobs)
         .where(eq(tiktokScrapeJobs.workspaceId, ctx.workspaceId))
         .orderBy(desc(tiktokScrapeJobs.createdAt));
+
+      type Rollup = {
+        reelCountRollup: number;
+        totalViews: number;
+        totalLikes: number;
+        totalComments: number;
+        totalShares: number;
+        avgEngagementPct: number | null;
+      };
+      const rollupMap = new Map<number, Rollup>();
+      const jobIds = jobs.map((job) => job.id);
+
+      if (jobIds.length > 0) {
+        const rollupRows = await db
+          .select({
+            jobId: tiktokVideos.jobId,
+            reelCount: sql<number>`cast(count(*) as signed)`.mapWith(Number),
+            totalViews: sql<number>`coalesce(sum(cast(${tiktokVideos.viewCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            totalLikes: sql<number>`coalesce(sum(cast(${tiktokVideos.likeCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            totalComments: sql<number>`coalesce(sum(cast(${tiktokVideos.commentCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            totalShares: sql<number>`coalesce(sum(cast(${tiktokVideos.shareCount} as signed)), 0)`.mapWith(
+              Number
+            ),
+            avgEngagementPct: sql<number | null>`avg(
+              (
+                cast(${tiktokVideos.likeCount} as signed)
+                + cast(${tiktokVideos.commentCount} as signed)
+                + cast(${tiktokVideos.shareCount} as signed)
+              )
+              / nullif(cast(${tiktokScrapeJobs.followerCount} as signed), 0) * 100
+            )`,
+          })
+          .from(tiktokVideos)
+          .innerJoin(tiktokScrapeJobs, eq(tiktokVideos.jobId, tiktokScrapeJobs.id))
+          .where(
+            and(
+              inArray(tiktokVideos.jobId, jobIds),
+              eq(tiktokScrapeJobs.workspaceId, ctx.workspaceId)
+            )
+          )
+          .groupBy(tiktokVideos.jobId);
+
+        for (const row of rollupRows) {
+          if (row.jobId == null) continue;
+          const raw = row.avgEngagementPct;
+          const n =
+            raw == null
+              ? null
+              : typeof raw === "number"
+                ? raw
+                : Number.parseFloat(String(raw));
+          rollupMap.set(row.jobId, {
+            reelCountRollup: row.reelCount,
+            totalViews: row.totalViews,
+            totalLikes: row.totalLikes,
+            totalComments: row.totalComments,
+            totalShares: row.totalShares,
+            avgEngagementPct: n != null && Number.isFinite(n) ? n : null,
+          });
+        }
+      }
+
+      return jobs.map((job) => ({
+        ...job,
+        reelStats: rollupMap.get(job.id) ?? null,
+      }));
     }),
 
     videos: protectedProcedure

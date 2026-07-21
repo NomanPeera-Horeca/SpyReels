@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Heart, MessageCircle, Share2, Eye, Clock } from "lucide-react";
+import { Loader2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/select";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useUsageGate } from "@/hooks/useUsageGate";
+import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
+import { formatNumber } from "@/components/InlineWorkflow";
 
 type TikTokVideoRow = {
   id: number;
@@ -32,15 +36,18 @@ type TikTokVideoRow = {
   engagementRate: number;
 };
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-function VideoCard({ video }: { video: TikTokVideoRow }) {
+function VideoCard({
+  video,
+  index,
+}: {
+  video: TikTokVideoRow;
+  index: number;
+}) {
+  const [remakeRequested, setRemakeRequested] = useState(false);
   const [transcriptionId, setTranscriptionId] = useState<number | null>(null);
   const [scriptId, setScriptId] = useState<number | null>(null);
+  const [generationStarted, setGenerationStarted] = useState(false);
+  const [showScript, setShowScript] = useState(false);
 
   const transcribeMutation = trpc.transcribe.start.useMutation({
     onSuccess: (data) => {
@@ -58,7 +65,7 @@ function VideoCard({ video }: { video: TikTokVideoRow }) {
   const transcriptionQuery = trpc.transcribe.status.useQuery(
     { tiktokVideoId: video.id },
     {
-      enabled: transcriptionId != null,
+      enabled: remakeRequested && transcriptionId != null,
       refetchInterval: (query) => {
         const status = query.state.data?.status;
         if (status === "completed" || status === "failed") return false;
@@ -93,127 +100,165 @@ function VideoCard({ video }: { video: TikTokVideoRow }) {
 
   const transcription = transcriptionQuery.data;
   const isTranscribing =
-    transcriptionId != null &&
+    remakeRequested &&
+    (transcribeMutation.isPending ||
+      (transcriptionId != null &&
     transcription?.status !== "completed" &&
-    transcription?.status !== "failed";
-  const canGenerate =
-    transcription?.status === "completed" && !!transcription.transcript;
+        transcription?.status !== "failed"));
 
   const script = scriptQuery.data;
-  const isGenerating = scriptId != null && script?.status === "processing";
+  const isGenerating =
+    generateMutation.isPending ||
+    (scriptId != null && script?.status === "processing");
+
+  useEffect(() => {
+    if (
+      !remakeRequested ||
+      generationStarted ||
+      transcription?.status !== "completed" ||
+      !transcription.transcript
+    ) {
+      return;
+    }
+
+    setGenerationStarted(true);
+    generateMutation.mutate({
+      tiktokVideoId: video.id,
+      topic: "",
+      gradeLevel: "auto",
+    });
+  }, [
+    generationStarted,
+    generateMutation,
+    remakeRequested,
+    transcription?.status,
+    transcription?.transcript,
+    video.id,
+  ]);
+
+  useEffect(() => {
+    if (script?.status === "completed" && script.generatedScript) {
+      setShowScript(true);
+    }
+  }, [script?.generatedScript, script?.status]);
+
+  const startRemake = () => {
+    if (script?.status === "completed" && script.generatedScript) {
+      setShowScript((current) => !current);
+      return;
+    }
+
+    setRemakeRequested(true);
+    setGenerationStarted(false);
+    setTranscriptionId(null);
+    setScriptId(null);
+    transcribeMutation.mutate({ tiktokVideoId: video.id });
+  };
+
+  const noSpeech =
+    transcription?.status === "completed" && !transcription.transcript;
+  const transcriptionFailed = transcription?.status === "failed";
+  const generationFailed = script?.status === "failed";
+
+  let buttonLabel = LIBRARY_REMAKE_CTA_LABEL;
+  if (isTranscribing) buttonLabel = "Transcribing...";
+  else if (isGenerating) buttonLabel = "Generating...";
+  else if (noSpeech) buttonLabel = "No speech detected";
+  else if (transcriptionFailed || generationFailed) buttonLabel = "Retry";
+  else if (script?.status === "completed") {
+    buttonLabel = showScript ? "Hide result" : "View result";
+  }
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card overflow-hidden flex flex-col">
-      {video.thumbnailUrl ? (
-        <img
-          src={video.thumbnailUrl}
-          alt=""
-          className="w-full aspect-[9/16] object-cover bg-muted"
-        />
-      ) : (
-        <div className="w-full aspect-[9/16] bg-muted" />
-      )}
-      <div className="p-3 space-y-2 flex-1 flex flex-col">
-        <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
-          {video.caption || "No caption"}
+    <WorkspaceReelGridTile
+      index={index}
+      thumbnailUrl={video.thumbnailUrl}
+      videoUrl={video.videoUrl}
+      engagementRate={video.engagementRate}
+      duration={video.durationSec}
+      reelUrl={video.videoPageUrl}
+      caption={
+        <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+          {video.caption || (
+            <span className="italic text-muted-foreground">No caption</span>
+          )}
         </p>
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Eye className="h-3 w-3" /> {formatCount(video.viewCount)}
+      }
+      stats={
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+          <span>{formatNumber(video.viewCount)} views</span>
+          <span aria-hidden>·</span>
+          <span className="font-medium text-emerald-400">
+            {video.engagementRate.toFixed(2)}%
           </span>
-          <span className="flex items-center gap-1">
-            <Heart className="h-3 w-3" /> {formatCount(video.likeCount)}
-          </span>
-          <span className="flex items-center gap-1">
-            <MessageCircle className="h-3 w-3" /> {formatCount(video.commentCount)}
-          </span>
-          <span className="flex items-center gap-1">
-            <Share2 className="h-3 w-3" /> {formatCount(video.shareCount)}
-          </span>
+          <span aria-hidden>·</span>
+          <span>{formatNumber(video.likeCount)} likes</span>
+          <span aria-hidden>·</span>
+          <span>{formatNumber(video.commentCount)} comments</span>
+          <span aria-hidden>·</span>
+          <span>{formatNumber(video.shareCount)} shares</span>
+          <span aria-hidden>·</span>
+          <span>{new Date(video.postedAt).toLocaleDateString()}</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {video.engagementRate.toFixed(2)}% engagement
-        </p>
+      }
+      actions={
+        <div className="space-y-2">
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={startRemake}
+            disabled={isTranscribing || isGenerating || noSpeech}
+          >
+            {(isTranscribing || isGenerating) && (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            )}
+            {buttonLabel}
+          </Button>
 
-        <div className="mt-auto pt-2 space-y-2">
-          {!transcriptionId ? (
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={() => transcribeMutation.mutate({ tiktokVideoId: video.id })}
-              disabled={transcribeMutation.isPending}
-            >
-              {transcribeMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                "Transcribe"
-              )}
-            </Button>
-          ) : isTranscribing ? (
-            <Button size="sm" className="w-full" disabled>
-              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-              Transcribing...
-            </Button>
-          ) : transcription?.status === "failed" ? (
+          {transcriptionFailed ? (
             <p className="text-xs text-destructive">
               {transcription.errorMessage || "Transcription failed"}
             </p>
-          ) : canGenerate && !scriptId ? (
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={() =>
-                generateMutation.mutate({
-                  tiktokVideoId: video.id,
-                  topic: "",
-                  gradeLevel: "auto",
-                })
-              }
-              disabled={generateMutation.isPending}
-            >
-              {generateMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                "Generate script"
-              )}
-            </Button>
           ) : null}
-
-          {isGenerating ? (
-            <Button size="sm" className="w-full" disabled>
-              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-              Generating...
-            </Button>
-          ) : null}
-
-          {script?.status === "completed" && script.generatedScript ? (
-            <div className="rounded-md border border-border/40 bg-muted/50 p-2 text-xs whitespace-pre-wrap max-h-40 overflow-y-auto">
-              {script.generatedScript}
-            </div>
-          ) : null}
-
-          {script?.status === "failed" ? (
+          {generationFailed ? (
             <p className="text-xs text-destructive">
               {script.errorMessage || "Script generation failed"}
             </p>
           ) : null}
-
-          {!transcription?.transcript && transcription?.status === "completed" ? (
+          {noSpeech ? (
             <p className="text-xs text-muted-foreground">
-              No speech detected in this video.
+              No speech was detected, so a script was not generated.
             </p>
           ) : null}
+          {showScript && script?.status === "completed" && script.generatedScript ? (
+            <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/40 bg-muted/50 p-3 text-xs">
+              {script.generatedScript}
+            </div>
+          ) : null}
         </div>
-      </div>
-    </div>
+      }
+      mediaFallback={<div className="h-full w-full bg-muted" />}
+    />
   );
 }
 
-export default function TikTokResearch() {
+export default function TikTokResearch({
+  initialJobId,
+}: {
+  initialJobId?: number;
+}) {
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
-  const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [activeJobId, setActiveJobId] = useState<number | null>(
+    initialJobId ?? null
+  );
   const scrapeGate = useUsageGate("scrapeCount");
+
+  useEffect(() => {
+    if (initialJobId != null) {
+      setActiveJobId(initialJobId);
+    }
+  }, [initialJobId]);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -287,6 +332,7 @@ export default function TikTokResearch() {
 
   return (
     <div className="mt-5 space-y-5">
+      {initialJobId == null ? (
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -385,6 +431,7 @@ export default function TikTokResearch() {
           )}
         </Button>
       </form>
+      ) : null}
 
       {isRunning ? (
         <div className="rounded-lg border border-border/40 bg-background/60 p-4">
@@ -393,7 +440,10 @@ export default function TikTokResearch() {
             {job?.videosFound ? (
               <span>Found {job.videosFound} videos...</span>
             ) : (
-              <span>Connecting to @{handle.replace(/^@/, "")}...</span>
+              <span>
+                Connecting to @
+                {job?.handle || handle.replace(/^@/, "")}...
+              </span>
             )}
           </div>
         </div>
@@ -415,9 +465,9 @@ export default function TikTokResearch() {
               Transcribe any video, then generate a script from it.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {videosQuery.data.videos.map((video) => (
-              <VideoCard key={video.id} video={video} />
+          <div className={WORKSPACE_REEL_GRID_CLASS}>
+            {videosQuery.data.videos.map((video, index) => (
+              <VideoCard key={video.id} video={video} index={index} />
             ))}
           </div>
         </div>

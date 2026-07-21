@@ -34,6 +34,8 @@ import {
   LayoutGrid,
   List,
   Sparkles,
+  Instagram,
+  Music2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatNumber } from "@/components/InlineWorkflow";
@@ -44,7 +46,21 @@ import { listHasRunningScrapeJob } from "@/lib/activeScrapeJob";
 import { runningJobProgressSnapshot } from "@/hooks/useScrapeCompletionNotifier";
 import { isScrapeJobInFlight } from "@shared/scrapeProgressUi";
 
-type ScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
+type InstagramScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
+type TikTokScrapeJobRow = inferRouterOutputs<AppRouter>["tiktokScrape"]["list"][number];
+type HistoryJobRow =
+  | (InstagramScrapeJobRow & { platform: "instagram" })
+  | (TikTokScrapeJobRow & { platform: "tiktok" });
+
+function jobVideoCount(job: HistoryJobRow): number {
+  return job.platform === "instagram" ? job.totalReels : job.totalVideos;
+}
+
+function jobNiche(job: HistoryJobRow): string | null {
+  return job.platform === "instagram"
+    ? readableNiche(job.classifiedNicheSlug)
+    : null;
+}
 
 function formatDate(d: Date | string): string {
   const date = new Date(d);
@@ -111,32 +127,46 @@ export default function History() {
     refetchInterval: (q) => (listHasRunningScrapeJob(q.state.data) ? 3000 : false),
     refetchOnWindowFocus: true,
   });
+  const tiktokJobsQuery = trpc.tiktokScrape.list.useQuery(undefined, {
+    refetchInterval: (q) =>
+      q.state.data?.some((job) => isScrapeJobInFlight(job.status)) ? 3000 : false,
+    refetchOnWindowFocus: true,
+  });
   const utils = trpc.useUtils();
 
   const [sortBy, setSortBy] = useState<SortKey>("updated");
   const [layout, setLayout] = useState<LayoutMode>("gallery");
 
   const deduplicatedJobs = useMemo(() => {
-    if (!jobsQuery.data) return [];
-    const handleMap = new Map<string, ScrapeJobRow>();
-    for (const job of jobsQuery.data) {
-      const key = job.handle.toLowerCase();
+    const combined: HistoryJobRow[] = [
+      ...(jobsQuery.data ?? []).map((job) => ({
+        ...job,
+        platform: "instagram" as const,
+      })),
+      ...(tiktokJobsQuery.data ?? []).map((job) => ({
+        ...job,
+        platform: "tiktok" as const,
+      })),
+    ];
+    const handleMap = new Map<string, HistoryJobRow>();
+    for (const job of combined) {
+      const key = `${job.platform}:${job.handle.toLowerCase()}`;
       const existing = handleMap.get(key);
       if (!existing) {
         handleMap.set(key, job);
-      } else if (job.totalReels > existing.totalReels) {
+      } else if (jobVideoCount(job) > jobVideoCount(existing)) {
         handleMap.set(key, job);
       }
     }
     return Array.from(handleMap.values());
-  }, [jobsQuery.data]);
+  }, [jobsQuery.data, tiktokJobsQuery.data]);
 
   const sortedJobs = useMemo(() => {
     const list = [...deduplicatedJobs];
-    const engagement = (j: ScrapeJobRow) => j.reelStats?.avgEngagementPct ?? 0;
+    const engagement = (j: HistoryJobRow) => j.reelStats?.avgEngagementPct ?? 0;
     switch (sortBy) {
       case "reels":
-        return list.sort((a, b) => b.totalReels - a.totalReels);
+        return list.sort((a, b) => jobVideoCount(b) - jobVideoCount(a));
       case "followers":
         return list.sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0));
       case "engagement":
@@ -154,7 +184,7 @@ export default function History() {
     let followers = 0;
     let views = 0;
     for (const j of sortedJobs) {
-      reels += j.totalReels || 0;
+      reels += jobVideoCount(j);
       followers += j.followerCount || 0;
       views += j.reelStats?.totalViews ?? 0;
     }
@@ -210,21 +240,43 @@ export default function History() {
       toast.error("Couldn’t remove", { description: error.message });
     },
   });
+  const deleteTikTokMutation = trpc.tiktokScrape.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Removed from Creator Radar");
+      utils.tiktokScrape.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Couldn’t remove", { description: error.message });
+    },
+  });
 
-  const handleDelete = (e: React.MouseEvent, jobId: number, handle: string) => {
+  const handleDelete = (
+    e: React.MouseEvent,
+    jobId: number,
+    handle: string,
+    platform: HistoryJobRow["platform"]
+  ) => {
     e.stopPropagation();
     if (
       confirm(
-        `Remove @${handle} from Creator Radar? This deletes the reels we stored for that spy session and any collected reels tied to it.`
+        `Remove @${handle} from Creator Radar? This deletes the videos stored for that research session.`
       )
     ) {
-      deleteMutation.mutate({ jobId });
+      if (platform === "instagram") {
+        deleteMutation.mutate({ jobId });
+      } else {
+        deleteTikTokMutation.mutate({ jobId });
+      }
     }
   };
 
-  const openJob = (job: ScrapeJobRow) => {
+  const openJob = (job: HistoryJobRow) => {
     if (job.status === "completed" || job.status === "running") {
-      setLocation(`/dashboard?jobId=${job.id}&from=history`);
+      setLocation(
+        job.platform === "instagram"
+          ? `/dashboard?jobId=${job.id}&from=history`
+          : `/research?platform=tiktok&jobId=${job.id}&from=history`
+      );
     }
   };
 
@@ -296,7 +348,7 @@ export default function History() {
         </div>
       </div>
 
-      {jobsQuery.isLoading && (
+      {(jobsQuery.isLoading || tiktokJobsQuery.isLoading) && (
         <div
           className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
           role="status"
@@ -328,7 +380,10 @@ export default function History() {
         </div>
       )}
 
-      {jobsQuery.data && jobsQuery.data.length === 0 && (
+      {jobsQuery.data &&
+        tiktokJobsQuery.data &&
+        jobsQuery.data.length === 0 &&
+        tiktokJobsQuery.data.length === 0 && (
         <Card className="border-border/50 bg-card">
           <CardContent className="flex flex-col items-center justify-center gap-5 py-16">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
@@ -337,8 +392,8 @@ export default function History() {
             <div className="text-center">
               <p className="text-base font-medium text-foreground">No creators tracked yet</p>
               <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Start from Spy Viral Reels. Each completed session lands here as a radar tile with Instagram metrics from
-                that scrape window.
+                Start from Spy Viral Reels. Each completed Instagram or TikTok
+                session lands here with metrics from that research window.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -353,11 +408,11 @@ export default function History() {
           {sortedJobs.map((job) => {
             const syncedRecently = isSyncedWithin24h(job.updatedAt);
             const stats = job.reelStats;
-            const niche = readableNiche(job.classifiedNicheSlug);
+            const niche = jobNiche(job);
             const canOpenRadar = job.status === "completed" || job.status === "running";
             return (
               <div
-                key={job.id}
+                key={`${job.platform}-${job.id}`}
                 role={canOpenRadar ? "button" : undefined}
                 tabIndex={canOpenRadar ? 0 : undefined}
                 onClick={() => {
@@ -396,6 +451,14 @@ export default function History() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-base font-semibold text-foreground">@{job.handle}</span>
+                      <Badge variant="outline" className="gap-1 text-[10px] capitalize">
+                        {job.platform === "instagram" ? (
+                          <Instagram className="h-2.5 w-2.5" />
+                        ) : (
+                          <Music2 className="h-2.5 w-2.5" />
+                        )}
+                        {job.platform}
+                      </Badge>
                       <Badge
                         variant={
                           job.status === "completed"
@@ -445,7 +508,19 @@ export default function History() {
                 {isScrapeJobInFlight(job.status) ? (
                   <div className="px-4 pt-3">
                     <ScrapeJobProgressUI
-                      snapshot={runningJobProgressSnapshot(job)}
+                      snapshot={
+                        job.platform === "instagram"
+                          ? runningJobProgressSnapshot(job)
+                          : {
+                              jobId: job.id,
+                              handle: job.handle,
+                              status: job.status,
+                              progressPercent: job.progressPercent,
+                              reelsFound: job.videosFound,
+                              currentStep: job.currentStep,
+                              estimatedTotal: job.estimatedTotal,
+                            }
+                      }
                       variant="card"
                     />
                   </div>
@@ -462,12 +537,20 @@ export default function History() {
                       </p>
                     </div>
                   </Tooltip>
-                  <Tooltip content={`Reels in your ${job.timeframeDays}-day scan window at scrape time`}>
+                  <Tooltip
+                    content={
+                      job.platform === "instagram"
+                        ? `Reels in your ${job.timeframeDays}-day scan window at scrape time`
+                        : "TikTok videos collected in this research session"
+                    }
+                  >
                     <div className="rounded-lg bg-muted/30 px-3 py-2">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        <Film className="h-3 w-3" /> Reels
+                        <Film className="h-3 w-3" /> Videos
                       </div>
-                      <p className="mt-1 font-semibold tabular-nums text-foreground">{job.totalReels}</p>
+                      <p className="mt-1 font-semibold tabular-nums text-foreground">
+                        {jobVideoCount(job)}
+                      </p>
                     </div>
                   </Tooltip>
                   <Tooltip content="Instagram view counts summed for reels in this session (when available).">
@@ -502,7 +585,13 @@ export default function History() {
                       </p>
                     </div>
                   </Tooltip>
-                  <Tooltip content="Mean of per-reel (likes + comments) ÷ followers at session time">
+                  <Tooltip
+                    content={
+                      job.platform === "instagram"
+                        ? "Mean of per-reel (likes + comments) divided by followers at session time"
+                        : "Mean of per-video (likes + comments + shares) divided by followers at session time"
+                    }
+                  >
                     <div className="rounded-lg bg-muted/30 px-3 py-2">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-emerald-300/90">
                         <TrendingUp className="h-3 w-3" /> Avg ER
@@ -519,7 +608,9 @@ export default function History() {
                     <p className="hidden text-[10px] text-muted-foreground sm:block">
                       {stats?.totalViews != null && stats.totalViews > 0
                         ? `${formatNumber(stats.totalViews)} total views in session`
-                        : `Scan window · ${job.timeframeDays}d window`}
+                        : job.platform === "instagram"
+                          ? `Scan window · ${job.timeframeDays}d window`
+                          : "TikTok research session"}
                     </p>
                     {canOpenRadar ? (
                       <span className="inline-flex min-h-10 items-center rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary">
@@ -531,7 +622,7 @@ export default function History() {
                     className="mt-2 flex items-center justify-end gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {job.status === "failed" && (
+                    {job.platform === "instagram" && job.status === "failed" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -545,7 +636,9 @@ export default function History() {
                         Retry
                       </Button>
                     )}
-                    {job.status === "completed" && !syncedRecently && (
+                    {job.platform === "instagram" &&
+                      job.status === "completed" &&
+                      !syncedRecently && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -563,8 +656,12 @@ export default function History() {
                       variant="ghost"
                       size="sm"
                       className="h-10 w-10 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={(e) => handleDelete(e, job.id, job.handle)}
-                      disabled={deleteMutation.isPending}
+                      onClick={(e) =>
+                        handleDelete(e, job.id, job.handle, job.platform)
+                      }
+                      disabled={
+                        deleteMutation.isPending || deleteTikTokMutation.isPending
+                      }
                       title="Remove from Creator Radar"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -582,11 +679,11 @@ export default function History() {
           {sortedJobs.map((job) => {
             const syncedRecently = isSyncedWithin24h(job.updatedAt);
             const stats = job.reelStats;
-            const niche = readableNiche(job.classifiedNicheSlug);
+            const niche = jobNiche(job);
             const canOpenRadar = job.status === "completed" || job.status === "running";
             return (
               <div
-                key={job.id}
+                key={`${job.platform}-${job.id}`}
                 className={`flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 transition-colors hover:border-border sm:flex-row sm:items-center ${
                   canOpenRadar ? "cursor-pointer hover:bg-accent/20" : ""
                 }`}
@@ -612,6 +709,14 @@ export default function History() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-foreground">@{job.handle}</span>
+                      <Badge variant="outline" className="h-5 gap-1 text-[10px] capitalize">
+                        {job.platform === "instagram" ? (
+                          <Instagram className="h-2.5 w-2.5" />
+                        ) : (
+                          <Music2 className="h-2.5 w-2.5" />
+                        )}
+                        {job.platform}
+                      </Badge>
                       <Badge variant="outline" className="text-[10px] h-5">
                         {job.status === "running" && <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />}
                         {job.status === "failed"
@@ -626,8 +731,10 @@ export default function History() {
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                       <span>{formatNumber(job.followerCount || 0)} followers</span>
-                      <span>{job.totalReels} reels</span>
-                      <span className="hidden sm:inline">{job.timeframeDays}d window</span>
+                      <span>{jobVideoCount(job)} videos</span>
+                      {job.platform === "instagram" ? (
+                        <span className="hidden sm:inline">{job.timeframeDays}d window</span>
+                      ) : null}
                       {stats?.totalViews ? (
                         <span className="hidden sm:inline">{formatNumber(stats.totalViews)} views</span>
                       ) : null}
@@ -643,7 +750,19 @@ export default function History() {
                   {isScrapeJobInFlight(job.status) ? (
                     <div className="w-full min-w-[200px] max-w-xs">
                       <ScrapeJobProgressUI
-                        snapshot={runningJobProgressSnapshot(job)}
+                        snapshot={
+                          job.platform === "instagram"
+                            ? runningJobProgressSnapshot(job)
+                            : {
+                                jobId: job.id,
+                                handle: job.handle,
+                                status: job.status,
+                                progressPercent: job.progressPercent,
+                                reelsFound: job.videosFound,
+                                currentStep: job.currentStep,
+                                estimatedTotal: job.estimatedTotal,
+                              }
+                        }
                         variant="card"
                       />
                     </div>
@@ -659,7 +778,7 @@ export default function History() {
                   className="flex shrink-0 flex-wrap justify-end gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {job.status === "failed" && (
+                  {job.platform === "instagram" && job.status === "failed" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -671,7 +790,9 @@ export default function History() {
                       Retry
                     </Button>
                   )}
-                  {job.status === "completed" && !syncedRecently && (
+                  {job.platform === "instagram" &&
+                    job.status === "completed" &&
+                    !syncedRecently && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -692,8 +813,12 @@ export default function History() {
                     variant="ghost"
                     size="sm"
                     className="h-10 w-10 p-0 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => handleDelete(e, job.id, job.handle)}
-                    disabled={deleteMutation.isPending}
+                    onClick={(e) =>
+                      handleDelete(e, job.id, job.handle, job.platform)
+                    }
+                    disabled={
+                      deleteMutation.isPending || deleteTikTokMutation.isPending
+                    }
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { TRPCClientError } from "@trpc/client";
 import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
 import { useActiveScrapeJob } from "@/lib/activeScrapeJob";
@@ -100,6 +100,7 @@ const PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE =
 export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
+  const search = useSearch();
   const [platform, setPlatform] = useState<"instagram" | "tiktok">("instagram");
   const [handle, setHandle] = useState("");
   const [handleError, setHandleError] = useState<string | null>(null);
@@ -107,6 +108,21 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialTikTokJobId = useMemo(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("platform") !== "tiktok") return undefined;
+    const rawJobId = params.get("jobId");
+    if (!rawJobId) return undefined;
+    const parsed = Number.parseInt(rawJobId, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }, [search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("platform") === "tiktok") {
+      setPlatform("tiktok");
+    }
+  }, [search]);
 
   // Debounce handle input - only query after 800ms of no typing and min 2 chars
   useEffect(() => {
@@ -981,7 +997,7 @@ export default function Home() {
               </Button>
             </form>
           ) : (
-            <TikTokResearch />
+            <TikTokResearch initialJobId={initialTikTokJobId} />
           )}
         </div>
       </div>
