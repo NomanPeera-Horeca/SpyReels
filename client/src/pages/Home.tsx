@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { TRPCClientError } from "@trpc/client";
@@ -46,6 +47,7 @@ import {
   creatorDisplayLabel,
   seeCreatorsViralReelsCta,
 } from "@/lib/creatorCtaCopy";
+import TikTokResearch from "@/pages/TikTokResearch";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -97,6 +99,7 @@ const PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE =
 export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
+  const [platform, setPlatform] = useState<"instagram" | "tiktok">("instagram");
   const [handle, setHandle] = useState("");
   const [handleError, setHandleError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState("30");
@@ -530,7 +533,23 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+    <div className="w-full min-w-0">
+      <div className="mx-auto w-full max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
+        <Tabs
+          value={platform}
+          onValueChange={(value) =>
+            setPlatform(value as "instagram" | "tiktok")
+          }
+        >
+          <TabsList>
+            <TabsTrigger value="instagram">Instagram</TabsTrigger>
+            <TabsTrigger value="tiktok">TikTok</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {platform === "instagram" ? (
+        <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mx-auto max-w-3xl">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Spy Viral Reels
@@ -1138,6 +1157,10 @@ export default function Home() {
         ))}
       </div>
 
+        </div>
+      ) : (
+        <TikTokResearch />
+      )}
     </div>
   );
 }
