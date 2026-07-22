@@ -231,6 +231,76 @@ export type TikTokVideo = typeof tiktokVideos.$inferSelect;
 export type InsertTikTokVideo = typeof tiktokVideos.$inferInsert;
 
 /**
+ * Scrape jobs track each scraping request for a YouTube channel handle.
+ */
+export const youtubeScrapeJobs = mysqlTable(
+  "youtube_scrape_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+    handle: varchar("handle", { length: 128 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    totalVideos: int("totalVideos").default(0).notNull(),
+    subscriberCount: int("subscriberCount").default(0).notNull(),
+    profilePicUrl: text("profilePicUrl"),
+    errorMessage: text("errorMessage"),
+    currentStep: varchar("currentStep", { length: 32 }).default("pending").notNull(),
+    videosFound: int("videosFound").default(0).notNull(),
+    estimatedTotal: int("estimatedTotal").default(30).notNull(),
+    progressPercent: int("progressPercent").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_youtube_scrape_jobs_workspace").on(table.workspaceId),
+  })
+);
+
+export type YouTubeScrapeJob = typeof youtubeScrapeJobs.$inferSelect;
+export type InsertYouTubeScrapeJob = typeof youtubeScrapeJobs.$inferInsert;
+
+/**
+ * Individual YouTube Shorts collected from a scrape job.
+ * Thumbnails are permanent public URLs; no R2 mirroring.
+ */
+export const youtubeVideos = mysqlTable(
+  "youtube_videos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    jobId: int("jobId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, {
+        onDelete: "cascade",
+      }),
+    videoId: varchar("videoId", { length: 32 }).notNull(),
+    title: text("title"),
+    description: text("description"),
+    viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
+    likeCount: int("likeCount").default(0).notNull(),
+    commentCount: int("commentCount").default(0).notNull(),
+    thumbnailUrl: text("thumbnailUrl"),
+    videoPageUrl: varchar("videoPageUrl", { length: 512 }).notNull(),
+    durationSec: int("durationSec"),
+    postedAt: timestamp("postedAt").notNull(),
+    ownerHandle: varchar("ownerHandle", { length: 128 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_youtube_videos_workspace").on(table.workspaceId),
+    jobIdx: index("idx_youtube_videos_job").on(table.jobId),
+  })
+);
+
+export type YouTubeVideo = typeof youtubeVideos.$inferSelect;
+export type InsertYouTubeVideo = typeof youtubeVideos.$inferInsert;
+
+/**
  * Background Excel export jobs for a scrape session. Files are cached on R2
  * so users can re-download without re-running transcription or export credits.
  */
@@ -399,12 +469,12 @@ export type InsertReel = typeof reels.$inferInsert;
 /**
  * Transcriptions generated on-demand for individual reels.
  *
- * Exactly one of (`reelId`, `featuredReelId`, `tiktokVideoId`) must be non-null. This is
- * enforced at the application layer (see `transcribe.*` handlers) since
- * MySQL can't express a cheap "xor" CHECK on nullable columns without
- * function dependencies. `reelId` points at `reels.id` (user-scraped),
- * `featuredReelId` at `featured_reels.id` (catalog), and `tiktokVideoId`
- * at `tiktok_videos.id`.
+ * Exactly one of (`reelId`, `featuredReelId`, `tiktokVideoId`, `youtubeVideoId`)
+ * must be non-null. This is enforced at the application layer (see `transcribe.*`
+ * handlers) since MySQL can't express a cheap "xor" CHECK on nullable columns
+ * without function dependencies. `reelId` points at `reels.id` (user-scraped),
+ * `featuredReelId` at `featured_reels.id` (catalog), `tiktokVideoId` at
+ * `tiktok_videos.id`, and `youtubeVideoId` at `youtube_videos.id`.
  *
  * `workspaceId` stays nullable forever: backfill copies reels.workspaceId
  * when reelId IS NOT NULL; featured-only rows keep workspaceId NULL.
@@ -416,6 +486,7 @@ export const transcriptions = mysqlTable(
   reelId: int("reelId"),
   featuredReelId: int("featuredReelId"),
   tiktokVideoId: int("tiktokVideoId"),
+  youtubeVideoId: int("youtubeVideoId"),
   workspaceId: varchar("workspaceId", { length: 36 }).references(() => workspaces.id, {
     onDelete: "cascade",
   }),
@@ -441,8 +512,8 @@ export type InsertTranscription = typeof transcriptions.$inferInsert;
 /**
  * Re-created scripts generated from viral reel structures.
  *
- * Exactly one of (`reelId`, `featuredReelId`, `tiktokVideoId`) must be non-null.
- * enforced in the `recreate.*` handlers.
+ * Exactly one of (`reelId`, `featuredReelId`, `tiktokVideoId`, `youtubeVideoId`)
+ * must be non-null. enforced in the `recreate.*` handlers.
  */
 export const recreatedScripts = mysqlTable(
   "recreated_scripts",
@@ -451,6 +522,7 @@ export const recreatedScripts = mysqlTable(
   reelId: int("reelId"),
   featuredReelId: int("featuredReelId"),
   tiktokVideoId: int("tiktokVideoId"),
+  youtubeVideoId: int("youtubeVideoId"),
   userId: int("userId").notNull(),
   workspaceId: varchar("workspaceId", { length: 36 })
     .notNull()
