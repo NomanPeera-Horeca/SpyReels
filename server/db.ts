@@ -925,6 +925,19 @@ export async function getTranscriptionByTiktokVideoId(
   return result[0];
 }
 
+export async function getTranscriptionByYoutubeVideoId(
+  youtubeVideoId: number
+): Promise<Transcription | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(transcriptions)
+    .where(eq(transcriptions.youtubeVideoId, youtubeVideoId))
+    .limit(1);
+  return result[0];
+}
+
 export async function updateTranscription(
   id: number,
   data: Partial<

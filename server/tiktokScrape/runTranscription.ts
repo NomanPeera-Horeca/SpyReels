@@ -67,7 +67,8 @@ export async function runTikTokTranscription(
       transcript,
       video.caption || "",
       video.thumbnailUrl || "",
-      segments
+      segments,
+      "TikTok video"
     );
 
     await updateTranscription(transcriptionId, {

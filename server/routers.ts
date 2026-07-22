@@ -58,6 +58,7 @@ import { runViralityDiagnosticJob } from "./virality/runJob";
 import { runTikTokScrapeJob } from "./tiktokScrape/runJob";
 import { runTikTokTranscription } from "./tiktokScrape/runTranscription";
 import { runYouTubeScrapeJob } from "./youtubeScrape/runJob";
+import { fetchYouTubeTranscript } from "./youtube";
 import { discoveryProcedure } from "./discovery/trpc";
 import { outreachRouter } from "./outreach/router";
 import { founderInterviewRouter } from "./founderInterview/router";
@@ -120,6 +121,7 @@ import {
   createTranscription,
   getTranscriptionByReelId,
   getTranscriptionByTiktokVideoId,
+  getTranscriptionByYoutubeVideoId,
   updateTranscription,
   getTranscriptionsByJobId,
   createRecreatedScript,
@@ -2268,25 +2270,31 @@ Return JSON only:
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
+            youtubeVideoId: z.number().optional(),
           })
           .refine(
             (d) =>
-              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
-                (id) => id != null
-              ).length === 1,
+              [
+                d.reelId,
+                d.featuredReelId,
+                d.tiktokVideoId,
+                d.youtubeVideoId,
+              ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
             }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" | "tiktok" =
+        const source: "user" | "featured" | "tiktok" | "youtube" =
           input.featuredReelId != null
             ? "featured"
             : input.tiktokVideoId != null
               ? "tiktok"
-              : "user";
+              : input.youtubeVideoId != null
+                ? "youtube"
+                : "user";
 
         // ────────────────────────────────────────────────────────────
         // Featured branch — cache-first (Commit 4b). The catalog owns
@@ -2458,6 +2466,123 @@ Return JSON only:
           };
         }
 
+        if (source === "youtube") {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+
+          const rows = await db
+            .select()
+            .from(youtubeVideos)
+            .where(eq(youtubeVideos.id, input.youtubeVideoId!))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "YouTube video not found",
+            });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+
+          const existing = await getTranscriptionByYoutubeVideoId(video.id);
+          if (existing && existing.status === "completed") {
+            return {
+              transcriptionId: existing.id,
+              status: "completed" as const,
+            };
+          }
+
+          const bypassTranscribeLimit =
+            await isFirstRemakeUsageBypassEligible(
+              ctx.user.id,
+              ctx.user.hasCompletedFirstSpy,
+              "transcribeCount"
+            );
+          if (!bypassTranscribeLimit) {
+            const usageCheck = await checkUsageLimit(
+              ctx.user.id,
+              "transcribeCount",
+              ctx.user.openId
+            );
+            if (!usageCheck.allowed) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+              });
+            }
+          }
+
+          if (
+            existing &&
+            (existing.status === "failed" || existing.status === "processing")
+          ) {
+            await db
+              .delete(transcriptions)
+              .where(eq(transcriptions.id, existing.id));
+          }
+
+          const transcriptResult = await fetchYouTubeTranscript(
+            video.videoPageUrl
+          );
+
+          if (!transcriptResult) {
+            const transcriptionId = await createTranscription({
+              reelId: null,
+              featuredReelId: null,
+              tiktokVideoId: null,
+              youtubeVideoId: video.id,
+              workspaceId: ctx.workspaceId,
+              transcript: "",
+              segments: [],
+              hookAnalysis: "",
+              status: "completed",
+              queuedAt: new Date(),
+              startedAt: new Date(),
+            });
+            await incrementUsage(ctx.user.id, "transcribeCount");
+            return {
+              transcriptionId,
+              status: "completed" as const,
+            };
+          }
+
+          const hookAnalysis = await analyzeHook(
+            transcriptResult.transcript,
+            video.title || video.description || "",
+            video.thumbnailUrl || "",
+            transcriptResult.segments,
+            "YouTube Short"
+          );
+
+          const transcriptionId = await createTranscription({
+            reelId: null,
+            featuredReelId: null,
+            tiktokVideoId: null,
+            youtubeVideoId: video.id,
+            workspaceId: ctx.workspaceId,
+            transcript: transcriptResult.transcript,
+            segments: transcriptResult.segments,
+            hookAnalysis,
+            status: "completed",
+            queuedAt: new Date(),
+            startedAt: new Date(),
+          });
+
+          await incrementUsage(ctx.user.id, "transcribeCount");
+
+          return {
+            transcriptionId,
+            status: "completed" as const,
+          };
+        }
+
         // ────────────────────────────────────────────────────────────
         // User-scrape branch — unchanged behavior. Each user owns
         // their own row in `transcriptions`.
@@ -2536,15 +2661,19 @@ Return JSON only:
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
+            youtubeVideoId: z.number().optional(),
           })
           .refine(
             (d) =>
-              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
-                (id) => id != null
-              ).length === 1,
+              [
+                d.reelId,
+                d.featuredReelId,
+                d.tiktokVideoId,
+                d.youtubeVideoId,
+              ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
             }
           )
       )
@@ -2554,7 +2683,9 @@ Return JSON only:
             ? await getTranscriptionByFeaturedReelId(input.featuredReelId)
             : input.tiktokVideoId != null
               ? await getTranscriptionByTiktokVideoId(input.tiktokVideoId)
-              : await getTranscriptionByReelId(input.reelId!);
+              : input.youtubeVideoId != null
+                ? await getTranscriptionByYoutubeVideoId(input.youtubeVideoId)
+                : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
       }),
   }),
@@ -8504,7 +8635,8 @@ export async function runTranscription(
       transcript,
       reel.caption || "",
       reel.thumbnailUrl || "",
-      segments as any
+      segments as any,
+      "Instagram Reel"
     );
 
     await updateTranscription(transcriptionId, {

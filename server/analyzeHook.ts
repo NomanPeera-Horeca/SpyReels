@@ -1,12 +1,13 @@
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 
-/** Analyze the hook (first 3 seconds) of a reel */
+/** Analyze the hook (first 3 seconds) of a short-form video */
 export async function analyzeHook(
   transcript: string,
   caption: string,
   thumbnailUrl: string,
-  segments?: Array<{ start: number; end: number; text: string }>
+  segments?: Array<{ start: number; end: number; text: string }>,
+  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel"
 ): Promise<string> {
   let first3sText = "";
   if (segments && segments.length > 0) {
@@ -17,9 +18,9 @@ export async function analyzeHook(
       .trim();
   }
 
-  const prompt = `You are an expert social media content analyst specializing in Instagram Reels.
+  const prompt = `You are an expert social media content analyst specializing in ${platformLabel}.
 
-Analyze the HOOK of this Instagram Reel (the first 3 seconds that capture attention).
+Analyze the HOOK of this ${platformLabel} (the first 3 seconds that capture attention).
 
 **Caption:** ${caption}
 
@@ -39,7 +40,9 @@ Please provide a concise analysis with these sections:
 
 **Improvement Suggestion:** One specific way to make this hook stronger.
 
-Keep the analysis concise and actionable.`;
+Keep the analysis concise and actionable.
+
+Title the analysis exactly as "## ${platformLabel} Hook Analysis".`;
 
   try {
     const result = await invokeLLM({
