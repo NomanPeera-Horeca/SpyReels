@@ -1,12 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Loader2, Clock, Play, Wand2 } from "lucide-react";
+import {
+  Loader2,
+  Clock,
+  Play,
+  Wand2,
+  ArrowLeft,
+  Eye,
+  Heart,
+  MessageCircle,
+  TrendingUp,
+  Calendar as CalendarIcon,
+  Share2,
+  List,
+  Grid3X3,
+} from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -20,6 +35,7 @@ import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
 import { formatNumber } from "@/components/InlineWorkflow";
+import Tooltip from "@/components/Tooltip";
 
 type TikTokVideoRow = {
   id: number;
@@ -36,6 +52,51 @@ type TikTokVideoRow = {
   postedAt: Date;
   engagementRate: number;
 };
+
+type SortOption =
+  | "views_desc"
+  | "likes_desc"
+  | "comments_desc"
+  | "shares_desc"
+  | "engagement_desc"
+  | "date_desc"
+  | "date_asc";
+
+type ViewMode = "list" | "grid";
+
+const SORT_OPTIONS: {
+  value: SortOption;
+  label: string;
+  icon: React.ReactNode;
+}[] = [
+  { value: "views_desc", label: "Highest Views", icon: <Eye className="h-3.5 w-3.5" /> },
+  { value: "likes_desc", label: "Highest Likes", icon: <Heart className="h-3.5 w-3.5" /> },
+  {
+    value: "comments_desc",
+    label: "Highest Comments",
+    icon: <MessageCircle className="h-3.5 w-3.5" />,
+  },
+  {
+    value: "shares_desc",
+    label: "Highest Shares",
+    icon: <Share2 className="h-3.5 w-3.5" />,
+  },
+  {
+    value: "engagement_desc",
+    label: "Highest Engagement Rate",
+    icon: <TrendingUp className="h-3.5 w-3.5" />,
+  },
+  {
+    value: "date_desc",
+    label: "Date (Newest)",
+    icon: <CalendarIcon className="h-3.5 w-3.5" />,
+  },
+  {
+    value: "date_asc",
+    label: "Date (Oldest)",
+    icon: <CalendarIcon className="h-3.5 w-3.5" />,
+  },
+];
 
 function VideoCard({
   video,
@@ -66,8 +127,9 @@ function VideoCard({
   const transcriptionQuery = trpc.transcribe.status.useQuery(
     { tiktokVideoId: video.id },
     {
-      enabled: remakeRequested && transcriptionId != null,
+      enabled: true,
       refetchInterval: (query) => {
+        if (!remakeRequested && transcriptionId == null) return false;
         const status = query.state.data?.status;
         if (status === "completed" || status === "failed") return false;
         return 2000;
@@ -100,11 +162,13 @@ function VideoCard({
   );
 
   const transcription = transcriptionQuery.data;
+  const hasTranscription = transcription?.status === "completed";
+  const transcript = transcription?.transcript ?? null;
   const isTranscribing =
     remakeRequested &&
     (transcribeMutation.isPending ||
       (transcriptionId != null &&
-    transcription?.status !== "completed" &&
+        transcription?.status !== "completed" &&
         transcription?.status !== "failed"));
 
   const script = scriptQuery.data;
@@ -156,8 +220,7 @@ function VideoCard({
     transcribeMutation.mutate({ tiktokVideoId: video.id });
   };
 
-  const noSpeech =
-    transcription?.status === "completed" && !transcription.transcript;
+  const noSpeech = hasTranscription && !transcript;
   const transcriptionFailed = transcription?.status === "failed";
   const generationFailed = script?.status === "failed";
 
@@ -178,6 +241,21 @@ function VideoCard({
       engagementRate={video.engagementRate}
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
+      statusChip={
+        hasTranscription && transcript ? (
+          <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+            Transcribed
+          </span>
+        ) : hasTranscription && !transcript ? (
+          <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+            No voice
+          </span>
+        ) : isTranscribing ? (
+          <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+            Processing
+          </span>
+        ) : null
+      }
       caption={
         <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
           {video.caption || (
@@ -240,7 +318,9 @@ function VideoCard({
               No speech was detected, so a script was not generated.
             </p>
           ) : null}
-          {showScript && script?.status === "completed" && script.generatedScript ? (
+          {showScript &&
+          script?.status === "completed" &&
+          script.generatedScript ? (
             <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/40 bg-muted/50 p-3 text-xs">
               {script.generatedScript}
             </div>
@@ -263,6 +343,8 @@ export default function TikTokResearch({
   const [activeJobId, setActiveJobId] = useState<number | null>(
     initialJobId ?? null
   );
+  const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const scrapeGate = useUsageGate("scrapeCount");
 
   useEffect(() => {
@@ -327,12 +409,41 @@ export default function TikTokResearch({
 
   const job = progressQuery.data;
   const isRunning =
-    activeJobId != null && job?.status !== "completed" && job?.status !== "failed";
+    activeJobId != null &&
+    job?.status !== "completed" &&
+    job?.status !== "failed";
 
   const videosQuery = trpc.tiktokScrape.videos.useQuery(
     { jobId: activeJobId! },
     { enabled: activeJobId != null && job?.status === "completed" }
   );
+
+  const sortedVideos = useMemo(() => {
+    const list = [...(videosQuery.data?.videos ?? [])];
+    switch (sortBy) {
+      case "views_desc":
+        return list.sort((a, b) => b.viewCount - a.viewCount);
+      case "likes_desc":
+        return list.sort((a, b) => b.likeCount - a.likeCount);
+      case "comments_desc":
+        return list.sort((a, b) => b.commentCount - a.commentCount);
+      case "shares_desc":
+        return list.sort((a, b) => b.shareCount - a.shareCount);
+      case "engagement_desc":
+        return list.sort((a, b) => b.engagementRate - a.engagementRate);
+      case "date_asc":
+        return list.sort(
+          (a, b) =>
+            new Date(a.postedAt).getTime() - new Date(b.postedAt).getTime()
+        );
+      case "date_desc":
+      default:
+        return list.sort(
+          (a, b) =>
+            new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+        );
+    }
+  }, [videosQuery.data?.videos, sortBy]);
 
   const handleSubmit = () => {
     const trimmed = handle.trim().replace(/^@/, "");
@@ -341,107 +452,113 @@ export default function TikTokResearch({
     startMutation.mutate({ handle: trimmed, timeframe });
   };
 
+  const displayHandle =
+    job?.handle || handle.replace(/^@/, "").trim() || null;
+  const followerCount = videosQuery.data?.followerCount ?? 0;
+  const showResults =
+    job?.status === "completed" && videosQuery.data != null;
+
   return (
     <div className="mt-5 space-y-5">
-      {initialJobId == null ? (
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          handleSubmit();
-        }}
-        className="space-y-5"
-      >
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="tiktok-handle">TikTok Handle</Label>
-            <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
-              Paste handle here
-            </span>
-          </div>
-          <div className="relative rounded-xl ring-1 ring-primary/70 shadow-[0_0_0_3px_hsl(var(--primary)/0.08),0_10px_30px_hsl(var(--primary)/0.12)] transition focus-within:ring-2 focus-within:ring-primary">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-primary">
-              @
-            </span>
-            <Input
-              id="tiktok-handle"
-              value={handle}
-              onChange={(event) => setHandle(event.target.value)}
-              placeholder="e.g. khaby.lame"
-              disabled={isRunning}
-              className="h-12 border-primary/30 bg-primary/5 pl-10"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Paste the TikTok username without the @ symbol. The account must be
-            public.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="tiktok-timeframe">Timeframe</Label>
-          <Select
-            value={timeframe}
-            onValueChange={(value) =>
-              setTimeframe(value as "30" | "90" | "180")
-            }
-            disabled={isRunning}
-          >
-            <SelectTrigger id="tiktok-timeframe" className="h-11 bg-background">
-              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-              <SelectItem value="180">Last 180 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            TikTok videos posted within this window will be collected.
-          </p>
-        </div>
-
-        {!scrapeGate.isLoading && !scrapeGate.allowed ? (
-          <UpgradePrompt
-            action="scrapeCount"
-            used={scrapeGate.used}
-            limit={scrapeGate.limit}
-            planRequired={scrapeGate.planRequired}
-            variant="inline"
-          />
-        ) : null}
-
-        {!scrapeGate.isLoading &&
-        scrapeGate.allowed &&
-        scrapeGate.limit > 0 ? (
-          <p className="text-center text-xs text-muted-foreground">
-            {scrapeGate.used}/{scrapeGate.limit} account research sessions this
-            month
-          </p>
-        ) : null}
-
-        <Button
-          type="submit"
-          size="lg"
-          className="h-12 w-full text-base font-medium"
-          disabled={
-            isRunning ||
-            !handle.trim() ||
-            startMutation.isPending ||
-            scrapeGate.isLoading ||
-            !scrapeGate.allowed
-          }
+      {initialJobId == null && !showResults ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSubmit();
+          }}
+          className="space-y-5"
         >
-          {isRunning || startMutation.isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Starting...
-            </>
-          ) : (
-            "Start spying on TikTok"
-          )}
-        </Button>
-      </form>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="tiktok-handle">TikTok Handle</Label>
+              <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
+                Paste handle here
+              </span>
+            </div>
+            <div className="relative rounded-xl ring-1 ring-primary/70 shadow-[0_0_0_3px_hsl(var(--primary)/0.08),0_10px_30px_hsl(var(--primary)/0.12)] transition focus-within:ring-2 focus-within:ring-primary">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-primary">
+                @
+              </span>
+              <Input
+                id="tiktok-handle"
+                value={handle}
+                onChange={(event) => setHandle(event.target.value)}
+                placeholder="e.g. khaby.lame"
+                disabled={isRunning}
+                className="h-12 border-primary/30 bg-primary/5 pl-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Paste the TikTok username without the @ symbol. The account must be
+              public.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tiktok-timeframe">Timeframe</Label>
+            <Select
+              value={timeframe}
+              onValueChange={(value) =>
+                setTimeframe(value as "30" | "90" | "180")
+              }
+              disabled={isRunning}
+            >
+              <SelectTrigger id="tiktok-timeframe" className="h-11 bg-background">
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="180">Last 180 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              TikTok videos posted within this window will be collected.
+            </p>
+          </div>
+
+          {!scrapeGate.isLoading && !scrapeGate.allowed ? (
+            <UpgradePrompt
+              action="scrapeCount"
+              used={scrapeGate.used}
+              limit={scrapeGate.limit}
+              planRequired={scrapeGate.planRequired}
+              variant="inline"
+            />
+          ) : null}
+
+          {!scrapeGate.isLoading &&
+          scrapeGate.allowed &&
+          scrapeGate.limit > 0 ? (
+            <p className="text-center text-xs text-muted-foreground">
+              {scrapeGate.used}/{scrapeGate.limit} account research sessions this
+              month
+            </p>
+          ) : null}
+
+          <Button
+            type="submit"
+            size="lg"
+            className="h-12 w-full text-base font-medium"
+            disabled={
+              isRunning ||
+              !handle.trim() ||
+              startMutation.isPending ||
+              scrapeGate.isLoading ||
+              !scrapeGate.allowed
+            }
+          >
+            {isRunning || startMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              "Start spying on TikTok"
+            )}
+          </Button>
+        </form>
       ) : null}
 
       {isRunning ? (
@@ -466,20 +583,113 @@ export default function TikTokResearch({
         </div>
       ) : null}
 
-      {job?.status === "completed" && videosQuery.data ? (
-        <div className="space-y-4 border-t border-border/50 pt-5">
-          <div>
-            <h3 className="font-semibold text-foreground">
-              {videosQuery.data.videos.length} TikTok videos found
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Transcribe any video, then generate a script from it.
-            </p>
-          </div>
-          <div className={WORKSPACE_REEL_GRID_CLASS}>
-            {videosQuery.data.videos.map((video, index) => (
-              <VideoCard key={video.id} video={video} index={index} />
-            ))}
+      {showResults ? (
+        <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+          <div className="min-w-0">
+            <div className="mb-6 flex flex-col gap-4">
+              <div className="flex min-w-0 gap-3">
+                <Tooltip content="Back">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() => setLocation("/research?platform=tiktok")}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {displayHandle ? `@${displayHandle}` : "@…"}
+                    </h1>
+                    {job ? (
+                      <Badge
+                        variant={
+                          job.status === "completed"
+                            ? "default"
+                            : job.status === "failed"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {job.status === "running" && (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        )}
+                        {job.status}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {sortedVideos.length} videos collected
+                    {followerCount > 0 ? (
+                      <>
+                        {" "}
+                        &middot; {formatNumber(followerCount)} followers
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                <Tooltip content="Change how videos are sorted">
+                  <div>
+                    <Select
+                      value={sortBy}
+                      onValueChange={(v) => setSortBy(v as SortOption)}
+                    >
+                      <SelectTrigger className="h-9 w-full min-w-0 max-w-full bg-card text-sm sm:min-w-[14rem] sm:max-w-[20rem]">
+                        <SelectValue placeholder="Sort by..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SORT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className="flex items-center gap-2">
+                              {opt.icon}
+                              {opt.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Tooltip>
+
+                <Tooltip content="Switch between detailed list and visual grid view">
+                  <div className="workspace-view-toggle inline-flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      className="min-h-9 px-3 text-xs"
+                      onClick={() => setViewMode("list")}
+                    >
+                      <List className="h-3.5 w-3.5 mr-1" />
+                      List
+                    </Button>
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      className="min-h-9 px-3 text-xs"
+                      onClick={() => setViewMode("grid")}
+                    >
+                      <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                      Grid
+                    </Button>
+                  </div>
+                </Tooltip>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* List currently renders the same grid shell (placeholder). */}
+              <div className={WORKSPACE_REEL_GRID_CLASS}>
+                {sortedVideos.map((video, index) => (
+                  <VideoCard key={video.id} video={video} index={index} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

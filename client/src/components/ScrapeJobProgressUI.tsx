@@ -16,6 +16,8 @@ type ScrapeJobProgressUIProps = {
   className?: string;
   onOpen?: () => void;
   showBar?: boolean;
+  /** When set, replaces Instagram-only scrapePhaseLabel / detail phase text. */
+  phaseLabelOverride?: string;
 };
 
 function ProgressBar({ percent, className }: { percent: number; className?: string }) {
@@ -35,12 +37,20 @@ export function ScrapeJobProgressUI({
   className,
   onOpen,
   showBar = true,
+  phaseLabelOverride,
 }: ScrapeJobProgressUIProps) {
   const handle = snapshot.handle ? `@${snapshot.handle.replace(/^@/, "")}` : "creator";
   const inFlight = snapshot.status === "running" || snapshot.status === "pending";
   const displayPct = scrapeDisplayPercent(snapshot.status, snapshot.progressPercent);
-  const phase = scrapePhaseLabel(snapshot.currentStep, snapshot.status);
-  const detail = scrapeProgressDetail(snapshot);
+  const phase =
+    phaseLabelOverride ??
+    scrapePhaseLabel(snapshot.currentStep, snapshot.status);
+  const detail =
+    phaseLabelOverride != null
+      ? snapshot.reelsFound > 0
+        ? `${displayPct}% · ${snapshot.reelsFound} reel${snapshot.reelsFound === 1 ? "" : "s"} · ${phase}`
+        : `${displayPct}% · ${phase}`
+      : scrapeProgressDetail(snapshot);
 
   if (variant === "sidebar") {
     const body = (
