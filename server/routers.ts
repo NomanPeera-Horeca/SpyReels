@@ -3503,6 +3503,7 @@ Return JSON only:
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
+            youtubeVideoId: z.number().optional(),
             topic: z.string().max(2000).optional().default(""),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
             /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
@@ -3510,22 +3511,27 @@ Return JSON only:
           })
           .refine(
             (d) =>
-              [d.reelId, d.featuredReelId, d.tiktokVideoId].filter(
-                (id) => id != null
-              ).length === 1,
+              [
+                d.reelId,
+                d.featuredReelId,
+                d.tiktokVideoId,
+                d.youtubeVideoId,
+              ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, or tiktokVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
             }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" | "tiktok" =
+        const source: "user" | "featured" | "tiktok" | "youtube" =
           input.featuredReelId != null
             ? "featured"
             : input.tiktokVideoId != null
               ? "tiktok"
-              : "user";
+              : input.youtubeVideoId != null
+                ? "youtube"
+                : "user";
         let caption = "";
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
         let reelForGeneration: any;
@@ -3564,6 +3570,32 @@ Return JSON only:
           caption = video.caption ?? "";
           reelForGeneration = video;
           transcription = await getTranscriptionByTiktokVideoId(video.id);
+        } else if (source === "youtube") {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+          const rows = await db
+            .select()
+            .from(youtubeVideos)
+            .where(eq(youtubeVideos.id, input.youtubeVideoId!))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "YouTube video not found",
+            });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          caption = video.title ?? "";
+          reelForGeneration = video;
+          transcription = await getTranscriptionByYoutubeVideoId(video.id);
         } else {
           const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
           caption = reel.caption ?? "";
@@ -3642,6 +3674,7 @@ Return JSON only:
           reelId: source === "user" ? input.reelId! : null,
           featuredReelId: source === "featured" ? input.featuredReelId! : null,
           tiktokVideoId: source === "tiktok" ? input.tiktokVideoId! : null,
+          youtubeVideoId: source === "youtube" ? input.youtubeVideoId! : null,
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
           topic: storedTopic,
@@ -3664,7 +3697,11 @@ Return JSON only:
           promptAngle,
           input.gradeLevel,
           effectiveAddCues,
-          source === "tiktok" ? "TikTok video" : "Instagram Reel"
+          source === "tiktok"
+            ? "TikTok video"
+            : source === "youtube"
+              ? "YouTube Short"
+              : "Instagram Reel"
         ).catch((err: unknown) => {
           console.error(`Script generation ${scriptId} failed:`, err);
         });
@@ -8860,7 +8897,7 @@ export async function runScriptGeneration(
   topic: string,
   gradeLevel: string,
   addCues: boolean,
-  platformLabel: "Instagram Reel" | "TikTok video" = "Instagram Reel"
+  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel"
 ): Promise<void> {
   try {
     // Step 1: Analyze viral structure
