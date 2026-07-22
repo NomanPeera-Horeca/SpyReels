@@ -1,4 +1,5 @@
 import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
+import sharp from "sharp";
 
 /**
  * R2 key for a TikTok video thumbnail, keyed by aweme_id.
@@ -52,7 +53,29 @@ export async function ensureTiktokThumbnailOnR2(
 
     const raw = res.rawBody;
     const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-    const { url } = await storagePut(key, buf, "image/jpeg");
+
+    let uploadBuf = buf;
+    try {
+      const metadata = await sharp(buf).metadata();
+      if (metadata.format === "heif") {
+        const heicConvert = (await import("heic-convert")).default;
+        const converted = await heicConvert({
+          buffer: buf,
+          format: "JPEG",
+          quality: 0.9,
+        });
+        uploadBuf = Buffer.isBuffer(converted)
+          ? converted
+          : Buffer.from(converted);
+      }
+    } catch (conversionErr) {
+      console.warn(
+        `[ensureTiktokThumbnailOnR2] HEIC conversion check/convert failed for ${awemeId}, uploading original bytes:`,
+        conversionErr instanceof Error ? conversionErr.message : conversionErr
+      );
+    }
+
+    const { url } = await storagePut(key, uploadBuf, "image/jpeg");
     return url;
   } catch {
     return src;
