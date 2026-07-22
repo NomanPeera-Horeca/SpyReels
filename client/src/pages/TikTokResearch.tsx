@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Loader2, Clock, Play, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
@@ -256,6 +257,7 @@ export default function TikTokResearch({
 }: {
   initialJobId?: number;
 }) {
+  const [, setLocation] = useLocation();
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
   const [activeJobId, setActiveJobId] = useState<number | null>(
@@ -300,7 +302,7 @@ export default function TikTokResearch({
 
   const startMutation = trpc.tiktokScrape.start.useMutation({
     onSuccess: (data) => {
-      setActiveJobId(data.jobId);
+      setLocation(`/tiktok-scraping?jobId=${data.jobId}&from=research`);
     },
     onError: (err) => {
       if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {

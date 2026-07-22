@@ -19,6 +19,7 @@ const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const Home = lazy(() => import("./pages/Home"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ScrapingProgress = lazy(() => import("./pages/ScrapingProgress"));
+const TikTokScrapingProgress = lazy(() => import("./pages/TikTokScrapingProgress"));
 const History = lazy(() => import("./pages/History"));
 const HookGenerator = lazy(() => import("@/pages/HookGenerator"));
 const SavedReels = lazy(() => import("./pages/SavedReels"));
@@ -107,6 +108,7 @@ function DesktopDashboardRouter() {
           <Route path="/research" component={Home} />
           <Route path="/interests" component={Interests} />
           <Route path="/scraping" component={ScrapingProgress} />
+          <Route path="/tiktok-scraping" component={TikTokScrapingProgress} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/discovery">
             {isDiscoveryV1Enabled ? <Discovery /> : <Redirect to="/dashboard" />}

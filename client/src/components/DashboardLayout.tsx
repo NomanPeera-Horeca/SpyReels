@@ -27,9 +27,13 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import ExportJobTracker from "@/components/ExportJobTracker";
-import { ActiveScrapeJobNotice } from "@/components/ActiveScrapeJobNotice";
-import { useActiveScrapeJob } from "@/lib/activeScrapeJob";
+import {
+  ScrapeJobProgressUI,
+  openScrapeDashboard,
+} from "@/components/ScrapeJobProgressUI";
+import { useActiveResearchJobs } from "@/lib/activeResearchJobs";
 import { useScrapeCompletionNotifier } from "@/hooks/useScrapeCompletionNotifier";
+import type { ScrapeProgressSnapshot } from "@shared/scrapeProgressUi";
 import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -315,11 +319,11 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   useActivityHeartbeat(Boolean(user));
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchString = useSearch();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const { activeJob: activeRunningJob } = useActiveScrapeJob();
+  const { activeJobs } = useActiveResearchJobs();
   useScrapeCompletionNotifier();
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -396,8 +400,36 @@ function DashboardLayoutContent({
           disableTransition={isResizing}
         >
           <WorkspaceSwitcher />
-          {activeRunningJob ? (
-            <ActiveScrapeJobNotice job={activeRunningJob} variant="sidebar" />
+          {activeJobs.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              {activeJobs.map((job) => {
+                const snapshot: ScrapeProgressSnapshot = {
+                  jobId: job.jobId,
+                  handle: job.handle,
+                  status: job.status,
+                  progressPercent: job.progressPercent,
+                  reelsFound: job.itemsFound,
+                  currentStep: job.currentStep,
+                  estimatedTotal: job.estimatedTotal,
+                };
+                return (
+                  <ScrapeJobProgressUI
+                    key={`${job.platform}-${job.jobId}`}
+                    snapshot={snapshot}
+                    variant="sidebar"
+                    onOpen={() => {
+                      if (job.platform === "instagram") {
+                        openScrapeDashboard(setLocation, job.jobId, "research");
+                      } else {
+                        setLocation(
+                          `/research?platform=tiktok&jobId=${job.jobId}&from=research`
+                        );
+                      }
+                    }}
+                  />
+                );
+              })}
+            </div>
           ) : null}
           <SidebarHeader className="h-16 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">

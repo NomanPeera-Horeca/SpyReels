@@ -104,3 +104,39 @@ export function snapshotFromListJob(job: {
 export function isScrapeJobInFlight(status: string): boolean {
   return status === "running" || status === "pending";
 }
+
+export type ResearchPlatform = "instagram" | "tiktok" | "youtube";
+
+const PLATFORM_PHASE_LABELS: Record<ResearchPlatform, Record<string, string>> = {
+  instagram: {
+    connecting: "Connecting to Instagram",
+    fetching_profile: "Fetching profile",
+    pulling_reels: "Pulling reels",
+    ranking: "Ranking and saving",
+    complete: "Complete",
+  },
+  tiktok: {
+    connecting: "Connecting to TikTok",
+    fetching_profile: "Fetching profile",
+    pulling_videos: "Pulling videos",
+    complete: "Complete",
+  },
+  youtube: {
+    connecting: "Connecting to YouTube",
+    fetching_profile: "Fetching channel",
+    pulling_videos: "Pulling shorts",
+    complete: "Complete",
+  },
+};
+
+export function platformPhaseLabel(
+  platform: ResearchPlatform,
+  currentStep: string | null | undefined,
+  status: string
+): string {
+  if (status === "completed") return "Complete";
+  if (status === "failed") return "Failed";
+  const labels = PLATFORM_PHASE_LABELS[platform];
+  if (currentStep && labels[currentStep]) return labels[currentStep];
+  return platform === "instagram" ? "Collecting reels" : "Collecting videos";
+}

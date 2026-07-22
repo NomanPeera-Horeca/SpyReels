@@ -40,7 +40,7 @@ export async function runTikTokScrapeJob(
       .update(tiktokScrapeJobs)
       .set({
         status: "running",
-        currentStep: "fetching_profile",
+        currentStep: "connecting",
         progressPercent: 15,
         errorMessage: null,
       })
