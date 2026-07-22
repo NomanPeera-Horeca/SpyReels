@@ -38,6 +38,15 @@ export function useActiveResearchJobs(): {
     refetchOnWindowFocus: true,
   });
 
+  const youtubeQuery = trpc.youtubeScrape.list.useQuery(undefined, {
+    refetchInterval: (q) => {
+      const jobs = q.state.data;
+      const running = jobs?.some((j) => isScrapeJobInFlight(j.status));
+      return running ? 3000 : false;
+    },
+    refetchOnWindowFocus: true,
+  });
+
   const activeJobs = useMemo(() => {
     const instagramJobs: ActiveResearchJob[] = (instagramQuery.data ?? [])
       .filter((j) => isScrapeJobInFlight(j.status) && !j.isDemo)
@@ -67,13 +76,30 @@ export function useActiveResearchJobs(): {
         updatedAt: j.updatedAt,
       }));
 
-    return [...instagramJobs, ...tiktokJobs].sort(
+    const youtubeJobs: ActiveResearchJob[] = (youtubeQuery.data ?? [])
+      .filter((j) => isScrapeJobInFlight(j.status))
+      .map((j) => ({
+        platform: "youtube" as const,
+        jobId: j.id,
+        handle: j.handle,
+        status: j.status,
+        progressPercent: j.progressPercent,
+        itemsFound: j.videosFound,
+        currentStep: j.currentStep,
+        estimatedTotal: j.estimatedTotal,
+        updatedAt: j.updatedAt,
+      }));
+
+    return [...instagramJobs, ...tiktokJobs, ...youtubeJobs].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }, [instagramQuery.data, tiktokQuery.data]);
+  }, [instagramQuery.data, tiktokQuery.data, youtubeQuery.data]);
 
   return {
     activeJobs,
-    isLoading: instagramQuery.isLoading || tiktokQuery.isLoading,
+    isLoading:
+      instagramQuery.isLoading ||
+      tiktokQuery.isLoading ||
+      youtubeQuery.isLoading,
   };
 }

@@ -420,9 +420,13 @@ function DashboardLayoutContent({
                     onOpen={() => {
                       if (job.platform === "instagram") {
                         openScrapeDashboard(setLocation, job.jobId, "research");
-                      } else {
+                      } else if (job.platform === "tiktok") {
                         setLocation(
                           `/research?platform=tiktok&jobId=${job.jobId}&from=research`
+                        );
+                      } else {
+                        setLocation(
+                          `/research?platform=youtube&jobId=${job.jobId}&from=research`
                         );
                       }
                     }}

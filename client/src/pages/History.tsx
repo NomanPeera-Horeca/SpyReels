@@ -36,6 +36,7 @@ import {
   Sparkles,
   Instagram,
   Music2,
+  Youtube,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatNumber } from "@/components/InlineWorkflow";
@@ -48,9 +49,11 @@ import { isScrapeJobInFlight } from "@shared/scrapeProgressUi";
 
 type InstagramScrapeJobRow = inferRouterOutputs<AppRouter>["scrape"]["list"][number];
 type TikTokScrapeJobRow = inferRouterOutputs<AppRouter>["tiktokScrape"]["list"][number];
+type YouTubeScrapeJobRow = inferRouterOutputs<AppRouter>["youtubeScrape"]["list"][number];
 type HistoryJobRow =
   | (InstagramScrapeJobRow & { platform: "instagram" })
-  | (TikTokScrapeJobRow & { platform: "tiktok" });
+  | (TikTokScrapeJobRow & { platform: "tiktok" })
+  | (YouTubeScrapeJobRow & { platform: "youtube"; followerCount: number });
 
 function jobVideoCount(job: HistoryJobRow): number {
   return job.platform === "instagram" ? job.totalReels : job.totalVideos;
@@ -60,6 +63,12 @@ function jobNiche(job: HistoryJobRow): string | null {
   return job.platform === "instagram"
     ? readableNiche(job.classifiedNicheSlug)
     : null;
+}
+
+function platformBadgeIcon(platform: HistoryJobRow["platform"]) {
+  if (platform === "instagram") return <Instagram className="h-3 w-3" />;
+  if (platform === "tiktok") return <Music2 className="h-3 w-3" />;
+  return <Youtube className="h-3 w-3" />;
 }
 
 function formatDate(d: Date | string): string {
@@ -132,6 +141,11 @@ export default function History() {
       q.state.data?.some((job) => isScrapeJobInFlight(job.status)) ? 3000 : false,
     refetchOnWindowFocus: true,
   });
+  const youtubeJobsQuery = trpc.youtubeScrape.list.useQuery(undefined, {
+    refetchInterval: (q) =>
+      q.state.data?.some((job) => isScrapeJobInFlight(job.status)) ? 3000 : false,
+    refetchOnWindowFocus: true,
+  });
   const utils = trpc.useUtils();
 
   const [sortBy, setSortBy] = useState<SortKey>("updated");
@@ -147,6 +161,11 @@ export default function History() {
         ...job,
         platform: "tiktok" as const,
       })),
+      ...(youtubeJobsQuery.data ?? []).map((job) => ({
+        ...job,
+        platform: "youtube" as const,
+        followerCount: job.subscriberCount,
+      })),
     ];
     const handleMap = new Map<string, HistoryJobRow>();
     for (const job of combined) {
@@ -159,7 +178,7 @@ export default function History() {
       }
     }
     return Array.from(handleMap.values());
-  }, [jobsQuery.data, tiktokJobsQuery.data]);
+  }, [jobsQuery.data, tiktokJobsQuery.data, youtubeJobsQuery.data]);
 
   const sortedJobs = useMemo(() => {
     const list = [...deduplicatedJobs];
@@ -249,6 +268,15 @@ export default function History() {
       toast.error("Couldn’t remove", { description: error.message });
     },
   });
+  const deleteYouTubeMutation = trpc.youtubeScrape.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Removed from Creator Radar");
+      utils.youtubeScrape.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Couldn’t remove", { description: error.message });
+    },
+  });
 
   const handleDelete = (
     e: React.MouseEvent,
@@ -264,19 +292,27 @@ export default function History() {
     ) {
       if (platform === "instagram") {
         deleteMutation.mutate({ jobId });
-      } else {
+      } else if (platform === "tiktok") {
         deleteTikTokMutation.mutate({ jobId });
+      } else {
+        deleteYouTubeMutation.mutate({ jobId });
       }
     }
   };
 
   const openJob = (job: HistoryJobRow) => {
     if (job.status === "completed" || job.status === "running") {
-      setLocation(
-        job.platform === "instagram"
-          ? `/dashboard?jobId=${job.id}&from=history`
-          : `/research?platform=tiktok&jobId=${job.id}&from=history`
-      );
+      if (job.platform === "instagram") {
+        setLocation(`/dashboard?jobId=${job.id}&from=history`);
+      } else if (job.platform === "tiktok") {
+        setLocation(
+          `/research?platform=tiktok&jobId=${job.id}&from=history`
+        );
+      } else {
+        setLocation(
+          `/research?platform=youtube&jobId=${job.id}&from=history`
+        );
+      }
     }
   };
 
@@ -348,7 +384,9 @@ export default function History() {
         </div>
       </div>
 
-      {(jobsQuery.isLoading || tiktokJobsQuery.isLoading) && (
+      {(jobsQuery.isLoading ||
+        tiktokJobsQuery.isLoading ||
+        youtubeJobsQuery.isLoading) && (
         <div
           className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
           role="status"
@@ -382,8 +420,10 @@ export default function History() {
 
       {jobsQuery.data &&
         tiktokJobsQuery.data &&
+        youtubeJobsQuery.data &&
         jobsQuery.data.length === 0 &&
-        tiktokJobsQuery.data.length === 0 && (
+        tiktokJobsQuery.data.length === 0 &&
+        youtubeJobsQuery.data.length === 0 && (
         <Card className="border-border/50 bg-card">
           <CardContent className="flex flex-col items-center justify-center gap-5 py-16">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
@@ -392,8 +432,8 @@ export default function History() {
             <div className="text-center">
               <p className="text-base font-medium text-foreground">No creators tracked yet</p>
               <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Start from Spy Viral Reels. Each completed Instagram or TikTok
-                session lands here with metrics from that research window.
+                Start from Spy Viral Reels. Each completed Instagram, TikTok, or
+                YouTube session lands here with metrics from that research window.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -452,11 +492,7 @@ export default function History() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-base font-semibold text-foreground">@{job.handle}</span>
                       <Badge variant="outline" className="gap-1 text-xs capitalize">
-                        {job.platform === "instagram" ? (
-                          <Instagram className="h-3 w-3" />
-                        ) : (
-                          <Music2 className="h-3 w-3" />
-                        )}
+                        {platformBadgeIcon(job.platform)}
                         {job.platform}
                       </Badge>
                       <Badge
@@ -527,10 +563,17 @@ export default function History() {
                 ) : null}
 
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
-                  <Tooltip content="Followers captured on last profile fetch">
+                  <Tooltip
+                    content={
+                      job.platform === "youtube"
+                        ? "Subscribers captured on last channel fetch"
+                        : "Followers captured on last profile fetch"
+                    }
+                  >
                     <div className="rounded-lg bg-muted/30 px-3 py-2">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        <Users className="h-3 w-3" /> Followers
+                        <Users className="h-3 w-3" />{" "}
+                        {job.platform === "youtube" ? "Subscribers" : "Followers"}
                       </div>
                       <p className="mt-1 font-semibold tabular-nums text-foreground">
                         {formatNumber(job.followerCount || 0)}
@@ -541,7 +584,9 @@ export default function History() {
                     content={
                       job.platform === "instagram"
                         ? `Reels in your ${job.timeframeDays}-day scan window at scrape time`
-                        : "TikTok videos collected in this research session"
+                        : job.platform === "tiktok"
+                          ? "TikTok videos collected in this research session"
+                          : "YouTube Shorts collected in this research session"
                     }
                   >
                     <div className="rounded-lg bg-muted/30 px-3 py-2">
@@ -553,7 +598,7 @@ export default function History() {
                       </p>
                     </div>
                   </Tooltip>
-                  <Tooltip content="Instagram view counts summed for reels in this session (when available).">
+                  <Tooltip content="View counts summed for videos in this session (when available).">
                     <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <Eye className="h-3 w-3" /> Views
@@ -563,7 +608,7 @@ export default function History() {
                       </p>
                     </div>
                   </Tooltip>
-                  <Tooltip content="Totals across reels in this session">
+                  <Tooltip content="Totals across videos in this session">
                     <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <Heart className="h-3 w-3" /> Likes
@@ -573,7 +618,7 @@ export default function History() {
                       </p>
                     </div>
                   </Tooltip>
-                  <Tooltip content="Totals across reels in this session">
+                  <Tooltip content="Totals across videos in this session">
                     <div className="hidden rounded-lg bg-muted/30 px-3 py-2 sm:block">
                       <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <MessageCircle className="h-3 w-3" /> Comments
@@ -589,7 +634,9 @@ export default function History() {
                     content={
                       job.platform === "instagram"
                         ? "Mean of per-reel (likes + comments) divided by followers at session time"
-                        : "Mean of per-video (likes + comments + shares) divided by followers at session time"
+                        : job.platform === "tiktok"
+                          ? "Mean of per-video (likes + comments + shares) divided by followers at session time"
+                          : "Mean of per-Short (likes + comments) divided by subscribers at session time"
                     }
                   >
                     <div className="rounded-lg bg-muted/30 px-3 py-2">
@@ -610,7 +657,9 @@ export default function History() {
                         ? `${formatNumber(stats.totalViews)} total views in session`
                         : job.platform === "instagram"
                           ? `Scan window · ${job.timeframeDays}d window`
-                          : "TikTok research session"}
+                          : job.platform === "tiktok"
+                            ? "TikTok research session"
+                            : "YouTube research session"}
                     </p>
                     {canOpenRadar ? (
                       <span className="inline-flex min-h-10 items-center rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary">
@@ -710,11 +759,7 @@ export default function History() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-foreground">@{job.handle}</span>
                       <Badge variant="outline" className="h-6 gap-1 text-xs capitalize">
-                        {job.platform === "instagram" ? (
-                          <Instagram className="h-3 w-3" />
-                        ) : (
-                          <Music2 className="h-3 w-3" />
-                        )}
+                        {platformBadgeIcon(job.platform)}
                         {job.platform}
                       </Badge>
                       <Badge variant="outline" className="text-[10px] h-5">
@@ -730,7 +775,10 @@ export default function History() {
                       ) : null}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                      <span>{formatNumber(job.followerCount || 0)} followers</span>
+                      <span>
+                        {formatNumber(job.followerCount || 0)}{" "}
+                        {job.platform === "youtube" ? "subscribers" : "followers"}
+                      </span>
                       <span>{jobVideoCount(job)} videos</span>
                       {job.platform === "instagram" ? (
                         <span className="hidden sm:inline">{job.timeframeDays}d window</span>

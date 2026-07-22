@@ -39,6 +39,7 @@ import {
   ExternalLink,
   AtSign,
   Music2,
+  Youtube,
 } from "lucide-react";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
@@ -49,6 +50,7 @@ import {
   seeCreatorsViralReelsCta,
 } from "@/lib/creatorCtaCopy";
 import TikTokResearch from "@/pages/TikTokResearch";
+import YouTubeResearch from "@/pages/YouTubeResearch";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -101,7 +103,9 @@ export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
   const search = useSearch();
-  const [platform, setPlatform] = useState<"instagram" | "tiktok">("instagram");
+  const [platform, setPlatform] = useState<"instagram" | "tiktok" | "youtube">(
+    "instagram"
+  );
   const [handle, setHandle] = useState("");
   const [handleError, setHandleError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState("30");
@@ -116,11 +120,22 @@ export default function Home() {
     const parsed = Number.parseInt(rawJobId, 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   }, [search]);
+  const initialYouTubeJobId = useMemo(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("platform") !== "youtube") return undefined;
+    const rawJobId = params.get("jobId");
+    if (!rawJobId) return undefined;
+    const parsed = Number.parseInt(rawJobId, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }, [search]);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
-    if (params.get("platform") === "tiktok") {
+    const platformParam = params.get("platform");
+    if (platformParam === "tiktok") {
       setPlatform("tiktok");
+    } else if (platformParam === "youtube") {
+      setPlatform("youtube");
     }
   }, [search]);
 
@@ -651,14 +666,18 @@ export default function Home() {
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {platform === "instagram"
                   ? "Enter any public Instagram handle. Can take 1 to 3 minutes depending on account size."
-                  : "Enter any public TikTok handle to find top-performing videos, transcripts, and script ideas."}
+                  : platform === "tiktok"
+                    ? "Enter any public TikTok handle to find top-performing videos, transcripts, and script ideas."
+                    : "Enter any public YouTube channel handle to find top Shorts, transcripts, and script ideas."}
               </p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground">
               {platform === "instagram" ? (
                 <AtSign className="h-5 w-5" aria-hidden />
-              ) : (
+              ) : platform === "tiktok" ? (
                 <Music2 className="h-5 w-5" aria-hidden />
+              ) : (
+                <Youtube className="h-5 w-5" aria-hidden />
               )}
             </span>
           </div>
@@ -675,12 +694,13 @@ export default function Home() {
             <Tabs
               value={platform}
               onValueChange={(value) =>
-                setPlatform(value as "instagram" | "tiktok")
+                setPlatform(value as "instagram" | "tiktok" | "youtube")
               }
             >
-              <TabsList className="grid w-full grid-cols-2 sm:w-64">
+              <TabsList className="grid w-full grid-cols-3 sm:w-80">
                 <TabsTrigger value="instagram">Instagram</TabsTrigger>
                 <TabsTrigger value="tiktok">TikTok</TabsTrigger>
+                <TabsTrigger value="youtube">YouTube</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -996,8 +1016,10 @@ export default function Home() {
                 )}
               </Button>
             </form>
-          ) : (
+          ) : platform === "tiktok" ? (
             <TikTokResearch initialJobId={initialTikTokJobId} />
+          ) : (
+            <YouTubeResearch initialJobId={initialYouTubeJobId} />
           )}
         </div>
       </div>
