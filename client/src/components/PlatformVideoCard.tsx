@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { formatNumber, formatPostedTime } from "@/components/InlineWorkflow";
 import {
@@ -23,6 +24,7 @@ export function PlatformVideoCard({
   isSaved,
   recreateState,
   oneClickRemake,
+  topRight,
   onMediaClick,
   onToggleSave,
   onTranscribe,
@@ -43,6 +45,7 @@ export function PlatformVideoCard({
   isSaved: boolean;
   recreateState: "none" | "generating" | "ready" | "failed";
   oneClickRemake?: OneClickRemakeAction;
+  topRight?: ReactNode;
   onMediaClick: () => void;
   onToggleSave: () => void;
   onTranscribe: () => void;
@@ -67,6 +70,7 @@ export function PlatformVideoCard({
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
       onMediaClick={onMediaClick}
+      topRight={topRight}
       statusChip={
         hasTranscription && !isNoSpeech ? (
           <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">

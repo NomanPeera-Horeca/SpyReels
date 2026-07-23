@@ -552,9 +552,11 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
 /**
  * Saved/bookmarked reels for quick access.
  *
- * Exactly one of the two ID sources must be populated:
- *   - user-scraped: (`reelId` + `jobId`) both non-null, `featuredReelId` null.
- *   - featured catalog: `featuredReelId` non-null, `reelId` and `jobId` null.
+ * Exactly one of the ID sources must be populated:
+ *   - user-scraped: (`reelId` + `jobId`) both non-null; other ID cols null.
+ *   - featured catalog: `featuredReelId` non-null; other ID cols null.
+ *   - TikTok: `tiktokVideoId` non-null; other ID cols null.
+ *   - YouTube: `youtubeVideoId` non-null; other ID cols null.
  * Enforced in the `saved.toggle` handler.
  */
 export const savedReels = mysqlTable(
@@ -570,6 +572,8 @@ export const savedReels = mysqlTable(
   reelId: int("reelId"),
   jobId: int("jobId"),
   featuredReelId: int("featuredReelId"),
+  tiktokVideoId: int("tiktokVideoId"),
+  youtubeVideoId: int("youtubeVideoId"),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
@@ -584,6 +588,16 @@ export const savedReels = mysqlTable(
       table.workspaceId,
       table.userId,
       table.featuredReelId
+    ),
+    workspaceUserTiktokUnique: uniqueIndex("uniq_saved_reels_workspace_user_tiktok").on(
+      table.workspaceId,
+      table.userId,
+      table.tiktokVideoId
+    ),
+    workspaceUserYoutubeUnique: uniqueIndex("uniq_saved_reels_workspace_user_youtube").on(
+      table.workspaceId,
+      table.userId,
+      table.youtubeVideoId
     ),
   })
 );

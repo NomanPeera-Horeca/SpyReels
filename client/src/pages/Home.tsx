@@ -564,6 +564,22 @@ export default function Home() {
     }
   };
 
+  const viewingPlatformJobResults =
+    (platform === "tiktok" && initialTikTokJobId != null) ||
+    (platform === "youtube" && initialYouTubeJobId != null);
+
+  if (viewingPlatformJobResults) {
+    return (
+      <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+        {platform === "tiktok" ? (
+          <TikTokResearch initialJobId={initialTikTokJobId} />
+        ) : (
+          <YouTubeResearch initialJobId={initialYouTubeJobId} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mx-auto max-w-3xl">

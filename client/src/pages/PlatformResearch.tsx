@@ -12,6 +12,8 @@ import {
   Share2,
   List,
   Grid3X3,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
@@ -91,6 +93,7 @@ export default function PlatformResearch({
     initialJobId ?? null
   );
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
+  const [dateFilter, setDateFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [gridModalVideoId, setGridModalVideoId] = useState<number | null>(null);
   const [pendingTranscriptions, setPendingTranscriptions] = useState<
@@ -234,10 +237,30 @@ export default function PlatformResearch({
       ? (tiktokVideos.data?.followerCount ?? 0)
       : (youtubeVideos.data?.subscriberCount ?? 0);
 
+  const allVideos = useMemo(
+    () =>
+      toPlatformVideos(
+        (videosData?.videos ?? []) as Array<Record<string, unknown>>
+      ),
+    [videosData?.videos]
+  );
+
+  const filteredVideos = useMemo(() => {
+    if (!allVideos.length || dateFilter === "all") return allVideos;
+    const now = new Date();
+    let cutoffDays = 30;
+    if (dateFilter === "7") cutoffDays = 7;
+    else if (dateFilter === "14") cutoffDays = 14;
+    else if (dateFilter === "30") cutoffDays = 30;
+    else if (dateFilter === "60") cutoffDays = 60;
+    else if (dateFilter === "90") cutoffDays = 90;
+    else if (dateFilter === "180") cutoffDays = 180;
+    const cutoff = new Date(now.getTime() - cutoffDays * 24 * 60 * 60 * 1000);
+    return allVideos.filter((v) => new Date(v.postedAt) >= cutoff);
+  }, [allVideos, dateFilter]);
+
   const sortedVideos = useMemo(() => {
-    const list = toPlatformVideos(
-      (videosData?.videos ?? []) as Array<Record<string, unknown>>
-    );
+    const list = [...filteredVideos];
     switch (sortBy) {
       case "views_desc":
         return list.sort((a, b) => b.viewCount - a.viewCount);
@@ -263,7 +286,28 @@ export default function PlatformResearch({
             new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
         );
     }
-  }, [videosData?.videos, sortBy]);
+  }, [filteredVideos, sortBy]);
+
+  const videoIdsForSaved = useMemo(
+    () => allVideos.map((v) => v.id),
+    [allVideos]
+  );
+
+  const savedBatchQuery = trpc.saved.checkBatch.useQuery(
+    config.platform === "tiktok"
+      ? { tiktokVideoIds: videoIdsForSaved }
+      : { youtubeVideoIds: videoIdsForSaved },
+    { enabled: videoIdsForSaved.length > 0 }
+  );
+  const savedMap = savedBatchQuery.data || {};
+
+  const toggleSave = trpc.saved.toggle.useMutation({
+    onSuccess: (data) => {
+      utils.saved.checkBatch.invalidate();
+      utils.saved.list.invalidate();
+      toast.success(data.saved ? "Saved" : "Removed from saved");
+    },
+  });
 
   const gridModalVideo = useMemo(
     () =>
@@ -608,7 +652,12 @@ export default function PlatformResearch({
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {sortedVideos.length} {config.contentNoun} collected
+                    {sortedVideos.length}
+                    {dateFilter !== "all" ? ` of ${allVideos.length}` : ""}{" "}
+                    {config.contentNoun}
+                    {dateFilter !== "all"
+                      ? ` (last ${dateFilter} days)`
+                      : " collected"}
                     {audienceCount > 0 ? (
                       <>
                         {" "}
@@ -621,6 +670,25 @@ export default function PlatformResearch({
               </div>
 
               <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                <Tooltip content={`Filter ${config.contentNoun} by date posted`}>
+                  <div>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger className="h-9 w-full min-w-[8.5rem] max-w-[9.5rem] bg-card text-sm sm:w-[150px]">
+                        <SelectValue placeholder="Date range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="7">Last 7 Days</SelectItem>
+                        <SelectItem value="14">Last 14 Days</SelectItem>
+                        <SelectItem value="30">Last 30 Days</SelectItem>
+                        <SelectItem value="60">Last 60 Days</SelectItem>
+                        <SelectItem value="90">Last 90 Days</SelectItem>
+                        <SelectItem value="180">Last 180 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Tooltip>
+
                 <Tooltip content="Change how videos are sorted">
                   <div>
                     <Select
@@ -685,6 +753,7 @@ export default function PlatformResearch({
                     tx?.status === "processing" ||
                     tx?.status === "pending";
                   const isFailed = tx?.status === "failed";
+                  const isSaved = !!savedMap[video.id];
 
                   return (
                     <PlatformVideoCard
@@ -698,15 +767,51 @@ export default function PlatformResearch({
                       isProcessing={isProcessing}
                       isFailed={!!isFailed}
                       isNoSpeech={!!isNoSpeech}
-                      isSaved={false}
+                      isSaved={isSaved}
                       recreateState="none"
                       oneClickRemake={buildOneClick(video)}
+                      topRight={
+                        <button
+                          type="button"
+                          className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur transition-colors ${
+                            isSaved
+                              ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                              : "bg-black/55 text-white/90 hover:bg-black/75"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (config.platform === "tiktok") {
+                              toggleSave.mutate({ tiktokVideoId: video.id });
+                            } else {
+                              toggleSave.mutate({ youtubeVideoId: video.id });
+                            }
+                          }}
+                          disabled={toggleSave.isPending}
+                          title={isSaved ? "Remove from saved" : "Save reel"}
+                          aria-label={
+                            isSaved ? "Remove from saved" : "Save reel"
+                          }
+                        >
+                          {isSaved ? (
+                            <BookmarkCheck className="h-4 w-4" />
+                          ) : (
+                            <Bookmark className="h-4 w-4" />
+                          )}
+                        </button>
+                      }
                       onMediaClick={() => setGridModalVideoId(video.id)}
-                      onToggleSave={() => {}}
+                      onToggleSave={() => {
+                        if (config.platform === "tiktok") {
+                          toggleSave.mutate({ tiktokVideoId: video.id });
+                        } else {
+                          toggleSave.mutate({ youtubeVideoId: video.id });
+                        }
+                      }}
                       onTranscribe={() => runTranscribe(video.id)}
                       onExpand={() => setGridModalVideoId(video.id)}
                       onMakeVersion={() => triggerRecreatePulse(video.id)}
                       onOpenMyScript={() => setGridModalVideoId(video.id)}
+                      saveBusy={toggleSave.isPending}
                     />
                   );
                 })}

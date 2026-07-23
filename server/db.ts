@@ -16,7 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, users, scrapeJobs, exportJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, InsertScrapeJob, InsertExportJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, ExportJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore } from "../drizzle/schema";
+import { InsertUser, User, users, scrapeJobs, exportJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, tiktokScrapeJobs, tiktokVideos, youtubeScrapeJobs, youtubeVideos, InsertScrapeJob, InsertExportJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, ExportJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore, TikTokScrapeJob, TikTokVideo, YouTubeScrapeJob, YouTubeVideo } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import {
   createPersonalWorkspaceForUser,
@@ -1349,6 +1349,262 @@ export async function isFeaturedReelSaved(
     )
     .limit(1);
   return rows.length > 0;
+}
+
+// ── Saved Reels (TikTok / YouTube variants) ──
+
+export async function saveTiktokVideo(
+  userId: number,
+  tiktokVideoId: number,
+  workspaceId: string
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedReels).values({
+    userId,
+    workspaceId,
+    reelId: null,
+    jobId: null,
+    featuredReelId: null,
+    tiktokVideoId,
+    youtubeVideoId: null,
+  });
+  return result[0].insertId;
+}
+
+export async function unsaveTiktokVideo(
+  workspaceId: string,
+  userId: number,
+  tiktokVideoId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(savedReels)
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.tiktokVideoId, tiktokVideoId)
+      )
+    );
+}
+
+export async function isTiktokVideoSaved(
+  workspaceId: string,
+  userId: number,
+  tiktokVideoId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: savedReels.id })
+    .from(savedReels)
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.tiktokVideoId, tiktokVideoId)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function saveYoutubeVideo(
+  userId: number,
+  youtubeVideoId: number,
+  workspaceId: string
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedReels).values({
+    userId,
+    workspaceId,
+    reelId: null,
+    jobId: null,
+    featuredReelId: null,
+    tiktokVideoId: null,
+    youtubeVideoId,
+  });
+  return result[0].insertId;
+}
+
+export async function unsaveYoutubeVideo(
+  workspaceId: string,
+  userId: number,
+  youtubeVideoId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(savedReels)
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.youtubeVideoId, youtubeVideoId)
+      )
+    );
+}
+
+export async function isYoutubeVideoSaved(
+  workspaceId: string,
+  userId: number,
+  youtubeVideoId: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: savedReels.id })
+    .from(savedReels)
+    .where(
+      and(
+        eq(savedReels.workspaceId, workspaceId),
+        eq(savedReels.userId, userId),
+        eq(savedReels.youtubeVideoId, youtubeVideoId)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+type SavedReelTiktok = Omit<
+  SavedReel,
+  "reelId" | "jobId" | "featuredReelId" | "tiktokVideoId" | "youtubeVideoId"
+> & {
+  reelId: null;
+  jobId: null;
+  featuredReelId: null;
+  tiktokVideoId: number;
+  youtubeVideoId: null;
+};
+
+export async function getSavedTiktokVideosWithDetails(
+  workspaceId: string
+): Promise<
+  Array<
+    SavedReelTiktok & {
+      video: TikTokVideo;
+      job: TikTokScrapeJob;
+      transcription?: Transcription;
+    }
+  >
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const joined = await db
+    .select({
+      saved: savedReels,
+      video: tiktokVideos,
+      job: tiktokScrapeJobs,
+    })
+    .from(savedReels)
+    .innerJoin(tiktokVideos, eq(savedReels.tiktokVideoId, tiktokVideos.id))
+    .innerJoin(tiktokScrapeJobs, eq(tiktokVideos.jobId, tiktokScrapeJobs.id))
+    .where(
+      and(eq(savedReels.workspaceId, workspaceId), isNotNull(savedReels.tiktokVideoId))
+    )
+    .orderBy(desc(savedReels.createdAt));
+
+  if (joined.length === 0) return [];
+
+  const videoIds = [...new Set(joined.map((row) => row.video.id))];
+  const txByVideoId = new Map<number, Transcription>();
+  for (let i = 0; i < videoIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = videoIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const txs = await db
+      .select()
+      .from(transcriptions)
+      .where(inArray(transcriptions.tiktokVideoId, chunk));
+    for (const t of txs) {
+      if (t.tiktokVideoId == null) continue;
+      const prev = txByVideoId.get(t.tiktokVideoId);
+      if (!prev || t.id > prev.id) txByVideoId.set(t.tiktokVideoId, t);
+    }
+  }
+
+  return joined.map(({ saved, video, job }) => ({
+    ...saved,
+    reelId: null,
+    jobId: null,
+    featuredReelId: null,
+    tiktokVideoId: saved.tiktokVideoId as number,
+    youtubeVideoId: null,
+    video,
+    job,
+    transcription: txByVideoId.get(video.id),
+  }));
+}
+
+type SavedReelYoutube = Omit<
+  SavedReel,
+  "reelId" | "jobId" | "featuredReelId" | "tiktokVideoId" | "youtubeVideoId"
+> & {
+  reelId: null;
+  jobId: null;
+  featuredReelId: null;
+  tiktokVideoId: null;
+  youtubeVideoId: number;
+};
+
+export async function getSavedYoutubeVideosWithDetails(
+  workspaceId: string
+): Promise<
+  Array<
+    SavedReelYoutube & {
+      video: YouTubeVideo;
+      job: YouTubeScrapeJob;
+      transcription?: Transcription;
+    }
+  >
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const joined = await db
+    .select({
+      saved: savedReels,
+      video: youtubeVideos,
+      job: youtubeScrapeJobs,
+    })
+    .from(savedReels)
+    .innerJoin(youtubeVideos, eq(savedReels.youtubeVideoId, youtubeVideos.id))
+    .innerJoin(youtubeScrapeJobs, eq(youtubeVideos.jobId, youtubeScrapeJobs.id))
+    .where(
+      and(eq(savedReels.workspaceId, workspaceId), isNotNull(savedReels.youtubeVideoId))
+    )
+    .orderBy(desc(savedReels.createdAt));
+
+  if (joined.length === 0) return [];
+
+  const videoIds = [...new Set(joined.map((row) => row.video.id))];
+  const txByVideoId = new Map<number, Transcription>();
+  for (let i = 0; i < videoIds.length; i += TRANSCRIPTION_BATCH_BY_REEL_IDS) {
+    const chunk = videoIds.slice(i, i + TRANSCRIPTION_BATCH_BY_REEL_IDS);
+    const txs = await db
+      .select()
+      .from(transcriptions)
+      .where(inArray(transcriptions.youtubeVideoId, chunk));
+    for (const t of txs) {
+      if (t.youtubeVideoId == null) continue;
+      const prev = txByVideoId.get(t.youtubeVideoId);
+      if (!prev || t.id > prev.id) txByVideoId.set(t.youtubeVideoId, t);
+    }
+  }
+
+  return joined.map(({ saved, video, job }) => ({
+    ...saved,
+    reelId: null,
+    jobId: null,
+    featuredReelId: null,
+    tiktokVideoId: null,
+    youtubeVideoId: saved.youtubeVideoId as number,
+    video,
+    job,
+    transcription: txByVideoId.get(video.id),
+  }));
 }
 
 /**
