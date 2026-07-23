@@ -1,0 +1,513 @@
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import {
+  Loader2,
+  Clock,
+  ArrowLeft,
+  Eye,
+  Heart,
+  MessageCircle,
+  TrendingUp,
+  Calendar as CalendarIcon,
+  Share2,
+  List,
+  Grid3X3,
+} from "lucide-react";
+import { toast } from "sonner";
+import { TRPCClientError } from "@trpc/client";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { useUsageGate } from "@/hooks/useUsageGate";
+import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import { formatNumber } from "@/components/InlineWorkflow";
+import Tooltip from "@/components/Tooltip";
+import { PlatformVideoCard } from "@/components/PlatformVideoCard";
+import type {
+  PlatformResearchConfig,
+  PlatformVideoLike,
+  SortOption,
+} from "@/lib/platformResearchConfigs";
+
+type ViewMode = "list" | "grid";
+
+const SORT_ICONS: Record<SortOption, React.ReactNode> = {
+  views_desc: <Eye className="h-3.5 w-3.5" />,
+  likes_desc: <Heart className="h-3.5 w-3.5" />,
+  comments_desc: <MessageCircle className="h-3.5 w-3.5" />,
+  shares_desc: <Share2 className="h-3.5 w-3.5" />,
+  engagement_desc: <TrendingUp className="h-3.5 w-3.5" />,
+  date_desc: <CalendarIcon className="h-3.5 w-3.5" />,
+  date_asc: <CalendarIcon className="h-3.5 w-3.5" />,
+};
+
+function toPlatformVideos(
+  rows: Array<Record<string, unknown>>
+): PlatformVideoLike[] {
+  return rows.map((row) => ({
+    id: Number(row.id),
+    viewCount: Number(row.viewCount ?? 0),
+    likeCount: Number(row.likeCount ?? 0),
+    commentCount: Number(row.commentCount ?? 0),
+    shareCount:
+      row.shareCount == null ? undefined : Number(row.shareCount),
+    thumbnailUrl: (row.thumbnailUrl as string | null) ?? null,
+    videoPageUrl: String(row.videoPageUrl ?? ""),
+    durationSec:
+      row.durationSec == null ? null : Number(row.durationSec),
+    postedAt: row.postedAt as Date,
+    engagementRate: Number(row.engagementRate ?? 0),
+    caption: (row.caption as string | null | undefined) ?? null,
+    title: (row.title as string | null | undefined) ?? null,
+    videoUrl: (row.videoUrl as string | null | undefined) ?? null,
+  }));
+}
+
+export default function PlatformResearch({
+  config,
+  initialJobId,
+}: {
+  config: PlatformResearchConfig;
+  initialJobId?: number;
+}) {
+  const [, setLocation] = useLocation();
+  const [handle, setHandle] = useState("");
+  const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
+  const [activeJobId, setActiveJobId] = useState<number | null>(
+    initialJobId ?? null
+  );
+  const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const scrapeGate = useUsageGate("scrapeCount");
+
+  useEffect(() => {
+    if (initialJobId != null) {
+      setActiveJobId(initialJobId);
+    }
+  }, [initialJobId]);
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    let robotsMeta = document.querySelector('meta[name="robots"]');
+    const created = !robotsMeta;
+    const previousRobots = robotsMeta?.getAttribute("content") ?? null;
+
+    if (!robotsMeta) {
+      robotsMeta = document.createElement("meta");
+      robotsMeta.setAttribute("name", "robots");
+      document.head.appendChild(robotsMeta);
+    }
+
+    document.title = config.documentTitle;
+    robotsMeta.setAttribute("content", "noindex,nofollow");
+
+    return () => {
+      document.title = previousTitle;
+      if (created && robotsMeta?.parentNode) {
+        robotsMeta.parentNode.removeChild(robotsMeta);
+      } else if (robotsMeta) {
+        if (previousRobots) {
+          robotsMeta.setAttribute("content", previousRobots);
+        } else {
+          robotsMeta.removeAttribute("content");
+        }
+      }
+    };
+  }, [config.documentTitle]);
+
+  // Platform-specific tRPC procedures are strongly typed; switch here once
+  // rather than trying to abstract the router path as a string.
+  const tiktokStart = trpc.tiktokScrape.start.useMutation({
+    onSuccess: (data) => {
+      setLocation(`${config.routePrefix}?jobId=${data.jobId}&from=research`);
+    },
+    onError: (err) => {
+      if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {
+        toast.error("Monthly research limit reached.");
+      } else {
+        toast.error(err.message);
+      }
+    },
+  });
+  const youtubeStart = trpc.youtubeScrape.start.useMutation({
+    onSuccess: (data) => {
+      setLocation(`${config.routePrefix}?jobId=${data.jobId}&from=research`);
+    },
+    onError: (err) => {
+      if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {
+        toast.error("Monthly research limit reached.");
+      } else {
+        toast.error(err.message);
+      }
+    },
+  });
+  const startPending =
+    config.platform === "tiktok"
+      ? tiktokStart.isPending
+      : youtubeStart.isPending;
+
+  const tiktokProgress = trpc.tiktokScrape.progress.useQuery(
+    { jobId: activeJobId! },
+    {
+      enabled: config.platform === "tiktok" && activeJobId != null,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "completed" || status === "failed") return false;
+        return 2000;
+      },
+    }
+  );
+  const youtubeProgress = trpc.youtubeScrape.progress.useQuery(
+    { jobId: activeJobId! },
+    {
+      enabled: config.platform === "youtube" && activeJobId != null,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "completed" || status === "failed") return false;
+        return 2000;
+      },
+    }
+  );
+  const job =
+    config.platform === "tiktok"
+      ? tiktokProgress.data
+      : youtubeProgress.data;
+
+  const isRunning =
+    activeJobId != null &&
+    job?.status !== "completed" &&
+    job?.status !== "failed";
+
+  const tiktokVideos = trpc.tiktokScrape.videos.useQuery(
+    { jobId: activeJobId! },
+    {
+      enabled:
+        config.platform === "tiktok" &&
+        activeJobId != null &&
+        job?.status === "completed",
+    }
+  );
+  const youtubeVideos = trpc.youtubeScrape.videos.useQuery(
+    { jobId: activeJobId! },
+    {
+      enabled:
+        config.platform === "youtube" &&
+        activeJobId != null &&
+        job?.status === "completed",
+    }
+  );
+
+  const videosData =
+    config.platform === "tiktok" ? tiktokVideos.data : youtubeVideos.data;
+  const audienceCount =
+    config.platform === "tiktok"
+      ? (tiktokVideos.data?.followerCount ?? 0)
+      : (youtubeVideos.data?.subscriberCount ?? 0);
+
+  const sortedVideos = useMemo(() => {
+    const list = toPlatformVideos(
+      (videosData?.videos ?? []) as Array<Record<string, unknown>>
+    );
+    switch (sortBy) {
+      case "views_desc":
+        return list.sort((a, b) => b.viewCount - a.viewCount);
+      case "likes_desc":
+        return list.sort((a, b) => b.likeCount - a.likeCount);
+      case "comments_desc":
+        return list.sort((a, b) => b.commentCount - a.commentCount);
+      case "shares_desc":
+        return list.sort(
+          (a, b) => (b.shareCount ?? 0) - (a.shareCount ?? 0)
+        );
+      case "engagement_desc":
+        return list.sort((a, b) => b.engagementRate - a.engagementRate);
+      case "date_asc":
+        return list.sort(
+          (a, b) =>
+            new Date(a.postedAt).getTime() - new Date(b.postedAt).getTime()
+        );
+      case "date_desc":
+      default:
+        return list.sort(
+          (a, b) =>
+            new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+        );
+    }
+  }, [videosData?.videos, sortBy]);
+
+  const handleSubmit = () => {
+    const trimmed = handle.trim().replace(/^@/, "");
+    if (!trimmed) return;
+    setActiveJobId(null);
+    if (config.platform === "tiktok") {
+      tiktokStart.mutate({ handle: trimmed, timeframe });
+    } else {
+      youtubeStart.mutate({ handle: trimmed, timeframe });
+    }
+  };
+
+  const displayHandle =
+    job?.handle || handle.replace(/^@/, "").trim() || null;
+  const showResults =
+    job?.status === "completed" && videosData != null;
+
+  return (
+    <div className="mt-5 space-y-5">
+      {initialJobId == null && !showResults ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSubmit();
+          }}
+          className="space-y-5"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={config.handleInputId}>{config.handleLabel}</Label>
+              <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
+                Paste handle here
+              </span>
+            </div>
+            <div className="relative rounded-xl ring-1 ring-primary/70 shadow-[0_0_0_3px_hsl(var(--primary)/0.08),0_10px_30px_hsl(var(--primary)/0.12)] transition focus-within:ring-2 focus-within:ring-primary">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-primary">
+                @
+              </span>
+              <Input
+                id={config.handleInputId}
+                value={handle}
+                onChange={(event) => setHandle(event.target.value)}
+                placeholder={config.handlePlaceholder}
+                disabled={isRunning}
+                className="h-12 border-primary/30 bg-primary/5 pl-10"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {config.handleHelpText}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={config.timeframeInputId}>Timeframe</Label>
+            <Select
+              value={timeframe}
+              onValueChange={(value) =>
+                setTimeframe(value as "30" | "90" | "180")
+              }
+              disabled={isRunning}
+            >
+              <SelectTrigger
+                id={config.timeframeInputId}
+                className="h-11 bg-background"
+              >
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="180">Last 180 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {config.timeframeHelpText}
+            </p>
+          </div>
+
+          {!scrapeGate.isLoading && !scrapeGate.allowed ? (
+            <UpgradePrompt
+              action="scrapeCount"
+              used={scrapeGate.used}
+              limit={scrapeGate.limit}
+              planRequired={scrapeGate.planRequired}
+              variant="inline"
+            />
+          ) : null}
+
+          {!scrapeGate.isLoading &&
+          scrapeGate.allowed &&
+          scrapeGate.limit > 0 ? (
+            <p className="text-center text-xs text-muted-foreground">
+              {scrapeGate.used}/{scrapeGate.limit} account research sessions this
+              month
+            </p>
+          ) : null}
+
+          <Button
+            type="submit"
+            size="lg"
+            className="h-12 w-full text-base font-medium"
+            disabled={
+              isRunning ||
+              !handle.trim() ||
+              startPending ||
+              scrapeGate.isLoading ||
+              !scrapeGate.allowed
+            }
+          >
+            {isRunning || startPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              config.ctaLabel
+            )}
+          </Button>
+        </form>
+      ) : null}
+
+      {isRunning ? (
+        <div className="rounded-lg border border-border/40 bg-background/60 p-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {job?.videosFound ? (
+              <span>
+                Found {job.videosFound} {config.foundProgressNoun}...
+              </span>
+            ) : (
+              <span>
+                Connecting to @
+                {job?.handle || handle.replace(/^@/, "")}...
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {job?.status === "failed" ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {job.errorMessage || "Research failed"}
+        </div>
+      ) : null}
+
+      {showResults ? (
+        <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+          <div className="min-w-0">
+            <div className="mb-6 flex flex-col gap-4">
+              <div className="flex min-w-0 gap-3">
+                <Tooltip content="Back">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() =>
+                      setLocation(`/research?platform=${config.platform}`)
+                    }
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {displayHandle ? `@${displayHandle}` : "@…"}
+                    </h1>
+                    {job ? (
+                      <Badge
+                        variant={
+                          job.status === "completed"
+                            ? "default"
+                            : job.status === "failed"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {job.status === "running" && (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        )}
+                        {job.status}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {sortedVideos.length} {config.contentNoun} collected
+                    {audienceCount > 0 ? (
+                      <>
+                        {" "}
+                        &middot; {formatNumber(audienceCount)}{" "}
+                        {config.audienceLabel}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                <Tooltip content="Change how videos are sorted">
+                  <div>
+                    <Select
+                      value={sortBy}
+                      onValueChange={(v) => setSortBy(v as SortOption)}
+                    >
+                      <SelectTrigger className="h-9 w-full min-w-0 max-w-full bg-card text-sm sm:min-w-[14rem] sm:max-w-[20rem]">
+                        <SelectValue placeholder="Sort by..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {config.sortOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className="flex items-center gap-2">
+                              {SORT_ICONS[opt.value]}
+                              {opt.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Tooltip>
+
+                <Tooltip content="Switch between detailed list and visual grid view">
+                  <div className="workspace-view-toggle inline-flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      className="min-h-9 px-3 text-xs"
+                      onClick={() => setViewMode("list")}
+                    >
+                      <List className="h-3.5 w-3.5 mr-1" />
+                      List
+                    </Button>
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      className="min-h-9 px-3 text-xs"
+                      onClick={() => setViewMode("grid")}
+                    >
+                      <Grid3X3 className="h-3.5 w-3.5 mr-1" />
+                      Grid
+                    </Button>
+                  </div>
+                </Tooltip>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* List currently renders the same grid shell (placeholder). */}
+              <div className={WORKSPACE_REEL_GRID_CLASS}>
+                {sortedVideos.map((video, index) => (
+                  <PlatformVideoCard
+                    key={video.id}
+                    video={video}
+                    index={index}
+                    config={config}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
