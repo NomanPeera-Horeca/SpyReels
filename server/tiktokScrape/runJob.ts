@@ -28,12 +28,15 @@ export async function runTikTokScrapeJob(
   const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
   const pendingWrites: Promise<void>[] = [];
   const timeframeDays = options?.timeframeDays ?? 30;
-  const cutoff = new Date(Date.now() - timeframeDays * 24 * 60 * 60 * 1000);
+  const sinceDate = new Date(
+    Date.now() - timeframeDays * 24 * 60 * 60 * 1000
+  );
+  const cutoff = sinceDate;
   let videosInWindowCount = 0;
 
   try {
     console.log(
-      `[runTikTokScrapeJob ${jobId}] start userId=${userId} workspaceId=${workspaceId} handle=@${cleanHandle}`
+      `[runTikTokScrapeJob ${jobId}] start userId=${userId} workspaceId=${workspaceId} handle=@${cleanHandle} timeframeDays=${timeframeDays}`
     );
 
     await db
@@ -100,6 +103,7 @@ export async function runTikTokScrapeJob(
       {
         maxVideos: options?.maxVideos ?? 500,
         timeoutMs: options?.timeoutMs ?? 5 * 60 * 1000,
+        sinceDate,
       }
     );
 

@@ -365,10 +365,11 @@ async function fetchYouTubeShortsPage(
 export async function scrapeYouTubeShorts(
   handle: string,
   onProgress?: (count: number, pageBatch?: YouTubeVideoData[]) => void,
-  options?: { maxVideos?: number; timeoutMs?: number }
+  options?: { maxVideos?: number; timeoutMs?: number; sinceDate?: Date }
 ): Promise<YouTubeScrapeResult> {
   const maxVideos = options?.maxVideos || 500;
   const timeoutMs = options?.timeoutMs || 5 * 60 * 1000;
+  const sinceDate = options?.sinceDate;
   const startTime = Date.now();
   const channel = await fetchYouTubeChannel(handle);
 
@@ -419,11 +420,30 @@ export async function scrapeYouTubeShorts(
       if (videos.length >= maxVideos) break;
     }
 
+    if (
+      sinceDate &&
+      pageNewVideos.some((video) => video.postedAt < sinceDate)
+    ) {
+      const kept = pageNewVideos.filter(
+        (video) => video.postedAt >= sinceDate
+      );
+      videos.splice(
+        videos.length - pageNewVideos.length,
+        pageNewVideos.length,
+        ...kept
+      );
+      pageNewVideos.splice(0, pageNewVideos.length, ...kept);
+      hasMore = false;
+      stoppedReason = `reached timeframe cutoff (${sinceDate.toISOString()})`;
+    }
+
     if (onProgress && pageNewVideos.length > 0) {
       onProgress(videos.length, pageNewVideos);
     }
 
-    if (!page.nextContinuationToken) {
+    if (!hasMore && stoppedReason.startsWith("reached timeframe cutoff")) {
+      // Early stop: do not advance pagination past the cutoff page.
+    } else if (!page.nextContinuationToken) {
       hasMore = false;
     } else if (seenTokens.has(page.nextContinuationToken)) {
       hasMore = false;

@@ -10,6 +10,7 @@ import {
   MessageCircle,
   TrendingUp,
   Calendar as CalendarIcon,
+  Clock,
   List,
   Grid3X3,
 } from "lucide-react";
@@ -327,6 +328,7 @@ export default function YouTubeResearch({
 }) {
   const [, setLocation] = useLocation();
   const [handle, setHandle] = useState("");
+  const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
   const [activeJobId, setActiveJobId] = useState<number | null>(
     initialJobId ?? null
   );
@@ -434,7 +436,7 @@ export default function YouTubeResearch({
     const trimmed = handle.trim().replace(/^@/, "");
     if (!trimmed) return;
     setActiveJobId(null);
-    startMutation.mutate({ handle: trimmed });
+    startMutation.mutate({ handle: trimmed, timeframe });
   };
 
   const displayHandle =
@@ -476,6 +478,30 @@ export default function YouTubeResearch({
             <p className="text-xs text-muted-foreground">
               Paste the YouTube channel handle without the @ symbol. The channel
               must be public.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="youtube-timeframe">Timeframe</Label>
+            <Select
+              value={timeframe}
+              onValueChange={(value) =>
+                setTimeframe(value as "30" | "90" | "180")
+              }
+              disabled={isRunning}
+            >
+              <SelectTrigger id="youtube-timeframe" className="h-11 bg-background">
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="180">Last 180 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              YouTube shorts posted within this window will be collected.
             </p>
           </div>
 

@@ -7241,11 +7241,13 @@ Return JSON only:
         }
 
         const handle = input.handle.replace(/^@/, "").trim().toLowerCase();
+        const timeframeDays = Number(input.timeframe);
         const insertResult = await db.insert(tiktokScrapeJobs).values({
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
           handle,
           status: "pending",
+          timeframeDays,
         });
         const jobId = insertResult[0].insertId;
         if (!jobId) {
@@ -7262,7 +7264,7 @@ Return JSON only:
           ctx.user.id,
           ctx.workspaceId,
           handle,
-          { timeframeDays: Number(input.timeframe) }
+          { timeframeDays }
         ).catch((error) => {
           console.error(`TikTok scrape job ${jobId} failed:`, error);
         });
@@ -7481,6 +7483,7 @@ Return JSON only:
       .input(
         z.object({
           handle: z.string().min(1).max(128),
+          timeframe: z.enum(["30", "90", "180"]).default("30"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -7505,11 +7508,13 @@ Return JSON only:
         }
 
         const handle = input.handle.replace(/^@/, "").trim().toLowerCase();
+        const timeframeDays = Number(input.timeframe);
         const insertResult = await db.insert(youtubeScrapeJobs).values({
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
           handle,
           status: "pending",
+          timeframeDays,
         });
         const jobId = insertResult[0].insertId;
         if (!jobId) {
@@ -7525,7 +7530,8 @@ Return JSON only:
           jobId,
           ctx.user.id,
           ctx.workspaceId,
-          handle
+          handle,
+          { timeframeDays }
         ).catch((error) => {
           console.error(`YouTube scrape job ${jobId} failed:`, error);
         });

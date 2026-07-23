@@ -415,10 +415,11 @@ async function fetchTikTokVideosPage(
 export async function scrapeTikTokVideos(
   handle: string,
   onProgress?: (count: number, pageBatch?: TikTokVideoData[]) => void,
-  options?: { maxVideos?: number; timeoutMs?: number }
+  options?: { maxVideos?: number; timeoutMs?: number; sinceDate?: Date }
 ): Promise<TikTokScrapeResult> {
   const maxVideos = options?.maxVideos || 500;
   const timeoutMs = options?.timeoutMs || 5 * 60 * 1000;
+  const sinceDate = options?.sinceDate;
   const startTime = Date.now();
   const profile = await fetchTikTokProfile(handle);
 
@@ -472,11 +473,30 @@ export async function scrapeTikTokVideos(
       if (videos.length >= maxVideos) break;
     }
 
+    if (
+      sinceDate &&
+      pageNewVideos.some((video) => video.postedAt < sinceDate)
+    ) {
+      const kept = pageNewVideos.filter(
+        (video) => video.postedAt >= sinceDate
+      );
+      videos.splice(
+        videos.length - pageNewVideos.length,
+        pageNewVideos.length,
+        ...kept
+      );
+      pageNewVideos.splice(0, pageNewVideos.length, ...kept);
+      hasMore = false;
+      stoppedReason = `reached timeframe cutoff (${sinceDate.toISOString()})`;
+    }
+
     if (onProgress && pageNewVideos.length > 0) {
       onProgress(videos.length, pageNewVideos);
     }
 
-    if (!page.hasMore || page.nextCursor === null) {
+    if (!hasMore && stoppedReason.startsWith("reached timeframe cutoff")) {
+      // Early stop: do not advance pagination past the cutoff page.
+    } else if (!page.hasMore || page.nextCursor === null) {
       hasMore = false;
     } else if (seenCursors.has(page.nextCursor)) {
       hasMore = false;
