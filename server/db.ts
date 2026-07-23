@@ -1009,6 +1009,42 @@ export async function getRecreatedScriptsByReelId(
     .orderBy(desc(recreatedScripts.createdAt));
 }
 
+export async function getRecreatedScriptsByTiktokVideoId(
+  tiktokVideoId: number,
+  workspaceId: string
+): Promise<RecreatedScript[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .select()
+    .from(recreatedScripts)
+    .where(
+      and(
+        eq(recreatedScripts.tiktokVideoId, tiktokVideoId),
+        eq(recreatedScripts.workspaceId, workspaceId)
+      )
+    )
+    .orderBy(desc(recreatedScripts.createdAt));
+}
+
+export async function getRecreatedScriptsByYoutubeVideoId(
+  youtubeVideoId: number,
+  workspaceId: string
+): Promise<RecreatedScript[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db
+    .select()
+    .from(recreatedScripts)
+    .where(
+      and(
+        eq(recreatedScripts.youtubeVideoId, youtubeVideoId),
+        eq(recreatedScripts.workspaceId, workspaceId)
+      )
+    )
+    .orderBy(desc(recreatedScripts.createdAt));
+}
+
 // ── Featured Reel helpers (Path B: catalog-backed transcribe/recreate/save) ──
 
 /** Fetch a featured_reels row by id (returns undefined if missing). */

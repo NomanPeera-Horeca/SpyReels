@@ -128,6 +128,8 @@ import {
   getRecreatedScript,
   updateRecreatedScript,
   getRecreatedScriptsByReelId,
+  getRecreatedScriptsByTiktokVideoId,
+  getRecreatedScriptsByYoutubeVideoId,
   saveReel,
   unsaveReel,
   isReelSaved,
@@ -3816,15 +3818,41 @@ Return JSON only:
           .object({
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
+            tiktokVideoId: z.number().optional(),
+            youtubeVideoId: z.number().optional(),
           })
           .refine(
-            (d) => (d.reelId != null) !== (d.featuredReelId != null),
-            { message: "Provide exactly one of reelId or featuredReelId" }
+            (d) =>
+              [
+                d.reelId,
+                d.featuredReelId,
+                d.tiktokVideoId,
+                d.youtubeVideoId,
+              ].filter((id) => id != null).length === 1,
+            {
+              message:
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+            }
           )
       )
       .query(async ({ ctx, input }) => {
         if (input.featuredReelId != null) {
-          return getRecreatedScriptsByFeaturedReelId(input.featuredReelId, ctx.workspaceId);
+          return getRecreatedScriptsByFeaturedReelId(
+            input.featuredReelId,
+            ctx.workspaceId
+          );
+        }
+        if (input.tiktokVideoId != null) {
+          return getRecreatedScriptsByTiktokVideoId(
+            input.tiktokVideoId,
+            ctx.workspaceId
+          );
+        }
+        if (input.youtubeVideoId != null) {
+          return getRecreatedScriptsByYoutubeVideoId(
+            input.youtubeVideoId,
+            ctx.workspaceId
+          );
         }
         return getRecreatedScriptsByReelId(input.reelId!, ctx.workspaceId);
       }),

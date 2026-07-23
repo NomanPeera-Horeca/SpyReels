@@ -33,6 +33,11 @@ export type GridReelWorkflowPreview = {
   hookPattern?: string | null;
   viralFlag?: boolean | number | null;
   confidence?: number | null;
+  /** Optional TikTok / YouTube video row ids (Platform Research). Instagram omits these. */
+  tiktokVideoId?: number;
+  youtubeVideoId?: number;
+  /** Defaults to instagram when absent so existing Dashboard call sites stay unchanged. */
+  platform?: "instagram" | "tiktok" | "youtube";
 };
 
 type GridReelWorkflowDialogProps = {
@@ -73,6 +78,7 @@ export function GridReelWorkflowDialog({
                     shortcode={reel.shortcode}
                     videoUrl={reel.videoUrl}
                     thumbnailUrl={reel.thumbnailUrl}
+                    platform={reel.platform}
                     className="h-full w-full object-cover"
                   />
                 ) : reel.thumbnailUrl ? (

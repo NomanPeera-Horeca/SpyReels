@@ -30,9 +30,14 @@ import {
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
-import { formatNumber } from "@/components/InlineWorkflow";
+import { formatNumber, InlineWorkflow } from "@/components/InlineWorkflow";
+import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import Tooltip from "@/components/Tooltip";
 import { PlatformVideoCard } from "@/components/PlatformVideoCard";
+import {
+  LIBRARY_REMAKE_CTA_LABEL,
+} from "@/lib/libraryRemakeChainCore";
+import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type {
   PlatformResearchConfig,
   PlatformVideoLike,
@@ -59,12 +64,10 @@ function toPlatformVideos(
     viewCount: Number(row.viewCount ?? 0),
     likeCount: Number(row.likeCount ?? 0),
     commentCount: Number(row.commentCount ?? 0),
-    shareCount:
-      row.shareCount == null ? undefined : Number(row.shareCount),
+    shareCount: row.shareCount == null ? undefined : Number(row.shareCount),
     thumbnailUrl: (row.thumbnailUrl as string | null) ?? null,
     videoPageUrl: String(row.videoPageUrl ?? ""),
-    durationSec:
-      row.durationSec == null ? null : Number(row.durationSec),
+    durationSec: row.durationSec == null ? null : Number(row.durationSec),
     postedAt: row.postedAt as Date,
     engagementRate: Number(row.engagementRate ?? 0),
     caption: (row.caption as string | null | undefined) ?? null,
@@ -81,6 +84,7 @@ export default function PlatformResearch({
   initialJobId?: number;
 }) {
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
   const [activeJobId, setActiveJobId] = useState<number | null>(
@@ -88,7 +92,24 @@ export default function PlatformResearch({
   );
   const [sortBy, setSortBy] = useState<SortOption>("engagement_desc");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [gridModalVideoId, setGridModalVideoId] = useState<number | null>(null);
+  const [pendingTranscriptions, setPendingTranscriptions] = useState<
+    Set<number>
+  >(() => new Set());
+  const [recreatePulse, setRecreatePulse] = useState<{
+    videoId: number;
+    nonce: number;
+    openScriptId?: number;
+  } | null>(null);
+  const [txStatusById, setTxStatusById] = useState<
+    Record<
+      number,
+      { status: string; transcript?: string | null; segments?: unknown }
+    >
+  >({});
   const scrapeGate = useUsageGate("scrapeCount");
+  const prefsQuery = trpc.preferences.get.useQuery();
+  const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
 
   useEffect(() => {
     if (initialJobId != null) {
@@ -125,8 +146,7 @@ export default function PlatformResearch({
     };
   }, [config.documentTitle]);
 
-  // Platform-specific tRPC procedures are strongly typed; switch here once
-  // rather than trying to abstract the router path as a string.
+  // Platform-specific tRPC procedures are strongly typed; switch here once.
   const tiktokStart = trpc.tiktokScrape.start.useMutation({
     onSuccess: (data) => {
       setLocation(`${config.routePrefix}?jobId=${data.jobId}&from=research`);
@@ -245,6 +265,121 @@ export default function PlatformResearch({
     }
   }, [videosData?.videos, sortBy]);
 
+  const gridModalVideo = useMemo(
+    () =>
+      gridModalVideoId == null
+        ? null
+        : (sortedVideos.find((v) => v.id === gridModalVideoId) ?? null),
+    [sortedVideos, gridModalVideoId]
+  );
+
+  useEffect(() => {
+    if (gridModalVideoId == null) return;
+    if (!sortedVideos.some((v) => v.id === gridModalVideoId)) {
+      setGridModalVideoId(null);
+    }
+  }, [gridModalVideoId, sortedVideos]);
+
+  // Hydrate transcription status for visible cards (additive; Instagram Dashboard
+  // uses joined reel.transcription instead).
+  useEffect(() => {
+    let cancelled = false;
+    const ids = sortedVideos.map((v) => v.id);
+    if (ids.length === 0) return;
+
+    void (async () => {
+      const next: typeof txStatusById = {};
+      await Promise.all(
+        ids.slice(0, 40).map(async (id) => {
+          try {
+            const status = await utils.transcribe.status.fetch(
+              config.platform === "tiktok"
+                ? { tiktokVideoId: id }
+                : { youtubeVideoId: id }
+            );
+            if (status) {
+              next[id] = {
+                status: status.status,
+                transcript: status.transcript,
+                segments: status.segments,
+              };
+            }
+          } catch {
+            /* ignore per-video status failures */
+          }
+        })
+      );
+      if (!cancelled) {
+        setTxStatusById((prev) => ({ ...prev, ...next }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sortedVideos, config.platform, utils.transcribe.status]);
+
+  const transcribeMutation = trpc.transcribe.start.useMutation({
+    onError: (err) => {
+      if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {
+        toast.error("Monthly transcription limit reached.");
+      } else {
+        toast.error(err.message);
+      }
+    },
+  });
+
+  const runTranscribe = (videoId: number) => {
+    setPendingTranscriptions((prev) => new Set(prev).add(videoId));
+    setTxStatusById((prev) => ({
+      ...prev,
+      [videoId]: { status: "processing" },
+    }));
+    const input =
+      config.platform === "tiktok"
+        ? { tiktokVideoId: videoId }
+        : { youtubeVideoId: videoId };
+    transcribeMutation.mutate(input as never, {
+      onSettled: () => {
+        void utils.transcribe.status
+          .fetch(input as never)
+          .then((status) => {
+            if (!status) return;
+            setTxStatusById((prev) => ({
+              ...prev,
+              [videoId]: {
+                status: status.status,
+                transcript: status.transcript,
+                segments: status.segments,
+              },
+            }));
+            if (status.status === "completed" || status.status === "failed") {
+              setPendingTranscriptions((prev) => {
+                const next = new Set(prev);
+                next.delete(videoId);
+                return next;
+              });
+            }
+          })
+          .catch(() => {
+            setPendingTranscriptions((prev) => {
+              const next = new Set(prev);
+              next.delete(videoId);
+              return next;
+            });
+          });
+      },
+    });
+  };
+
+  const triggerRecreatePulse = (videoId: number) => {
+    setGridModalVideoId(videoId);
+    setRecreatePulse((prev) => ({
+      videoId,
+      nonce: (prev?.videoId === videoId ? prev.nonce : 0) + 1,
+    }));
+  };
+
   const handleSubmit = () => {
     const trimmed = handle.trim().replace(/^@/, "");
     if (!trimmed) return;
@@ -258,8 +393,50 @@ export default function PlatformResearch({
 
   const displayHandle =
     job?.handle || handle.replace(/^@/, "").trim() || null;
-  const showResults =
-    job?.status === "completed" && videosData != null;
+  const showResults = job?.status === "completed" && videosData != null;
+
+  const buildOneClick = (video: PlatformVideoLike): OneClickRemakeAction => {
+    const tx = txStatusById[video.id];
+    const hasTranscription = tx?.status === "completed";
+    const isNoSpeech =
+      hasTranscription &&
+      !String(tx?.transcript ?? "").trim() &&
+      !(Array.isArray(tx?.segments) && tx.segments.length > 0);
+    const isProcessing =
+      pendingTranscriptions.has(video.id) ||
+      tx?.status === "processing" ||
+      tx?.status === "pending";
+
+    if (isProcessing) {
+      return {
+        label: "Transcribing...",
+        disabled: true,
+        loading: true,
+        onClick: () => {},
+      };
+    }
+    if (isNoSpeech) {
+      return {
+        label: "No voice",
+        disabled: true,
+        tooltip: "No transcript available. Click the reel to view details.",
+        onClick: () => {},
+      };
+    }
+    if (hasTranscription) {
+      return {
+        label: LIBRARY_REMAKE_CTA_LABEL,
+        onClick: () => triggerRecreatePulse(video.id),
+      };
+    }
+    return {
+      label: LIBRARY_REMAKE_CTA_LABEL,
+      onClick: () => {
+        runTranscribe(video.id);
+        triggerRecreatePulse(video.id);
+      },
+    };
+  };
 
   return (
     <div className="mt-5 space-y-5">
@@ -493,21 +670,161 @@ export default function PlatformResearch({
             </div>
 
             <div className="space-y-3">
-              {/* List currently renders the same grid shell (placeholder). */}
               <div className={WORKSPACE_REEL_GRID_CLASS}>
-                {sortedVideos.map((video, index) => (
-                  <PlatformVideoCard
-                    key={video.id}
-                    video={video}
-                    index={index}
-                    config={config}
-                  />
-                ))}
+                {sortedVideos.map((video, index) => {
+                  const tx = txStatusById[video.id];
+                  const hasTranscription = tx?.status === "completed";
+                  const isNoSpeech =
+                    hasTranscription &&
+                    !String(tx?.transcript ?? "").trim() &&
+                    !(
+                      Array.isArray(tx?.segments) && tx.segments.length > 0
+                    );
+                  const isProcessing =
+                    pendingTranscriptions.has(video.id) ||
+                    tx?.status === "processing" ||
+                    tx?.status === "pending";
+                  const isFailed = tx?.status === "failed";
+
+                  return (
+                    <PlatformVideoCard
+                      key={video.id}
+                      video={video}
+                      index={index}
+                      config={config}
+                      isModalOpen={gridModalVideoId === video.id}
+                      userTimezone={userTimezone}
+                      hasTranscription={hasTranscription}
+                      isProcessing={isProcessing}
+                      isFailed={!!isFailed}
+                      isNoSpeech={!!isNoSpeech}
+                      isSaved={false}
+                      recreateState="none"
+                      oneClickRemake={buildOneClick(video)}
+                      onMediaClick={() => setGridModalVideoId(video.id)}
+                      onToggleSave={() => {}}
+                      onTranscribe={() => runTranscribe(video.id)}
+                      onExpand={() => setGridModalVideoId(video.id)}
+                      onMakeVersion={() => triggerRecreatePulse(video.id)}
+                      onOpenMyScript={() => setGridModalVideoId(video.id)}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
       ) : null}
+
+      <GridReelWorkflowDialog
+        open={gridModalVideo != null}
+        onOpenChange={(open) => {
+          if (!open) setGridModalVideoId(null);
+        }}
+        reel={
+          gridModalVideo
+            ? {
+                id: gridModalVideo.id,
+                caption:
+                  config.getCaption(gridModalVideo) || null,
+                thumbnailUrl: gridModalVideo.thumbnailUrl,
+                videoUrl: config.getVideoUrl(gridModalVideo),
+                viewCount: gridModalVideo.viewCount,
+                likeCount: gridModalVideo.likeCount,
+                commentCount: gridModalVideo.commentCount,
+                engagementRate: gridModalVideo.engagementRate,
+                postedAt: gridModalVideo.postedAt,
+                duration: gridModalVideo.durationSec,
+                niche: null,
+                hookPattern: null,
+                viralFlag: false,
+                confidence: null,
+                tiktokVideoId:
+                  config.platform === "tiktok" ? gridModalVideo.id : undefined,
+                youtubeVideoId:
+                  config.platform === "youtube" ? gridModalVideo.id : undefined,
+                platform: config.platform,
+              }
+            : null
+        }
+        userTimezone={userTimezone}
+      >
+        {gridModalVideo ? (
+          config.platform === "tiktok" ? (
+            <InlineWorkflow
+              reelSource="tiktok"
+              tiktokVideoId={gridModalVideo.id}
+              handle={displayHandle || ""}
+              reelCaption={config.getCaption(gridModalVideo) || undefined}
+              hasTranscription={
+                txStatusById[gridModalVideo.id]?.status === "completed"
+              }
+              isProcessing={
+                pendingTranscriptions.has(gridModalVideo.id) ||
+                txStatusById[gridModalVideo.id]?.status === "processing" ||
+                txStatusById[gridModalVideo.id]?.status === "pending"
+              }
+              isNoSpeech={
+                txStatusById[gridModalVideo.id]?.status === "completed" &&
+                !String(txStatusById[gridModalVideo.id]?.transcript ?? "").trim() &&
+                !(
+                  Array.isArray(txStatusById[gridModalVideo.id]?.segments) &&
+                  (txStatusById[gridModalVideo.id]?.segments as unknown[])
+                    .length > 0
+                )
+              }
+              onTranscribe={() => runTranscribe(gridModalVideo.id)}
+              userTimezone={userTimezone}
+              postedAt={gridModalVideo.postedAt}
+              recreateEntrySignal={
+                recreatePulse?.videoId === gridModalVideo.id
+                  ? {
+                      nonce: recreatePulse.nonce,
+                      openScriptId: recreatePulse.openScriptId,
+                    }
+                  : undefined
+              }
+              onRemakeSaved={() => setGridModalVideoId(null)}
+            />
+          ) : (
+            <InlineWorkflow
+              reelSource="youtube"
+              youtubeVideoId={gridModalVideo.id}
+              handle={displayHandle || ""}
+              reelCaption={config.getCaption(gridModalVideo) || undefined}
+              hasTranscription={
+                txStatusById[gridModalVideo.id]?.status === "completed"
+              }
+              isProcessing={
+                pendingTranscriptions.has(gridModalVideo.id) ||
+                txStatusById[gridModalVideo.id]?.status === "processing" ||
+                txStatusById[gridModalVideo.id]?.status === "pending"
+              }
+              isNoSpeech={
+                txStatusById[gridModalVideo.id]?.status === "completed" &&
+                !String(txStatusById[gridModalVideo.id]?.transcript ?? "").trim() &&
+                !(
+                  Array.isArray(txStatusById[gridModalVideo.id]?.segments) &&
+                  (txStatusById[gridModalVideo.id]?.segments as unknown[])
+                    .length > 0
+                )
+              }
+              onTranscribe={() => runTranscribe(gridModalVideo.id)}
+              userTimezone={userTimezone}
+              postedAt={gridModalVideo.postedAt}
+              recreateEntrySignal={
+                recreatePulse?.videoId === gridModalVideo.id
+                  ? {
+                      nonce: recreatePulse.nonce,
+                      openScriptId: recreatePulse.openScriptId,
+                    }
+                  : undefined
+              }
+              onRemakeSaved={() => setGridModalVideoId(null)}
+            />
+          )
+        ) : null}
+      </GridReelWorkflowDialog>
     </div>
   );
 }

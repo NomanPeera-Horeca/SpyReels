@@ -290,9 +290,28 @@ export type InlineWorkflowProps = {
   reelCaption?: string;
   /** Close grid modal or collapse panel after save / Open in Studio */
   onRemakeSaved?: () => void;
+  /**
+   * Platform Research: optional TikTok / YouTube video row ids.
+   * When set, transcribe/recreate inputs use these instead of reelId/featuredReelId.
+   * Instagram Dashboard never passes these; existing behavior is unchanged.
+   */
+  tiktokVideoId?: number;
+  youtubeVideoId?: number;
 } & (
   | { reelSource?: "user_job"; reelId: number; featuredReelId?: never }
   | { reelSource: "featured"; reelId?: never; featuredReelId: number }
+  | {
+      reelSource: "tiktok";
+      reelId?: never;
+      featuredReelId?: never;
+      tiktokVideoId: number;
+    }
+  | {
+      reelSource: "youtube";
+      reelId?: never;
+      featuredReelId?: never;
+      youtubeVideoId: number;
+    }
 );
 
 export function InlineWorkflow(props: InlineWorkflowProps) {
@@ -314,18 +333,36 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     userTimezone,
     postedAt,
   } = props;
-  const reelSource: "user_job" | "featured" =
-    props.reelSource === "featured" ? "featured" : "user_job";
+  const reelSource: "user_job" | "featured" | "tiktok" | "youtube" =
+    props.reelSource === "featured"
+      ? "featured"
+      : props.reelSource === "tiktok"
+        ? "tiktok"
+        : props.reelSource === "youtube"
+          ? "youtube"
+          : "user_job";
   const reelId = reelSource === "user_job" ? props.reelId : undefined;
   const featuredReelId =
     reelSource === "featured" ? props.featuredReelId : undefined;
-  const displayReelId: number = (reelId ?? featuredReelId ?? 0) as number;
+  const tiktokVideoId = props.tiktokVideoId;
+  const youtubeVideoId = props.youtubeVideoId;
+  const displayReelId: number = (tiktokVideoId ??
+    youtubeVideoId ??
+    reelId ??
+    featuredReelId ??
+    0) as number;
   // Input shapes the `transcribe` / `recreate` routers accept; both
   // branches get enforced by Zod `refine` + runtime checks server-side.
+  // TikTok / YouTube IDs take precedence only when explicitly provided;
+  // Instagram Dashboard paths still resolve to reelId / featuredReelId only.
   const transcribeIdInput =
-    reelSource === "featured"
-      ? { featuredReelId: featuredReelId! }
-      : { reelId: reelId! };
+    tiktokVideoId != null
+      ? { tiktokVideoId }
+      : youtubeVideoId != null
+        ? { youtubeVideoId }
+        : reelSource === "featured"
+          ? { featuredReelId: featuredReelId! }
+          : { reelId: reelId! };
   const recreateIdInput = transcribeIdInput;
   const [activeScriptId, setActiveScriptId] = useState<number | null>(null);
   const [gradeLevel, setGradeLevel] = useState("auto");
@@ -401,7 +438,13 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       // while a run is in flight before the list row refreshes, and when
       // the user requested a transcript before the parent has flipped
       // `hasTranscription` to true.
-      enabled: hasTranscription || isProcessing,
+      // TikTok / YouTube Platform Research always enables so status is
+      // discovered even when the parent list has no transcription join.
+      enabled:
+        hasTranscription ||
+        isProcessing ||
+        tiktokVideoId != null ||
+        youtubeVideoId != null,
       refetchInterval: (query) => {
         const data = query.state.data;
         return data?.status === "processing" ? 2000 : false;
@@ -445,7 +488,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     }
   );
 
-  const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput);
+  const previousScriptsQuery = trpc.recreate.list.useQuery(recreateIdInput as never);
 
   const onboardingQuery = trpc.onboarding.getState.useQuery();
   const prevHasCompletedFirstSpyRef = useRef<boolean | null>(null);
@@ -795,9 +838,11 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       <SparkCaptureStrip
         reelHandle={handle}
         reelCaption={reelCaption}
-        {...(reelSource === "featured"
-          ? { featuredReelId: featuredReelId! }
-          : { reelId: reelId! })}
+        {...(tiktokVideoId != null || youtubeVideoId != null
+          ? {}
+          : reelSource === "featured"
+            ? { featuredReelId: featuredReelId! }
+            : { reelId: reelId! })}
       />
 
       <div className="p-4">

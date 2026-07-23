@@ -25,7 +25,9 @@ import {
  */
 export type ReelActionSource =
   | { source: "user_job"; reelId: number; jobId: number }
-  | { source: "featured"; featuredReelId: number };
+  | { source: "featured"; featuredReelId: number }
+  | { source: "tiktok"; tiktokVideoId: number }
+  | { source: "youtube"; youtubeVideoId: number };
 
 export interface ReelActionButtonsProps {
   /** Selects the discriminated input for `saved.toggle`/`transcribe.start`. */

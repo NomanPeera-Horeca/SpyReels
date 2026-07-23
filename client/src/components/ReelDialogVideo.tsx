@@ -10,6 +10,11 @@ type ReelDialogVideoProps = {
   shortcode?: string | null;
   videoUrl?: string | null;
   thumbnailUrl?: string | null;
+  /**
+   * Instagram (default / undefined) may refresh expired CDN URLs via shortcode.
+   * TikTok / YouTube never call refreshVideoUrl; they use the passed videoUrl only.
+   */
+  platform?: "instagram" | "tiktok" | "youtube";
   className?: string;
 };
 
@@ -19,6 +24,7 @@ export function ReelDialogVideo({
   shortcode,
   videoUrl,
   thumbnailUrl,
+  platform,
   className,
 }: ReelDialogVideoProps) {
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
@@ -27,6 +33,9 @@ export function ReelDialogVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const refreshMutation = trpc.reels.refreshVideoUrl.useMutation();
   const code = (shortcode ?? "").trim();
+  // Absent platform means Instagram (existing Dashboard call sites).
+  const allowInstagramRefresh =
+    platform == null || platform === "instagram";
 
   useEffect(() => {
     setResolvedSrc((videoUrl ?? "").trim());
@@ -35,6 +44,7 @@ export function ReelDialogVideo({
 
   const fetchFreshUrl = useCallback(async (): Promise<string | null> => {
     const current = (videoUrl ?? "").trim();
+    if (!allowInstagramRefresh) return current || null;
     if (current && !needsVideoUrlRefresh(current)) return current;
     if (!code) return current || null;
     try {
@@ -48,11 +58,12 @@ export function ReelDialogVideo({
       toast.error("Video preview unavailable", { description: message });
       return null;
     }
-  }, [videoUrl, code, reelId, refreshMutation]);
+  }, [videoUrl, code, reelId, refreshMutation, allowInstagramRefresh]);
 
   useEffect(() => {
     let cancelled = false;
     const initial = (videoUrl ?? "").trim();
+    if (!allowInstagramRefresh) return;
     if (!initial && !code) return;
     if (initial && !needsVideoUrlRefresh(initial)) return;
 
@@ -74,7 +85,7 @@ export function ReelDialogVideo({
     return () => {
       cancelled = true;
     };
-  }, [videoUrl, code, reelId, fetchFreshUrl]);
+  }, [videoUrl, code, reelId, fetchFreshUrl, allowInstagramRefresh]);
 
   const thumb = (thumbnailUrl ?? "").trim();
 
@@ -110,7 +121,7 @@ export function ReelDialogVideo({
     return (
       <div className={`relative ${className ?? ""}`}>
         <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
-        {videoFailed && code ? (
+        {videoFailed && code && allowInstagramRefresh ? (
           <button
             type="button"
             className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70 text-white"
