@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   Loader2,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
+import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import Tooltip from "@/components/Tooltip";
 import { PlatformVideoCard } from "@/components/PlatformVideoCard";
 import {
   LIBRARY_REMAKE_CTA_LABEL,
+  READY_TO_FILM_CTA_LABEL,
 } from "@/lib/libraryRemakeChainCore";
 import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type {
@@ -47,6 +49,22 @@ import type {
 } from "@/lib/platformResearchConfigs";
 
 type ViewMode = "list" | "grid";
+
+const RECREATE_BATCH_STALE_MS = 300_000;
+const RECREATE_BATCH_POLL_MS = 5_000;
+
+type RecreateBatchEntry = { latestScriptId: number; status: string };
+
+function videoRecreateState(
+  entry: RecreateBatchEntry | undefined
+): "none" | "generating" | "ready" | "failed" {
+  if (!entry) return "none";
+  if (entry.status === "pending" || entry.status === "processing") {
+    return "generating";
+  }
+  if (entry.status === "completed") return "ready";
+  return "failed";
+}
 
 const SORT_ICONS: Record<SortOption, React.ReactNode> = {
   views_desc: <Eye className="h-3.5 w-3.5" />,
@@ -75,6 +93,8 @@ function toPlatformVideos(
     caption: (row.caption as string | null | undefined) ?? null,
     title: (row.title as string | null | undefined) ?? null,
     videoUrl: (row.videoUrl as string | null | undefined) ?? null,
+    outsideSpyWindow:
+      row.outsideSpyWindow == null ? null : Boolean(row.outsideSpyWindow),
   }));
 }
 
@@ -301,6 +321,38 @@ export default function PlatformResearch({
   );
   const savedMap = savedBatchQuery.data || {};
 
+  const recreateBatchQuery = trpc.recreate.checkBatch.useQuery(
+    config.platform === "tiktok"
+      ? { tiktokVideoIds: videoIdsForSaved }
+      : { youtubeVideoIds: videoIdsForSaved },
+    {
+      enabled: videoIdsForSaved.length > 0,
+      staleTime: RECREATE_BATCH_STALE_MS,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (!d) return false;
+        for (const v of Object.values(d)) {
+          if (
+            v &&
+            (v.status === "pending" || v.status === "processing")
+          ) {
+            return RECREATE_BATCH_POLL_MS;
+          }
+        }
+        return false;
+      },
+    }
+  );
+  const recreateMap = recreateBatchQuery.data || {};
+
+  const videosInSpyWindow = allVideos.filter(
+    (v) => v.outsideSpyWindow !== true
+  ).length;
+  const backfilledVideoCount =
+    allVideos.length > videosInSpyWindow
+      ? allVideos.length - videosInSpyWindow
+      : 0;
+
   const toggleSave = trpc.saved.toggle.useMutation({
     onSuccess: (data) => {
       utils.saved.checkBatch.invalidate();
@@ -424,6 +476,18 @@ export default function PlatformResearch({
     }));
   };
 
+  const triggerOpenMyScript = useCallback(
+    (videoId: number, openScriptId: number) => {
+      setGridModalVideoId(videoId);
+      setRecreatePulse((prev) => ({
+        videoId,
+        openScriptId,
+        nonce: (prev?.videoId === videoId ? prev.nonce : 0) + 1,
+      }));
+    },
+    []
+  );
+
   const handleSubmit = () => {
     const trimmed = handle.trim().replace(/^@/, "");
     if (!trimmed) return;
@@ -450,6 +514,8 @@ export default function PlatformResearch({
       pendingTranscriptions.has(video.id) ||
       tx?.status === "processing" ||
       tx?.status === "pending";
+    const batchEntry = recreateMap[video.id] as RecreateBatchEntry | undefined;
+    const recreateSt = videoRecreateState(batchEntry);
 
     if (isProcessing) {
       return {
@@ -457,6 +523,23 @@ export default function PlatformResearch({
         disabled: true,
         loading: true,
         onClick: () => {},
+      };
+    }
+    if (recreateSt === "generating") {
+      return {
+        label: "Generating...",
+        disabled: true,
+        loading: true,
+        onClick: () => {},
+      };
+    }
+    if (recreateSt === "ready" && batchEntry?.latestScriptId) {
+      return {
+        label: READY_TO_FILM_CTA_LABEL,
+        tone: "ready",
+        tooltip: "Open your script and record in the teleprompter",
+        onClick: () =>
+          triggerOpenMyScript(video.id, batchEntry.latestScriptId),
       };
     }
     if (isNoSpeech) {
@@ -737,6 +820,25 @@ export default function PlatformResearch({
               </div>
             </div>
 
+            {backfilledVideoCount > 0 &&
+            typeof job?.timeframeDays === "number" ? (
+              <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
+                <p className="text-sm text-foreground">
+                  Only {videosInSpyWindow}{" "}
+                  {videosInSpyWindow === 1
+                    ? config.contentNoun.replace(/s$/i, "")
+                    : config.contentNoun}{" "}
+                  posted in the last {job.timeframeDays} days. We added{" "}
+                  {backfilledVideoCount} older{" "}
+                  {backfilledVideoCount === 1
+                    ? config.contentNoun.replace(/s$/i, "")
+                    : config.contentNoun}{" "}
+                  so you have at least{" "}
+                  {Math.min(allVideos.length, MIN_SPY_DISPLAY_REELS)} to study.
+                </p>
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               <div className={WORKSPACE_REEL_GRID_CLASS}>
                 {sortedVideos.map((video, index) => {
@@ -754,6 +856,10 @@ export default function PlatformResearch({
                     tx?.status === "pending";
                   const isFailed = tx?.status === "failed";
                   const isSaved = !!savedMap[video.id];
+                  const batchEntry = recreateMap[video.id] as
+                    | RecreateBatchEntry
+                    | undefined;
+                  const recreateSt = videoRecreateState(batchEntry);
 
                   return (
                     <PlatformVideoCard
@@ -768,7 +874,7 @@ export default function PlatformResearch({
                       isFailed={!!isFailed}
                       isNoSpeech={!!isNoSpeech}
                       isSaved={isSaved}
-                      recreateState="none"
+                      recreateState={recreateSt}
                       oneClickRemake={buildOneClick(video)}
                       topRight={
                         <button
@@ -810,7 +916,16 @@ export default function PlatformResearch({
                       onTranscribe={() => runTranscribe(video.id)}
                       onExpand={() => setGridModalVideoId(video.id)}
                       onMakeVersion={() => triggerRecreatePulse(video.id)}
-                      onOpenMyScript={() => setGridModalVideoId(video.id)}
+                      onOpenMyScript={() => {
+                        if (batchEntry?.latestScriptId) {
+                          triggerOpenMyScript(
+                            video.id,
+                            batchEntry.latestScriptId
+                          );
+                        } else {
+                          setGridModalVideoId(video.id);
+                        }
+                      }}
                       saveBusy={toggleSave.isPending}
                     />
                   );

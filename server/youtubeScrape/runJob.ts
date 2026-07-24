@@ -28,7 +28,7 @@ export async function runYouTubeScrapeJob(
     Date.now() - timeframeDays * 24 * 60 * 60 * 1000
   );
   let pastFetchingProfile = false;
-  let videosFoundCount = 0;
+  let videosPersistedCount = 0;
 
   try {
     console.log(
@@ -48,10 +48,9 @@ export async function runYouTubeScrapeJob(
     const result = await scrapeYouTubeShorts(
       cleanHandle,
       (count, pageBatch) => {
-        const batch =
-          pageBatch?.filter((video) => video.postedAt >= sinceDate) ?? [];
-        videosFoundCount += batch.length;
-        const currentVideosFound = videosFoundCount;
+        const batch = pageBatch ?? [];
+        videosPersistedCount += batch.length;
+        const currentVideosFound = videosPersistedCount;
         const shouldMarkFetchingProfile = !pastFetchingProfile;
         if (shouldMarkFetchingProfile) {
           pastFetchingProfile = true;
@@ -96,6 +95,7 @@ export async function runYouTubeScrapeJob(
                 durationSec: Math.round(video.durationSec),
                 postedAt: video.postedAt,
                 ownerHandle: video.ownerHandle,
+                outsideSpyWindow: video.outsideSpyWindow === true ? true : null,
               }))
             );
           }
@@ -117,16 +117,17 @@ export async function runYouTubeScrapeJob(
     );
 
     await Promise.all(pendingWrites);
-    const videosInWindow = result.videos.filter(
-      (video) => video.postedAt >= sinceDate
-    );
+
+    const inWindowCount = result.videos.filter(
+      (video) => video.outsideSpyWindow !== true
+    ).length;
 
     await db
       .update(youtubeScrapeJobs)
       .set({
         status: "completed",
-        totalVideos: videosInWindow.length,
-        videosFound: videosInWindow.length,
+        totalVideos: result.videos.length,
+        videosFound: result.videos.length,
         subscriberCount: result.subscriberCount,
         profilePicUrl: result.profilePicUrl,
         currentStep: "complete",
@@ -136,7 +137,7 @@ export async function runYouTubeScrapeJob(
       .where(eq(youtubeScrapeJobs.id, jobId));
 
     console.log(
-      `[runYouTubeScrapeJob ${jobId}] completed handle=@${cleanHandle} videos=${videosInWindow.length} timeframeDays=${timeframeDays} subscribers=${result.subscriberCount}`
+      `[runYouTubeScrapeJob ${jobId}] completed handle=@${cleanHandle} videos=${result.videos.length} in_window=${inWindowCount} timeframeDays=${timeframeDays} subscribers=${result.subscriberCount}`
     );
   } catch (error) {
     await Promise.allSettled(pendingWrites);

@@ -3,6 +3,8 @@
  * Uses global fetch with x-api-key.
  */
 
+import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
@@ -134,6 +136,10 @@ export interface TikTokVideoData {
   durationSec: number;
   postedAt: Date;
   ownerUsername: string;
+  /** ScrapeCreators `is_top` (0|1). Pinned; may appear out of chrono order. */
+  isTop?: boolean;
+  /** True when collected only to reach MIN_SPY_DISPLAY_REELS (older than spy window). */
+  outsideSpyWindow?: boolean;
 }
 
 export interface TikTokVideoInfo {
@@ -310,6 +316,7 @@ function parseTikTokVideo(
     durationSec: toFiniteNumber(video?.duration) / 1000,
     postedAt,
     ownerUsername,
+    isTop: toFiniteNumber(item?.is_top) === 1,
   };
 }
 
@@ -429,25 +436,30 @@ export async function scrapeTikTokVideos(
     );
   }
 
-  const videos: TikTokVideoData[] = [];
+  // Mirror Instagram scrapeReels: in-window + min-sample backfill.
+  const inWindowVideos: TikTokVideoData[] = [];
+  const backfillVideos: TikTokVideoData[] = [];
   const seenAwemeIds = new Set<string>();
   const seenCursors = new Set<number>();
+  const combinedCount = () => inWindowVideos.length + backfillVideos.length;
+
   let maxCursor: number | undefined;
   let hasMore = true;
   let pageCount = 0;
   const maxPages = 100;
+  let consecutiveInWindowEmptyPages = 0;
   let stoppedReason = "";
 
   while (hasMore && pageCount < maxPages) {
     if (Date.now() - startTime > timeoutMs) {
       stoppedReason = `timeout after ${Math.round((Date.now() - startTime) / 1000)}s`;
       console.warn(
-        `[TikTok] Scrape timeout for @${profile.uniqueId} after ${pageCount} pages, ${videos.length} videos collected`
+        `[TikTok] Scrape timeout for @${profile.uniqueId} after ${pageCount} pages, ${combinedCount()} videos collected`
       );
       break;
     }
 
-    if (videos.length >= maxVideos) {
+    if (combinedCount() >= maxVideos) {
       stoppedReason = `reached ${maxVideos} video cap`;
       console.log(
         `[TikTok] Reached video cap (${maxVideos}) for @${profile.uniqueId} after ${pageCount} pages`
@@ -463,40 +475,51 @@ export async function scrapeTikTokVideos(
     }
 
     const page = await fetchTikTokVideosPage(profile.uniqueId, maxCursor);
+    let foundInWindowThisPage = false;
     const pageNewVideos: TikTokVideoData[] = [];
 
     for (const video of page.videos) {
       if (seenAwemeIds.has(video.awemeId)) continue;
+      if (Number.isNaN(video.postedAt.getTime())) continue;
       seenAwemeIds.add(video.awemeId);
-      videos.push(video);
-      pageNewVideos.push(video);
-      if (videos.length >= maxVideos) break;
+
+      // is_top harden (scrapeTikTokVideos classification loop):
+      // Pinned items (is_top === 1) are collected normally (in-window or
+      // backfill by postedAt). They are excluded from the timeframe cutoff
+      // decision: we never early-stop on `postedAt < sinceDate` for isTop
+      // items. Stop uses Instagram's consecutiveInWindowEmptyPages shape only.
+      const inWindow = !sinceDate || video.postedAt >= sinceDate;
+      if (inWindow) {
+        inWindowVideos.push(video);
+        pageNewVideos.push(video);
+        foundInWindowThisPage = true;
+        if (combinedCount() >= maxVideos) break;
+        continue;
+      }
+
+      // Out-of-window (including pinned): backfill while under the min sample.
+      if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
+        const backfillVideo: TikTokVideoData = {
+          ...video,
+          outsideSpyWindow: true,
+        };
+        backfillVideos.push(backfillVideo);
+        pageNewVideos.push(backfillVideo);
+        if (combinedCount() >= maxVideos) break;
+      }
     }
 
-    if (
-      sinceDate &&
-      pageNewVideos.some((video) => video.postedAt < sinceDate)
-    ) {
-      const kept = pageNewVideos.filter(
-        (video) => video.postedAt >= sinceDate
-      );
-      videos.splice(
-        videos.length - pageNewVideos.length,
-        pageNewVideos.length,
-        ...kept
-      );
-      pageNewVideos.splice(0, pageNewVideos.length, ...kept);
-      hasMore = false;
-      stoppedReason = `reached timeframe cutoff (${sinceDate.toISOString()})`;
+    if (foundInWindowThisPage) {
+      consecutiveInWindowEmptyPages = 0;
+    } else {
+      consecutiveInWindowEmptyPages++;
     }
 
     if (onProgress && pageNewVideos.length > 0) {
-      onProgress(videos.length, pageNewVideos);
+      onProgress(combinedCount(), pageNewVideos);
     }
 
-    if (!hasMore && stoppedReason.startsWith("reached timeframe cutoff")) {
-      // Early stop: do not advance pagination past the cutoff page.
-    } else if (!page.hasMore || page.nextCursor === null) {
+    if (!page.hasMore || page.nextCursor === null) {
       hasMore = false;
     } else if (seenCursors.has(page.nextCursor)) {
       hasMore = false;
@@ -504,15 +527,28 @@ export async function scrapeTikTokVideos(
       console.warn(
         `[TikTok] Repeated max_cursor ${page.nextCursor} for @${profile.uniqueId}, stopping pagination`
       );
+    } else if (
+      sinceDate &&
+      inWindowVideos.length > 0 &&
+      consecutiveInWindowEmptyPages >= 3 &&
+      combinedCount() >= MIN_SPY_DISPLAY_REELS
+    ) {
+      hasMore = false;
+      stoppedReason = "in-window window exhausted with minimum sample met";
     } else {
       seenCursors.add(page.nextCursor);
       maxCursor = page.nextCursor;
     }
   }
 
+  const videos = [...inWindowVideos, ...backfillVideos];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const backfillNote =
+    backfillVideos.length > 0
+      ? `, in_window=${inWindowVideos.length}, backfill=${backfillVideos.length}`
+      : "";
   console.log(
-    `[TikTok] Scraped ${videos.length} videos for @${profile.uniqueId} in ${elapsed}s (${pageCount} pages, ${profile.followerCount} followers${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
+    `[TikTok] Scraped ${videos.length} videos for @${profile.uniqueId} in ${elapsed}s (${pageCount} pages, ${profile.followerCount} followers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
   );
 
   return {

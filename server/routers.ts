@@ -3869,7 +3869,7 @@ Return JSON only:
      * Latest recreated script per reel (max row id) for the current user.
      * Dashboard list/grid uses this to show Make My Version / Generating /
      * Open My Script. Missing keys = no row yet. Exactly one of reelIds /
-     * featuredReelIds must be non-empty.
+     * featuredReelIds / tiktokVideoIds / youtubeVideoIds must be non-empty.
      */
     checkBatch: protectedProcedure
       .input(
@@ -3877,14 +3877,20 @@ Return JSON only:
           .object({
             reelIds: z.array(z.number()).optional(),
             featuredReelIds: z.array(z.number()).optional(),
+            tiktokVideoIds: z.array(z.number()).optional(),
+            youtubeVideoIds: z.array(z.number()).optional(),
           })
           .refine(
             (d) =>
-              (d.reelIds && d.reelIds.length > 0) !==
-              (d.featuredReelIds && d.featuredReelIds.length > 0),
+              [
+                d.reelIds && d.reelIds.length > 0,
+                d.featuredReelIds && d.featuredReelIds.length > 0,
+                d.tiktokVideoIds && d.tiktokVideoIds.length > 0,
+                d.youtubeVideoIds && d.youtubeVideoIds.length > 0,
+              ].filter(Boolean).length === 1,
             {
               message:
-                "Provide exactly one of reelIds or featuredReelIds (non-empty)",
+                "Provide exactly one of reelIds, featuredReelIds, tiktokVideoIds, or youtubeVideoIds (non-empty)",
             }
           )
       )
@@ -3895,10 +3901,34 @@ Return JSON only:
           number,
           { latestScriptId: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
         > = {};
+
+        const fillBest = (
+          rows: Array<{
+            sourceId: number | null;
+            id: number;
+            status: (typeof recreatedScripts.$inferSelect)["status"];
+          }>
+        ) => {
+          const best = new Map<
+            number,
+            { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
+          >();
+          for (const r of rows) {
+            if (r.sourceId == null) continue;
+            const cur = best.get(r.sourceId);
+            if (!cur || r.id > cur.id) {
+              best.set(r.sourceId, { id: r.id, status: r.status });
+            }
+          }
+          for (const [sid, v] of best) {
+            map[sid] = { latestScriptId: v.id, status: v.status };
+          }
+        };
+
         if (input.featuredReelIds && input.featuredReelIds.length > 0) {
           const rows = await db
             .select({
-              featuredReelId: recreatedScripts.featuredReelId,
+              sourceId: recreatedScripts.featuredReelId,
               id: recreatedScripts.id,
               status: recreatedScripts.status,
             })
@@ -3912,25 +3942,55 @@ Return JSON only:
                 )
               )
             );
-          const best = new Map<
-            number,
-            { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
-          >();
-          for (const r of rows) {
-            if (r.featuredReelId == null) continue;
-            const cur = best.get(r.featuredReelId);
-            if (!cur || r.id > cur.id) {
-              best.set(r.featuredReelId, { id: r.id, status: r.status });
-            }
-          }
-          for (const [fid, v] of best) {
-            map[fid] = { latestScriptId: v.id, status: v.status };
-          }
+          fillBest(rows);
           return map;
         }
+
+        if (input.tiktokVideoIds && input.tiktokVideoIds.length > 0) {
+          const rows = await db
+            .select({
+              sourceId: recreatedScripts.tiktokVideoId,
+              id: recreatedScripts.id,
+              status: recreatedScripts.status,
+            })
+            .from(recreatedScripts)
+            .where(
+              and(
+                eq(recreatedScripts.workspaceId, ctx.workspaceId),
+                inArray(
+                  recreatedScripts.tiktokVideoId as any,
+                  input.tiktokVideoIds
+                )
+              )
+            );
+          fillBest(rows);
+          return map;
+        }
+
+        if (input.youtubeVideoIds && input.youtubeVideoIds.length > 0) {
+          const rows = await db
+            .select({
+              sourceId: recreatedScripts.youtubeVideoId,
+              id: recreatedScripts.id,
+              status: recreatedScripts.status,
+            })
+            .from(recreatedScripts)
+            .where(
+              and(
+                eq(recreatedScripts.workspaceId, ctx.workspaceId),
+                inArray(
+                  recreatedScripts.youtubeVideoId as any,
+                  input.youtubeVideoIds
+                )
+              )
+            );
+          fillBest(rows);
+          return map;
+        }
+
         const rows = await db
           .select({
-            reelId: recreatedScripts.reelId,
+            sourceId: recreatedScripts.reelId,
             id: recreatedScripts.id,
             status: recreatedScripts.status,
           })
@@ -3941,20 +4001,7 @@ Return JSON only:
               inArray(recreatedScripts.reelId as any, input.reelIds!)
             )
           );
-        const best = new Map<
-          number,
-          { id: number; status: (typeof recreatedScripts.$inferSelect)["status"] }
-        >();
-        for (const r of rows) {
-          if (r.reelId == null) continue;
-          const cur = best.get(r.reelId);
-          if (!cur || r.id > cur.id) {
-            best.set(r.reelId, { id: r.id, status: r.status });
-          }
-        }
-        for (const [rid, v] of best) {
-          map[rid] = { latestScriptId: v.id, status: v.status };
-        }
+        fillBest(rows);
         return map;
       }),
   }),
@@ -7519,6 +7566,7 @@ Return JSON only:
           progressPercent: job.progressPercent,
           errorMessage: job.errorMessage,
           handle: job.handle,
+          timeframeDays: job.timeframeDays,
         };
       }),
 
@@ -7786,6 +7834,7 @@ Return JSON only:
           progressPercent: job.progressPercent,
           errorMessage: job.errorMessage,
           handle: job.handle,
+          timeframeDays: job.timeframeDays,
         };
       }),
 

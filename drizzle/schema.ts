@@ -220,6 +220,8 @@ export const tiktokVideos = mysqlTable(
     durationSec: int("durationSec"),
     postedAt: timestamp("postedAt").notNull(),
     ownerUsername: varchar("ownerUsername", { length: 128 }),
+    /** True when row is older than the spy window (min-sample backfill). */
+    outsideSpyWindow: boolean("outsideSpyWindow"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -291,6 +293,8 @@ export const youtubeVideos = mysqlTable(
     durationSec: int("durationSec"),
     postedAt: timestamp("postedAt").notNull(),
     ownerHandle: varchar("ownerHandle", { length: 128 }),
+    /** True when row is older than the spy window (min-sample backfill). */
+    outsideSpyWindow: boolean("outsideSpyWindow"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({

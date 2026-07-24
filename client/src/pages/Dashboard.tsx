@@ -91,7 +91,6 @@ import {
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
-import { scriptFilmPath } from "@shared/scriptFilm";
 import { useAppBack } from "@/hooks/useAppBack";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
@@ -417,17 +416,17 @@ export default function Dashboard() {
   const triggerOpenMyScript = useCallback(
     (reelId: number, openScriptId: number) => {
       if (viewMode === "grid") {
-        setLocation(scriptFilmPath(openScriptId));
-        return;
+        setGridModalReelId(reelId);
+      } else {
+        setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
       }
-      setExpandedReelId((prev) => (prev === reelId ? prev : reelId));
       setRecreatePulse((prev) => ({
         reelId,
         openScriptId,
         nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
       }));
     },
-    [viewMode, setLocation]
+    [viewMode]
   );
   const setReelRowRef = useCallback((id: number) => (el: HTMLDivElement | null) => {
     if (el) reelRowElsRef.current.set(id, el);

@@ -3,6 +3,8 @@
  * Uses global fetch with x-api-key (same pattern as server/tiktok.ts).
  */
 
+import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
@@ -129,6 +131,8 @@ export interface YouTubeVideoData {
   durationSec: number;
   postedAt: Date;
   ownerHandle: string;
+  /** True when collected only to reach MIN_SPY_DISPLAY_REELS (older than spy window). */
+  outsideSpyWindow?: boolean;
 }
 
 export interface YouTubeScrapeResult {
@@ -373,25 +377,30 @@ export async function scrapeYouTubeShorts(
   const startTime = Date.now();
   const channel = await fetchYouTubeChannel(handle);
 
-  const videos: YouTubeVideoData[] = [];
+  // Mirror Instagram scrapeReels: in-window + min-sample backfill.
+  const inWindowVideos: YouTubeVideoData[] = [];
+  const backfillVideos: YouTubeVideoData[] = [];
   const seenVideoIds = new Set<string>();
   const seenTokens = new Set<string>();
+  const combinedCount = () => inWindowVideos.length + backfillVideos.length;
+
   let continuationToken: string | undefined;
   let hasMore = true;
   let pageCount = 0;
   const maxPages = 100;
+  let consecutiveInWindowEmptyPages = 0;
   let stoppedReason = "";
 
   while (hasMore && pageCount < maxPages) {
     if (Date.now() - startTime > timeoutMs) {
       stoppedReason = `timeout after ${Math.round((Date.now() - startTime) / 1000)}s`;
       console.warn(
-        `[YouTube] Scrape timeout for @${channel.handle} after ${pageCount} pages, ${videos.length} videos collected`
+        `[YouTube] Scrape timeout for @${channel.handle} after ${pageCount} pages, ${combinedCount()} videos collected`
       );
       break;
     }
 
-    if (videos.length >= maxVideos) {
+    if (combinedCount() >= maxVideos) {
       stoppedReason = `reached ${maxVideos} video cap`;
       console.log(
         `[YouTube] Reached video cap (${maxVideos}) for @${channel.handle} after ${pageCount} pages`
@@ -410,40 +419,45 @@ export async function scrapeYouTubeShorts(
       channel.handle,
       continuationToken
     );
+    let foundInWindowThisPage = false;
     const pageNewVideos: YouTubeVideoData[] = [];
 
     for (const video of page.videos) {
       if (seenVideoIds.has(video.videoId)) continue;
+      if (Number.isNaN(video.postedAt.getTime())) continue;
       seenVideoIds.add(video.videoId);
-      videos.push(video);
-      pageNewVideos.push(video);
-      if (videos.length >= maxVideos) break;
+
+      const inWindow = !sinceDate || video.postedAt >= sinceDate;
+      if (inWindow) {
+        inWindowVideos.push(video);
+        pageNewVideos.push(video);
+        foundInWindowThisPage = true;
+        if (combinedCount() >= maxVideos) break;
+        continue;
+      }
+
+      if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
+        const backfillVideo: YouTubeVideoData = {
+          ...video,
+          outsideSpyWindow: true,
+        };
+        backfillVideos.push(backfillVideo);
+        pageNewVideos.push(backfillVideo);
+        if (combinedCount() >= maxVideos) break;
+      }
     }
 
-    if (
-      sinceDate &&
-      pageNewVideos.some((video) => video.postedAt < sinceDate)
-    ) {
-      const kept = pageNewVideos.filter(
-        (video) => video.postedAt >= sinceDate
-      );
-      videos.splice(
-        videos.length - pageNewVideos.length,
-        pageNewVideos.length,
-        ...kept
-      );
-      pageNewVideos.splice(0, pageNewVideos.length, ...kept);
-      hasMore = false;
-      stoppedReason = `reached timeframe cutoff (${sinceDate.toISOString()})`;
+    if (foundInWindowThisPage) {
+      consecutiveInWindowEmptyPages = 0;
+    } else {
+      consecutiveInWindowEmptyPages++;
     }
 
     if (onProgress && pageNewVideos.length > 0) {
-      onProgress(videos.length, pageNewVideos);
+      onProgress(combinedCount(), pageNewVideos);
     }
 
-    if (!hasMore && stoppedReason.startsWith("reached timeframe cutoff")) {
-      // Early stop: do not advance pagination past the cutoff page.
-    } else if (!page.nextContinuationToken) {
+    if (!page.nextContinuationToken) {
       hasMore = false;
     } else if (seenTokens.has(page.nextContinuationToken)) {
       hasMore = false;
@@ -451,15 +465,28 @@ export async function scrapeYouTubeShorts(
       console.warn(
         `[YouTube] Repeated continuationToken for @${channel.handle}, stopping pagination`
       );
+    } else if (
+      sinceDate &&
+      inWindowVideos.length > 0 &&
+      consecutiveInWindowEmptyPages >= 3 &&
+      combinedCount() >= MIN_SPY_DISPLAY_REELS
+    ) {
+      hasMore = false;
+      stoppedReason = "in-window window exhausted with minimum sample met";
     } else {
       seenTokens.add(page.nextContinuationToken);
       continuationToken = page.nextContinuationToken;
     }
   }
 
+  const videos = [...inWindowVideos, ...backfillVideos];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const backfillNote =
+    backfillVideos.length > 0
+      ? `, in_window=${inWindowVideos.length}, backfill=${backfillVideos.length}`
+      : "";
   console.log(
-    `[YouTube] Scraped ${videos.length} shorts for @${channel.handle} in ${elapsed}s (${pageCount} pages, ${channel.subscriberCount} subscribers${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
+    `[YouTube] Scraped ${videos.length} shorts for @${channel.handle} in ${elapsed}s (${pageCount} pages, ${channel.subscriberCount} subscribers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
   );
 
   return {

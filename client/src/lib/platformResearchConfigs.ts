@@ -23,6 +23,8 @@ export type PlatformVideoLike = {
   caption?: string | null;
   title?: string | null;
   videoUrl?: string | null;
+  /** True when row is older than the spy window (min-sample backfill). */
+  outsideSpyWindow?: boolean | null;
 };
 
 export type PlatformResearchConfig = {

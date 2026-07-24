@@ -31,8 +31,7 @@ export async function runTikTokScrapeJob(
   const sinceDate = new Date(
     Date.now() - timeframeDays * 24 * 60 * 60 * 1000
   );
-  const cutoff = sinceDate;
-  let videosInWindowCount = 0;
+  let videosPersistedCount = 0;
 
   try {
     console.log(
@@ -52,17 +51,16 @@ export async function runTikTokScrapeJob(
     const result = await scrapeTikTokVideos(
       cleanHandle,
       (count, pageBatch) => {
-        const videosInWindow =
-          pageBatch?.filter((video) => video.postedAt >= cutoff) ?? [];
-        videosInWindowCount += videosInWindow.length;
-        const currentVideosInWindowCount = videosInWindowCount;
+        const batch = pageBatch ?? [];
+        videosPersistedCount += batch.length;
+        const currentVideosCount = videosPersistedCount;
         const write = (async () => {
           await db
             .update(tiktokScrapeJobs)
             .set({
               currentStep: "pulling_videos",
-              totalVideos: currentVideosInWindowCount,
-              videosFound: currentVideosInWindowCount,
+              totalVideos: currentVideosCount,
+              videosFound: currentVideosCount,
               progressPercent: Math.min(
                 20 + Math.floor((count / 30) * 60),
                 80
@@ -70,9 +68,9 @@ export async function runTikTokScrapeJob(
             })
             .where(eq(tiktokScrapeJobs.id, jobId));
 
-          if (videosInWindow.length > 0) {
+          if (batch.length > 0) {
             await db.insert(tiktokVideos).values(
-              videosInWindow.map((video) => ({
+              batch.map((video) => ({
                 jobId,
                 workspaceId,
                 awemeId: video.awemeId,
@@ -87,6 +85,7 @@ export async function runTikTokScrapeJob(
                 durationSec: Math.round(video.durationSec),
                 postedAt: video.postedAt,
                 ownerUsername: video.ownerUsername,
+                outsideSpyWindow: video.outsideSpyWindow === true ? true : null,
               }))
             );
           }
@@ -108,18 +107,15 @@ export async function runTikTokScrapeJob(
     );
 
     await Promise.all(pendingWrites);
-    const videosInWindow = result.videos.filter(
-      (video) => video.postedAt >= cutoff
-    );
 
     const mirroredThumbnails = await mirrorTiktokThumbnailsBounded(
-      videosInWindow.map((video) => ({
+      result.videos.map((video) => ({
         awemeId: video.awemeId,
         thumbnailUrl: video.thumbnailUrl,
       }))
     );
 
-    for (const video of videosInWindow) {
+    for (const video of result.videos) {
       const thumbnailUrl = mirroredThumbnails.get(video.awemeId);
       if (thumbnailUrl === undefined) continue;
       await db
@@ -133,12 +129,16 @@ export async function runTikTokScrapeJob(
         );
     }
 
+    const inWindowCount = result.videos.filter(
+      (video) => video.outsideSpyWindow !== true
+    ).length;
+
     await db
       .update(tiktokScrapeJobs)
       .set({
         status: "completed",
-        totalVideos: videosInWindow.length,
-        videosFound: videosInWindow.length,
+        totalVideos: result.videos.length,
+        videosFound: result.videos.length,
         followerCount: result.followerCount,
         profilePicUrl: result.profilePicUrl,
         currentStep: "complete",
@@ -148,7 +148,7 @@ export async function runTikTokScrapeJob(
       .where(eq(tiktokScrapeJobs.id, jobId));
 
     console.log(
-      `[runTikTokScrapeJob ${jobId}] completed handle=@${cleanHandle} videos=${videosInWindow.length} timeframeDays=${timeframeDays} followers=${result.followerCount}`
+      `[runTikTokScrapeJob ${jobId}] completed handle=@${cleanHandle} videos=${result.videos.length} in_window=${inWindowCount} timeframeDays=${timeframeDays} followers=${result.followerCount}`
     );
   } catch (error) {
     await Promise.allSettled(pendingWrites);
