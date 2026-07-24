@@ -497,14 +497,15 @@ export async function scrapeTikTokVideos(
         continue;
       }
 
-      // Out-of-window (including pinned): backfill while under the min sample.
+      // Out-of-window (including pinned): hold in memory only until the loop
+      // ends. Progressive inserts must not persist pins that appear before
+      // in-window posts when the window later meets MIN_SPY_DISPLAY_REELS.
       if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
         const backfillVideo: TikTokVideoData = {
           ...video,
           outsideSpyWindow: true,
         };
         backfillVideos.push(backfillVideo);
-        pageNewVideos.push(backfillVideo);
         if (combinedCount() >= maxVideos) break;
       }
     }
@@ -516,7 +517,7 @@ export async function scrapeTikTokVideos(
     }
 
     if (onProgress && pageNewVideos.length > 0) {
-      onProgress(combinedCount(), pageNewVideos);
+      onProgress(inWindowVideos.length, pageNewVideos);
     }
 
     if (!page.hasMore || page.nextCursor === null) {
@@ -541,12 +542,23 @@ export async function scrapeTikTokVideos(
     }
   }
 
-  const videos = [...inWindowVideos, ...backfillVideos];
+  const neededBackfill =
+    inWindowVideos.length < MIN_SPY_DISPLAY_REELS ? backfillVideos : [];
+  if (neededBackfill.length > 0 && onProgress) {
+    onProgress(
+      inWindowVideos.length + neededBackfill.length,
+      neededBackfill
+    );
+  }
+
+  const videos = [...inWindowVideos, ...neededBackfill];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const backfillNote =
-    backfillVideos.length > 0
-      ? `, in_window=${inWindowVideos.length}, backfill=${backfillVideos.length}`
-      : "";
+    neededBackfill.length > 0
+      ? `, in_window=${inWindowVideos.length}, backfill=${neededBackfill.length}`
+      : inWindowVideos.length >= MIN_SPY_DISPLAY_REELS && backfillVideos.length > 0
+        ? `, in_window=${inWindowVideos.length}, backfill_discarded=${backfillVideos.length}`
+        : "";
   console.log(
     `[TikTok] Scraped ${videos.length} videos for @${profile.uniqueId} in ${elapsed}s (${pageCount} pages, ${profile.followerCount} followers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
   );

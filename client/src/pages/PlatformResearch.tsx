@@ -821,6 +821,7 @@ export default function PlatformResearch({
             </div>
 
             {backfilledVideoCount > 0 &&
+            videosInSpyWindow < MIN_SPY_DISPLAY_REELS &&
             typeof job?.timeframeDays === "number" ? (
               <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
                 <p className="text-sm text-foreground">

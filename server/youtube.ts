@@ -436,13 +436,14 @@ export async function scrapeYouTubeShorts(
         continue;
       }
 
+      // Hold out-of-window candidates in memory only; flush after the loop
+      // only if the in-window count is still below MIN_SPY_DISPLAY_REELS.
       if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
         const backfillVideo: YouTubeVideoData = {
           ...video,
           outsideSpyWindow: true,
         };
         backfillVideos.push(backfillVideo);
-        pageNewVideos.push(backfillVideo);
         if (combinedCount() >= maxVideos) break;
       }
     }
@@ -454,7 +455,7 @@ export async function scrapeYouTubeShorts(
     }
 
     if (onProgress && pageNewVideos.length > 0) {
-      onProgress(combinedCount(), pageNewVideos);
+      onProgress(inWindowVideos.length, pageNewVideos);
     }
 
     if (!page.nextContinuationToken) {
@@ -479,12 +480,23 @@ export async function scrapeYouTubeShorts(
     }
   }
 
-  const videos = [...inWindowVideos, ...backfillVideos];
+  const neededBackfill =
+    inWindowVideos.length < MIN_SPY_DISPLAY_REELS ? backfillVideos : [];
+  if (neededBackfill.length > 0 && onProgress) {
+    onProgress(
+      inWindowVideos.length + neededBackfill.length,
+      neededBackfill
+    );
+  }
+
+  const videos = [...inWindowVideos, ...neededBackfill];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const backfillNote =
-    backfillVideos.length > 0
-      ? `, in_window=${inWindowVideos.length}, backfill=${backfillVideos.length}`
-      : "";
+    neededBackfill.length > 0
+      ? `, in_window=${inWindowVideos.length}, backfill=${neededBackfill.length}`
+      : inWindowVideos.length >= MIN_SPY_DISPLAY_REELS && backfillVideos.length > 0
+        ? `, in_window=${inWindowVideos.length}, backfill_discarded=${backfillVideos.length}`
+        : "";
   console.log(
     `[YouTube] Scraped ${videos.length} shorts for @${channel.handle} in ${elapsed}s (${pageCount} pages, ${channel.subscriberCount} subscribers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""})`
   );

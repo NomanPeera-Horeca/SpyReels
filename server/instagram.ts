@@ -724,10 +724,14 @@ export async function scrapeReels(
         continue;
       }
 
+      // Hold out-of-window candidates in memory only. Do not emit them via
+      // onProgress yet: pinned posts often appear first on page 1 while
+      // combinedCount is still low, and progressive inserts would persist
+      // them before we know the in-window count. After the loop we append
+      // backfill only if inWindowReels.length < MIN_SPY_DISPLAY_REELS.
       if (combinedCount() < MIN_SPY_DISPLAY_REELS) {
         const backfillReel: ReelData = { ...reel, outsideSpyWindow: true };
         backfillReels.push(backfillReel);
-        pageNewReels.push(backfillReel);
 
         if (combinedCount() >= maxReels) break;
       }
@@ -754,8 +758,10 @@ export async function scrapeReels(
       consecutiveInWindowEmptyPages++;
     }
 
+    // Progress / progressive insert: in-window only. Backfill is flushed once
+    // after the loop if the window is still below the minimum sample.
     if (onProgress && pageNewReels.length > 0) {
-      onProgress(combinedCount(), pageNewReels);
+      onProgress(inWindowReels.length, pageNewReels);
     }
 
     if (!page.moreAvailable || !page.maxId) {
@@ -772,16 +778,30 @@ export async function scrapeReels(
     }
   }
 
-  const allReels = [...inWindowReels, ...backfillReels];
+  // Drop unnecessary backfill once the window itself meets the minimum.
+  // Otherwise flush held candidates so progressive inserters (and the final
+  // Instagram insert of the returned set) persist them.
+  const neededBackfill =
+    inWindowReels.length < MIN_SPY_DISPLAY_REELS ? backfillReels : [];
+  if (neededBackfill.length > 0 && onProgress) {
+    onProgress(
+      inWindowReels.length + neededBackfill.length,
+      neededBackfill
+    );
+  }
+
+  const allReels = [...inWindowReels, ...neededBackfill];
   const elapsed = Math.round((Date.now() - startTime) / 1000);
   const shapeWarning =
     pagesWithItemsButNoParses > 0
       ? `, unparseable_pages=${pagesWithItemsButNoParses}`
       : "";
   const backfillNote =
-    backfillReels.length > 0
-      ? `, in_window=${inWindowReels.length}, backfill=${backfillReels.length}`
-      : "";
+    neededBackfill.length > 0
+      ? `, in_window=${inWindowReels.length}, backfill=${neededBackfill.length}`
+      : inWindowReels.length >= MIN_SPY_DISPLAY_REELS && backfillReels.length > 0
+        ? `, in_window=${inWindowReels.length}, backfill_discarded=${backfillReels.length}`
+        : "";
   console.log(
     `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
   );
