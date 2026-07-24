@@ -217,6 +217,7 @@ function mapCoachScriptRow(row: typeof coachScripts.$inferSelect) {
     contentFormat: row.contentFormat,
     formatLabel: row.formatLabel,
     productionNotes: row.productionNotes,
+    productionNotesStatus: row.productionNotesStatus ?? null,
   };
 }
 
@@ -832,6 +833,10 @@ export const studioRouter = router({
         script: z.string().min(20).max(12000),
         title: z.string().max(256).optional(),
         sourceHandle: z.string().max(128).optional(),
+        sourceCaption: z.string().max(2000).optional(),
+        platformLabel: z
+          .enum(["Instagram Reel", "TikTok video", "YouTube Short"])
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -841,6 +846,8 @@ export const studioRouter = router({
         flatScript: input.script,
         title: input.title,
         sourceHandle: input.sourceHandle,
+        sourceCaption: input.sourceCaption,
+        platformLabel: input.platformLabel,
       });
     }),
 

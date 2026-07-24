@@ -203,6 +203,40 @@ export default function AiCoach() {
     setHookVariations(null);
   };
 
+  // Same 2s interval as remake/transcription polling while production notes generate.
+  const productionPollEnabled =
+    Boolean(result?.id) &&
+    (result?.productionNotesStatus === "processing" ||
+      result?.productionNotesStatus === "pending");
+  const productionPollQuery = trpc.studio.get.useQuery(
+    { id: result?.id ?? 0 },
+    {
+      enabled: productionPollEnabled,
+      refetchInterval: (query) => {
+        const status =
+          query.state.data?.productionNotesStatus ?? result?.productionNotesStatus;
+        return status === "processing" || status === "pending" ? 2000 : false;
+      },
+    }
+  );
+
+  useEffect(() => {
+    const data = productionPollQuery.data;
+    if (!data || !result || data.id !== result.id) return;
+    if (
+      data.productionNotesStatus === result.productionNotesStatus &&
+      data.productionNotes === result.productionNotes
+    ) {
+      return;
+    }
+    applyScriptResult(data);
+  }, [
+    productionPollQuery.data,
+    result?.id,
+    result?.productionNotes,
+    result?.productionNotesStatus,
+  ]);
+
   const resolveIntentMutation = trpc.studio.resolveIntent.useMutation();
 
   const buildGenerateInput = (overrides?: {

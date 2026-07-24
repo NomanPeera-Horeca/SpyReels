@@ -51,6 +51,7 @@ function mapCoachRow(row: typeof coachScripts.$inferSelect): GeneratedCoachScrip
     contentFormat: row.contentFormat,
     formatLabel: row.formatLabel,
     productionNotes: row.productionNotes,
+    productionNotesStatus: row.productionNotesStatus ?? null,
   };
 }
 

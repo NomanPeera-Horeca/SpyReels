@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   Lightbulb,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
@@ -63,6 +64,8 @@ export type CoachResultScript = {
   contentFormat: string | null;
   formatLabel: string | null;
   productionNotes: string | null;
+  /** Remake import async production layer. Null for sync Studio paths. */
+  productionNotesStatus?: "pending" | "processing" | "completed" | "failed" | null;
 };
 
 const VISUAL_HOOK_TOOLTIP =
@@ -268,6 +271,9 @@ export function AiCoachResultView({
   const [originalIdeaOpen, setOriginalIdeaOpen] = useState(true);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
+  const isGeneratingProduction =
+    result.productionNotesStatus === "processing" ||
+    result.productionNotesStatus === "pending";
   const originalIdea = production?.sourceDescription?.trim() || "";
   const savedOnScreenText =
     production?.hookOnScreenText?.trim() ||
@@ -475,6 +481,11 @@ export function AiCoachResultView({
                             placeholder="What the viewer sees in frame 0 (mid-action, close-up, or result)."
                             className="min-h-[52px] resize-none text-sm italic bg-white dark:bg-gray-900"
                           />
+                        ) : isGeneratingProduction ? (
+                          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                            <span>Generating production notes...</span>
+                          </div>
                         ) : (
                           <p
                             className={`text-sm leading-relaxed ${hookVisualBeat ? "italic text-gray-700 dark:text-gray-300" : "text-muted-foreground italic"}`}
@@ -517,6 +528,11 @@ export function AiCoachResultView({
                             maxLength={60}
                             className="min-h-[44px] resize-none bg-white dark:bg-gray-900 text-sm font-extrabold uppercase tracking-wide"
                           />
+                        ) : isGeneratingProduction ? (
+                          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                            <span>Generating production notes...</span>
+                          </div>
                         ) : hookOnScreenText ? (
                           <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900 dark:text-gray-50">
                             {hookOnScreenText}
@@ -721,6 +737,13 @@ export function AiCoachResultView({
           <aside className="space-y-4 lg:sticky lg:top-6">
             <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
               <h2 className="text-sm font-bold mb-4">Production Notes</h2>
+              {isGeneratingProduction ? (
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                  <span>Generating production notes...</span>
+                </div>
+              ) : (
+                <>
               {production?.setup && (
                 <div className="mb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
@@ -802,6 +825,8 @@ export function AiCoachResultView({
                 <p className="text-sm text-muted-foreground">
                   Production directions will appear here after generation.
                 </p>
+              )}
+                </>
               )}
             </div>
 

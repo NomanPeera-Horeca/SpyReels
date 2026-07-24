@@ -51,6 +51,7 @@ export type GeneratedCoachScript = {
   contentFormat: string | null;
   formatLabel: string | null;
   productionNotes: string | null;
+  productionNotesStatus: "pending" | "processing" | "completed" | "failed" | null;
 };
 
 export function mapCoachScriptRow(row: typeof coachScripts.$inferSelect): GeneratedCoachScript {
@@ -76,6 +77,7 @@ export function mapCoachScriptRow(row: typeof coachScripts.$inferSelect): Genera
     contentFormat: row.contentFormat,
     formatLabel: row.formatLabel,
     productionNotes: row.productionNotes,
+    productionNotesStatus: row.productionNotesStatus ?? null,
   };
 }
 
@@ -300,7 +302,7 @@ function pickCoachString(obj: Record<string, unknown>, ...keys: string[]): strin
   return "";
 }
 
-function normalizeProductionCoach(coach: unknown): Record<string, unknown> {
+export function normalizeProductionCoach(coach: unknown): Record<string, unknown> {
   const base =
     coach && typeof coach === "object" ? { ...(coach as Record<string, unknown>) } : {};
   const hookOnScreen =

@@ -1062,6 +1062,13 @@ export const coachScripts = mysqlTable(
     contentFormat: varchar("contentFormat", { length: 64 }),
     formatLabel: varchar("formatLabel", { length: 128 }),
     productionNotes: text("productionNotes"),
+    /** Async production-layer job for remake → Studio import. Null = legacy / sync paths. */
+    productionNotesStatus: mysqlEnum("productionNotesStatus", [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+    ]),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

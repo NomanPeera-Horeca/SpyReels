@@ -751,10 +751,18 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       toast.error("No script content to open in Studio");
       return;
     }
+    const platformLabel =
+      reelSource === "tiktok"
+        ? ("TikTok video" as const)
+        : reelSource === "youtube"
+          ? ("YouTube Short" as const)
+          : ("Instagram Reel" as const);
     importRemakeMutation.mutate({
       script: content,
       title: saveTitle.trim() || `Script from @${handle}`,
       sourceHandle: handle || undefined,
+      sourceCaption: reelCaption?.trim() || undefined,
+      platformLabel,
     });
   };
 
@@ -1316,6 +1324,8 @@ export function SearchInlineWorkflow({
       script: content,
       title: saveTitle.trim() || `Script from @${reel.ownerUsername}`,
       sourceHandle: reel.ownerUsername || undefined,
+      sourceCaption: reel.caption?.trim() || undefined,
+      platformLabel: "Instagram Reel",
     });
   };
 

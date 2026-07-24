@@ -115,5 +115,6 @@ export async function expandHookToScript(args: {
     contentFormat: updated.contentFormat,
     formatLabel: updated.formatLabel,
     productionNotes: updated.productionNotes,
+    productionNotesStatus: updated.productionNotesStatus ?? null,
   };
 }
