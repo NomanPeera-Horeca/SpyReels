@@ -72,9 +72,12 @@ export function GridReelWorkflowDialog({
           <>
             <div className="flex shrink-0 gap-3 border-b border-border/40 p-4 sm:gap-4">
               <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:h-44 sm:w-28">
-                {reel.videoUrl?.trim() || reel.shortcode?.trim() ? (
+                {reel.videoUrl?.trim() ||
+                reel.shortcode?.trim() ||
+                (reel.platform === "tiktok" &&
+                  (reel.reelId != null || reel.tiktokVideoId != null)) ? (
                   <ReelDialogVideo
-                    reelId={reel.reelId}
+                    reelId={reel.reelId ?? reel.tiktokVideoId}
                     shortcode={reel.shortcode}
                     videoUrl={reel.videoUrl}
                     thumbnailUrl={reel.thumbnailUrl}

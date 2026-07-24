@@ -18,6 +18,9 @@ function requireApiKey(): string {
 
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
+/** Interactive preview refresh: one ScrapeCreators attempt, fail fast for UI. */
+export const INTERACTIVE_REEL_FETCH_TIMEOUT_MS = 8_000;
+
 /** HTTP status returned when discovery pipeline ScrapeCreators call fuse trips. */
 export const DISCOVERY_SC_CALL_FUSE_STATUS = 499;
 
@@ -98,7 +101,8 @@ function discoveryScFuseTripped(
 
 async function scGet(
   path: string,
-  query: Record<string, string | undefined>
+  query: Record<string, string | undefined>,
+  opts?: { timeoutMs?: number }
 ): Promise<{ status: number; data: any }> {
   const tracker = activeDiscoveryScCallTracker;
   if (tracker && discoveryScFuseTripped(tracker)) {
@@ -121,8 +125,9 @@ async function scGet(
       url.searchParams.set(k, v);
     }
   }
+  const timeoutMs = opts?.timeoutMs ?? SCRAPECREATORS_FETCH_MS;
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), SCRAPECREATORS_FETCH_MS);
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(url.toString(), {
@@ -963,10 +968,18 @@ function regionForReelFetchAttempt(attempt: number): string | undefined {
 /**
  * Fetch a single reel/post by shortcode (or full Instagram URL).
  * Retries transient ScrapeCreators failures (same pattern as fetchProfile).
+ *
+ * Pass `mode: "interactive"` for modal preview refresh: one URL, one attempt,
+ * INTERACTIVE_REEL_FETCH_TIMEOUT_MS (8s) worst case. Background callers omit
+ * mode and keep the default 6-try / 30s-per-attempt behavior.
  */
 export async function fetchReelByShortcodeResult(
   shortcode: string,
-  options?: { preferUrl?: string; downloadMedia?: boolean }
+  options?: {
+    preferUrl?: string;
+    downloadMedia?: boolean;
+    mode?: "default" | "interactive";
+  }
 ): Promise<FetchReelByShortcodeResult> {
   const resolvedPrefer = options?.preferUrl
     ? await resolveInstagramPostUrl(options.preferUrl)
@@ -974,20 +987,31 @@ export async function fetchReelByShortcodeResult(
   const code = normalizeShortcode(resolvedPrefer || shortcode);
   if (!code) return { ok: false, reason: "not_found" };
 
-  const urls = postUrlsForShortcode(code, resolvedPrefer);
-  const MAX_TRIES = 6;
+  const interactive = options?.mode === "interactive";
+  let urls = postUrlsForShortcode(code, resolvedPrefer);
+  if (interactive) {
+    urls = urls.slice(0, 1);
+  }
+  const MAX_TRIES = interactive ? 1 : 6;
   const BACKOFF_MS = 600;
+  const requestTimeoutMs = interactive
+    ? INTERACTIVE_REEL_FETCH_TIMEOUT_MS
+    : undefined;
 
   let lastReason: ReelFetchFailureReason = "unknown";
 
   for (const postUrl of urls) {
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
       const region = regionForReelFetchAttempt(attempt);
-      const { status, data } = await scGet("/v1/instagram/post", {
-        url: postUrl,
-        region,
-        download_media: options?.downloadMedia ? "true" : undefined,
-      });
+      const { status, data } = await scGet(
+        "/v1/instagram/post",
+        {
+          url: postUrl,
+          region,
+          download_media: options?.downloadMedia ? "true" : undefined,
+        },
+        requestTimeoutMs != null ? { timeoutMs: requestTimeoutMs } : undefined
+      );
 
       if (status === 408) {
         lastReason = "timeout";
@@ -1092,7 +1116,7 @@ export async function fetchReelByShortcodeResult(
 
 export async function fetchReelByShortcode(
   shortcode: string,
-  options?: { preferUrl?: string }
+  options?: { preferUrl?: string; mode?: "default" | "interactive" }
 ): Promise<ReelFullData | null> {
   const result = await fetchReelByShortcodeResult(shortcode, options);
   return result.ok ? result.data : null;

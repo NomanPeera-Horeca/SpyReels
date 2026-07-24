@@ -27,7 +27,7 @@ export function formatVideoPreviewError(err: unknown): string {
   }
 
   if (lower.includes("could not retrieve a fresh video url")) {
-    return "Instagram would not share a fresh video link for this reel.";
+    return "Could not get a fresh video link for this preview.";
   }
 
   const trimmed = raw.trim();

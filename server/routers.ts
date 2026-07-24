@@ -246,7 +246,12 @@ import {
   searchReelsByHandle,
   runWithScrapeCallContext,
 } from "./instagram";
+import { fetchTikTokVideoInfo } from "./tiktok";
 import { isDurableReelVideoUrl } from "./reelVideoR2";
+import {
+  isDurableTiktokVideoUrl,
+  scheduleTiktokVideoMirror,
+} from "./tiktokVideoR2";
 import {
   enqueueCollectedReelIngest,
   enqueueCollectedReelRefresh,
@@ -1234,7 +1239,9 @@ export const appRouter = router({
           }
         }
 
-        const freshData = await fetchReelByShortcode(shortcode);
+        const freshData = await fetchReelByShortcode(shortcode, {
+          mode: "interactive",
+        });
         if (!freshData?.videoUrl?.trim()) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -7705,6 +7712,68 @@ Return JSON only:
             };
           }),
         };
+      }),
+
+    /** Fresh TikTok play URL for modal preview; mirror to R2 in the background. */
+    refreshVideoUrl: protectedProcedure
+      .input(z.object({ videoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const [video] = await db
+          .select()
+          .from(tiktokVideos)
+          .where(eq(tiktokVideos.id, input.videoId))
+          .limit(1);
+        if (!video) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+        }
+
+        const [job] = await db
+          .select()
+          .from(tiktokScrapeJobs)
+          .where(eq(tiktokScrapeJobs.id, video.jobId))
+          .limit(1);
+        if (!job || job.workspaceId !== ctx.workspaceId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        const existing = (video.videoUrl ?? "").trim();
+        const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(
+          /\/+$/,
+          ""
+        );
+        if (
+          (publicBase && existing.startsWith(publicBase)) ||
+          isDurableTiktokVideoUrl(existing)
+        ) {
+          return { videoUrl: existing };
+        }
+
+        const fresh = await fetchTikTokVideoInfo(video.videoPageUrl, {
+          mode: "interactive",
+        });
+        if (!fresh?.videoUrl?.trim()) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not retrieve a fresh video URL for this TikTok.",
+          });
+        }
+
+        const videoUrl = fresh.videoUrl.trim();
+        scheduleTiktokVideoMirror(video.id, video.awemeId, videoUrl);
+        await db
+          .update(tiktokVideos)
+          .set({ videoUrl })
+          .where(eq(tiktokVideos.id, video.id));
+
+        return { videoUrl };
       }),
 
     delete: protectedProcedure

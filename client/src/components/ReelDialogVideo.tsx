@@ -11,8 +11,8 @@ type ReelDialogVideoProps = {
   videoUrl?: string | null;
   thumbnailUrl?: string | null;
   /**
-   * Instagram (default / undefined) may refresh expired CDN URLs via shortcode.
-   * TikTok / YouTube never call refreshVideoUrl; they use the passed videoUrl only.
+   * Instagram (default) and TikTok refresh expired CDN URLs via platform APIs.
+   * YouTube has no downloadable video file and is excluded.
    */
   platform?: "instagram" | "tiktok" | "youtube";
   className?: string;
@@ -31,11 +31,19 @@ export function ReelDialogVideo({
   const [videoFailed, setVideoFailed] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const refreshMutation = trpc.reels.refreshVideoUrl.useMutation();
+  const igRefreshMutation = trpc.reels.refreshVideoUrl.useMutation();
+  const ttRefreshMutation = trpc.tiktokScrape.refreshVideoUrl.useMutation();
   const code = (shortcode ?? "").trim();
   // Absent platform means Instagram (existing Dashboard call sites).
-  const allowInstagramRefresh =
-    platform == null || platform === "instagram";
+  const platformKind = platform ?? "instagram";
+  const canRefresh = platformKind === "instagram" || platformKind === "tiktok";
+  const refreshPending =
+    platformKind === "tiktok"
+      ? ttRefreshMutation.isPending
+      : igRefreshMutation.isPending;
+  // Depend on mutateAsync only (stable), not the whole mutation object.
+  const igMutateAsync = igRefreshMutation.mutateAsync;
+  const ttMutateAsync = ttRefreshMutation.mutateAsync;
 
   useEffect(() => {
     setResolvedSrc((videoUrl ?? "").trim());
@@ -44,11 +52,17 @@ export function ReelDialogVideo({
 
   const fetchFreshUrl = useCallback(async (): Promise<string | null> => {
     const current = (videoUrl ?? "").trim();
-    if (!allowInstagramRefresh) return current || null;
+    if (!canRefresh) return current || null;
     if (current && !needsVideoUrlRefresh(current)) return current;
-    if (!code) return current || null;
+
     try {
-      const result = await refreshMutation.mutateAsync({
+      if (platformKind === "tiktok") {
+        if (reelId == null) return current || null;
+        const result = await ttMutateAsync({ videoId: reelId });
+        return result.videoUrl.trim() || null;
+      }
+      if (!code) return current || null;
+      const result = await igMutateAsync({
         shortcode: code,
         reelId,
       });
@@ -58,13 +72,25 @@ export function ReelDialogVideo({
       toast.error("Video preview unavailable", { description: message });
       return null;
     }
-  }, [videoUrl, code, reelId, refreshMutation, allowInstagramRefresh]);
+  }, [
+    videoUrl,
+    code,
+    reelId,
+    canRefresh,
+    platformKind,
+    igMutateAsync,
+    ttMutateAsync,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     const initial = (videoUrl ?? "").trim();
-    if (!allowInstagramRefresh) return;
-    if (!initial && !code) return;
+    if (!canRefresh) return;
+    if (platformKind === "tiktok") {
+      if (reelId == null && !initial) return;
+    } else if (!initial && !code) {
+      return;
+    }
     if (initial && !needsVideoUrlRefresh(initial)) return;
 
     setIsPreparing(true);
@@ -85,11 +111,15 @@ export function ReelDialogVideo({
     return () => {
       cancelled = true;
     };
-  }, [videoUrl, code, reelId, fetchFreshUrl, allowInstagramRefresh]);
+  }, [videoUrl, code, reelId, fetchFreshUrl, canRefresh, platformKind]);
 
   const thumb = (thumbnailUrl ?? "").trim();
+  const showRetry =
+    videoFailed &&
+    canRefresh &&
+    (platformKind === "tiktok" ? reelId != null : Boolean(code));
 
-  if (isPreparing || refreshMutation.isPending) {
+  if (isPreparing || refreshPending) {
     return (
       <div className={`flex items-center justify-center bg-muted ${className ?? ""}`}>
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -121,7 +151,7 @@ export function ReelDialogVideo({
     return (
       <div className={`relative ${className ?? ""}`}>
         <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
-        {videoFailed && code && allowInstagramRefresh ? (
+        {showRetry ? (
           <button
             type="button"
             className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70 text-white"

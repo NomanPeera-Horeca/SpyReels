@@ -12,9 +12,16 @@ export function isEphemeralInstagramMediaUrl(url: string | null | undefined): bo
   return /cdninstagram\.com|fbcdn\.net/i.test(u);
 }
 
+/** TikTok CDN / play-addr links expire; refresh before playback when not on R2. */
+export function isEphemeralTiktokMediaUrl(url: string | null | undefined): boolean {
+  const u = (url ?? "").trim();
+  if (!u) return false;
+  return /tiktokcdn|byteoversea|musical\.ly|tiktokv\.com/i.test(u);
+}
+
 export function needsVideoUrlRefresh(url: string | null | undefined): boolean {
   const u = (url ?? "").trim();
   if (!u) return true;
   if (isStableSpyreelsMediaUrl(u)) return false;
-  return isEphemeralInstagramMediaUrl(u);
+  return isEphemeralInstagramMediaUrl(u) || isEphemeralTiktokMediaUrl(u);
 }

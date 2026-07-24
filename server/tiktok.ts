@@ -8,6 +8,9 @@ import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
+/** Interactive preview refresh: one ScrapeCreators attempt, fail fast for UI. */
+export const INTERACTIVE_TIKTOK_FETCH_TIMEOUT_MS = 8_000;
+
 function requireApiKey(): string {
   const key = process.env.SCRAPECREATORS_API_KEY?.trim();
   if (!key) {
@@ -18,7 +21,8 @@ function requireApiKey(): string {
 
 async function scGet(
   path: string,
-  query: Record<string, string | undefined>
+  query: Record<string, string | undefined>,
+  opts?: { timeoutMs?: number }
 ): Promise<{ status: number; data: any }> {
   const url = new URL(`${API_BASE}${path}`);
   for (const [key, value] of Object.entries(query)) {
@@ -27,10 +31,11 @@ async function scGet(
     }
   }
 
+  const timeoutMs = opts?.timeoutMs ?? SCRAPECREATORS_FETCH_MS;
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    SCRAPECREATORS_FETCH_MS
+    timeoutMs
   );
   let response: Response;
 
@@ -153,15 +158,25 @@ export interface TikTokScrapeResult {
 }
 
 export async function fetchTikTokVideoInfo(
-  videoPageUrl: string
+  videoPageUrl: string,
+  options?: { mode?: "default" | "interactive" }
 ): Promise<TikTokVideoInfo | null> {
   const url = videoPageUrl.trim();
   if (!url) return null;
 
-  const maxTries = 5;
+  const interactive = options?.mode === "interactive";
+  const maxTries = interactive ? 1 : 5;
+  const requestTimeoutMs = interactive
+    ? INTERACTIVE_TIKTOK_FETCH_TIMEOUT_MS
+    : undefined;
+
   for (let attempt = 1; attempt <= maxTries; attempt++) {
     try {
-      const { status, data } = await scGet("/v2/tiktok/video", { url });
+      const { status, data } = await scGet(
+        "/v2/tiktok/video",
+        { url },
+        requestTimeoutMs != null ? { timeoutMs: requestTimeoutMs } : undefined
+      );
       if (
         status === 200 &&
         data &&
