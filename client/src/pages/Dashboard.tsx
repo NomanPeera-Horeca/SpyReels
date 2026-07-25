@@ -33,8 +33,6 @@ import {
   Wand2,
   Bookmark,
   BookmarkCheck,
-  ChevronDown,
-  ChevronUp,
   ChevronRight,
   Search,
   Inbox,
@@ -99,6 +97,7 @@ import {
 } from "@/lib/reelLibraryPagination";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
+import { WorkspaceReelListRow } from "@/components/WorkspaceReelListRow";
 
 type SortOption =
   | "views_desc"
@@ -2506,226 +2505,116 @@ export default function Dashboard() {
                       })
                     : undefined;
 
+                const actionButtons = (
+                  <ReelActionButtons
+                    source={
+                      isFeaturedView
+                        ? { source: "featured", featuredReelId: reel.id }
+                        : { source: "user_job", reelId: reel.id, jobId: jobId! }
+                    }
+                    reelId={reel.id}
+                    reelUrl={reel.reelUrl}
+                    isSaved={isSaved}
+                    hasTranscription={hasTranscription}
+                    isProcessing={isProcessingForStrip}
+                    isFailed={isFailed}
+                    recreateState={recreateSt}
+                    saveBusy={toggleSave.isPending}
+                    isQueued={isTxQueued}
+                    isNoSpeech={isNoSpeech}
+                    oneClickRemake={oneClickRemake}
+                    onToggleSave={() => {
+                      if (isFeaturedView) {
+                        toggleSave.mutate({ featuredReelId: reel.id });
+                      } else {
+                        toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
+                      }
+                    }}
+                    onTranscribe={() => {}}
+                    onExpand={() => setExpandedReelId(reel.id)}
+                    onMakeVersion={() => {}}
+                    onOpenMyScript={() => {}}
+                  />
+                );
+
                 return (
-                  <div
+                  <WorkspaceReelListRow
                     key={reel.id}
-                    ref={setReelRowRef(reel.id)}
-                    className={`workspace-reel-card overflow-hidden ${
-                      isFirstVisitDashboard && index === 0
-                        ? "rounded-xl border-2 border-primary/40 bg-primary/5"
-                        : ""
-                    }`}
-                  >
-                    {/* Reel Row */}
-                    <div
-                      className={`${
-                        isFirstVisitDashboard
-                          ? "flex flex-col gap-3 p-3 hover:bg-accent/25 transition-colors cursor-pointer"
-                          : `flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-3 hover:bg-accent/25 transition-colors cursor-pointer ${
-                              isExpanded ? "bg-accent/20 border-b border-border/40" : ""
-                            }`
-                      }`}
-                      onClick={() => {
-                        if (isExpanded) {
-                          setExpandedReelId(null);
-                        } else {
-                          setExpandedReelId(reel.id);
-                        }
-                      }}
-                    >
-                      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center sm:gap-3">
-                      {/* Rank */}
-                      <span className="hidden w-5 shrink-0 text-right font-mono text-sm text-muted-foreground sm:block sm:w-6">
-                        {index + 1}
-                      </span>
-
-                      {/* Thumbnail */}
-                      <div className="relative h-[4.5rem] w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-                        {reel.thumbnailUrl ? (
-                          <img
-                            src={reel.thumbnailUrl}
-                            alt=""
-                            width={56}
-                            height={72}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Film className="h-4 w-4 text-muted-foreground/50" />
-                          </div>
-                        )}
-                        {reel.duration && (
-                          <span className="absolute bottom-0.5 right-0.5 text-[9px] font-mono bg-black/70 text-white px-1 rounded">
-                            {Math.floor(reel.duration / 60)}:{(reel.duration % 60).toString().padStart(2, "0")}
+                    rowRef={setReelRowRef(reel.id)}
+                    index={index}
+                    thumbnailUrl={reel.thumbnailUrl}
+                    duration={reel.duration}
+                    caption={reel.caption}
+                    stats={{
+                      viewCount: reel.viewCount,
+                      likeCount: reel.likeCount,
+                      commentCount: reel.commentCount,
+                      engagementRate: reel.engagementRate,
+                      postedAt: reel.postedAt,
+                    }}
+                    userTimezone={userTimezone}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => {
+                      if (isExpanded) {
+                        setExpandedReelId(null);
+                      } else {
+                        setExpandedReelId(reel.id);
+                      }
+                    }}
+                    onboardingBorder={isFirstVisitDashboard && index === 0}
+                    onboardingLayout={isFirstVisitDashboard}
+                    statusChip={
+                      <>
+                        {hasTranscription && !isNoSpeech && (
+                          <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">
+                            Transcribed
                           </span>
                         )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        {isFirstVisitDashboard && index === 0 ? (
-                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                            Start here
-                          </p>
-                        ) : null}
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm text-foreground line-clamp-1 leading-snug">
-                            {reel.caption || <span className="text-muted-foreground italic">No caption</span>}
-                          </p>
-                          {hasTranscription && !isNoSpeech && (
-                            <span className="shrink-0 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Transcribed</span>
-                          )}
-                          {isNoSpeech && (
-                            <span className="shrink-0 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">No voice</span>
-                          )}
-                          {isProcessing && (
-                            <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">Processing</span>
-                          )}
-                          {isFailed && (
-                            <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">Failed</span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <V13ReelClassificationBadges
-                            niche={null}
-                            hookPattern={reel.hookPattern}
-                            productionFormat={
-                              "productionFormat" in reel ? reel.productionFormat : null
-                            }
-                            viralFlag={reel.viralFlag}
-                            confidence={reel.confidence}
-                          />
-                          <BrandCoachBadge
-                            source={
-                              isFeaturedView
-                                ? { kind: "featured", featuredReelId: reel.id }
-                                : { kind: "reel", reelId: reel.id }
-                            }
-                            hasTranscript={hasTranscription && !isNoSpeech}
-                            prefetchedScore={
-                              isFeaturedView
-                                ? brandCoachBatch.prefetchedForFeatured(reel.id)
-                                : brandCoachBatch.prefetchedForReel(reel.id)
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            {formatNumber(reel.viewCount)}
+                        {isNoSpeech && (
+                          <span className="shrink-0 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                            No voice
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Heart className="h-3 w-3" />
-                            {formatNumber(reel.likeCount)}
+                        )}
+                        {isProcessing && (
+                          <span className="shrink-0 text-[9px] font-medium bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full animate-pulse">
+                            Processing
                           </span>
-                          <span className="flex items-center gap-1">
-                            <MessageCircle className="h-3 w-3" />
-                            {formatNumber(reel.commentCount)}
+                        )}
+                        {isFailed && (
+                          <span className="shrink-0 text-[9px] font-medium bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
+                            Failed
                           </span>
-                          {reel.engagementRate > 0 && (
-                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                              <TrendingUp className="h-3 w-3" />
-                              {reel.engagementRate.toFixed(2)}%
-                            </span>
-                          )}
-                          {/* Competitor posting day & time in user timezone */}
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {formatPostedTime(reel.postedAt, userTimezone)}
-                          </span>
-                        </div>
-                      </div>
-                      </div>
-
-                      {!isFirstVisitDashboard ? (
-                        <div
-                          className="flex w-full shrink-0 flex-col items-stretch gap-1 sm:w-auto sm:min-w-[11rem] sm:self-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ReelActionButtons
-                            source={
-                              isFeaturedView
-                                ? { source: "featured", featuredReelId: reel.id }
-                                : { source: "user_job", reelId: reel.id, jobId: jobId! }
-                            }
-                            reelId={reel.id}
-                            reelUrl={reel.reelUrl}
-                            isSaved={isSaved}
-                            hasTranscription={hasTranscription}
-                            isProcessing={isProcessingForStrip}
-                            isFailed={isFailed}
-                            recreateState={recreateSt}
-                            saveBusy={toggleSave.isPending}
-                            isQueued={isTxQueued}
-                            isNoSpeech={isNoSpeech}
-                            oneClickRemake={oneClickRemake}
-                            onToggleSave={() => {
-                              if (isFeaturedView) {
-                                toggleSave.mutate({ featuredReelId: reel.id });
-                              } else {
-                                toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
-                              }
-                            }}
-                            onTranscribe={() => {}}
-                            onExpand={() => setExpandedReelId(reel.id)}
-                            onMakeVersion={() => {}}
-                            onOpenMyScript={() => {}}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="hidden h-8 w-8 shrink-0 p-0 text-muted-foreground sm:inline-flex"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedReelId(isExpanded ? null : reel.id);
-                            }}
-                          >
-                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      ) : null}
-
-                      {isFirstVisitDashboard ? (
-                        <div className="w-full" onClick={(e) => e.stopPropagation()}>
-                          <ReelActionButtons
-                            source={
-                              isFeaturedView
-                                ? { source: "featured", featuredReelId: reel.id }
-                                : { source: "user_job", reelId: reel.id, jobId: jobId! }
-                            }
-                            reelId={reel.id}
-                            reelUrl={reel.reelUrl}
-                            isSaved={isSaved}
-                            hasTranscription={hasTranscription}
-                            isProcessing={isProcessingForStrip}
-                            isFailed={isFailed}
-                            recreateState={recreateSt}
-                            saveBusy={toggleSave.isPending}
-                            isQueued={isTxQueued}
-                            isNoSpeech={isNoSpeech}
-                            oneClickRemake={oneClickRemake}
-                            onToggleSave={() => {
-                              if (isFeaturedView) {
-                                toggleSave.mutate({ featuredReelId: reel.id });
-                              } else {
-                                toggleSave.mutate({ reelId: reel.id, jobId: jobId! });
-                              }
-                            }}
-                            onTranscribe={() => {}}
-                            onExpand={() => setExpandedReelId(reel.id)}
-                            onMakeVersion={() => {}}
-                            onOpenMyScript={() => {}}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-
-                    {/* Expanded inline workflow panel  -  same component now
-                        serves both sources; Commit 3b teaches the inner
-                        tRPC mutations about `featuredReelId`. */}
-                    {isExpanded && (
+                        )}
+                      </>
+                    }
+                    badges={
+                      <>
+                        <V13ReelClassificationBadges
+                          niche={null}
+                          hookPattern={reel.hookPattern}
+                          productionFormat={
+                            "productionFormat" in reel ? reel.productionFormat : null
+                          }
+                          viralFlag={reel.viralFlag}
+                          confidence={reel.confidence}
+                        />
+                        <BrandCoachBadge
+                          source={
+                            isFeaturedView
+                              ? { kind: "featured", featuredReelId: reel.id }
+                              : { kind: "reel", reelId: reel.id }
+                          }
+                          hasTranscript={hasTranscription && !isNoSpeech}
+                          prefetchedScore={
+                            isFeaturedView
+                              ? brandCoachBatch.prefetchedForFeatured(reel.id)
+                              : brandCoachBatch.prefetchedForReel(reel.id)
+                          }
+                        />
+                      </>
+                    }
+                    actions={actionButtons}
+                    expandedContent={
                       isFeaturedView ? (
                         <InlineWorkflow
                           reelSource="featured"
@@ -2791,8 +2680,8 @@ export default function Dashboard() {
                           }
                         />
                       )
-                    )}
-                  </div>
+                    }
+                  />
                 );
               })}
             </div>
