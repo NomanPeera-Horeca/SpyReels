@@ -17,6 +17,7 @@ export interface PlanLimits {
   recreatesPerMonth: number;
   discoverySearches: number;
   viralityDiagnostics: number;
+  carouselRemakes: number;
   rewritesPerScript: number;
   savedScripts: number;
   customTags: number;
@@ -74,6 +75,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       recreatesPerMonth: 3,
       discoverySearches: 1,
       viralityDiagnostics: 1,
+      carouselRemakes: 1,
       rewritesPerScript: 3,
       savedScripts: 5,
       customTags: 2,
@@ -124,6 +126,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       recreatesPerMonth: 15,
       discoverySearches: 5,
       viralityDiagnostics: 5,
+      carouselRemakes: 5,
       rewritesPerScript: 2,
       savedScripts: 50,
       customTags: 10,
@@ -177,6 +180,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       recreatesPerMonth: 100,
       discoverySearches: 20,
       viralityDiagnostics: 20,
+      carouselRemakes: 20,
       rewritesPerScript: 10,
       savedScripts: 500,
       customTags: 999999,
@@ -232,6 +236,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       recreatesPerMonth: 500,
       discoverySearches: 20,
       viralityDiagnostics: 20,
+      carouselRemakes: 50,
       rewritesPerScript: 999999,
       savedScripts: 999999,
       customTags: 999999,
@@ -285,6 +290,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       recreatesPerMonth: 999999,
       discoverySearches: 20,
       viralityDiagnostics: 20,
+      carouselRemakes: 999999,
       rewritesPerScript: 999999,
       savedScripts: 999999,
       customTags: 999999,

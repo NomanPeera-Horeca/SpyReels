@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
 import { workspacesRouter } from "./routers/workspacesRouter";
+import { carouselRemakeRouter } from "./routers/carouselRemakeRouter";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -800,6 +801,8 @@ export const appRouter = router({
   system: systemRouter,
 
   workspaces: workspacesRouter,
+
+  carouselRemake: carouselRemakeRouter,
 
   activity: router({
     recordHeartbeat: protectedProcedure

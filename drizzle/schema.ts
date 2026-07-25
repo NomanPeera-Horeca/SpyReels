@@ -1955,3 +1955,33 @@ export const coachScriptFeedback = mysqlTable(
 
 export type CoachScriptFeedback = typeof coachScriptFeedback.$inferSelect;
 export type InsertCoachScriptFeedback = typeof coachScriptFeedback.$inferInsert;
+
+/**
+ * Carousel remake jobs: AI rewrites only slot text for a curated template.
+ * Layout/fonts/colors stay fixed; slotValuesJson is { [slideId]: { [slotId]: string } }.
+ */
+export const carouselRemakes = mysqlTable(
+  "carousel_remakes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    templateId: varchar("templateId", { length: 128 }).notNull(),
+    niche: text("niche").notNull(),
+    status: mysqlEnum("status", ["pending", "processing", "completed", "failed"])
+      .default("pending")
+      .notNull(),
+    slotValuesJson: json("slotValuesJson").$type<Record<string, Record<string, string>>>(),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_carousel_remakes_workspace").on(table.workspaceId),
+  })
+);
+
+export type CarouselRemake = typeof carouselRemakes.$inferSelect;
+export type InsertCarouselRemake = typeof carouselRemakes.$inferInsert;

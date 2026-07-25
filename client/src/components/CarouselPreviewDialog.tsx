@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CarouselTemplate } from "@shared/carouselTemplates";
+import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CarouselRenderer } from "@/components/CarouselRenderer";
-import { Wand2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { Loader2, Wand2 } from "lucide-react";
+import { toast } from "sonner";
 
 export type CarouselPreviewDialogProps = {
   open: boolean;
@@ -19,20 +23,81 @@ export type CarouselPreviewDialogProps = {
 /**
  * Preview / remake modal for a carousel template.
  * Follows GridReelWorkflowDialog DialogContent conventions.
- * Remake is stubbed until niche text generation ships.
  */
 export function CarouselPreviewDialog({
   open,
   onOpenChange,
   template,
 }: CarouselPreviewDialogProps) {
-  const [showRemakeStub, setShowRemakeStub] = useState(false);
+  const [nicheInput, setNicheInput] = useState("");
+  const [activeRemakeId, setActiveRemakeId] = useState<number | null>(null);
+  const [remakeSlideValues, setRemakeSlideValues] =
+    useState<CarouselSlideValuesById | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (!open) {
+      setActiveRemakeId(null);
+      setRemakeSlideValues(null);
+      setShowOriginal(false);
+      setNicheInput("");
+      return;
+    }
+    if (defaultNicheQuery.data?.niche && !nicheInput) {
+      setNicheInput(defaultNicheQuery.data.niche);
+    }
+  }, [open, defaultNicheQuery.data?.niche]);
+
+  const startMutation = trpc.carouselRemake.start.useMutation({
+    onSuccess: (data) => {
+      setActiveRemakeId(data.remakeId);
+      setRemakeSlideValues(null);
+      setShowOriginal(false);
+      toast.success("Carousel remake started");
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const statusQuery = trpc.carouselRemake.status.useQuery(
+    { remakeId: activeRemakeId! },
+    {
+      enabled: activeRemakeId != null,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        return status === "processing" || status === "pending" ? 2000 : false;
+      },
+    }
+  );
+
+  useEffect(() => {
+    const data = statusQuery.data;
+    if (!data) return;
+    if (data.status === "completed" && data.slotValues) {
+      setRemakeSlideValues(data.slotValues);
+    }
+    if (data.status === "failed") {
+      toast.error(data.errorMessage || "Carousel remake failed");
+    }
+  }, [statusQuery.data]);
+
+  const isGenerating =
+    startMutation.isPending ||
+    statusQuery.data?.status === "processing" ||
+    statusQuery.data?.status === "pending";
+
+  const hasRemake = remakeSlideValues != null;
+  const viewingRemake = hasRemake && !showOriginal;
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) setShowRemakeStub(false);
         onOpenChange(next);
       }}
     >
@@ -55,6 +120,11 @@ export function CarouselPreviewDialog({
                 <p className="text-xs text-muted-foreground">
                   {template.sourceAttribution}
                 </p>
+                {viewingRemake && statusQuery.data?.niche ? (
+                  <p className="text-xs text-primary">
+                    Remade for: {statusQuery.data.niche}
+                  </p>
+                ) : null}
               </div>
               <span className="shrink-0 self-start rounded-full border border-border bg-muted px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {template.slides.length} slides
@@ -62,26 +132,91 @@ export function CarouselPreviewDialog({
             </div>
 
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-3">
-              <CarouselRenderer template={template} />
+              <CarouselRenderer
+                template={template}
+                slideValues={viewingRemake ? remakeSlideValues : undefined}
+              />
             </div>
 
-            <div className="shrink-0 space-y-2 border-t border-border/40 p-4">
-              {showRemakeStub ? (
-                <p className="rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                  Niche remake is coming in the next step. Generation is not
-                  wired yet.
+            <div className="shrink-0 space-y-3 border-t border-border/40 p-4">
+              {isGenerating ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Rewriting slide text for your niche…
                 </p>
               ) : null}
+
+              {hasRemake ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={showOriginal ? "outline" : "default"}
+                    size="sm"
+                    onClick={() => setShowOriginal(false)}
+                  >
+                    Remake
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={showOriginal ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowOriginal(true)}
+                  >
+                    Original
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setActiveRemakeId(null);
+                      setRemakeSlideValues(null);
+                      setShowOriginal(false);
+                    }}
+                  >
+                    Start over
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Niche or topic (optional)
+                  </label>
+                  <Input
+                    value={nicheInput}
+                    onChange={(e) => setNicheInput(e.target.value)}
+                    placeholder={
+                      defaultNicheQuery.data?.niche ||
+                      "e.g. restaurant owners, fitness coaches"
+                    }
+                    className="bg-card"
+                    disabled={isGenerating}
+                  />
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="default"
-                  className="gap-2"
-                  onClick={() => setShowRemakeStub(true)}
-                >
-                  <Wand2 className="h-4 w-4" />
-                  Remake for my niche
-                </Button>
+                {!hasRemake ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="gap-2"
+                    disabled={isGenerating || !template}
+                    onClick={() => {
+                      startMutation.mutate({
+                        templateId: template.id,
+                        niche: nicheInput.trim() || undefined,
+                      });
+                    }}
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-4 w-4" />
+                    )}
+                    Remake for my niche
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"
