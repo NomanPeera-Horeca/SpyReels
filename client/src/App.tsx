@@ -51,12 +51,16 @@ const ViralityDiagnostic = lazy(() => import("./pages/ViralityDiagnostic"));
 const ThirtyDayPlan = lazy(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazy(() => import("./pages/AiCoach"));
 const Library = lazy(() => import("./pages/Library"));
+const CarouselLibrary = lazy(() => import("./pages/CarouselLibrary"));
 const PasteScript = lazy(() => import("./pages/PasteScript"));
 const Interests = lazy(() => import("./pages/Interests"));
 const AdminEntry = lazy(() => import("./admin/AdminEntry"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AcceptInvitation = lazy(() => import("./pages/AcceptInvitation"));
 const PublicScriptView = lazy(() => import("./pages/PublicScriptView"));
+
+/** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
+const DevCarouselPreview = lazy(() => import("./pages/DevCarouselPreview"));
 
 const MobileMore = lazy(() => import("./pages/MobileMore"));
 
@@ -132,6 +136,7 @@ function DesktopDashboardRouter() {
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
+          <Route path="/carousel-library" component={CarouselLibrary} />
           <Route path="/library" component={Library} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
@@ -192,6 +197,8 @@ function Router() {
         <Route path="/invitations/accept/:token" component={AcceptInvitation} />
         <Route path="/s/:token" component={PublicScriptView} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
+        {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
+        <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />

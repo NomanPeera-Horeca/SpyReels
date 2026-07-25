@@ -56,6 +56,7 @@ import {
   Sun,
   Users,
   TrendingUp,
+  Images,
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
@@ -98,6 +99,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   // "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
   "/studio": "AI Coach for viral Reel scripts",
+  "/carousel-library":
+    "Browse proven viral carousel templates and remake them for your niche",
   "/library":
     "Saved reel transcripts and scripts (from research, collects, and the script tools)",
   "/saved": "Reels you bookmarked for later",
@@ -133,6 +136,7 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
+        { icon: Images, label: "Carousel Library", path: "/carousel-library", badge: "new" },
         { icon: FileText, label: "My Scripts", path: "/scripts" },
         { icon: Library, label: "Transcripts & Scripts", path: "/library" },
         { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
