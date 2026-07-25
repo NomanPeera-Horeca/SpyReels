@@ -13,6 +13,8 @@ export type CarouselRendererProps = {
   /** Optional per-slide overrides. Missing slots fall back to defaultText. */
   slideValues?: CarouselSlideValuesById;
   className?: string;
+  /** Optional per-slide download handler. When provided, a small download button renders on each slide. */
+  onDownloadSlide?: (slideId: string) => void;
 };
 
 export function resolveCarouselSlideValues(
@@ -36,6 +38,7 @@ export function CarouselRenderer({
   template,
   slideValues,
   className,
+  onDownloadSlide,
 }: CarouselRendererProps) {
   return (
     <div
@@ -53,8 +56,34 @@ export function CarouselRenderer({
         const Layout = CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
         return (
-          <div key={slide.id} style={{ flex: "0 0 auto" }}>
+          <div
+            key={slide.id}
+            data-carousel-slide-id={slide.id}
+            style={{ flex: "0 0 auto", position: "relative" }}
+          >
             <Layout tokens={template.design} values={values} />
+            {onDownloadSlide ? (
+              <button
+                type="button"
+                onClick={() => onDownloadSlide(slide.id)}
+                aria-label="Download this slide as PNG"
+                style={{
+                  position: "absolute",
+                  top: "0.5rem",
+                  right: "0.5rem",
+                  zIndex: 10,
+                  fontSize: "0.7rem",
+                  padding: "0.25rem 0.5rem",
+                  borderRadius: "0.25rem",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  background: "rgba(15,20,25,0.7)",
+                  color: "#F4F1EA",
+                  cursor: "pointer",
+                }}
+              >
+                ↓ PNG
+              </button>
+            ) : null}
           </div>
         );
       })}

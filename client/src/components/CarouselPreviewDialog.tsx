@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CarouselTemplate } from "@shared/carouselTemplates";
 import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
 import {
@@ -13,12 +13,40 @@ import { CarouselRenderer } from "@/components/CarouselRenderer";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { toBlob } from "html-to-image";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 export type CarouselPreviewDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template: CarouselTemplate | null;
 };
+
+function slugifyCarouselName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+async function captureSlideAsPngBlob(node: HTMLElement): Promise<Blob> {
+  await document.fonts.ready;
+  // Capture the layout root only so the per-slide download chrome is not in the PNG.
+  const target = (node.firstElementChild as HTMLElement | null) ?? node;
+  const blob = await toBlob(target, {
+    pixelRatio: 3,
+    cacheBust: true,
+    filter: (domNode) => {
+      if (!(domNode instanceof HTMLElement)) return true;
+      return domNode.getAttribute("aria-label") !== "Download this slide as PNG";
+    },
+  });
+  if (!blob) {
+    throw new Error("Failed to capture slide as image");
+  }
+  return blob;
+}
 
 /**
  * Preview / remake modal for a carousel template.
@@ -34,6 +62,8 @@ export function CarouselPreviewDialog({
   const [remakeSlideValues, setRemakeSlideValues] =
     useState<CarouselSlideValuesById | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const carouselContainerRef = useRef<HTMLDivElement>(null);
 
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
     enabled: open,
@@ -86,6 +116,49 @@ export function CarouselPreviewDialog({
     }
   }, [statusQuery.data]);
 
+  async function handleDownloadSlide(slideId: string) {
+    const node = carouselContainerRef.current?.querySelector<HTMLElement>(
+      `[data-carousel-slide-id="${slideId}"]`
+    );
+    if (!node || !template) return;
+    setIsExporting(true);
+    try {
+      const blob = await captureSlideAsPngBlob(node);
+      const index = template.slides.findIndex((s) => s.id === slideId);
+      const filename = `${slugifyCarouselName(template.name)}-slide-${String(
+        index + 1
+      ).padStart(2, "0")}.png`;
+      saveAs(blob, filename);
+    } catch (err) {
+      console.error("Slide download failed", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleDownloadAllSlides() {
+    const container = carouselContainerRef.current;
+    if (!container || !template) return;
+    setIsExporting(true);
+    try {
+      const nodes = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-carousel-slide-id]")
+      );
+      const zip = new JSZip();
+      for (let i = 0; i < nodes.length; i++) {
+        const blob = await captureSlideAsPngBlob(nodes[i]);
+        const filename = `slide-${String(i + 1).padStart(2, "0")}.png`;
+        zip.file(filename, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      saveAs(zipBlob, `${slugifyCarouselName(template.name)}.zip`);
+    } catch (err) {
+      console.error("Carousel export failed", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const isGenerating =
     startMutation.isPending ||
     statusQuery.data?.status === "processing" ||
@@ -131,10 +204,14 @@ export function CarouselPreviewDialog({
               </span>
             </div>
 
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-3">
+            <div
+              ref={carouselContainerRef}
+              className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pt-3"
+            >
               <CarouselRenderer
                 template={template}
                 slideValues={viewingRemake ? remakeSlideValues : undefined}
+                onDownloadSlide={handleDownloadSlide}
               />
             </div>
 
@@ -217,6 +294,17 @@ export function CarouselPreviewDialog({
                     Remake for my niche
                   </Button>
                 ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isExporting}
+                  onClick={() => {
+                    void handleDownloadAllSlides();
+                  }}
+                >
+                  {isExporting ? "Preparing..." : "Download All (ZIP)"}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
