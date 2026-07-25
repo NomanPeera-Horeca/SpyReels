@@ -88,7 +88,8 @@ Rules:
 3. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
 4. Keep the same structure: hooks stay hooks, list items stay list items, CTAs stay CTAs.
 5. Use defaultText only as a tone and length reference, not as copy to keep.
-6. Return ONLY the tool payload with every slide id and every slot id filled.
+6. For any slot with role "kicker": use the plural noun for the target audience described in the niche above (e.g. "RESTAURANT OWNERS", "FITNESS COACHES", "REAL ESTATE AGENTS"). Do not invent a stylistic or generic word. If the niche names a specific audience noun, use that noun directly, uppercased. Stay within the character budget for that slot.
+7. Return ONLY the tool payload with every slide id and every slot id filled.
 
 ${slideBlocks}`;
 }

@@ -180,7 +180,7 @@ export function CarouselPreviewDialog({
               ) : (
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-muted-foreground">
-                    Niche or topic (optional)
+                    Niche or topic (overrides your saved niche for this remake only)
                   </label>
                   <Input
                     value={nicheInput}
