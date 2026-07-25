@@ -49,6 +49,7 @@ import {
 } from "./stripe/stripe-service";
 import { PLANS, getPlanLimits, isUnlimited } from "./stripe/products";
 import type { PlanId, BillingInterval } from "./stripe/products";
+import { hasUnlimitedUsage } from "./usageBypass";
 import {
   countCombinedDiscoverySearchesThisMonth,
   countSucceededSearchesThisMonth,
@@ -3120,14 +3121,22 @@ Return JSON only:
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const sub = await getUserSubscription(ctx.user.id);
-        const limits = getPlanLimits(sub.plan as PlanId);
-        const used = await countViralityDiagnosticJobsThisMonth(ctx.user.id);
-        if (used >= limits.viralityDiagnostics) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: `Monthly virality diagnostic limit reached (${used}/${limits.viralityDiagnostics}). Resets ${firstDayOfNextMonthUtc()}.`,
-          });
+        if (
+          !hasUnlimitedUsage({
+            openId: ctx.user.openId,
+            email: ctx.user.email,
+            role: ctx.user.role,
+          })
+        ) {
+          const sub = await getUserSubscription(ctx.user.id);
+          const limits = getPlanLimits(sub.plan as PlanId);
+          const used = await countViralityDiagnosticJobsThisMonth(ctx.user.id);
+          if (used >= limits.viralityDiagnostics) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Monthly virality diagnostic limit reached (${used}/${limits.viralityDiagnostics}). Resets ${firstDayOfNextMonthUtc()}.`,
+            });
+          }
         }
 
         const db = await getDb();
