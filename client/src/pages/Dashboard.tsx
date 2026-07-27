@@ -44,7 +44,6 @@ import {
   X,
   Sparkles,
   Radar,
-  BookOpen,
   CalendarDays,
 } from "lucide-react";
 import {
@@ -1530,15 +1529,15 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
-                    Transcripts and scripts you create show up in{" "}
+                    Scripts you create show up in{" "}
                     <AppLink
-                      href="/library"
+                      href="/scripts"
                       className="font-medium text-primary underline-offset-4 hover:underline"
                       onClick={() => {
                         posthog?.capture("dashboard_empty_state_library_link");
                       }}
                     >
-                      Library
+                      My Scripts
                     </AppLink>
                     . Start with Spy a creator when you are ready.
                   </p>
@@ -1552,13 +1551,13 @@ export default function Dashboard() {
                   className="gap-1.5 border-border/50 bg-background/40"
                 >
                   <AppLink
-                    href="/library"
+                    href="/scripts"
                     onClick={() => {
-                      posthog?.capture("dashboard_hero_shortcut", { to: "library" });
+                      posthog?.capture("dashboard_hero_shortcut", { to: "scripts" });
                     }}
                   >
-                    <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                    Library
+                    <FileText className="h-3.5 w-3.5" aria-hidden />
+                    My Scripts
                   </AppLink>
                 </Button>
                 <Button
@@ -1716,20 +1715,20 @@ export default function Dashboard() {
               <p className="mt-1 text-sm text-muted-foreground">From Telegram, ready to transcribe and turn into scripts.</p>
             </AppLink>
             <AppLink
-              href="/library"
+              href="/scripts"
               onClick={() => {
-                posthog?.capture("dashboard_shortcut_tile", { to: "library" });
+                posthog?.capture("dashboard_shortcut_tile", { to: "scripts" });
               }}
               className="group block rounded-2xl border border-border/50 bg-card p-5 text-left no-underline text-inherit transition-all hover:border-cyan-500/30 hover:bg-accent/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/25"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/12">
-                  <BookOpen className="h-5 w-5 text-cyan-500" aria-hidden />
+                  <FileText className="h-5 w-5 text-cyan-500" aria-hidden />
                 </div>
                 <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
-              <p className="mt-3 font-semibold text-foreground">Library</p>
-              <p className="mt-1 text-sm text-muted-foreground">All transcripts and scripts in one scrollable place.</p>
+              <p className="mt-3 font-semibold text-foreground">My Scripts</p>
+              <p className="mt-1 text-sm text-muted-foreground">Your saved drafts, remakes, and AI Coach scripts in one place.</p>
             </AppLink>
             <AppLink
               href="/studio"

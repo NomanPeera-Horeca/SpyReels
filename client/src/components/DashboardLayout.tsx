@@ -47,7 +47,6 @@ import {
   Inbox,
   CalendarDays,
   Sparkles,
-  Library,
   Search,
   ClipboardPaste,
   Compass,
@@ -101,8 +100,6 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/studio": "AI Coach for viral Reel scripts",
   "/carousel-library":
     "Browse proven viral carousel templates and remake them for your niche",
-  "/library":
-    "Saved reel transcripts and scripts (from research, collects, and the script tools)",
   "/saved": "Reels you bookmarked for later",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
@@ -138,7 +135,6 @@ function buildNavSections(): SidebarNavSection[] {
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
         { icon: Images, label: "Carousel Library", path: "/carousel-library", badge: "new" },
         { icon: FileText, label: "My Scripts", path: "/scripts" },
-        { icon: Library, label: "Transcripts & Scripts", path: "/library" },
         { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
       ],
     },

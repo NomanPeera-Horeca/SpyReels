@@ -70,8 +70,6 @@ export function resolveFromParamFallback(from: string | null | undefined): strin
       return "/studio";
     case "scripts":
       return "/scripts";
-    case "library":
-      return "/library";
     case "collected":
       return "/collected";
     case "ideas":

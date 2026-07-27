@@ -41,7 +41,6 @@ const PRIVATE_PATH_PREFIXES = [
   "/discover-creators",
   "/collected",
   "/ideas",
-  "/library",
   "/paste",
   "/workspace",
   "/invitations",

@@ -50,7 +50,6 @@ const ViralityDiagnostic = lazy(() => import("./pages/ViralityDiagnostic"));
 // const IdeaToScript = lazy(() => import("./pages/IdeaToScript"));
 const ThirtyDayPlan = lazy(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazy(() => import("./pages/AiCoach"));
-const Library = lazy(() => import("./pages/Library"));
 const CarouselLibrary = lazy(() => import("./pages/CarouselLibrary"));
 const PasteScript = lazy(() => import("./pages/PasteScript"));
 const Interests = lazy(() => import("./pages/Interests"));
@@ -137,7 +136,6 @@ function DesktopDashboardRouter() {
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
           <Route path="/carousel-library" component={CarouselLibrary} />
-          <Route path="/library" component={Library} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
