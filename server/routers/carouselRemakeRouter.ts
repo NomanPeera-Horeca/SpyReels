@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
-import { carouselRemakes } from "../../drizzle/schema";
+import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getCreatorCoachProfile } from "../planCoachProfile";
@@ -11,6 +11,22 @@ import { getPlanLimits, type PlanId } from "../stripe/products";
 import { hasUnlimitedUsage } from "../usageBypass";
 import { countCarouselRemakesThisMonth } from "../carousel/db";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
+
+const DESIGN_OVERRIDE_SCHEMA = z.object({
+  background: z.string().max(16),
+  foreground: z.string().max(16),
+  accent: z.string().max(16),
+  muted: z.string().max(16),
+  fontDisplay: z.string().max(80).optional(),
+  fontBody: z.string().max(80).optional(),
+});
+
+const ASPECT_RATIO_SCHEMA = z.enum(["4:5", "1:1", "9:16"]);
+
+const SLIDE_COUNT_SCHEMA = z.union([
+  z.literal("auto"),
+  z.number().int().min(3).max(20),
+]);
 
 function firstDayOfNextMonthUtc(): string {
   const now = new Date();
@@ -55,15 +71,14 @@ async function resolveCarouselNiche(
 }
 
 export const carouselRemakeRouter = router({
-  /**
-   * Start a carousel remake job. Returns immediately; poll `status` until
-   * completed or failed.
-   */
   start: protectedProcedure
     .input(
       z.object({
         templateId: z.string().min(1).max(128),
         niche: z.string().max(500).optional(),
+        slideCount: SLIDE_COUNT_SCHEMA.optional(),
+        designOverride: DESIGN_OVERRIDE_SCHEMA.optional(),
+        aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -111,6 +126,8 @@ export const carouselRemakeRouter = router({
         templateId: input.templateId,
         niche,
         status: "processing",
+        designOverrideJson: input.designOverride ?? null,
+        aspectRatioOverride: input.aspectRatioOverride ?? null,
       });
       const remakeId = insertResult[0].insertId;
       if (!remakeId) {
@@ -120,11 +137,14 @@ export const carouselRemakeRouter = router({
         });
       }
 
-      generateCarouselRemake(remakeId, input.templateId, niche).catch(
-        (err: unknown) => {
-          console.error(`Carousel remake ${remakeId} failed:`, err);
-        }
-      );
+      generateCarouselRemake(
+        remakeId,
+        input.templateId,
+        niche,
+        input.slideCount
+      ).catch((err: unknown) => {
+        console.error(`Carousel remake ${remakeId} failed:`, err);
+      });
 
       return { remakeId, status: "processing" as const, niche };
     }),
@@ -162,13 +182,15 @@ export const carouselRemakeRouter = router({
         niche: row.niche,
         status: row.status,
         slotValues: row.slotValuesJson ?? null,
+        slideStructure: row.slideStructureJson ?? null,
+        designOverride: row.designOverrideJson ?? null,
+        aspectRatioOverride: row.aspectRatioOverride ?? null,
         errorMessage: row.errorMessage,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };
     }),
 
-  /** Recent remakes for this workspace (minimal list for later library history). */
   list: protectedProcedure
     .input(
       z
@@ -208,7 +230,6 @@ export const carouselRemakeRouter = router({
       return rows;
     }),
 
-  /** Default niche string for the remake input placeholder. */
   defaultNiche: protectedProcedure.query(async ({ ctx }) => {
     try {
       const niche = await resolveCarouselNiche(ctx.user.id, undefined, {
@@ -220,4 +241,28 @@ export const carouselRemakeRouter = router({
       return { niche: null as string | null };
     }
   }),
+
+  /** Saved Instagram handle for the carousel handle overlay, if set. */
+  defaultHandle: protectedProcedure.query(async ({ ctx }) => {
+    return { handle: ctx.user.instagramHandle ?? null };
+  }),
+
+  /** Persist the user's handle so it's remembered for future remakes. */
+  saveHandle: protectedProcedure
+    .input(z.object({ handle: z.string().max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+      const cleaned = input.handle.trim();
+      await db
+        .update(users)
+        .set({ instagramHandle: cleaned.length > 0 ? cleaned : null })
+        .where(eq(users.id, ctx.user.id));
+      return { handle: cleaned.length > 0 ? cleaned : null };
+    }),
 });

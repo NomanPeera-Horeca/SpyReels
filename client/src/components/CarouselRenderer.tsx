@@ -2,6 +2,7 @@ import type {
   CarouselSlotValues,
   CarouselSlideSpec,
   CarouselTemplate,
+  CarouselDesignTokens,
 } from "@shared/carouselTemplates";
 import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
 
@@ -12,8 +13,13 @@ export type CarouselRendererProps = {
   template: CarouselTemplate;
   /** Optional per-slide overrides. Missing slots fall back to defaultText. */
   slideValues?: CarouselSlideValuesById;
+  /** Optional slide list override (e.g. a remake generated at a different slide count than the template default). Falls back to template.slides. */
+  slides?: CarouselSlideSpec[];
+  /** Optional design token override (color/font choices made at remake time). Merged over template.design. */
+  designOverride?: Partial<CarouselDesignTokens>;
+  /** Optional handle text (e.g. "@yourbrand") rendered as a small overlay on every slide. Never sent to the AI; purely a static render-time value. */
+  handle?: string;
   className?: string;
-  /** Optional per-slide download handler. When provided, a small download button renders on each slide. */
   onDownloadSlide?: (slideId: string) => void;
 };
 
@@ -37,9 +43,17 @@ export function resolveCarouselSlideValues(
 export function CarouselRenderer({
   template,
   slideValues,
+  slides,
+  designOverride,
+  handle,
   className,
   onDownloadSlide,
 }: CarouselRendererProps) {
+  const effectiveSlides = slides ?? template.slides;
+  const effectiveTokens: CarouselDesignTokens = designOverride
+    ? { ...template.design, ...designOverride }
+    : template.design;
+
   return (
     <div
       className={className}
@@ -52,7 +66,7 @@ export function CarouselRenderer({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {template.slides.map((slide) => {
+      {effectiveSlides.map((slide) => {
         const Layout = CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
         return (
@@ -61,7 +75,7 @@ export function CarouselRenderer({
             data-carousel-slide-id={slide.id}
             style={{ flex: "0 0 auto", position: "relative" }}
           >
-            <Layout tokens={template.design} values={values} />
+            <Layout tokens={effectiveTokens} values={values} handle={handle} />
             {onDownloadSlide ? (
               <button
                 type="button"

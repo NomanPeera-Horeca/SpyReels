@@ -61,6 +61,8 @@ export const users = mysqlTable("users", {
   selectedCreatorHandles: json("selectedCreatorHandles").$type<string[] | null>(),
   businessDescription: varchar("businessDescription", { length: 1000 }),
   targetAudience: varchar("targetAudience", { length: 1000 }),
+  /** Optional Instagram @handle for carousel slide watermark overlays. */
+  instagramHandle: varchar("instagramHandle", { length: 64 }),
   onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
   onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
   /** First-touch marketing attribution (set once on signup). */
@@ -1974,6 +1976,12 @@ export const carouselRemakes = mysqlTable(
       .default("pending")
       .notNull(),
     slotValuesJson: json("slotValuesJson").$type<Record<string, Record<string, string>>>(),
+    /** Ephemeral slide list when remake used a different middle-section count than the template. */
+    slideStructureJson: json("slideStructureJson"),
+    /** Optional per-remake color/font override. */
+    designOverrideJson: json("designOverrideJson"),
+    /** Optional per-remake aspect ratio override (e.g. "4:5", "9:16"). */
+    aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
     errorMessage: text("errorMessage"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -11,6 +11,8 @@ import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCen
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
+  /** Optional Instagram handle overlay; render-only, never sent to AI. */
+  handle?: string;
   className?: string;
 };
 

@@ -6,6 +6,7 @@ import type {
 export type CarouselSlideCtaBoldCenterProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
+  handle?: string;
   className?: string;
 };
 
@@ -22,6 +23,7 @@ const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
 export function CarouselSlideCtaBoldCenter({
   tokens,
   values,
+  handle,
   className,
 }: CarouselSlideCtaBoldCenterProps) {
   const headline = values.headline ?? "";
@@ -32,6 +34,7 @@ export function CarouselSlideCtaBoldCenter({
     <div
       className={className}
       style={{
+        position: "relative",
         aspectRatio: ASPECT_RATIO_CSS[tokens.aspectRatio],
         backgroundColor: tokens.colors.background,
         color: tokens.colors.foreground,
@@ -97,6 +100,23 @@ export function CarouselSlideCtaBoldCenter({
           }}
         >
           {ctaLabel}
+        </span>
+      ) : null}
+
+      {handle ? (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "0.9rem",
+            left: "1.75rem",
+            fontSize: "0.65rem",
+            fontFamily: tokens.fontFamily.body,
+            color: tokens.colors.muted,
+            opacity: 0.85,
+            letterSpacing: "0.02em",
+          }}
+        >
+          {handle}
         </span>
       ) : null}
     </div>
