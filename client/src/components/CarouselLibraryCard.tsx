@@ -2,6 +2,7 @@ import type { CarouselTemplate } from "@shared/carouselTemplates";
 import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
 import { resolveCarouselSlideValues } from "@/components/CarouselRenderer";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const ASPECT_RATIO_CSS: Record<CarouselTemplate["design"]["aspectRatio"], string> = {
   "4:5": "4 / 5",
@@ -33,11 +34,18 @@ export function CarouselLibraryCard({
     : null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
-        "workspace-reel-card group relative flex h-full w-full flex-col overflow-hidden text-left",
+        "workspace-reel-card group relative flex h-full w-full cursor-pointer flex-col overflow-hidden text-left",
         isActive && "ring-2 ring-primary/35"
       )}
     >
@@ -73,6 +81,20 @@ export function CarouselLibraryCard({
           {template.sourceAttribution}
         </p>
       </div>
-    </button>
+
+      <div className="mt-auto p-3 pt-0">
+        <Button
+          type="button"
+          size="sm"
+          className="w-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+        >
+          Remake for my niche
+        </Button>
+      </div>
+    </div>
   );
 }

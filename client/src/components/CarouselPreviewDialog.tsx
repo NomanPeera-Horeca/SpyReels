@@ -77,10 +77,12 @@ export function CarouselPreviewDialog({
       setNicheInput("");
       return;
     }
-    if (defaultNicheQuery.data?.niche && !nicheInput) {
-      setNicheInput(defaultNicheQuery.data.niche);
-    }
-  }, [open, defaultNicheQuery.data?.niche]);
+    // Intentionally do NOT pre-fill nicheInput with the saved niche as a real
+    // value. That made it look like committed typed text instead of a
+    // suggestion. The saved niche still shows as placeholder text via the
+    // Input's `placeholder` prop below, and the server already falls back to
+    // the saved niche automatically when nicheInput is left empty.
+  }, [open]);
 
   const startMutation = trpc.carouselRemake.start.useMutation({
     onSuccess: (data) => {
@@ -185,7 +187,7 @@ export function CarouselPreviewDialog({
         </DialogHeader>
         {template ? (
           <>
-            <div className="flex shrink-0 flex-col gap-1 border-b border-border/40 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex shrink-0 flex-col gap-1 border-b border-border/40 p-4 pr-12 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0 space-y-1">
                 <p className="text-base font-semibold text-foreground">
                   {template.name}
@@ -211,7 +213,7 @@ export function CarouselPreviewDialog({
               <CarouselRenderer
                 template={template}
                 slideValues={viewingRemake ? remakeSlideValues : undefined}
-                onDownloadSlide={handleDownloadSlide}
+                onDownloadSlide={hasRemake ? handleDownloadSlide : undefined}
               />
             </div>
 
@@ -257,7 +259,7 @@ export function CarouselPreviewDialog({
               ) : (
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-muted-foreground">
-                    Niche or topic (overrides your saved niche for this remake only)
+                    Add context for this remake. Leave blank to use your saved niche automatically
                   </label>
                   <Input
                     value={nicheInput}
@@ -294,17 +296,19 @@ export function CarouselPreviewDialog({
                     Remake for my niche
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isExporting}
-                  onClick={() => {
-                    void handleDownloadAllSlides();
-                  }}
-                >
-                  {isExporting ? "Preparing..." : "Download All (ZIP)"}
-                </Button>
+                {hasRemake ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isExporting}
+                    onClick={() => {
+                      void handleDownloadAllSlides();
+                    }}
+                  >
+                    {isExporting ? "Preparing..." : "Download"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"
