@@ -131,6 +131,7 @@ export default function PrivacyPolicy() {
               <li><strong>Manus OAuth</strong>: Authentication. Used for secure sign-in</li>
               <li><strong>PostHog</strong>: Product analytics and session replay to improve the Service. Subject to <a href="https://posthog.com/privacy" target="_blank" rel="noopener noreferrer">PostHog's Privacy Policy</a></li>
               <li><strong>Microsoft Clarity</strong>: Heatmaps and session recordings to understand how the Service is used. Subject to <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft's Privacy Statement</a></li>
+              <li><strong>LogRocket</strong>: Session replay and error diagnostics to improve the Service. Subject to <a href="https://logrocket.com/privacy/" target="_blank" rel="noopener noreferrer">LogRocket's Privacy Policy</a></li>
             </ul>
           </section>
 

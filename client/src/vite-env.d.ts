@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_PUBLIC_POSTHOG_TOKEN: string;
   readonly VITE_PUBLIC_POSTHOG_HOST: string;
   readonly VITE_PUBLIC_CLARITY_PROJECT_ID: string;
+  readonly VITE_PUBLIC_LOGROCKET_APP_ID: string;
   readonly VITE_APP_ORIGIN: string;
 }
 

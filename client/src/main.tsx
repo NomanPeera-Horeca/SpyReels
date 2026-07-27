@@ -13,11 +13,17 @@ import { PostHogProvider } from "@posthog/react";
 import { installClientLoadFailureReporting } from "./utils/clientLoadFailureReporting";
 import { resolveAppUrl, isNativeApp } from "@/lib/nativeApp";
 import { initClarity } from "@/lib/clarity";
+import { initLogRocket } from "@/lib/logrocket";
 import { registerSW } from "virtual:pwa-register";
 
 const clarityProjectId = import.meta.env.VITE_PUBLIC_CLARITY_PROJECT_ID;
 if (clarityProjectId && !isNativeApp()) {
   initClarity(clarityProjectId);
+}
+
+const logRocketAppId = import.meta.env.VITE_PUBLIC_LOGROCKET_APP_ID;
+if (logRocketAppId && !isNativeApp()) {
+  initLogRocket(logRocketAppId);
 }
 
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {

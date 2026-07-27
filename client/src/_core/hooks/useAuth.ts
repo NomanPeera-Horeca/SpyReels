@@ -1,5 +1,6 @@
 import { getLoginUrl } from "@/const";
 import { identifyClarityUser } from "@/lib/clarity";
+import { identifyLogRocketUser } from "@/lib/logrocket";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import posthog from "posthog-js";
@@ -58,6 +59,12 @@ export function useAuth(options?: UseAuthOptions) {
     }
     if (import.meta.env.VITE_PUBLIC_CLARITY_PROJECT_ID) {
       identifyClarityUser(String(user.id), user.name ?? user.email ?? null);
+    }
+    if (import.meta.env.VITE_PUBLIC_LOGROCKET_APP_ID) {
+      identifyLogRocketUser(String(user.id), {
+        name: user.name,
+        email: user.email,
+      });
     }
   }, [meQuery.data?.id, meQuery.data?.email, meQuery.data?.name]);
 
