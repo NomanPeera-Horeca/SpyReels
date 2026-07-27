@@ -1,4 +1,5 @@
 import { getLoginUrl } from "@/const";
+import { identifyClarityUser } from "@/lib/clarity";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import posthog from "posthog-js";
@@ -48,11 +49,16 @@ export function useAuth(options?: UseAuthOptions) {
 
   useEffect(() => {
     const user = meQuery.data;
-    if (!user || !import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) return;
-    posthog.identify(String(user.id), {
-      email: user.email ?? undefined,
-      name: user.name ?? undefined,
-    });
+    if (!user) return;
+    if (import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN) {
+      posthog.identify(String(user.id), {
+        email: user.email ?? undefined,
+        name: user.name ?? undefined,
+      });
+    }
+    if (import.meta.env.VITE_PUBLIC_CLARITY_PROJECT_ID) {
+      identifyClarityUser(String(user.id), user.name ?? user.email ?? null);
+    }
   }, [meQuery.data?.id, meQuery.data?.email, meQuery.data?.name]);
 
   const state = useMemo(() => {

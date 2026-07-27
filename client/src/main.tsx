@@ -12,7 +12,13 @@ import posthog from "posthog-js";
 import { PostHogProvider } from "@posthog/react";
 import { installClientLoadFailureReporting } from "./utils/clientLoadFailureReporting";
 import { resolveAppUrl, isNativeApp } from "@/lib/nativeApp";
+import { initClarity } from "@/lib/clarity";
 import { registerSW } from "virtual:pwa-register";
+
+const clarityProjectId = import.meta.env.VITE_PUBLIC_CLARITY_PROJECT_ID;
+if (clarityProjectId && !isNativeApp()) {
+  initClarity(clarityProjectId);
+}
 
 posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_TOKEN, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,

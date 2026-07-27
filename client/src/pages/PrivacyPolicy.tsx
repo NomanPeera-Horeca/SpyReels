@@ -129,7 +129,8 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-6 space-y-1">
               <li><strong>Stripe</strong>: Payment processing. Subject to <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">Stripe's Privacy Policy</a></li>
               <li><strong>Manus OAuth</strong>: Authentication. Used for secure sign-in</li>
-              <li><strong>Analytics</strong>: Anonymous usage tracking to improve the Service</li>
+              <li><strong>PostHog</strong>: Product analytics and session replay to improve the Service. Subject to <a href="https://posthog.com/privacy" target="_blank" rel="noopener noreferrer">PostHog's Privacy Policy</a></li>
+              <li><strong>Microsoft Clarity</strong>: Heatmaps and session recordings to understand how the Service is used. Subject to <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft's Privacy Statement</a></li>
             </ul>
           </section>
 
