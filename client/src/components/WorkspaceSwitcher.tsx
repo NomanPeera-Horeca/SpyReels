@@ -85,7 +85,16 @@ export function WorkspaceSwitcher() {
   const handleSelectWorkspace = (workspaceId: string) => {
     if (workspaceId === currentWorkspaceId) return;
     setCurrentWorkspaceId(workspaceId);
-    window.location.reload();
+    // Scripts routes can reference workspace-scoped state (a specific script ID,
+    // or a tag filter) that doesn't exist in the new workspace. Redirect to a
+    // clean list instead of reloading the same URL, which previously produced
+    // an empty list or a misleading "Script not found" after switching.
+    const isScriptsRoute = window.location.pathname.startsWith("/scripts");
+    if (isScriptsRoute) {
+      window.location.href = "/scripts";
+    } else {
+      window.location.reload();
+    }
   };
 
   const handleOpenCreateModal = () => {
