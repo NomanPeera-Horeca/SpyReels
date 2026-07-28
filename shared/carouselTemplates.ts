@@ -1711,6 +1711,267 @@ export const CAROUSEL_TEMPLATE_CHECKLIST_READY_TO_LAUNCH: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_PSYCHOLOGY_INSIGHT_MINIMAL: CarouselTemplate = {
+  id: "psychology_insight_minimal",
+  name: "Uncomfortable Truth (Minimal)",
+  sourceAttribution:
+    "Inspired by high-performing black-and-white narrative insight carousels (psychology/self-improvement format).",
+  description:
+    "A five-slide narrative insight carousel: a bold uncomfortable-truth hook, three flowing insight slides (not numbered as a list), then a save/follow CTA. Pure black-on-white, no color accents.",
+  active: true,
+  sortOrder: 16,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#FFFFFF",
+      foreground: "#111111",
+      accent: "#111111",
+      muted: "#6B7280",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "An uncomfortable-truth hook creates tension the reader wants resolved, and the stark black-and-white design signals 'no fluff' honesty before they read a word.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "UNCOMFORTABLE TRUTH" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Advice that stung but fixed everything" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "This one insight changed how I approach the work." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "problem",
+      viralWhy:
+        "Name the problem the reader already senses but hasn't said out loud. Recognition builds trust before the reframe lands.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Insight title", budget: { min: 14, max: 40 }, defaultText: "You already know the problem" },
+        { id: "body", role: "body", label: "The insight", budget: { min: 50, max: 140 }, defaultText: "Deep down you've sensed it for a while. The discomfort isn't confusion, it's avoidance." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "problem",
+      viralWhy:
+        "Explain why the discomfort exists. This is the beat that makes the reader feel understood, not lectured.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Insight title", budget: { min: 14, max: 40 }, defaultText: "Comfort was never the goal" },
+        { id: "body", role: "body", label: "The insight", budget: { min: 50, max: 140 }, defaultText: "Staying comfortable protects you from failing, but it also protects you from ever finding out what works." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "example",
+      viralWhy:
+        "Land the reframe with a concrete, specific example so the insight feels earned, not generic.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Insight title", budget: { min: 14, max: 40 }, defaultText: "The reframe that actually worked" },
+        { id: "body", role: "body", label: "The insight", budget: { min: 50, max: 140 }, defaultText: "Instead of asking 'how do I feel better,' start asking 'what would this look like if it were easy.'" },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this for the next uncomfortable truth" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more honest reframes, no fluff." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS_MINIMAL: CarouselTemplate = {
+  id: "checklist_3_signs_minimal",
+  name: "3 Signs Checklist (Minimal)",
+  sourceAttribution:
+    "Same structure as '3 Signs Checklist', restyled in a pure black-and-white minimal design for a cleaner, no-color aesthetic.",
+  description:
+    "A five-slide checklist: hook, three self-check signs, then a save/follow CTA. Pure black-on-white, no color accents.",
+  active: true,
+  sortOrder: 17,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#FFFFFF",
+      foreground: "#111111",
+      accent: "#111111",
+      muted: "#6B7280",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "Diagnostic hooks work because the reader self-identifies before they even swipe.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "SELF-CHECK" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "3 signs you're stuck" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Check these before you blame the algorithm." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "First check should be the most common and easiest to self-diagnose.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Sign title", budget: { min: 14, max: 40 }, defaultText: "You post and disappear" },
+        { id: "body", role: "body", label: "Why it matters", budget: { min: 50, max: 140 }, defaultText: "No reply, no follow-up, no reason to come back. Engagement dies in the first hour without you." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Middle check deepens the diagnostic pattern with a concrete, screenshot-worthy sign.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Sign title", budget: { min: 14, max: 40 }, defaultText: "Every post looks the same" },
+        { id: "body", role: "body", label: "Why it matters", budget: { min: 50, max: 140 }, defaultText: "Same format, same pace, same energy. The algorithm and the audience both stop noticing you." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Last check should be the one that surprises even experienced people in the niche.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Sign title", budget: { min: 14, max: 40 }, defaultText: "You're guessing what works" },
+        { id: "body", role: "body", label: "Why it matters", budget: { min: 50, max: 140 }, defaultText: "No numbers, no pattern-tracking. Without data every post is a fresh guess instead of a repeatable win." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next post" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for weekly checks that actually move the needle." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_COMPARISON_OLD_VS_NEW_MINIMAL: CarouselTemplate = {
+  id: "comparison_old_vs_new_minimal",
+  name: "Old Way vs New Way (Minimal)",
+  sourceAttribution:
+    "Same structure as 'Old Way vs New Way', restyled in a pure black-and-white minimal design for a cleaner, no-color aesthetic.",
+  description:
+    "A six-slide comparison carousel: hook, four old-way/new-way contrasts, then a save/follow CTA. Pure black-on-white, no color accents.",
+  active: true,
+  sortOrder: 18,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#FFFFFF",
+      foreground: "#111111",
+      accent: "#111111",
+      muted: "#6B7280",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "Old-way/new-way framing signals a shortcut is coming, which is highly swipeable.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "LEVEL UP" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "The old way vs the new way" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "What used to work is quietly costing you now." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "First contrast should be the most universally recognized old habit.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Contrast", budget: { min: 14, max: 40 }, defaultText: "Guessing vs testing" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "The old way guesses what the audience wants. The new way tests small and lets data decide." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Middle contrast deepens the pattern with a specific, practical example.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Contrast", budget: { min: 14, max: 40 }, defaultText: "One-size-fits-all vs targeted" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "The old way talks to everyone. The new way speaks directly to the one person most likely to act." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Continue the pattern; keep each contrast concrete and niche-specific.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Contrast", budget: { min: 14, max: 40 }, defaultText: "Reactive vs planned" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "The old way scrambles last minute. The new way runs on a simple plan set the week before." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Last contrast should be the one that reframes the reader's whole approach.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "04" },
+        { id: "headline", role: "headline", label: "Contrast", budget: { min: 14, max: 40 }, defaultText: "Chasing trends vs owning a system" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "The old way jumps to every new trend. The new way builds one system that compounds over months." },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you go the old way again" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for weekly upgrades that actually stick." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -1727,6 +1988,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_COMPARISON_MISTAKE_VS_FIX,
   CAROUSEL_TEMPLATE_MYTH_6_TRUTHS,
   CAROUSEL_TEMPLATE_CHECKLIST_READY_TO_LAUNCH,
+  CAROUSEL_TEMPLATE_PSYCHOLOGY_INSIGHT_MINIMAL,
+  CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS_MINIMAL,
+  CAROUSEL_TEMPLATE_COMPARISON_OLD_VS_NEW_MINIMAL,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(
