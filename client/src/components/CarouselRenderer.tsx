@@ -3,7 +3,9 @@ import type {
   CarouselSlideSpec,
   CarouselTemplate,
   CarouselDesignTokens,
+  CarouselImageUrlMap,
 } from "@shared/carouselTemplates";
+import { normalizeSlideImages } from "@shared/carouselTemplates";
 import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
 
 /** Per-slide slot overrides, keyed by CarouselSlideSpec.id */
@@ -19,8 +21,8 @@ export type CarouselRendererProps = {
   designOverride?: Partial<CarouselDesignTokens>;
   /** Optional handle text (e.g. "@yourbrand") rendered as a small overlay on every slide. Never sent to the AI; purely a static render-time value. */
   handle?: string;
-  /** Resolved photo URLs keyed by slide id, for slides with an imageSlots entry. */
-  imageUrls?: Record<string, string>;
+  /** Resolved photo URLs keyed by slide id (string or per-slot map). */
+  imageUrls?: CarouselImageUrlMap;
   className?: string;
   onDownloadSlide?: (slideId: string) => void;
 };
@@ -36,6 +38,13 @@ export function resolveCarouselSlideValues(
       override !== undefined && override !== "" ? override : slot.defaultText;
   }
   return values;
+}
+
+function firstUrlFromMap(map: CarouselImageUrlMap | undefined): string | undefined {
+  if (!map) return undefined;
+  const first = Object.values(map)[0];
+  if (!first) return undefined;
+  return typeof first === "string" ? first : Object.values(first)[0];
 }
 
 /**
@@ -58,8 +67,18 @@ export function CarouselRenderer({
     : template.design;
 
   const sharedCoverUrl = template.shareCoverImage
-    ? imageUrls?.[effectiveSlides.find((s) => s.imageSlots && s.imageSlots.length > 0)?.id ?? ""] ??
-      (imageUrls ? Object.values(imageUrls)[0] : undefined)
+    ? (() => {
+        const coverSlide = effectiveSlides.find(
+          (s) => s.imageSlots && s.imageSlots.length > 0
+        );
+        const entry = coverSlide ? imageUrls?.[coverSlide.id] : undefined;
+        const normalized = normalizeSlideImages(
+          typeof entry === "string" || (entry && typeof entry === "object")
+            ? entry
+            : undefined
+        );
+        return normalized.imageUrl ?? firstUrlFromMap(imageUrls);
+      })()
     : undefined;
 
   return (
@@ -77,9 +96,9 @@ export function CarouselRenderer({
       {effectiveSlides.map((slide) => {
         const Layout = CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
-        const imageUrl = template.shareCoverImage
-          ? sharedCoverUrl
-          : imageUrls?.[slide.id];
+        const { imageUrl, imageUrlsBySlot } = template.shareCoverImage
+          ? { imageUrl: sharedCoverUrl, imageUrlsBySlot: undefined }
+          : normalizeSlideImages(imageUrls?.[slide.id]);
         return (
           <div
             key={slide.id}
@@ -91,6 +110,7 @@ export function CarouselRenderer({
               values={values}
               handle={handle}
               imageUrl={imageUrl}
+              imageUrlsBySlot={imageUrlsBySlot}
             />
             {onDownloadSlide ? (
               <button

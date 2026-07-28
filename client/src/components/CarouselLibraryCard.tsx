@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { CarouselTemplate } from "@shared/carouselTemplates";
-import { resolveTemplatePreviewImageUrls } from "@shared/carouselTemplates";
+import {
+  resolveTemplatePreviewImageUrls,
+  normalizeSlideImages,
+} from "@shared/carouselTemplates";
 import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
 import { resolveCarouselSlideValues } from "@/components/CarouselRenderer";
 import { cn } from "@/lib/utils";
@@ -42,7 +45,9 @@ export function CarouselLibraryCard({
     ? resolveCarouselSlideValues(activeSlide)
     : null;
   const previewImages = resolveTemplatePreviewImageUrls(template);
-  const imageUrl = activeSlide ? previewImages[activeSlide.id] : undefined;
+  const { imageUrl, imageUrlsBySlot } = activeSlide
+    ? normalizeSlideImages(previewImages[activeSlide.id])
+    : {};
   const hoverTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -105,6 +110,7 @@ export function CarouselLibraryCard({
               tokens={template.design}
               values={activeValues}
               imageUrl={imageUrl}
+              imageUrlsBySlot={imageUrlsBySlot}
               className="h-full w-full"
             />
           </div>

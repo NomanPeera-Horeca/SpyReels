@@ -13,14 +13,18 @@ import { CarouselSlideNotebookCover } from "@/components/CarouselSlideNotebookCo
 import { CarouselSlideNotebookListItem } from "@/components/CarouselSlideNotebookListItem";
 import { CarouselSlideListItemWarmNumbered } from "@/components/CarouselSlideListItemWarmNumbered";
 import { CarouselSlideQuoteTweetCard } from "@/components/CarouselSlideQuoteTweetCard";
+import { CarouselSlideExcuseGrid4 } from "@/components/CarouselSlideExcuseGrid4";
+import { CarouselSlideExcuseSplitStack } from "@/components/CarouselSlideExcuseSplitStack";
 
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   /** Optional Instagram handle overlay; render-only, never sent to AI. */
   handle?: string;
-  /** Resolved photo URL for layouts that have an image region. */
+  /** Resolved photo URL for layouts that have a single image region. */
   imageUrl?: string;
+  /** Multi-slot photo map (excuse grid / split stack). */
+  imageUrlsBySlot?: Record<string, string>;
   className?: string;
 };
 
@@ -41,4 +45,6 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   notebook_list_item: CarouselSlideNotebookListItem,
   list_item_warm_numbered: CarouselSlideListItemWarmNumbered,
   quote_tweet_card: CarouselSlideQuoteTweetCard,
+  excuse_grid_4: CarouselSlideExcuseGrid4,
+  excuse_split_stack: CarouselSlideExcuseSplitStack,
 };

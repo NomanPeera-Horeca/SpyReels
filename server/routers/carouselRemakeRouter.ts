@@ -81,6 +81,7 @@ export const carouselRemakeRouter = router({
         designOverride: DESIGN_OVERRIDE_SCHEMA.optional(),
         aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
         uploadedImageUrls: z.record(z.string(), z.string()).optional(),
+        uploadedImagePool: z.array(z.string().min(1).max(2048)).max(20).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -142,6 +143,7 @@ export const carouselRemakeRouter = router({
       generateCarouselRemake(remakeId, input.templateId, niche, {
         slideCountOption: input.slideCount,
         uploadedImageUrls: input.uploadedImageUrls,
+        uploadedImagePool: input.uploadedImagePool,
       }).catch((err: unknown) => {
         console.error(`Carousel remake ${remakeId} failed:`, err);
       });

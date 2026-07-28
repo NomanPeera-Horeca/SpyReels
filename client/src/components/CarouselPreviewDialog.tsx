@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { CarouselSlideSpec, CarouselTemplate, CarouselDesignTokens } from "@shared/carouselTemplates";
-import { resolveTemplatePreviewImageUrls } from "@shared/carouselTemplates";
+import {
+  resolveTemplatePreviewImageUrls,
+  assignImagePoolRoundRobin,
+} from "@shared/carouselTemplates";
 import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
 import {
   Dialog,
@@ -153,6 +156,7 @@ export function CarouselPreviewDialog({
   const [showOriginal, setShowOriginal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string>>({});
+  const [uploadedImagePool, setUploadedImagePool] = useState<string[]>([]);
   const carouselContainerRef = useRef<HTMLDivElement>(null);
 
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
@@ -175,6 +179,7 @@ export function CarouselPreviewDialog({
       setFontChoice("auto");
       setFormatChoice("post_4_5");
       setUploadedImageUrls({});
+      setUploadedImagePool([]);
       return;
     }
   }, [open]);
@@ -255,10 +260,19 @@ export function CarouselPreviewDialog({
   const catalogPreviewImages = template
     ? resolveTemplatePreviewImageUrls(template)
     : {};
+  const poolPreviewImages =
+    template && uploadedImagePool.length > 0
+      ? assignImagePoolRoundRobin(template, uploadedImagePool)
+      : {};
   const previewImageUrls = viewingRemake
-    ? ((statusQuery.data?.imageUrls as Record<string, string> | undefined) ??
-      catalogPreviewImages)
-    : { ...catalogPreviewImages, ...uploadedImageUrls };
+    ? ((statusQuery.data?.imageUrls as
+        | Record<string, string | Record<string, string>>
+        | undefined) ?? catalogPreviewImages)
+    : {
+        ...catalogPreviewImages,
+        ...poolPreviewImages,
+        ...uploadedImageUrls,
+      };
 
   async function handleDownloadSlide(slideId: string) {
     const node = carouselContainerRef.current?.querySelector<HTMLElement>(
@@ -335,11 +349,13 @@ export function CarouselPreviewDialog({
       designOverride,
       aspectRatioOverride,
       uploadedImageUrls: Object.keys(uploadedImageUrls).length > 0 ? uploadedImageUrls : undefined,
+      uploadedImagePool: uploadedImagePool.length > 0 ? uploadedImagePool : undefined,
     });
   }
 
   function handleImageSlotId(): string | null {
     if (!template) return null;
+    if (template.imagePoolAssign) return null;
     // Cover-only upload: first slide that declares imageSlots (cover must be
     // ordered before any closer photo slide). Later photo slides (e.g. closer)
     // stay auto-resolved via Pexels/AI because uploadedImageUrls never gets them.
@@ -367,6 +383,33 @@ export function CarouselPreviewDialog({
       }
     };
     reader.readAsDataURL(file);
+  }
+
+  async function handlePoolPhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    try {
+      const uploaded: string[] = [];
+      for (const file of files) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(new Error("read failed"));
+          reader.readAsDataURL(file);
+        });
+        const base64 = dataUrl.split(",")[1] ?? "";
+        const { url } = await uploadImageMutation.mutateAsync({
+          base64,
+          contentType: file.type || "image/jpeg",
+        });
+        uploaded.push(url);
+      }
+      setUploadedImagePool((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      console.error("Photo upload failed", err);
+      toast.error("Photo upload failed");
+    }
+    e.target.value = "";
   }
 
   return (
@@ -492,7 +535,33 @@ export function CarouselPreviewDialog({
                     />
                   </div>
 
-                  {handleImageSlotId() ? (
+                  {template.imagePoolAssign ? (
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Photos (optional - add 2+ and AI places them by excuse; or leave empty for Pexels/AI)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handlePoolPhotoFileChange}
+                        disabled={isGenerating || uploadImageMutation.isPending}
+                        className="block w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-card file:px-2 file:py-1 file:text-xs"
+                      />
+                      {uploadedImagePool.length > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {uploadedImagePool.length} photo
+                          {uploadedImagePool.length === 1 ? "" : "s"} ready
+                          {uploadedImagePool.length === 1
+                            ? " (add at least one more for best results)"
+                            : ""}
+                        </p>
+                      ) : null}
+                      {uploadImageMutation.isPending ? (
+                        <p className="text-xs text-muted-foreground">Uploading...</p>
+                      ) : null}
+                    </div>
+                  ) : handleImageSlotId() ? (
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-muted-foreground">
                         {template.shareCoverImage

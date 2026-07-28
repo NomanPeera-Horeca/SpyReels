@@ -13,6 +13,8 @@ export const CAROUSEL_LAYOUT_IDS = [
   "notebook_list_item",
   "list_item_warm_numbered",
   "quote_tweet_card",
+  "excuse_grid_4",
+  "excuse_split_stack",
 ] as const;
 export type CarouselLayoutId = (typeof CAROUSEL_LAYOUT_IDS)[number];
 
@@ -143,7 +145,42 @@ export const CAROUSEL_STOCK_PREVIEW = {
     "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=800",
   warmSmile:
     "https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=800",
+  phoneFocus:
+    "https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg?auto=compress&cs=tinysrgb&w=800",
+  carLifestyle:
+    "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg?auto=compress&cs=tinysrgb&w=800",
+  laptopGrind:
+    "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=800",
+  celebration:
+    "https://images.pexels.com/photos/3184192/pexels-photo-3184192.jpeg?auto=compress&cs=tinysrgb&w=800",
+  stressedWork:
+    "https://images.pexels.com/photos/3756679/pexels-photo-3756679.jpeg?auto=compress&cs=tinysrgb&w=800",
+  successPose:
+    "https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg?auto=compress&cs=tinysrgb&w=800",
+  lateNight:
+    "https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg?auto=compress&cs=tinysrgb&w=800",
+  finishStrong:
+    "https://images.pexels.com/photos/3184339/pexels-photo-3184339.jpeg?auto=compress&cs=tinysrgb&w=800",
 } as const;
+
+/**
+ * Preview / remake image map.
+ * - Single-slot slides: slideId -> url string (legacy)
+ * - Multi-slot slides: slideId -> { slotId: url }
+ */
+export type CarouselImageUrlMap = Record<string, string | Record<string, string>>;
+
+export function normalizeSlideImages(
+  entry: string | Record<string, string> | undefined
+): { imageUrl?: string; imageUrlsBySlot?: Record<string, string> } {
+  if (!entry) return {};
+  if (typeof entry === "string") return { imageUrl: entry };
+  const values = Object.values(entry);
+  return {
+    imageUrl: values[0],
+    imageUrlsBySlot: entry,
+  };
+}
 
 /**
  * Preview image map for library cards / unreade dialog: uses each slide's
@@ -152,21 +189,62 @@ export const CAROUSEL_STOCK_PREVIEW = {
  */
 export function resolveTemplatePreviewImageUrls(
   template: CarouselTemplate
-): Record<string, string> {
-  const urls: Record<string, string> = {};
+): CarouselImageUrlMap {
+  const urls: CarouselImageUrlMap = {};
   for (const slide of template.slides) {
-    const url = slide.imageSlots?.[0]?.defaultImageUrl;
-    if (url) {
-      urls[slide.id] = url;
+    const slots = slide.imageSlots;
+    if (!slots?.length) continue;
+    if (slots.length === 1) {
+      if (slots[0].defaultImageUrl) {
+        urls[slide.id] = slots[0].defaultImageUrl;
+      }
+      continue;
+    }
+    const bySlot: Record<string, string> = {};
+    for (const slot of slots) {
+      if (slot.defaultImageUrl) bySlot[slot.id] = slot.defaultImageUrl;
+    }
+    if (Object.keys(bySlot).length > 0) {
+      urls[slide.id] = bySlot;
     }
   }
   if (template.shareCoverImage) {
-    const coverUrl = Object.values(urls)[0];
+    const first = Object.values(urls)[0];
+    const coverUrl = typeof first === "string" ? first : first ? Object.values(first)[0] : undefined;
     if (coverUrl) {
       for (const slide of template.slides) {
         urls[slide.id] = coverUrl;
       }
     }
+  }
+  return urls;
+}
+
+/**
+ * Round-robin assign an upload pool onto template image slots for live preview
+ * before remake. Remake replaces this with AI placement.
+ */
+export function assignImagePoolRoundRobin(
+  template: CarouselTemplate,
+  pool: string[]
+): CarouselImageUrlMap {
+  if (pool.length === 0) return {};
+  const urls: CarouselImageUrlMap = {};
+  let i = 0;
+  for (const slide of template.slides) {
+    const slots = slide.imageSlots;
+    if (!slots?.length) continue;
+    if (slots.length === 1) {
+      urls[slide.id] = pool[i % pool.length];
+      i += 1;
+      continue;
+    }
+    const bySlot: Record<string, string> = {};
+    for (const slot of slots) {
+      bySlot[slot.id] = pool[i % pool.length];
+      i += 1;
+    }
+    urls[slide.id] = bySlot;
   }
   return urls;
 }
@@ -204,6 +282,12 @@ export type CarouselTemplate = {
    * on slide_01; remake + renderer propagate the URL.
    */
   shareCoverImage?: boolean;
+  /**
+   * When true, user uploads a photo pool (min 2 recommended). Remake AI
+   * assigns each pool photo to image slots using slide text context.
+   * With an empty pool, each slot uses Pexels → AI as usual.
+   */
+  imagePoolAssign?: boolean;
 };
 
 /** Filled slot text keyed by CarouselTextSlot.id */
@@ -3667,6 +3751,252 @@ export const CAROUSEL_TEMPLATE_DIRECT_AND_WARM: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
+  id: "excuse_rewrite",
+  name: "Excuse Rewrite",
+  sourceAttribution:
+    "Inspired by high-performing creator carousels that strike through excuses and reframe them.",
+  description:
+    "Cover is a 2x2 photo grid with strikethrough excuses. Content slides split top (B&W + excuse) and bottom (color + reframe). Upload a photo pool for AI placement, or leave empty for Pexels/AI.",
+  active: true,
+  sortOrder: 43,
+  imagePoolAssign: true,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#000000",
+      foreground: "#FFFFFF",
+      accent: "#FFFFFF",
+      muted: "#2A2A2A",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Four struck-through excuses on a 2x2 photo grid stop the scroll and promise a reframe pattern.",
+      layoutId: "excuse_grid_4",
+      slots: [
+        {
+          id: "excuse_tl",
+          role: "headline",
+          label: "Excuse top left",
+          budget: { min: 8, max: 36 },
+          defaultText: "I don't have experience.",
+        },
+        {
+          id: "excuse_tr",
+          role: "headline",
+          label: "Excuse top right",
+          budget: { min: 8, max: 36 },
+          defaultText: "I'm too busy.",
+        },
+        {
+          id: "excuse_bl",
+          role: "headline",
+          label: "Excuse bottom left",
+          budget: { min: 8, max: 36 },
+          defaultText: "I'm stressed.",
+        },
+        {
+          id: "excuse_br",
+          role: "headline",
+          label: "Excuse bottom right",
+          budget: { min: 8, max: 36 },
+          defaultText: "I procrastinated.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_tl",
+          label: "Excuse photo top left",
+          searchQueryHint:
+            "candid lifestyle photo of a person looking unsure or hesitant, natural light",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
+        },
+        {
+          id: "photo_tr",
+          label: "Excuse photo top right",
+          searchQueryHint:
+            "person checking phone while looking overwhelmed, everyday setting",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.phoneFocus,
+        },
+        {
+          id: "photo_bl",
+          label: "Excuse photo bottom left",
+          searchQueryHint:
+            "person at a desk looking tired late at night, soft lamp light",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
+        },
+        {
+          id: "photo_br",
+          label: "Excuse photo bottom right",
+          searchQueryHint:
+            "person sitting in a car or cafe looking thoughtful, lifestyle portrait",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.carLifestyle,
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy:
+        "Top half kills the excuse in grayscale; bottom half delivers the confident reframe in color.",
+      layoutId: "excuse_split_stack",
+      slots: [
+        {
+          id: "excuse",
+          role: "headline",
+          label: "Excuse",
+          budget: { min: 8, max: 40 },
+          defaultText: "I don't have experience.",
+        },
+        {
+          id: "reframe",
+          role: "body",
+          label: "Reframe",
+          budget: { min: 8, max: 40 },
+          defaultText: "I'll do what I can.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_before",
+          label: "Excuse photo (before)",
+          searchQueryHint:
+            "person looking uncertain before starting, muted everyday moment",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
+        },
+        {
+          id: "photo_after",
+          label: "Reframe photo (after / win)",
+          searchQueryHint:
+            "confident person mid-action building something, bright energy",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.successPose,
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Second excuse/reframe pair deepens the pattern and keeps swipes going.",
+      layoutId: "excuse_split_stack",
+      slots: [
+        {
+          id: "excuse",
+          role: "headline",
+          label: "Excuse",
+          budget: { min: 8, max: 40 },
+          defaultText: "I'm stressed.",
+        },
+        {
+          id: "reframe",
+          role: "body",
+          label: "Reframe",
+          budget: { min: 8, max: 40 },
+          defaultText: "I'm building something.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_before",
+          label: "Excuse photo (before)",
+          searchQueryHint: "stressed person rubbing temples at work, candid",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
+        },
+        {
+          id: "photo_after",
+          label: "Reframe photo (after / win)",
+          searchQueryHint:
+            "focused creator smiling while shipping work, warm daylight",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebration,
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Third rewrite keeps momentum with a slightly softer, relatable excuse.",
+      layoutId: "excuse_split_stack",
+      slots: [
+        {
+          id: "excuse",
+          role: "headline",
+          label: "Excuse",
+          budget: { min: 8, max: 40 },
+          defaultText: "I procrastinated.",
+        },
+        {
+          id: "reframe",
+          role: "body",
+          label: "Reframe",
+          budget: { min: 8, max: 40 },
+          defaultText: "I'll get it done late.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_before",
+          label: "Excuse photo (before)",
+          searchQueryHint: "person delaying work on a laptop, lazy evening vibe",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
+        },
+        {
+          id: "photo_after",
+          label: "Reframe photo (after / win)",
+          searchQueryHint:
+            "person finishing strong late at night with determination",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.finishStrong,
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy:
+        "Final rewrite doubles as a soft CTA: last excuse dies, identity reframe invites a follow or save.",
+      layoutId: "excuse_split_stack",
+      slots: [
+        {
+          id: "excuse",
+          role: "headline",
+          label: "Excuse",
+          budget: { min: 8, max: 40 },
+          defaultText: "I'm not ready yet.",
+        },
+        {
+          id: "reframe",
+          role: "body",
+          label: "Reframe",
+          budget: { min: 8, max: 40 },
+          defaultText: "I start messy and learn.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_before",
+          label: "Excuse photo (before)",
+          searchQueryHint: "hesitant person pausing before a big step, quiet mood",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
+        },
+        {
+          id: "photo_after",
+          label: "Reframe photo (after / win)",
+          searchQueryHint:
+            "person taking action with calm confidence, lifestyle success energy",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -3704,6 +4034,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_PHOTO_CAPTION_WARM,
   CAROUSEL_TEMPLATE_NOTEBOOK_TIPS,
   CAROUSEL_TEMPLATE_DIRECT_AND_WARM,
+  CAROUSEL_TEMPLATE_EXCUSE_REWRITE,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

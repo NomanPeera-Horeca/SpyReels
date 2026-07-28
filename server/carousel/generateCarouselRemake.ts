@@ -11,6 +11,11 @@ import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { resolveSlideImage } from "./resolveSlideImage";
+import {
+  assignPoolPhotosToSlots,
+  type PhotoSlotNeed,
+} from "./assignPoolPhotos";
+import type { CarouselImageUrlMap } from "@shared/carouselTemplates";
 
 export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 
@@ -288,10 +293,12 @@ export async function generateCarouselRemake(
   options?: {
     slideCountOption?: number | "auto";
     uploadedImageUrls?: Record<string, string>;
+    uploadedImagePool?: string[];
   }
 ): Promise<void> {
   const slideCountOption = options?.slideCountOption;
   const uploadedImageUrls = options?.uploadedImageUrls;
+  const uploadedImagePool = options?.uploadedImagePool;
   const db = await getDb();
   if (!db) {
     console.error(`[carouselRemake] ${remakeId}: database unavailable`);
@@ -354,32 +361,100 @@ export async function generateCarouselRemake(
       }
     }
 
-    const imageUrls: Record<string, string> = {};
-    for (const slide of effectiveSlides) {
-      if (slide.imageSlots && slide.imageSlots.length > 0) {
-        // MVP: resolve only the first image slot per slide.
-        const imageSlot = slide.imageSlots[0];
-        const uploaded = uploadedImageUrls?.[slide.id];
-        const resolvedUrl = await resolveSlideImage(
-          imageSlot.searchQueryHint,
-          niche,
-          uploaded
-        );
-        if (resolvedUrl) {
-          imageUrls[slide.id] = resolvedUrl;
+    const imageUrls: CarouselImageUrlMap = {};
+
+    const pool =
+      uploadedImagePool && uploadedImagePool.length > 0
+        ? uploadedImagePool
+        : Object.values(uploadedImageUrls ?? {}).filter(Boolean);
+
+    if (template.imagePoolAssign) {
+      const needs: PhotoSlotNeed[] = [];
+      for (const slide of effectiveSlides) {
+        if (!slide.imageSlots?.length) continue;
+        for (const imageSlot of slide.imageSlots) {
+          const slideVals = values[slide.id] ?? {};
+          const textContext = Object.values(slideVals).filter(Boolean).join(" / ");
+          const labelLower = imageSlot.label.toLowerCase();
+          const isAfter =
+            imageSlot.id.includes("after") ||
+            labelLower.includes("after") ||
+            labelLower.includes("reframe") ||
+            labelLower.includes("win");
+          needs.push({
+            key: `${slide.id}::${imageSlot.id}`,
+            slideId: slide.id,
+            slotId: imageSlot.id,
+            roleHint: isAfter
+              ? "after/reframe / win energy (color)"
+              : "before/excuse energy (often shown grayscale)",
+            textContext: textContext || imageSlot.searchQueryHint,
+            searchQueryHint: imageSlot.searchQueryHint,
+          });
         }
       }
-    }
 
-    // Style A: one cover photo reused on every slide.
-    if (template.shareCoverImage) {
-      const coverUrl =
-        imageUrls[
-          effectiveSlides.find((s) => s.imageSlots && s.imageSlots.length > 0)?.id ?? ""
-        ] ?? Object.values(imageUrls)[0];
-      if (coverUrl) {
-        for (const slide of effectiveSlides) {
-          imageUrls[slide.id] = coverUrl;
+      if (pool.length > 0) {
+        const assigned = await assignPoolPhotosToSlots(pool, needs, niche);
+        for (const need of needs) {
+          const url = assigned[need.key];
+          if (!url) continue;
+          const existing = imageUrls[need.slideId];
+          if (typeof existing === "string" || !existing) {
+            imageUrls[need.slideId] = { [need.slotId]: url };
+          } else {
+            existing[need.slotId] = url;
+          }
+        }
+      } else {
+        for (const need of needs) {
+          const resolvedUrl = await resolveSlideImage(
+            `${need.searchQueryHint}. Context: ${need.textContext}`,
+            niche
+          );
+          if (!resolvedUrl) continue;
+          const existing = imageUrls[need.slideId];
+          if (typeof existing === "string" || !existing) {
+            imageUrls[need.slideId] = { [need.slotId]: resolvedUrl };
+          } else {
+            existing[need.slotId] = resolvedUrl;
+          }
+        }
+      }
+    } else {
+      for (const slide of effectiveSlides) {
+        if (slide.imageSlots && slide.imageSlots.length > 0) {
+          // MVP: resolve only the first image slot per slide (legacy templates).
+          const imageSlot = slide.imageSlots[0];
+          const uploaded = uploadedImageUrls?.[slide.id];
+          const resolvedUrl = await resolveSlideImage(
+            imageSlot.searchQueryHint,
+            niche,
+            uploaded
+          );
+          if (resolvedUrl) {
+            imageUrls[slide.id] = resolvedUrl;
+          }
+        }
+      }
+
+      // Style A: one cover photo reused on every slide.
+      if (template.shareCoverImage) {
+        const coverEntry =
+          imageUrls[
+            effectiveSlides.find((s) => s.imageSlots && s.imageSlots.length > 0)
+              ?.id ?? ""
+          ] ?? Object.values(imageUrls)[0];
+        const coverUrl =
+          typeof coverEntry === "string"
+            ? coverEntry
+            : coverEntry
+              ? Object.values(coverEntry)[0]
+              : undefined;
+        if (coverUrl) {
+          for (const slide of effectiveSlides) {
+            imageUrls[slide.id] = coverUrl;
+          }
         }
       }
     }
