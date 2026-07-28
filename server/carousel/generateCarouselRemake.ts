@@ -378,19 +378,19 @@ export async function generateCarouselRemake(
           const labelLower = imageSlot.label.toLowerCase();
           const isAfter =
             imageSlot.id.includes("after") ||
-            imageSlot.id.includes("top") ||
             labelLower.includes("after") ||
             labelLower.includes("reframe") ||
             labelLower.includes("win") ||
             labelLower.includes("success") ||
-            labelLower.includes("outcome");
+            labelLower.includes("outcome") ||
+            labelLower.includes("discipline");
           needs.push({
             key: `${slide.id}::${imageSlot.id}`,
             slideId: slide.id,
             slotId: imageSlot.id,
             roleHint: isAfter
-              ? "after/success / destination energy (color)"
-              : "before/early grind energy",
+              ? "after/success / discipline energy (color)"
+              : "before/excuse / comfort energy",
             textContext: textContext || imageSlot.searchQueryHint,
             searchQueryHint: imageSlot.searchQueryHint,
           });

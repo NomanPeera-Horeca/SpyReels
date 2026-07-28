@@ -4213,6 +4213,222 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
+  id: "same_situation",
+  name: "Same Situation",
+  sourceAttribution:
+    "Inspired by high-performing creator carousels that show two people facing the same constraint with opposite choices.",
+  description:
+    "Color split slides: top is the soft excuse or condition, bottom echoes So did he / So was he with the disciplined choice. Closer uses two white quote bubbles. Optional photo pool with AI placement.",
+  active: true,
+  sortOrder: 45,
+  imagePoolAssign: true,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#000000",
+      foreground: "#FFFFFF",
+      accent: "#FFFFFF",
+      muted: "#2A2A2A",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Same time constraint, two choices. Top names the limit; bottom must stay a short So did he echo.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "setup",
+          role: "headline",
+          label: "Setup (excuse / condition)",
+          budget: { min: 12, max: 48 },
+          defaultText: "He only had 30 minutes.",
+        },
+        {
+          id: "echo",
+          role: "body",
+          label: "Echo (So did / So was)",
+          budget: { min: 8, max: 24 },
+          defaultText: "So did he.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Excuse / comfort photo (before)",
+          searchQueryHint:
+            "person lounging on a couch eating junk food and scrolling phone at night",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
+        },
+        {
+          id: "photo_bottom",
+          label: "Discipline photo (win)",
+          searchQueryHint:
+            "focused person working on a laptop while eating a healthy meal, productive desk",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy:
+        "Same feeling, different outlet. Keep bottom as a short So was he parallel.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "setup",
+          role: "headline",
+          label: "Setup (excuse / condition)",
+          budget: { min: 12, max: 48 },
+          defaultText: "He was feeling stressed.",
+        },
+        {
+          id: "echo",
+          role: "body",
+          label: "Echo (So did / So was)",
+          budget: { min: 8, max: 24 },
+          defaultText: "So was he.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Excuse / comfort photo (before)",
+          searchQueryHint:
+            "stressed person eating sweets in a dim kitchen at night, defeated mood",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
+        },
+        {
+          id: "photo_bottom",
+          label: "Discipline photo (win)",
+          searchQueryHint:
+            "intense gym workout deadlift focus, disciplined response to stress",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.athletic,
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy:
+        "Same long day, opposite finish. Bottom stays a short So did he echo.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "setup",
+          role: "headline",
+          label: "Setup (excuse / condition)",
+          budget: { min: 12, max: 48 },
+          defaultText: "He had a long day.",
+        },
+        {
+          id: "echo",
+          role: "body",
+          label: "Echo (So did / So was)",
+          budget: { min: 8, max: 24 },
+          defaultText: "So did he.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Excuse / comfort photo (before)",
+          searchQueryHint:
+            "exhausted person on the couch with chips and remote after a long day",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopFrustrated,
+        },
+        {
+          id: "photo_bottom",
+          label: "Discipline photo (win)",
+          searchQueryHint:
+            "determined person tying sneakers on the floor, ready to train after work",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.finishStrong,
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy:
+        "Same setback, opposite recovery. Bottom must stay a short So did he echo.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "setup",
+          role: "headline",
+          label: "Setup (excuse / condition)",
+          budget: { min: 12, max: 48 },
+          defaultText: "He hit a setback.",
+        },
+        {
+          id: "echo",
+          role: "body",
+          label: "Echo (So did / So was)",
+          budget: { min: 8, max: 24 },
+          defaultText: "So did he.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Excuse / comfort photo (before)",
+          searchQueryHint:
+            "dejected person at a messy desk after zero sales, junk food and soda around",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
+        },
+        {
+          id: "photo_bottom",
+          label: "Discipline photo (win)",
+          searchQueryHint:
+            "focused person planning next moves with notebook and phone at a clean desk",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy:
+        "Closer names the shared struggle then pushes show up anyway with a soft share CTA.",
+      layoutId: "photo_quote_bubbles",
+      slots: [
+        {
+          id: "quote",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 24, max: 90 },
+          defaultText: "We all deal with the same struggles.",
+        },
+        {
+          id: "cta_label",
+          role: "cta_label",
+          label: "CTA",
+          budget: { min: 12, max: 48 },
+          defaultText: "Show up anyway. Share if you agree",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Closer photo (win / resolve)",
+          searchQueryHint:
+            "confident person arms crossed in warm indoor light, calm resolve",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.warmPortrait,
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -4252,6 +4468,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_DIRECT_AND_WARM,
   CAROUSEL_TEMPLATE_EXCUSE_REWRITE,
   CAROUSEL_TEMPLATE_AVERAGE_VS_NOT,
+  CAROUSEL_TEMPLATE_SAME_SITUATION,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

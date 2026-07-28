@@ -30,8 +30,8 @@ export function CarouselSlideStatSplitStack({
   imageUrl,
   imageUrlsBySlot,
 }: CarouselSlideStatSplitStackProps) {
-  const average = values.average ?? values.headline ?? "";
-  const notLine = values.not_line ?? values.body ?? "";
+  const average = values.setup ?? values.average ?? values.headline ?? "";
+  const notLine = values.echo ?? values.not_line ?? values.body ?? "";
   const topSrc = imageUrlsBySlot?.photo_top ?? imageUrl;
   const bottomSrc = imageUrlsBySlot?.photo_bottom ?? imageUrl;
 
