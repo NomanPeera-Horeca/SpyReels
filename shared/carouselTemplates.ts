@@ -8,6 +8,9 @@ export const CAROUSEL_LAYOUT_IDS = [
   "list_item_numbered",
   "cta_bold_center",
   "hook_photo_top",
+  "photo_caption_bubble",
+  "notebook_cover",
+  "notebook_list_item",
 ] as const;
 export type CarouselLayoutId = (typeof CAROUSEL_LAYOUT_IDS)[number];
 
@@ -51,8 +54,12 @@ export const CAROUSEL_DECORATION_TYPES = [
   "lightning",
   "circles",
   "steps",
+  "arrow",
 ] as const;
 export type CarouselDecorationType = (typeof CAROUSEL_DECORATION_TYPES)[number];
+
+export const CAROUSEL_BACKGROUND_PATTERNS = ["none", "grid"] as const;
+export type CarouselBackgroundPattern = (typeof CAROUSEL_BACKGROUND_PATTERNS)[number];
 
 export type CarouselDesignTokens = {
   fontFamily: {
@@ -71,6 +78,16 @@ export type CarouselDesignTokens = {
   aspectRatio: "4:5" | "1:1" | "9:16";
   /** Optional fixed decorative background pattern. Baked into the template, never user-selectable. */
   decoration?: CarouselDecorationType;
+  /**
+   * Text alignment for layouts that support it (currently hook_bold_center).
+   * Undefined defaults to "center" so existing templates stay unchanged.
+   */
+  textAlign?: "center" | "left";
+  /**
+   * Optional surface pattern behind slide content (e.g. notebook grid).
+   * Undefined / "none" = solid colors.background only.
+   */
+  backgroundPattern?: CarouselBackgroundPattern;
 };
 
 export type CarouselImageSlot = {
@@ -114,6 +131,12 @@ export type CarouselTemplate = {
   active: boolean;
   /** Library sort order (ascending). */
   sortOrder: number;
+  /**
+   * When true, resolve/upload one cover photo and reuse that same URL on
+   * every slide (Style A photo-caption carousels). imageSlots usually only
+   * on slide_01; remake + renderer propagate the URL.
+   */
+  shareCoverImage?: boolean;
 };
 
 /** Filled slot text keyed by CarouselTextSlot.id */
@@ -1740,6 +1763,115 @@ export const CAROUSEL_TEMPLATE_CHECKLIST_READY_TO_LAUNCH: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD: CarouselTemplate = {
+  id: "quote_callout_bold",
+  name: "Quote Callout",
+  sourceAttribution:
+    "Inspired by high-performing quote-card creator carousels.",
+  description:
+    "Bold, left-aligned quote statements on a flat background. No photo, no decoration. One slide equals one thought.",
+  active: true,
+  sortOrder: 39,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#FFFFFF",
+      foreground: "#111111",
+      accent: "#111111",
+      muted: "#6B7280",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "none",
+    textAlign: "left",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Open with a sharp, left-aligned statement that stops the scroll. One thought only: no setup, no list.",
+      layoutId: "hook_bold_center",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 18, max: 72 },
+          defaultText: "Most people quit right before it starts working.",
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "problem",
+      viralWhy:
+        "Name the tension the reader already feels. A single blunt line builds recognition before the next swipe.",
+      layoutId: "hook_bold_center",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 18, max: 72 },
+          defaultText: "Discipline is just deciding once.",
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy:
+        "Reframe the problem into a memorable rule the reader can repeat. Short enough to screenshot.",
+      layoutId: "hook_bold_center",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 18, max: 72 },
+          defaultText: "Consistency beats intensity every single time.",
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "example",
+      viralWhy:
+        "Land a concrete, high-agency line so the carousel feels earned, not motivational fluff.",
+      layoutId: "hook_bold_center",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 18, max: 72 },
+          defaultText: "Do the boring work until it compounds.",
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy:
+        "Close with one clear save/follow line while keeping the same left-aligned quote-card look.",
+      layoutId: "hook_bold_center",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 18, max: 72 },
+          defaultText: "Save this for the day you want to quit.",
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATE_PSYCHOLOGY_INSIGHT_MINIMAL: CarouselTemplate = {
   id: "psychology_insight_minimal",
   name: "Uncomfortable Truth (Minimal)",
@@ -2936,6 +3068,311 @@ export const CAROUSEL_TEMPLATE_CLEAN_CODE: CarouselTemplate = {
 };
 
 
+export const CAROUSEL_TEMPLATE_PHOTO_CAPTION_WARM: CarouselTemplate = {
+  id: "photo_caption_warm",
+  name: "Photo Caption Warm",
+  sourceAttribution:
+    "Inspired by high-performing lifestyle creator carousels with photo backgrounds and white caption bubbles.",
+  description:
+    "A five-slide carousel where the same personal photo fills every slide behind a white rounded caption bubble. Direct, conversational copy. One photo upload (or auto-find) is shared across all slides.",
+  active: true,
+  sortOrder: 40,
+  shareCoverImage: true,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#FFFFFF",
+      foreground: "#111111",
+      accent: "#111111",
+      muted: "#9CA3AF",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "none",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Open with a personal photo and a bold boxed hook that stops the scroll and promises a short list of systems or tips.",
+      layoutId: "photo_caption_bubble",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Caption",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "If I could go back to year one, I'd ignore everything else and just set up these 3 systems.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Photo",
+          searchQueryHint:
+            "candid lifestyle selfie of a creator at a cafe table with a laptop, natural daylight",
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Name system one in plain language so the reader self-identifies.",
+      layoutId: "photo_caption_bubble",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Caption",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "1. A no-incentive management system. Constant rewards for basic behavior create entitlement, not consistency.",
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Name system two with a conversational reframe that feels spoken, not corporate.",
+      layoutId: "photo_caption_bubble",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Caption",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "2. A FULL procedures system. Not a one-week intro, then move on. Repeat until it sticks.",
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Name system three and tease why it matters most.",
+      layoutId: "photo_caption_bubble",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Caption",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "3. A daily meeting rhythm that teaches manners and resets the room before chaos starts.",
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy: "Close with a save/follow line while keeping the same photo + bubble look.",
+      layoutId: "photo_caption_bubble",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Caption",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "Having all three in place WILL change your day. Save this and follow for the full systems.",
+        },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_NOTEBOOK_TIPS: CarouselTemplate = {
+  id: "notebook_tips_grid",
+  name: "Notebook Tips",
+  sourceAttribution:
+    "Inspired by high-performing notebook and graph-paper tip carousels with highlighter accents.",
+  description:
+    "A six-slide notebook carousel: grid-paper cover with photo and doodle arrow, four yellow-highlighter tip slides, then a save CTA tip. Cover photo only; content slides are text on grid.",
+  active: true,
+  sortOrder: 41,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#F3F4F6",
+      foreground: "#111111",
+      accent: "#FDE047",
+      muted: "#6B7280",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "arrow",
+    backgroundPattern: "grid",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Grid paper plus a bold how-to headline and a cover photo creates a notebook scrapbook feel that invites a swipe.",
+      layoutId: "notebook_cover",
+      slots: [
+        {
+          id: "headline",
+          role: "headline",
+          label: "Headline",
+          budget: { min: 18, max: 64 },
+          defaultText: "How to Read A Book Per Week (Even If You're Busy)",
+        },
+        {
+          id: "subhead",
+          role: "subhead",
+          label: "Swipe line",
+          budget: { min: 6, max: 18 },
+          defaultText: "Swipe →",
+        },
+        {
+          id: "kicker",
+          role: "kicker",
+          label: "Arrow label",
+          budget: { min: 8, max: 22 },
+          defaultText: "start doing this",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Photo",
+          searchQueryHint:
+            "person holding a tall stack of colorful books, portrait, clean background",
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Tip one with highlighter title and a short rule the reader can apply today.",
+      layoutId: "notebook_list_item",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "1" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Tip title",
+          budget: { min: 14, max: 48 },
+          defaultText: "Always carry a book with you",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Tip body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "Phone dead time becomes reading time. Keep one book in your bag and one by your bed.",
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Tip two challenges a common habit with a concrete alternative.",
+      layoutId: "notebook_list_item",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "2" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Tip title",
+          budget: { min: 14, max: 48 },
+          defaultText: "Read more than one book at a time",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Tip body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "When you get stuck, switch genres. A fiction book and a non-fiction book keep momentum.",
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Tip three with a memorable rule of thumb.",
+      layoutId: "notebook_list_item",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "3" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Tip title",
+          budget: { min: 14, max: 48 },
+          defaultText: "Quit bad books faster",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Tip body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "The rule: 100 pages minus your age. Life is too short for books that drain you.",
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Tip four reinforces identity and social accountability.",
+      layoutId: "notebook_list_item",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "4" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Tip title",
+          budget: { min: 14, max: 48 },
+          defaultText: "Start a book club with friends",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Tip body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "Accountability plus discussion means you actually finish. Pick books that solve a real problem you have.",
+        },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy: "Close on the same notebook tip layout so the CTA still feels like part of the list.",
+      layoutId: "notebook_list_item",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "5" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Tip title",
+          budget: { min: 14, max: 48 },
+          defaultText: "Save this and start tonight",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Tip body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "Follow for more simple systems that compound. Pick one tip and do it before bed.",
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -2969,6 +3406,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FITNESS_CLEAN,
   CAROUSEL_TEMPLATE_TRAVEL_BUCKET_LIST,
   CAROUSEL_TEMPLATE_CLEAN_CODE,
+  CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD,
+  CAROUSEL_TEMPLATE_PHOTO_CAPTION_WARM,
+  CAROUSEL_TEMPLATE_NOTEBOOK_TIPS,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

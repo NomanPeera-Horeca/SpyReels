@@ -103,5 +103,29 @@ export function CarouselDecorationLayer({ type, color }: CarouselDecorationLayer
     );
   }
 
+  if (type === "arrow") {
+    return (
+      <svg style={commonStyle} width="100%" height="100%" viewBox="0 0 360 450" preserveAspectRatio="xMidYMid slice">
+        <path
+          d="M 250 175 C 290 210, 300 250, 275 300"
+          fill="none"
+          stroke={color}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          opacity="0.7"
+        />
+        <path
+          d="M 262 285 L 275 300 L 290 278"
+          fill="none"
+          stroke={color}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.7"
+        />
+      </svg>
+    );
+  }
+
   return null;
 }

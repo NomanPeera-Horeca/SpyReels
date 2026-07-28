@@ -57,6 +57,11 @@ export function CarouselRenderer({
     ? { ...template.design, ...designOverride }
     : template.design;
 
+  const sharedCoverUrl = template.shareCoverImage
+    ? imageUrls?.[effectiveSlides.find((s) => s.imageSlots && s.imageSlots.length > 0)?.id ?? ""] ??
+      (imageUrls ? Object.values(imageUrls)[0] : undefined)
+    : undefined;
+
   return (
     <div
       className={className}
@@ -72,6 +77,9 @@ export function CarouselRenderer({
       {effectiveSlides.map((slide) => {
         const Layout = CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
+        const imageUrl = template.shareCoverImage
+          ? sharedCoverUrl
+          : imageUrls?.[slide.id];
         return (
           <div
             key={slide.id}
@@ -82,7 +90,7 @@ export function CarouselRenderer({
               tokens={effectiveTokens}
               values={values}
               handle={handle}
-              imageUrl={imageUrls?.[slide.id]}
+              imageUrl={imageUrl}
             />
             {onDownloadSlide ? (
               <button

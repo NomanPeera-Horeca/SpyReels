@@ -30,6 +30,9 @@ export function CarouselSlideHookBoldCenter({
   const kicker = values.kicker ?? "";
   const headline = values.headline ?? "";
   const subhead = values.subhead ?? "";
+  const textAlign = tokens.textAlign ?? "center";
+  const isLeft = textAlign === "left";
+  const alignItems = isLeft ? "flex-start" : "center";
 
   return (
     <div
@@ -45,10 +48,10 @@ export function CarouselSlideHookBoldCenter({
         maxWidth: "22.5rem",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
+        alignItems,
         justifyContent: "center",
-        textAlign: "center",
-        padding: "2.5rem 1.75rem",
+        textAlign,
+        padding: isLeft ? "2.75rem 1.85rem" : "2.5rem 1.75rem",
         boxSizing: "border-box",
         overflow: "hidden",
       }}
@@ -61,9 +64,10 @@ export function CarouselSlideHookBoldCenter({
           zIndex: 1,
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
+          alignItems,
           justifyContent: "center",
-          textAlign: "center",
+          textAlign,
+          width: "100%",
         }}
       >
         {kicker ? (
@@ -87,12 +91,14 @@ export function CarouselSlideHookBoldCenter({
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.75rem, 7vw, 2.35rem)",
+            fontSize: isLeft
+              ? "clamp(1.85rem, 7.5vw, 2.5rem)"
+              : "clamp(1.75rem, 7vw, 2.35rem)",
             fontWeight: 700,
-            lineHeight: 1.12,
+            lineHeight: isLeft ? 1.28 : 1.12,
             letterSpacing: "-0.02em",
             color: tokens.colors.foreground,
-            maxWidth: "16ch",
+            maxWidth: isLeft ? "14ch" : "16ch",
           }}
         >
           {headline}

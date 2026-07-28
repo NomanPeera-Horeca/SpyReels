@@ -8,6 +8,9 @@ import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldC
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
 import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCenter";
 import { CarouselSlideHookPhotoTop } from "@/components/CarouselSlideHookPhotoTop";
+import { CarouselSlidePhotoCaptionBubble } from "@/components/CarouselSlidePhotoCaptionBubble";
+import { CarouselSlideNotebookCover } from "@/components/CarouselSlideNotebookCover";
+import { CarouselSlideNotebookListItem } from "@/components/CarouselSlideNotebookListItem";
 
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
@@ -31,4 +34,7 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   list_item_numbered: CarouselSlideListItemNumbered,
   cta_bold_center: CarouselSlideCtaBoldCenter,
   hook_photo_top: CarouselSlideHookPhotoTop,
+  photo_caption_bubble: CarouselSlidePhotoCaptionBubble,
+  notebook_cover: CarouselSlideNotebookCover,
+  notebook_list_item: CarouselSlideNotebookListItem,
 };

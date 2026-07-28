@@ -371,6 +371,19 @@ export async function generateCarouselRemake(
       }
     }
 
+    // Style A: one cover photo reused on every slide.
+    if (template.shareCoverImage) {
+      const coverUrl =
+        imageUrls[
+          effectiveSlides.find((s) => s.imageSlots && s.imageSlots.length > 0)?.id ?? ""
+        ] ?? Object.values(imageUrls)[0];
+      if (coverUrl) {
+        for (const slide of effectiveSlides) {
+          imageUrls[slide.id] = coverUrl;
+        }
+      }
+    }
+
     await db
       .update(carouselRemakes)
       .set({
