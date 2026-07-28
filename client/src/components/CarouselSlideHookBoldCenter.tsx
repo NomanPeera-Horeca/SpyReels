@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
 
 export type CarouselSlideHookBoldCenterProps = {
   tokens: CarouselDesignTokens;
@@ -52,59 +53,74 @@ export function CarouselSlideHookBoldCenter({
         overflow: "hidden",
       }}
     >
-      {kicker ? (
-        <p
-          style={{
-            margin: 0,
-            marginBottom: "1rem",
-            fontFamily: tokens.fontFamily.body,
-            fontSize: "0.7rem",
-            fontWeight: 700,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: tokens.colors.accent,
-          }}
-        >
-          {kicker}
-        </p>
-      ) : null}
+      <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
 
-      <h2
+      <div
         style={{
-          margin: 0,
-          fontFamily: tokens.fontFamily.display,
-          fontSize: "clamp(1.75rem, 7vw, 2.35rem)",
-          fontWeight: 700,
-          lineHeight: 1.12,
-          letterSpacing: "-0.02em",
-          color: tokens.colors.foreground,
-          maxWidth: "16ch",
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
         }}
       >
-        {headline}
-      </h2>
+        {kicker ? (
+          <p
+            style={{
+              margin: 0,
+              marginBottom: "1rem",
+              fontFamily: tokens.fontFamily.body,
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: tokens.colors.accent,
+            }}
+          >
+            {kicker}
+          </p>
+        ) : null}
 
-      {subhead ? (
-        <p
+        <h2
           style={{
             margin: 0,
-            marginTop: "1.25rem",
-            fontFamily: tokens.fontFamily.body,
-            fontSize: "0.95rem",
-            fontWeight: 400,
-            lineHeight: 1.45,
-            color: tokens.colors.muted,
-            maxWidth: "28ch",
+            fontFamily: tokens.fontFamily.display,
+            fontSize: "clamp(1.75rem, 7vw, 2.35rem)",
+            fontWeight: 700,
+            lineHeight: 1.12,
+            letterSpacing: "-0.02em",
+            color: tokens.colors.foreground,
+            maxWidth: "16ch",
           }}
         >
-          {subhead}
-        </p>
-      ) : null}
+          {headline}
+        </h2>
+
+        {subhead ? (
+          <p
+            style={{
+              margin: 0,
+              marginTop: "1.25rem",
+              fontFamily: tokens.fontFamily.body,
+              fontSize: "0.95rem",
+              fontWeight: 400,
+              lineHeight: 1.45,
+              color: tokens.colors.muted,
+              maxWidth: "28ch",
+            }}
+          >
+            {subhead}
+          </p>
+        ) : null}
+      </div>
 
       {handle ? (
         <span
           style={{
             position: "absolute",
+            zIndex: 1,
             bottom: "0.9rem",
             left: "1.75rem",
             fontSize: "0.65rem",

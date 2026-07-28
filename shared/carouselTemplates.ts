@@ -44,6 +44,16 @@ export type CarouselTextSlot = {
   defaultText: string;
 };
 
+export const CAROUSEL_DECORATION_TYPES = [
+  "none",
+  "dots",
+  "hexagons",
+  "lightning",
+  "circles",
+  "steps",
+] as const;
+export type CarouselDecorationType = (typeof CAROUSEL_DECORATION_TYPES)[number];
+
 export type CarouselDesignTokens = {
   fontFamily: {
     display: string;
@@ -59,6 +69,8 @@ export type CarouselDesignTokens = {
   radiusPx?: number;
   /** IG carousel default; keep explicit for renderers. */
   aspectRatio: "4:5" | "1:1" | "9:16";
+  /** Optional fixed decorative background pattern. Baked into the template, never user-selectable. */
+  decoration?: CarouselDecorationType;
 };
 
 export type CarouselImageSlot = {
@@ -2534,6 +2546,396 @@ export const CAROUSEL_TEMPLATE_PHOTO_STORY_TEST: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_CONTENT_IGNORED: CarouselTemplate = {
+  id: "content_ignored_dots",
+  name: "Why Your Content Gets Ignored",
+  sourceAttribution: "Inspired by high-performing dot-pattern creator carousels.",
+  description: "A five-slide carousel: photo hook, three fix slides, then a save/follow CTA. Dark green, dot pattern.",
+  active: true,
+  sortOrder: 31,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#0D1610", foreground: "#F4F1EA", accent: "#A8FF60", muted: "#7FA88F" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "dots",
+  },
+  slides: [
+    {
+      id: "slide_01", role: "hook",
+      viralWhy: "Naming the exact frustration (content being ignored) is a strong pattern-interrupt hook.",
+      layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "POSTING, NOBODY CARES?" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your content gets ignored" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "The algorithm isn't broken. Here are the fixes that actually move the needle." },
+      ],
+      imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person looking frustrated at a laptop" }],
+    },
+    { id: "slide_02", role: "list_item", viralWhy: "First fix targets the most common mistake.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Stop selling, start helping" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Nobody likes being sold to constantly. Build trust first, monetize later." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second fix deepens the pattern.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Hook in 3 seconds" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "People decide fast. Your first line must shock, relate, or promise value immediately." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Final fix is the most actionable, testable step.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Test one change this week" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Pick one fix, try it for 5 posts, track what happens. Growth is iteration, not inspiration." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next post" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more fixes that actually move the needle." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_MORNING_HABITS: CarouselTemplate = {
+  id: "morning_habits_steps",
+  name: "3 Simple Morning Habits",
+  sourceAttribution: "Inspired by high-performing step-pattern habit creator carousels.",
+  description: "A five-slide carousel: photo hook, three habit slides, then a save/follow CTA. Teal, step pattern.",
+  active: true,
+  sortOrder: 32,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#0B2B2E", foreground: "#F4F1EA", accent: "#4FD1C5", muted: "#7FA8A0" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "steps",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "A specific habit-count promise with a personal-testing angle builds credibility.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "100 DAYS TESTED" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "3 simple habits for better mornings" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "What I discovered after 100 days of testing. Ready to level up?" },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a calm morning routine, coffee and sunrise" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First habit is the easiest to adopt immediately.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Habit title", budget: { min: 14, max: 40 }, defaultText: "Hydrate before caffeine" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Drink water before coffee to boost metabolism, then move for 10 minutes to increase focus." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second habit builds on the morning momentum.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Habit title", budget: { min: 14, max: 40 }, defaultText: "Plan your top 3 priorities" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Time blocking increases productivity and gives your brain clear direction and purpose." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Third habit is the payoff step that ties the morning together.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Habit title", budget: { min: 14, max: 40 }, defaultText: "Master one habit at a time" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Build momentum by mastering one habit first, then add the next. You have everything you need." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before tomorrow morning" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more habits that actually stick." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_WORKOUT_TRANSFORM: CarouselTemplate = {
+  id: "workout_transform_lightning",
+  name: "What Happens When You Start Moving",
+  sourceAttribution: "Inspired by high-performing lightning-pattern fitness creator carousels.",
+  description: "A five-slide carousel: photo hook, three benefit slides, then a save/follow CTA. Red/orange, lightning pattern.",
+  active: true,
+  sortOrder: 33,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#2B0F0F", foreground: "#F4F1EA", accent: "#FF6B4A", muted: "#C99B8F" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "lightning",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "A question hook about a specific transformation invites the reader to imagine their own result.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "STRENGTH FROM WITHIN" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "What happens when you start moving?" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "What if consistent exercise could transform your body and mind?" },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person running or lifting weights, athletic" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First benefit is the most visible, physical payoff.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Benefit title", budget: { min: 14, max: 40 }, defaultText: "Muscles get stronger" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "When you lift regularly, your body transforms. Energy levels skyrocket every single day." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second benefit shifts to the mental payoff, broadening appeal.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Benefit title", budget: { min: 14, max: 40 }, defaultText: "Mental health improves" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Regular movement releases endorphins naturally. Your mind becomes clearer and sharper." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Third beat reframes the goal as sustainable, not overwhelming.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Benefit title", budget: { min: 14, max: 40 }, defaultText: "One workout at a time" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Progress over perfection. Your strength grows with every single session, not all at once." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Start your first workout today" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more ways to build momentum, one session at a time." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_FUNNEL_LEAKS: CarouselTemplate = {
+  id: "funnel_leaks_circles",
+  name: "Why Your Funnel Isn't Converting",
+  sourceAttribution: "Inspired by high-performing light-theme marketing creator carousels.",
+  description: "A five-slide carousel: photo hook, three leak-fix slides, then a save/follow CTA. Light mint, soft circles.",
+  active: true,
+  sortOrder: 34,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#EAF7F0", foreground: "#0F2E23", accent: "#2FBF71", muted: "#5C8A73" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "circles",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "'Invisible leaks' framing creates urgency around a hidden, ongoing cost.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "THE INVISIBLE LEAKS" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your funnel isn't converting" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Most funnels fail at the same predictable points. Here's how to fix yours." },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional reviewing analytics on a laptop" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First leak targets the most common structural mistake.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Leak title", budget: { min: 14, max: 40 }, defaultText: "Too many options" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Every extra button or choice reduces action. Give visitors one clear path forward." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second leak addresses timing, a frequently overlooked factor.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Leak title", budget: { min: 14, max: 40 }, defaultText: "Slow follow-up" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Leads go cold within hours, not days. Fast follow-up shows you value their time." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Third leak reframes small fixes as high-leverage, not overwhelming.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Leak title", budget: { min: 14, max: 40 }, defaultText: "Ignoring the small fixes" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Simplify your landing page and speed up follow-ups today. Small fixes create big wins." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next launch" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more funnel fixes that actually convert." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_CAREER_MOVES: CarouselTemplate = {
+  id: "career_moves_hexagons",
+  name: "Career Moves Nobody Teaches",
+  sourceAttribution: "Inspired by high-performing hexagon-pattern career creator carousels.",
+  description: "A five-slide carousel: photo hook, three career-move slides, then a save/follow CTA. Copper/brown, hexagon pattern.",
+  active: true,
+  sortOrder: 35,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#241512", foreground: "#F4F1EA", accent: "#C97B4A", muted: "#B89A8E" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "hexagons",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "'Nobody teaches' framing promises insider knowledge that competitors won't share.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "BUILD YOUR CASE" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Career moves nobody teaches" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Promotions don't happen to people who wait quietly. Here's what actually gets you noticed." },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional working confidently at a desk" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First move is the most overlooked, low-effort habit.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Move title", budget: { min: 14, max: 40 }, defaultText: "Document your wins weekly" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Review time needs receipts, not memories. Managers forget, your documentation doesn't." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second move builds visibility, a common growth blocker.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Move title", budget: { min: 14, max: 40 }, defaultText: "Learn in public" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Teaching others positions you as the go-to. Visibility beats expertise when climbing." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Third move ties the pattern into a consistent daily habit.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Move title", budget: { min: 14, max: 40 }, defaultText: "Build your case daily" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "You're not bragging when you're tracking. You're building the story of why you deserve more." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next review" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more career moves nobody talks about." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_FITNESS_CLEAN: CarouselTemplate = {
+  id: "fitness_clean_light",
+  name: "Fitness Without the Overwhelm",
+  sourceAttribution: "Inspired by high-performing clean light-theme fitness creator carousels.",
+  description: "A five-slide carousel: photo hook, three simple-fitness slides, then a save/follow CTA. Clean white, no decoration.",
+  active: true,
+  sortOrder: 36,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#FFFFFF", foreground: "#16213E", accent: "#2B6CFF", muted: "#6B7A99" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "none",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "Naming the exact feeling ('overwhelm') that stops people from starting builds instant recognition.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "START HERE" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Fitness without the overwhelm" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "You don't need a perfect plan. You need a sustainable one." },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person stretching or exercising at home, approachable" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First beat lowers the bar for what counts as a real workout.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Tip title", budget: { min: 14, max: 40 }, defaultText: "Consistency beats intensity" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "10 minutes daily beats 2-hour sessions you skip. Build the habit, let your body adapt." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second beat simplifies a common source of overwhelm: nutrition.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Tip title", budget: { min: 14, max: 40 }, defaultText: "Hit protein first" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Focus on hitting your protein goal before worrying about anything else. Keep it simple." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Third beat closes the loop on comparison, a major source of quitting.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Tip title", budget: { min: 14, max: 40 }, defaultText: "Your body, your pace" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Stop comparing your chapter one to someone's chapter twenty. Focus on being 1% better." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you skip today" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more simple, sustainable fitness." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_TRAVEL_BUCKET_LIST: CarouselTemplate = {
+  id: "travel_bucket_list_circles",
+  name: "5 Iconic Islands to Visit",
+  sourceAttribution: "Inspired by high-performing radial-pattern travel creator carousels.",
+  description: "A five-slide carousel: photo hook, three destination slides, then a save/follow CTA. Dark red, radial circles.",
+  active: true,
+  sortOrder: 37,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#1A0F0F", foreground: "#F4F1EA", accent: "#D9704A", muted: "#B08A7A" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "circles",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "'Gold standard' framing signals a curated, trustworthy list worth saving.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "GOLD STANDARD" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "5 most iconic islands to visit" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "These destinations are topping the charts for a reason." },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a tropical island beach with turquoise water" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First destination should be the most universally recognized.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Destination", budget: { min: 14, max: 40 }, defaultText: "Bali and Santorini" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Bali blends lush jungles with spiritual temples, while Santorini defines Mediterranean luxury." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second destination targets a different traveler intent (romance/luxury).", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Destination", budget: { min: 14, max: 40 }, defaultText: "The Maldives and Bora Bora" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "For dreamiest turquoise waters and private villa seclusion, both offer a once-in-a-lifetime backdrop." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Final destination broadens appeal beyond typical honeymoon spots.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Destination", budget: { min: 14, max: 40 }, defaultText: "St. Lucia, Caribbean" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "A top honeymoon pick with iconic volcanic peaks, blending relaxation and thrill." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you book your trip" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more bucket-list destinations worth the trip." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_CLEAN_CODE: CarouselTemplate = {
+  id: "clean_code_circles",
+  name: "Why Your Code Is Hard to Maintain",
+  sourceAttribution: "Inspired by high-performing corner-circle tech/dev creator carousels.",
+  description: "A five-slide carousel: photo hook, three code-quality slides, then a save/follow CTA. Navy/blue, corner circles.",
+  active: true,
+  sortOrder: 38,
+  design: {
+    fontFamily: { display: '"Fraunces", Georgia, serif', body: '"DM Sans", system-ui, sans-serif' },
+    colors: { background: "#10151F", foreground: "#F4F1EA", accent: "#4FA8E8", muted: "#7FA0C0" },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "circles",
+  },
+  slides: [
+    { id: "slide_01", role: "hook", viralWhy: "Naming a specific pain (hard-to-maintain code) speaks directly to a developer's daily frustration.", layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "SIMPLE FIXES" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your code is hard to maintain" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Technical debt starts small. Here's how to keep your code readable and scalable." },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a developer working at a computer with code on screen" }] },
+    { id: "slide_02", role: "list_item", viralWhy: "First fix targets the most common trade-off developers make under pressure.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Clear code over clever code" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Future you will hate past you for that one-liner magic. Write code that explains itself." },
+      ] },
+    { id: "slide_03", role: "list_item", viralWhy: "Second fix addresses a habit that's easy to skip under deadline pressure.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Document your decisions" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Your logic makes sense now, but will it in six months? Document why, not just what." },
+      ] },
+    { id: "slide_04", role: "list_item", viralWhy: "Final fix reframes the habit as a gift to a future collaborator, including yourself.", layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Fix title", budget: { min: 14, max: 40 }, defaultText: "Clean code is a gift to future you" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Prioritize readability today and thank yourself tomorrow." },
+      ] },
+    { id: "slide_05", role: "cta", viralWhy: "Close with one clear action plus a soft identity line.", layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next refactor" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more code quality tips that actually stick." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ] },
+  ],
+};
+
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -2559,6 +2961,14 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_OBJECTIONS_HANDLED,
   CAROUSEL_TEMPLATE_STAT_LED_REVEAL,
   CAROUSEL_TEMPLATE_PHOTO_STORY_TEST,
+  CAROUSEL_TEMPLATE_CONTENT_IGNORED,
+  CAROUSEL_TEMPLATE_MORNING_HABITS,
+  CAROUSEL_TEMPLATE_WORKOUT_TRANSFORM,
+  CAROUSEL_TEMPLATE_FUNNEL_LEAKS,
+  CAROUSEL_TEMPLATE_CAREER_MOVES,
+  CAROUSEL_TEMPLATE_FITNESS_CLEAN,
+  CAROUSEL_TEMPLATE_TRAVEL_BUCKET_LIST,
+  CAROUSEL_TEMPLATE_CLEAN_CODE,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

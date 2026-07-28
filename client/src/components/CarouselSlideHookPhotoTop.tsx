@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
 
 export type CarouselSlideHookPhotoTopProps = {
   tokens: CarouselDesignTokens;
@@ -55,8 +56,12 @@ export function CarouselSlideHookPhotoTop({
         overflow: "hidden",
       }}
     >
+      <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
+
       <div
         style={{
+          position: "relative",
+          zIndex: 1,
           width: "100%",
           height: "55%",
           flexShrink: 0,
@@ -69,6 +74,8 @@ export function CarouselSlideHookPhotoTop({
 
       <div
         style={{
+          position: "relative",
+          zIndex: 1,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -132,6 +139,7 @@ export function CarouselSlideHookPhotoTop({
         <span
           style={{
             position: "absolute",
+            zIndex: 1,
             bottom: "0.9rem",
             left: "1.75rem",
             fontSize: "0.65rem",
