@@ -1972,6 +1972,472 @@ export const CAROUSEL_TEMPLATE_COMPARISON_OLD_VS_NEW_MINIMAL: CarouselTemplate =
   ],
 };
 
+export const CAROUSEL_TEMPLATE_QA_SINGLE_QUESTION: CarouselTemplate = {
+  id: "qa_single_question",
+  name: "Answer This One Question",
+  sourceAttribution:
+    "Inspired by high-performing single-question deep-dive creator carousels.",
+  description:
+    "A six-slide Q&A carousel: hook posing one specific question, four answer-facet slides, then a save/follow CTA. Navy palette.",
+  active: true,
+  sortOrder: 19,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#0B1E33",
+      foreground: "#F4F1EA",
+      accent: "#5B9BD5",
+      muted: "#8FA6BD",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "A single sharp question hook creates an open loop the reader wants closed, more compelling than a vague topic tease.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "THE REAL ANSWER" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why does nothing seem to work?" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "One question, answered properly, no fluff." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "First answer-facet should address the most common assumption behind the question.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Facet title", budget: { min: 14, max: 40 }, defaultText: "It's not what you think" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Most people assume the obvious cause. The real answer is usually one step further back." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Second facet deepens the answer with a concrete mechanism, not just a restatement.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Facet title", budget: { min: 14, max: 40 }, defaultText: "Here's the actual mechanism" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "This is the part that actually explains why the pattern keeps repeating." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Third facet addresses the natural follow-up question the reader is now asking.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Facet title", budget: { min: 14, max: 40 }, defaultText: "So what changes now?" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "Once you see the real cause, the fix is usually smaller and faster than expected." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Final facet should be the most actionable, giving the reader something to do today.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "04" },
+        { id: "headline", role: "headline", label: "Facet title", budget: { min: 14, max: 40 }, defaultText: "Start with this today" },
+        { id: "body", role: "body", label: "Explanation", budget: { min: 50, max: 140 }, defaultText: "One small change this week beats a perfect plan you never start." },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you ask again" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for straight answers to the questions that actually matter." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_HOWTO_STEP_BY_STEP: CarouselTemplate = {
+  id: "howto_step_by_step",
+  name: "Do This Step by Step",
+  sourceAttribution:
+    "Inspired by high-performing step-by-step how-to creator carousels.",
+  description:
+    "A seven-slide how-to carousel: hook, five sequential action steps, then a save/follow CTA. Forest palette.",
+  active: true,
+  sortOrder: 20,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#0F1F17",
+      foreground: "#F4F1EA",
+      accent: "#4CAF7D",
+      muted: "#8FA69B",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "A step-count promise ('do this in 5 steps') signals a concrete, followable process, not vague advice.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "FOLLOW ALONG" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Do this in 5 simple steps" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "No fluff, just the exact sequence that works." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Step one should be the easiest possible entry point so nobody feels stuck before starting.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Step number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Step title", budget: { min: 14, max: 40 }, defaultText: "Write down the end goal" },
+        { id: "body", role: "body", label: "Instruction", budget: { min: 50, max: 140 }, defaultText: "Be specific. A fuzzy goal produces a fuzzy result every time." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Step two builds directly on step one, keeping the sequence logical.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Step number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Step title", budget: { min: 14, max: 40 }, defaultText: "Break it into 3 milestones" },
+        { id: "body", role: "body", label: "Instruction", budget: { min: 50, max: 140 }, defaultText: "Three checkpoints keep momentum visible instead of one distant finish line." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Step three is usually the one people skip - call it out directly.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Step number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Step title", budget: { min: 14, max: 40 }, defaultText: "Set a hard deadline for milestone one" },
+        { id: "body", role: "body", label: "Instruction", budget: { min: 50, max: 140 }, defaultText: "Without a date, milestone one quietly becomes 'eventually.'" },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Step four addresses the point where most people quit.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Step number", budget: { min: 1, max: 3 }, defaultText: "04" },
+        { id: "headline", role: "headline", label: "Step title", budget: { min: 14, max: 40 }, defaultText: "Review progress every Friday" },
+        { id: "body", role: "body", label: "Instruction", budget: { min: 50, max: 140 }, defaultText: "A weekly check-in catches drift before it becomes a full derail." },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "list_item",
+      viralWhy: "Final step should be the payoff step, tying back to the original goal from slide one.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Step number", budget: { min: 1, max: 3 }, defaultText: "05" },
+        { id: "headline", role: "headline", label: "Step title", budget: { min: 14, max: 40 }, defaultText: "Repeat the cycle, not the plan" },
+        { id: "body", role: "body", label: "Instruction", budget: { min: 50, max: 140 }, defaultText: "The system carries you further than any single plan ever could." },
+      ],
+    },
+    {
+      id: "slide_07",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you start" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more step-by-step systems that actually work." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_BEFORE_AFTER_TRANSFORMATION: CarouselTemplate = {
+  id: "before_after_transformation",
+  name: "My Before and After",
+  sourceAttribution:
+    "Inspired by high-performing personal-transformation creator carousels.",
+  description:
+    "A five-slide transformation carousel: hook, before state, turning point, after state, then a save/follow CTA. Warm palette.",
+  active: true,
+  sortOrder: 21,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#241512",
+      foreground: "#F4F1EA",
+      accent: "#E07856",
+      muted: "#B89A8E",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "A personal transformation claim (not an industry-wide comparison) creates curiosity about a specific, relatable result.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "MY TRANSFORMATION" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "6 months ago I almost quit" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Here's exactly what changed, step by step." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "problem",
+      viralWhy: "The 'before' slide needs to be specific and a little vulnerable so it reads as real, not a highlight reel.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Beat title", budget: { min: 14, max: 40 }, defaultText: "Where I actually started" },
+        { id: "body", role: "body", label: "Detail", budget: { min: 50, max: 140 }, defaultText: "No plan, no system, just showing up inconsistently and hoping something would click." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "problem",
+      viralWhy: "The turning point is the emotional core of the story - name the specific moment or decision.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Beat title", budget: { min: 14, max: 40 }, defaultText: "The moment it shifted" },
+        { id: "body", role: "body", label: "Detail", budget: { min: 50, max: 140 }, defaultText: "One specific decision changed everything after that, not motivation, a decision." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "example",
+      viralWhy: "The 'after' slide should show the tangible result without overselling - specificity builds credibility.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Beat title", budget: { min: 14, max: 40 }, defaultText: "Where I am now" },
+        { id: "body", role: "body", label: "Detail", budget: { min: 50, max: 140 }, defaultText: "Not perfect, but consistent, and consistent beats perfect every time." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this if you're where I started" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for the real, unfiltered version of this journey." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_OBJECTIONS_HANDLED: CarouselTemplate = {
+  id: "objections_handled",
+  name: "You Might Be Thinking...",
+  sourceAttribution:
+    "Inspired by high-performing objection-handling creator carousels.",
+  description:
+    "A six-slide objection-handling carousel: hook, four objection/rebuttal pairs, then a save/follow CTA. Rose palette.",
+  active: true,
+  sortOrder: 22,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#241018",
+      foreground: "#F4F1EA",
+      accent: "#E0668C",
+      muted: "#B08A9A",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "Naming the reader's unspoken objection directly disarms skepticism before they scroll past.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "LET'S ADDRESS IT" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "You might be thinking this won't work" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Fair. Let's go through the real objections one by one." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "First objection should be the most common, most obvious one people already have in mind.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Objection", budget: { min: 14, max: 40 }, defaultText: "\"I don't have time for this\"" },
+        { id: "body", role: "body", label: "Rebuttal", budget: { min: 50, max: 140 }, defaultText: "This takes less time than the problem it's currently costing you every week." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Second objection should target a cost or risk concern.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Objection", budget: { min: 14, max: 40 }, defaultText: "\"It's too expensive\"" },
+        { id: "body", role: "body", label: "Rebuttal", budget: { min: 50, max: 140 }, defaultText: "Compare it to what doing nothing is already costing, most people never run that math." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Third objection should target self-doubt, the internal version of resistance.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "03" },
+        { id: "headline", role: "headline", label: "Objection", budget: { min: 14, max: 40 }, defaultText: "\"I've tried things like this before\"" },
+        { id: "body", role: "body", label: "Rebuttal", budget: { min: 50, max: 140 }, defaultText: "Most past attempts failed on execution, not the idea itself. This time the system carries you." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Final objection should be the most skeptical, contrarian one, leaving the reader with nothing left to push back on.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "04" },
+        { id: "headline", role: "headline", label: "Objection", budget: { min: 14, max: 40 }, defaultText: "\"This is probably just hype\"" },
+        { id: "body", role: "body", label: "Rebuttal", budget: { min: 50, max: 140 }, defaultText: "Healthy skepticism is fair, judge it on the actual results, not the pitch." },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before your next objection" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more straight answers to the doubts that hold people back." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
+export const CAROUSEL_TEMPLATE_STAT_LED_REVEAL: CarouselTemplate = {
+  id: "stat_led_reveal",
+  name: "The Numbers Don't Lie",
+  sourceAttribution:
+    "Inspired by high-performing data-reveal creator carousels.",
+  description:
+    "A six-slide stat-led carousel: hook, four striking-number reveal slides (the number IS the kicker), then a save/follow CTA. Ocean teal palette.",
+  active: true,
+  sortOrder: 23,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#0A2323",
+      foreground: "#F4F1EA",
+      accent: "#3FBFBF",
+      muted: "#7FA8A8",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy: "Leading with 'the numbers' framing signals hard evidence is coming, not opinion, which earns attention from skeptical scrollers.",
+      layoutId: "hook_bold_center",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "DATA, NOT OPINION" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "The numbers don't lie" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Four stats that change how you should think about this." },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Note for the remake AI: the kicker slot here is the STAT ITSELF (e.g. '73%', '3X', '10K'), not a sequence number. Lead with the most surprising stat first.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Stat", budget: { min: 1, max: 3 }, defaultText: "73%" },
+        { id: "headline", role: "headline", label: "What it means", budget: { min: 14, max: 40 }, defaultText: "of people never revisit this" },
+        { id: "body", role: "body", label: "Context", budget: { min: 50, max: 140 }, defaultText: "Once the initial excitement fades, most people quietly stop before the results show up." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Second stat should reinforce the pattern with a different angle on the same underlying truth.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Stat", budget: { min: 1, max: 3 }, defaultText: "3X" },
+        { id: "headline", role: "headline", label: "What it means", budget: { min: 14, max: 40 }, defaultText: "more likely to stick with a system" },
+        { id: "body", role: "body", label: "Context", budget: { min: 50, max: 140 }, defaultText: "People with a repeatable system outlast people relying on willpower alone by a wide margin." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Third stat should be the one that surprises even people already familiar with the topic.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Stat", budget: { min: 1, max: 3 }, defaultText: "90" },
+        { id: "headline", role: "headline", label: "What it means", budget: { min: 14, max: 40 }, defaultText: "days is the real average, not 30" },
+        { id: "body", role: "body", label: "Context", budget: { min: 50, max: 140 }, defaultText: "The '30 days' number gets repeated everywhere, but the honest average is much longer." },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Final stat should be the most actionable, pointing directly at what to do with this information.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Stat", budget: { min: 1, max: 3 }, defaultText: "1" },
+        { id: "headline", role: "headline", label: "What it means", budget: { min: 14, max: 40 }, defaultText: "small change beats ten big ones" },
+        { id: "body", role: "body", label: "Context", budget: { min: 50, max: 140 }, defaultText: "One change you actually keep beats an ambitious plan you abandon in week two." },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this before you argue with the data" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for more numbers that actually change how you think." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -1991,6 +2457,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_PSYCHOLOGY_INSIGHT_MINIMAL,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS_MINIMAL,
   CAROUSEL_TEMPLATE_COMPARISON_OLD_VS_NEW_MINIMAL,
+  CAROUSEL_TEMPLATE_QA_SINGLE_QUESTION,
+  CAROUSEL_TEMPLATE_HOWTO_STEP_BY_STEP,
+  CAROUSEL_TEMPLATE_BEFORE_AFTER_TRANSFORMATION,
+  CAROUSEL_TEMPLATE_OBJECTIONS_HANDLED,
+  CAROUSEL_TEMPLATE_STAT_LED_REVEAL,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

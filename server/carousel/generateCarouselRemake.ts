@@ -93,7 +93,11 @@ Rules:
 3. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
 4. Keep the same structure: hooks stay hooks, list items stay list items, CTAs stay CTAs.
 5. Use defaultText only as a tone and length reference, not as copy to keep.
-6. For any slot with role "kicker": use the plural noun for the target audience described in the niche above (e.g. "RESTAURANT OWNERS", "FITNESS COACHES", "REAL ESTATE AGENTS"). Do not invent a stylistic or generic word. If the niche names a specific audience noun, use that noun directly, uppercased. Stay within the character budget for that slot.
+6. For slots with role "kicker":
+   - If the slot label is "Kicker" (hook-style): use the plural noun for the target audience described in the niche above (e.g. "RESTAURANT OWNERS", "FITNESS COACHES", "REAL ESTATE AGENTS"). Do not invent a stylistic or generic word. If the niche names a specific audience noun, use that noun directly, uppercased.
+   - If the slot label is "Number" or "Step number": use a short sequence number like "01", "02" (match the tone/length of defaultText).
+   - If the slot label is "Stat": the kicker IS the statistic itself (e.g. "82%", "4X", "10K", "90"). Do not use audience nouns or sequence numbers. Prefer a short striking number within the character budget.
+   Always stay within the character budget for that slot.
 7. Return ONLY the tool payload with every slide id and every slot id filled.
 
 ${slideBlocks}`;
