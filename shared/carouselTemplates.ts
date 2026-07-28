@@ -105,7 +105,71 @@ export type CarouselImageSlot = {
    * Niche context gets appended at resolve time.
    */
   searchQueryHint: string;
+  /**
+   * Static Pexels (or CDN) URL used for library cards and unreade previews
+   * so photo regions are never empty before remake. Remake replaces this
+   * with upload / niche-matched Pexels / AI.
+   */
+  defaultImageUrl?: string;
 };
+
+/** Curated Pexels preview URLs for catalog photo slots (display only until remake). */
+export const CAROUSEL_STOCK_PREVIEW = {
+  headshot:
+    "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=800",
+  celebrate:
+    "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=800",
+  laptopFrustrated:
+    "https://images.pexels.com/photos/4065876/pexels-photo-4065876.jpeg?auto=compress&cs=tinysrgb&w=800",
+  morningCoffee:
+    "https://images.pexels.com/photos/374885/pexels-photo-374885.jpeg?auto=compress&cs=tinysrgb&w=800",
+  athletic:
+    "https://images.pexels.com/photos/841130/pexels-photo-841130.jpeg?auto=compress&cs=tinysrgb&w=800",
+  analytics:
+    "https://images.pexels.com/photos/590022/pexels-photo-590022.jpeg?auto=compress&cs=tinysrgb&w=800",
+  deskPro:
+    "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=800",
+  homeStretch:
+    "https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&w=800",
+  beach:
+    "https://images.pexels.com/photos/457882/pexels-photo-457882.jpeg?auto=compress&cs=tinysrgb&w=800",
+  coding:
+    "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&cs=tinysrgb&w=800",
+  cafeCreator:
+    "https://images.pexels.com/photos/4050315/pexels-photo-4050315.jpeg?auto=compress&cs=tinysrgb&w=800",
+  booksStack:
+    "https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=800",
+  warmPortrait:
+    "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=800",
+  warmSmile:
+    "https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=800",
+} as const;
+
+/**
+ * Preview image map for library cards / unreade dialog: uses each slide's
+ * defaultImageUrl. When shareCoverImage is set, the first available URL is
+ * copied onto every slide id.
+ */
+export function resolveTemplatePreviewImageUrls(
+  template: CarouselTemplate
+): Record<string, string> {
+  const urls: Record<string, string> = {};
+  for (const slide of template.slides) {
+    const url = slide.imageSlots?.[0]?.defaultImageUrl;
+    if (url) {
+      urls[slide.id] = url;
+    }
+  }
+  if (template.shareCoverImage) {
+    const coverUrl = Object.values(urls)[0];
+    if (coverUrl) {
+      for (const slide of template.slides) {
+        urls[slide.id] = coverUrl;
+      }
+    }
+  }
+  return urls;
+}
 
 export type CarouselSlideSpec = {
   /** Stable within the template, e.g. "slide_01". */
@@ -1814,6 +1878,7 @@ export const CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD: CarouselTemplate = {
           label: "Profile photo",
           searchQueryHint:
             "professional headshot portrait of a confident creator, clean background",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.headshot,
         },
       ],
     },
@@ -2651,6 +2716,7 @@ export const CAROUSEL_TEMPLATE_PHOTO_STORY_TEST: CarouselTemplate = {
           id: "photo",
           label: "Photo",
           searchQueryHint: "a person celebrating a personal achievement or success moment",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebrate,
         },
       ],
     },
@@ -2714,7 +2780,7 @@ export const CAROUSEL_TEMPLATE_CONTENT_IGNORED: CarouselTemplate = {
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your content gets ignored" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "The algorithm isn't broken. Here are the fixes that actually move the needle." },
       ],
-      imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person looking frustrated at a laptop" }],
+      imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person looking frustrated at a laptop", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopFrustrated }],
     },
     { id: "slide_02", role: "list_item", viralWhy: "First fix targets the most common mistake.", layoutId: "list_item_numbered",
       slots: [
@@ -2763,7 +2829,7 @@ export const CAROUSEL_TEMPLATE_MORNING_HABITS: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "100 DAYS TESTED" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "3 simple habits for better mornings" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "What I discovered after 100 days of testing. Ready to level up?" },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a calm morning routine, coffee and sunrise" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a calm morning routine, coffee and sunrise", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.morningCoffee }] },
     { id: "slide_02", role: "list_item", viralWhy: "First habit is the easiest to adopt immediately.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -2811,7 +2877,7 @@ export const CAROUSEL_TEMPLATE_WORKOUT_TRANSFORM: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "STRENGTH FROM WITHIN" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "What happens when you start moving?" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "What if consistent exercise could transform your body and mind?" },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person running or lifting weights, athletic" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person running or lifting weights, athletic", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.athletic }] },
     { id: "slide_02", role: "list_item", viralWhy: "First benefit is the most visible, physical payoff.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -2859,7 +2925,7 @@ export const CAROUSEL_TEMPLATE_FUNNEL_LEAKS: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "THE INVISIBLE LEAKS" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your funnel isn't converting" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Most funnels fail at the same predictable points. Here's how to fix yours." },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional reviewing analytics on a laptop" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional reviewing analytics on a laptop", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.analytics }] },
     { id: "slide_02", role: "list_item", viralWhy: "First leak targets the most common structural mistake.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -2907,7 +2973,7 @@ export const CAROUSEL_TEMPLATE_CAREER_MOVES: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "BUILD YOUR CASE" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Career moves nobody teaches" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Promotions don't happen to people who wait quietly. Here's what actually gets you noticed." },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional working confidently at a desk" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a professional working confidently at a desk", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro }] },
     { id: "slide_02", role: "list_item", viralWhy: "First move is the most overlooked, low-effort habit.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -2955,7 +3021,7 @@ export const CAROUSEL_TEMPLATE_FITNESS_CLEAN: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "START HERE" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Fitness without the overwhelm" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "You don't need a perfect plan. You need a sustainable one." },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person stretching or exercising at home, approachable" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a person stretching or exercising at home, approachable", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.homeStretch }] },
     { id: "slide_02", role: "list_item", viralWhy: "First beat lowers the bar for what counts as a real workout.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -3003,7 +3069,7 @@ export const CAROUSEL_TEMPLATE_TRAVEL_BUCKET_LIST: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "GOLD STANDARD" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "5 most iconic islands to visit" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "These destinations are topping the charts for a reason." },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a tropical island beach with turquoise water" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a tropical island beach with turquoise water", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.beach }] },
     { id: "slide_02", role: "list_item", viralWhy: "First destination should be the most universally recognized.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -3051,7 +3117,7 @@ export const CAROUSEL_TEMPLATE_CLEAN_CODE: CarouselTemplate = {
         { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "SIMPLE FIXES" },
         { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "Why your code is hard to maintain" },
         { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "Technical debt starts small. Here's how to keep your code readable and scalable." },
-      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a developer working at a computer with code on screen" }] },
+      ], imageSlots: [{ id: "photo", label: "Photo", searchQueryHint: "a developer working at a computer with code on screen", defaultImageUrl: CAROUSEL_STOCK_PREVIEW.coding }] },
     { id: "slide_02", role: "list_item", viralWhy: "First fix targets the most common trade-off developers make under pressure.", layoutId: "list_item_numbered",
       slots: [
         { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
@@ -3128,6 +3194,7 @@ export const CAROUSEL_TEMPLATE_PHOTO_CAPTION_WARM: CarouselTemplate = {
           label: "Photo",
           searchQueryHint:
             "candid lifestyle selfie of a creator at a cafe table with a laptop, natural daylight",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
         },
       ],
     },
@@ -3259,6 +3326,7 @@ export const CAROUSEL_TEMPLATE_NOTEBOOK_TIPS: CarouselTemplate = {
           label: "Photo",
           searchQueryHint:
             "person holding a tall stack of colorful books, portrait, clean background",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.booksStack,
         },
       ],
     },
@@ -3445,6 +3513,7 @@ export const CAROUSEL_TEMPLATE_DIRECT_AND_WARM: CarouselTemplate = {
           label: "Photo",
           searchQueryHint:
             "warm lifestyle portrait of a calm professional outdoors, soft natural light",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.warmPortrait,
         },
       ],
     },
@@ -3591,6 +3660,7 @@ export const CAROUSEL_TEMPLATE_DIRECT_AND_WARM: CarouselTemplate = {
           label: "Photo",
           searchQueryHint:
             "warm candid portrait of a creator smiling softly, natural indoor light",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.warmSmile,
         },
       ],
     },

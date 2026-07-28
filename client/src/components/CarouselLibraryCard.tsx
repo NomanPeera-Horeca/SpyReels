@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import type { CarouselTemplate } from "@shared/carouselTemplates";
+import { resolveTemplatePreviewImageUrls } from "@shared/carouselTemplates";
 import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
 import { resolveCarouselSlideValues } from "@/components/CarouselRenderer";
 import { cn } from "@/lib/utils";
@@ -10,6 +12,8 @@ const ASPECT_RATIO_CSS: Record<CarouselTemplate["design"]["aspectRatio"], string
   "9:16": "9 / 16",
 };
 
+const HOVER_ADVANCE_MS = 900;
+
 export type CarouselLibraryCardProps = {
   template: CarouselTemplate;
   onClick: () => void;
@@ -17,27 +21,67 @@ export type CarouselLibraryCardProps = {
 };
 
 /**
- * Library grid card shell: same workspace-reel-card chrome as reel tiles.
- * Media area shows the first slide at the template aspect ratio (slide tokens only).
+ * Library grid card: hover auto-advances slides; dots also switch slides.
+ * No attribution blurb under the title.
  */
 export function CarouselLibraryCard({
   template,
   onClick,
   isActive,
 }: CarouselLibraryCardProps) {
-  const firstSlide = template.slides[0];
-  const Layout = firstSlide
-    ? CAROUSEL_LAYOUT_REGISTRY[firstSlide.layoutId]
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [isHovering, setIsHovering] = useState(false);
+  const slides = template.slides;
+  const slideCount = slides.length;
+  const activeIndex = Math.min(slideIndex, Math.max(slideCount - 1, 0));
+  const activeSlide = slides[activeIndex];
+  const Layout = activeSlide
+    ? CAROUSEL_LAYOUT_REGISTRY[activeSlide.layoutId]
     : null;
-  const firstValues = firstSlide
-    ? resolveCarouselSlideValues(firstSlide)
+  const activeValues = activeSlide
+    ? resolveCarouselSlideValues(activeSlide)
     : null;
+  const previewImages = resolveTemplatePreviewImageUrls(template);
+  const imageUrl = activeSlide ? previewImages[activeSlide.id] : undefined;
+  const hoverTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!isHovering || slideCount <= 1) {
+      if (hoverTimerRef.current) {
+        clearInterval(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+      return;
+    }
+
+    hoverTimerRef.current = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % slideCount);
+    }, HOVER_ADVANCE_MS);
+
+    return () => {
+      if (hoverTimerRef.current) {
+        clearInterval(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+    };
+  }, [isHovering, slideCount]);
+
+  function handleMouseEnter() {
+    setIsHovering(true);
+  }
+
+  function handleMouseLeave() {
+    setIsHovering(false);
+    setSlideIndex(0);
+  }
 
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -55,11 +99,12 @@ export function CarouselLibraryCard({
           aspectRatio: ASPECT_RATIO_CSS[template.design.aspectRatio],
         }}
       >
-        {Layout && firstValues ? (
+        {Layout && activeValues ? (
           <div className="pointer-events-none absolute inset-0 flex items-stretch justify-center overflow-hidden">
             <Layout
               tokens={template.design}
-              values={firstValues}
+              values={activeValues}
+              imageUrl={imageUrl}
               className="h-full w-full"
             />
           </div>
@@ -68,17 +113,44 @@ export function CarouselLibraryCard({
             No slides
           </div>
         )}
-        <div className="absolute right-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
-          {template.slides.length} slides
-        </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-2">
+      {slideCount > 1 ? (
+        <div
+          className="flex items-center justify-center gap-1.5 px-2 py-2"
+          role="tablist"
+          aria-label="Preview slides"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {slides.map((slide, index) => (
+            <button
+              key={slide.id}
+              type="button"
+              role="tab"
+              aria-selected={index === activeIndex}
+              aria-label={`Slide ${index + 1} of ${slideCount}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSlideIndex(index);
+              }}
+              onMouseEnter={(e) => {
+                e.stopPropagation();
+                setSlideIndex(index);
+              }}
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                index === activeIndex
+                  ? "bg-primary"
+                  : "bg-muted-foreground/35 hover:bg-muted-foreground/55"
+              )}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2 pt-1">
         <p className="text-sm font-semibold leading-snug text-foreground line-clamp-2">
           {template.name}
-        </p>
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-          {template.sourceAttribution}
         </p>
       </div>
 

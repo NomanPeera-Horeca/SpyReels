@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CarouselSlideSpec, CarouselTemplate, CarouselDesignTokens } from "@shared/carouselTemplates";
+import { resolveTemplatePreviewImageUrls } from "@shared/carouselTemplates";
 import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
 import {
   Dialog,
@@ -251,6 +252,14 @@ export function CarouselPreviewDialog({
 
   const effectiveSlideCount = effectiveSlides?.length ?? template?.slides.length ?? 0;
 
+  const catalogPreviewImages = template
+    ? resolveTemplatePreviewImageUrls(template)
+    : {};
+  const previewImageUrls = viewingRemake
+    ? ((statusQuery.data?.imageUrls as Record<string, string> | undefined) ??
+      catalogPreviewImages)
+    : { ...catalogPreviewImages, ...uploadedImageUrls };
+
   async function handleDownloadSlide(slideId: string) {
     const node = carouselContainerRef.current?.querySelector<HTMLElement>(
       `[data-carousel-slide-id="${slideId}"]`
@@ -407,11 +416,7 @@ export function CarouselPreviewDialog({
                 slides={effectiveSlides}
                 designOverride={effectiveDesignOverride}
                 handle={handleInput.trim() || undefined}
-                imageUrls={
-                  viewingRemake
-                    ? ((statusQuery.data?.imageUrls as Record<string, string> | undefined) ?? undefined)
-                    : uploadedImageUrls
-                }
+                imageUrls={previewImageUrls}
                 onDownloadSlide={hasRemake ? handleDownloadSlide : undefined}
               />
             </div>
