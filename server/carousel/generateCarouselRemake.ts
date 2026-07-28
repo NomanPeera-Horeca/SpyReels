@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import { resolveSlideImage } from "./resolveSlideImage";
 
 export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 
@@ -284,8 +285,13 @@ export async function generateCarouselRemake(
   remakeId: number,
   templateId: string,
   niche: string,
-  slideCountOption?: number | "auto"
+  options?: {
+    slideCountOption?: number | "auto";
+    uploadedImageUrls?: Record<string, string>;
+  }
 ): Promise<void> {
+  const slideCountOption = options?.slideCountOption;
+  const uploadedImageUrls = options?.uploadedImageUrls;
   const db = await getDb();
   if (!db) {
     console.error(`[carouselRemake] ${remakeId}: database unavailable`);
@@ -348,12 +354,30 @@ export async function generateCarouselRemake(
       }
     }
 
+    const imageUrls: Record<string, string> = {};
+    for (const slide of effectiveSlides) {
+      if (slide.imageSlots && slide.imageSlots.length > 0) {
+        // MVP: resolve only the first image slot per slide.
+        const imageSlot = slide.imageSlots[0];
+        const uploaded = uploadedImageUrls?.[slide.id];
+        const resolvedUrl = await resolveSlideImage(
+          imageSlot.searchQueryHint,
+          niche,
+          uploaded
+        );
+        if (resolvedUrl) {
+          imageUrls[slide.id] = resolvedUrl;
+        }
+      }
+    }
+
     await db
       .update(carouselRemakes)
       .set({
         status: "completed",
         slotValuesJson: values,
         slideStructureJson: effectiveSlides,
+        imageUrlsJson: Object.keys(imageUrls).length > 0 ? imageUrls : null,
         errorMessage: null,
       })
       .where(eq(carouselRemakes.id, remakeId));

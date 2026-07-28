@@ -7,6 +7,7 @@ export const CAROUSEL_LAYOUT_IDS = [
   "hook_bold_center",
   "list_item_numbered",
   "cta_bold_center",
+  "hook_photo_top",
 ] as const;
 export type CarouselLayoutId = (typeof CAROUSEL_LAYOUT_IDS)[number];
 
@@ -60,6 +61,20 @@ export type CarouselDesignTokens = {
   aspectRatio: "4:5" | "1:1" | "9:16";
 };
 
+export type CarouselImageSlot = {
+  /** Stable within the slide, e.g. "photo". */
+  id: string;
+  /** Shown in UI ("Photo"). */
+  label: string;
+  /**
+   * Search/generation hint describing what this photo should show, in
+   * niche-agnostic terms (e.g. "a person working at a desk"). Used both as
+   * a stock photo search query and as an AI image generation prompt seed.
+   * Niche context gets appended at resolve time.
+   */
+  searchQueryHint: string;
+};
+
 export type CarouselSlideSpec = {
   /** Stable within the template, e.g. "slide_01". */
   id: string;
@@ -68,6 +83,8 @@ export type CarouselSlideSpec = {
   viralWhy: string;
   layoutId: CarouselLayoutId;
   slots: CarouselTextSlot[];
+  /** Optional photo region(s) for this slide. Most slides have none. */
+  imageSlots?: CarouselImageSlot[];
 };
 
 export type CarouselTemplate = {
@@ -2438,6 +2455,85 @@ export const CAROUSEL_TEMPLATE_STAT_LED_REVEAL: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_PHOTO_STORY_TEST: CarouselTemplate = {
+  id: "photo_story_test",
+  name: "Real Result Story",
+  sourceAttribution:
+    "Test template proving photo slot support: upload your own photo, or SpyReels finds/generates one for you.",
+  description:
+    "A four-slide personal-result story: a photo hook, two story beats, then a save/follow CTA. Upload your own photo for the hook, or let SpyReels find or generate one.",
+  active: true,
+  sortOrder: 30,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#1A1A2E",
+      foreground: "#F4F1EA",
+      accent: "#E94560",
+      muted: "#9A9AB0",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "A real photo in the hook builds immediate credibility for a personal-result story, more than text alone.",
+      layoutId: "hook_photo_top",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, defaultText: "REAL RESULT" },
+        { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, defaultText: "This is what changed" },
+        { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, defaultText: "One year of consistency, one photo tells the story." },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Photo",
+          searchQueryHint: "a person celebrating a personal achievement or success moment",
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "First beat sets up where things started, grounding the story before the payoff.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "01" },
+        { id: "headline", role: "headline", label: "Beat title", budget: { min: 14, max: 40 }, defaultText: "Where I started" },
+        { id: "body", role: "body", label: "Detail", budget: { min: 50, max: 140 }, defaultText: "No plan, no system, just showing up inconsistently and hoping something would click." },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "example",
+      viralWhy: "Second beat delivers the payoff, tying directly back to the photo shown in the hook.",
+      layoutId: "list_item_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "02" },
+        { id: "headline", role: "headline", label: "Beat title", budget: { min: 14, max: 40 }, defaultText: "What actually changed" },
+        { id: "body", role: "body", label: "Detail", budget: { min: 50, max: 140 }, defaultText: "One small, repeatable habit did more than any big overhaul ever did." },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "cta",
+      viralWhy: "Close with one clear action plus a soft identity line.",
+      layoutId: "cta_bold_center",
+      slots: [
+        { id: "headline", role: "headline", label: "CTA headline", budget: { min: 16, max: 48 }, defaultText: "Save this if you're where I started" },
+        { id: "subhead", role: "subhead", label: "CTA subhead", budget: { min: 24, max: 80 }, defaultText: "Follow for the real, unfiltered version of this journey." },
+        { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, defaultText: "Follow for more" },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -2462,6 +2558,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_BEFORE_AFTER_TRANSFORMATION,
   CAROUSEL_TEMPLATE_OBJECTIONS_HANDLED,
   CAROUSEL_TEMPLATE_STAT_LED_REVEAL,
+  CAROUSEL_TEMPLATE_PHOTO_STORY_TEST,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

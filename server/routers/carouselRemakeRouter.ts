@@ -11,6 +11,7 @@ import { getPlanLimits, type PlanId } from "../stripe/products";
 import { hasUnlimitedUsage } from "../usageBypass";
 import { countCarouselRemakesThisMonth } from "../carousel/db";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
+import { storagePut } from "../storage";
 
 const DESIGN_OVERRIDE_SCHEMA = z.object({
   background: z.string().max(16),
@@ -79,6 +80,7 @@ export const carouselRemakeRouter = router({
         slideCount: SLIDE_COUNT_SCHEMA.optional(),
         designOverride: DESIGN_OVERRIDE_SCHEMA.optional(),
         aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
+        uploadedImageUrls: z.record(z.string(), z.string()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -137,12 +139,10 @@ export const carouselRemakeRouter = router({
         });
       }
 
-      generateCarouselRemake(
-        remakeId,
-        input.templateId,
-        niche,
-        input.slideCount
-      ).catch((err: unknown) => {
+      generateCarouselRemake(remakeId, input.templateId, niche, {
+        slideCountOption: input.slideCount,
+        uploadedImageUrls: input.uploadedImageUrls,
+      }).catch((err: unknown) => {
         console.error(`Carousel remake ${remakeId} failed:`, err);
       });
 
@@ -185,6 +185,7 @@ export const carouselRemakeRouter = router({
         slideStructure: row.slideStructureJson ?? null,
         designOverride: row.designOverrideJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
+        imageUrls: row.imageUrlsJson ?? null,
         errorMessage: row.errorMessage,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -264,5 +265,20 @@ export const carouselRemakeRouter = router({
         .set({ instagramHandle: cleaned.length > 0 ? cleaned : null })
         .where(eq(users.id, ctx.user.id));
       return { handle: cleaned.length > 0 ? cleaned : null };
+    }),
+
+  /** Upload a photo for a carousel image slot. Returns the stored R2 URL. */
+  uploadSlideImage: protectedProcedure
+    .input(
+      z.object({
+        base64: z.string().max(10_000_000),
+        contentType: z.string().max(64).default("image/jpeg"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const buffer = Buffer.from(input.base64, "base64");
+      const key = `carousel-uploads/${ctx.user.id}/${Date.now()}.jpg`;
+      const { url } = await storagePut(key, buffer, input.contentType);
+      return { url };
     }),
 });

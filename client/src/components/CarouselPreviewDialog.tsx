@@ -151,6 +151,7 @@ export function CarouselPreviewDialog({
     useState<CarouselSlideValuesById | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string>>({});
   const carouselContainerRef = useRef<HTMLDivElement>(null);
 
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
@@ -160,6 +161,7 @@ export function CarouselPreviewDialog({
     enabled: open,
   });
   const saveHandleMutation = trpc.carouselRemake.saveHandle.useMutation();
+  const uploadImageMutation = trpc.carouselRemake.uploadSlideImage.useMutation();
 
   useEffect(() => {
     if (!open) {
@@ -171,6 +173,7 @@ export function CarouselPreviewDialog({
       setColorChoice("auto");
       setFontChoice("auto");
       setFormatChoice("post_4_5");
+      setUploadedImageUrls({});
       return;
     }
   }, [open]);
@@ -322,7 +325,36 @@ export function CarouselPreviewDialog({
       slideCount: slideCountChoice === "auto" ? "auto" : Number(slideCountChoice),
       designOverride,
       aspectRatioOverride,
+      uploadedImageUrls: Object.keys(uploadedImageUrls).length > 0 ? uploadedImageUrls : undefined,
     });
+  }
+
+  function handleImageSlotId(): string | null {
+    if (!template) return null;
+    const slideWithImage = template.slides.find((s) => s.imageSlots && s.imageSlots.length > 0);
+    return slideWithImage?.id ?? null;
+  }
+
+  async function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const slideId = handleImageSlotId();
+    if (!file || !slideId) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1] ?? "";
+      try {
+        const { url } = await uploadImageMutation.mutateAsync({
+          base64,
+          contentType: file.type || "image/jpeg",
+        });
+        setUploadedImageUrls((prev) => ({ ...prev, [slideId]: url }));
+      } catch (err) {
+        console.error("Photo upload failed", err);
+        toast.error("Photo upload failed");
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -372,6 +404,11 @@ export function CarouselPreviewDialog({
                 slides={effectiveSlides}
                 designOverride={effectiveDesignOverride}
                 handle={handleInput.trim() || undefined}
+                imageUrls={
+                  viewingRemake
+                    ? ((statusQuery.data?.imageUrls as Record<string, string> | undefined) ?? undefined)
+                    : uploadedImageUrls
+                }
                 onDownloadSlide={hasRemake ? handleDownloadSlide : undefined}
               />
             </div>
@@ -446,6 +483,24 @@ export function CarouselPreviewDialog({
                       disabled={isGenerating}
                     />
                   </div>
+
+                  {handleImageSlotId() ? (
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Photo (optional - upload your own, or SpyReels finds or generates one)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoFileChange}
+                        disabled={isGenerating || uploadImageMutation.isPending}
+                        className="block w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-card file:px-2 file:py-1 file:text-xs"
+                      />
+                      {uploadImageMutation.isPending ? (
+                        <p className="text-xs text-muted-foreground">Uploading...</p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="space-y-1">

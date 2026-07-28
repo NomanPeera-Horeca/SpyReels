@@ -19,6 +19,8 @@ export type CarouselRendererProps = {
   designOverride?: Partial<CarouselDesignTokens>;
   /** Optional handle text (e.g. "@yourbrand") rendered as a small overlay on every slide. Never sent to the AI; purely a static render-time value. */
   handle?: string;
+  /** Resolved photo URLs keyed by slide id, for slides with an imageSlots entry. */
+  imageUrls?: Record<string, string>;
   className?: string;
   onDownloadSlide?: (slideId: string) => void;
 };
@@ -46,6 +48,7 @@ export function CarouselRenderer({
   slides,
   designOverride,
   handle,
+  imageUrls,
   className,
   onDownloadSlide,
 }: CarouselRendererProps) {
@@ -75,7 +78,12 @@ export function CarouselRenderer({
             data-carousel-slide-id={slide.id}
             style={{ flex: "0 0 auto", position: "relative" }}
           >
-            <Layout tokens={effectiveTokens} values={values} handle={handle} />
+            <Layout
+              tokens={effectiveTokens}
+              values={values}
+              handle={handle}
+              imageUrl={imageUrls?.[slide.id]}
+            />
             {onDownloadSlide ? (
               <button
                 type="button"

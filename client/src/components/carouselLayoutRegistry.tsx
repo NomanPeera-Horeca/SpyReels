@@ -7,12 +7,15 @@ import type {
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
 import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCenter";
+import { CarouselSlideHookPhotoTop } from "@/components/CarouselSlideHookPhotoTop";
 
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   /** Optional Instagram handle overlay; render-only, never sent to AI. */
   handle?: string;
+  /** Resolved photo URL for layouts that have an image region. */
+  imageUrl?: string;
   className?: string;
 };
 
@@ -27,4 +30,5 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   hook_bold_center: CarouselSlideHookBoldCenter,
   list_item_numbered: CarouselSlideListItemNumbered,
   cta_bold_center: CarouselSlideCtaBoldCenter,
+  hook_photo_top: CarouselSlideHookPhotoTop,
 };

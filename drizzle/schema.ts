@@ -1982,6 +1982,8 @@ export const carouselRemakes = mysqlTable(
     designOverrideJson: json("designOverrideJson"),
     /** Optional per-remake aspect ratio override (e.g. "4:5", "9:16"). */
     aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
+    /** Resolved slide photo URLs keyed by slide id. */
+    imageUrlsJson: json("imageUrlsJson"),
     errorMessage: text("errorMessage"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
