@@ -15,6 +15,8 @@ import { CarouselSlideListItemWarmNumbered } from "@/components/CarouselSlideLis
 import { CarouselSlideQuoteTweetCard } from "@/components/CarouselSlideQuoteTweetCard";
 import { CarouselSlideExcuseGrid4 } from "@/components/CarouselSlideExcuseGrid4";
 import { CarouselSlideExcuseSplitStack } from "@/components/CarouselSlideExcuseSplitStack";
+import { CarouselSlideStatSplitStack } from "@/components/CarouselSlideStatSplitStack";
+import { CarouselSlidePhotoQuoteBubbles } from "@/components/CarouselSlidePhotoQuoteBubbles";
 
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
@@ -47,4 +49,6 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   quote_tweet_card: CarouselSlideQuoteTweetCard,
   excuse_grid_4: CarouselSlideExcuseGrid4,
   excuse_split_stack: CarouselSlideExcuseSplitStack,
+  stat_split_stack: CarouselSlideStatSplitStack,
+  photo_quote_bubbles: CarouselSlidePhotoQuoteBubbles,
 };

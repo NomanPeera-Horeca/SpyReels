@@ -15,6 +15,8 @@ export const CAROUSEL_LAYOUT_IDS = [
   "quote_tweet_card",
   "excuse_grid_4",
   "excuse_split_stack",
+  "stat_split_stack",
+  "photo_quote_bubbles",
 ] as const;
 export type CarouselLayoutId = (typeof CAROUSEL_LAYOUT_IDS)[number];
 
@@ -3997,6 +3999,220 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
+  id: "average_vs_not",
+  name: "Average vs Not",
+  sourceAttribution:
+    "Inspired by high-performing creator carousels that contrast average timelines with impatient expectations.",
+  description:
+    "Four color split slides: top states the average truth, bottom punches with Not Y. Closer is a full-bleed photo with two white quote bubbles. Optional photo pool with AI placement.",
+  active: true,
+  sortOrder: 44,
+  imagePoolAssign: true,
+  design: {
+    fontFamily: {
+      display: '"DM Sans", system-ui, sans-serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#000000",
+      foreground: "#FFFFFF",
+      accent: "#FFFFFF",
+      muted: "#2A2A2A",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "Opens with a hard average-age fact vs an impatient Not line to stop the scroll.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "average",
+          role: "headline",
+          label: "Average line",
+          budget: { min: 18, max: 56 },
+          defaultText: "The average millionaire is 57",
+        },
+        {
+          id: "not_line",
+          role: "body",
+          label: "Not line",
+          budget: { min: 5, max: 28 },
+          defaultText: "Not 27",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Success outcome photo (win)",
+          searchQueryHint:
+            "confident successful person in front of luxury lifestyle, warm golden hour",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.successPose,
+        },
+        {
+          id: "photo_bottom",
+          label: "Early grind photo (before)",
+          searchQueryHint:
+            "younger person grinding on phone and laptop at night, focused stress",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.phoneFocus,
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Second average vs Not pair reinforces the patience pattern.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "average",
+          role: "headline",
+          label: "Average line",
+          budget: { min: 18, max: 56 },
+          defaultText: "The average CEO is 55",
+        },
+        {
+          id: "not_line",
+          role: "body",
+          label: "Not line",
+          budget: { min: 5, max: 28 },
+          defaultText: "Not 25",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Success outcome photo (win)",
+          searchQueryHint:
+            "leader at the head of a boardroom table, authority and sunset city view",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
+        },
+        {
+          id: "photo_bottom",
+          label: "Early grind photo (before)",
+          searchQueryHint:
+            "stressed person holding head at desk with laptop late at night",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Switches from age to mastery time to keep the carousel fresh.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "average",
+          role: "headline",
+          label: "Average line",
+          budget: { min: 18, max: 64 },
+          defaultText: "The average expert spends 10 years learning",
+        },
+        {
+          id: "not_line",
+          role: "body",
+          label: "Not line",
+          budget: { min: 5, max: 28 },
+          defaultText: "Not 10 weeks",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Success outcome photo (win)",
+          searchQueryHint:
+            "person looking out over a city skyline from a high window, reflective mastery",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.homeStretch,
+        },
+        {
+          id: "photo_bottom",
+          label: "Early grind photo (before)",
+          searchQueryHint:
+            "person studying a book at a desk lamp at night, deep learning focus",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.booksStack,
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Business profit timeline lands the patience message before the closer.",
+      layoutId: "stat_split_stack",
+      slots: [
+        {
+          id: "average",
+          role: "headline",
+          label: "Average line",
+          budget: { min: 18, max: 64 },
+          defaultText: "The average business turns real profit after 3 years",
+        },
+        {
+          id: "not_line",
+          role: "body",
+          label: "Not line",
+          budget: { min: 5, max: 28 },
+          defaultText: "Not 3 months",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo_top",
+          label: "Success outcome photo (win)",
+          searchQueryHint:
+            "relaxed entrepreneur leaning back after growth, chart rising on monitor",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebration,
+        },
+        {
+          id: "photo_bottom",
+          label: "Early grind photo (before)",
+          searchQueryHint:
+            "focused person typing hard on a laptop in a dim office at night",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "cta",
+      viralWhy:
+        "Full-bleed closer with a patience quote and a soft share CTA in white bubbles.",
+      layoutId: "photo_quote_bubbles",
+      slots: [
+        {
+          id: "quote",
+          role: "headline",
+          label: "Quote",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "People overestimate what they can do in 1 year and underestimate what they can do in 5.",
+        },
+        {
+          id: "cta_label",
+          role: "cta_label",
+          label: "CTA",
+          budget: { min: 12, max: 48 },
+          defaultText: "Keep grinding. Share if you agree",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Closer photo (win / reflection)",
+          searchQueryHint:
+            "person looking out over mountains at sunrise, calm long-game energy",
+          defaultImageUrl: CAROUSEL_STOCK_PREVIEW.beach,
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -4035,6 +4251,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_NOTEBOOK_TIPS,
   CAROUSEL_TEMPLATE_DIRECT_AND_WARM,
   CAROUSEL_TEMPLATE_EXCUSE_REWRITE,
+  CAROUSEL_TEMPLATE_AVERAGE_VS_NOT,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

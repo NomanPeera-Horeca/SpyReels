@@ -378,16 +378,19 @@ export async function generateCarouselRemake(
           const labelLower = imageSlot.label.toLowerCase();
           const isAfter =
             imageSlot.id.includes("after") ||
+            imageSlot.id.includes("top") ||
             labelLower.includes("after") ||
             labelLower.includes("reframe") ||
-            labelLower.includes("win");
+            labelLower.includes("win") ||
+            labelLower.includes("success") ||
+            labelLower.includes("outcome");
           needs.push({
             key: `${slide.id}::${imageSlot.id}`,
             slideId: slide.id,
             slotId: imageSlot.id,
             roleHint: isAfter
-              ? "after/reframe / win energy (color)"
-              : "before/excuse energy (often shown grayscale)",
+              ? "after/success / destination energy (color)"
+              : "before/early grind energy",
             textContext: textContext || imageSlot.searchQueryHint,
             searchQueryHint: imageSlot.searchQueryHint,
           });
