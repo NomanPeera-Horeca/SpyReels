@@ -11,6 +11,8 @@ export const CAROUSEL_LAYOUT_IDS = [
   "photo_caption_bubble",
   "notebook_cover",
   "notebook_list_item",
+  "list_item_warm_numbered",
+  "quote_tweet_card",
 ] as const;
 export type CarouselLayoutId = (typeof CAROUSEL_LAYOUT_IDS)[number];
 
@@ -29,6 +31,7 @@ export const CAROUSEL_SLOT_ROLES = [
   "subhead",
   "body",
   "cta_label",
+  "body_callout",
 ] as const;
 export type CarouselSlotRole = (typeof CAROUSEL_SLOT_ROLES)[number];
 
@@ -1767,11 +1770,12 @@ export const CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD: CarouselTemplate = {
   id: "quote_callout_bold",
   name: "Quote Callout",
   sourceAttribution:
-    "Inspired by high-performing quote-card creator carousels.",
+    "Inspired by high-performing tweet-style quote carousels (Hormozi-format).",
   description:
-    "Bold, left-aligned quote statements on a flat background. No photo, no decoration. One slide equals one thought.",
+    "Tweet-style quote cards: circular avatar, name, verified badge, and handle above a bold left-aligned statement. Flat white background, no decoration. One slide equals one thought. Same avatar on every slide.",
   active: true,
   sortOrder: 39,
+  shareCoverImage: true,
   design: {
     fontFamily: {
       display: '"DM Sans", system-ui, sans-serif',
@@ -1779,93 +1783,101 @@ export const CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD: CarouselTemplate = {
     },
     colors: {
       background: "#FFFFFF",
-      foreground: "#111111",
-      accent: "#111111",
-      muted: "#6B7280",
+      foreground: "#0F1419",
+      accent: "#1D9BF0",
+      muted: "#536471",
     },
     radiusPx: 0,
-    aspectRatio: "4:5",
+    aspectRatio: "1:1",
     decoration: "none",
-    textAlign: "left",
   },
   slides: [
     {
       id: "slide_01",
       role: "hook",
       viralWhy:
-        "Open with a sharp, left-aligned statement that stops the scroll. One thought only: no setup, no list.",
-      layoutId: "hook_bold_center",
+        "Open with a sharp accountability quote. The tweet-style header makes the statement feel personal and authoritative.",
+      layoutId: "quote_tweet_card",
       slots: [
         {
           id: "headline",
           role: "headline",
           label: "Quote",
-          budget: { min: 18, max: 72 },
-          defaultText: "Most people quit right before it starts working.",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "The wrong person needs you to stay small so they feel comfortable. The right person pushes you to grow into your best self.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "avatar",
+          label: "Profile photo",
+          searchQueryHint:
+            "professional headshot portrait of a confident creator, clean background",
         },
       ],
     },
     {
       id: "slide_02",
       role: "problem",
-      viralWhy:
-        "Name the tension the reader already feels. A single blunt line builds recognition before the next swipe.",
-      layoutId: "hook_bold_center",
+      viralWhy: "Name the relationship standard in one blunt line readers will screenshot.",
+      layoutId: "quote_tweet_card",
       slots: [
         {
           id: "headline",
           role: "headline",
           label: "Quote",
-          budget: { min: 18, max: 72 },
-          defaultText: "Discipline is just deciding once.",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "Marry someone who calls you out when they see you're not living up to your full potential.",
         },
       ],
     },
     {
       id: "slide_03",
       role: "list_item",
-      viralWhy:
-        "Reframe the problem into a memorable rule the reader can repeat. Short enough to screenshot.",
-      layoutId: "hook_bold_center",
+      viralWhy: "Reframe accountability as love, not criticism.",
+      layoutId: "quote_tweet_card",
       slots: [
         {
           id: "headline",
           role: "headline",
           label: "Quote",
-          budget: { min: 18, max: 72 },
-          defaultText: "Consistency beats intensity every single time.",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "Holding your partner accountable to achieving their full potential is the deepest form of love.",
         },
       ],
     },
     {
       id: "slide_04",
       role: "example",
-      viralWhy:
-        "Land a concrete, high-agency line so the carousel feels earned, not motivational fluff.",
-      layoutId: "hook_bold_center",
+      viralWhy: "Contrast past-focused people with future-focused people in two short beats.",
+      layoutId: "quote_tweet_card",
       slots: [
         {
           id: "headline",
           role: "headline",
           label: "Quote",
-          budget: { min: 18, max: 72 },
-          defaultText: "Do the boring work until it compounds.",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "Get around people who talk about future you. Get away from people who talk about past you.",
         },
       ],
     },
     {
       id: "slide_05",
       role: "cta",
-      viralWhy:
-        "Close with one clear save/follow line while keeping the same left-aligned quote-card look.",
-      layoutId: "hook_bold_center",
+      viralWhy: "Close with a high-agency line about who belongs in your circle.",
+      layoutId: "quote_tweet_card",
       slots: [
         {
           id: "headline",
           role: "headline",
           label: "Quote",
-          budget: { min: 18, max: 72 },
-          defaultText: "Save this for the day you want to quit.",
+          budget: { min: 40, max: 140 },
+          defaultText:
+            "Make friends with people who get mad at you when they see you're not living up to your potential.",
         },
       ],
     },
@@ -3373,6 +3385,218 @@ export const CAROUSEL_TEMPLATE_NOTEBOOK_TIPS: CarouselTemplate = {
   ],
 };
 
+export const CAROUSEL_TEMPLATE_DIRECT_AND_WARM: CarouselTemplate = {
+  id: "direct_and_warm",
+  name: "Direct & Warm",
+  sourceAttribution:
+    "Inspired by high-performing warm-editorial creator carousels.",
+  description:
+    "Photo cover and closer with numbered, warm-toned advice slides in between. Kraft-grain content slides, underline accent, optional checkmark callouts, and a hand-drawn arrow.",
+  active: true,
+  sortOrder: 42,
+  design: {
+    fontFamily: {
+      display: '"Fraunces", Georgia, serif',
+      body: '"DM Sans", system-ui, sans-serif',
+    },
+    colors: {
+      background: "#E8DFD0",
+      foreground: "#1A1A1A",
+      accent: "#C4785A",
+      muted: "#6B6660",
+    },
+    radiusPx: 0,
+    aspectRatio: "4:5",
+    decoration: "none",
+  },
+  slides: [
+    {
+      id: "slide_01",
+      role: "hook",
+      viralWhy:
+        "A warm photo plus a bold hook statement creates an approachable editorial cover that invites a swipe into numbered advice.",
+      layoutId: "hook_photo_top",
+      slots: [
+        {
+          id: "kicker",
+          role: "kicker",
+          label: "Kicker",
+          budget: { min: 8, max: 22 },
+          defaultText: "REAL TALK",
+        },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Headline",
+          budget: { min: 18, max: 64 },
+          defaultText: "One-liners I use when things get tense",
+        },
+        {
+          id: "subhead",
+          role: "subhead",
+          label: "Subhead",
+          budget: { min: 28, max: 90 },
+          defaultText: "Calm scripts that de-escalate without giving up the boundary.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Photo",
+          searchQueryHint:
+            "warm lifestyle portrait of a calm professional outdoors, soft natural light",
+        },
+      ],
+    },
+    {
+      id: "slide_02",
+      role: "list_item",
+      viralWhy: "Open with a recognition line that names the emotion before the ask.",
+      layoutId: "list_item_warm_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "1" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Heading",
+          budget: { min: 14, max: 48 },
+          defaultText: "Name the nerve, then invite",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "I can see I hit a nerve. Care to share what's going on so we can address it?",
+        },
+        {
+          id: "callout",
+          role: "body_callout",
+          label: "Callout list",
+          budget: { min: 20, max: 120 },
+          defaultText: "Stay curious\nSkip the lecture\nAsk one clear question",
+        },
+      ],
+    },
+    {
+      id: "slide_03",
+      role: "list_item",
+      viralWhy: "Separate disagreement from disrespect so the boundary feels fair.",
+      layoutId: "list_item_warm_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "2" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Heading",
+          budget: { min: 14, max: 48 },
+          defaultText: "Disagree without unkind",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Body",
+          budget: { min: 50, max: 160 },
+          defaultText: "It's okay to disagree. It's not okay to be unkind.",
+        },
+      ],
+    },
+    {
+      id: "slide_04",
+      role: "list_item",
+      viralWhy: "Offer a reset beat so both people can re-enter the conversation.",
+      layoutId: "list_item_warm_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "3" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Heading",
+          budget: { min: 14, max: 48 },
+          defaultText: "Pause, then try again",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Body",
+          budget: { min: 50, max: 160 },
+          defaultText: "Let's both take a minute, then try again.",
+        },
+        {
+          id: "callout",
+          role: "body_callout",
+          label: "Callout list",
+          budget: { min: 20, max: 120 },
+          defaultText: "Step away briefly\nCome back with one ask\nKeep the tone even",
+        },
+      ],
+    },
+    {
+      id: "slide_05",
+      role: "list_item",
+      viralWhy: "Close the list with a collaboration frame instead of a power struggle.",
+      layoutId: "list_item_warm_numbered",
+      slots: [
+        { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, defaultText: "4" },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Heading",
+          budget: { min: 14, max: 48 },
+          defaultText: "Argue with me or work with me",
+        },
+        {
+          id: "body",
+          role: "body",
+          label: "Body",
+          budget: { min: 50, max: 160 },
+          defaultText:
+            "Do you want to argue with me or do you want to work with me to figure this out?",
+        },
+      ],
+    },
+    {
+      id: "slide_06",
+      role: "cta",
+      viralWhy:
+        "Photo closer with a soft CTA keeps the warm editorial feel and invites a comment or save.",
+      layoutId: "hook_photo_top",
+      slots: [
+        {
+          id: "kicker",
+          role: "kicker",
+          label: "Kicker",
+          budget: { min: 8, max: 22 },
+          defaultText: "WANT MORE?",
+        },
+        {
+          id: "headline",
+          role: "headline",
+          label: "Headline",
+          budget: { min: 16, max: 48 },
+          defaultText: "Comment PROMPTS for the full list",
+        },
+        {
+          id: "subhead",
+          role: "subhead",
+          label: "Subhead",
+          budget: { min: 24, max: 80 },
+          defaultText: "Save this for the next hard conversation.",
+        },
+      ],
+      imageSlots: [
+        {
+          id: "photo",
+          label: "Photo",
+          searchQueryHint:
+            "warm candid portrait of a creator smiling softly, natural indoor light",
+        },
+      ],
+    },
+  ],
+};
+
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_FIVE_MISTAKES,
   CAROUSEL_TEMPLATE_CHECKLIST_3_SIGNS,
@@ -3409,6 +3633,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   CAROUSEL_TEMPLATE_QUOTE_CALLOUT_BOLD,
   CAROUSEL_TEMPLATE_PHOTO_CAPTION_WARM,
   CAROUSEL_TEMPLATE_NOTEBOOK_TIPS,
+  CAROUSEL_TEMPLATE_DIRECT_AND_WARM,
 ];
 
 export const CAROUSEL_TEMPLATES_BY_ID = new Map(

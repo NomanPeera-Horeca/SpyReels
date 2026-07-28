@@ -331,6 +331,9 @@ export function CarouselPreviewDialog({
 
   function handleImageSlotId(): string | null {
     if (!template) return null;
+    // Cover-only upload: first slide that declares imageSlots (cover must be
+    // ordered before any closer photo slide). Later photo slides (e.g. closer)
+    // stay auto-resolved via Pexels/AI because uploadedImageUrls never gets them.
     const slideWithImage = template.slides.find((s) => s.imageSlots && s.imageSlots.length > 0);
     return slideWithImage?.id ?? null;
   }
@@ -472,7 +475,7 @@ export function CarouselPreviewDialog({
 
                   <div className="space-y-1">
                     <label className="block text-xs font-medium text-muted-foreground">
-                      Your handle (optional, shown on every slide)
+                      Your handle (optional - name + @handle on quote cards)
                     </label>
                     <Input
                       value={handleInput}
@@ -487,7 +490,9 @@ export function CarouselPreviewDialog({
                   {handleImageSlotId() ? (
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-muted-foreground">
-                        Photo (optional - upload your own, or SpyReels finds or generates one)
+                        {template.shareCoverImage
+                          ? "Profile photo (optional - used as avatar on every slide)"
+                          : "Photo (optional - upload your own, or SpyReels finds or generates one)"}
                       </label>
                       <input
                         type="file"

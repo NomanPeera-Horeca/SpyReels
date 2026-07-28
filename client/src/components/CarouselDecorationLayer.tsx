@@ -104,24 +104,25 @@ export function CarouselDecorationLayer({ type, color }: CarouselDecorationLayer
   }
 
   if (type === "arrow") {
+    // Bottom-right hand-drawn arrow (sketchy stroke + chevron head).
     return (
       <svg style={commonStyle} width="100%" height="100%" viewBox="0 0 360 450" preserveAspectRatio="xMidYMid slice">
         <path
-          d="M 250 175 C 290 210, 300 250, 275 300"
+          d="M 210 385 C 250 378, 290 382, 318 390"
           fill="none"
           stroke={color}
-          strokeWidth="2.2"
+          strokeWidth="1.8"
           strokeLinecap="round"
-          opacity="0.7"
+          opacity="0.75"
         />
         <path
-          d="M 262 285 L 275 300 L 290 278"
+          d="M 302 378 L 320 392 L 300 404"
           fill="none"
           stroke={color}
-          strokeWidth="2.2"
+          strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity="0.7"
+          opacity="0.75"
         />
       </svg>
     );

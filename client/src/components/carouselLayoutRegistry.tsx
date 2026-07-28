@@ -11,6 +11,8 @@ import { CarouselSlideHookPhotoTop } from "@/components/CarouselSlideHookPhotoTo
 import { CarouselSlidePhotoCaptionBubble } from "@/components/CarouselSlidePhotoCaptionBubble";
 import { CarouselSlideNotebookCover } from "@/components/CarouselSlideNotebookCover";
 import { CarouselSlideNotebookListItem } from "@/components/CarouselSlideNotebookListItem";
+import { CarouselSlideListItemWarmNumbered } from "@/components/CarouselSlideListItemWarmNumbered";
+import { CarouselSlideQuoteTweetCard } from "@/components/CarouselSlideQuoteTweetCard";
 
 export type CarouselSlideLayoutProps = {
   tokens: CarouselDesignTokens;
@@ -37,4 +39,6 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   photo_caption_bubble: CarouselSlidePhotoCaptionBubble,
   notebook_cover: CarouselSlideNotebookCover,
   notebook_list_item: CarouselSlideNotebookListItem,
+  list_item_warm_numbered: CarouselSlideListItemWarmNumbered,
+  quote_tweet_card: CarouselSlideQuoteTweetCard,
 };
