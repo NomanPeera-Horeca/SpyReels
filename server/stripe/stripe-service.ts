@@ -5,6 +5,10 @@ import { eq, and, sql } from "drizzle-orm";
 import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY, STRIPE_INTERVAL_METADATA_KEY } from "./products";
 import { sendPaymentConfirmationEmail } from "../utils/email.js";
 import { hasUnlimitedUsage, unlimitedUsageResult } from "../usageBypass";
+import {
+  capturePostHogEvent,
+  posthogDistinctIdForUser,
+} from "../analytics/posthogServer";
 
 function resolveStripeSecretKey(): string {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
@@ -255,6 +259,16 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
             currentPeriodEnd: periodEnd,
           });
           console.log(`[Stripe Webhook] checkout.session.completed: userId=${userId}, plan=${planId}, interval=${interval}`);
+          void capturePostHogEvent({
+            distinctId: posthogDistinctIdForUser(userId),
+            event: "checkout_completed",
+            properties: {
+              plan: planId,
+              billing_interval: interval,
+              stripe_subscription_id: session.subscription as string,
+              $set: { plan: planId },
+            },
+          });
           const customerEmail = session.metadata?.customer_email;
           const customerName = session.metadata?.customer_name || "there";
           const firstName = customerName.split(" ")[0];
@@ -300,6 +314,32 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
           currentPeriodEnd: periodEnd,
         });
         console.log(`[Stripe Webhook] ${event.type}: userId=${userId}, plan=${planId}, status=${status}`);
+        if (event.type === "customer.subscription.created") {
+          void capturePostHogEvent({
+            distinctId: posthogDistinctIdForUser(userId),
+            event: "subscription_started",
+            properties: {
+              plan: planId,
+              billing_interval: interval,
+              status,
+              stripe_subscription_id: subscription.id,
+              $set: { plan: planId },
+            },
+          });
+        } else {
+          // Keep PostHog person.plan in sync on plan/status changes without a separate funnel event.
+          void capturePostHogEvent({
+            distinctId: posthogDistinctIdForUser(userId),
+            event: "subscription_plan_synced",
+            properties: {
+              plan: planId,
+              billing_interval: interval,
+              status,
+              stripe_subscription_id: subscription.id,
+              $set: { plan: planId },
+            },
+          });
+        }
       } catch (err: any) {
         console.error(`[Stripe Webhook] Error processing ${event.type}: ${err.message}`);
         throw err;
@@ -313,6 +353,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (!userId) break;
       const dbDel = await getDb();
       if (!dbDel) break;
+      const previousPlan = (subscription.metadata?.plan_id || "pro") as PlanId;
 
       try {
         await upsertSubscription(dbDel, userId, {
@@ -327,6 +368,15 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
           stripeSubscriptionId: null,
         }).where(eq(subscriptions.userId, userId));
         console.log(`[Stripe Webhook] customer.subscription.deleted: userId=${userId}, reverted to free`);
+        void capturePostHogEvent({
+          distinctId: posthogDistinctIdForUser(userId),
+          event: "subscription_canceled",
+          properties: {
+            plan: previousPlan,
+            stripe_subscription_id: subscription.id,
+            $set: { plan: "free" },
+          },
+        });
       } catch (err: any) {
         console.error(`[Stripe Webhook] Error processing customer.subscription.deleted: ${err.message}`);
         throw err;
