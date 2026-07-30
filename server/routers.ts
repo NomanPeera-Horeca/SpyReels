@@ -809,12 +809,10 @@ function detectHospitalityB2CContext(description: string): string | null {
 /**
  * In-memory response cache for `featured.publicDemo`.
  *
- * That procedure is unauthenticated and reachable by anyone, and it reads every
- * `viewCount` row for an account to compute the median. There are only
- * `PUBLIC_DEMO_HANDLES.length` possible responses and the data changes at scrape
- * cadence, so caching removes the unbounded read from the anonymous request path
- * entirely. Not a substitute for a rate limiter, but it makes the endpoint cheap
- * to hammer.
+ * Unauthenticated and allow-list scoped. Successful payloads use a long TTL
+ * (scrape cadence). Empty/degraded handles use a short TTL so fallthrough still
+ * works, but a bad handle is not re-probed (and does not re-fire CDN→R2 heal
+ * jobs) on every anonymous request.
  */
 type PublicDemoPayload = {
   handle: string;
@@ -841,9 +839,46 @@ type PublicDemoPayload = {
 };
 
 const PUBLIC_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
-const publicDemoCache = new Map<string, { expiresAt: number; payload: unknown }>();
+/** Short TTL for inactive / zero-usable probes so fallthrough stays cheap. */
+const PUBLIC_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
+const publicDemoCache = new Map<string, { expiresAt: number; payload: PublicDemoPayload }>();
 
-function readPublicDemoCache(handle: string): unknown | null {
+/** Probe counters for proving negative-path cache behaviour (in-process tests). */
+export const publicDemoProbeStats = {
+  requests: 0,
+  cacheHitFull: 0,
+  cacheHitEmpty: 0,
+  accountQueries: 0,
+  countQueries: 0,
+  medianQueries: 0,
+  reelListQueries: 0,
+  healJobsStarted: 0,
+  emptyCacheWrites: 0,
+  fullCacheWrites: 0,
+};
+
+export function resetPublicDemoProbeStats(): void {
+  publicDemoProbeStats.requests = 0;
+  publicDemoProbeStats.cacheHitFull = 0;
+  publicDemoProbeStats.cacheHitEmpty = 0;
+  publicDemoProbeStats.accountQueries = 0;
+  publicDemoProbeStats.countQueries = 0;
+  publicDemoProbeStats.medianQueries = 0;
+  publicDemoProbeStats.reelListQueries = 0;
+  publicDemoProbeStats.healJobsStarted = 0;
+  publicDemoProbeStats.emptyCacheWrites = 0;
+  publicDemoProbeStats.fullCacheWrites = 0;
+}
+
+export function clearPublicDemoCache(): void {
+  publicDemoCache.clear();
+}
+
+function emptyPublicDemoPayload(handle: string): PublicDemoPayload {
+  return { handle, totalReelCount: 0, medianViewCount: 0, reels: [] };
+}
+
+function readPublicDemoCache(handle: string): PublicDemoPayload | null {
   const hit = publicDemoCache.get(handle);
   if (!hit) return null;
   if (hit.expiresAt < Date.now()) {
@@ -853,18 +888,37 @@ function readPublicDemoCache(handle: string): unknown | null {
   return hit.payload;
 }
 
-function writePublicDemoCache(handle: string, payload: unknown): void {
+function writePublicDemoCache(handle: string, payload: PublicDemoPayload): void {
+  const empty = payload.reels.length === 0;
   publicDemoCache.set(handle, {
-    expiresAt: Date.now() + PUBLIC_DEMO_CACHE_TTL_MS,
+    expiresAt:
+      Date.now() +
+      (empty ? PUBLIC_DEMO_EMPTY_CACHE_TTL_MS : PUBLIC_DEMO_CACHE_TTL_MS),
     payload,
   });
+  if (empty) publicDemoProbeStats.emptyCacheWrites += 1;
+  else publicDemoProbeStats.fullCacheWrites += 1;
 }
 
-function medianOf(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+async function featuredAccountMedianViewCount(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  reelFilter: ReturnType<typeof and>,
+  totalReelCount: number
+): Promise<number> {
+  if (totalReelCount <= 0) return 0;
+  publicDemoProbeStats.medianQueries += 1;
+  const offset = Math.floor((totalReelCount - 1) / 2);
+  const limit = totalReelCount % 2 === 0 ? 2 : 1;
+  const midRows = await db
+    .select({ viewCount: featuredReels.viewCount })
+    .from(featuredReels)
+    .where(reelFilter)
+    .orderBy(asc(featuredReels.viewCount))
+    .limit(limit)
+    .offset(offset);
+  if (midRows.length === 0) return 0;
+  if (midRows.length === 1) return midRows[0].viewCount;
+  return Math.round((midRows[0].viewCount + midRows[1].viewCount) / 2);
 }
 
 export const appRouter = router({
@@ -1359,6 +1413,7 @@ export const appRouter = router({
     publicDemo: publicProcedure
       .input(z.object({ handle: z.string().optional() }).optional())
       .query(async ({ ctx, input }) => {
+        publicDemoProbeStats.requests += 1;
         const ip = clientIpFromRequest(ctx.req);
         if (isPublicIpRateLimited(ip)) {
           throw new TRPCError({
@@ -1385,10 +1440,16 @@ export const appRouter = router({
         for (const handle of tryOrder) {
           const cached = readPublicDemoCache(handle);
           if (cached) {
-            const hit = cached as PublicDemoPayload;
-            if (hit.reels.length > 0) return hit;
+            if (cached.reels.length > 0) {
+              publicDemoProbeStats.cacheHitFull += 1;
+              return cached;
+            }
+            // Cached empty/degraded: skip DB + heal jobs, try next handle.
+            publicDemoProbeStats.cacheHitEmpty += 1;
+            continue;
           }
 
+          publicDemoProbeStats.accountQueries += 1;
           const accountRows = await db
             .select({
               id: featuredAccounts.id,
@@ -1401,7 +1462,10 @@ export const appRouter = router({
             )
             .limit(1);
 
-          if (accountRows.length === 0) continue;
+          if (accountRows.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
 
           const acc = accountRows[0];
           const reelFilter = and(
@@ -1409,18 +1473,28 @@ export const appRouter = router({
             ne(featuredReels.transcriptionStatus, "failed")
           );
 
-          // Ints only — used for the header line (count + median views) across
-          // the whole account, not just the page of reels we return below.
-          const viewCountRows = await db
-            .select({ viewCount: featuredReels.viewCount })
+          publicDemoProbeStats.countQueries += 1;
+          const [countRow] = await db
+            .select({ c: sql<number>`COUNT(*)` })
             .from(featuredReels)
             .where(reelFilter);
+          const totalReelCount = Number(countRow?.c ?? 0);
 
-          if (viewCountRows.length === 0) continue;
+          if (totalReelCount === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
+
+          const medianViewCount = await featuredAccountMedianViewCount(
+            db,
+            reelFilter,
+            totalReelCount
+          );
 
           // Over-fetch so we can still return a full page when some top rows
           // still point at expired Instagram CDN thumbs.
           const CANDIDATE_LIMIT = Math.max(PUBLIC_DEMO_REEL_LIMIT * 2, 16);
+          publicDemoProbeStats.reelListQueries += 1;
           const reelRows = await db
             .select({
               id: featuredReels.id,
@@ -1445,7 +1519,10 @@ export const appRouter = router({
             .orderBy(desc(featuredReels.viewCount))
             .limit(CANDIDATE_LIMIT);
 
-          if (reelRows.length === 0) continue;
+          if (reelRows.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
 
           const followerCount = acc.followerCount || 0;
           const r2PublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(
@@ -1481,6 +1558,7 @@ export const appRouter = router({
 
             if (!isStableThumb(rawThumb)) {
               if (looksLikeCdn(rawThumb)) {
+                publicDemoProbeStats.healJobsStarted += 1;
                 healJobs.push(
                   (async () => {
                     const healed = await ensureReelThumbnailOnR2(
@@ -1534,7 +1612,10 @@ export const appRouter = router({
             void Promise.allSettled(healJobs);
           }
 
-          if (usable.length === 0) continue;
+          if (usable.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
 
           if (usable.length < PUBLIC_DEMO_REEL_LIMIT) {
             console.warn(
@@ -1544,8 +1625,8 @@ export const appRouter = router({
 
           const payload: PublicDemoPayload = {
             handle: acc.handle,
-            totalReelCount: viewCountRows.length,
-            medianViewCount: medianOf(viewCountRows.map((row) => row.viewCount)),
+            totalReelCount,
+            medianViewCount,
             reels: usable,
           };
 
