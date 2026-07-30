@@ -193,6 +193,11 @@ async function scrapeOneAccount(
       thumbR2Ok++;
     } else {
       thumbR2Fallback++;
+      if (/cdninstagram\.com|fbcdn\.net|instagram\.com/i.test(thumbUrl)) {
+        console.warn(
+          `    ⚠ thumb still on CDN after R2 attempt for ${reel.shortcode}`
+        );
+      }
     }
     if (thumbPublicBase && videoUrlStable.startsWith(thumbPublicBase)) {
       videoR2Ok++;

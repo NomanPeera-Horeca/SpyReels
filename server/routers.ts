@@ -14,6 +14,11 @@ import {
 } from "@shared/instagramHandle";
 import { REEL_NICHE_VALUES } from "@shared/reelNiches";
 import {
+  PUBLIC_DEMO_HANDLES,
+  PUBLIC_DEMO_REEL_LIMIT,
+  isPublicDemoHandle,
+} from "@shared/publicDemoAccounts";
+import {
   buildClarificationWizard,
   buildFilmingFormatWizard,
   filmingFormatLabelFromId,
@@ -313,6 +318,10 @@ import {
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import {
+  clientIpFromRequest,
+  isPublicIpRateLimited,
+} from "./publicRateLimit";
 import { ensureReelVideoOnR2, scheduleReelVideoMirror } from "./reelVideoR2";
 import {
   scheduleScrapeJobPostCompleteWork,
@@ -797,6 +806,121 @@ function detectHospitalityB2CContext(description: string): string | null {
   return null;
 }
 
+/**
+ * In-memory response cache for `featured.publicDemo`.
+ *
+ * Unauthenticated and allow-list scoped. Successful payloads use a long TTL
+ * (scrape cadence). Empty/degraded handles use a short TTL so fallthrough still
+ * works, but a bad handle is not re-probed (and does not re-fire CDN→R2 heal
+ * jobs) on every anonymous request.
+ */
+type PublicDemoPayload = {
+  handle: string;
+  totalReelCount: number;
+  medianViewCount: number;
+  reels: {
+    id: number;
+    reelShortcode: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    engagementRate: number;
+    thumbnailUrl: string;
+    duration: number | null;
+    postedAt: Date;
+    transcriptionStatus: string;
+    contentType: string | null;
+    hookPattern: string | null;
+    productionFormat: string | null;
+    viralFlag: boolean | null;
+    confidence: number | null;
+  }[];
+};
+
+const PUBLIC_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
+/** Short TTL for inactive / zero-usable probes so fallthrough stays cheap. */
+const PUBLIC_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
+const publicDemoCache = new Map<string, { expiresAt: number; payload: PublicDemoPayload }>();
+
+/** Probe counters for proving negative-path cache behaviour (in-process tests). */
+export const publicDemoProbeStats = {
+  requests: 0,
+  cacheHitFull: 0,
+  cacheHitEmpty: 0,
+  accountQueries: 0,
+  countQueries: 0,
+  medianQueries: 0,
+  reelListQueries: 0,
+  healJobsStarted: 0,
+  emptyCacheWrites: 0,
+  fullCacheWrites: 0,
+};
+
+export function resetPublicDemoProbeStats(): void {
+  publicDemoProbeStats.requests = 0;
+  publicDemoProbeStats.cacheHitFull = 0;
+  publicDemoProbeStats.cacheHitEmpty = 0;
+  publicDemoProbeStats.accountQueries = 0;
+  publicDemoProbeStats.countQueries = 0;
+  publicDemoProbeStats.medianQueries = 0;
+  publicDemoProbeStats.reelListQueries = 0;
+  publicDemoProbeStats.healJobsStarted = 0;
+  publicDemoProbeStats.emptyCacheWrites = 0;
+  publicDemoProbeStats.fullCacheWrites = 0;
+}
+
+export function clearPublicDemoCache(): void {
+  publicDemoCache.clear();
+}
+
+function emptyPublicDemoPayload(handle: string): PublicDemoPayload {
+  return { handle, totalReelCount: 0, medianViewCount: 0, reels: [] };
+}
+
+function readPublicDemoCache(handle: string): PublicDemoPayload | null {
+  const hit = publicDemoCache.get(handle);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    publicDemoCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writePublicDemoCache(handle: string, payload: PublicDemoPayload): void {
+  const empty = payload.reels.length === 0;
+  publicDemoCache.set(handle, {
+    expiresAt:
+      Date.now() +
+      (empty ? PUBLIC_DEMO_EMPTY_CACHE_TTL_MS : PUBLIC_DEMO_CACHE_TTL_MS),
+    payload,
+  });
+  if (empty) publicDemoProbeStats.emptyCacheWrites += 1;
+  else publicDemoProbeStats.fullCacheWrites += 1;
+}
+
+async function featuredAccountMedianViewCount(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  reelFilter: ReturnType<typeof and>,
+  totalReelCount: number
+): Promise<number> {
+  if (totalReelCount <= 0) return 0;
+  publicDemoProbeStats.medianQueries += 1;
+  const offset = Math.floor((totalReelCount - 1) / 2);
+  const limit = totalReelCount % 2 === 0 ? 2 : 1;
+  const midRows = await db
+    .select({ viewCount: featuredReels.viewCount })
+    .from(featuredReels)
+    .where(reelFilter)
+    .orderBy(asc(featuredReels.viewCount))
+    .limit(limit)
+    .offset(offset);
+  if (midRows.length === 0) return 0;
+  if (midRows.length === 1) return midRows[0].viewCount;
+  return Math.round((midRows[0].viewCount + midRows[1].viewCount) / 2);
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -1274,6 +1398,248 @@ export const appRouter = router({
 
   // ── Featured Accounts (pre-scraped catalog browsed by niche) ──
   featured: router({
+    /**
+     * Public, read-only demo slice of the curated featured catalog. Powers the
+     * logged-out /features/viral-reel-finder marketing page, so it is the one
+     * unauthenticated procedure in this router: restricted to the
+     * `PUBLIC_DEMO_HANDLES` allow-list, capped at `PUBLIC_DEMO_REEL_LIMIT`
+     * rows, and returning display fields only — never transcript text,
+     * videoUrl, or account/user ids.
+     *
+     * If the requested allow-listed handle is inactive or has zero usable
+     * reels, walks the rest of the allow-list so the marketing page never
+     * renders an empty grid.
+     */
+    publicDemo: publicProcedure
+      .input(z.object({ handle: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        publicDemoProbeStats.requests += 1;
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+
+        const requested = normalizeInstagramHandle(input?.handle ?? "");
+        const tryOrder: string[] = [];
+        if (isPublicDemoHandle(requested)) tryOrder.push(requested);
+        for (const h of PUBLIC_DEMO_HANDLES) {
+          if (!tryOrder.includes(h)) tryOrder.push(h);
+        }
+
+        for (const handle of tryOrder) {
+          const cached = readPublicDemoCache(handle);
+          if (cached) {
+            if (cached.reels.length > 0) {
+              publicDemoProbeStats.cacheHitFull += 1;
+              return cached;
+            }
+            // Cached empty/degraded: skip DB + heal jobs, try next handle.
+            publicDemoProbeStats.cacheHitEmpty += 1;
+            continue;
+          }
+
+          publicDemoProbeStats.accountQueries += 1;
+          const accountRows = await db
+            .select({
+              id: featuredAccounts.id,
+              handle: featuredAccounts.handle,
+              followerCount: featuredAccounts.followerCount,
+            })
+            .from(featuredAccounts)
+            .where(
+              and(eq(featuredAccounts.handle, handle), eq(featuredAccounts.isActive, true))
+            )
+            .limit(1);
+
+          if (accountRows.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
+
+          const acc = accountRows[0];
+          const reelFilter = and(
+            eq(featuredReels.featuredAccountId, acc.id),
+            ne(featuredReels.transcriptionStatus, "failed")
+          );
+
+          publicDemoProbeStats.countQueries += 1;
+          const [countRow] = await db
+            .select({ c: sql<number>`COUNT(*)` })
+            .from(featuredReels)
+            .where(reelFilter);
+          const totalReelCount = Number(countRow?.c ?? 0);
+
+          if (totalReelCount === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
+
+          const medianViewCount = await featuredAccountMedianViewCount(
+            db,
+            reelFilter,
+            totalReelCount
+          );
+
+          // Over-fetch so we can still return a full page when some top rows
+          // still point at expired Instagram CDN thumbs.
+          const CANDIDATE_LIMIT = Math.max(PUBLIC_DEMO_REEL_LIMIT * 2, 16);
+          publicDemoProbeStats.reelListQueries += 1;
+          const reelRows = await db
+            .select({
+              id: featuredReels.id,
+              reelShortcode: featuredReels.reelShortcode,
+              caption: featuredReels.caption,
+              viewCount: featuredReels.viewCount,
+              likeCount: featuredReels.likeCount,
+              commentCount: featuredReels.commentCount,
+              engagementRate: featuredReels.engagementRate,
+              thumbnailUrl: featuredReels.thumbnailUrl,
+              duration: featuredReels.duration,
+              postedAt: featuredReels.postedAt,
+              transcriptionStatus: featuredReels.transcriptionStatus,
+              contentType: featuredReels.contentType,
+              hookPattern: featuredReels.hookPattern,
+              productionFormat: featuredReels.productionFormat,
+              viralFlag: featuredReels.viralFlag,
+              confidence: featuredReels.confidence,
+            })
+            .from(featuredReels)
+            .where(reelFilter)
+            .orderBy(desc(featuredReels.viewCount))
+            .limit(CANDIDATE_LIMIT);
+
+          if (reelRows.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
+
+          const followerCount = acc.followerCount || 0;
+          const r2PublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(
+            /\/+$/,
+            ""
+          );
+
+          const isStableThumb = (url: string) => {
+            if (!url) return false;
+            if (r2PublicBase && url.startsWith(r2PublicBase)) return true;
+            try {
+              const host = new URL(url).host;
+              return host.endsWith(".r2.dev") || host.includes("cloudfront.net");
+            } catch {
+              return false;
+            }
+          };
+
+          const looksLikeCdn = (url: string) =>
+            /cdninstagram\.com|fbcdn\.net|instagram\.com/i.test(url);
+
+          // Prefer already-stable R2 thumbs on the read path. CDN rows are
+          // skipped for this response and healed fire-and-forget so an
+          // anonymous GET never blocks on CDN download + R2 write.
+          const usable: PublicDemoPayload["reels"] = [];
+          const healJobs: Promise<void>[] = [];
+
+          for (const r of reelRows) {
+            if (usable.length >= PUBLIC_DEMO_REEL_LIMIT) break;
+
+            const rawThumb = (r.thumbnailUrl ?? "").trim();
+            if (!rawThumb) continue;
+
+            if (!isStableThumb(rawThumb)) {
+              if (looksLikeCdn(rawThumb)) {
+                publicDemoProbeStats.healJobsStarted += 1;
+                healJobs.push(
+                  (async () => {
+                    const healed = await ensureReelThumbnailOnR2(
+                      r.reelShortcode,
+                      rawThumb
+                    );
+                    if (!isStableThumb(healed) || healed === rawThumb) return;
+                    await db
+                      .update(featuredReels)
+                      .set({ thumbnailUrl: healed })
+                      .where(eq(featuredReels.id, r.id));
+                  })().catch((err) => {
+                    console.warn(
+                      `[featured.publicDemo] background thumb heal failed for ${r.reelShortcode}:`,
+                      err instanceof Error ? err.message : err
+                    );
+                  })
+                );
+              }
+              continue;
+            }
+
+            usable.push({
+              id: r.id,
+              reelShortcode: r.reelShortcode,
+              caption: r.caption ?? "",
+              viewCount: r.viewCount,
+              likeCount: r.likeCount,
+              commentCount: r.commentCount,
+              engagementRate:
+                followerCount > 0
+                  ? accountEngagementRatePercent(
+                      r.likeCount,
+                      r.commentCount,
+                      followerCount
+                    )
+                  : Number(r.engagementRate ?? 0),
+              thumbnailUrl: rawThumb,
+              duration: r.duration,
+              postedAt: r.postedAt,
+              transcriptionStatus: r.transcriptionStatus,
+              contentType: r.contentType ?? null,
+              hookPattern: r.hookPattern ?? null,
+              productionFormat: r.productionFormat ?? null,
+              viralFlag: r.viralFlag,
+              confidence: r.confidence ?? null,
+            });
+          }
+
+          if (healJobs.length > 0) {
+            void Promise.allSettled(healJobs);
+          }
+
+          if (usable.length === 0) {
+            writePublicDemoCache(handle, emptyPublicDemoPayload(handle));
+            continue;
+          }
+
+          if (usable.length < PUBLIC_DEMO_REEL_LIMIT) {
+            console.warn(
+              `[featured.publicDemo] handle=@${acc.handle} only returned ${usable.length}/${PUBLIC_DEMO_REEL_LIMIT} reels with stable thumbnails (candidates=${reelRows.length})`
+            );
+          }
+
+          const payload: PublicDemoPayload = {
+            handle: acc.handle,
+            totalReelCount,
+            medianViewCount,
+            reels: usable,
+          };
+
+          writePublicDemoCache(handle, payload);
+          return payload;
+        }
+
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This creator isn't available",
+        });
+      }),
+
     /**
      * All niches grouped by `groupName`, with a per-niche count of active
      * accounts that have at least one reel stored. Used by the initial
