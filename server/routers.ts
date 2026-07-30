@@ -14,6 +14,11 @@ import {
 } from "@shared/instagramHandle";
 import { REEL_NICHE_VALUES } from "@shared/reelNiches";
 import {
+  PUBLIC_DEMO_HANDLES,
+  PUBLIC_DEMO_REEL_LIMIT,
+  isPublicDemoHandle,
+} from "@shared/publicDemoAccounts";
+import {
   buildClarificationWizard,
   buildFilmingFormatWizard,
   filmingFormatLabelFromId,
@@ -797,6 +802,13 @@ function detectHospitalityB2CContext(description: string): string | null {
   return null;
 }
 
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -1274,6 +1286,116 @@ export const appRouter = router({
 
   // ── Featured Accounts (pre-scraped catalog browsed by niche) ──
   featured: router({
+    /**
+     * Public, read-only demo slice of the curated featured catalog. Powers the
+     * logged-out /features/viral-reel-finder marketing page, so it is the one
+     * unauthenticated procedure in this router: restricted to the
+     * `PUBLIC_DEMO_HANDLES` allow-list, capped at `PUBLIC_DEMO_REEL_LIMIT`
+     * rows, and returning display fields only — never transcript text,
+     * videoUrl, or account/user ids.
+     */
+    publicDemo: publicProcedure
+      .input(z.object({ handle: z.string().optional() }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unavailable",
+          });
+        }
+
+        const requested = normalizeInstagramHandle(input?.handle ?? "");
+        const handle = isPublicDemoHandle(requested) ? requested : PUBLIC_DEMO_HANDLES[0];
+
+        const accountRows = await db
+          .select({
+            id: featuredAccounts.id,
+            handle: featuredAccounts.handle,
+            followerCount: featuredAccounts.followerCount,
+          })
+          .from(featuredAccounts)
+          .where(
+            and(eq(featuredAccounts.handle, handle), eq(featuredAccounts.isActive, true))
+          )
+          .limit(1);
+
+        if (accountRows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This creator isn't available",
+          });
+        }
+
+        const acc = accountRows[0];
+        const reelFilter = and(
+          eq(featuredReels.featuredAccountId, acc.id),
+          ne(featuredReels.transcriptionStatus, "failed")
+        );
+
+        // Ints only — used for the header line (count + median views) across
+        // the whole account, not just the page of reels we return below.
+        const viewCountRows = await db
+          .select({ viewCount: featuredReels.viewCount })
+          .from(featuredReels)
+          .where(reelFilter);
+
+        const reelRows = await db
+          .select({
+            id: featuredReels.id,
+            reelShortcode: featuredReels.reelShortcode,
+            caption: featuredReels.caption,
+            viewCount: featuredReels.viewCount,
+            likeCount: featuredReels.likeCount,
+            commentCount: featuredReels.commentCount,
+            engagementRate: featuredReels.engagementRate,
+            thumbnailUrl: featuredReels.thumbnailUrl,
+            duration: featuredReels.duration,
+            postedAt: featuredReels.postedAt,
+            transcriptionStatus: featuredReels.transcriptionStatus,
+            contentType: featuredReels.contentType,
+            hookPattern: featuredReels.hookPattern,
+            productionFormat: featuredReels.productionFormat,
+            viralFlag: featuredReels.viralFlag,
+            confidence: featuredReels.confidence,
+          })
+          .from(featuredReels)
+          .where(reelFilter)
+          .orderBy(desc(featuredReels.viewCount))
+          .limit(PUBLIC_DEMO_REEL_LIMIT);
+
+        const followerCount = acc.followerCount || 0;
+
+        return {
+          handle: acc.handle,
+          totalReelCount: viewCountRows.length,
+          medianViewCount: medianOf(viewCountRows.map((r) => r.viewCount)),
+          reels: reelRows.map((r) => ({
+            id: r.id,
+            reelShortcode: r.reelShortcode,
+            caption: r.caption ?? "",
+            viewCount: r.viewCount,
+            likeCount: r.likeCount,
+            commentCount: r.commentCount,
+            // Prefer the follower-based rate the dashboard shows so the demo
+            // grid matches the real product, falling back to the stored column.
+            engagementRate:
+              followerCount > 0
+                ? accountEngagementRatePercent(r.likeCount, r.commentCount, followerCount)
+                : Number(r.engagementRate ?? 0),
+            thumbnailUrl: r.thumbnailUrl ?? "",
+            duration: r.duration,
+            postedAt: r.postedAt,
+            transcriptionStatus: r.transcriptionStatus,
+            contentType: r.contentType ?? null,
+            hookPattern: r.hookPattern ?? null,
+            productionFormat: r.productionFormat ?? null,
+            viralFlag: r.viralFlag,
+            confidence: r.confidence ?? null,
+          })),
+        };
+      }),
+
     /**
      * All niches grouped by `groupName`, with a per-niche count of active
      * accounts that have at least one reel stored. Used by the initial

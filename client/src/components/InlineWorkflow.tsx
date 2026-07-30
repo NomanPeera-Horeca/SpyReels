@@ -101,11 +101,7 @@ export const TIME_OPTIONS = (() => {
 
 // ── Shared Helper Functions ──
 
-export function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
-}
+export { formatNumber } from "@/lib/formatNumber";
 
 export function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);

@@ -1,10 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
+import { ArrowRight, Loader2, Lock, Search } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { Button } from "@/components/ui/button";
+import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
+import { formatNumber } from "@/lib/formatNumber";
+import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
+import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
+import { normalizeInstagramHandle } from "@shared/instagramHandle";
+import { PUBLIC_DEMO_HANDLES, isPublicDemoHandle } from "@shared/publicDemoAccounts";
 import {
   applyStandardPageMeta,
   cleanupSchemaScripts,
@@ -12,13 +21,16 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 
-const PAGE_TITLE = "Reel Finder for Viral Instagram Reels | SpyReels";
+const PAGE_TITLE = "Free Instagram Reel Finder | Reel Spy Tool for Any Account";
 const PAGE_DESCRIPTION =
   "Use the SpyReels reel finder to rank viral Instagram Reels by views and engagement, then transcribe hooks and script faster. Free tier for nano creators.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
 const DIRECT_ANSWER =
   "A reel finder (also called a viral reel finder) ranks Instagram Reels by performance so you can study winners instead of scrolling the feed. SpyReels is a reel finder for public creator accounts: sort by views and engagement, then transcribe hooks and rewrite scripts for your niche. Built for nano and micro creators under 50,000 followers. Free tier available, no credit card required.";
+
+const HERO_SUBHEAD =
+  "Paste a public handle. A free reel finder that sorts by views, likes and engagement rate — no card required.";
 
 const FAQ_ITEMS = [
   {
@@ -74,9 +86,119 @@ function formatDisplayDate(value: Date): string {
   });
 }
 
+/** Accepts "@name", "name", or any instagram.com profile/reel link. */
+function parseHandleInput(raw: string): string {
+  const trimmed = raw.trim();
+  const fromUrl = trimmed.match(/instagram\.com\/([^/?#\s]+)/i);
+  return normalizeInstagramHandle(fromUrl ? fromUrl[1] : trimmed);
+}
+
+type HandleFormProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  submitLabel: string;
+  compact?: boolean;
+  isLoading?: boolean;
+};
+
+function HandleForm({
+  value,
+  onChange,
+  onSubmit,
+  submitLabel,
+  compact,
+  isLoading,
+}: HandleFormProps) {
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+      className={
+        compact
+          ? "flex w-full items-center gap-2 rounded-full border border-border bg-background p-1 pl-3"
+          : "flex w-full flex-col gap-2 rounded-2xl border border-border bg-card/60 p-2 sm:flex-row sm:items-center sm:rounded-full sm:pl-5"
+      }
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="shrink-0 text-muted-foreground" aria-hidden>
+          @
+        </span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="username or profile link"
+          aria-label="Instagram username or profile link"
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        />
+      </div>
+      <Button
+        type="submit"
+        size={compact ? "sm" : "lg"}
+        className={compact ? "shrink-0 rounded-full" : "min-h-11 shrink-0 rounded-full"}
+      >
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Search className="h-4 w-4" aria-hidden />
+        )}
+        {submitLabel}
+      </Button>
+    </form>
+  );
+}
+
 export default function ViralReelFinder() {
   useCanonical("/features/viral-reel-finder");
   const updatedLabel = formatDisplayDate(new Date());
+
+  const [heroInput, setHeroInput] = useState("");
+  const [stickyInput, setStickyInput] = useState("");
+  const [activeHandle, setActiveHandle] = useState<string>(PUBLIC_DEMO_HANDLES[0]);
+  const [unsupportedHandle, setUnsupportedHandle] = useState<string | null>(null);
+
+  const heroBarRef = useRef<HTMLDivElement>(null);
+  const footerCtaRef = useRef<HTMLElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const [heroBarVisible, setHeroBarVisible] = useState(true);
+  const [footerCtaVisible, setFooterCtaVisible] = useState(false);
+
+  const demo = trpc.featured.publicDemo.useQuery({ handle: activeHandle });
+
+  function submitHandle(raw: string) {
+    const parsed = parseHandleInput(raw);
+    if (!parsed) return;
+    if (isPublicDemoHandle(parsed)) {
+      setUnsupportedHandle(null);
+      setActiveHandle(parsed);
+    } else {
+      setUnsupportedHandle(parsed);
+    }
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  useEffect(() => {
+    const observers: IntersectionObserver[] = [];
+    const watch = (el: Element | null, setVisible: (visible: boolean) => void) => {
+      if (!el) return;
+      const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+      observer.observe(el);
+      observers.push(observer);
+    };
+    watch(heroBarRef.current, setHeroBarVisible);
+    watch(footerCtaRef.current, setFooterCtaVisible);
+    return () => observers.forEach((o) => o.disconnect());
+  }, []);
+
+  const showStickyBar = !heroBarVisible && !footerCtaVisible;
+
+  const headerLine = demo.data
+    ? `@${demo.data.handle} · ${demo.data.totalReelCount} Reels in the catalog · median ${formatNumber(demo.data.medianViewCount)} views`
+    : null;
 
   useEffect(() => {
     applyStandardPageMeta({
@@ -114,6 +236,12 @@ export default function ViralReelFinder() {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       name: "SpyReels Viral Reel Finder",
+      alternateName: [
+        "Instagram Reel Finder",
+        "Viral Reel Finder",
+        "Instagram Reel Spy Tool",
+        "Reels Finder",
+      ],
       applicationCategory: "MultimediaApplication",
       operatingSystem: "Web Browser",
       offers: {
@@ -152,14 +280,185 @@ export default function ViralReelFinder() {
     <div className="min-h-screen bg-background text-foreground">
       <PublicHeader />
 
-      <main className="max-w-4xl mx-auto px-4 py-12 sm:py-16">
+      <section className="mx-auto max-w-5xl px-4 pb-10 pt-12 text-center sm:pt-16">
+        <span className="inline-flex items-center rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+          Free reel finder &amp; reel spy tool · no card
+        </span>
+
+        <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+          Any Instagram account&apos;s viral Reels, ranked
+        </h1>
+
+        <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+          {HERO_SUBHEAD}
+        </p>
+
+        <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl">
+          <HandleForm
+            value={heroInput}
+            onChange={setHeroInput}
+            onSubmit={() => submitHandle(heroInput)}
+            submitLabel="Find their best Reels"
+            isLoading={demo.isFetching}
+          />
+        </div>
+
+        <p className="mt-3 text-xs text-muted-foreground">
+          or try{" "}
+          {PUBLIC_DEMO_HANDLES.map((handle, i) => (
+            <span key={handle}>
+              {i > 0 ? " · " : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setHeroInput(handle);
+                  submitHandle(handle);
+                }}
+                className="text-primary hover:underline"
+              >
+                @{handle}
+              </button>
+            </span>
+          ))}
+        </p>
+      </section>
+
+      <section ref={resultsRef} className="mx-auto max-w-6xl px-4 pb-14">
+        {unsupportedHandle ? (
+          <div className="mx-auto mb-6 max-w-2xl rounded-2xl border border-border bg-card/60 p-5 text-left">
+            <div className="flex items-start gap-3">
+              <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">
+                  We can&apos;t preview @{unsupportedHandle} on this page
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This page only previews a handful of curated accounts we have already scraped, so nothing here is guessed or generated. Running a handle of your own choosing pulls live Reels from Instagram, which needs a free SpyReels account.
+                </p>
+                <Button asChild className="mt-4 min-h-10">
+                  <a href={getLoginUrl()}>
+                    Run @{unsupportedHandle} free
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+            Demo data · curated accounts
+          </span>
+          {headerLine ? (
+            <span className="text-xs text-muted-foreground">{headerLine}</span>
+          ) : null}
+        </div>
+
+        {demo.isPending ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card/40 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading top Reels
+          </div>
+        ) : demo.isError ? (
+          <div className="rounded-2xl border border-border bg-card/40 py-12 text-center text-sm text-muted-foreground">
+            The demo catalog is unavailable right now.{" "}
+            <a href={getLoginUrl()} className="text-primary hover:underline">
+              Start free
+            </a>{" "}
+            to research any public handle.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {demo.data.reels.map((reel, index) => (
+              <WorkspaceReelGridTile
+                key={reel.id}
+                index={index}
+                thumbnailUrl={reel.thumbnailUrl}
+                duration={reel.duration}
+                engagementRate={reel.engagementRate}
+                reelUrl={`https://www.instagram.com/reel/${reel.reelShortcode}/`}
+                mediaFallback={
+                  <ReelGridThumbnail thumbnailUrl={null} fallbackLabel="No thumbnail" />
+                }
+                badges={
+                  <V13ReelClassificationBadges
+                    niche={null}
+                    hookPattern={reel.hookPattern}
+                    productionFormat={reel.productionFormat}
+                    viralFlag={reel.viralFlag}
+                    confidence={reel.confidence}
+                  />
+                }
+                caption={
+                  <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+                    {reel.caption || (
+                      <span className="italic text-muted-foreground">No caption</span>
+                    )}
+                  </p>
+                }
+                stats={
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                    <span>{formatNumber(reel.viewCount)} views</span>
+                    {reel.engagementRate > 0 && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="font-medium text-emerald-400">
+                          {reel.engagementRate.toFixed(2)}%
+                        </span>
+                      </>
+                    )}
+                    <span className="hidden sm:inline" aria-hidden>
+                      ·
+                    </span>
+                    <span className="hidden sm:inline">{formatNumber(reel.likeCount)} likes</span>
+                    <span className="hidden md:inline" aria-hidden>
+                      ·
+                    </span>
+                    <span className="hidden md:inline">
+                      {formatNumber(reel.commentCount)} comments
+                    </span>
+                  </div>
+                }
+                actions={
+                  <Button asChild size="sm" className="min-h-9 w-full text-xs">
+                    <a href={getLoginUrl()}>{LIBRARY_REMAKE_CTA_LABEL}</a>
+                  </Button>
+                }
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showStickyBar ? (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border/60 bg-card/95 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <p className="shrink-0 text-sm font-semibold text-foreground">
+              Any account&apos;s viral Reels, ranked
+            </p>
+            <div className="min-w-0 flex-1">
+              <HandleForm
+                compact
+                value={stickyInput}
+                onChange={setStickyInput}
+                onSubmit={() => submitHandle(stickyInput)}
+                submitLabel="Find Reels"
+                isLoading={demo.isFetching}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <main className="max-w-4xl mx-auto px-4 pb-12 sm:pb-16">
         <p className="text-sm text-muted-foreground mb-6">
           By Noah Perry · Updated {updatedLabel}
         </p>
 
-        <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+        <h2 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl">
           Reel Finder for Viral Instagram Reels
-        </h1>
+        </h2>
 
         <p className="text-lg text-muted-foreground leading-relaxed mb-8">{DIRECT_ANSWER}</p>
 
@@ -244,10 +543,10 @@ export default function ViralReelFinder() {
             </div>
             <div>
               <h3 className="text-xl font-medium mb-3 text-foreground">
-                Step 3: Transcribe and rewrite in your voice
+                Step 3: Transcribe and remake in your voice
               </h3>
               <p className="text-muted-foreground leading-relaxed">
-                Open a transcript, study the hook and body, then generate a new script that keeps the structure but matches your offer and tone. Learn more about Noah Perry and the product on our{" "}
+                Open a transcript, study the hook and body, then remake the Reel in your voice: same structure, your offer and tone. Learn more about Noah Perry and the product on our{" "}
                 <Link href="/about" className="text-primary hover:underline">
                   about page
                 </Link>
@@ -321,7 +620,10 @@ export default function ViralReelFinder() {
           </div>
         </section>
 
-        <section className="mb-10 rounded-2xl border border-border bg-card/50 p-5 text-center sm:p-8">
+        <section
+          ref={footerCtaRef}
+          className="mb-10 rounded-2xl border border-border bg-card/50 p-5 text-center sm:p-8"
+        >
           <h2 className="mb-4 text-2xl font-semibold text-foreground">Start finding viral Reels in your niche</h2>
           <p className="mx-auto mb-6 max-w-xl text-muted-foreground">
             Stop guessing what to film. Research winners, transcribe hooks, and ship your next Reel with confidence.
