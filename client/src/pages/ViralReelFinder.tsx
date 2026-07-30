@@ -215,13 +215,13 @@ function HandleForm({
           spellCheck={false}
           className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
-        {!compact && status === "loading" ? (
+        {status === "loading" ? (
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
         ) : null}
-        {!compact && status === "found" ? (
+        {status === "found" ? (
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
         ) : null}
-        {!compact && status === "error" ? (
+        {status === "error" ? (
           <XCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
         ) : null}
       </div>
@@ -241,19 +241,147 @@ function HandleForm({
   );
 }
 
+type FoundProfile = {
+  username: string;
+  fullName: string;
+  biography: string;
+  profilePicUrl: string;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  isVerified: boolean;
+  isPrivate: boolean;
+  category: string;
+};
+
+type HandleProfilePreviewProps = {
+  error: string | null;
+  profile: FoundProfile | null;
+  ctaLabel: string;
+  onSelect: (username: string) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
+  className?: string;
+};
+
+function HandleProfilePreview({
+  error,
+  profile,
+  ctaLabel,
+  onSelect,
+  onKeyDown,
+  className,
+}: HandleProfilePreviewProps) {
+  if (!error && !profile) return null;
+  return (
+    <div className={cn("text-left", className)}>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {profile ? (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={ctaLabel}
+          onClick={() => onSelect(profile.username)}
+          onKeyDown={onKeyDown}
+          className="relative cursor-pointer rounded-lg border border-border bg-background p-4 transition-colors animate-in fade-in slide-in-from-top-2 duration-300 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <span className="absolute right-3 top-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
+            {ctaLabel}
+            <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+          </span>
+          <div className="flex items-start gap-4">
+            <div className="shrink-0">
+              {profile.profilePicUrl ? (
+                <img
+                  src={profile.profilePicUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-full border-2 border-border object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-border bg-muted">
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 sm:pr-40">
+              <div className="mb-0.5 flex items-center gap-2">
+                <h3 className="truncate text-sm font-bold text-foreground">{profile.username}</h3>
+                {profile.isVerified ? (
+                  <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+                ) : null}
+                {profile.isPrivate ? (
+                  <Badge
+                    variant="outline"
+                    className="h-4 border-orange-500/50 text-[10px] text-orange-400"
+                  >
+                    <Lock className="mr-0.5 h-2.5 w-2.5" />
+                    Private
+                  </Badge>
+                ) : null}
+              </div>
+              {profile.fullName ? (
+                <p className="mb-1 text-xs text-muted-foreground">{profile.fullName}</p>
+              ) : null}
+              {profile.category ? (
+                <Badge variant="secondary" className="mb-1.5 h-4 text-[10px]">
+                  {profile.category}
+                </Badge>
+              ) : null}
+              {profile.biography ? (
+                <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                  {profile.biography}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-4 text-xs">
+                <div className="text-center">
+                  <p className="font-bold text-foreground">
+                    {formatProfileCount(profile.postCount)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">posts</p>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-foreground">
+                    {formatProfileCount(profile.followerCount)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">followers</p>
+                </div>
+                <div className="hidden text-center sm:block">
+                  <p className="font-bold text-foreground">
+                    {formatProfileCount(profile.followingCount)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">following</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1 border-t border-border pt-2.5 text-xs font-semibold text-primary sm:hidden">
+            {ctaLabel}
+            <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ViralReelFinder() {
   useCanonical("/features/viral-reel-finder");
   const { user, loading: authLoading } = useAuth();
   const isSignedIn = Boolean(user);
 
-  const [heroInput, setHeroInput] = useState("");
-  const [stickyInput, setStickyInput] = useState("");
-  const [footerInput, setFooterInput] = useState("");
+  const [handleInput, setHandleInput] = useState("");
   const [activeHandle, setActiveHandle] = useState<string>(PUBLIC_DEMO_HANDLES[0]);
   const [unsupportedHandle, setUnsupportedHandle] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("outlier");
   const [signInOpen, setSignInOpen] = useState(false);
-  const [debouncedHeroHandle, setDebouncedHeroHandle] = useState("");
+  const [debouncedHandle, setDebouncedHandle] = useState("");
 
   const heroBarRef = useRef<HTMLDivElement>(null);
   const footerCtaRef = useRef<HTMLElement>(null);
@@ -267,25 +395,24 @@ export default function ViralReelFinder() {
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    const parsed = parseHandleInput(heroInput);
+    const parsed = parseHandleInput(handleInput);
     if (parsed.length < 2) {
-      setDebouncedHeroHandle("");
+      setDebouncedHandle("");
       return;
     }
     debounceTimer.current = setTimeout(() => {
-      setDebouncedHeroHandle(parsed);
+      setDebouncedHandle(parsed);
     }, 800);
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [heroInput]);
+  }, [handleInput]);
 
   const debouncedShapeOk =
-    debouncedHeroHandle.length >= 2 &&
-    isValidInstagramHandleNormalized(debouncedHeroHandle);
+    debouncedHandle.length >= 2 && isValidInstagramHandleNormalized(debouncedHandle);
 
   const profileQuery = trpc.featured.publicProfilePreview.useQuery(
-    { handle: debouncedHeroHandle },
+    { handle: debouncedHandle },
     {
       enabled: debouncedShapeOk,
       retry: false,
@@ -294,17 +421,16 @@ export default function ViralReelFinder() {
   );
 
   const profile = profileQuery.data;
-  const profileFound = profile?.found === true;
-  const profilePreviewInvalidShape =
-    debouncedHeroHandle.length >= 2 && !debouncedShapeOk;
+  const profileFound = profile?.found === true ? profile : null;
+  const profilePreviewInvalidShape = debouncedHandle.length >= 2 && !debouncedShapeOk;
   const profileError = profilePreviewInvalidShape
     ? INSTAGRAM_HANDLE_INVALID_MESSAGE
     : profile?.found === false
       ? profile.error
       : null;
 
-  const heroInputStatus: "idle" | "loading" | "found" | "error" =
-    debouncedHeroHandle.length < 2
+  const handleInputStatus: "idle" | "loading" | "found" | "error" =
+    debouncedHandle.length < 2
       ? "idle"
       : profilePreviewInvalidShape || Boolean(profileError)
         ? "error"
@@ -315,7 +441,7 @@ export default function ViralReelFinder() {
             : "idle";
 
   const profileCtaLabel = profileFound
-    ? `Find ${firstNameFromProfile(profile.fullName, profile.username)}'s Viral Reels`
+    ? `Find ${firstNameFromProfile(profileFound.fullName, profileFound.username)}'s Viral Reels`
     : "Find viral Reels";
 
   function requireSignIn() {
@@ -330,6 +456,7 @@ export default function ViralReelFinder() {
   function submitHandle(raw: string) {
     const parsed = parseHandleInput(raw);
     if (!parsed) return;
+    setHandleInput(parsed);
     if (isPublicDemoHandle(parsed)) {
       setUnsupportedHandle(null);
       setActiveHandle(parsed);
@@ -342,9 +469,19 @@ export default function ViralReelFinder() {
   function onProfileCardKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      submitHandle(heroInput);
+      submitHandle(handleInput);
     }
   }
+
+  const sharedPreview = (
+    <HandleProfilePreview
+      error={profileError}
+      profile={profileFound}
+      ctaLabel={profileCtaLabel}
+      onSelect={submitHandle}
+      onKeyDown={onProfileCardKeyDown}
+    />
+  );
 
   const sortedReels = useMemo(() => {
     const reels = demo.data?.reels ?? [];
@@ -497,108 +634,14 @@ export default function ViralReelFinder() {
         </p>
         <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl text-left">
           <HandleForm
-            value={heroInput}
-            onChange={setHeroInput}
-            onSubmit={() => submitHandle(heroInput)}
+            value={handleInput}
+            onChange={setHandleInput}
+            onSubmit={() => submitHandle(handleInput)}
             submitLabel="Find their best Reels"
             isLoading={demo.isFetching}
-            status={heroInputStatus}
+            status={handleInputStatus}
           />
-          {profileError ? (
-            <p className="mt-2 text-sm text-destructive" role="alert">
-              {profileError}
-            </p>
-          ) : null}
-          {profileFound ? (
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={profileCtaLabel}
-              onClick={() => submitHandle(profile.username)}
-              onKeyDown={onProfileCardKeyDown}
-              className="relative mt-3 cursor-pointer rounded-lg border border-border bg-background p-4 text-left transition-colors animate-in fade-in slide-in-from-top-2 duration-300 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <span className="absolute right-3 top-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
-                {profileCtaLabel}
-                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
-              </span>
-              <div className="flex items-start gap-4">
-                <div className="shrink-0">
-                  {profile.profilePicUrl ? (
-                    <img
-                      src={profile.profilePicUrl}
-                      alt=""
-                      className="h-16 w-16 rounded-full border-2 border-border object-cover"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-border bg-muted">
-                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 sm:pr-40">
-                  <div className="mb-0.5 flex items-center gap-2">
-                    <h3 className="truncate text-sm font-bold text-foreground">
-                      {profile.username}
-                    </h3>
-                    {profile.isVerified ? (
-                      <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
-                    ) : null}
-                    {profile.isPrivate ? (
-                      <Badge
-                        variant="outline"
-                        className="h-4 border-orange-500/50 text-[10px] text-orange-400"
-                      >
-                        <Lock className="mr-0.5 h-2.5 w-2.5" />
-                        Private
-                      </Badge>
-                    ) : null}
-                  </div>
-                  {profile.fullName ? (
-                    <p className="mb-1 text-xs text-muted-foreground">{profile.fullName}</p>
-                  ) : null}
-                  {profile.category ? (
-                    <Badge variant="secondary" className="mb-1.5 h-4 text-[10px]">
-                      {profile.category}
-                    </Badge>
-                  ) : null}
-                  {profile.biography ? (
-                    <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                      {profile.biography}
-                    </p>
-                  ) : null}
-                  <div className="flex items-center gap-4 text-xs">
-                    <div className="text-center">
-                      <p className="font-bold text-foreground">
-                        {formatProfileCount(profile.postCount)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">posts</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-foreground">
-                        {formatProfileCount(profile.followerCount)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">followers</p>
-                    </div>
-                    <div className="hidden text-center sm:block">
-                      <p className="font-bold text-foreground">
-                        {formatProfileCount(profile.followingCount)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">following</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-1 border-t border-border pt-2.5 text-xs font-semibold text-primary sm:hidden">
-                {profileCtaLabel}
-                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
-              </div>
-            </div>
-          ) : null}
+          <div className="mt-3">{sharedPreview}</div>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           or try{" "}
@@ -608,7 +651,7 @@ export default function ViralReelFinder() {
               <button
                 type="button"
                 onClick={() => {
-                  setHeroInput(handle);
+                  setHandleInput(handle);
                   submitHandle(handle);
                 }}
                 className="text-primary hover:underline"
@@ -1053,33 +1096,39 @@ export default function ViralReelFinder() {
           <p className="mx-auto mt-3 max-w-md text-muted-foreground">
             Free tier, no credit card. You will see results before we ask you for anything.
           </p>
-          <div className="mx-auto mt-6 max-w-xl">
+          <div className="mx-auto mt-6 max-w-xl text-left">
             <HandleForm
-              value={footerInput}
-              onChange={setFooterInput}
-              onSubmit={() => submitHandle(footerInput)}
+              value={handleInput}
+              onChange={setHandleInput}
+              onSubmit={() => submitHandle(handleInput)}
               submitLabel="Find best Reels"
               isLoading={demo.isFetching}
+              status={handleInputStatus}
             />
+            <div className="mt-3">{sharedPreview}</div>
           </div>
         </section>
       </main>
 
       {showStickyBar ? (
-        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-5xl rounded-full border border-border bg-card/95 p-2 shadow-2xl backdrop-blur-xl sm:inset-x-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:pl-3">
-            <p className="hidden shrink-0 px-2 text-sm font-semibold sm:block">
-              Any account&apos;s viral Reels, ranked
-            </p>
-            <div className="min-w-0 flex-1">
-              <HandleForm
-                compact
-                value={stickyInput}
-                onChange={setStickyInput}
-                onSubmit={() => submitHandle(stickyInput)}
-                submitLabel="Find best Reels"
-                isLoading={demo.isFetching}
-              />
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-5xl flex-col gap-2 sm:inset-x-4">
+          {sharedPreview}
+          <div className="rounded-full border border-border bg-card/95 p-2 shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:pl-3">
+              <p className="hidden shrink-0 px-2 text-sm font-semibold sm:block">
+                Any account&apos;s viral Reels, ranked
+              </p>
+              <div className="min-w-0 flex-1">
+                <HandleForm
+                  compact
+                  value={handleInput}
+                  onChange={setHandleInput}
+                  onSubmit={() => submitHandle(handleInput)}
+                  submitLabel="Find best Reels"
+                  isLoading={demo.isFetching}
+                  status={handleInputStatus}
+                />
+              </div>
             </div>
           </div>
         </div>
