@@ -843,6 +843,54 @@ const PUBLIC_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
 const PUBLIC_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
 const publicDemoCache = new Map<string, { expiresAt: number; payload: PublicDemoPayload }>();
 
+type PublicProfilePreviewPayload =
+  | {
+      found: true;
+      username: string;
+      fullName: string;
+      biography: string;
+      profilePicUrl: string;
+      followerCount: number;
+      followingCount: number;
+      postCount: number;
+      isVerified: boolean;
+      isPrivate: boolean;
+      category: string;
+      externalUrl: string;
+    }
+  | {
+      found: false;
+      error: string;
+    };
+
+const PUBLIC_PROFILE_PREVIEW_TTL_MS = 5 * 60_000;
+const publicProfilePreviewCache = new Map<
+  string,
+  { expiresAt: number; payload: PublicProfilePreviewPayload }
+>();
+
+function readPublicProfilePreviewCache(
+  handle: string
+): PublicProfilePreviewPayload | null {
+  const hit = publicProfilePreviewCache.get(handle);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    publicProfilePreviewCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writePublicProfilePreviewCache(
+  handle: string,
+  payload: PublicProfilePreviewPayload
+): void {
+  publicProfilePreviewCache.set(handle, {
+    expiresAt: Date.now() + PUBLIC_PROFILE_PREVIEW_TTL_MS,
+    payload,
+  });
+}
+
 /** Probe counters for proving negative-path cache behaviour (in-process tests). */
 export const publicDemoProbeStats = {
   requests: 0,
@@ -1638,6 +1686,68 @@ export const appRouter = router({
           code: "NOT_FOUND",
           message: "This creator isn't available",
         });
+      }),
+
+    /**
+     * Unauthenticated profile lookup for the viral reel finder landing hero.
+     * Same payload shape as `scrape.profilePreview`, with the shared public IP
+     * rate limit plus a short in-memory cache so anonymous typing does not
+     * re-hit ScrapeCreators on every keystroke debounce.
+     */
+    publicProfilePreview: publicProcedure
+      .input(z.object({ handle: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
+        const normalized = normalizeInstagramHandle(input.handle);
+        if (!isValidInstagramHandleNormalized(normalized)) {
+          return {
+            found: false as const,
+            error: INSTAGRAM_HANDLE_INVALID_MESSAGE,
+          };
+        }
+
+        const cached = readPublicProfilePreviewCache(normalized);
+        if (cached) return cached;
+
+        try {
+          const profile = await fetchProfile(normalized);
+          const cleanHandle = normalizeInstagramHandle(profile.username);
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.profilePicUrl
+          );
+          const payload = {
+            found: true as const,
+            username: profile.username,
+            fullName: profile.fullName,
+            biography: profile.biography,
+            profilePicUrl: proxiedPicUrl,
+            followerCount: profile.followerCount,
+            followingCount: profile.followingCount,
+            postCount: profile.postCount,
+            isVerified: profile.isVerified,
+            isPrivate: profile.isPrivate,
+            category: profile.category,
+            externalUrl: profile.externalUrl,
+          };
+          writePublicProfilePreviewCache(normalized, payload);
+          return payload;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Profile not found";
+          const payload = {
+            found: false as const,
+            error: message,
+          };
+          writePublicProfilePreviewCache(normalized, payload);
+          return payload;
+        }
       }),
 
     /**

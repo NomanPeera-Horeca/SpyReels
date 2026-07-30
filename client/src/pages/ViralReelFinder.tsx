@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "wouter";
-import { ArrowRight, Loader2, Lock, Search } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  CheckCircle2,
+  ImageIcon,
+  Loader2,
+  Lock,
+  Search,
+  XCircle,
+} from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +33,11 @@ import {
 import { formatNumber } from "@/lib/formatNumber";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { normalizeInstagramHandle } from "@shared/instagramHandle";
+import {
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+  isValidInstagramHandleNormalized,
+  normalizeInstagramHandle,
+} from "@shared/instagramHandle";
 import { PUBLIC_DEMO_HANDLES, isPublicDemoHandle } from "@shared/publicDemoAccounts";
 import {
   applyStandardPageMeta,
@@ -121,6 +135,19 @@ function parseHandleInput(raw: string): string {
   return normalizeInstagramHandle(fromUrl ? fromUrl[1] : trimmed);
 }
 
+function formatProfileCount(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  return n.toString();
+}
+
+function firstNameFromProfile(fullName: string | null | undefined, username: string): string {
+  const first = fullName?.trim().split(/\s+/).filter(Boolean)[0];
+  if (first) return first;
+  if (!username) return "their";
+  return username.charAt(0).toUpperCase() + username.slice(1);
+}
+
 function outlierMultiple(viewCount: number, median: number): number | null {
   if (!median || median <= 0 || !viewCount) return null;
   return viewCount / median;
@@ -151,6 +178,7 @@ type HandleFormProps = {
   submitLabel: string;
   compact?: boolean;
   isLoading?: boolean;
+  status?: "idle" | "loading" | "found" | "error";
 };
 
 function HandleForm({
@@ -160,6 +188,7 @@ function HandleForm({
   submitLabel,
   compact,
   isLoading,
+  status = "idle",
 }: HandleFormProps) {
   return (
     <form
@@ -186,6 +215,15 @@ function HandleForm({
           spellCheck={false}
           className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
+        {!compact && status === "loading" ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
+        ) : null}
+        {!compact && status === "found" ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
+        ) : null}
+        {!compact && status === "error" ? (
+          <XCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
+        ) : null}
       </div>
       <Button
         type="submit"
@@ -215,15 +253,70 @@ export default function ViralReelFinder() {
   const [unsupportedHandle, setUnsupportedHandle] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("outlier");
   const [signInOpen, setSignInOpen] = useState(false);
+  const [debouncedHeroHandle, setDebouncedHeroHandle] = useState("");
 
   const heroBarRef = useRef<HTMLDivElement>(null);
   const footerCtaRef = useRef<HTMLElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [heroBarVisible, setHeroBarVisible] = useState(true);
   const [footerCtaVisible, setFooterCtaVisible] = useState(false);
 
   const demo = trpc.featured.publicDemo.useQuery({ handle: activeHandle });
   const loginUrl = getLoginUrl({ returnTo: "/features/viral-reel-finder" });
+
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    const parsed = parseHandleInput(heroInput);
+    if (parsed.length < 2) {
+      setDebouncedHeroHandle("");
+      return;
+    }
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedHeroHandle(parsed);
+    }, 800);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [heroInput]);
+
+  const debouncedShapeOk =
+    debouncedHeroHandle.length >= 2 &&
+    isValidInstagramHandleNormalized(debouncedHeroHandle);
+
+  const profileQuery = trpc.featured.publicProfilePreview.useQuery(
+    { handle: debouncedHeroHandle },
+    {
+      enabled: debouncedShapeOk,
+      retry: false,
+      staleTime: 300_000,
+    }
+  );
+
+  const profile = profileQuery.data;
+  const profileFound = profile?.found === true;
+  const profilePreviewInvalidShape =
+    debouncedHeroHandle.length >= 2 && !debouncedShapeOk;
+  const profileError = profilePreviewInvalidShape
+    ? INSTAGRAM_HANDLE_INVALID_MESSAGE
+    : profile?.found === false
+      ? profile.error
+      : null;
+
+  const heroInputStatus: "idle" | "loading" | "found" | "error" =
+    debouncedHeroHandle.length < 2
+      ? "idle"
+      : profilePreviewInvalidShape || Boolean(profileError)
+        ? "error"
+        : profileQuery.isFetching
+          ? "loading"
+          : profileFound
+            ? "found"
+            : "idle";
+
+  const profileCtaLabel = profileFound
+    ? `Find ${firstNameFromProfile(profile.fullName, profile.username)}'s Viral Reels`
+    : "Find viral Reels";
 
   function requireSignIn() {
     if (authLoading) return;
@@ -244,6 +337,13 @@ export default function ViralReelFinder() {
       setUnsupportedHandle(parsed);
     }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function onProfileCardKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      submitHandle(heroInput);
+    }
   }
 
   const sortedReels = useMemo(() => {
@@ -395,14 +495,110 @@ export default function ViralReelFinder() {
         <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
           {HERO_SUBHEAD}
         </p>
-        <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl">
+        <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl text-left">
           <HandleForm
             value={heroInput}
             onChange={setHeroInput}
             onSubmit={() => submitHandle(heroInput)}
             submitLabel="Find their best Reels"
             isLoading={demo.isFetching}
+            status={heroInputStatus}
           />
+          {profileError ? (
+            <p className="mt-2 text-sm text-destructive" role="alert">
+              {profileError}
+            </p>
+          ) : null}
+          {profileFound ? (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={profileCtaLabel}
+              onClick={() => submitHandle(profile.username)}
+              onKeyDown={onProfileCardKeyDown}
+              className="relative mt-3 cursor-pointer rounded-lg border border-border bg-background p-4 text-left transition-colors animate-in fade-in slide-in-from-top-2 duration-300 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <span className="absolute right-3 top-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
+                {profileCtaLabel}
+                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+              </span>
+              <div className="flex items-start gap-4">
+                <div className="shrink-0">
+                  {profile.profilePicUrl ? (
+                    <img
+                      src={profile.profilePicUrl}
+                      alt=""
+                      className="h-16 w-16 rounded-full border-2 border-border object-cover"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-border bg-muted">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 sm:pr-40">
+                  <div className="mb-0.5 flex items-center gap-2">
+                    <h3 className="truncate text-sm font-bold text-foreground">
+                      {profile.username}
+                    </h3>
+                    {profile.isVerified ? (
+                      <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+                    ) : null}
+                    {profile.isPrivate ? (
+                      <Badge
+                        variant="outline"
+                        className="h-4 border-orange-500/50 text-[10px] text-orange-400"
+                      >
+                        <Lock className="mr-0.5 h-2.5 w-2.5" />
+                        Private
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {profile.fullName ? (
+                    <p className="mb-1 text-xs text-muted-foreground">{profile.fullName}</p>
+                  ) : null}
+                  {profile.category ? (
+                    <Badge variant="secondary" className="mb-1.5 h-4 text-[10px]">
+                      {profile.category}
+                    </Badge>
+                  ) : null}
+                  {profile.biography ? (
+                    <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {profile.biography}
+                    </p>
+                  ) : null}
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="text-center">
+                      <p className="font-bold text-foreground">
+                        {formatProfileCount(profile.postCount)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">posts</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold text-foreground">
+                        {formatProfileCount(profile.followerCount)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">followers</p>
+                    </div>
+                    <div className="hidden text-center sm:block">
+                      <p className="font-bold text-foreground">
+                        {formatProfileCount(profile.followingCount)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">following</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-1 border-t border-border pt-2.5 text-xs font-semibold text-primary sm:hidden">
+                {profileCtaLabel}
+                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+              </div>
+            </div>
+          ) : null}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           or try{" "}
