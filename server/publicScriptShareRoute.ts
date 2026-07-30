@@ -1,34 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { recordPublicShareView } from "./scriptShareLinks";
-
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 60;
-
-type RateBucket = {
-  count: number;
-  resetAt: number;
-};
-
-const rateBuckets = new Map<string, RateBucket>();
-
-function clientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0]?.trim() ?? "unknown";
-  }
-  return req.socket.remoteAddress ?? "unknown";
-}
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  let bucket = rateBuckets.get(ip);
-  if (!bucket || now > bucket.resetAt) {
-    bucket = { count: 0, resetAt: now + WINDOW_MS };
-    rateBuckets.set(ip, bucket);
-  }
-  bucket.count += 1;
-  return bucket.count > MAX_REQUESTS_PER_WINDOW;
-}
+import {
+  clientIpFromRequest,
+  isPublicIpRateLimited,
+} from "./publicRateLimit";
 
 function wantsJsonResponse(req: Request): boolean {
   if (req.query.format === "json") return true;
@@ -51,8 +26,8 @@ export function registerPublicScriptShareRoutes(app: Express): void {
         return next();
       }
 
-      const ip = clientIp(req);
-      if (isRateLimited(ip)) {
+      const ip = clientIpFromRequest(req);
+      if (isPublicIpRateLimited(ip)) {
         res.status(429).json({
           error: "rate_limited",
           message: "Too many requests. Please try again in a minute.",

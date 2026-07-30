@@ -318,6 +318,10 @@ import {
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import {
+  clientIpFromRequest,
+  isPublicIpRateLimited,
+} from "./publicRateLimit";
 import { ensureReelVideoOnR2, scheduleReelVideoMirror } from "./reelVideoR2";
 import {
   scheduleScrapeJobPostCompleteWork,
@@ -1347,10 +1351,22 @@ export const appRouter = router({
      * `PUBLIC_DEMO_HANDLES` allow-list, capped at `PUBLIC_DEMO_REEL_LIMIT`
      * rows, and returning display fields only — never transcript text,
      * videoUrl, or account/user ids.
+     *
+     * If the requested allow-listed handle is inactive or has zero usable
+     * reels, walks the rest of the allow-list so the marketing page never
+     * renders an empty grid.
      */
     publicDemo: publicProcedure
       .input(z.object({ handle: z.string().optional() }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
         const db = await getDb();
         if (!db) {
           throw new TRPCError({
@@ -1360,100 +1376,169 @@ export const appRouter = router({
         }
 
         const requested = normalizeInstagramHandle(input?.handle ?? "");
-        const handle = isPublicDemoHandle(requested) ? requested : PUBLIC_DEMO_HANDLES[0];
-
-        const cached = readPublicDemoCache(handle);
-        if (cached) return cached as PublicDemoPayload;
-
-        const accountRows = await db
-          .select({
-            id: featuredAccounts.id,
-            handle: featuredAccounts.handle,
-            followerCount: featuredAccounts.followerCount,
-          })
-          .from(featuredAccounts)
-          .where(
-            and(eq(featuredAccounts.handle, handle), eq(featuredAccounts.isActive, true))
-          )
-          .limit(1);
-
-        if (accountRows.length === 0) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "This creator isn't available",
-          });
+        const tryOrder: string[] = [];
+        if (isPublicDemoHandle(requested)) tryOrder.push(requested);
+        for (const h of PUBLIC_DEMO_HANDLES) {
+          if (!tryOrder.includes(h)) tryOrder.push(h);
         }
 
-        const acc = accountRows[0];
-        const reelFilter = and(
-          eq(featuredReels.featuredAccountId, acc.id),
-          ne(featuredReels.transcriptionStatus, "failed")
-        );
+        for (const handle of tryOrder) {
+          const cached = readPublicDemoCache(handle);
+          if (cached) {
+            const hit = cached as PublicDemoPayload;
+            if (hit.reels.length > 0) return hit;
+          }
 
-        // Ints only — used for the header line (count + median views) across
-        // the whole account, not just the page of reels we return below.
-        const viewCountRows = await db
-          .select({ viewCount: featuredReels.viewCount })
-          .from(featuredReels)
-          .where(reelFilter);
+          const accountRows = await db
+            .select({
+              id: featuredAccounts.id,
+              handle: featuredAccounts.handle,
+              followerCount: featuredAccounts.followerCount,
+            })
+            .from(featuredAccounts)
+            .where(
+              and(eq(featuredAccounts.handle, handle), eq(featuredAccounts.isActive, true))
+            )
+            .limit(1);
 
-        const reelRows = await db
-          .select({
-            id: featuredReels.id,
-            reelShortcode: featuredReels.reelShortcode,
-            caption: featuredReels.caption,
-            viewCount: featuredReels.viewCount,
-            likeCount: featuredReels.likeCount,
-            commentCount: featuredReels.commentCount,
-            engagementRate: featuredReels.engagementRate,
-            thumbnailUrl: featuredReels.thumbnailUrl,
-            duration: featuredReels.duration,
-            postedAt: featuredReels.postedAt,
-            transcriptionStatus: featuredReels.transcriptionStatus,
-            contentType: featuredReels.contentType,
-            hookPattern: featuredReels.hookPattern,
-            productionFormat: featuredReels.productionFormat,
-            viralFlag: featuredReels.viralFlag,
-            confidence: featuredReels.confidence,
-          })
-          .from(featuredReels)
-          .where(reelFilter)
-          .orderBy(desc(featuredReels.viewCount))
-          .limit(PUBLIC_DEMO_REEL_LIMIT);
+          if (accountRows.length === 0) continue;
 
-        const followerCount = acc.followerCount || 0;
+          const acc = accountRows[0];
+          const reelFilter = and(
+            eq(featuredReels.featuredAccountId, acc.id),
+            ne(featuredReels.transcriptionStatus, "failed")
+          );
 
-        const payload: PublicDemoPayload = {
-          handle: acc.handle,
-          totalReelCount: viewCountRows.length,
-          medianViewCount: medianOf(viewCountRows.map((r) => r.viewCount)),
-          reels: reelRows.map((r) => ({
-            id: r.id,
-            reelShortcode: r.reelShortcode,
-            caption: r.caption ?? "",
-            viewCount: r.viewCount,
-            likeCount: r.likeCount,
-            commentCount: r.commentCount,
-            // Prefer the follower-based rate the dashboard shows so the demo
-            // grid matches the real product, falling back to the stored column.
-            engagementRate:
-              followerCount > 0
-                ? accountEngagementRatePercent(r.likeCount, r.commentCount, followerCount)
-                : Number(r.engagementRate ?? 0),
-            thumbnailUrl: r.thumbnailUrl ?? "",
-            duration: r.duration,
-            postedAt: r.postedAt,
-            transcriptionStatus: r.transcriptionStatus,
-            contentType: r.contentType ?? null,
-            hookPattern: r.hookPattern ?? null,
-            productionFormat: r.productionFormat ?? null,
-            viralFlag: r.viralFlag,
-            confidence: r.confidence ?? null,
-          })),
-        };
+          // Ints only — used for the header line (count + median views) across
+          // the whole account, not just the page of reels we return below.
+          const viewCountRows = await db
+            .select({ viewCount: featuredReels.viewCount })
+            .from(featuredReels)
+            .where(reelFilter);
 
-        writePublicDemoCache(handle, payload);
-        return payload;
+          if (viewCountRows.length === 0) continue;
+
+          // Pull extra candidates so we can drop rows whose Instagram CDN
+          // thumbs are expired (403) even after an R2 heal attempt.
+          const reelRows = await db
+            .select({
+              id: featuredReels.id,
+              reelShortcode: featuredReels.reelShortcode,
+              caption: featuredReels.caption,
+              viewCount: featuredReels.viewCount,
+              likeCount: featuredReels.likeCount,
+              commentCount: featuredReels.commentCount,
+              engagementRate: featuredReels.engagementRate,
+              thumbnailUrl: featuredReels.thumbnailUrl,
+              duration: featuredReels.duration,
+              postedAt: featuredReels.postedAt,
+              transcriptionStatus: featuredReels.transcriptionStatus,
+              contentType: featuredReels.contentType,
+              hookPattern: featuredReels.hookPattern,
+              productionFormat: featuredReels.productionFormat,
+              viralFlag: featuredReels.viralFlag,
+              confidence: featuredReels.confidence,
+            })
+            .from(featuredReels)
+            .where(reelFilter)
+            .orderBy(desc(featuredReels.viewCount))
+            .limit(PUBLIC_DEMO_REEL_LIMIT * 3);
+
+          if (reelRows.length === 0) continue;
+
+          const followerCount = acc.followerCount || 0;
+          const r2PublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(
+            /\/+$/,
+            ""
+          );
+
+          const isStableThumb = (url: string) => {
+            if (!url) return false;
+            if (r2PublicBase && url.startsWith(r2PublicBase)) return true;
+            try {
+              const host = new URL(url).host;
+              return host.endsWith(".r2.dev") || host.includes("cloudfront.net");
+            } catch {
+              return false;
+            }
+          };
+
+          // Featured scrape already mirrors thumbs to R2 via
+          // ensureReelThumbnailOnR2. Re-run only when a row still points at
+          // an Instagram CDN URL so logged-out visitors never hit expired
+          // signed CDN links. Skip rows that remain on CDN after heal.
+          const usable: PublicDemoPayload["reels"] = [];
+          for (const r of reelRows) {
+            if (usable.length >= PUBLIC_DEMO_REEL_LIMIT) break;
+
+            const rawThumb = (r.thumbnailUrl ?? "").trim();
+            const needsMirror =
+              rawThumb.length > 0 &&
+              !isStableThumb(rawThumb) &&
+              /cdninstagram\.com|fbcdn\.net|instagram\.com/i.test(rawThumb);
+
+            let thumbnailUrl = rawThumb;
+            if (needsMirror) {
+              thumbnailUrl = await ensureReelThumbnailOnR2(r.reelShortcode, rawThumb);
+              if (isStableThumb(thumbnailUrl) && thumbnailUrl !== rawThumb) {
+                try {
+                  await db
+                    .update(featuredReels)
+                    .set({ thumbnailUrl })
+                    .where(eq(featuredReels.id, r.id));
+                } catch {
+                  /* best-effort persist */
+                }
+              }
+            }
+
+            if (!isStableThumb(thumbnailUrl) && needsMirror) continue;
+            if (!thumbnailUrl) continue;
+
+            usable.push({
+              id: r.id,
+              reelShortcode: r.reelShortcode,
+              caption: r.caption ?? "",
+              viewCount: r.viewCount,
+              likeCount: r.likeCount,
+              commentCount: r.commentCount,
+              engagementRate:
+                followerCount > 0
+                  ? accountEngagementRatePercent(
+                      r.likeCount,
+                      r.commentCount,
+                      followerCount
+                    )
+                  : Number(r.engagementRate ?? 0),
+              thumbnailUrl,
+              duration: r.duration,
+              postedAt: r.postedAt,
+              transcriptionStatus: r.transcriptionStatus,
+              contentType: r.contentType ?? null,
+              hookPattern: r.hookPattern ?? null,
+              productionFormat: r.productionFormat ?? null,
+              viralFlag: r.viralFlag,
+              confidence: r.confidence ?? null,
+            });
+          }
+
+          if (usable.length === 0) continue;
+
+          const payload: PublicDemoPayload = {
+            handle: acc.handle,
+            totalReelCount: viewCountRows.length,
+            medianViewCount: medianOf(viewCountRows.map((row) => row.viewCount)),
+            reels: usable,
+          };
+
+          writePublicDemoCache(handle, payload);
+          return payload;
+        }
+
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This creator isn't available",
+        });
       }),
 
     /**

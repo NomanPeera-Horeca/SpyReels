@@ -7,9 +7,9 @@
  */
 export const PUBLIC_DEMO_HANDLES = [
   "garyvee",
-  "alexhormozi",
   "humphreytalks",
-  "erinmcgoff",
+  "russellbrunson",
+  "codiesanchez",
 ] as const;
 
 export const PUBLIC_DEMO_REEL_LIMIT = 8;
