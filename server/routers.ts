@@ -1418,8 +1418,9 @@ export const appRouter = router({
 
           if (viewCountRows.length === 0) continue;
 
-          // Pull extra candidates so we can drop rows whose Instagram CDN
-          // thumbs are expired (403) even after an R2 heal attempt.
+          // Over-fetch so we can still return a full page when some top rows
+          // still point at expired Instagram CDN thumbs.
+          const CANDIDATE_LIMIT = Math.max(PUBLIC_DEMO_REEL_LIMIT * 2, 16);
           const reelRows = await db
             .select({
               id: featuredReels.id,
@@ -1442,7 +1443,7 @@ export const appRouter = router({
             .from(featuredReels)
             .where(reelFilter)
             .orderBy(desc(featuredReels.viewCount))
-            .limit(PUBLIC_DEMO_REEL_LIMIT * 3);
+            .limit(CANDIDATE_LIMIT);
 
           if (reelRows.length === 0) continue;
 
@@ -1463,37 +1464,44 @@ export const appRouter = router({
             }
           };
 
-          // Featured scrape already mirrors thumbs to R2 via
-          // ensureReelThumbnailOnR2. Re-run only when a row still points at
-          // an Instagram CDN URL so logged-out visitors never hit expired
-          // signed CDN links. Skip rows that remain on CDN after heal.
+          const looksLikeCdn = (url: string) =>
+            /cdninstagram\.com|fbcdn\.net|instagram\.com/i.test(url);
+
+          // Prefer already-stable R2 thumbs on the read path. CDN rows are
+          // skipped for this response and healed fire-and-forget so an
+          // anonymous GET never blocks on CDN download + R2 write.
           const usable: PublicDemoPayload["reels"] = [];
+          const healJobs: Promise<void>[] = [];
+
           for (const r of reelRows) {
             if (usable.length >= PUBLIC_DEMO_REEL_LIMIT) break;
 
             const rawThumb = (r.thumbnailUrl ?? "").trim();
-            const needsMirror =
-              rawThumb.length > 0 &&
-              !isStableThumb(rawThumb) &&
-              /cdninstagram\.com|fbcdn\.net|instagram\.com/i.test(rawThumb);
+            if (!rawThumb) continue;
 
-            let thumbnailUrl = rawThumb;
-            if (needsMirror) {
-              thumbnailUrl = await ensureReelThumbnailOnR2(r.reelShortcode, rawThumb);
-              if (isStableThumb(thumbnailUrl) && thumbnailUrl !== rawThumb) {
-                try {
-                  await db
-                    .update(featuredReels)
-                    .set({ thumbnailUrl })
-                    .where(eq(featuredReels.id, r.id));
-                } catch {
-                  /* best-effort persist */
-                }
+            if (!isStableThumb(rawThumb)) {
+              if (looksLikeCdn(rawThumb)) {
+                healJobs.push(
+                  (async () => {
+                    const healed = await ensureReelThumbnailOnR2(
+                      r.reelShortcode,
+                      rawThumb
+                    );
+                    if (!isStableThumb(healed) || healed === rawThumb) return;
+                    await db
+                      .update(featuredReels)
+                      .set({ thumbnailUrl: healed })
+                      .where(eq(featuredReels.id, r.id));
+                  })().catch((err) => {
+                    console.warn(
+                      `[featured.publicDemo] background thumb heal failed for ${r.reelShortcode}:`,
+                      err instanceof Error ? err.message : err
+                    );
+                  })
+                );
               }
+              continue;
             }
-
-            if (!isStableThumb(thumbnailUrl) && needsMirror) continue;
-            if (!thumbnailUrl) continue;
 
             usable.push({
               id: r.id,
@@ -1510,7 +1518,7 @@ export const appRouter = router({
                       followerCount
                     )
                   : Number(r.engagementRate ?? 0),
-              thumbnailUrl,
+              thumbnailUrl: rawThumb,
               duration: r.duration,
               postedAt: r.postedAt,
               transcriptionStatus: r.transcriptionStatus,
@@ -1522,7 +1530,17 @@ export const appRouter = router({
             });
           }
 
+          if (healJobs.length > 0) {
+            void Promise.allSettled(healJobs);
+          }
+
           if (usable.length === 0) continue;
+
+          if (usable.length < PUBLIC_DEMO_REEL_LIMIT) {
+            console.warn(
+              `[featured.publicDemo] handle=@${acc.handle} only returned ${usable.length}/${PUBLIC_DEMO_REEL_LIMIT} reels with stable thumbnails (candidates=${reelRows.length})`
+            );
+          }
 
           const payload: PublicDemoPayload = {
             handle: acc.handle,

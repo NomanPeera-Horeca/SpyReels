@@ -4,8 +4,13 @@ import type { Request } from "express";
  * Shared in-memory IP rate limiter for unauthenticated public HTTP/tRPC
  * surfaces. Same knobs as `publicScriptShareRoute` (60 req / 60s / IP).
  *
- * Process-local only — fine for a single Node instance; not a substitute for
- * edge/WAF limits in multi-instance production.
+ * Process-local only. Production runs as a single Render web service
+ * (`srv-d79bfrshg0os73e4lo1g` in project docs) with one Node process, so the
+ * effective limit matches the configured 60/min. If the service is ever
+ * scaled horizontally, this map does not share state across instances
+ * (effective limit becomes 60 x instance count) — there is no Redis/shared
+ * store in this codebase to back it; use the edge/WAF or keep instance count
+ * at 1.
  */
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 60;
