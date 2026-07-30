@@ -386,8 +386,11 @@ export default function ViralReelFinder() {
           Free reel finder &amp; reel spy tool · no card
         </span>
         <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold tracking-tight sm:text-5xl">
-          Any Instagram account&apos;s viral Reels,{" "}
-          <span className="text-primary">ranked</span>
+          <span className="hidden sm:inline">
+            Any Instagram account&apos;s viral Reels,{" "}
+          </span>
+          <span className="sm:hidden">Any account&apos;s viral Reels,{" "}</span>
+          <span className="text-primary">remade in your voice.</span>
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
           {HERO_SUBHEAD}
