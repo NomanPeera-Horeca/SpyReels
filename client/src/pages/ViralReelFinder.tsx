@@ -12,18 +12,11 @@ import {
 } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Accordion,
   AccordionContent,
@@ -32,7 +25,12 @@ import {
 } from "@/components/ui/accordion";
 import { formatNumber } from "@/lib/formatNumber";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+import {
+  authCreatorDisplayName,
+  authHeadlineRemake,
+  authHeadlineSeeViralReels,
+  authHeadlineSpyHandle,
+} from "@/lib/authHeadlines";
 import {
   INSTAGRAM_HANDLE_INVALID_MESSAGE,
   isValidInstagramHandleNormalized,
@@ -381,7 +379,9 @@ export default function ViralReelFinder() {
   const [activeHandle, setActiveHandle] = useState<string>(PUBLIC_DEMO_HANDLES[0]);
   const [unsupportedHandle, setUnsupportedHandle] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("outlier");
-  const [signInOpen, setSignInOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authHeadline, setAuthHeadline] = useState("");
+  const [authReturnTo, setAuthReturnTo] = useState("/research");
   const [debouncedHandle, setDebouncedHandle] = useState("");
 
   const heroBarRef = useRef<HTMLDivElement>(null);
@@ -392,8 +392,6 @@ export default function ViralReelFinder() {
   const [footerCtaVisible, setFooterCtaVisible] = useState(false);
 
   const demo = trpc.featured.publicDemo.useQuery({ handle: activeHandle });
-  const loginUrl = getLoginUrl({ returnTo: "/features/viral-reel-finder" });
-
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     const parsed = parseHandleInput(handleInput);
@@ -445,23 +443,45 @@ export default function ViralReelFinder() {
     ? `Find ${firstNameFromProfile(profileFound.fullName, profileFound.username)}'s Viral Reels`
     : "Find viral Reels";
 
-  function requireSignIn() {
+  const demoHandle = demo.data?.handle ?? activeHandle;
+  const demoDisplayName =
+    profileFound && profileFound.username === demoHandle
+      ? authCreatorDisplayName(profileFound.fullName, profileFound.username)
+      : authCreatorDisplayName(null, demoHandle);
+
+  function openAuth(opts: { headline?: string; returnTo?: string } = {}) {
     if (authLoading) return;
     if (isSignedIn) {
-      window.location.href = "/research";
+      window.location.href = opts.returnTo || "/research";
       return;
     }
-    setSignInOpen(true);
+    setAuthHeadline(opts.headline?.trim() || "");
+    setAuthReturnTo(opts.returnTo || "/research");
+    setAuthOpen(true);
+  }
+
+  function requireRemakeSignIn() {
+    openAuth({ headline: authHeadlineRemake(), returnTo: "/research" });
+  }
+
+  function requireSeeViralSignIn() {
+    openAuth({
+      headline: authHeadlineSeeViralReels(demoDisplayName),
+      returnTo: "/research",
+    });
   }
 
   function continueToAppWithHandle(parsed: string) {
     stashResearchHandleForAfterAuth(parsed, true);
-    if (authLoading) return;
-    if (isSignedIn) {
-      window.location.href = "/research";
-      return;
-    }
-    window.location.href = getLoginUrl({ returnTo: "/research" });
+    const matchedPreview =
+      profileFound && profileFound.username === parsed ? profileFound : null;
+    const headline =
+      matchedPreview && matchedPreview.fullName?.trim()
+        ? authHeadlineSeeViralReels(
+            authCreatorDisplayName(matchedPreview.fullName, matchedPreview.username)
+          )
+        : authHeadlineSpyHandle(parsed);
+    openAuth({ headline, returnTo: "/research" });
   }
 
   function submitHandle(raw: string) {
@@ -619,12 +639,16 @@ export default function ViralReelFinder() {
             <Link href="/pricing" className="hover:text-foreground">
               Pricing
             </Link>
-            <a href={loginUrl} className="hover:text-foreground">
+            <button
+              type="button"
+              className="hover:text-foreground"
+              onClick={() => openAuth({ returnTo: "/research" })}
+            >
               Sign in
-            </a>
+            </button>
           </nav>
-          <Button asChild className="rounded-full">
-            <a href={loginUrl}>Start free - no card</a>
+          <Button className="rounded-full" onClick={() => openAuth({ returnTo: "/research" })}>
+            Start free - no card
           </Button>
         </div>
       </header>
@@ -699,11 +723,19 @@ export default function ViralReelFinder() {
                   This page only previews curated accounts we have already scraped. Running your own
                   handle needs a free SpyReels account.
                 </p>
-                <Button asChild className="mt-4 min-h-10">
-                  <a href={loginUrl}>
-                    Run @{unsupportedHandle} free
-                    <ArrowRight className="h-4 w-4" aria-hidden />
-                  </a>
+                <Button
+                  className="mt-4 min-h-10"
+                  onClick={() => {
+                    if (!unsupportedHandle) return;
+                    stashResearchHandleForAfterAuth(unsupportedHandle, true);
+                    openAuth({
+                      headline: authHeadlineSpyHandle(unsupportedHandle),
+                      returnTo: "/research",
+                    });
+                  }}
+                >
+                  Run @{unsupportedHandle} free
+                  <ArrowRight className="h-4 w-4" aria-hidden />
                 </Button>
               </div>
             </div>
@@ -754,9 +786,13 @@ export default function ViralReelFinder() {
         ) : demo.isError ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             The demo catalog is unavailable right now.{" "}
-            <a href={loginUrl} className="text-primary hover:underline">
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => openAuth({ returnTo: "/research" })}
+            >
               Start free
-            </a>{" "}
+            </button>{" "}
             to research any public handle.
           </div>
         ) : (
@@ -800,7 +836,7 @@ export default function ViralReelFinder() {
                       </span>
                       <button
                         type="button"
-                        onClick={requireSignIn}
+                        onClick={requireRemakeSignIn}
                         className="text-xs font-semibold text-primary hover:underline"
                       >
                         Remake in my voice →
@@ -815,7 +851,7 @@ export default function ViralReelFinder() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-4 text-sm text-muted-foreground">
           <span>Every Reel here can be remade in your own voice, with a script and shot list.</span>
-          <Button variant="outline" className="rounded-full" onClick={requireSignIn}>
+          <Button variant="outline" className="rounded-full" onClick={requireSeeViralSignIn}>
             See the full list free
           </Button>
         </div>
@@ -1146,25 +1182,13 @@ export default function ViralReelFinder() {
         </div>
       ) : null}
 
-      <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign in to remake this Reel</DialogTitle>
-            <DialogDescription>
-              Remake opens the script flow in your SpyReels account. Free tier, no credit card
-              required to start.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setSignInOpen(false)}>
-              Not now
-            </Button>
-            <Button asChild>
-              <a href={loginUrl}>Sign in to continue</a>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AuthDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        defaultMode="signup"
+        headline={authHeadline || undefined}
+        returnTo={authReturnTo}
+      />
 
       <PublicFooter />
     </div>

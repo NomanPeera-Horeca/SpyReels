@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpyReels · Auth dialog dynamic headline (Opus-style)</title>
+  <style>
+    :root {
+      --bg: #f4f4f5;
+      --page-dim: rgba(9, 9, 11, 0.55);
+      --card: #ffffff;
+      --text: #09090b;
+      --muted: #71717a;
+      --border: #e4e4e7;
+      --primary: #7c3aed;
+      --primary-fg: #ffffff;
+      --accent: #f4f4f5;
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    h1.page-title {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .page-sub {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 62ch;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 840px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .scenario {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .scenario:hover { border-color: #c4b5fd; background: #faf5ff; }
+    .scenario.active {
+      border-color: var(--primary);
+      background: #f5f3ff;
+      box-shadow: inset 0 0 0 1px var(--primary);
+    }
+    .scenario .label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .scenario .from {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .note code {
+      font-size: 11px;
+      background: var(--accent);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* Fake blurred page behind modal */
+    .stage {
+      position: relative;
+      min-height: 640px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%);
+    }
+    .fake-page {
+      padding: 28px 24px;
+      filter: blur(2.5px);
+      opacity: 0.55;
+      pointer-events: none;
+      user-select: none;
+    }
+    .fake-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 36px;
+    }
+    .fake-logo {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+    .fake-logo span { color: var(--primary); }
+    .fake-hero {
+      max-width: 420px;
+    }
+    .fake-hero h3 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+    .fake-hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .fake-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .fake-card {
+      height: 160px;
+      border-radius: 12px;
+      background: #e4e4e7;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--page-dim);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    /* Existing AuthDialog shape, Opus-style headline swap */
+    .auth-card {
+      width: min(100%, 420px);
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 28px 24px 22px;
+      position: relative;
+    }
+    .close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: default;
+      border-radius: 6px;
+    }
+
+    .headline {
+      margin: 8px 0 8px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.25;
+    }
+    .sub {
+      margin: 0 0 18px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .google {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: default;
+    }
+    .google img { width: 18px; height: 18px; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .tab {
+      flex: 1;
+      border: none;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: default;
+    }
+    .tab.on {
+      background: var(--primary);
+      color: var(--primary-fg);
+    }
+    .tab.off {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .field {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      background: #fff;
+      color: var(--muted);
+    }
+
+    .primary-btn {
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 14px;
+      font-weight: 500;
+      background: var(--primary);
+      color: var(--primary-fg);
+      margin-top: 2px;
+      cursor: default;
+    }
+
+    .fine {
+      margin: 14px 0 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .diff {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .diff strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1 class="page-title">Auth dialog: dynamic headline (before wiring)</h1>
+    <p class="page-sub">
+      Same SpyReels AuthDialog (Google + email). Only the title changes based on where they clicked.
+      Google’s “continue to spyreels.ai” screen stays unchanged. Pick a trigger on the left.
+    </p>
+
+    <div class="layout">
+      <aside class="panel">
+        <h2>Entry point</h2>
+
+        <button type="button" class="scenario active" data-key="see_viral" onclick="setScenario(this)">
+          <span class="label">See viral reels</span>
+          <span class="from">Landing / demo card: “See Noman’s viral reels”</span>
+        </button>
+
+        <button type="button" class="scenario" data-key="find_handle" onclick="setScenario(this)">
+          <span class="label">Find (non-demo handle)</span>
+          <span class="from">Viral Reel Finder: Find after typing a handle</span>
+        </button>
+
+        <button type="button" class="scenario" data-key="remake" onclick="setScenario(this)">
+          <span class="label">Remake into your voice</span>
+          <span class="from">Demo remake / gated remake CTA</span>
+        </button>
+
+        <button type="button" class="scenario" data-key="hooks" onclick="setScenario(this)">
+          <span class="label">Unlock more hooks</span>
+          <span class="from">Free viral hooks tool paywall</span>
+        </button>
+
+        <button type="button" class="scenario" data-key="default" onclick="setScenario(this)">
+          <span class="label">Generic Sign in / Sign up</span>
+          <span class="from">Header, pricing, blog CTAs</span>
+        </button>
+
+        <p class="note">
+          Proposal: replace fixed <code>Welcome to SpyReels</code> with the dynamic line.
+          Keep the small subcopy as “Free plan available. No credit card required.”
+          (Opus pattern). Optional: still show brand mark above.
+        </p>
+      </aside>
+
+      <div>
+        <div class="stage">
+          <div class="fake-page">
+            <div class="fake-nav">
+              <div class="fake-logo">Spy<span>Reels</span></div>
+              <div style="font-size:13px;color:#71717a">Sign in</div>
+            </div>
+            <div class="fake-hero">
+              <h3 id="fakeHeroTitle">Viral Reel Finder</h3>
+              <p id="fakeHeroSub">Blurred page behind the modal. Context depends on the trigger.</p>
+            </div>
+            <div class="fake-cards">
+              <div class="fake-card"></div>
+              <div class="fake-card"></div>
+              <div class="fake-card"></div>
+            </div>
+          </div>
+
+          <div class="overlay">
+            <div class="auth-card" role="dialog" aria-labelledby="authHeadline">
+              <button class="close" aria-label="Close">×</button>
+              <h2 class="headline" id="authHeadline">Finish signing up to see Noman’s viral reels</h2>
+              <p class="sub" id="authSub">Free plan available. No credit card required.</p>
+
+              <button type="button" class="google">
+                <img src="https://www.google.com/favicon.ico" alt="" />
+                Continue with Google
+              </button>
+
+              <div class="divider">or</div>
+
+              <div class="tabs">
+                <button type="button" class="tab off">Log In</button>
+                <button type="button" class="tab on">Sign Up</button>
+              </div>
+
+              <div class="field">Your name</div>
+              <div class="field">Email address</div>
+              <div class="field">Password</div>
+              <button type="button" class="primary-btn">Create Account</button>
+              <p class="fine">Same form we already ship. Only the headline is contextual.</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="diff" id="diffNote">
+          <strong>Change vs today:</strong> title becomes the provocation line (not a purple banner under “Welcome to SpyReels”).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCENARIOS = {
+      see_viral: {
+        headline: "Finish signing up to see Noman’s viral reels",
+        sub: "Free plan available. No credit card required.",
+        fakeTitle: "Viral Reel Finder",
+        fakeSub: "User clicked “See Noman’s viral reels” on a demo card.",
+        note: "Use the creator display name from the card when available (e.g. Noman), else @handle."
+      },
+      find_handle: {
+        headline: "Finish signing up to spy @garyvee’s viral reels",
+        sub: "Free plan available. No credit card required.",
+        fakeTitle: "Find viral reels",
+        fakeSub: "User typed a non-demo handle and hit Find.",
+        note: "Handle comes from the finder input; after auth they go to Research with that handle."
+      },
+      remake: {
+        headline: "Finish signing up to remake this Reel in your voice",
+        sub: "Free plan available. No credit card required.",
+        fakeTitle: "Remake gated",
+        fakeSub: "User clicked “Remake this into your voice” while logged out.",
+        note: "Same AuthDialog; returnTo continues into the remake / script flow."
+      },
+      hooks: {
+        headline: "Finish signing up to unlock all 10 hooks",
+        sub: "Free plan available. No credit card required.",
+        fakeTitle: "Viral Hook Generator",
+        fakeSub: "Free tool paywall after the first free hooks.",
+        note: "Already uses AuthDialog + contextMessage; promote that copy into the title."
+      },
+      default: {
+        headline: "Welcome to SpyReels",
+        sub: "Spy on viral Reels. Steal the script. Own the feed.",
+        fakeTitle: "Header / Pricing / Blog",
+        fakeSub: "Generic Sign in with no action context.",
+        note: "Keep current default title + tagline when there is no CTA context."
+      }
+    };
+
+    function setScenario(btn) {
+      document.querySelectorAll(".scenario").forEach((el) => el.classList.remove("active"));
+      btn.classList.add("active");
+      const key = btn.getAttribute("data-key");
+      const s = SCENARIOS[key];
+      document.getElementById("authHeadline").textContent = s.headline;
+      document.getElementById("authSub").textContent = s.sub;
+      document.getElementById("fakeHeroTitle").textContent = s.fakeTitle;
+      document.getElementById("fakeHeroSub").textContent = s.fakeSub;
+      document.getElementById("diffNote").innerHTML =
+        "<strong>Copy for this trigger:</strong> " + s.note;
+    }
+  </script>
+</body>
+</html>

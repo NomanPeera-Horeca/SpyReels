@@ -14,6 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { AuthDialog } from "@/components/AuthDialog";
+import {
+  authHeadlineHookToScript,
+  authHeadlineUnlockHooks,
+} from "@/lib/authHeadlines";
 import { HookResultCard } from "@/components/HookResultCard";
 import { OnboardingAhaView } from "@/components/OnboardingAhaView";
 import type { CoachResultScript } from "@/components/AiCoachResultView";
@@ -131,7 +135,7 @@ export default function HookGenerator() {
   const [sessionToken, setSessionToken] = useState("");
   const [error, setError] = useState("");
   const [authOpen, setAuthOpen] = useState(false);
-  const [authContext, setAuthContext] = useState("");
+  const [authHeadline, setAuthHeadline] = useState("");
   const [selectedHookIndex, setSelectedHookIndex] = useState(0);
   const [ahaScript, setAhaScript] = useState<CoachResultScript | null>(null);
   const [pendingResume, setPendingResume] = useState(false);
@@ -263,7 +267,7 @@ export default function HookGenerator() {
     }
 
     sessionStorage.setItem(HOOK_TO_SCRIPT_PENDING_KEY, JSON.stringify(pending));
-    setAuthContext(`You picked hook #${index + 1}. Sign up to expand it into a full Reel script. No credit card.`);
+    setAuthHeadline(authHeadlineHookToScript(index + 1));
     setAuthOpen(true);
   };
 
@@ -278,7 +282,7 @@ export default function HookGenerator() {
         open={authOpen}
         onOpenChange={setAuthOpen}
         defaultMode="signup"
-        contextMessage={authContext}
+        headline={authHeadline || authHeadlineUnlockHooks()}
         returnTo="/free-tools/viral-hooks"
       />
 

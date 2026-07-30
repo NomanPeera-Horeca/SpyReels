@@ -11,16 +11,24 @@ import { signupAttributionBody } from "@/utils/utm-capture";
 
 type AuthMode = "login" | "signup" | "forgot";
 
+const DEFAULT_TITLE = "Welcome to SpyReels";
+const DEFAULT_SUBTITLE = "Spy on viral Reels. Steal the script. Own the feed.";
+const CONTEXT_SUBTITLE = "Free plan available. No credit card required.";
+
 export function AuthDialog({
   open,
   onOpenChange,
   defaultMode = "login",
+  headline,
   contextMessage,
   returnTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultMode?: Exclude<AuthMode, "forgot">;
+  /** Opus-style provocation line. Replaces the default Welcome title when set. */
+  headline?: string;
+  /** Optional secondary banner under the subtitle (legacy). Prefer `headline`. */
   contextMessage?: string;
   returnTo?: string;
 }) {
@@ -96,19 +104,20 @@ export function AuthDialog({
     }
   };
 
+  const title = headline?.trim() || DEFAULT_TITLE;
+  const subtitle = headline?.trim() ? CONTEXT_SUBTITLE : DEFAULT_SUBTITLE;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-center text-2xl font-bold">
-            Welcome to SpyReels
+          <DialogTitle className="text-center text-2xl font-bold leading-snug">
+            {title}
           </DialogTitle>
         </DialogHeader>
         <div className="flex w-full flex-col items-center gap-4 py-2">
-          <p className="text-center text-sm text-muted-foreground">
-            Spy on viral Reels. Steal the script. Own the feed.
-          </p>
-          {contextMessage ? (
+          <p className="text-center text-sm text-muted-foreground">{subtitle}</p>
+          {!headline && contextMessage ? (
             <p className="w-full rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-xs font-medium text-primary">
               {contextMessage}
             </p>
@@ -238,9 +247,11 @@ export function AuthDialog({
               </button>
             </div>
           )}
-          <p className="text-center text-xs text-muted-foreground">
-            Free to start. No credit card required.
-          </p>
+          {!headline?.trim() ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Free to start. No credit card required.
+            </p>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
