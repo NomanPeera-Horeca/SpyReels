@@ -802,6 +802,60 @@ function detectHospitalityB2CContext(description: string): string | null {
   return null;
 }
 
+/**
+ * In-memory response cache for `featured.publicDemo`.
+ *
+ * That procedure is unauthenticated and reachable by anyone, and it reads every
+ * `viewCount` row for an account to compute the median. There are only
+ * `PUBLIC_DEMO_HANDLES.length` possible responses and the data changes at scrape
+ * cadence, so caching removes the unbounded read from the anonymous request path
+ * entirely. Not a substitute for a rate limiter, but it makes the endpoint cheap
+ * to hammer.
+ */
+type PublicDemoPayload = {
+  handle: string;
+  totalReelCount: number;
+  medianViewCount: number;
+  reels: {
+    id: number;
+    reelShortcode: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    engagementRate: number;
+    thumbnailUrl: string;
+    duration: number | null;
+    postedAt: Date;
+    transcriptionStatus: string;
+    contentType: string | null;
+    hookPattern: string | null;
+    productionFormat: string | null;
+    viralFlag: boolean | null;
+    confidence: number | null;
+  }[];
+};
+
+const PUBLIC_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
+const publicDemoCache = new Map<string, { expiresAt: number; payload: unknown }>();
+
+function readPublicDemoCache(handle: string): unknown | null {
+  const hit = publicDemoCache.get(handle);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    publicDemoCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writePublicDemoCache(handle: string, payload: unknown): void {
+  publicDemoCache.set(handle, {
+    expiresAt: Date.now() + PUBLIC_DEMO_CACHE_TTL_MS,
+    payload,
+  });
+}
+
 function medianOf(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -1308,6 +1362,9 @@ export const appRouter = router({
         const requested = normalizeInstagramHandle(input?.handle ?? "");
         const handle = isPublicDemoHandle(requested) ? requested : PUBLIC_DEMO_HANDLES[0];
 
+        const cached = readPublicDemoCache(handle);
+        if (cached) return cached as PublicDemoPayload;
+
         const accountRows = await db
           .select({
             id: featuredAccounts.id,
@@ -1366,7 +1423,7 @@ export const appRouter = router({
 
         const followerCount = acc.followerCount || 0;
 
-        return {
+        const payload: PublicDemoPayload = {
           handle: acc.handle,
           totalReelCount: viewCountRows.length,
           medianViewCount: medianOf(viewCountRows.map((r) => r.viewCount)),
@@ -1394,6 +1451,9 @@ export const appRouter = router({
             confidence: r.confidence ?? null,
           })),
         };
+
+        writePublicDemoCache(handle, payload);
+        return payload;
       }),
 
     /**
