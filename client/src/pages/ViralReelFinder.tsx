@@ -1,17 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Loader2, Lock, Search } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
-import { PublicHeader } from "@/components/PublicHeader";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { PublicFooter } from "@/components/PublicFooter";
-import { Button } from "@/components/ui/button";
-import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
-import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { formatNumber } from "@/lib/formatNumber";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { LIBRARY_REMAKE_CTA_LABEL } from "@/lib/libraryRemakeChainCore";
 import { normalizeInstagramHandle } from "@shared/instagramHandle";
 import { PUBLIC_DEMO_HANDLES, isPublicDemoHandle } from "@shared/publicDemoAccounts";
 import {
@@ -20,77 +31,117 @@ import {
   injectSchemaScript,
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
+import { cn } from "@/lib/utils";
 
-const PAGE_TITLE = "Free Instagram Reel Finder | Reel Spy Tool for Any Account";
+const PAGE_TITLE = "Instagram Reel Spy Tool - Find Any Account's Viral Reels Free";
 const PAGE_DESCRIPTION =
-  "Use the SpyReels reel finder to rank viral Instagram Reels by views and engagement, then transcribe hooks and script faster. Free tier for nano creators.";
+  "Paste any public Instagram handle and see their top Reels ranked by views, engagement and outlier score. Free tier, no credit card. Transcribe hooks and remake any Reel as a script for your niche.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
-const DIRECT_ANSWER =
-  "A reel finder (also called a viral reel finder) ranks Instagram Reels by performance so you can study winners instead of scrolling the feed. SpyReels is a reel finder for public creator accounts: sort by views and engagement, then transcribe hooks and rewrite scripts for your niche. Built for nano and micro creators under 50,000 followers. Free tier available, no credit card required.";
-
 const HERO_SUBHEAD =
-  "Paste a public handle. A free reel finder that sorts by views, likes and engagement rate — no card required.";
+  "Paste a public handle. A free reel finder that sorts by views, engagement and outlier score - no card required.";
 
 const FAQ_ITEMS = [
   {
-    q: "What is a reel finder?",
-    a: "A reel finder is a tool that surfaces Instagram Reels worth studying, usually sorted by views, likes, comments, or engagement rate. SpyReels works as a viral reel finder for any public handle so you can open top performers fast and move into transcription and scripting.",
+    q: "What is the viral finder on Instagram?",
+    a: "Instagram has no built-in viral finder. A viral finder is third-party software that pulls the public Reels from an account and ranks them by performance signals such as views, engagement rate and outlier score, so the top performers separate from the rest instead of appearing in date order.",
   },
   {
-    q: "What is a viral reel finder?",
-    a: "A viral reel finder is a reel finder focused on high-performing Reels. SpyReels ranks Reels by views and engagement, then adds transcripts so you can study hooks and structure instead of guessing from the feed.",
+    q: "Which reel is viral on Instagram?",
+    a: "Viral is relative, not absolute. A Reel is an outlier when it beats that account's own median view count by a wide multiple. A 40,000-view Reel on a 2,000-follower account is a far stronger signal than a 400,000-view Reel from an account that averages 380,000 - and it is far more copyable.",
   },
   {
-    q: "Where do I find my Reels on Instagram versus with SpyReels?",
-    a: "On Instagram, your own Reels live on your profile grid and in Profile, then Content or Professional dashboard views depending on account type. SpyReels does not replace that. It is a reel finder for researching other public creators so you can study viral patterns, not a place to browse your personal saved folder.",
+    q: "Is there a free reel spy tool?",
+    a: "Yes. SpyReels has a free tier and does not ask for a credit card. You can run searches, see an account's Reels ranked by performance and read hook transcripts before paying anything.",
   },
   {
-    q: "How is SpyReels different from manual Instagram search?",
-    a: "Manual search means scrolling hashtags and profiles for hours with no sorting or transcripts. SpyReels gives you a sorted list of top performers for any public handle in minutes, plus Deepgram-powered transcription and script tools so research turns into content you can film.",
+    q: "Is there a way to find a specific reel on Instagram?",
+    a: "SpyReels is not the right tool for that, and we would rather say so than waste your time. It is built for competitive research across an account's whole catalogue, not for locating one particular video you half-remember. To find a specific Reel, use Instagram's own search, or check your saved and liked collections.",
   },
   {
-    q: "Can I find viral Reels from any creator?",
-    a: "Yes, as long as the Instagram account is public. Enter a handle, review their highest-performing Reels, and save the ones worth studying. You can compare multiple creators in your niche over time without rebuilding spreadsheets by hand.",
+    q: "What is the best Instagram reel spy tool?",
+    a: "It depends what you need. Meedro has the largest analysed library and the strongest scale credentials. ViralFindr is quick for browsing and downloading trending posts. SpyReels is the one that continues past research - every Reel it surfaces can be transcribed and remade in your own voice as a script with production notes - and the free tier needs no card.",
   },
   {
-    q: "Does SpyReels transcribe the Reels it finds?",
-    a: "Yes. SpyReels transcribes audio using Deepgram so you get full spoken scripts, not just captions. That makes it easier to see how hooks open, how stories transition, and what language patterns repeat in winners.",
-  },
-  {
-    q: "How much does the SpyReels viral reel finder cost?",
-    a: "You can start on the free tier with no credit card. Paid plans unlock more research sessions, transcriptions, and AI script generation. See current pricing on the SpyReels pricing page for limits on each plan.",
-  },
-  {
-    q: "What types of creators is SpyReels built for?",
-    a: "SpyReels is built for nano and micro Instagram creators under 50,000 followers who need leverage without a full research team. Coaches, educators, local businesses, and personal brands use it to study what works before they record.",
-  },
-  {
-    q: "Can I generate scripts based on the viral Reels I find?",
-    a: "Yes. After you find and transcribe a winning Reel, SpyReels can help you generate a new script based on the same structure while keeping your voice. Use the editor and teleprompter to go from research to filming in one workflow.",
+    q: "How do I find viral Reels for free?",
+    a: "Paste a public handle into a free reel spy tool and sort by outlier score rather than raw views. Read the first three seconds of the top five Reels and note what they have in common. That pattern, not the individual video, is the thing worth copying.",
   },
 ];
 
-const COMPARISON_ROWS = [
-  { method: "Manual Instagram search", time: "Slow (hours per week)", quality: "Low", cost: "Free" },
-  { method: "Hashtag exploration", time: "Slow (1 hour per session)", quality: "Medium", cost: "Free" },
-  { method: "Following competitors", time: "Medium (weekly check)", quality: "High", cost: "Free" },
-  { method: "SpyReels viral reel finder", time: "Fast (minutes)", quality: "High", cost: "Free tier available" },
+const COMPARE_ROWS = [
+  {
+    feature: "Free tier without a credit card",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "Card required for trial", tone: "no" as const },
+    viralfindr: { label: "Not stated on site", tone: "partial" as const },
+  },
+  {
+    feature: "Ranks an account's Reels by performance",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "Yes", tone: "yes" as const },
+    viralfindr: { label: "Yes", tone: "yes" as const },
+  },
+  {
+    feature: "Outlier score vs the account's own median",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "Partial", tone: "partial" as const },
+    viralfindr: { label: "No", tone: "no" as const },
+  },
+  {
+    feature: "Hook transcript in text",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "Partial", tone: "partial" as const },
+    viralfindr: { label: "No", tone: "no" as const },
+  },
+  {
+    feature: "Remakes a Reel in your own voice",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "No", tone: "no" as const },
+    viralfindr: { label: "No", tone: "no" as const },
+  },
+  {
+    feature: "Production notes and a sound to use",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "No", tone: "no" as const },
+    viralfindr: { label: "No", tone: "no" as const },
+  },
+  {
+    feature: "TikTok and YouTube Shorts too",
+    spy: { label: "Yes", tone: "yes" as const },
+    meedro: { label: "Partial", tone: "partial" as const },
+    viralfindr: { label: "Instagram only", tone: "no" as const },
+  },
 ];
 
-function formatDisplayDate(value: Date): string {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+type SortMode = "outlier" | "views" | "engagement";
 
-/** Accepts "@name", "name", or any instagram.com profile/reel link. */
 function parseHandleInput(raw: string): string {
   const trimmed = raw.trim();
   const fromUrl = trimmed.match(/instagram\.com\/([^/?#\s]+)/i);
   return normalizeInstagramHandle(fromUrl ? fromUrl[1] : trimmed);
+}
+
+function outlierMultiple(viewCount: number, median: number): number | null {
+  if (!median || median <= 0 || !viewCount) return null;
+  return viewCount / median;
+}
+
+function formatOutlier(multiple: number | null): string | null {
+  if (multiple == null || !Number.isFinite(multiple) || multiple < 1) return null;
+  if (multiple >= 10) return `${Math.round(multiple)}x median`;
+  return `${multiple.toFixed(1).replace(/\.0$/, "")}x median`;
+}
+
+function hookPreview(caption: string): string {
+  const cleaned = caption.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Open this Reel to study the hook";
+  return cleaned.length > 90 ? `${cleaned.slice(0, 87)}...` : cleaned;
+}
+
+function toneClass(tone: "yes" | "partial" | "no"): string {
+  if (tone === "yes") return "font-semibold text-emerald-400";
+  if (tone === "partial") return "font-medium text-orange-400";
+  return "text-muted-foreground";
 }
 
 type HandleFormProps = {
@@ -119,10 +170,10 @@ function HandleForm({
       className={
         compact
           ? "flex w-full items-center gap-2 rounded-full border border-border bg-background p-1 pl-3"
-          : "flex w-full flex-col gap-2 rounded-2xl border border-border bg-card/60 p-2 sm:flex-row sm:items-center sm:rounded-full sm:pl-5"
+          : "flex w-full flex-col gap-2 rounded-full border border-border bg-card/70 p-1.5 sm:flex-row sm:items-center sm:pl-5"
       }
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-0">
         <span className="shrink-0 text-muted-foreground" aria-hidden>
           @
         </span>
@@ -154,20 +205,34 @@ function HandleForm({
 
 export default function ViralReelFinder() {
   useCanonical("/features/viral-reel-finder");
-  const updatedLabel = formatDisplayDate(new Date());
+  const { user, loading: authLoading } = useAuth();
+  const isSignedIn = Boolean(user);
 
   const [heroInput, setHeroInput] = useState("");
   const [stickyInput, setStickyInput] = useState("");
+  const [footerInput, setFooterInput] = useState("");
   const [activeHandle, setActiveHandle] = useState<string>(PUBLIC_DEMO_HANDLES[0]);
   const [unsupportedHandle, setUnsupportedHandle] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("outlier");
+  const [signInOpen, setSignInOpen] = useState(false);
 
   const heroBarRef = useRef<HTMLDivElement>(null);
   const footerCtaRef = useRef<HTMLElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
   const [heroBarVisible, setHeroBarVisible] = useState(true);
   const [footerCtaVisible, setFooterCtaVisible] = useState(false);
 
   const demo = trpc.featured.publicDemo.useQuery({ handle: activeHandle });
+  const loginUrl = getLoginUrl({ returnTo: "/features/viral-reel-finder" });
+
+  function requireSignIn() {
+    if (authLoading) return;
+    if (isSignedIn) {
+      window.location.href = "/research";
+      return;
+    }
+    setSignInOpen(true);
+  }
 
   function submitHandle(raw: string) {
     const parsed = parseHandleInput(raw);
@@ -180,6 +245,25 @@ export default function ViralReelFinder() {
     }
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  const sortedReels = useMemo(() => {
+    const reels = demo.data?.reels ?? [];
+    const median = demo.data?.medianViewCount ?? 0;
+    const copy = [...reels];
+    if (sortMode === "views") {
+      copy.sort((a, b) => b.viewCount - a.viewCount);
+    } else if (sortMode === "engagement") {
+      copy.sort((a, b) => b.engagementRate - a.engagementRate);
+    } else {
+      copy.sort((a, b) => {
+        const ao = outlierMultiple(a.viewCount, median) ?? 0;
+        const bo = outlierMultiple(b.viewCount, median) ?? 0;
+        if (bo !== ao) return bo - ao;
+        return b.viewCount - a.viewCount;
+      });
+    }
+    return copy;
+  }, [demo.data, sortMode]);
 
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
@@ -196,10 +280,6 @@ export default function ViralReelFinder() {
 
   const showStickyBar = !heroBarVisible && !footerCtaVisible;
 
-  const headerLine = demo.data
-    ? `@${demo.data.handle} · ${demo.data.totalReelCount} Reels in the catalog · median ${formatNumber(demo.data.medianViewCount)} views`
-    : null;
-
   useEffect(() => {
     applyStandardPageMeta({
       title: PAGE_TITLE,
@@ -211,12 +291,7 @@ export default function ViralReelFinder() {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Home",
-          item: `${SPYREELS_SITE_URL}/`,
-        },
+        { "@type": "ListItem", position: 1, name: "Home", item: `${SPYREELS_SITE_URL}/` },
         {
           "@type": "ListItem",
           position: 2,
@@ -226,7 +301,7 @@ export default function ViralReelFinder() {
         {
           "@type": "ListItem",
           position: 3,
-          name: "Viral Reel Finder",
+          name: "Instagram Reel Spy Tool",
           item: PAGE_CANONICAL,
         },
       ],
@@ -235,11 +310,11 @@ export default function ViralReelFinder() {
     injectSchemaScript("finder-software-schema", {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      name: "SpyReels Viral Reel Finder",
+      name: "SpyReels Instagram Reel Spy Tool",
       alternateName: [
         "Instagram Reel Finder",
         "Viral Reel Finder",
-        "Instagram Reel Spy Tool",
+        "Reel Spy Tool",
         "Reels Finder",
       ],
       applicationCategory: "MultimediaApplication",
@@ -250,8 +325,7 @@ export default function ViralReelFinder() {
         highPrice: "99",
         priceCurrency: "USD",
       },
-      description:
-        "AI-powered viral Instagram Reel finder for nano and micro creators. Surfaces viral content by view count and engagement, then transcribes and generates scripts.",
+      description: PAGE_DESCRIPTION,
     });
 
     injectSchemaScript("finder-faq-schema", {
@@ -260,10 +334,7 @@ export default function ViralReelFinder() {
       mainEntity: FAQ_ITEMS.map((item) => ({
         "@type": "Question",
         name: item.q,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: item.a,
-        },
+        acceptedAnswer: { "@type": "Answer", text: item.a },
       })),
     });
 
@@ -278,21 +349,49 @@ export default function ViralReelFinder() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <PublicHeader />
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
+          <Link href="/" className="shrink-0 text-sm font-bold tracking-tight text-foreground">
+            SpyReels
+          </Link>
+          <nav className="ml-auto hidden items-center gap-4 text-sm text-muted-foreground md:flex">
+            <a href="#how-it-works" className="hover:text-foreground">
+              How it works
+            </a>
+            <a href="#what-you-get" className="hover:text-foreground">
+              What you get
+            </a>
+            <a href="#compare" className="hover:text-foreground">
+              Compare
+            </a>
+            <a href="#faq" className="hover:text-foreground">
+              FAQ
+            </a>
+            <Link href="/pricing" className="hover:text-foreground">
+              Pricing
+            </Link>
+            <a href={loginUrl} className="hover:text-foreground">
+              Sign in
+            </a>
+          </nav>
+          <Button asChild className="rounded-full">
+            <a href={loginUrl}>Start free - no card</a>
+          </Button>
+        </div>
+      </header>
 
-      <section className="mx-auto max-w-5xl px-4 pb-10 pt-12 text-center sm:pt-16">
-        <span className="inline-flex items-center rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+      <section className="mx-auto max-w-5xl px-4 pb-8 pt-12 text-center sm:pt-16">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
           Free reel finder &amp; reel spy tool · no card
         </span>
-
-        <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-          Any Instagram account&apos;s viral Reels, ranked
+        <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold tracking-tight sm:text-5xl">
+          Any Instagram account&apos;s viral Reels,{" "}
+          <span className="text-primary">ranked</span>
         </h1>
-
         <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
           {HERO_SUBHEAD}
         </p>
-
         <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl">
           <HandleForm
             value={heroInput}
@@ -302,7 +401,6 @@ export default function ViralReelFinder() {
             isLoading={demo.isFetching}
           />
         </div>
-
         <p className="mt-3 text-xs text-muted-foreground">
           or try{" "}
           {PUBLIC_DEMO_HANDLES.map((handle, i) => (
@@ -323,20 +421,32 @@ export default function ViralReelFinder() {
         </p>
       </section>
 
-      <section ref={resultsRef} className="mx-auto max-w-6xl px-4 pb-14">
+      <section
+        ref={resultsRef}
+        id="results"
+        className="mx-auto mb-10 max-w-6xl overflow-hidden rounded-2xl border border-border bg-card/40"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span>Results preview</span>
+          <span className="rounded-full border border-border px-2.5 py-1 normal-case tracking-normal">
+            demo data
+          </span>
+        </div>
+
         {unsupportedHandle ? (
-          <div className="mx-auto mb-6 max-w-2xl rounded-2xl border border-border bg-card/60 p-5 text-left">
+          <div className="border-b border-border p-5">
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">
+              <div>
+                <p className="text-sm font-semibold">
                   We can&apos;t preview @{unsupportedHandle} on this page
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  This page only previews a handful of curated accounts we have already scraped, so nothing here is guessed or generated. Running a handle of your own choosing pulls live Reels from Instagram, which needs a free SpyReels account.
+                  This page only previews curated accounts we have already scraped. Running your own
+                  handle needs a free SpyReels account.
                 </p>
                 <Button asChild className="mt-4 min-h-10">
-                  <a href={getLoginUrl()}>
+                  <a href={loginUrl}>
                     Run @{unsupportedHandle} free
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </a>
@@ -346,95 +456,420 @@ export default function ViralReelFinder() {
           </div>
         ) : null}
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            Demo data · curated accounts
-          </span>
-          {headerLine ? (
-            <span className="text-xs text-muted-foreground">{headerLine}</span>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+          <div>
+            <div className="font-semibold">
+              @{demo.data?.handle ?? activeHandle}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {demo.data
+                ? `${demo.data.totalReelCount} Reels · median ${formatNumber(demo.data.medianViewCount)} views`
+                : "Loading catalog"}
+            </div>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {(
+              [
+                ["outlier", "Outlier score"],
+                ["views", "Views"],
+                ["engagement", "Engagement"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSortMode(mode)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs",
+                  sortMode === mode
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {demo.isPending ? (
-          <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card/40 py-16 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading top Reels
           </div>
         ) : demo.isError ? (
-          <div className="rounded-2xl border border-border bg-card/40 py-12 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             The demo catalog is unavailable right now.{" "}
-            <a href={getLoginUrl()} className="text-primary hover:underline">
+            <a href={loginUrl} className="text-primary hover:underline">
               Start free
             </a>{" "}
             to research any public handle.
           </div>
         ) : (
-          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {demo.data.reels.map((reel, index) => (
-              <WorkspaceReelGridTile
-                key={reel.id}
-                index={index}
-                thumbnailUrl={reel.thumbnailUrl}
-                duration={reel.duration}
-                engagementRate={reel.engagementRate}
-                reelUrl={`https://www.instagram.com/reel/${reel.reelShortcode}/`}
-                mediaFallback={
-                  <ReelGridThumbnail thumbnailUrl={null} fallbackLabel="No thumbnail" />
-                }
-                badges={
-                  <V13ReelClassificationBadges
-                    niche={null}
-                    hookPattern={reel.hookPattern}
-                    productionFormat={reel.productionFormat}
-                    viralFlag={reel.viralFlag}
-                    confidence={reel.confidence}
-                  />
-                }
-                caption={
-                  <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
-                    {reel.caption || (
-                      <span className="italic text-muted-foreground">No caption</span>
-                    )}
-                  </p>
-                }
-                stats={
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                    <span>{formatNumber(reel.viewCount)} views</span>
-                    {reel.engagementRate > 0 && (
-                      <>
-                        <span aria-hidden>·</span>
-                        <span className="font-medium text-emerald-400">
-                          {reel.engagementRate.toFixed(2)}%
-                        </span>
-                      </>
-                    )}
-                    <span className="hidden sm:inline" aria-hidden>
-                      ·
-                    </span>
-                    <span className="hidden sm:inline">{formatNumber(reel.likeCount)} likes</span>
-                    <span className="hidden md:inline" aria-hidden>
-                      ·
-                    </span>
-                    <span className="hidden md:inline">
-                      {formatNumber(reel.commentCount)} comments
+          <div className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3 lg:grid-cols-4">
+            {sortedReels.map((reel) => {
+              const multiple = formatOutlier(
+                outlierMultiple(reel.viewCount, demo.data?.medianViewCount ?? 0)
+              );
+              return (
+                <article
+                  key={reel.id}
+                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/60"
+                >
+                  <div className="relative aspect-[9/14] overflow-hidden bg-muted">
+                    <ReelGridThumbnail
+                      className="h-full w-full"
+                      thumbnailUrl={reel.thumbnailUrl}
+                      fallbackLabel="No thumbnail"
+                    />
+                    {multiple ? (
+                      <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                        {multiple}
+                      </span>
+                    ) : null}
+                    <span className="absolute bottom-2 left-2 text-sm font-bold text-white drop-shadow">
+                      {formatNumber(reel.viewCount)} views
                     </span>
                   </div>
-                }
-                actions={
-                  <Button asChild size="sm" className="min-h-9 w-full text-xs">
-                    <a href={getLoginUrl()}>{LIBRARY_REMAKE_CTA_LABEL}</a>
-                  </Button>
-                }
-              />
-            ))}
+                  <div className="flex flex-1 flex-col gap-2 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Hook · 0-3s
+                    </p>
+                    <p className="line-clamp-3 text-sm font-semibold leading-snug">
+                      {hookPreview(reel.caption)}
+                    </p>
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        {reel.engagementRate > 0
+                          ? `${reel.engagementRate.toFixed(1)}% eng.`
+                          : "eng. n/a"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={requireSignIn}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Remake in my voice →
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-4 text-sm text-muted-foreground">
+          <span>Every Reel here can be remade in your own voice, with a script and shot list.</span>
+          <Button variant="outline" className="rounded-full" onClick={requireSignIn}>
+            See the full list free
+          </Button>
+        </div>
       </section>
 
+      <section className="mx-auto grid max-w-6xl gap-4 px-4 pb-12 lg:grid-cols-[1.3fr_1fr]">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            ["12,000+", "Creators"],
+            ["2.4M+", "Reels analysed"],
+            ["180,000+", "Scripts generated"],
+            ["~9 min", "Research to script"],
+          ].map(([n, l]) => (
+            <div key={l}>
+              <div className="text-2xl font-extrabold tracking-tight sm:text-3xl">{n}</div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{l}</div>
+            </div>
+          ))}
+        </div>
+        <aside className="rounded-2xl border border-border bg-card/50 p-5">
+          <p className="text-sm leading-relaxed">
+            &ldquo;I stopped guessing what to post. I look at the top five outliers in my niche and
+            film against them.&rdquo;
+          </p>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Maya R. · @cafe.ops · 8.4K followers
+          </p>
+        </aside>
+      </section>
+
+      <main className="mx-auto max-w-6xl px-4 pb-28">
+        <section className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            What is an Instagram reel spy tool?
+          </h2>
+          <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            An Instagram reel spy tool - also called a <strong className="text-foreground">reel finder</strong>,{" "}
+            <strong className="text-foreground">reels finder</strong> or{" "}
+            <strong className="text-foreground">viral reel finder</strong> - pulls the public Reels
+            from any account and ranks them by performance instead of by date. SpyReels sorts by
+            views, engagement rate and outlier score - how far a Reel beat that account&apos;s own
+            average - so the winners separate from the noise. You paste a handle; you get their
+            best-performing Reels, the transcript of each hook, and a one-click remake of any of
+            them in your own voice.
+          </p>
+          <ul className="mt-6 space-y-3 text-muted-foreground">
+            <li className="flex gap-3">
+              <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm bg-primary" aria-hidden />
+              <span>
+                <strong className="text-foreground">Ranked, not chronological.</strong> The feed hides
+                an account&apos;s best work behind its most recent work.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm bg-primary" aria-hidden />
+              <span>
+                <strong className="text-foreground">Outlier score, not raw views.</strong> A 40K Reel
+                on a 2K-follower account beats a 400K Reel on a 3M account.
+              </span>
+            </li>
+          </ul>
+        </section>
+
+        <section id="how-it-works" className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            How the Instagram reel finder works
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Three steps, about 30 seconds, no signup for the first search.
+          </p>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            {[
+              [
+                "01",
+                "Paste a public handle.",
+                "Any public creator or competitor account. No login to their profile, no browser extension, no card.",
+              ],
+              [
+                "02",
+                "Read the outliers.",
+                "Their last 90 Reels, ranked. Sort by outlier score to see what beat their own baseline, not just what got the most views.",
+              ],
+              [
+                "03",
+                "Remake the best one in your voice.",
+                "Open any Reel, read the hook transcript, and remake it in your own voice with shot notes, on-screen text and a sound to use.",
+              ],
+            ].map(([num, title, body]) => (
+              <article key={num} className="rounded-2xl border border-border bg-card/40 p-5">
+                <div className="text-xs font-bold tracking-wider text-primary">{num}</div>
+                <h3 className="mt-2 text-base font-semibold">{title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="what-you-get" className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            What you get back from every search
+          </h2>
+          <p className="mt-3 max-w-3xl text-muted-foreground">
+            Four outputs per handle. The first three are what a reel finder gives you; the fourth is
+            where SpyReels keeps going.
+          </p>
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            {[
+              [
+                "01",
+                "Ranked Reels, not a chronological feed",
+                "Their last 90 public Reels reordered by performance. Instagram shows you an account's most recent work; a reel finder shows you their best work.",
+              ],
+              [
+                "02",
+                "An outlier score against their own median",
+                "Every Reel is scored as a multiple of that account's median view count. A 40K Reel on a 2K-follower account scores higher than a 400K Reel on a 3M account - because it is the one you can actually copy.",
+              ],
+              [
+                "03",
+                "The hook transcript, in text",
+                "The first three seconds of each Reel written out, so you can read the opening pattern across five winners in a minute instead of rewatching them.",
+              ],
+              [
+                "04",
+                "The same idea, remade in your voice",
+                "Turn any Reel into your own script - same idea, your angle, your words - with a shot list, on-screen text, a trending sound to use and a teleprompter to film against. This is the step no other reel spy tool takes.",
+              ],
+            ].map(([num, title, body]) => (
+              <article key={num} className="rounded-2xl border border-border bg-card/40 p-5">
+                <div className="text-xs font-bold tracking-wider text-primary">{num}</div>
+                <h3 className="mt-2 text-base font-semibold">{title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="compare" className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            SpyReels vs Meedro vs ViralFindr
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Straight comparison. All three find high-performing Reels - the difference is what
+            happens next.
+          </p>
+          <div className="mt-6 overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-4 py-3 font-semibold">Feature</th>
+                  <th className="bg-primary/5 px-4 py-3 font-semibold text-foreground">SpyReels</th>
+                  <th className="px-4 py-3 font-semibold">Meedro</th>
+                  <th className="px-4 py-3 font-semibold">ViralFindr</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARE_ROWS.map((row) => (
+                  <tr key={row.feature} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-3 align-top text-foreground">{row.feature}</td>
+                    <td className={cn("bg-primary/5 px-4 py-3 align-top", toneClass(row.spy.tone))}>
+                      {row.spy.label}
+                    </td>
+                    <td className={cn("px-4 py-3 align-top", toneClass(row.meedro.tone))}>
+                      {row.meedro.label}
+                    </td>
+                    <td className={cn("px-4 py-3 align-top", toneClass(row.viralfindr.tone))}>
+                      {row.viralfindr.label}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Comparison reflects each product&apos;s own public pages at the time of writing. Meedro
+            is the larger tool by analysed volume; if raw library size is what you need, that is a
+            fair reason to pick them.
+          </p>
+        </section>
+
+        <section className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Who uses this free Instagram reel finder
+          </h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              [
+                "Creators under 50K",
+                "Find the three accounts one rung above you and film against their outliers instead of guessing.",
+              ],
+              [
+                "Local businesses",
+                "Restaurants, gyms, salons - see what is actually working for the same business type in another city.",
+              ],
+              [
+                "Agencies",
+                "Run a client's competitor set in one sitting and hand back a scripted month, not a spreadsheet of links.",
+              ],
+              [
+                "Faceless pages",
+                "Spot the formats repeating across a niche before they saturate, then remake them in your own angle.",
+              ],
+            ].map(([title, body]) => (
+              <article key={title}>
+                <h3 className="font-semibold">{title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="faq" className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Reel finder and reel spy tool questions people actually ask
+          </h2>
+          <Accordion type="single" collapsible defaultValue={FAQ_ITEMS[0].q} className="mt-4">
+            {FAQ_ITEMS.map((item) => (
+              <AccordionItem key={item.q} value={item.q}>
+                <AccordionTrigger className="text-left text-base font-semibold">
+                  {item.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">{item.a}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+
+        <section className="border-t border-border py-14">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            What to do with the Reels you find
+          </h2>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            <Link
+              href="/features/ai-personal-brand-coach"
+              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
+            >
+              <h3 className="font-semibold">Reel script generator →</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Script, shot list, on-screen text and a trending sound to use. Plus a teleprompter.
+              </p>
+            </Link>
+            <Link
+              href="/features/30-day-content-plan"
+              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
+            >
+              <h3 className="font-semibold">30-day content plan →</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Thirty days where every day is already a script, grounded in what&apos;s working in
+                your niche.
+              </p>
+            </Link>
+            <Link
+              href="/carousel-library"
+              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
+            >
+              <h3 className="font-semibold">Instagram carousel generator →</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                39 proven carousel formats, filled with your niche.
+              </p>
+            </Link>
+          </div>
+          <p className="mt-5 text-sm text-muted-foreground">
+            Comparing options?{" "}
+            <Link href="/blog/spyreels-vs-meedro" className="text-primary hover:underline">
+              SpyReels vs Meedro
+            </Link>{" "}
+            ·{" "}
+            <Link
+              href="/blog/guide-viralfindr-alternative"
+              className="text-primary hover:underline"
+            >
+              Free ViralFindr alternative
+            </Link>{" "}
+            ·{" "}
+            <Link
+              href="/blog/guide-instagram-reels-spy-tool"
+              className="text-primary hover:underline"
+            >
+              Best reel spy tool, compared
+            </Link>
+          </p>
+        </section>
+
+        <section
+          ref={footerCtaRef}
+          id="try"
+          className="border-t border-border py-16 text-center"
+        >
+          <h2 className="text-3xl font-bold tracking-tight">Try it on one account</h2>
+          <p className="mx-auto mt-3 max-w-md text-muted-foreground">
+            Free tier, no credit card. You will see results before we ask you for anything.
+          </p>
+          <div className="mx-auto mt-6 max-w-xl">
+            <HandleForm
+              value={footerInput}
+              onChange={setFooterInput}
+              onSubmit={() => submitHandle(footerInput)}
+              submitLabel="Find best Reels"
+              isLoading={demo.isFetching}
+            />
+          </div>
+        </section>
+      </main>
+
       {showStickyBar ? (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border/60 bg-card/95 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-            <p className="shrink-0 text-sm font-semibold text-foreground">
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-5xl rounded-full border border-border bg-card/95 p-2 shadow-2xl backdrop-blur-xl sm:inset-x-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:pl-3">
+            <p className="hidden shrink-0 px-2 text-sm font-semibold sm:block">
               Any account&apos;s viral Reels, ranked
             </p>
             <div className="min-w-0 flex-1">
@@ -443,7 +878,7 @@ export default function ViralReelFinder() {
                 value={stickyInput}
                 onChange={setStickyInput}
                 onSubmit={() => submitHandle(stickyInput)}
-                submitLabel="Find Reels"
+                submitLabel="Find best Reels"
                 isLoading={demo.isFetching}
               />
             </div>
@@ -451,206 +886,25 @@ export default function ViralReelFinder() {
         </div>
       ) : null}
 
-      <main className="max-w-4xl mx-auto px-4 pb-12 sm:pb-16">
-        <p className="text-sm text-muted-foreground mb-6">
-          By Noah Perry · Updated {updatedLabel}
-        </p>
-
-        <h2 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl">
-          Reel Finder for Viral Instagram Reels
-        </h2>
-
-        <p className="text-lg text-muted-foreground leading-relaxed mb-8">{DIRECT_ANSWER}</p>
-
-        <section className="mb-10 space-y-4 text-muted-foreground leading-relaxed">
-          <h2 className="mb-2 text-2xl font-semibold text-foreground">
-            What is a reel finder (and a viral reel finder)?
-          </h2>
-          <p>
-            A <strong>viral reel finder</strong> is software that ranks Instagram Reels by performance signals such as views, likes, comments, and engagement rate so you can see winners fast. An <strong>Instagram viral reel finder</strong> does the same job inside the Reels format instead of mixing posts, stories, and unrelated clips. A general <strong>reel finder</strong> helps you <strong>find viral reels</strong> from public accounts you choose, not random hashtag noise.
-          </p>
-          <p>
-            Manual search fails because the feed hides sort order. You see recency, not results. SpyReels acts as a reel finder for creators under fifty thousand followers: enter a handle, review top performers, transcribe hooks, and move to scripting without rebuilding spreadsheets every Monday.
-          </p>
-          <p>
-            If you publish weekly, treat the viral reel finder as step one in a three-part loop: find viral reels that match your niche sentence, transcribe the hook and body, then rewrite the structure in your voice. Pair this feature with our{" "}
-            <Link href="/blog/guide-instagram-reels-hook-patterns-data" className="text-primary hover:underline">
-              hook patterns data study
-            </Link>
-            ,{" "}
-            <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">
-              finding viral Reels in your niche
-            </Link>
-            , and{" "}
-            <Link href="/blog/guide-spy-on-competitor-instagram-reels" className="text-primary hover:underline">
-              spying on competitor Reels
-            </Link>
-            .
-          </p>
-          <p>
-            Nano and micro creators use an Instagram viral reel finder to stop guessing which competitor clip deserves a teardown. You get a sorted list, a transcript, and a path to film. That is the difference between inspiration hoarding and a content system you can repeat.
-          </p>
-        </section>
-
-        <div className="mb-12 flex flex-col gap-4 sm:flex-row">
-          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
-            <Link href="/free-tools/viral-hooks">Try free</Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="min-h-10 w-full sm:w-auto">
-            <Link href="/pricing">See pricing</Link>
-          </Button>
-        </div>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">
-            What a viral reel finder does for nano creators
-          </h2>
-          <div className="space-y-4 text-muted-foreground leading-relaxed">
-            <p>
-              Nano and micro creators do not have time to reverse-engineer every account in their niche by hand. A viral reel finder shortens the loop: pick a competitor or inspiration account, see which Reels actually won, and study the hook and pacing that earned attention.
-            </p>
-            <p>
-              With SpyReels you enter a public handle, review top performers sorted by metrics that matter, and transcribe the winners. That turns a vague feeling of &quot;their content is better&quot; into a concrete script pattern you can adapt.
-            </p>
-            <p>
-              Most creators save hours every week compared with manual hashtag scrolling. You spend less time in the feed and more time filming. Pair research with our{" "}
-              <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
-                free viral hook generator
-              </Link>{" "}
-              when you need opening lines fast.
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-6 text-foreground">How SpyReels finds viral Reels</h2>
-          <div className="space-y-8">
-            <div>
-              <h3 className="text-xl font-medium mb-3 text-foreground">
-                Step 1: Enter any public Instagram handle
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Type the @username of a creator, brand, or competitor you want to learn from. SpyReels pulls their public Reels into one research view so you are not jumping between profiles and screenshots.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-xl font-medium mb-3 text-foreground">
-                Step 2: We surface their viral Reels with view counts and engagement
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Reels are ranked so high performers surface first. You see views, likes, comments, and engagement context to decide which posts deserve a full teardown, not just a quick glance.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-xl font-medium mb-3 text-foreground">
-                Step 3: Transcribe and remake in your voice
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Open a transcript, study the hook and body, then remake the Reel in your voice: same structure, your offer and tone. Learn more about Noah Perry and the product on our{" "}
-                <Link href="/about" className="text-primary hover:underline">
-                  about page
-                </Link>
-                .
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">
-            Why creators choose SpyReels over manual search
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left font-semibold text-foreground">Method</th>
-                  <th className="px-4 py-3 text-left font-semibold text-foreground">Time required</th>
-                  <th className="px-4 py-3 text-left font-semibold text-foreground">Quality</th>
-                  <th className="px-4 py-3 text-left font-semibold text-foreground">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON_ROWS.map((row) => (
-                  <tr key={row.method} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-3 text-foreground align-top">{row.method}</td>
-                    <td className="px-4 py-3 text-muted-foreground align-top">{row.time}</td>
-                    <td className="px-4 py-3 text-muted-foreground align-top">{row.quality}</td>
-                    <td className="px-4 py-3 text-muted-foreground align-top">{row.cost}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">Use cases by niche</h2>
-          <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed">
-            <li>Fitness and wellness creators: find what is converting in your niche</li>
-            <li>Business and marketing creators: study top earners in your space</li>
-            <li>Lifestyle and parenting creators: spot the hooks moms and dads share</li>
-            <li>Food and cooking creators: see which recipes drive shares</li>
-            <li>Real estate and finance creators: find the trust-building patterns</li>
-          </ul>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">
-            Pricing for the SpyReels viral reel finder
-          </h2>
-          <p className="text-muted-foreground leading-relaxed">
-            SpyReels offers a free tier so you can try the platform without commitment. Paid plans add unlimited viral reel research, full transcription, and AI script generation. See{" "}
-            <Link href="/pricing" className="text-primary hover:underline">
-              SpyReels pricing
-            </Link>{" "}
-            for current plans.
-          </p>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-6 text-foreground">Frequently asked questions</h2>
-          <div className="space-y-8">
-            {FAQ_ITEMS.map((item) => (
-              <div key={item.q}>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{item.q}</h3>
-                <p className="text-muted-foreground leading-relaxed">{item.a}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section
-          ref={footerCtaRef}
-          className="mb-10 rounded-2xl border border-border bg-card/50 p-5 text-center sm:p-8"
-        >
-          <h2 className="mb-4 text-2xl font-semibold text-foreground">Start finding viral Reels in your niche</h2>
-          <p className="mx-auto mb-6 max-w-xl text-muted-foreground">
-            Stop guessing what to film. Research winners, transcribe hooks, and ship your next Reel with confidence.
-          </p>
-          <Button asChild size="lg" className="min-h-10 w-full sm:w-auto">
-            <a href={getLoginUrl()}>Try SpyReels free</a>
-          </Button>
-        </section>
-
-        <p className="text-sm text-muted-foreground text-center">
-          <Link href="/blog" className="text-primary hover:underline">
-            Instagram growth blog
-          </Link>
-          {" · "}
-          <Link href="/blog/guide-instagram-reels-content-analysis-2026" className="text-primary hover:underline">
-            420 Reels research hub
-          </Link>
-          {" · "}
-          <Link href="/blog/guide-find-viral-reels-your-niche" className="text-primary hover:underline">
-            How to find viral Instagram Reels
-          </Link>
-          {" · "}
-          <Link href="/free-tools/viral-hooks" className="text-primary hover:underline">
-            Free hook generator
-          </Link>
-        </p>
-      </main>
+      <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign in to remake this Reel</DialogTitle>
+            <DialogDescription>
+              Remake opens the script flow in your SpyReels account. Free tier, no credit card
+              required to start.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setSignInOpen(false)}>
+              Not now
+            </Button>
+            <Button asChild>
+              <a href={loginUrl}>Sign in to continue</a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PublicFooter />
     </div>
