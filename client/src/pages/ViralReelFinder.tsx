@@ -45,6 +45,7 @@ import {
   injectSchemaScript,
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
+import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
 import { cn } from "@/lib/utils";
 
 const PAGE_TITLE = "Instagram Reel Spy Tool - Find Any Account's Viral Reels Free";
@@ -453,6 +454,16 @@ export default function ViralReelFinder() {
     setSignInOpen(true);
   }
 
+  function continueToAppWithHandle(parsed: string) {
+    stashResearchHandleForAfterAuth(parsed, true);
+    if (authLoading) return;
+    if (isSignedIn) {
+      window.location.href = "/research";
+      return;
+    }
+    window.location.href = getLoginUrl({ returnTo: "/research" });
+  }
+
   function submitHandle(raw: string) {
     const parsed = parseHandleInput(raw);
     if (!parsed) return;
@@ -460,10 +471,11 @@ export default function ViralReelFinder() {
     if (isPublicDemoHandle(parsed)) {
       setUnsupportedHandle(null);
       setActiveHandle(parsed);
-    } else {
-      setUnsupportedHandle(parsed);
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
-    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Non-demo handles continue into the existing Research → dashboard spy flow.
+    continueToAppWithHandle(parsed);
   }
 
   function onProfileCardKeyDown(e: KeyboardEvent<HTMLDivElement>) {

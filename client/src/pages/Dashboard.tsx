@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
 import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
+import { FirstResultsCelebration } from "@/components/FirstResultsCelebration";
 import { snapshotFromProgressRow } from "@shared/scrapeProgressUi";
 import { usePostHog } from "@posthog/react";
 import { trpc } from "@/lib/trpc";
@@ -928,7 +929,7 @@ export default function Dashboard() {
     [utils, featuredAccountId]
   );
 
-  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
+  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
     useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
 
   const invalidateTranscriptionFollowUp = useCallback(
@@ -1945,6 +1946,16 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
+      {VoiceGateDialog}
+      <FirstResultsCelebration
+        handle={displayScrapeHandle || job?.handle}
+        enabled={
+          isFirstVisitDashboard &&
+          canDisplayJobReels &&
+          sortedReels.length > 0 &&
+          (job?.status === "completed" || isFeaturedView)
+        }
+      />
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="min-w-0">
           {/* Demo banner removed from UI; re-enable by uncommenting this block.

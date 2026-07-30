@@ -51,6 +51,7 @@ import {
 } from "@/lib/creatorCtaCopy";
 import TikTokResearch from "@/pages/TikTokResearch";
 import YouTubeResearch from "@/pages/YouTubeResearch";
+import { consumeResearchPendingHandle } from "@/lib/researchPendingHandle";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -112,6 +113,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAutostartRef = useRef(false);
   const initialTikTokJobId = useMemo(() => {
     const params = new URLSearchParams(search);
     if (params.get("platform") !== "tiktok") return undefined;
@@ -138,6 +140,16 @@ export default function Home() {
       setPlatform("youtube");
     }
   }, [search]);
+
+  // Landing-page handoff after sign-in: restore handle and optionally start spy.
+  useEffect(() => {
+    const { handle: pending, autostart } = consumeResearchPendingHandle();
+    if (!pending) return;
+    setPlatform("instagram");
+    setHandle(pending);
+    setHandleError(null);
+    pendingAutostartRef.current = autostart;
+  }, []);
 
   // Debounce handle input - only query after 800ms of no typing and min 2 chars
   useEffect(() => {
@@ -542,6 +554,23 @@ export default function Home() {
     e.preventDefault();
     requestStartSpy();
   };
+
+  // After landing-page auth handoff: start spy once the handle is ready.
+  useEffect(() => {
+    if (!pendingAutostartRef.current) return;
+    if (platform !== "instagram") return;
+    if (!handleReadyForSubmit) return;
+    if (isLoadingProfile) return;
+    if (startScrape.isPending) return;
+    pendingAutostartRef.current = false;
+    requestStartSpy();
+  }, [
+    platform,
+    handleReadyForSubmit,
+    isLoadingProfile,
+    startScrape.isPending,
+    // requestStartSpy is stable enough via closure; intentional auto-run once
+  ]);
 
   const startSpyingDisabled =
     startScrape.isPending ||

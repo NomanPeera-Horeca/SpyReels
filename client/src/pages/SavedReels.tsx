@@ -264,7 +264,7 @@ export default function SavedReels() {
     [utils]
   );
 
-  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
+  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
     useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
 
   const invalidateTranscriptionFollowUp = useCallback(
@@ -601,6 +601,7 @@ export default function SavedReels() {
 
   return (
     <div className="mx-auto max-w-7xl px-2 sm:px-0">
+      {VoiceGateDialog}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">

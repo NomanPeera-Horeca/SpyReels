@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, createElement } from "react";
 import { toast } from "sonner";
 import type { ReelClassificationLike } from "@/lib/remakeability";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/lib/libraryRemakeChainCore";
 import { trpc } from "@/lib/trpc";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import { OnboardingVoiceGateDialog } from "@/components/OnboardingVoiceGateDialog";
 
 export type LibrarySaveState = "idle" | "saved" | "error";
 
@@ -33,6 +34,15 @@ export type StartRemakeOptions = {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function hasVoiceProfile(state: {
+  businessDescription?: string | null;
+  targetAudience?: string | null;
+} | null | undefined): boolean {
+  return Boolean(
+    state?.businessDescription?.trim() && state?.targetAudience?.trim()
+  );
 }
 
 export type UseLibraryRemakeChainOptions = {
@@ -52,6 +62,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const trpcUtils = trpc.useUtils();
   const onStageChangeRef = useRef(options.onStageChange);
   onStageChangeRef.current = options.onStageChange;
+  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
   const transcribeStartMutation = trpc.transcribe.start.useMutation();
   const collectedTranscribeMutation = trpc.collected.transcribe.useMutation();
   const generateMutation = trpc.recreate.generate.useMutation();
@@ -59,6 +73,12 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
   const [stateByKey, setStateByKey] = useState<Record<string, LibraryRemakeState>>({});
   const [saveStateByKey, setSaveStateByKey] = useState<Record<string, LibrarySaveState>>({});
+  const [voiceGateOpen, setVoiceGateOpen] = useState(false);
+  const pendingRemakeRef = useRef<{
+    source: LibraryRemakeSource;
+    opts?: StartRemakeOptions;
+    mode: "start" | "retry";
+  } | null>(null);
   const runningRef = useRef<Set<string>>(new Set());
   const saveRunningRef = useRef<Set<string>>(new Set());
   const cancelledRef = useRef<Set<string>>(new Set());
@@ -322,17 +342,44 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       }
       if (current?.stage === "inspiration") return;
       if (current?.stage === "ready" && current.scriptId != null) return;
+
+      if (!hasVoiceProfile(onboardingStateQuery.data)) {
+        pendingRemakeRef.current = { source, opts, mode: "start" };
+        setVoiceGateOpen(true);
+        return;
+      }
       void runChain(source, opts);
     },
-    [runChain, stateByKey]
+    [onboardingStateQuery.data, runChain, stateByKey]
   );
 
   const retryRemake = useCallback(
     (source: LibraryRemakeSource, opts?: StartRemakeOptions) => {
+      if (!hasVoiceProfile(onboardingStateQuery.data)) {
+        pendingRemakeRef.current = { source, opts, mode: "retry" };
+        setVoiceGateOpen(true);
+        return;
+      }
       void runChain(source, opts);
     },
-    [runChain]
+    [onboardingStateQuery.data, runChain]
   );
+
+  const onVoiceGateSaved = useCallback(() => {
+    const pending = pendingRemakeRef.current;
+    pendingRemakeRef.current = null;
+    if (!pending) return;
+    void runChain(pending.source, pending.opts);
+  }, [runChain]);
+
+  const VoiceGateDialog = createElement(OnboardingVoiceGateDialog, {
+    open: voiceGateOpen,
+    onOpenChange: (open: boolean) => {
+      setVoiceGateOpen(open);
+      if (!open) pendingRemakeRef.current = null;
+    },
+    onSaved: onVoiceGateSaved,
+  });
 
   const startInspirationSave = useCallback(
     async (source: LibraryRemakeSource, opts?: Pick<StartRemakeOptions, "jobId">) => {
@@ -419,6 +466,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     startRemake,
     retryRemake,
     startInspirationSave,
+    VoiceGateDialog,
   };
 }
 

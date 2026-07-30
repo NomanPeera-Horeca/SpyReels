@@ -491,7 +491,7 @@ export default function CollectedReels() {
     [utils]
   );
 
-  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave } =
+  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
     useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
 
   const currentSortOption = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[4];
@@ -779,6 +779,7 @@ export default function CollectedReels() {
 
   return (
     <div className="mx-auto max-w-7xl px-2 sm:px-0">
+      {VoiceGateDialog}
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">
