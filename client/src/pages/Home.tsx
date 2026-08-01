@@ -488,6 +488,12 @@ export default function Home() {
         });
         return;
       }
+      if (error instanceof TRPCClientError && error.data?.code === "TOO_MANY_REQUESTS") {
+        toast.error("Too many scrapes running right now", {
+          description: "Try again in a few minutes.",
+        });
+        return;
+      }
       if (isLikelyInstagramRateLimitMessage(msg)) {
         toast.error("Instagram is limiting requests right now", {
           description:

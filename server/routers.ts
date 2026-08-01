@@ -47,6 +47,10 @@ import {
   SCRAPE_JOB_STALE_MS,
   SCRAPE_JOB_ZOMBIE_MESSAGE,
 } from "./scrapeJobSweeper";
+import {
+  releaseScrapeSlot,
+  tryAcquireScrapeSlot,
+} from "./scrapeSemaphore";
 import { accountEngagementRatePercent } from "./accountEngagementRate";
 import {
   createCheckoutSession,
@@ -1163,35 +1167,50 @@ export const appRouter = router({
           });
         }
 
-        const jobId = await createScrapeJob({
-          userId: ctx.user.id,
-          handle: normalizedHandle,
-          timeframeDays: input.timeframeDays,
-          status: "running",
-          currentStep: "connecting",
-        });
-
-        // Track usage. Refunded inside runScrapeJob when the failure is
-        // vendor-side (rate limit / temporary restriction) so flaky scrapes
-        // don't burn the user's monthly quota.
-        await incrementUsage(ctx.user.id, "scrapeCount");
-
-        let seededFromFeatured = false;
-        if (featuredAccountId != null) {
-          await seedFeaturedReelsIntoJob(
-            jobId,
-            featuredAccountId,
-            input.timeframeDays
-          );
-          seededFromFeatured = true;
+        // Process-local OOM guard: refuse rather than queue a job that never starts.
+        if (!tryAcquireScrapeSlot()) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message:
+              "Too many scrapes running right now, try again in a few minutes",
+          });
         }
 
-        // Run scraping in background
-        runScrapeJob(jobId, ctx.user.id, normalizedHandle, input.timeframeDays).catch((err) => {
-          console.error(`Scrape job ${jobId} failed:`, err);
-        });
+        let launched = false;
+        try {
+          const jobId = await createScrapeJob({
+            userId: ctx.user.id,
+            handle: normalizedHandle,
+            timeframeDays: input.timeframeDays,
+            status: "running",
+            currentStep: "connecting",
+          });
 
-        return seededFromFeatured ? { jobId, seededFromFeatured: true as const } : { jobId };
+          // Track usage. Refunded inside runScrapeJob when the failure is
+          // vendor-side (rate limit / temporary restriction) so flaky scrapes
+          // don't burn the user's monthly quota.
+          await incrementUsage(ctx.user.id, "scrapeCount");
+
+          let seededFromFeatured = false;
+          if (featuredAccountId != null) {
+            await seedFeaturedReelsIntoJob(
+              jobId,
+              featuredAccountId,
+              input.timeframeDays
+            );
+            seededFromFeatured = true;
+          }
+
+          // Run scraping in background (releases the semaphore in finally).
+          runScrapeJob(jobId, ctx.user.id, normalizedHandle, input.timeframeDays).catch((err) => {
+            console.error(`Scrape job ${jobId} failed:`, err);
+          });
+          launched = true;
+
+          return seededFromFeatured ? { jobId, seededFromFeatured: true as const } : { jobId };
+        } finally {
+          if (!launched) releaseScrapeSlot();
+        }
       }),
 
     status: protectedProcedure
@@ -9044,6 +9063,19 @@ async function runCreatorDiscoveryJob(
 
 /** Background scrape job runner */
 async function runScrapeJob(
+  jobId: number,
+  userId: number,
+  handle: string,
+  timeframeDays: number
+): Promise<void> {
+  try {
+    await runScrapeJobInner(jobId, userId, handle, timeframeDays);
+  } finally {
+    releaseScrapeSlot();
+  }
+}
+
+async function runScrapeJobInner(
   jobId: number,
   userId: number,
   handle: string,

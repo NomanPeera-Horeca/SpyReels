@@ -912,6 +912,12 @@ export default function Discovery() {
         },
         onError: (err) => {
           setAddStateByUsername((prev) => ({ ...prev, [userKey]: "error" }));
+          if (err.data?.code === "TOO_MANY_REQUESTS") {
+            toast.error("Too many scrapes running right now", {
+              description: "Try again in a few minutes.",
+            });
+            return;
+          }
           toast.error(err.message);
         },
       }

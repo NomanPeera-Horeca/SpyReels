@@ -1,5 +1,9 @@
 import { and, eq, lt } from "drizzle-orm";
 import { scrapeJobs } from "../drizzle/schema";
+import {
+  capturePostHogEvent,
+  posthogDistinctIdForUser,
+} from "./analytics/posthogServer";
 import { getDb } from "./db";
 
 export const SCRAPE_JOB_STALE_MS = 10 * 60 * 1000;
@@ -18,7 +22,13 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
   if (!db) return 0;
   const before = new Date(Date.now() - SCRAPE_JOB_STALE_MS);
   const rows = await db
-    .select({ id: scrapeJobs.id })
+    .select({
+      id: scrapeJobs.id,
+      userId: scrapeJobs.userId,
+      workspaceId: scrapeJobs.workspaceId,
+      handle: scrapeJobs.handle,
+      updatedAt: scrapeJobs.updatedAt,
+    })
     .from(scrapeJobs)
     .where(and(eq(scrapeJobs.status, "running"), lt(scrapeJobs.updatedAt, before)));
   for (const r of rows) {
@@ -31,6 +41,17 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
         failureReason: "unknown",
       })
       .where(eq(scrapeJobs.id, r.id));
+
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(r.userId),
+      event: "scrape_job_zombie_swept",
+      properties: {
+        job_id: r.id,
+        handle: r.handle,
+        workspace_id: r.workspaceId,
+        stale_updated_at: r.updatedAt?.toISOString?.() ?? String(r.updatedAt),
+      },
+    });
   }
   if (rows.length > 0) {
     console.log(

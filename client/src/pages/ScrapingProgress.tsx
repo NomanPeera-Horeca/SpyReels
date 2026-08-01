@@ -127,6 +127,12 @@ export default function ScrapingProgress() {
       navigateAfterScrapeStart(d, setLocation, "research");
     },
     onError: (err) => {
+      if (err.data?.code === "TOO_MANY_REQUESTS") {
+        toast.error("Too many scrapes running right now", {
+          description: "Try again in a few minutes.",
+        });
+        return;
+      }
       toast.error("Could not start again", { description: err.message });
     },
   });

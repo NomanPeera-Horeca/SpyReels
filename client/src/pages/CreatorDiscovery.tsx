@@ -539,6 +539,12 @@ export default function CreatorDiscovery() {
           toast.error(err.message);
           return;
         }
+        if (err.data?.code === "TOO_MANY_REQUESTS") {
+          toast.error("Too many scrapes running right now", {
+            description: "Try again in a few minutes.",
+          });
+          return;
+        }
         if (err.data?.code === "FORBIDDEN") {
           toast.error(
             `Account research limit reached (${scrapeGate.used}/${scrapeGate.limit})`,
