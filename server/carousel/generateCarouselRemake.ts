@@ -4,6 +4,12 @@ import {
   type CarouselSlideSpec,
   type CarouselTemplate,
 } from "@shared/carouselTemplates";
+import {
+  carouselFactPool,
+  factFitsTemplate,
+  nicheMatchesFact,
+  type VettedFact,
+} from "@shared/carouselFactPool";
 import { carouselRemakes } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { getDb } from "../db";
@@ -19,22 +25,107 @@ import type { CarouselImageUrlMap } from "@shared/carouselTemplates";
 
 export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 
+/** Per-slide locked average facts selected from the vetted pool for one remake job. */
+export type LockedSlideFacts = Map<string, VettedFact>;
+
 const MIN_SLIDE_COUNT = 3;
 const MAX_SLIDE_COUNT = 20;
 
+const AVERAGE_NOT_LINE_RULE_8 = `8. For any slide with an "average" slot and a "not_line" slot (stat_split_stack): not_line
+must name and negate the specific silent belief a human forms from that slide's average line
+— not generically reframe it. Determine which type of claim average makes, and apply the
+matching logic:
+
+   a) TIMEFRAME/AGE/SCALE claims (a duration, a number, an age — e.g. "The average
+      millionaire is 57", "The average restaurant takes 3 years to profit"): humans facing
+      this crave a FASTER or YOUNGER outcome than reality states. not_line must name that
+      specific impatient craving as a shorter/younger contrasting figure.
+      Correct: "The average millionaire is 57" → "Not 27"
+      Correct: "The average restaurant takes 3 years to profit" → "Not 3 months"
+      Wrong: "Not yours" (no craving named, no echo of the number)
+
+   b) FAILURE/HARDSHIP claims (a real setback, loss, or struggle — e.g. "McDonald's failed
+      in its first year open"): humans facing this form a FEAR that one failure defines them
+      permanently. not_line must name and kill that specific fear, not confirm the fact or
+      offer an unrelated reframe.
+      Correct: "McDonald's failed in its first year open" → "Not forever"
+      Wrong: "Not a myth" (confirms the fact instead of addressing the fear it creates)
+      Wrong: "Not true" (confirms/denies the fact itself, ignores the human fear entirely)
+
+Before finalizing not_line, identify: (1) is this a timeframe/age/scale claim or a
+failure/hardship claim, (2) what specific craving or fear would a human form from it, (3)
+does not_line directly name and negate that specific craving/fear. If not_line could apply
+unchanged to a different average line on a different slide, it has failed this rule —
+it must be specific to what THAT slide's average line makes someone feel.`;
+
+/**
+ * Pick vetted facts for average+not_line slides. One fact id per job (no reuse).
+ * Slides without a niche+template match are omitted (unnamed-brand fallback).
+ */
+export function selectVettedFactsForSlides(
+  templateId: string,
+  niche: string,
+  slides: CarouselSlideSpec[]
+): LockedSlideFacts {
+  const locked: LockedSlideFacts = new Map();
+  const usedFactIds = new Set<string>();
+  const candidates = carouselFactPool.filter(
+    (fact) => factFitsTemplate(fact, templateId) && nicheMatchesFact(niche, fact)
+  );
+
+  for (const slide of slides) {
+    if (!slideHasAverageNotLinePair(slide)) continue;
+    const pick = candidates.find((fact) => !usedFactIds.has(fact.id));
+    if (!pick) continue;
+    usedFactIds.add(pick.id);
+    locked.set(slide.id, pick);
+  }
+
+  return locked;
+}
+
+/** Force locked average slots to vetted factText so the LLM cannot mutate them. */
+export function applyLockedAverageFacts(
+  values: CarouselSlideValuesMap,
+  lockedFacts: LockedSlideFacts
+): CarouselSlideValuesMap {
+  if (lockedFacts.size === 0) return values;
+  const next: CarouselSlideValuesMap = { ...values };
+  for (const [slideId, fact] of lockedFacts) {
+    next[slideId] = {
+      ...(next[slideId] ?? {}),
+      average: fact.factText,
+    };
+  }
+  return next;
+}
+
 /**
  * Map an image slot to its most specific text line for photo search.
- * Cover grid: photo_tl -> excuse_tl (etc). Split stack: prefer "excuse".
+ * Cover grid: photo_tl -> excuse_tl (etc).
+ * Average vs Not: photo_top -> average, photo_bottom -> not_line.
+ * Excuse split: photo_before / default -> excuse.
  */
 function textContextForImageSlot(
   slideVals: Record<string, string>,
   imageSlotId: string
 ): string {
+  if (imageSlotId === "photo_top" || imageSlotId === "top") {
+    if (typeof slideVals.average === "string" && slideVals.average.trim()) {
+      return slideVals.average.trim();
+    }
+  }
+  if (imageSlotId === "photo_bottom" || imageSlotId === "bottom") {
+    if (typeof slideVals.not_line === "string" && slideVals.not_line.trim()) {
+      return slideVals.not_line.trim();
+    }
+  }
+
   const suffix = imageSlotId.startsWith("photo_")
     ? imageSlotId.slice("photo_".length)
     : "";
 
-  if (suffix && suffix !== "before" && suffix !== "after") {
+  if (suffix && suffix !== "before" && suffix !== "after" && suffix !== "top" && suffix !== "bottom") {
     const paired =
       slideVals[`excuse_${suffix}`] ??
       slideVals[`headline_${suffix}`] ??
@@ -94,26 +185,62 @@ export function buildCarouselRemakeJsonSchema(slides: CarouselSlideSpec[]): {
   };
 }
 
+function slideHasAverageNotLinePair(slide: CarouselSlideSpec): boolean {
+  if (slide.layoutId !== "stat_split_stack") return false;
+  const ids = new Set(slide.slots.map((s) => s.id));
+  return ids.has("average") && ids.has("not_line");
+}
+
+function reframeAngleInstruction(angle: VettedFact["reframeAngle"]): string {
+  return angle === "fear_negation"
+    ? 'Apply Rule 8 branch (b) FAILURE/HARDSHIP (fear negation) for not_line on this slide.'
+    : 'Apply Rule 8 branch (a) TIMEFRAME/AGE/SCALE (craving negation) for not_line on this slide.';
+}
+
 function buildCarouselRemakePrompt(
   templateName: string,
   templateDescription: string,
   slides: CarouselSlideSpec[],
-  niche: string
+  niche: string,
+  lockedFacts: LockedSlideFacts = new Map()
 ): string {
+  const hasAverageNotPair = slides.some(slideHasAverageNotLinePair);
+  const unlockedAverageSlides = slides.filter(
+    (slide) => slideHasAverageNotLinePair(slide) && !lockedFacts.has(slide.id)
+  );
+
   const slideBlocks = slides
     .map((slide) => {
+      const locked = lockedFacts.get(slide.id);
       const slotLines = slide.slots
-        .map(
-          (slot) =>
-            `- slot "${slot.id}" (${slot.role}, label "${slot.label}"): ${slot.budget.min}-${slot.budget.max} characters. Tone/length reference: "${slot.defaultText}"`
-        )
+        .map((slot) => {
+          if (locked && slot.id === "average") {
+            return `- slot "average" (${slot.role}, label "${slot.label}"): LOCKED. Copy this exact text verbatim (do not rewrite, shorten, or invent a different fact): "${locked.factText}"`;
+          }
+          if (locked && slot.id === "not_line") {
+            return `- slot "not_line" (${slot.role}, label "${slot.label}"): ${slot.budget.min}-${slot.budget.max} characters. ${reframeAngleInstruction(locked.reframeAngle)} Generate not_line for the LOCKED average above. Tone/length reference: "${slot.defaultText}"`;
+          }
+          return `- slot "${slot.id}" (${slot.role}, label "${slot.label}"): ${slot.budget.min}-${slot.budget.max} characters. Tone/length reference: "${slot.defaultText}"`;
+        })
         .join("\n");
+      const lockNote = locked
+        ? `\nVetted fact lock: average is fixed. ${reframeAngleInstruction(locked.reframeAngle)}`
+        : "";
       return `Slide ${slide.id} (role: ${slide.role}):
-Viral why (preserve this beat): ${slide.viralWhy}
+Viral why (preserve this beat): ${slide.viralWhy}${lockNote}
 Slots:
 ${slotLines}`;
     })
     .join("\n\n");
+
+  const averageNotRule = hasAverageNotPair ? `\n${AVERAGE_NOT_LINE_RULE_8}\n` : "";
+
+  const noNamedBrandRule =
+    unlockedAverageSlides.length > 0
+      ? `
+9. For slides with an "average" slot that are NOT marked LOCKED: you may invent niche-fit average claims, but you MUST NOT name real brands, companies, restaurants, products, or public figures. Use unnamed framing only (e.g. "a fast-food giant", "the average restaurant", "most independent cafes"). Never write McDonald's, Chipotle, Nobu, or any other real named entity in average or not_line.
+`
+      : "";
 
   return `You rewrite Instagram carousel slide text for a creator's niche. The template layout, fonts, colors, and slide order are LOCKED. You only rewrite slot text.
 
@@ -124,24 +251,24 @@ Template: ${templateName}
 ${templateDescription}
 
 Rules:
-1. Rewrite every slot for the niche above. Be specific and postable. Zero generic filler.
+1. Rewrite every slot for the niche above. Be specific and postable. Zero generic filler. Exception: any slot marked LOCKED must be copied exactly.
 2. Preserve each slide's viral beat exactly as described in "Viral why".
-3. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
+3. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces). Exception: LOCKED average text is copied verbatim even if outside budget.
 4. Keep the same structure: hooks stay hooks, list items stay list items, CTAs stay CTAs.
-5. Use defaultText only as a tone and length reference, not as copy to keep.
+5. Use defaultText only as a tone and length reference, not as copy to keep (unless the slot is LOCKED).
 6. For slots with role "kicker":
    - If the slot label is "Kicker" (hook-style): use the plural noun for the target audience described in the niche above (e.g. "RESTAURANT OWNERS", "FITNESS COACHES", "REAL ESTATE AGENTS"). Do not invent a stylistic or generic word. If the niche names a specific audience noun, use that noun directly, uppercased.
    - If the slot label is "Number" or "Step number": use a short sequence number like "01", "02" (match the tone/length of defaultText).
    - If the slot label is "Stat": the kicker IS the statistic itself (e.g. "82%", "4X", "10K", "90"). Do not use audience nouns or sequence numbers. Prefer a short striking number within the character budget.
    Always stay within the character budget for that slot.
-7. Return ONLY the tool payload with every slide id and every slot id filled.
-
+7. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
 }
 
 function validateBudgets(
   slides: CarouselSlideSpec[],
-  values: CarouselSlideValuesMap
+  values: CarouselSlideValuesMap,
+  lockedFacts: LockedSlideFacts = new Map()
 ): { ok: true } | { ok: false; issues: string[] } {
   const issues: string[] = [];
   for (const slide of slides) {
@@ -151,6 +278,8 @@ function validateBudgets(
       continue;
     }
     for (const slot of slide.slots) {
+      // Vetted pool facts are authoritative; skip length checks on locked averages.
+      if (slot.id === "average" && lockedFacts.has(slide.id)) continue;
       const text = slideVals[slot.id];
       if (typeof text !== "string") {
         issues.push(`Missing ${slide.id}.${slot.id}`);
@@ -167,17 +296,92 @@ function validateBudgets(
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
 }
 
+const CONFIRMATORY_NOT_LINE =
+  /^(not\s+(a\s+)?(myth|true|false|fake|lie|rumor|joke)\b)/i;
+
+const TIME_UNIT_WORDS = new Set([
+  "year",
+  "years",
+  "month",
+  "months",
+  "week",
+  "weeks",
+  "day",
+  "days",
+  "hour",
+  "hours",
+  "minute",
+  "minutes",
+]);
+
+/** Soft heuristic: warn when not_line looks disconnected from average (no auto-retry). */
+function warnAverageNotLineConsistency(
+  slides: CarouselSlideSpec[],
+  values: CarouselSlideValuesMap
+): void {
+  for (const slide of slides) {
+    if (!slideHasAverageNotLinePair(slide)) continue;
+    const average = values[slide.id]?.average?.trim() ?? "";
+    const notLine = values[slide.id]?.not_line?.trim() ?? "";
+    if (!average || !notLine) continue;
+
+    if (CONFIRMATORY_NOT_LINE.test(notLine)) {
+      console.warn(
+        `[carouselRemake] not_line confirmatory on ${slide.id}: average="${average}" not_line="${notLine}"`
+      );
+      continue;
+    }
+
+    const avgNums: string[] = average.match(/\d+/g) ?? [];
+    const notNums: string[] = notLine.match(/\d+/g) ?? [];
+    const stop = new Set(["the", "and", "for", "with", "was", "are", "its"]);
+    const avgTokens = average
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2 && !stop.has(t));
+    const notTokens = new Set(
+      notLine
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+    );
+
+    const sharesNumber = avgNums.some((n) => notNums.includes(n));
+    const sharesUnit = avgTokens.some((t) => TIME_UNIT_WORDS.has(t) && notTokens.has(t));
+    const sharesWord = avgTokens.some(
+      (t) => !TIME_UNIT_WORDS.has(t) && !/^\d+$/.test(t) && notTokens.has(t)
+    );
+    const hasNotMarker = /^not\b/i.test(notLine);
+
+    if (hasNotMarker && (sharesNumber || sharesUnit || sharesWord)) continue;
+
+    console.warn(
+      `[carouselRemake] not_line weak echo on ${slide.id}: average="${average}" not_line="${notLine}"`
+    );
+  }
+}
+
 async function invokeCarouselRemakeOnce(
   templateName: string,
   templateDescription: string,
   slides: CarouselSlideSpec[],
   niche: string,
+  lockedFacts: LockedSlideFacts = new Map(),
   repairNote?: string
 ): Promise<CarouselSlideValuesMap> {
   const schema = buildCarouselRemakeJsonSchema(slides);
+  const basePrompt = buildCarouselRemakePrompt(
+    templateName,
+    templateDescription,
+    slides,
+    niche,
+    lockedFacts
+  );
   const userPrompt = repairNote
-    ? `${buildCarouselRemakePrompt(templateName, templateDescription, slides, niche)}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${repairNote}`
-    : buildCarouselRemakePrompt(templateName, templateDescription, slides, niche);
+    ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${repairNote}`
+    : basePrompt;
 
   const response = await invokeLLM({
     messages: [
@@ -197,7 +401,7 @@ async function invokeCarouselRemakeOnce(
 
   const raw = String(response.choices[0]?.message?.content ?? "");
   const parsed = parseLlmJson<CarouselSlideValuesMap>(raw, {});
-  return parsed;
+  return applyLockedAverageFacts(parsed, lockedFacts);
 }
 
 /**
@@ -279,6 +483,34 @@ function countMiddleSlides(template: CarouselTemplate): number {
  * repeating pattern for layout/slots/budgets, renumbering ids and "kicker"
  * number text.
  */
+/** Rotate Style hints on cloned middle slides so Pexels queries do not collide. */
+function rotateClonedStyleHint(
+  baseHint: string,
+  slotId: string,
+  cloneIndex: number
+): string {
+  const topAlts = [
+    baseHint,
+    "accomplished professional celebrating a milestone, warm natural light",
+    "confident person in a polished setting, soft golden hour light",
+  ];
+  const bottomAlts = [
+    baseHint,
+    "person working late with focused intensity, dim room light",
+    "younger professional grinding on laptop, candid night vibe",
+  ];
+  const isBottom =
+    slotId === "photo_bottom" ||
+    slotId.endsWith("_bottom") ||
+    slotId.includes("before");
+  const isTop =
+    slotId === "photo_top" ||
+    slotId.endsWith("_top") ||
+    slotId.includes("after");
+  const alts = isBottom ? bottomAlts : isTop ? topAlts : [baseHint];
+  return alts[cloneIndex % alts.length] ?? baseHint;
+}
+
 function buildDynamicSlideList(
   template: CarouselTemplate,
   desiredMiddleCount: number
@@ -296,10 +528,19 @@ function buildDynamicSlideList(
       }
       return { ...slot };
     });
+    const clonedImageSlots = middlePattern.imageSlots?.map((imgSlot) => ({
+      ...imgSlot,
+      searchQueryHint: rotateClonedStyleHint(
+        imgSlot.searchQueryHint,
+        imgSlot.id,
+        i
+      ),
+    }));
     middleSlides.push({
       ...middlePattern,
       id: `slide_${String(i + 2).padStart(2, "0")}`,
       slots: clonedSlots,
+      ...(clonedImageSlots ? { imageSlots: clonedImageSlots } : {}),
     });
   }
 
@@ -362,13 +603,30 @@ export async function generateCarouselRemake(
       }
     }
 
+    // Per-job vetted fact selection (ids not reused across slides in this remake).
+    const lockedFacts = selectVettedFactsForSlides(
+      template.id,
+      niche,
+      effectiveSlides
+    );
+    if (lockedFacts.size > 0) {
+      console.log(
+        `[carouselRemake] ${remakeId}: locked ${lockedFacts.size} vetted fact(s): ${[
+          ...lockedFacts.entries(),
+        ]
+          .map(([slideId, fact]) => `${slideId}=${fact.id}`)
+          .join(", ")}`
+      );
+    }
+
     let values = await invokeCarouselRemakeOnce(
       template.name,
       template.description,
       effectiveSlides,
-      niche
+      niche,
+      lockedFacts
     );
-    let validation = validateBudgets(effectiveSlides, values);
+    let validation = validateBudgets(effectiveSlides, values, lockedFacts);
 
     if (!validation.ok) {
       values = await invokeCarouselRemakeOnce(
@@ -376,9 +634,10 @@ export async function generateCarouselRemake(
         template.description,
         effectiveSlides,
         niche,
+        lockedFacts,
         validation.issues.join("\n")
       );
-      validation = validateBudgets(effectiveSlides, values);
+      validation = validateBudgets(effectiveSlides, values, lockedFacts);
       if (!validation.ok) {
         await db
           .update(carouselRemakes)
@@ -391,7 +650,12 @@ export async function generateCarouselRemake(
       }
     }
 
+    // Soft visibility only: do not fail or retry on weak not_line echo.
+    warnAverageNotLineConsistency(effectiveSlides, values);
+
     const imageUrls: CarouselImageUrlMap = {};
+    // Per-generation-job dedupe only (not persisted across remakes).
+    const usedImageUrls = new Set<string>();
 
     const pool =
       uploadedImagePool && uploadedImagePool.length > 0
@@ -436,6 +700,7 @@ export async function generateCarouselRemake(
         for (const need of needs) {
           const url = assigned[need.key];
           if (!url) continue;
+          usedImageUrls.add(url);
           const existing = imageUrls[need.slideId];
           if (typeof existing === "string" || !existing) {
             imageUrls[need.slideId] = { [need.slotId]: url };
@@ -449,7 +714,11 @@ export async function generateCarouselRemake(
             need.searchQueryHint,
             niche,
             undefined,
-            need.textContext
+            need.textContext,
+            {
+              usedUrls: usedImageUrls,
+              dedupeDifferentiator: `${need.slideId}-${need.slotId}`,
+            }
           );
           if (!resolvedUrl) continue;
           const existing = imageUrls[need.slideId];
@@ -469,7 +738,12 @@ export async function generateCarouselRemake(
           const resolvedUrl = await resolveSlideImage(
             imageSlot.searchQueryHint,
             niche,
-            uploaded
+            uploaded,
+            undefined,
+            {
+              usedUrls: usedImageUrls,
+              dedupeDifferentiator: slide.id,
+            }
           );
           if (resolvedUrl) {
             imageUrls[slide.id] = resolvedUrl;

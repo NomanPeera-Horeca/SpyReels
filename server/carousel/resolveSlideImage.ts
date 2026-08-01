@@ -34,13 +34,16 @@ function buildCarouselImageQuery(
   return stylePart;
 }
 
-async function searchPexelsPhoto(query: string): Promise<string | null> {
+async function searchPexelsPhoto(
+  query: string,
+  page = 1
+): Promise<string | null> {
   const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) {
     return null;
   }
   try {
-    const url = `${PEXELS_API_URL}?query=${encodeURIComponent(query)}&per_page=1&orientation=portrait`;
+    const url = `${PEXELS_API_URL}?query=${encodeURIComponent(query)}&per_page=1&orientation=portrait&page=${Math.max(1, page)}`;
     const response = await fetch(url, {
       headers: { Authorization: apiKey },
     });
@@ -119,6 +122,13 @@ async function generateAiFallbackImage(query: string): Promise<string | null> {
   }
 }
 
+export type ResolveSlideImageOptions = {
+  /** In-job set of already-used image URLs (not persisted). */
+  usedUrls?: Set<string>;
+  /** Appended on one Pexels retry when the first hit is a duplicate. */
+  dedupeDifferentiator?: string;
+};
+
 /**
  * Resolve the final image URL for one image slot.
  * Priority: uploaded photo (if provided) > stock photo search (Pexels,
@@ -126,24 +136,45 @@ async function generateAiFallbackImage(query: string): Promise<string | null> {
  *
  * Query order: niche + specific slot text lead; template mood hint trails
  * as Style: so stock/AI do not ignore the niche for generic lifestyle hits.
+ *
+ * When `usedUrls` is provided, a duplicate Pexels hit triggers one retry
+ * (modified query + page 2) before AI fallback.
  */
 export async function resolveSlideImage(
   searchQueryHint: string,
   niche: string,
   uploadedUrl?: string,
-  textContext?: string
+  textContext?: string,
+  options?: ResolveSlideImageOptions
 ): Promise<string | null> {
   if (uploadedUrl) {
+    options?.usedUrls?.add(uploadedUrl);
     return uploadedUrl;
   }
 
   const query = buildCarouselImageQuery(niche, searchQueryHint, textContext);
   console.log("[carousel-image-query]", query);
 
-  const stockUrl = await searchPexelsPhoto(query);
+  let stockUrl = await searchPexelsPhoto(query);
+  if (stockUrl && options?.usedUrls?.has(stockUrl)) {
+    const diff = options.dedupeDifferentiator?.trim() || "alternate framing";
+    const retryQuery = `${query} ${diff}`.trim();
+    console.warn(
+      `[resolveSlideImage] duplicate URL, one Pexels retry: ${stockUrl}`
+    );
+    console.log("[carousel-image-query-dedupe-retry]", retryQuery);
+    const retried = await searchPexelsPhoto(retryQuery, 2);
+    stockUrl = retried && !options.usedUrls.has(retried) ? retried : null;
+  }
+
   if (stockUrl) {
+    options?.usedUrls?.add(stockUrl);
     return stockUrl;
   }
 
-  return generateAiFallbackImage(query);
+  const aiUrl = await generateAiFallbackImage(query);
+  if (aiUrl) {
+    options?.usedUrls?.add(aiUrl);
+  }
+  return aiUrl;
 }
