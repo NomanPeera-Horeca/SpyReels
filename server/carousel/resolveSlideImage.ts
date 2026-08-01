@@ -2,6 +2,38 @@ import { storagePut } from "../storage";
 
 const PEXELS_API_URL = "https://api.pexels.com/v1/search";
 
+/**
+ * Prefer a single short line for search (excuse / first segment), not a
+ * joined multi-slot block that dilutes the query.
+ */
+export function extractPhotoSearchSubject(textContext: string | undefined): string {
+  if (!textContext?.trim()) return "";
+  const firstSegment = textContext.split(" / ")[0]?.trim() ?? textContext.trim();
+  // Drop trailing punctuation noise; keep enough for a visual subject.
+  return firstSegment.replace(/\s+/g, " ").slice(0, 90);
+}
+
+function buildCarouselImageQuery(
+  niche: string,
+  searchQueryHint: string,
+  textContext?: string
+): string {
+  const subject = extractPhotoSearchSubject(textContext);
+  const nichePart = niche.trim();
+  const stylePart = searchQueryHint.trim();
+
+  if (subject && nichePart) {
+    return `${nichePart}: ${subject}. Style: ${stylePart}`.trim();
+  }
+  if (nichePart) {
+    return `${nichePart}. Style: ${stylePart}`.trim();
+  }
+  if (subject) {
+    return `${subject}. Style: ${stylePart}`.trim();
+  }
+  return stylePart;
+}
+
 async function searchPexelsPhoto(query: string): Promise<string | null> {
   const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) {
@@ -91,17 +123,22 @@ async function generateAiFallbackImage(query: string): Promise<string | null> {
  * Resolve the final image URL for one image slot.
  * Priority: uploaded photo (if provided) > stock photo search (Pexels,
  * skipped gracefully if PEXELS_API_KEY is not set) > AI-generated fallback.
+ *
+ * Query order: niche + specific slot text lead; template mood hint trails
+ * as Style: so stock/AI do not ignore the niche for generic lifestyle hits.
  */
 export async function resolveSlideImage(
   searchQueryHint: string,
   niche: string,
-  uploadedUrl?: string
+  uploadedUrl?: string,
+  textContext?: string
 ): Promise<string | null> {
   if (uploadedUrl) {
     return uploadedUrl;
   }
 
-  const query = `${searchQueryHint}, ${niche}`.trim();
+  const query = buildCarouselImageQuery(niche, searchQueryHint, textContext);
+  console.log("[carousel-image-query]", query);
 
   const stockUrl = await searchPexelsPhoto(query);
   if (stockUrl) {

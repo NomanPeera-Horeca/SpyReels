@@ -22,6 +22,36 @@ export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 const MIN_SLIDE_COUNT = 3;
 const MAX_SLIDE_COUNT = 20;
 
+/**
+ * Map an image slot to its most specific text line for photo search.
+ * Cover grid: photo_tl -> excuse_tl (etc). Split stack: prefer "excuse".
+ */
+function textContextForImageSlot(
+  slideVals: Record<string, string>,
+  imageSlotId: string
+): string {
+  const suffix = imageSlotId.startsWith("photo_")
+    ? imageSlotId.slice("photo_".length)
+    : "";
+
+  if (suffix && suffix !== "before" && suffix !== "after") {
+    const paired =
+      slideVals[`excuse_${suffix}`] ??
+      slideVals[`headline_${suffix}`] ??
+      slideVals[suffix];
+    if (typeof paired === "string" && paired.trim()) return paired.trim();
+  }
+
+  if (typeof slideVals.excuse === "string" && slideVals.excuse.trim()) {
+    return slideVals.excuse.trim();
+  }
+
+  const first = Object.values(slideVals).find(
+    (v) => typeof v === "string" && v.trim().length > 0
+  );
+  return first?.trim() ?? "";
+}
+
 function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
@@ -374,7 +404,6 @@ export async function generateCarouselRemake(
         if (!slide.imageSlots?.length) continue;
         for (const imageSlot of slide.imageSlots) {
           const slideVals = values[slide.id] ?? {};
-          const textContext = Object.values(slideVals).filter(Boolean).join(" / ");
           const labelLower = imageSlot.label.toLowerCase();
           const isAfter =
             imageSlot.id.includes("after") ||
@@ -384,6 +413,11 @@ export async function generateCarouselRemake(
             labelLower.includes("success") ||
             labelLower.includes("outcome") ||
             labelLower.includes("discipline");
+          // Prefer the matching excuse line for this cell (cover grid:
+          // photo_tl -> excuse_tl). Fall back to shared "excuse", then first text.
+          const textContext =
+            textContextForImageSlot(slideVals, imageSlot.id) ||
+            imageSlot.searchQueryHint;
           needs.push({
             key: `${slide.id}::${imageSlot.id}`,
             slideId: slide.id,
@@ -391,7 +425,7 @@ export async function generateCarouselRemake(
             roleHint: isAfter
               ? "after/success / discipline energy (color)"
               : "before/excuse / comfort energy",
-            textContext: textContext || imageSlot.searchQueryHint,
+            textContext,
             searchQueryHint: imageSlot.searchQueryHint,
           });
         }
@@ -412,8 +446,10 @@ export async function generateCarouselRemake(
       } else {
         for (const need of needs) {
           const resolvedUrl = await resolveSlideImage(
-            `${need.searchQueryHint}. Context: ${need.textContext}`,
-            niche
+            need.searchQueryHint,
+            niche,
+            undefined,
+            need.textContext
           );
           if (!resolvedUrl) continue;
           const existing = imageUrls[need.slideId];
