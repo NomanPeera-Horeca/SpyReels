@@ -131,6 +131,15 @@ export default function ScrapingProgress() {
     },
   });
 
+  const cancelMutation = trpc.scrape.cancel.useMutation({
+    onSuccess: async () => {
+      await progressQuery.refetch();
+    },
+    onError: (err) => {
+      toast.error("Could not cancel", { description: err.message });
+    },
+  });
+
   const handleRetry = () => {
     if (!data) return;
     const n = normalizeInstagramHandle(data.handle);
@@ -144,7 +153,20 @@ export default function ScrapingProgress() {
     });
   };
 
+  const handleCancel = () => {
+    if (jobId == null || cancelMutation.isPending) return;
+    cancelMutation.mutate({ jobId });
+  };
+
   const handleBackToResearch = () => handleBack();
+
+  const canCancel =
+    status === "running" ||
+    status === "pending" ||
+    (data?.currentStep != null &&
+      ["connecting", "fetching_profile", "pulling_reels", "ranking"].includes(
+        data.currentStep
+      ));
 
   if (progressQuery.isError) {
     return (
@@ -214,8 +236,18 @@ export default function ScrapingProgress() {
             <div className="h-full w-1/3 animate-pulse rounded-full bg-primary/40" />
           </div>
         )}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>{statusLine}</span>
+          {canCancel && jobId != null ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelMutation.isPending}
+              className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+            >
+              {cancelMutation.isPending ? "Cancelling..." : "Cancel"}
+            </button>
+          ) : null}
         </div>
       </div>
 

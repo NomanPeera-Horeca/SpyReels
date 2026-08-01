@@ -43,6 +43,10 @@ const reelNicheInputEnum = z.enum(
   REEL_NICHE_VALUES as unknown as [string, ...string[]]
 );
 import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
+import {
+  SCRAPE_JOB_STALE_MS,
+  SCRAPE_JOB_ZOMBIE_MESSAGE,
+} from "./scrapeJobSweeper";
 import { accountEngagementRatePercent } from "./accountEngagementRate";
 import {
   createCheckoutSession,
@@ -1104,7 +1108,21 @@ export const appRouter = router({
           (j) => j.handle.toLowerCase() === normalizedHandle && j.status === "running"
         );
         if (existingRunningJob) {
-          return { jobId: existingRunningJob.id, resumed: true as const };
+          const staleBefore = Date.now() - SCRAPE_JOB_STALE_MS;
+          const lastTouch = new Date(existingRunningJob.updatedAt).getTime();
+          if (Number.isFinite(lastTouch) && lastTouch >= staleBefore) {
+            return { jobId: existingRunningJob.id, resumed: true as const };
+          }
+          // Zombie: process likely died mid-scrape. Fail it and start fresh.
+          await updateScrapeJob(existingRunningJob.id, {
+            status: "failed",
+            errorMessage: SCRAPE_JOB_ZOMBIE_MESSAGE,
+            currentStep: "failed",
+            failureReason: "unknown",
+          });
+          console.warn(
+            `[scrape.start] marked stale running job ${existingRunningJob.id} (@${normalizedHandle}) failed before starting a new scrape`
+          );
         }
         const existingCompletedJob = existingJobs.find(
           (j) => j.handle.toLowerCase() === normalizedHandle && j.status === "completed"
@@ -1182,6 +1200,27 @@ export const appRouter = router({
         const job = await getScrapeJob(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
         return job;
+      }),
+
+    /** Cancel an in-flight scrape owned by the current user. */
+    cancel: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await getScrapeJob(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.userId !== ctx.user.id || job.workspaceId !== ctx.workspaceId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        if (job.status !== "running" && job.status !== "pending") {
+          return { jobId: job.id, status: job.status };
+        }
+        await updateScrapeJob(job.id, {
+          status: "failed",
+          errorMessage: "Cancelled by user",
+          currentStep: "failed",
+          failureReason: "unknown",
+        });
+        return { jobId: job.id, status: "failed" as const };
       }),
 
     /**

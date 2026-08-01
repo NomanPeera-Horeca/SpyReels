@@ -12,6 +12,7 @@ import { createExtensionRouter } from "../extensionApi";
 import { handleTelegramUpdate, setupTelegramWebhook } from "../telegramBot";
 import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
+import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
@@ -171,6 +172,7 @@ async function startServer() {
 
     startTranscriptionZombieSweeper();
     startCollectedReelIngestSweeper();
+    startScrapeJobZombieSweeper();
 
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {
