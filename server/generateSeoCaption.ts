@@ -1,3 +1,4 @@
+import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
@@ -109,6 +110,8 @@ Every caption MUST have exactly 3 parts:
 
 2. THE BODY (5-15 lines depending on length setting)
    - Provide EXTRA VALUE beyond what the video shows. Do not just summarize the video
+   - Extra value should be advice or actionable framing, not new factual claims, stats, or named-source assertions that are not present in the source script
+   - ${AI_FACT_CLAIM_GUARDRAIL}
    - Give context as to WHY people should care about this post
    - Use proper formatting: emojis + line breaks for readability
    - AVOID long paragraphs, especially at the beginning

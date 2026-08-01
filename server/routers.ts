@@ -281,6 +281,7 @@ import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import {
   buildIdeaScriptProgressSteps,
   type IdeaScriptProgressStepId,
@@ -497,7 +498,7 @@ INPUT INTERPRETATION:
 SPOKEN HOOK RULES (field: hook):
 - 6 to 14 words. Vary length across the set.
 - This is what the creator SAYS on camera in the first 2 seconds.
-- Use specific numbers, dollar amounts, or time frames where natural.
+- ${AI_FACT_CLAIM_GUARDRAIL}
 - No em dashes anywhere.
 - No clichés: avoid "Did you know", "Here is the thing", "Get ready", "Wait until you see", "POV:", "Tell me why", "Imagine if", "What if I told you".
 - Each hook should feel like a real creator wrote it, not AI.
@@ -9935,7 +9936,7 @@ ${gradeLevelInstruction}${cuesInstruction}
 **INSTRUCTIONS:**
 1. Keep the SAME topic and core message as the original.
 2. HOOK: Use the SAME hook pattern type ("${(viralStructure.hook as any)?.type || 'Bold Statement'}") with the same core idea, but rephrase it so it sounds different. Use different words, a slightly different angle, or a fresh way to open.
-3. BODY: Cover the SAME key points and arguments but rephrase them. Change the examples, analogies, or supporting details. Keep the same pacing style ("${(viralStructure.body as any)?.pacing || 'Problem-solution'}") and information flow.
+3. BODY: Cover the SAME key points and arguments but rephrase them. Change the examples, analogies, or supporting details. New examples must stay generic or hypothetical; do not swap in a different invented real-entity fact, study, or named-source claim. ${AI_FACT_CLAIM_GUARDRAIL} Keep the same pacing style ("${(viralStructure.body as any)?.pacing || 'Problem-solution'}") and information flow.
 4. TRANSITION: Use a similar transition technique ("${(viralStructure.transition as any)?.type || 'pivot'}") but word it differently.
 5. CTA: End with a similar call-to-action style ("${(viralStructure.cta as any)?.type || 'engagement'}") but phrase it in your own words.
 6. Match the overall tone: "${(viralStructure as any)?.overallTone || 'engaging'}"

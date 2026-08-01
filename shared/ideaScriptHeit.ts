@@ -1,5 +1,6 @@
 /** H.E.I.T. script framework: Hook, Explain, Illustrate, Teach */
 
+import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import { buildRetentionAndShareRules } from "@shared/coachRetentionRules";
 import type { CoachScriptMode } from "@shared/coachScriptMode";
 import { inferCoachScriptMode } from "@shared/coachScriptMode";
@@ -31,7 +32,7 @@ ${profileBlock}
 H.E.I.T. SCRIPT STANDARDS (one flowing spoken script, in this order):
 - H (Hook): First line only. Open Loop A: tease outcome, do NOT reveal the best insight yet.
 - E (Explain): Open Loop B: name pain plus a surprising complication. No full payoff.
-- I (Illustrate): Close Loop B with a concrete story or visual. Main insight still withheld.
+- I (Illustrate): Close Loop B with a concrete story or visual. Main insight still withheld. Prefer hypothetical or relatable examples from the user's idea, not invented named-entity facts.
 - T (Teach): Close Loop A: ONE payoff insight at roughly 70% through the script.
 - Final lines: loop tie-back, DM-share trigger ("Send this to the friend who..."), and funnel-appropriate CTA.
 
@@ -41,6 +42,7 @@ ${wordRule}
 - Short paragraphs (1-2 sentences), natural contractions, spoken rhythm.
 - No section labels like "Hook:" or "Body:" in the script.
 - Sound like a real creator, not an AI summary.
+- ${AI_FACT_CLAIM_GUARDRAIL}
 ${audienceBlock}
 ${formatRules}
 
@@ -81,8 +83,9 @@ ${viralHookBlock}
 H.E.I.T. means:
 - H = Hook (context OR contrarian OR intrigue)
 - E = Explain (surface pain they feel, then deeper problem that makes it worse)
-- I = Illustrate (analogy or story with relatable detail)
+- I = Illustrate (analogy or story with relatable detail; hypothetical or from the user's idea, not invented named-entity facts)
 - T = Teach (single action: ONE lesson only, not a listicle)
+- Fact claims: ${AI_FACT_CLAIM_GUARDRAIL}
 
 Return JSON with:
 - hook: { heitType ("context"|"contrarian"|"intrigue"), text (ready-to-speak opening line), technique (why it stops the scroll) }
