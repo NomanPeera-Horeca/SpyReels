@@ -94,7 +94,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",
     description:
-      "Find viral Instagram Reels by views and engagement rate. Transcribe hooks and generate scripts. Free tier for nano and micro creators.",
+      "Search any Instagram creator's Reels, sort by views and engagement rate, then remake the best ones in your own voice in seconds and go viral.",
   },
   "/features/30-day-content-plan": {
     title: "30-Day Instagram Content Plan | SpyReels",

@@ -351,9 +351,9 @@ Tighten line one, add one proof beat, pick one CTA. Ship three tests.
       slug: "guide-find-viral-reels-your-niche",
       excerpt:
         "Build a competitor map, search by problems (not vibes), and run a weekly research ritual that turns patterns into scheduled content tests.",
-      metaTitle: "How to Find Viral Reels in Your Niche (2026 Method)",
+      metaTitle: "How to Find Viral Reels (2026 Guide) | SpyReels",
       metaDescription:
-        "The exact system top creators use to find viral Reels in their niche before they peak so they can ride the trend instead of chasing it.",
+        "Stop scrolling for content ideas. Find real viral Reels in your niche within seconds, then remake them in your own voice. Your shortcut to going viral.",
       coverImageUrl: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1200&q=80",
       tags: ["viral reels", "trend research", "niche growth"],
       status: "published" as const,

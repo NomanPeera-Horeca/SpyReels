@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_TITLE = "Instagram Reel Spy Tool - Find Any Account's Viral Reels Free";
 const PAGE_DESCRIPTION =
-  "Paste any public Instagram handle and see their top Reels ranked by views, engagement and outlier score. Free tier, no credit card. Transcribe hooks and remake any Reel as a script for your niche.";
+  "Search any Instagram creator's Reels, sort by views and engagement rate, then remake the best ones in your own voice in seconds and go viral.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/viral-reel-finder`;
 
 const HERO_SUBHEAD =

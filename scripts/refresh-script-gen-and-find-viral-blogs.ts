@@ -34,7 +34,7 @@ const UPDATES = [
     sourceKeyword: "how to find viral reels",
     metaTitle: "How to Find Viral Reels (2026 Guide) | SpyReels",
     metaDescription:
-      "How to find viral Reels without doom scrolling: competitor maps, problem-based search, early-viral signals, and a ninety-minute weekly workflow.",
+      "Stop scrolling for content ideas. Find real viral Reels in your niche within seconds, then remake them in your own voice. Your shortcut to going viral.",
     articleFile: "05-guide-find-viral-reels-your-niche.md",
   },
 ] as const;
