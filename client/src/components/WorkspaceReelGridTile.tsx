@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Play } from "lucide-react";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { cn } from "@/lib/utils";
@@ -94,6 +94,22 @@ export function WorkspaceReelGridTile({
           mediaFallback
         )}
 
+        {/* Visual-only: static thumbnails open the workflow dialog on click.
+            Centered Play (watch here) vs bottom-right ExternalLink (leave to platform). */}
+        {!interactiveMedia ? (
+          <div
+            className={cn(
+              "pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
+              // Touch / coarse pointers: always visible but subtle.
+              // Fine-pointer hover devices: fade in on card hover.
+              "opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
+            )}
+            aria-hidden
+          >
+            <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+          </div>
+        ) : null}
+
         <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
           #{index + 1}
         </div>
@@ -122,7 +138,7 @@ export function WorkspaceReelGridTile({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 p-0 text-white/90 backdrop-blur hover:bg-black/75"
+            className="absolute bottom-2 right-2 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 p-0 text-white/90 backdrop-blur hover:bg-black/75"
             title="Open on Instagram"
             aria-label="Open on Instagram"
           >
