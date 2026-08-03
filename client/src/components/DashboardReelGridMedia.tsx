@@ -25,6 +25,7 @@ export function DashboardReelGridMedia({
   onPlayingChange,
   onVideoUrlResolved,
   fallbackLabel,
+  autoStart = false,
 }: {
   thumbnailUrl: string | null | undefined;
   videoUrl: string | null | undefined;
@@ -38,6 +39,8 @@ export function DashboardReelGridMedia({
   /** Called when a refreshed stable URL is fetched (parent can update cache). */
   onVideoUrlResolved?: (url: string) => void;
   fallbackLabel?: string;
+  /** Start playback once on mount (used when only the active tile mounts a player). */
+  autoStart?: boolean;
 }) {
   const posthog = usePostHog();
   const [playingLocal, setPlayingLocal] = useState(false);
@@ -199,6 +202,13 @@ export function DashboardReelGridMedia({
       pauseVideoElement(true);
     }
   }, [playing, pauseVideoElement]);
+
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void startPlayback();
+  }, [autoStart, startPlayback]);
 
   const handleVideoLoadedData = () => {
     tryPlay();

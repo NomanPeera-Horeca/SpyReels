@@ -32,6 +32,10 @@ export function PlatformVideoCard({
   onMakeVersion,
   onOpenMyScript,
   saveBusy,
+  interactiveMedia = false,
+  inlinePlaying = false,
+  onInlinePlayRequest,
+  onInlinePlayStop,
 }: {
   video: PlatformVideoLike;
   index: number;
@@ -53,8 +57,15 @@ export function PlatformVideoCard({
   onMakeVersion: () => void;
   onOpenMyScript: () => void;
   saveBusy?: boolean;
+  /** When true and a playable MP4 exists, media click plays inline (not modal). */
+  interactiveMedia?: boolean;
+  inlinePlaying?: boolean;
+  onInlinePlayRequest?: () => void;
+  onInlinePlayStop?: () => void;
 }) {
   const captionText = config.getCaption(video);
+  const playableUrl = config.getVideoUrl(video);
+  const canPlayInline = interactiveMedia && Boolean(playableUrl?.trim());
   const actionSource: ReelActionSource =
     config.platform === "tiktok"
       ? { source: "tiktok", tiktokVideoId: video.id }
@@ -65,11 +76,15 @@ export function PlatformVideoCard({
       index={index}
       isActive={isModalOpen}
       thumbnailUrl={video.thumbnailUrl}
-      videoUrl={config.getVideoUrl(video)}
+      videoUrl={playableUrl}
       engagementRate={video.engagementRate}
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
       onMediaClick={onMediaClick}
+      interactiveMedia={canPlayInline}
+      inlinePlaying={inlinePlaying}
+      onInlinePlayRequest={onInlinePlayRequest}
+      onInlinePlayStop={onInlinePlayStop}
       topRight={topRight}
       statusChip={
         hasTranscription && !isNoSpeech ? (

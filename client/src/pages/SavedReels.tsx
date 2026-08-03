@@ -193,6 +193,8 @@ export default function SavedReels() {
 
   const [expandedSavedId, setExpandedSavedId] = useState<number | null>(null);
   const [gridModalSavedId, setGridModalSavedId] = useState<number | null>(null);
+  /** Freeze-safe: only one grid tile mounts an inline player at a time. */
+  const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
 
@@ -1060,7 +1062,12 @@ export default function SavedReels() {
                         engagementRate={engagementRate}
                         duration={reel.duration}
                         reelUrl={reel.reelUrl}
-                        onMediaClick={() => setGridModalSavedId(item.id)}
+                        interactiveMedia
+                        inlinePlaying={inlinePlayingId === item.id}
+                        onInlinePlayRequest={() => setInlinePlayingId(item.id)}
+                        onInlinePlayStop={() =>
+                          setInlinePlayingId((cur) => (cur === item.id ? null : cur))
+                        }
                         topRight={
                           <button
                             type="button"

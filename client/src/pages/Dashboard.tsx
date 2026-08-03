@@ -385,6 +385,8 @@ export default function Dashboard() {
   const [expandedReelId, setExpandedReelId] = useState<number | null>(null);
   /** Grid view: full workflow in a dialog instead of inline under the card. */
   const [gridModalReelId, setGridModalReelId] = useState<number | null>(null);
+  /** Freeze-safe: only one grid tile mounts an inline player at a time. */
+  const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
   /**
@@ -2780,7 +2782,12 @@ export default function Dashboard() {
                         engagementRate={reel.engagementRate}
                         duration={reel.duration}
                         reelUrl={reel.reelUrl}
-                        onMediaClick={() => setGridModalReelId(reel.id)}
+                        interactiveMedia
+                        inlinePlaying={inlinePlayingId === reel.id}
+                        onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
+                        onInlinePlayStop={() =>
+                          setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                        }
                         highlightBanner={
                           isFirstVisitDashboard && index === 0 ? "Start here" : null
                         }

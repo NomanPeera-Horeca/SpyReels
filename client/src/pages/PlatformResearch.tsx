@@ -116,6 +116,8 @@ export default function PlatformResearch({
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [gridModalVideoId, setGridModalVideoId] = useState<number | null>(null);
+  /** Freeze-safe: only one grid tile mounts an inline player at a time. */
+  const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
   const [pendingTranscriptions, setPendingTranscriptions] = useState<
     Set<number>
   >(() => new Set());
@@ -877,6 +879,14 @@ export default function PlatformResearch({
                       isSaved={isSaved}
                       recreateState={recreateSt}
                       oneClickRemake={buildOneClick(video)}
+                      interactiveMedia
+                      inlinePlaying={inlinePlayingId === video.id}
+                      onInlinePlayRequest={() => setInlinePlayingId(video.id)}
+                      onInlinePlayStop={() =>
+                        setInlinePlayingId((cur) =>
+                          cur === video.id ? null : cur
+                        )
+                      }
                       topRight={
                         <button
                           type="button"

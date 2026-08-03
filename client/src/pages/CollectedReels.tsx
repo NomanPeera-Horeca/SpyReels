@@ -173,6 +173,8 @@ export default function CollectedReels() {
 
   const [expandedCollectedId, setExpandedCollectedId] = useState<number | null>(null);
   const [gridModalCollectedId, setGridModalCollectedId] = useState<number | null>(null);
+  /** Freeze-safe: only one grid tile mounts an inline player at a time. */
+  const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
 
@@ -1179,7 +1181,12 @@ export default function CollectedReels() {
                 engagementRate={isReady ? engagementRate : 0}
                 duration={isReady ? reel.duration : null}
                 reelUrl={isReady ? reel.reelUrl : null}
-                onMediaClick={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
+                interactiveMedia={isReady && hasThumb}
+                inlinePlaying={inlinePlayingId === reel.id}
+                onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
+                onInlinePlayStop={() =>
+                  setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                }
                 topRight={renderGridRemoveButton(reel.id)}
                 mediaLabel={
                   <span className="rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">

@@ -26,8 +26,17 @@ export type WorkspaceReelGridTileProps = {
   stats: ReactNode;
   actions: ReactNode;
   mediaFallback?: ReactNode;
-  /** When false (default), renders a lazy thumbnail only. Set true for inline grid playback. */
+  /**
+   * Freeze-safe inline playback: only the actively playing tile mounts a
+   * video player. Other tiles stay as lazy thumbnails.
+   */
   interactiveMedia?: boolean;
+  /** True when this tile is the one currently playing inline. */
+  inlinePlaying?: boolean;
+  /** User asked to play this tile (parent should set inlinePlaying to this reel). */
+  onInlinePlayRequest?: () => void;
+  /** Playback stopped/closed (parent should clear inlinePlaying if it matches). */
+  onInlinePlayStop?: () => void;
 };
 
 /**
@@ -57,9 +66,22 @@ export function WorkspaceReelGridTile({
   actions,
   mediaFallback,
   interactiveMedia = false,
+  inlinePlaying = false,
+  onInlinePlayRequest,
+  onInlinePlayStop,
 }: WorkspaceReelGridTileProps) {
   const showEngagement =
     engagementRate > 0 && !(highlightBanner && index === 0);
+  const hasThumb = (thumbnailUrl ?? "").trim().length > 0;
+  const showInlinePlayer = interactiveMedia && inlinePlaying && hasThumb;
+
+  const handleMediaAreaClick = () => {
+    if (interactiveMedia) {
+      if (!inlinePlaying) onInlinePlayRequest?.();
+      return;
+    }
+    onMediaClick?.();
+  };
 
   return (
     <div
@@ -71,16 +93,20 @@ export function WorkspaceReelGridTile({
     >
       <div
         className="relative aspect-[9/14] cursor-pointer overflow-hidden"
-        onClick={onMediaClick}
+        onClick={handleMediaAreaClick}
       >
-        {(thumbnailUrl ?? "").trim() ? (
-          interactiveMedia ? (
+        {hasThumb ? (
+          showInlinePlayer ? (
             <DashboardReelGridMedia
               className="relative h-full w-full"
               thumbnailUrl={thumbnailUrl}
               videoUrl={videoUrl}
               shortcode={shortcode}
               reelId={reelId}
+              autoStart
+              onPlayingChange={(playing) => {
+                if (!playing) onInlinePlayStop?.();
+              }}
             />
           ) : (
             <ReelGridThumbnail
@@ -94,17 +120,16 @@ export function WorkspaceReelGridTile({
           mediaFallback
         )}
 
-        {/* Visual-only: static thumbnails open the workflow dialog on click.
-            Centered Play (watch here) vs bottom-right ExternalLink (leave to platform). */}
-        {!interactiveMedia ? (
+        {/* Play affordance: real click target when interactive; visual-only otherwise. */}
+        {hasThumb && !showInlinePlayer ? (
           <div
             className={cn(
-              "pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
-              // Touch / coarse pointers: always visible but subtle.
-              // Fine-pointer hover devices: fade in on card hover.
-              "opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
+              "absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
+              interactiveMedia
+                ? "opacity-90 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
+                : "pointer-events-none opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
             )}
-            aria-hidden
+            aria-hidden={!interactiveMedia}
           >
             <Play className="h-5 w-5 translate-x-0.5 fill-current" />
           </div>
@@ -130,7 +155,7 @@ export function WorkspaceReelGridTile({
           </div>
         ) : null}
 
-        {topRight ? <div className="absolute right-2 top-2">{topRight}</div> : null}
+        {topRight ? <div className="absolute right-2 top-2 z-30">{topRight}</div> : null}
 
         {reelUrl ? (
           <a
