@@ -57,7 +57,7 @@ export function PlatformVideoCard({
   onMakeVersion: () => void;
   onOpenMyScript: () => void;
   saveBusy?: boolean;
-  /** When true and a playable MP4 exists, media click plays inline (not modal). */
+  /** When true, media click plays inline when a URL exists or TikTok can refresh via reel id. */
   interactiveMedia?: boolean;
   inlinePlaying?: boolean;
   onInlinePlayRequest?: () => void;
@@ -65,7 +65,11 @@ export function PlatformVideoCard({
 }) {
   const captionText = config.getCaption(video);
   const playableUrl = config.getVideoUrl(video);
-  const canPlayInline = interactiveMedia && Boolean(playableUrl?.trim());
+  // TikTok: allow mount/play request with empty videoUrl; DashboardReelGridMedia refreshes via reelId.
+  const canPlayInline =
+    interactiveMedia &&
+    (Boolean(playableUrl?.trim()) ||
+      (config.platform === "tiktok" && video.id != null));
   const actionSource: ReelActionSource =
     config.platform === "tiktok"
       ? { source: "tiktok", tiktokVideoId: video.id }
@@ -77,6 +81,8 @@ export function PlatformVideoCard({
       isActive={isModalOpen}
       thumbnailUrl={video.thumbnailUrl}
       videoUrl={playableUrl}
+      reelId={video.id}
+      mediaPlatform={config.platform === "tiktok" ? "tiktok" : "instagram"}
       engagementRate={video.engagementRate}
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
@@ -174,7 +180,7 @@ export function PlatformVideoCard({
           saveBusy={saveBusy}
         />
       }
-      mediaFallback={<div className="h-full w-full bg-muted" />}
+      mediaFallback={<div className="absolute inset-0 h-full w-full bg-muted" />}
     />
   );
 }

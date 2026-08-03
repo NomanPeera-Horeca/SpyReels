@@ -13,6 +13,8 @@ export type WorkspaceReelGridTileProps = {
   videoUrl?: string | null;
   shortcode?: string | null;
   reelId?: number;
+  /** Platform for inline URL refresh (Instagram shortcode vs TikTok video id). */
+  mediaPlatform?: "instagram" | "tiktok";
   engagementRate?: number;
   duration?: number | null;
   reelUrl?: string | null;
@@ -52,6 +54,7 @@ export function WorkspaceReelGridTile({
   videoUrl,
   shortcode,
   reelId,
+  mediaPlatform = "instagram",
   engagementRate = 0,
   duration,
   reelUrl,
@@ -92,33 +95,41 @@ export function WorkspaceReelGridTile({
       )}
     >
       <div
-        className="relative aspect-[9/14] cursor-pointer overflow-hidden"
+        className="relative aspect-[9/14] cursor-pointer overflow-hidden bg-muted"
         onClick={handleMediaAreaClick}
       >
-        {hasThumb ? (
-          showInlinePlayer ? (
-            <DashboardReelGridMedia
-              className="relative h-full w-full"
-              thumbnailUrl={thumbnailUrl}
-              videoUrl={videoUrl}
-              shortcode={shortcode}
-              reelId={reelId}
-              autoStart
-              onPlayingChange={(playing) => {
-                if (!playing) onInlinePlayStop?.();
-              }}
-            />
+        {/*
+          Absolute fill is required: percentage height on replaced elements does not
+          resolve against an aspect-ratio box alone, so shorter TikTok covers
+          (e.g. 300x400) leave a black gap under the image.
+        */}
+        <div className="absolute inset-0">
+          {hasThumb ? (
+            showInlinePlayer ? (
+              <DashboardReelGridMedia
+                className="h-full w-full"
+                thumbnailUrl={thumbnailUrl}
+                videoUrl={videoUrl}
+                shortcode={shortcode}
+                reelId={reelId}
+                platform={mediaPlatform}
+                autoStart
+                onPlayingChange={(playing) => {
+                  if (!playing) onInlinePlayStop?.();
+                }}
+              />
+            ) : (
+              <ReelGridThumbnail
+                className="h-full w-full"
+                thumbnailUrl={thumbnailUrl}
+                width={360}
+                height={560}
+              />
+            )
           ) : (
-            <ReelGridThumbnail
-              className="relative h-full w-full"
-              thumbnailUrl={thumbnailUrl}
-              width={360}
-              height={560}
-            />
-          )
-        ) : (
-          mediaFallback
-        )}
+            mediaFallback
+          )}
+        </div>
 
         {/* Play affordance: real click target when interactive; visual-only otherwise. */}
         {hasThumb && !showInlinePlayer ? (
@@ -135,7 +146,7 @@ export function WorkspaceReelGridTile({
           </div>
         ) : null}
 
-        <div className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+        <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
           #{index + 1}
         </div>
 
@@ -150,7 +161,7 @@ export function WorkspaceReelGridTile({
         ) : null}
 
         {showEngagement ? (
-          <div className="absolute bottom-2 left-2 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
+          <div className="absolute bottom-2 left-2 z-10 rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
             {engagementRate.toFixed(2)}%
           </div>
         ) : null}
@@ -172,7 +183,7 @@ export function WorkspaceReelGridTile({
         ) : null}
 
         {duration ? (
-          <span className="absolute right-2 top-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+          <span className="absolute right-2 top-10 z-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
             {formatWorkspaceReelDuration(duration)}
           </span>
         ) : null}

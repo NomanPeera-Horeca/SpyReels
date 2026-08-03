@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,11 +20,15 @@ export function ReelGridThumbnail({
   const [failed, setFailed] = useState(false);
   const thumb = (thumbnailUrl ?? "").trim();
 
+  useEffect(() => {
+    setFailed(false);
+  }, [thumb]);
+
   if (!thumb || failed) {
     return (
       <div
         className={cn(
-          "flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900 text-zinc-400",
+          "absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900 text-zinc-400",
           className
         )}
       >
@@ -47,7 +51,8 @@ export function ReelGridThumbnail({
       loading="lazy"
       decoding="async"
       className={cn(
-        "h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]",
+        // absolute inset-0: fill aspect-ratio parents where % height does not resolve
+        "absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]",
         className
       )}
       onError={() => setFailed(true)}

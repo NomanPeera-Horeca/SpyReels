@@ -13,12 +13,13 @@ import {
 
 type Size = "default" | "compact";
 
-/** Grid/list tile: thumbnail + optional inline playback when `videoUrl` exists (R2 or Instagram CDN). */
+/** Grid/list tile: thumbnail + optional inline playback when `videoUrl` exists (R2 or platform CDN). */
 export function DashboardReelGridMedia({
   thumbnailUrl,
   videoUrl,
   shortcode,
   reelId,
+  platform = "instagram",
   className,
   size = "default",
   playing: playingControlled,
@@ -32,6 +33,8 @@ export function DashboardReelGridMedia({
   /** Required to refresh expired Instagram CDN URLs on play. */
   shortcode?: string | null;
   reelId?: number;
+  /** Instagram (default) or TikTok. YouTube has no downloadable MP4. */
+  platform?: "instagram" | "tiktok";
   className?: string;
   size?: Size;
   playing?: boolean;
@@ -53,12 +56,20 @@ export function DashboardReelGridMedia({
   const programmaticPauseRef = useRef(false);
   const fallbackId = useId();
   const playerId = useMemo(() => {
+    if (platform === "tiktok" && reelId != null) return `tiktok-${reelId}`;
     if (reelId != null) return `reel-${reelId}`;
     const code = (shortcode ?? "").trim();
     if (code) return `shortcode-${code}`;
     return fallbackId;
-  }, [reelId, shortcode, fallbackId]);
-  const refreshMutation = trpc.reels.refreshVideoUrl.useMutation();
+  }, [platform, reelId, shortcode, fallbackId]);
+  const igRefreshMutation = trpc.reels.refreshVideoUrl.useMutation();
+  const ttRefreshMutation = trpc.tiktokScrape.refreshVideoUrl.useMutation();
+  const igMutateAsync = igRefreshMutation.mutateAsync;
+  const ttMutateAsync = ttRefreshMutation.mutateAsync;
+  const refreshPending =
+    platform === "tiktok"
+      ? ttRefreshMutation.isPending
+      : igRefreshMutation.isPending;
   const isCompact = size === "compact";
   const isControlled = playingControlled !== undefined;
   const playing = isControlled ? playingControlled : playingLocal;
@@ -104,7 +115,11 @@ export function DashboardReelGridMedia({
   const thumb = (thumbnailUrl ?? "").trim();
   const showThumb = thumb.length > 0 && !thumbFailed;
   const hasResolvableVideo =
-    resolvedSrc.length > 0 || Boolean(shortcode?.trim()) || Boolean((videoUrl ?? "").trim());
+    resolvedSrc.length > 0 ||
+    Boolean((videoUrl ?? "").trim()) ||
+    (platform === "tiktok"
+      ? reelId != null
+      : Boolean(shortcode?.trim()));
 
   // Do not overwrite the active preview URL while the inline player is open.
   useEffect(() => {
@@ -151,12 +166,25 @@ export function DashboardReelGridMedia({
   const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
     const current = resolvedSrc || (videoUrl ?? "").trim();
     const code = (shortcode ?? "").trim();
-    if (!code && !current) return null;
+    if (platform === "tiktok") {
+      if (reelId == null && !current) return null;
+    } else if (!code && !current) {
+      return null;
+    }
     if (current && !needsVideoUrlRefresh(current)) return current;
-    if (!code) return current || null;
 
     try {
-      const result = await refreshMutation.mutateAsync({
+      if (platform === "tiktok") {
+        if (reelId == null) return current || null;
+        const result = await ttMutateAsync({ videoId: reelId });
+        const next = result.videoUrl.trim();
+        if (!next) return null;
+        setResolvedSrc(next);
+        onVideoUrlResolved?.(next);
+        return next;
+      }
+      if (!code) return current || null;
+      const result = await igMutateAsync({
         shortcode: code,
         reelId,
       });
@@ -173,7 +201,17 @@ export function DashboardReelGridMedia({
       });
       return null;
     }
-  }, [resolvedSrc, videoUrl, shortcode, reelId, refreshMutation, onVideoUrlResolved, capturePreviewEvent]);
+  }, [
+    resolvedSrc,
+    videoUrl,
+    shortcode,
+    reelId,
+    platform,
+    igMutateAsync,
+    ttMutateAsync,
+    onVideoUrlResolved,
+    capturePreviewEvent,
+  ]);
 
   const startPlayback = useCallback(async () => {
     if (isPreparing) return;
@@ -237,9 +275,9 @@ export function DashboardReelGridMedia({
   };
 
   return (
-    <div className={cn(className)}>
+    <div className={cn("relative h-full w-full", className)}>
       {playing && resolvedSrc && !videoFailed ? (
-        <div className="relative h-full w-full bg-black" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute inset-0 bg-black" onClick={(e) => e.stopPropagation()}>
           <video
             ref={videoRef}
             key={playerId}
@@ -249,7 +287,7 @@ export function DashboardReelGridMedia({
             playsInline
             loop={false}
             preload="metadata"
-            className="h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
             onLoadedData={handleVideoLoadedData}
             onPause={handleVideoPause}
             onPlay={handleVideoPlay}
@@ -275,12 +313,12 @@ export function DashboardReelGridMedia({
             <img
               src={thumb}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
               loading="lazy"
               onError={() => setThumbFailed(true)}
             />
           ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900 text-zinc-400">
+            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-2 bg-zinc-900 text-zinc-400">
               <Play
                 className={cn(
                   "fill-current text-zinc-500",
@@ -304,13 +342,13 @@ export function DashboardReelGridMedia({
               )}
               aria-label={videoFailed ? "Play video again" : "Play video"}
               title={videoFailed ? "Preview failed. Tap to try again." : "Play video"}
-              disabled={isPreparing || refreshMutation.isPending}
+              disabled={isPreparing || refreshPending}
               onClick={(e) => {
                 e.stopPropagation();
                 void startPlayback();
               }}
             >
-              {isPreparing || refreshMutation.isPending ? (
+              {isPreparing || refreshPending ? (
                 <Loader2 className={cn("animate-spin", isCompact ? "h-4 w-4" : "h-5 w-5")} />
               ) : (
                 <Play
