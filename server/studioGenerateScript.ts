@@ -92,6 +92,7 @@ export async function generateCoachScriptForWorkspace(args: {
   skipUsageCheck?: boolean;
   profileOverride?: CreatorCoachProfile;
   audienceResearchBlock?: string;
+  researchGroundingBlock?: string;
   onPhase?: (phase: "hook_angle" | "write_script" | "quality_check" | "production_notes") => void;
   scriptModeOverride?: CoachScriptMode;
 }): Promise<GeneratedCoachScript> {
@@ -190,7 +191,12 @@ export async function generateCoachScriptForWorkspace(args: {
           profile.brandDescription,
           args.clarifications,
           audienceResearchBlock,
-          { explicitUserAngle, scriptMode, funnelStage }
+          {
+            explicitUserAngle,
+            scriptMode,
+            funnelStage,
+            researchGroundingBlock: args.researchGroundingBlock,
+          }
         ),
       },
     ],

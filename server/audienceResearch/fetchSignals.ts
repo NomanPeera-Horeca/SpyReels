@@ -200,3 +200,54 @@ export async function fetchAudienceSignalsFromWeb(args: {
 
   return rankAudienceSignals(combined);
 }
+
+export type TopicResearchResult = {
+  title: string;
+  snippet: string | null;
+  sourceUrl: string;
+  score: number;
+};
+
+/**
+ * Topic-specific web research for Studio script grounding (Serper + same
+ * Reddit/Serper transport as audience signals). Prefer factual/organic hits
+ * over audience-question filtering.
+ */
+export async function fetchTopicResearchFromWeb(args: {
+  idea: string;
+  nicheLabel: string;
+}): Promise<TopicResearchResult[]> {
+  const idea = args.idea.replace(/\s+/g, " ").trim().slice(0, 180);
+  const niche = args.nicheLabel.replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!idea) return [];
+
+  const queries = [
+    `${niche} ${idea} statistics facts`.trim(),
+    `${idea} ${niche}`.trim(),
+    `site:reddit.com ${niche} ${idea}`.trim(),
+  ].filter((q) => q.length > 3);
+
+  const settled = await Promise.allSettled(
+    queries.map((q) => fetchSerperSearch(q, "web"))
+  );
+
+  const byUrl = new Map<string, TopicResearchResult>();
+  for (const result of settled) {
+    if (result.status !== "fulfilled") continue;
+    for (const row of result.value) {
+      const url = row.sourceUrl?.trim();
+      if (!url) continue;
+      const existing = byUrl.get(url);
+      if (existing && existing.score >= row.score) continue;
+      byUrl.set(url, {
+        title: row.title,
+        snippet: row.snippet,
+        sourceUrl: url,
+        score: row.score,
+      });
+    }
+  }
+
+  return [...byUrl.values()].sort((a, b) => b.score - a.score);
+}
+

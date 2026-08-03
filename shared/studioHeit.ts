@@ -117,6 +117,7 @@ export function buildCoachPrompt(
     scriptMode?: CoachScriptMode;
     funnelStage?: string | null;
     contentFormat?: string | null;
+    researchGroundingBlock?: string;
   }
 ): string {
   const clarificationBlock =
@@ -126,6 +127,11 @@ export function buildCoachPrompt(
   const audienceBlock = audienceResearchBlock?.trim()
     ? `\n\n${audienceResearchBlock.trim()}`
     : "";
+
+  const researchRaw = options?.researchGroundingBlock?.trim() ?? "";
+  const researchBlock = researchRaw
+    ? `\n\nVerified research for this topic (use ONLY these facts/examples for the illustrate section's concrete details. Do not invent additional stats, named studies, or named entities beyond what's provided here):\n${researchRaw}\nIf these results don't contain a usable concrete example, keep the illustrate section hypothetical/generic rather than inventing a specific fact.`
+    : `\n\nNo verified research results were available for this topic. Keep the illustrate section hypothetical, relatable, or drawn from the creator's own idea. Do not invent specific stats, named studies, or named real-world entities as facts.`;
 
   const topicRules = options?.explicitUserAngle
     ? COACH_EXPLICIT_ANGLE_RULES
@@ -138,11 +144,15 @@ export function buildCoachPrompt(
     contentFormat: options?.contentFormat,
     description,
   });
-  const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing — you must output this exact hookType value).`;
+  const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing: you must output this exact hookType value).`;
+
+  const illustrateInstruction = researchRaw
+    ? "I section only. One story, analogy, or example. Concrete details must come from the Verified research block above (or stay hypothetical if that block has nothing usable)."
+    : "I section only. One story, analogy, or example with concrete detail. Prefer hypothetical/relatable framing; do not invent specific stats or named entities as facts.";
 
   return `A content creator just shared this raw idea:
 
-"${description}"${clarificationBlock}${audienceBlock}
+"${description}"${clarificationBlock}${audienceBlock}${researchBlock}
 
 ${buildStudioDateContext()}
 
@@ -208,7 +218,7 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
   "hook": "H section only. Spoken Layer 2. MAX 2 sentences. Open Loop A. Match hookType. Zero warm-up.",
   "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
-  "illustrate": "I section only. One story, analogy, or example with concrete detail.",
+  "illustrate": "${illustrateInstruction}",
   "teach": "T section only. ONE clear takeaway or action. Not a list. Do not repeat the call to action.",
   "cta": "OPTIONAL. Empty string when the Reel should end on teach. If present: one natural next action for a cold viewer, different from teach. Never invent personal names or insider nicknames in the CTA."
 }

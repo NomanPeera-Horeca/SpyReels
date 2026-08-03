@@ -17,6 +17,10 @@ import {
 } from "./agentProgressStore";
 import { getCreatorCoachProfile } from "./planCoachProfile";
 import { generateCoachScriptForWorkspace, convertRoughScriptForWorkspace, type GeneratedCoachScript } from "./studioGenerateScript";
+import {
+  formatResearchGroundingForPrompt,
+  getResearchGrounding,
+} from "./studioResearchGrounding";
 
 const FLOW = "coach" as const;
 
@@ -86,7 +90,11 @@ export async function generateCoachScriptWithProgress(args: {
       audienceResearchBlock = formatAudienceSignalsForPrompt(signals.slice(0, 5));
     }
 
-    setCoachStep(args.userId, "find_viral", "audience_research");
+    setCoachStep(args.userId, "research_grounding", "audience_research");
+    const researchItems = await getResearchGrounding(args.description, profile.niche);
+    const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
+
+    setCoachStep(args.userId, "find_viral", "research_grounding");
     setCoachStep(args.userId, "hook_angle", "find_viral");
 
     const script = await generateCoachScriptForWorkspace({
@@ -100,6 +108,7 @@ export async function generateCoachScriptWithProgress(args: {
       skipUsageCheck: args.skipUsageCheck,
       profileOverride: profile,
       audienceResearchBlock,
+      researchGroundingBlock,
       onPhase: (phase) => {
         if (phase === "write_script") {
           setCoachStep(args.userId, "write_script", "hook_angle");

@@ -3,6 +3,7 @@ import { buildProgressSteps, type AgentProgressStep } from "./agentProgress";
 export type CoachScriptProgressStepId =
   | "read_profile"
   | "audience_research"
+  | "research_grounding"
   | "find_viral"
   | "hook_angle"
   | "write_script"
@@ -12,6 +13,7 @@ export type CoachScriptProgressStepId =
 const STEP_ORDER: CoachScriptProgressStepId[] = [
   "read_profile",
   "audience_research",
+  "research_grounding",
   "find_viral",
   "hook_angle",
   "write_script",
@@ -32,6 +34,8 @@ export function defaultCoachScriptStepLabel(stepId: CoachScriptProgressStepId): 
       return "Reading your niche and audience profile";
     case "audience_research":
       return "Researching your audience on Reddit and Quora";
+    case "research_grounding":
+      return "Researching real examples...";
     case "find_viral":
       return "Finding what's going viral in your niche";
     case "hook_angle":
@@ -90,6 +94,7 @@ export function personalizedCoachScriptStepLabels(args: {
   return {
     read_profile: `Reading ${nicheShort} and ${audienceShort}`,
     audience_research: `Researching ${audienceShort} on Reddit and Quora`,
+    research_grounding: "Researching real examples...",
     find_viral: `Finding what's going viral in ${nicheShort}`,
     hook_angle: "Picking a scroll-stopping hook angle",
     write_script: "Writing your viral script",
