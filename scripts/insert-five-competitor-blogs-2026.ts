@@ -25,9 +25,9 @@ const POSTS = [
     sourceKeyword: "meedro alternative",
     excerpt:
       "Looking for a Meedro alternative? Compare SpyReels vs Meedro on pricing, Reels workflow, transcription, and who should switch in 2026.",
-    metaTitle: "Best Meedro Alternative 2026 | SpyReels",
+    metaTitle: "Meedro Alternative | Better Than Meedro",
     metaDescription:
-      "Best Meedro alternative for Instagram Reels in 2026. Compare SpyReels on pricing, transcription, AI scripts, and who should switch from Meedro today.",
+      "Want more views, not just more videos to study? Meedro shows you what's viral. SpyReels turns it into a ready-to-film script in your voice, so you can post and grow faster.",
     coverImageUrl:
       "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&q=80",
     tags: ["meedro alternative", "comparison", "instagram reels tool"],
@@ -39,9 +39,9 @@ const POSTS = [
     sourceKeyword: "viralfindr alternative",
     excerpt:
       "Outgrowing ViralFindr? See the best ViralFindr alternatives for transcription, hook breakdown, and AI scripts, with an honest SpyReels comparison.",
-    metaTitle: "Best ViralFindr Alternative 2026 | SpyReels",
+    metaTitle: "ViralFindr Alternative | Better Than ViralFindr",
     metaDescription:
-      "Best ViralFindr alternative in 2026 for creators who need transcription, hook breakdown, and AI scripts. Honest SpyReels comparison and switch steps.",
+      "Stop collecting viral videos, start posting them. SpyReels finds what's working in your niche and writes your next script, hook, structure, and all, so you can go viral faster.",
     coverImageUrl:
       "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&q=80",
     tags: ["viralfindr alternative", "comparison", "instagram reels tool"],
@@ -67,9 +67,9 @@ const POSTS = [
     sourceKeyword: "viralfindr review",
     excerpt:
       "ViralFindr review 2026 with honest pros, cons, pricing, and when to switch to SpyReels for transcription, hooks, and AI Reels scripts.",
-    metaTitle: "ViralFindr Review 2026: Worth It?",
+    metaTitle: "ViralFindr Review 2026: Is It Worth It? | SpyReels",
     metaDescription:
-      "ViralFindr review 2026: worth it or not? Features, pricing, common complaints, and the best alternative when you need scripts, not only downloads.",
+      "ViralFindr review 2026: honest pros, cons, pricing, and the best alternative when you need scripts, not just downloads.",
     coverImageUrl:
       "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=1200&q=80",
     tags: ["viralfindr review", "comparison", "instagram reels tool"],

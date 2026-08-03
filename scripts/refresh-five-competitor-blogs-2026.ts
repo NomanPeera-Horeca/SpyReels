@@ -21,15 +21,16 @@ function loadArticle(file: string): string {
 const UPDATES = [
   {
     slug: "guide-meedro-alternative",
+    metaTitle: "Meedro Alternative | Better Than Meedro",
     metaDescription:
-      "Best Meedro alternative for Instagram Reels in 2026. Compare SpyReels on pricing, transcription, AI scripts, and who should switch from Meedro today.",
+      "Want more views, not just more videos to study? Meedro shows you what's viral. SpyReels turns it into a ready-to-film script in your voice, so you can post and grow faster.",
     articleFile: "11-guide-meedro-alternative.md",
   },
   {
     slug: "guide-viralfindr-alternative",
-    metaTitle: "ViralFindr Free Alternative 2026 | SpyReels",
+    metaTitle: "ViralFindr Alternative | Better Than ViralFindr",
     metaDescription:
-      "Best ViralFindr free alternative in 2026 for creators who need transcription, hook breakdown, and AI scripts. Honest SpyReels comparison and switch steps.",
+      "Stop collecting viral videos, start posting them. SpyReels finds what's working in your niche and writes your next script, hook, structure, and all, so you can go viral faster.",
     articleFile: "12-guide-viralfindr-alternative.md",
   },
   {
@@ -40,8 +41,9 @@ const UPDATES = [
   },
   {
     slug: "viralfindr-review-2026",
+    metaTitle: "ViralFindr Review 2026: Is It Worth It? | SpyReels",
     metaDescription:
-      "ViralFindr review 2026: worth it or not? Features, pricing, common complaints, and the best alternative when you need scripts, not only downloads.",
+      "ViralFindr review 2026: honest pros, cons, pricing, and the best alternative when you need scripts, not just downloads.",
     articleFile: "14-viralfindr-review-2026.md",
   },
   {
