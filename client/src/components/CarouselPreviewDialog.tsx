@@ -78,6 +78,14 @@ const FORMAT_OPTIONS: { value: FormatChoice; label: string; aspectRatio: Carouse
   { value: "tiktok_9_16", label: "TikTok", aspectRatio: "9:16", iconWidth: 8, iconHeight: 14 },
 ];
 
+/** Map stored aspect override back to a format chip (Post vs Story defaults). */
+function formatChoiceFromAspect(
+  aspect: string | null | undefined
+): FormatChoice {
+  if (aspect === "9:16") return "story_reel_9_16";
+  return "post_4_5";
+}
+
 function FormatIcon({ width, height, active }: { width: number; height: number; active: boolean }) {
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
@@ -109,13 +117,18 @@ async function captureSlideAsPngBlob(node: HTMLElement): Promise<Blob> {
   if (active instanceof HTMLElement && active.isContentEditable) {
     active.blur();
   }
-  // Allow blur commit + React paint (local displayValue) before snapshot.
+  // Allow blur commit + React paint (text edits and format/aspect switch) before snapshot.
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 
   await document.fonts.ready;
+  // Capture the live slide layout node (aspect CSS already applied via designOverride).
   const target = (node.firstElementChild as HTMLElement | null) ?? node;
+  // Force layout flush so html-to-image reads current 4:5 / 9:16 box size.
+  void target.offsetWidth;
+  void target.offsetHeight;
+
   const blob = await toBlob(target, {
     pixelRatio: 3,
     cacheBust: true,
@@ -203,6 +216,21 @@ export function CarouselPreviewDialog({
   const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
     onError: (err) => {
       toast.error(err.message || "Failed to save text edit");
+    },
+  });
+  const updateAspectRatioMutation = trpc.carouselRemake.updateAspectRatio.useMutation({
+    onSuccess: (data) => {
+      if (activeRemakeId != null) {
+        utils.carouselRemake.status.setData({ remakeId: activeRemakeId }, (prev) =>
+          prev
+            ? { ...prev, aspectRatioOverride: data.aspectRatio }
+            : prev
+        );
+      }
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to save format");
     },
   });
   const updateScheduleMutation = trpc.carouselRemake.updateSchedule.useMutation({
@@ -314,6 +342,14 @@ export function CarouselPreviewDialog({
     statusQuery.data?.postTime,
   ]);
 
+  // Sync format chip from stored aspect when remake loads (not on local persist).
+  useEffect(() => {
+    const data = statusQuery.data;
+    if (!data || data.status !== "completed") return;
+    setFormatChoice(formatChoiceFromAspect(data.aspectRatioOverride));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on remake identity / status; persist must not reset chip label
+  }, [activeRemakeId, statusQuery.data?.status, statusQuery.data?.id]);
+
   function handleSlotChange(slideId: string, slotId: string, value: string) {
     setRemakeSlideValues((prev) => {
       if (!prev) return prev;
@@ -331,6 +367,22 @@ export function CarouselPreviewDialog({
         slideId,
         slotId,
         value,
+      });
+    }
+  }
+
+  /** Switch format locally then persist aspect; never calls start / LLM. */
+  function handleFormatChange(next: FormatChoice) {
+    setFormatChoice(next);
+    const aspect = FORMAT_OPTIONS.find((f) => f.value === next)?.aspectRatio;
+    if (
+      aspect &&
+      activeRemakeId != null &&
+      statusQuery.data?.status === "completed"
+    ) {
+      updateAspectRatioMutation.mutate({
+        remakeId: activeRemakeId,
+        aspectRatio: aspect,
       });
     }
   }
@@ -355,6 +407,17 @@ export function CarouselPreviewDialog({
       ? (statusQuery.data.slideStructure as CarouselSlideSpec[])
       : undefined;
 
+  /** Live aspect from format chip; re-renders slides without regenerating text. */
+  const liveAspectRatio: CarouselDesignTokens["aspectRatio"] | null =
+    viewingRemake
+      ? (FORMAT_OPTIONS.find((f) => f.value === formatChoice)?.aspectRatio ??
+          (statusQuery.data?.aspectRatioOverride as
+            | CarouselDesignTokens["aspectRatio"]
+            | null
+            | undefined) ??
+          null)
+      : null;
+
   const effectiveDesignOverride =
     viewingRemake
       ? toDesignOverride(
@@ -362,7 +425,7 @@ export function CarouselPreviewDialog({
             | { background: string; foreground: string; accent: string; muted: string; fontDisplay?: string; fontBody?: string }
             | null
             | undefined,
-          statusQuery.data?.aspectRatioOverride
+          liveAspectRatio ?? statusQuery.data?.aspectRatioOverride
         )
       : undefined;
 
@@ -588,107 +651,141 @@ export function CarouselPreviewDialog({
               ) : null}
 
               {hasRemake ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={showOriginal ? "outline" : "default"}
-                    size="sm"
-                    onClick={() => setShowOriginal(false)}
-                  >
-                    Remake
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={showOriginal ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setShowOriginal(true)}
-                  >
-                    Original
-                  </Button>
-                  {!isReopenMode ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant={showOriginal ? "outline" : "default"}
                       size="sm"
-                      onClick={() => {
-                        setActiveRemakeId(null);
-                        setRemakeSlideValues(null);
-                        setShowOriginal(false);
-                      }}
+                      onClick={() => setShowOriginal(false)}
                     >
-                      Start over
+                      Remake
                     </Button>
-                  ) : null}
-                  {statusQuery.data?.status === "completed" &&
-                  activeRemakeId != null ? (
-                    <Popover open={scheduleOpen} onOpenChange={setScheduleOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="sm" className="gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {postDate
-                            ? postDate.toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                              })
-                            : "Schedule"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72 space-y-3 p-3" align="start">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Plan post date</p>
-                          <p className="text-xs text-muted-foreground">
-                            For your reference only. SpyReels does not post to Instagram.
-                          </p>
-                        </div>
-                        <PostDateTimePicker
-                          date={postDate}
-                          onDateChange={setPostDate}
-                          time={postTime}
-                          onTimeChange={setPostTime}
-                          timezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
-                          compact
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={updateScheduleMutation.isPending || !postDate}
-                            onClick={() => {
-                              updateScheduleMutation.mutate({
-                                remakeId: activeRemakeId,
-                                postDate: postDate
-                                  ? postDate.toISOString()
-                                  : null,
-                                postTime: postTime || null,
-                              });
-                            }}
-                          >
-                            {updateScheduleMutation.isPending
-                              ? "Saving…"
-                              : "Save schedule"}
+                    <Button
+                      type="button"
+                      variant={showOriginal ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowOriginal(true)}
+                    >
+                      Original
+                    </Button>
+                    {!isReopenMode ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setActiveRemakeId(null);
+                          setRemakeSlideValues(null);
+                          setShowOriginal(false);
+                        }}
+                      >
+                        Start over
+                      </Button>
+                    ) : null}
+                    {statusQuery.data?.status === "completed" &&
+                    activeRemakeId != null ? (
+                      <Popover open={scheduleOpen} onOpenChange={setScheduleOpen}>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {postDate
+                              ? postDate.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              : "Schedule"}
                           </Button>
-                          {postDate || statusQuery.data?.postDate ? (
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 space-y-3 p-3" align="start">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Plan post date</p>
+                            <p className="text-xs text-muted-foreground">
+                              For your reference only. SpyReels does not post to Instagram.
+                            </p>
+                          </div>
+                          <PostDateTimePicker
+                            date={postDate}
+                            onDateChange={setPostDate}
+                            time={postTime}
+                            onTimeChange={setPostTime}
+                            timezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                            compact
+                          />
+                          <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"
                               size="sm"
-                              variant="ghost"
-                              disabled={updateScheduleMutation.isPending}
+                              disabled={updateScheduleMutation.isPending || !postDate}
                               onClick={() => {
-                                setPostDate(undefined);
-                                setPostTime("09:00");
                                 updateScheduleMutation.mutate({
                                   remakeId: activeRemakeId,
-                                  postDate: null,
-                                  postTime: null,
+                                  postDate: postDate
+                                    ? postDate.toISOString()
+                                    : null,
+                                  postTime: postTime || null,
                                 });
                               }}
                             >
-                              Clear
+                              {updateScheduleMutation.isPending
+                                ? "Saving…"
+                                : "Save schedule"}
                             </Button>
-                          ) : null}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                            {postDate || statusQuery.data?.postDate ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={updateScheduleMutation.isPending}
+                                onClick={() => {
+                                  setPostDate(undefined);
+                                  setPostTime("09:00");
+                                  updateScheduleMutation.mutate({
+                                    remakeId: activeRemakeId,
+                                    postDate: null,
+                                    postTime: null,
+                                  });
+                                }}
+                              >
+                                Clear
+                              </Button>
+                            ) : null}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    ) : null}
+                  </div>
+
+                  {viewingRemake && statusQuery.data?.status === "completed" ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Format
+                      </label>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {FORMAT_OPTIONS.map((opt) => {
+                          const active = formatChoice === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => handleFormatChange(opt.value)}
+                              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                                active
+                                  ? "border-primary bg-primary/10 text-foreground"
+                                  : "border-input bg-card text-muted-foreground"
+                              }`}
+                            >
+                              <FormatIcon
+                                width={opt.iconWidth}
+                                height={opt.iconHeight}
+                                active={active}
+                              />
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               ) : isLoadingReopen ? null : (

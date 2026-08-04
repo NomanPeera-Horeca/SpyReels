@@ -266,6 +266,7 @@ export const carouselRemakeRouter = router({
           createdAt: carouselRemakes.createdAt,
           postDate: carouselRemakes.postDate,
           postTime: carouselRemakes.postTime,
+          aspectRatioOverride: carouselRemakes.aspectRatioOverride,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
         })
         .from(carouselRemakes)
@@ -455,5 +456,58 @@ export const carouselRemakeRouter = router({
         .where(eq(carouselRemakes.id, input.remakeId));
 
       return { slotValues: next };
+    }),
+
+  /**
+   * Persist aspect ratio format switch for a completed remake.
+   * Pure column update; does not touch slotValues / images / LLM.
+   */
+  updateAspectRatio: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        aspectRatio: ASPECT_RATIO_SCHEMA,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before changing format",
+        });
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({ aspectRatioOverride: input.aspectRatio })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, aspectRatio: input.aspectRatio };
     }),
 });
