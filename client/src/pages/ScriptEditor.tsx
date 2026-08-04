@@ -37,10 +37,12 @@ import {
   Check,
   Send,
   Link2,
+  Clapperboard,
 } from "lucide-react";
 import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
 import { openShareLinkModal } from "@/components/ShareLinkModal";
 import { SentFromBadge } from "@/components/SentFromBadge";
+import { BrollResultsPanel } from "@/components/BrollResultsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -139,6 +141,7 @@ export default function ScriptEditor() {
     hookType?: string;
   }>({});
   const [captionDialogOpen, setCaptionDialogOpen] = useState(false);
+  const [brollOpen, setBrollOpen] = useState(false);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [editableCaption, setEditableCaption] = useState("");
   const [editableHashtags, setEditableHashtags] = useState("");
@@ -717,6 +720,25 @@ export default function ScriptEditor() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Fix spelling & grammar errors</TooltipContent>
+                </Tooltip>
+
+                {/* B-Roll suggestions */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBrollOpen(true)}
+                      disabled={!editedContent.trim()}
+                      className="gap-1.5 h-8"
+                    >
+                      <Clapperboard className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">B-Roll</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Find Pexels B-roll clips for this script
+                  </TooltipContent>
                 </Tooltip>
 
                 {/* Phrase Swapper */}
@@ -1928,6 +1950,15 @@ export default function ScriptEditor() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <BrollResultsPanel
+          open={brollOpen}
+          onOpenChange={setBrollOpen}
+          content={editedContent}
+          scriptId={scriptId ?? undefined}
+          title={editedTitle || undefined}
+          autoGenerate
+        />
 
         {/* Teleprompter */}
         {showTeleprompter && (

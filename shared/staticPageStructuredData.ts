@@ -155,6 +155,29 @@ const HOOKS_FAQ: FaqItem[] = [
   },
 ];
 
+const BROLL_FAQ: FaqItem[] = [
+  {
+    q: "Is this B-roll generator free?",
+    a: "Yes. Preview the fixed demo with no signup. Live generation for your own script needs a free SpyReels account. Monthly generation limits apply by plan.",
+  },
+  {
+    q: "Where do the video clips come from?",
+    a: "Clips come from Pexels stock video. Always credit the photographer when you publish. SpyReels does not host or sell the footage.",
+  },
+  {
+    q: "Does downloading a clip count against my limit?",
+    a: "No. Limits count successful B-roll generation runs for a script, not individual clip downloads or previews.",
+  },
+  {
+    q: "Can I use this for TikTok or YouTube Shorts?",
+    a: "Yes. Beat-matched B-roll works on any short-form platform. Adjust pacing to match your platform's style.",
+  },
+  {
+    q: "Do I need an Instagram handle?",
+    a: "No. Paste your script text only. This tool does not scrape Instagram profiles.",
+  },
+];
+
 const AFFILIATE_FAQ: FaqItem[] = [
   {
     q: "How and when do I get paid?",
@@ -422,6 +445,41 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: faqSchema(HOOKS_FAQ),
         },
       ];
+    case "/free-tools/broll-generator":
+      return [
+        {
+          id: "broll-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Free Tools", item: `${SPYREELS_SITE_URL}/free-tools` },
+            {
+              name: "B-Roll Generator",
+              item: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
+            },
+          ]),
+        },
+        {
+          id: "broll-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "Free Instagram Reel B-Roll Generator",
+            applicationCategory: "MultimediaApplication",
+            operatingSystem: "Web Browser",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            description:
+              "Paste a Reel script and get beat-matched Pexels B-roll ideas for Instagram Reels.",
+          },
+        },
+        {
+          id: "broll-faq-schema",
+          data: faqSchema(BROLL_FAQ),
+        },
+      ];
     case "/affiliate":
       return [
         {
@@ -535,6 +593,7 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/features/30-day-content-plan",
   "/features/ai-personal-brand-coach",
   "/free-tools/viral-hooks",
+  "/free-tools/broll-generator",
   "/affiliate",
   "/about",
   "/contact",

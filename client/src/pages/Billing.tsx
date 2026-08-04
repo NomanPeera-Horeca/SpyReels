@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
   Crown, CreditCard, ArrowRight, ExternalLink, Sparkles,
-  BarChart3, FileText, Mic, Wand2, Bookmark, Tag, Calendar, Search
+  BarChart3, FileText, Mic, Wand2, Bookmark, Tag, Calendar, Search, Clapperboard
 } from "lucide-react";
 
 // ─── Usage meter component ──────────────────────────────────────
@@ -110,6 +110,13 @@ export default function Billing() {
           used: rawUsage.usage.recreateCount ?? 0,
           limit: rawUsage.limits.recreatesPerMonth ?? 0,
           color: "bg-purple-500",
+        },
+        {
+          icon: Clapperboard,
+          label: "B-Roll Generations",
+          used: rawUsage.usage.brollGenerationCount ?? 0,
+          limit: rawUsage.limits.brollGenerationsPerMonth ?? 0,
+          color: "bg-cyan-500",
         },
         {
           icon: FileText,

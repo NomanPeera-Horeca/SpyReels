@@ -826,6 +826,8 @@ export const monthlyUsage = mysqlTable("monthly_usage", {
   recreateCount: int("recreateCount").default(0).notNull(),
   rewriteCount: int("rewriteCount").default(0).notNull(),
   exportCount: int("exportCount").default(0).notNull(),
+  /** Successful B-roll suggestion runs this month (not clip downloads). */
+  brollGenerationCount: int("brollGenerationCount").default(0).notNull(),
   extensionSortCount: int("extensionSortCount").default(0).notNull(),
   extensionSaveCount: int("extensionSaveCount").default(0).notNull(),
   extensionTranscribeCount: int("extensionTranscribeCount").default(0).notNull(),

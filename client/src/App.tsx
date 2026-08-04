@@ -24,6 +24,7 @@ const TikTokScrapingProgress = lazyWithRetry(() => import("./pages/TikTokScrapin
 const YouTubeScrapingProgress = lazyWithRetry(() => import("./pages/YouTubeScrapingProgress"));
 const History = lazyWithRetry(() => import("./pages/History"));
 const HookGenerator = lazyWithRetry(() => import("@/pages/HookGenerator"));
+const BrollGenerator = lazyWithRetry(() => import("@/pages/BrollGenerator"));
 const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
 const ScriptEditor = lazyWithRetry(() => import("./pages/ScriptEditor"));
@@ -52,6 +53,7 @@ const ViralityDiagnostic = lazyWithRetry(() => import("./pages/ViralityDiagnosti
 const ThirtyDayPlan = lazyWithRetry(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazyWithRetry(() => import("./pages/AiCoach"));
 const CarouselLibrary = lazyWithRetry(() => import("./pages/CarouselLibrary"));
+const BrollLibrary = lazyWithRetry(() => import("./pages/BrollLibrary"));
 const PasteScript = lazyWithRetry(() => import("./pages/PasteScript"));
 const Interests = lazyWithRetry(() => import("./pages/Interests"));
 const AdminEntry = lazyWithRetry(() => import("./admin/AdminEntry"));
@@ -137,6 +139,7 @@ function DesktopDashboardRouter() {
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
           <Route path="/carousel-library" component={CarouselLibrary} />
+          <Route path="/broll-library" component={BrollLibrary} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
@@ -196,6 +199,7 @@ function Router() {
         <Route path="/invitations/accept/:token" component={AcceptInvitation} />
         <Route path="/s/:token" component={PublicScriptView} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
+        <Route path="/free-tools/broll-generator" component={BrollGenerator} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />

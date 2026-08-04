@@ -91,6 +91,11 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
     description:
       "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.",
   },
+  "/free-tools/broll-generator": {
+    title: "Free Instagram Reel B-Roll Generator | SpyReels",
+    description:
+      "Paste a Reel script and get beat-matched Pexels B-roll ideas. Preview a free demo, then generate live clips with a free SpyReels account.",
+  },
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",
     description:

@@ -9,6 +9,7 @@ export type UsageAction =
   | "recreateCount"
   | "rewriteCount"
   | "exportCount"
+  | "brollGenerationCount"
   | "extensionSortCount"
   | "extensionSaveCount"
   | "extensionTranscribeCount"
@@ -135,6 +136,7 @@ export const ACTION_LABELS: Record<UsageAction, string> = {
   recreateCount: "AI re-creations",
   rewriteCount: "rewrites",
   exportCount: "exports",
+  brollGenerationCount: "B-roll generations",
   extensionSortCount: "extension sorts",
   extensionSaveCount: "extension saves",
   extensionTranscribeCount: "extension transcriptions",

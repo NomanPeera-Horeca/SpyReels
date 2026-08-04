@@ -15,6 +15,11 @@ export interface PlanLimits {
   urlIngestionLimit: number;
   transcriptionsPerMonth: number;
   recreatesPerMonth: number;
+  /**
+   * Successful B-roll generation runs per month (not clip downloads).
+   * PLACEHOLDER: currently mirrors recreatesPerMonth. Product must confirm before prod.
+   */
+  brollGenerationsPerMonth: number;
   discoverySearches: number;
   viralityDiagnostics: number;
   carouselRemakes: number;
@@ -73,6 +78,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 5,
       transcriptionsPerMonth: 3,
       recreatesPerMonth: 3,
+      // PLACEHOLDER: mirrors recreatesPerMonth until product confirms B-roll limits.
+      brollGenerationsPerMonth: 3,
       discoverySearches: 1,
       viralityDiagnostics: 1,
       carouselRemakes: 1,
@@ -124,6 +131,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 30,
       recreatesPerMonth: 15,
+      // PLACEHOLDER: mirrors recreatesPerMonth until product confirms B-roll limits.
+      brollGenerationsPerMonth: 15,
       discoverySearches: 5,
       viralityDiagnostics: 5,
       carouselRemakes: 5,
@@ -178,6 +187,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 200,
       recreatesPerMonth: 100,
+      // PLACEHOLDER: mirrors recreatesPerMonth until product confirms B-roll limits.
+      brollGenerationsPerMonth: 100,
       discoverySearches: 20,
       viralityDiagnostics: 20,
       carouselRemakes: 20,
@@ -234,6 +245,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 1000,
       recreatesPerMonth: 500,
+      // PLACEHOLDER: mirrors recreatesPerMonth until product confirms B-roll limits.
+      brollGenerationsPerMonth: 500,
       discoverySearches: 20,
       viralityDiagnostics: 20,
       carouselRemakes: 50,
@@ -288,6 +301,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       urlIngestionLimit: 20,
       transcriptionsPerMonth: 999999,
       recreatesPerMonth: 999999,
+      // PLACEHOLDER: mirrors recreatesPerMonth until product confirms B-roll limits.
+      brollGenerationsPerMonth: 999999,
       discoverySearches: 20,
       viralityDiagnostics: 20,
       carouselRemakes: 999999,

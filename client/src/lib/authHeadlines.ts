@@ -21,6 +21,10 @@ export function authHeadlineHookToScript(hookNumber: number): string {
   return `Finish signing up to turn hook #${hookNumber} into a full Reel script`;
 }
 
+export function authHeadlineBrollGenerate(): string {
+  return "Finish signing up to generate B-roll for your Reel script";
+}
+
 /** Prefer first name from profile; fall back to @handle. */
 export function authCreatorDisplayName(
   fullName: string | null | undefined,

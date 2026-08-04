@@ -279,6 +279,7 @@ import {
 import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
+import { suggestBrollForScript } from "./broll/suggestBroll";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
@@ -1050,6 +1051,7 @@ export const appRouter = router({
         action: z.enum([
           "scrapeCount", "searchCount", "transcribeCount",
           "recreateCount", "rewriteCount", "exportCount",
+          "brollGenerationCount",
           "extensionSortCount", "extensionSaveCount",
           "extensionTranscribeCount", "extensionRecreateCount",
         ]),
@@ -1066,6 +1068,7 @@ export const appRouter = router({
         action: z.enum([
           "scrapeCount", "searchCount", "transcribeCount",
           "recreateCount", "rewriteCount", "exportCount",
+          "brollGenerationCount",
           "extensionSortCount", "extensionSaveCount",
           "extensionTranscribeCount", "extensionRecreateCount",
         ]),
@@ -5647,6 +5650,49 @@ Return JSON only:
       .input(z.object({ scriptId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         return getShareLinkInfoForScript(ctx, input.scriptId);
+      }),
+
+    /**
+     * Suggest Pexels B-roll clips for a script.
+     * One LLM beat-split call, then one Pexels video search per beat with in-job URL dedupe.
+     * Gated by brollGenerationCount (generation runs only, not clip downloads).
+     */
+    suggestBroll: protectedProcedure
+      .input(
+        z.object({
+          content: z.string().min(1).max(12000),
+          scriptId: z.number().int().positive().optional(),
+          niche: z.string().max(120).optional(),
+          clipsPerBeat: z.number().int().min(1).max(3).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (input.scriptId != null) {
+          await assertScriptInWorkspace(input.scriptId, ctx);
+        }
+
+        const usageCheck = await checkUsageLimit(
+          ctx.user.id,
+          "brollGenerationCount",
+          ctx.user.openId,
+          { email: ctx.user.email, role: ctx.user.role }
+        );
+        if (!usageCheck.allowed) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `You have reached your monthly B-roll generation limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+          });
+        }
+
+        const result = await suggestBrollForScript({
+          content: input.content,
+          niche: input.niche,
+          clipsPerBeat: input.clipsPerBeat,
+        });
+
+        // Count successful generation runs only (not per-clip downloads).
+        await incrementUsage(ctx.user.id, "brollGenerationCount");
+        return result;
       }),
   }),
 

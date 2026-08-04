@@ -406,6 +406,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
                 recreateCount: 0,
                 rewriteCount: 0,
                 exportCount: 0,
+                brollGenerationCount: 0,
                 extensionSortCount: 0,
                 extensionSaveCount: 0,
                 extensionTranscribeCount: 0,
@@ -438,6 +439,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 type UsageField = 
   | "scrapeCount" | "searchCount" | "transcribeCount" 
   | "recreateCount" | "rewriteCount" | "exportCount"
+  | "brollGenerationCount"
   | "extensionSortCount" | "extensionSaveCount" 
   | "extensionTranscribeCount" | "extensionRecreateCount";
 
@@ -488,7 +490,7 @@ export async function decrementUsage(userId: number, field: UsageField, amount: 
 
 export async function getMonthlyUsage(userId: number): Promise<Record<string, number>> {
   const db = await getDb();
-  if (!db) return { scrapeCount: 0, searchCount: 0, transcribeCount: 0, recreateCount: 0, rewriteCount: 0, exportCount: 0, extensionSortCount: 0, extensionSaveCount: 0, extensionTranscribeCount: 0, extensionRecreateCount: 0 };
+  if (!db) return { scrapeCount: 0, searchCount: 0, transcribeCount: 0, recreateCount: 0, rewriteCount: 0, exportCount: 0, brollGenerationCount: 0, extensionSortCount: 0, extensionSaveCount: 0, extensionTranscribeCount: 0, extensionRecreateCount: 0 };
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [usage] = await db.select().from(monthlyUsage)
     .where(and(eq(monthlyUsage.userId, userId), eq(monthlyUsage.usageMonth, currentMonth)))
@@ -498,6 +500,7 @@ export async function getMonthlyUsage(userId: number): Promise<Record<string, nu
     return {
       scrapeCount: 0, searchCount: 0, transcribeCount: 0,
       recreateCount: 0, rewriteCount: 0, exportCount: 0,
+      brollGenerationCount: 0,
       extensionSortCount: 0, extensionSaveCount: 0,
       extensionTranscribeCount: 0, extensionRecreateCount: 0,
     };
@@ -510,6 +513,7 @@ export async function getMonthlyUsage(userId: number): Promise<Record<string, nu
     recreateCount: usage.recreateCount,
     rewriteCount: usage.rewriteCount,
     exportCount: usage.exportCount,
+    brollGenerationCount: usage.brollGenerationCount,
     extensionSortCount: usage.extensionSortCount,
     extensionSaveCount: usage.extensionSaveCount,
     extensionTranscribeCount: usage.extensionTranscribeCount,
@@ -576,6 +580,7 @@ export async function checkUsageLimit(
     recreateCount: "recreatesPerMonth",
     rewriteCount: "rewritesPerScript",
     exportCount: "scrapesPerMonth", // reuse scrape limit for exports
+    brollGenerationCount: "brollGenerationsPerMonth",
     extensionSortCount: "extSortsPerDay",
     extensionSaveCount: "extSavesPerDay",
     extensionTranscribeCount: "extTranscribesPerMonth",
