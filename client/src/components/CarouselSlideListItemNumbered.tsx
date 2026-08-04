@@ -3,12 +3,15 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideListItemNumberedProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   handle?: string;
   className?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -26,6 +29,8 @@ export function CarouselSlideListItemNumbered({
   values,
   handle,
   className,
+  editable,
+  onSlotChange,
 }: CarouselSlideListItemNumberedProps) {
   const kicker = values.kicker ?? "";
   const headline = values.headline ?? "";
@@ -67,7 +72,12 @@ export function CarouselSlideListItemNumbered({
         }}
       >
         {kicker ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="kicker"
+            value={kicker}
+            editable={editable}
+            onCommit={onSlotChange}
             style={{
               margin: 0,
               marginBottom: "1.25rem",
@@ -78,12 +88,16 @@ export function CarouselSlideListItemNumbered({
               letterSpacing: "-0.03em",
               color: tokens.colors.accent,
             }}
-          >
-            {kicker}
-          </p>
+          />
         ) : null}
 
-        <h2
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
@@ -94,12 +108,16 @@ export function CarouselSlideListItemNumbered({
             color: tokens.colors.foreground,
             maxWidth: "18ch",
           }}
-        >
-          {headline}
-        </h2>
+        />
 
         {body ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="body"
+            value={body}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               marginTop: "1rem",
@@ -110,9 +128,7 @@ export function CarouselSlideListItemNumbered({
               color: tokens.colors.muted,
               maxWidth: "32ch",
             }}
-          >
-            {body}
-          </p>
+          />
         ) : null}
       </div>
 

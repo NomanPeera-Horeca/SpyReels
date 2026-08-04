@@ -1,15 +1,18 @@
-import { useId } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideListItemWarmNumberedProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   handle?: string;
   className?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -35,6 +38,8 @@ export function CarouselSlideListItemWarmNumbered({
   values,
   handle,
   className,
+  editable,
+  onSlotChange,
 }: CarouselSlideListItemWarmNumberedProps) {
   const grainId = `warm-kraft-grain-${useId().replace(/:/g, "")}`;
   const kicker = values.kicker ?? "";
@@ -42,6 +47,18 @@ export function CarouselSlideListItemWarmNumbered({
   const body = values.body ?? "";
   const calloutRaw = values.callout ?? "";
   const calloutLines = parseCalloutLines(calloutRaw);
+  const [editingCallout, setEditingCallout] = useState(false);
+  const calloutRef = useRef<HTMLDivElement | null>(null);
+  const skipCalloutCommitRef = useRef(false);
+
+  function commitCallout() {
+    const raw = (calloutRef.current?.innerText ?? calloutRaw).replace(/\u00a0/g, " ");
+    const next = raw.replace(/^\n+/, "").replace(/\n+$/, "");
+    setEditingCallout(false);
+    if (next !== calloutRaw) {
+      onSlotChange?.("callout", next);
+    }
+  }
 
   return (
     <div
@@ -118,9 +135,28 @@ export function CarouselSlideListItemWarmNumbered({
               }}
             >
               {kicker ? (
-                <span style={{ marginRight: "0.35rem" }}>{kicker}.</span>
+                <>
+                  <CarouselEditableText
+                    as="span"
+                    slotId="kicker"
+                    value={kicker}
+                    editable={editable}
+                    onCommit={onSlotChange}
+                    style={{ marginRight: "0.35rem" }}
+                  />
+                  {"."}
+                  {" "}
+                </>
               ) : null}
-              {headline}
+              <CarouselEditableText
+                as="span"
+                slotId="headline"
+                value={headline}
+                editable={editable}
+                onCommit={onSlotChange}
+                multiline
+                style={{ display: "inline" }}
+              />
             </h2>
             <svg
               width="72"
@@ -141,7 +177,13 @@ export function CarouselSlideListItemWarmNumbered({
         ) : null}
 
         {body ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="body"
+            value={body}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
@@ -151,12 +193,10 @@ export function CarouselSlideListItemWarmNumbered({
               color: tokens.colors.foreground,
               maxWidth: "30ch",
             }}
-          >
-            {body}
-          </p>
+          />
         ) : null}
 
-        {calloutLines.length > 0 ? (
+        {calloutLines.length > 0 || (editable && calloutRaw) ? (
           <div
             style={{
               marginTop: "1.35rem",
@@ -167,46 +207,99 @@ export function CarouselSlideListItemWarmNumbered({
               borderRadius: "0.45rem",
               padding: "0.75rem 0.85rem",
               boxSizing: "border-box",
+              cursor: editable ? "text" : undefined,
             }}
+            title={editable ? "Click to edit" : undefined}
+            onClick={
+              editable && !editingCallout
+                ? () => {
+                    setEditingCallout(true);
+                    requestAnimationFrame(() => {
+                      const el = calloutRef.current;
+                      if (!el) return;
+                      el.innerText = calloutRaw;
+                      el.focus();
+                    });
+                  }
+                : undefined
+            }
           >
-            <ul
-              style={{
-                margin: 0,
-                padding: 0,
-                listStyle: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.45rem",
-              }}
-            >
-              {calloutLines.map((line) => (
-                <li
-                  key={line}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.45rem",
-                    fontFamily: tokens.fontFamily.body,
-                    fontSize: "0.8rem",
-                    lineHeight: 1.35,
-                    color: tokens.colors.foreground,
-                  }}
-                >
-                  <span
-                    aria-hidden
+            {editable && editingCallout ? (
+              <div
+                ref={calloutRef}
+                contentEditable
+                suppressContentEditableWarning
+                data-carousel-editing="true"
+                data-carousel-slot-id="callout"
+                style={{
+                  margin: 0,
+                  fontFamily: tokens.fontFamily.body,
+                  fontSize: "0.8rem",
+                  lineHeight: 1.35,
+                  color: tokens.colors.foreground,
+                  whiteSpace: "pre-wrap",
+                  outline: "1px dashed rgba(232,165,75,0.85)",
+                  outlineOffset: "2px",
+                  caretColor: "currentColor",
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={() => {
+                  if (skipCalloutCommitRef.current) {
+                    skipCalloutCommitRef.current = false;
+                    setEditingCallout(false);
+                    return;
+                  }
+                  commitCallout();
+                }}
+                onKeyDown={(e: KeyboardEvent) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    skipCalloutCommitRef.current = true;
+                    setEditingCallout(false);
+                    (e.currentTarget as HTMLElement).blur();
+                  }
+                }}
+              />
+            ) : (
+              <ul
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.45rem",
+                }}
+              >
+                {calloutLines.map((line) => (
+                  <li
+                    key={line}
                     style={{
-                      color: tokens.colors.accent,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                      marginTop: "0.05rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.45rem",
+                      fontFamily: tokens.fontFamily.body,
+                      fontSize: "0.8rem",
+                      lineHeight: 1.35,
+                      color: tokens.colors.foreground,
                     }}
                   >
-                    ✓
-                  </span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
+                    <span
+                      aria-hidden
+                      style={{
+                        color: tokens.colors.accent,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                        marginTop: "0.05rem",
+                      }}
+                    >
+                      ✓
+                    </span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ) : null}
       </div>

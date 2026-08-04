@@ -2,6 +2,10 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import {
+  CarouselEditableText,
+  pickCarouselSlot,
+} from "@/components/CarouselEditableText";
 
 export type CarouselSlideExcuseSplitStackProps = {
   tokens: CarouselDesignTokens;
@@ -10,6 +14,8 @@ export type CarouselSlideExcuseSplitStackProps = {
   className?: string;
   imageUrl?: string;
   imageUrlsBySlot?: Record<string, string>;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -29,9 +35,11 @@ export function CarouselSlideExcuseSplitStack({
   className,
   imageUrl,
   imageUrlsBySlot,
+  editable,
+  onSlotChange,
 }: CarouselSlideExcuseSplitStackProps) {
-  const excuse = values.excuse ?? values.headline ?? "";
-  const reframe = values.reframe ?? values.body ?? "";
+  const excuseSlot = pickCarouselSlot(values, ["excuse", "headline"]);
+  const reframeSlot = pickCarouselSlot(values, ["reframe", "body"]);
   const topSrc = imageUrlsBySlot?.photo_before ?? imageUrl;
   const bottomSrc = imageUrlsBySlot?.photo_after ?? imageUrl;
 
@@ -76,8 +84,14 @@ export function CarouselSlideExcuseSplitStack({
             background: "rgba(0,0,0,0.28)",
           }}
         />
-        {excuse ? (
-          <p
+        {excuseSlot.value ? (
+          <CarouselEditableText
+            as="p"
+            slotId={excuseSlot.slotId}
+            value={excuseSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               position: "relative",
               zIndex: 1,
@@ -93,9 +107,7 @@ export function CarouselSlideExcuseSplitStack({
               textShadow: "0 2px 8px rgba(0,0,0,0.85)",
               maxWidth: "14ch",
             }}
-          >
-            {excuse}
-          </p>
+          />
         ) : null}
       </div>
 
@@ -122,8 +134,14 @@ export function CarouselSlideExcuseSplitStack({
             background: "rgba(0,0,0,0.22)",
           }}
         />
-        {reframe ? (
-          <p
+        {reframeSlot.value ? (
+          <CarouselEditableText
+            as="p"
+            slotId={reframeSlot.slotId}
+            value={reframeSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               position: "relative",
               zIndex: 1,
@@ -137,9 +155,7 @@ export function CarouselSlideExcuseSplitStack({
               textShadow: "0 2px 8px rgba(0,0,0,0.85)",
               maxWidth: "14ch",
             }}
-          >
-            {reframe}
-          </p>
+          />
         ) : null}
       </div>
 

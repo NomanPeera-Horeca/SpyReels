@@ -2,6 +2,10 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import {
+  CarouselEditableText,
+  pickCarouselSlot,
+} from "@/components/CarouselEditableText";
 
 export type CarouselSlideStatSplitStackProps = {
   tokens: CarouselDesignTokens;
@@ -10,6 +14,8 @@ export type CarouselSlideStatSplitStackProps = {
   className?: string;
   imageUrl?: string;
   imageUrlsBySlot?: Record<string, string>;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -29,9 +35,11 @@ export function CarouselSlideStatSplitStack({
   className,
   imageUrl,
   imageUrlsBySlot,
+  editable,
+  onSlotChange,
 }: CarouselSlideStatSplitStackProps) {
-  const average = values.setup ?? values.average ?? values.headline ?? "";
-  const notLine = values.echo ?? values.not_line ?? values.body ?? "";
+  const averageSlot = pickCarouselSlot(values, ["setup", "average", "headline"]);
+  const notLineSlot = pickCarouselSlot(values, ["echo", "not_line", "body"]);
   const topSrc = imageUrlsBySlot?.photo_top ?? imageUrl;
   const bottomSrc = imageUrlsBySlot?.photo_bottom ?? imageUrl;
 
@@ -75,8 +83,14 @@ export function CarouselSlideStatSplitStack({
             background: "rgba(0,0,0,0.22)",
           }}
         />
-        {average ? (
-          <p
+        {averageSlot.value ? (
+          <CarouselEditableText
+            as="p"
+            slotId={averageSlot.slotId}
+            value={averageSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               position: "relative",
               zIndex: 1,
@@ -90,9 +104,7 @@ export function CarouselSlideStatSplitStack({
               textShadow: "0 2px 8px rgba(0,0,0,0.85)",
               maxWidth: "16ch",
             }}
-          >
-            {average}
-          </p>
+          />
         ) : null}
       </div>
 
@@ -119,8 +131,14 @@ export function CarouselSlideStatSplitStack({
             background: "rgba(0,0,0,0.22)",
           }}
         />
-        {notLine ? (
-          <p
+        {notLineSlot.value ? (
+          <CarouselEditableText
+            as="p"
+            slotId={notLineSlot.slotId}
+            value={notLineSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               position: "relative",
               zIndex: 1,
@@ -134,9 +152,7 @@ export function CarouselSlideStatSplitStack({
               textShadow: "0 2px 8px rgba(0,0,0,0.85)",
               maxWidth: "12ch",
             }}
-          >
-            {notLine}
-          </p>
+          />
         ) : null}
       </div>
 

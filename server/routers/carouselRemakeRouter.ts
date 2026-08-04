@@ -283,4 +283,72 @@ export const carouselRemakeRouter = router({
       const { url } = await storagePut(key, buffer, input.contentType);
       return { url };
     }),
+
+  /**
+   * Merge one text-slot edit into slotValuesJson for a completed remake.
+   * Auth + workspace ownership; no LLM / image work.
+   */
+  updateSlotValues: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+        value: z.string().max(4000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          slotValuesJson: carouselRemakes.slotValuesJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing slide text",
+        });
+      }
+
+      const prev = (row.slotValuesJson ?? {}) as Record<
+        string,
+        Record<string, string>
+      >;
+      const next: Record<string, Record<string, string>> = {
+        ...prev,
+        [input.slideId]: {
+          ...(prev[input.slideId] ?? {}),
+          [input.slotId]: input.value,
+        },
+      };
+
+      await db
+        .update(carouselRemakes)
+        .set({ slotValuesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { slotValues: next };
+    }),
 });

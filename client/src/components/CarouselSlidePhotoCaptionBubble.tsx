@@ -2,6 +2,10 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import {
+  CarouselEditableText,
+  pickCarouselSlot,
+} from "@/components/CarouselEditableText";
 
 export type CarouselSlidePhotoCaptionBubbleProps = {
   tokens: CarouselDesignTokens;
@@ -10,6 +14,8 @@ export type CarouselSlidePhotoCaptionBubbleProps = {
   className?: string;
   /** Shared cover photo URL (same image on every slide for shareCoverImage templates). */
   imageUrl?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -28,9 +34,11 @@ export function CarouselSlidePhotoCaptionBubble({
   handle,
   className,
   imageUrl,
+  editable,
+  onSlotChange,
 }: CarouselSlidePhotoCaptionBubbleProps) {
   const headline = values.headline ?? "";
-  const body = values.body ?? values.subhead ?? "";
+  const bodySlot = pickCarouselSlot(values, ["body", "subhead"]);
 
   return (
     <div
@@ -66,7 +74,13 @@ export function CarouselSlidePhotoCaptionBubble({
         }}
       >
         {headline ? (
-          <h2
+          <CarouselEditableText
+            as="h2"
+            slotId="headline"
+            value={headline}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
@@ -76,12 +90,16 @@ export function CarouselSlidePhotoCaptionBubble({
               letterSpacing: "-0.01em",
               color: tokens.colors.foreground,
             }}
-          >
-            {headline}
-          </h2>
+          />
         ) : null}
-        {body ? (
-          <p
+        {bodySlot.value ? (
+          <CarouselEditableText
+            as="p"
+            slotId={bodySlot.slotId}
+            value={bodySlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: headline ? "0.55rem 0 0" : 0,
               fontFamily: tokens.fontFamily.display,
@@ -90,9 +108,7 @@ export function CarouselSlidePhotoCaptionBubble({
               lineHeight: 1.4,
               color: tokens.colors.foreground,
             }}
-          >
-            {body}
-          </p>
+          />
         ) : null}
       </div>
 

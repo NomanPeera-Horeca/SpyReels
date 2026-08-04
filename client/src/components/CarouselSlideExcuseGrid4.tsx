@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideExcuseGrid4Props = {
   tokens: CarouselDesignTokens;
@@ -10,6 +11,8 @@ export type CarouselSlideExcuseGrid4Props = {
   className?: string;
   imageUrl?: string;
   imageUrlsBySlot?: Record<string, string>;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -36,6 +39,8 @@ export function CarouselSlideExcuseGrid4({
   className,
   imageUrl,
   imageUrlsBySlot,
+  editable,
+  onSlotChange,
 }: CarouselSlideExcuseGrid4Props) {
   return (
     <div
@@ -84,7 +89,13 @@ export function CarouselSlideExcuseGrid4({
               }}
             />
             {text ? (
-              <p
+              <CarouselEditableText
+                as="p"
+                slotId={cell.textId}
+                value={text}
+                editable={editable}
+                onCommit={onSlotChange}
+                multiline
                 style={{
                   position: "relative",
                   zIndex: 1,
@@ -100,9 +111,7 @@ export function CarouselSlideExcuseGrid4({
                   textShadow: "0 1px 4px rgba(0,0,0,0.85)",
                   maxWidth: "12ch",
                 }}
-              >
-                {text}
-              </p>
+              />
             ) : null}
           </div>
         );

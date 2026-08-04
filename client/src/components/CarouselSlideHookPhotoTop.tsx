@@ -3,6 +3,7 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideHookPhotoTopProps = {
   tokens: CarouselDesignTokens;
@@ -11,6 +12,8 @@ export type CarouselSlideHookPhotoTopProps = {
   className?: string;
   /** Resolved image URL for this slide's single photo slot, if any. */
   imageUrl?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -30,6 +33,8 @@ export function CarouselSlideHookPhotoTop({
   handle,
   className,
   imageUrl,
+  editable,
+  onSlotChange,
 }: CarouselSlideHookPhotoTopProps) {
   const kicker = values.kicker ?? "";
   const headline = values.headline ?? "";
@@ -86,7 +91,12 @@ export function CarouselSlideHookPhotoTop({
         }}
       >
         {kicker ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="kicker"
+            value={kicker}
+            editable={editable}
+            onCommit={onSlotChange}
             style={{
               margin: 0,
               marginBottom: "0.75rem",
@@ -97,12 +107,16 @@ export function CarouselSlideHookPhotoTop({
               textTransform: "uppercase",
               color: tokens.colors.accent,
             }}
-          >
-            {kicker}
-          </p>
+          />
         ) : null}
 
-        <h2
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
@@ -113,12 +127,16 @@ export function CarouselSlideHookPhotoTop({
             color: tokens.colors.foreground,
             maxWidth: "18ch",
           }}
-        >
-          {headline}
-        </h2>
+        />
 
         {subhead ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="subhead"
+            value={subhead}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               marginTop: "0.9rem",
@@ -129,9 +147,7 @@ export function CarouselSlideHookPhotoTop({
               color: tokens.colors.muted,
               maxWidth: "28ch",
             }}
-          >
-            {subhead}
-          </p>
+          />
         ) : null}
       </div>
 

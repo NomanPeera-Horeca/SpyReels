@@ -3,12 +3,15 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { notebookGridStyle } from "@/components/carouselNotebookGrid";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideNotebookListItemProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   handle?: string;
   className?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -26,11 +29,12 @@ export function CarouselSlideNotebookListItem({
   values,
   handle,
   className,
+  editable,
+  onSlotChange,
 }: CarouselSlideNotebookListItemProps) {
   const kicker = values.kicker ?? "";
   const headline = values.headline ?? "";
   const body = values.body ?? "";
-  const title = kicker ? `${kicker}. ${headline}` : headline;
 
   return (
     <div
@@ -55,7 +59,7 @@ export function CarouselSlideNotebookListItem({
       }}
     >
       <div style={{ position: "relative", zIndex: 1, width: "100%" }}>
-        {title ? (
+        {(kicker || headline) ? (
           <h2
             style={{
               margin: 0,
@@ -73,12 +77,39 @@ export function CarouselSlideNotebookListItem({
               borderRadius: "0.15rem",
             }}
           >
-            {title}
+            {kicker ? (
+              <>
+                <CarouselEditableText
+                  as="span"
+                  slotId="kicker"
+                  value={kicker}
+                  editable={editable}
+                  onCommit={onSlotChange}
+                  style={{ display: "inline" }}
+                />
+                {". "}
+              </>
+            ) : null}
+            <CarouselEditableText
+              as="span"
+              slotId="headline"
+              value={headline}
+              editable={editable}
+              onCommit={onSlotChange}
+              multiline
+              style={{ display: "inline" }}
+            />
           </h2>
         ) : null}
 
         {body ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="body"
+            value={body}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: "1.35rem 0 0",
               fontFamily: tokens.fontFamily.display,
@@ -89,9 +120,7 @@ export function CarouselSlideNotebookListItem({
               maxWidth: "28ch",
               whiteSpace: "pre-line",
             }}
-          >
-            {body}
-          </p>
+          />
         ) : null}
       </div>
 

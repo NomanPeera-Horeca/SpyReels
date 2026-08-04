@@ -93,6 +93,16 @@ function slugifyCarouselName(name: string): string {
 }
 
 async function captureSlideAsPngBlob(node: HTMLElement): Promise<Blob> {
+  // Exit any in-progress contentEditable so capture uses committed text in the DOM.
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.isContentEditable) {
+    active.blur();
+  }
+  // Allow blur commit + React paint (local displayValue) before snapshot.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
   await document.fonts.ready;
   const target = (node.firstElementChild as HTMLElement | null) ?? node;
   const blob = await toBlob(target, {
@@ -167,6 +177,11 @@ export function CarouselPreviewDialog({
   });
   const saveHandleMutation = trpc.carouselRemake.saveHandle.useMutation();
   const uploadImageMutation = trpc.carouselRemake.uploadSlideImage.useMutation();
+  const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
+    onError: (err) => {
+      toast.error(err.message || "Failed to save text edit");
+    },
+  });
 
   useEffect(() => {
     if (!open) {
@@ -220,6 +235,8 @@ export function CarouselPreviewDialog({
     }
   );
 
+  // Apply server slotValues when remake completes (or when a remake is loaded).
+  // Do not re-apply on every status payload change so local text edits are not clobbered.
   useEffect(() => {
     const data = statusQuery.data;
     if (!data) return;
@@ -229,8 +246,29 @@ export function CarouselPreviewDialog({
     if (data.status === "failed") {
       toast.error(data.errorMessage || "Carousel remake failed");
     }
-  }, [statusQuery.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync on remake identity / status transitions
+  }, [activeRemakeId, statusQuery.data?.status, statusQuery.data?.id]);
 
+  function handleSlotChange(slideId: string, slotId: string, value: string) {
+    setRemakeSlideValues((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [slideId]: {
+          ...(prev[slideId] ?? {}),
+          [slotId]: value,
+        },
+      };
+    });
+    if (activeRemakeId != null) {
+      updateSlotMutation.mutate({
+        remakeId: activeRemakeId,
+        slideId,
+        slotId,
+        value,
+      });
+    }
+  }
   const isGenerating =
     startMutation.isPending ||
     statusQuery.data?.status === "processing" ||
@@ -461,6 +499,8 @@ export function CarouselPreviewDialog({
                 handle={handleInput.trim() || undefined}
                 imageUrls={previewImageUrls}
                 onDownloadSlide={hasRemake ? handleDownloadSlide : undefined}
+                editable={viewingRemake}
+                onSlotChange={viewingRemake ? handleSlotChange : undefined}
               />
             </div>
 

@@ -3,12 +3,15 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideHookBoldCenterProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   handle?: string;
   className?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -26,6 +29,8 @@ export function CarouselSlideHookBoldCenter({
   values,
   handle,
   className,
+  editable,
+  onSlotChange,
 }: CarouselSlideHookBoldCenterProps) {
   const kicker = values.kicker ?? "";
   const headline = values.headline ?? "";
@@ -71,7 +76,12 @@ export function CarouselSlideHookBoldCenter({
         }}
       >
         {kicker ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="kicker"
+            value={kicker}
+            editable={editable}
+            onCommit={onSlotChange}
             style={{
               margin: 0,
               marginBottom: "1rem",
@@ -82,12 +92,16 @@ export function CarouselSlideHookBoldCenter({
               textTransform: "uppercase",
               color: tokens.colors.accent,
             }}
-          >
-            {kicker}
-          </p>
+          />
         ) : null}
 
-        <h2
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
@@ -100,12 +114,16 @@ export function CarouselSlideHookBoldCenter({
             color: tokens.colors.foreground,
             maxWidth: isLeft ? "14ch" : "16ch",
           }}
-        >
-          {headline}
-        </h2>
+        />
 
         {subhead ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="subhead"
+            value={subhead}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               marginTop: "1.25rem",
@@ -116,9 +134,7 @@ export function CarouselSlideHookBoldCenter({
               color: tokens.colors.muted,
               maxWidth: "28ch",
             }}
-          >
-            {subhead}
-          </p>
+          />
         ) : null}
       </div>
 

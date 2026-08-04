@@ -25,6 +25,10 @@ export type CarouselRendererProps = {
   imageUrls?: CarouselImageUrlMap;
   className?: string;
   onDownloadSlide?: (slideId: string) => void;
+  /** Enable click-to-edit on text slots (remake review). */
+  editable?: boolean;
+  /** Commit a text slot edit into remake values. */
+  onSlotChange?: (slideId: string, slotId: string, value: string) => void;
 };
 
 export function resolveCarouselSlideValues(
@@ -60,6 +64,8 @@ export function CarouselRenderer({
   imageUrls,
   className,
   onDownloadSlide,
+  editable,
+  onSlotChange,
 }: CarouselRendererProps) {
   const effectiveSlides = slides ?? template.slides;
   const effectiveTokens: CarouselDesignTokens = designOverride
@@ -111,6 +117,12 @@ export function CarouselRenderer({
               handle={handle}
               imageUrl={imageUrl}
               imageUrlsBySlot={imageUrlsBySlot}
+              editable={editable}
+              onSlotChange={
+                onSlotChange
+                  ? (slotId, value) => onSlotChange(slide.id, slotId, value)
+                  : undefined
+              }
             />
             {onDownloadSlide ? (
               <button

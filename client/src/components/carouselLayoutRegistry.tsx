@@ -28,6 +28,10 @@ export type CarouselSlideLayoutProps = {
   /** Multi-slot photo map (excuse grid / split stack). */
   imageUrlsBySlot?: Record<string, string>;
   className?: string;
+  /** When true, text slots are click-to-edit (remake review only). */
+  editable?: boolean;
+  /** Commit a slot edit; slotId matches template slot ids. */
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 /**

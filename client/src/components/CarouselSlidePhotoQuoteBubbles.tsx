@@ -2,6 +2,10 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import {
+  CarouselEditableText,
+  pickCarouselSlot,
+} from "@/components/CarouselEditableText";
 
 export type CarouselSlidePhotoQuoteBubblesProps = {
   tokens: CarouselDesignTokens;
@@ -10,6 +14,8 @@ export type CarouselSlidePhotoQuoteBubblesProps = {
   className?: string;
   imageUrl?: string;
   imageUrlsBySlot?: Record<string, string>;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -29,9 +35,11 @@ export function CarouselSlidePhotoQuoteBubbles({
   className,
   imageUrl,
   imageUrlsBySlot,
+  editable,
+  onSlotChange,
 }: CarouselSlidePhotoQuoteBubblesProps) {
-  const quote = values.quote ?? values.headline ?? "";
-  const cta = values.cta_label ?? values.body ?? "";
+  const quoteSlot = pickCarouselSlot(values, ["quote", "headline"]);
+  const ctaSlot = pickCarouselSlot(values, ["cta_label", "body"]);
   const src = imageUrlsBySlot?.photo ?? imageUrl;
 
   return (
@@ -65,7 +73,7 @@ export function CarouselSlidePhotoQuoteBubbles({
         }}
       />
 
-      {quote ? (
+      {quoteSlot.value ? (
         <div
           style={{
             position: "relative",
@@ -79,7 +87,13 @@ export function CarouselSlidePhotoQuoteBubbles({
             boxSizing: "border-box",
           }}
         >
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId={quoteSlot.slotId}
+            value={quoteSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
@@ -89,13 +103,11 @@ export function CarouselSlidePhotoQuoteBubbles({
               textAlign: "center",
               color: "#111111",
             }}
-          >
-            {quote}
-          </p>
+          />
         </div>
       ) : null}
 
-      {cta ? (
+      {ctaSlot.value ? (
         <div
           style={{
             position: "relative",
@@ -109,7 +121,13 @@ export function CarouselSlidePhotoQuoteBubbles({
             boxSizing: "border-box",
           }}
         >
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId={ctaSlot.slotId}
+            value={ctaSlot.value}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
@@ -119,9 +137,7 @@ export function CarouselSlidePhotoQuoteBubbles({
               textAlign: "center",
               color: "#111111",
             }}
-          >
-            {cta}
-          </p>
+          />
         </div>
       ) : null}
 

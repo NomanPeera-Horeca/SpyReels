@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideQuoteTweetCardProps = {
   tokens: CarouselDesignTokens;
@@ -10,6 +11,8 @@ export type CarouselSlideQuoteTweetCardProps = {
   className?: string;
   /** Profile avatar URL (shared across slides via shareCoverImage). */
   imageUrl?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -42,6 +45,8 @@ export function CarouselSlideQuoteTweetCard({
   handle,
   className,
   imageUrl,
+  editable,
+  onSlotChange,
 }: CarouselSlideQuoteTweetCardProps) {
   const quote = values.headline ?? "";
   const nameOverride = (values.kicker ?? "").trim();
@@ -99,20 +104,40 @@ export function CarouselSlideQuoteTweetCard({
         />
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "0.1rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.28rem" }}>
-            <span
-              style={{
-                fontFamily: tokens.fontFamily.body,
-                fontSize: "0.95rem",
-                fontWeight: 700,
-                color: tokens.colors.foreground,
-                lineHeight: 1.2,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {displayName}
-            </span>
+            {editable || nameOverride ? (
+              <CarouselEditableText
+                as="span"
+                slotId="kicker"
+                value={displayName}
+                editable={editable}
+                onCommit={onSlotChange}
+                style={{
+                  fontFamily: tokens.fontFamily.body,
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                  color: tokens.colors.foreground,
+                  lineHeight: 1.2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  fontFamily: tokens.fontFamily.body,
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                  color: tokens.colors.foreground,
+                  lineHeight: 1.2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {displayName}
+              </span>
+            )}
             <svg
               width="16"
               height="16"
@@ -141,7 +166,13 @@ export function CarouselSlideQuoteTweetCard({
         </div>
       </div>
 
-      <h2
+      <CarouselEditableText
+        as="h2"
+        slotId="headline"
+        value={quote}
+        editable={editable}
+        onCommit={onSlotChange}
+        multiline
         style={{
           margin: 0,
           fontFamily: tokens.fontFamily.display,
@@ -153,9 +184,7 @@ export function CarouselSlideQuoteTweetCard({
           maxWidth: "18ch",
           whiteSpace: "pre-line",
         }}
-      >
-        {quote}
-      </h2>
+      />
     </div>
   );
 }

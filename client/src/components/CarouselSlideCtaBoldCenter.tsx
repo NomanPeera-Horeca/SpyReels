@@ -3,12 +3,15 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideCtaBoldCenterProps = {
   tokens: CarouselDesignTokens;
   values: CarouselSlotValues;
   handle?: string;
   className?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -26,6 +29,8 @@ export function CarouselSlideCtaBoldCenter({
   values,
   handle,
   className,
+  editable,
+  onSlotChange,
 }: CarouselSlideCtaBoldCenterProps) {
   const headline = values.headline ?? "";
   const subhead = values.subhead ?? "";
@@ -66,7 +71,13 @@ export function CarouselSlideCtaBoldCenter({
           textAlign: "center",
         }}
       >
-        <h2
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
@@ -77,12 +88,16 @@ export function CarouselSlideCtaBoldCenter({
             color: tokens.colors.foreground,
             maxWidth: "16ch",
           }}
-        >
-          {headline}
-        </h2>
+        />
 
         {subhead ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="subhead"
+            value={subhead}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: 0,
               marginTop: "1.25rem",
@@ -93,13 +108,16 @@ export function CarouselSlideCtaBoldCenter({
               color: tokens.colors.muted,
               maxWidth: "28ch",
             }}
-          >
-            {subhead}
-          </p>
+          />
         ) : null}
 
         {ctaLabel ? (
-          <span
+          <CarouselEditableText
+            as="span"
+            slotId="cta_label"
+            value={ctaLabel}
+            editable={editable}
+            onCommit={onSlotChange}
             style={{
               display: "inline-block",
               marginTop: "1.75rem",
@@ -112,9 +130,7 @@ export function CarouselSlideCtaBoldCenter({
               backgroundColor: tokens.colors.accent,
               color: tokens.colors.background,
             }}
-          >
-            {ctaLabel}
-          </span>
+          />
         ) : null}
       </div>
 

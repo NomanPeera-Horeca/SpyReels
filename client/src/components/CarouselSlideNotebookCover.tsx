@@ -4,6 +4,7 @@ import type {
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
 import { notebookGridStyle } from "@/components/carouselNotebookGrid";
+import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideNotebookCoverProps = {
   tokens: CarouselDesignTokens;
@@ -11,6 +12,8 @@ export type CarouselSlideNotebookCoverProps = {
   handle?: string;
   className?: string;
   imageUrl?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 };
 
 const ASPECT_RATIO_CSS: Record<CarouselDesignTokens["aspectRatio"], string> = {
@@ -29,6 +32,8 @@ export function CarouselSlideNotebookCover({
   handle,
   className,
   imageUrl,
+  editable,
+  onSlotChange,
 }: CarouselSlideNotebookCoverProps) {
   const headline = values.headline ?? "";
   const subhead = values.subhead ?? "";
@@ -59,7 +64,13 @@ export function CarouselSlideNotebookCover({
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.foreground} />
 
       <div style={{ position: "relative", zIndex: 1 }}>
-        <h2
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
@@ -70,11 +81,15 @@ export function CarouselSlideNotebookCover({
             color: tokens.colors.foreground,
             maxWidth: "14ch",
           }}
-        >
-          {headline}
-        </h2>
+        />
         {subhead ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="subhead"
+            value={subhead}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
             style={{
               margin: "0.85rem 0 0",
               fontFamily: tokens.fontFamily.body,
@@ -82,12 +97,15 @@ export function CarouselSlideNotebookCover({
               fontWeight: 500,
               color: tokens.colors.foreground,
             }}
-          >
-            {subhead}
-          </p>
+          />
         ) : null}
         {kicker ? (
-          <p
+          <CarouselEditableText
+            as="p"
+            slotId="kicker"
+            value={kicker}
+            editable={editable}
+            onCommit={onSlotChange}
             style={{
               position: "absolute",
               right: "0.25rem",
@@ -100,9 +118,7 @@ export function CarouselSlideNotebookCover({
               maxWidth: "7ch",
               textAlign: "right",
             }}
-          >
-            {kicker}
-          </p>
+          />
         ) : null}
       </div>
 
