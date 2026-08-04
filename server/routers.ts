@@ -280,6 +280,12 @@ import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
 import { suggestBrollForScript, regenerateBrollBeat } from "./broll/suggestBroll";
+import {
+  getBrollGenerationByScriptId,
+  listScriptIdsWithBroll as listBrollScriptIds,
+  updateBrollGenerationBeatClips,
+  upsertBrollGeneration,
+} from "./broll/db";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
@@ -5656,6 +5662,7 @@ Return JSON only:
      * Suggest Pexels B-roll clips for a script.
      * One LLM beat-split call, then one Pexels video search per beat with in-job URL dedupe.
      * Gated by brollGenerationCount (generation runs only, not clip downloads).
+     * When scriptId is present, upserts the result into broll_generations.
      */
     suggestBroll: protectedProcedure
       .input(
@@ -5690,6 +5697,17 @@ Return JSON only:
           clipsPerBeat: input.clipsPerBeat,
         });
 
+        // Persist for library / ScriptEditor flows that have a saved script.
+        // Paste-only (no scriptId) skips persist; result still returned.
+        if (input.scriptId != null) {
+          await upsertBrollGeneration({
+            userId: ctx.user.id,
+            workspaceId: ctx.workspaceId,
+            scriptId: input.scriptId,
+            result,
+          });
+        }
+
         // Count successful generation runs only (not per-clip downloads).
         await incrementUsage(ctx.user.id, "brollGenerationCount");
         return result;
@@ -5699,6 +5717,7 @@ Return JSON only:
      * Re-search Pexels for a single beat (no LLM split, no full suggestBroll).
      * Product decision: does NOT increment brollGenerationCount (cheaper op;
      * currently unlimited per-beat re-search; can add a light limit later).
+     * When scriptId + beatIndex are set, patches that beat's clips in broll_generations.
      */
     regenerateBrollBeat: protectedProcedure
       .input(
@@ -5709,11 +5728,17 @@ Return JSON only:
           theme: z.string().max(240).optional(),
           excludeUrls: z.array(z.string().max(2048)).max(40).optional(),
           clipsPerBeat: z.number().int().min(1).max(3).optional(),
+          scriptId: z.number().int().positive().optional(),
+          beatIndex: z.number().int().min(0).optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (input.scriptId != null) {
+          await assertScriptInWorkspace(input.scriptId, ctx);
+        }
+
         // Intentionally no checkUsageLimit / incrementUsage for brollGenerationCount.
-        return regenerateBrollBeat({
+        const result = await regenerateBrollBeat({
           searchQuery: input.searchQuery,
           visualSummary: input.visualSummary,
           niche: input.niche,
@@ -5721,7 +5746,48 @@ Return JSON only:
           excludeUrls: input.excludeUrls,
           clipsPerBeat: input.clipsPerBeat,
         });
+
+        if (
+          input.scriptId != null &&
+          input.beatIndex != null
+        ) {
+          await updateBrollGenerationBeatClips({
+            scriptId: input.scriptId,
+            workspaceId: ctx.workspaceId,
+            beatIndex: input.beatIndex,
+            clips: result.clips,
+          });
+        }
+
+        return result;
       }),
+
+    /**
+     * Load persisted B-roll for a saved script (no usage increment).
+     * Returns null when no generation has been saved yet.
+     */
+    getBrollGeneration: protectedProcedure
+      .input(z.object({ scriptId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        await assertScriptInWorkspace(input.scriptId, ctx);
+        const row = await getBrollGenerationByScriptId(
+          input.scriptId,
+          ctx.workspaceId
+        );
+        if (!row) return null;
+        return {
+          scriptId: row.scriptId,
+          result: row.beatsJson,
+          updatedAt: row.updatedAt,
+        };
+      }),
+
+    /**
+     * Lightweight list of scriptIds in the workspace that have saved B-roll.
+     */
+    listScriptIdsWithBroll: protectedProcedure.query(async ({ ctx }) => {
+      return listBrollScriptIds(ctx.workspaceId);
+    }),
   }),
 
   // ── Search Reels ──

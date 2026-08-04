@@ -270,6 +270,16 @@ export function BrollResultsPanel({
   >(null);
   const regeneratingBeatIndexRef = useRef<number | null>(null);
   const autoRanRef = useRef(false);
+  /** Avoid treating a fresh open as "already loaded" across script changes. */
+  const loadedScriptIdRef = useRef<number | undefined>(undefined);
+
+  const savedQuery = trpc.scripts.getBrollGeneration.useQuery(
+    { scriptId: scriptId! },
+    {
+      enabled: open && scriptId != null,
+      staleTime: 30_000,
+    }
+  );
 
   const suggestMutation = trpc.scripts.suggestBroll.useMutation({
     onSuccess: (data) => {
@@ -277,6 +287,10 @@ export function BrollResultsPanel({
       // Server increments brollGenerationCount on success; refresh gate UI only.
       void utils.billing.checkLimit.invalidate({ action: "brollGenerationCount" });
       void utils.billing.usage.invalidate();
+      if (scriptId != null) {
+        void utils.scripts.getBrollGeneration.invalidate({ scriptId });
+        void utils.scripts.listScriptIdsWithBroll.invalidate();
+      }
       toast.success("B-roll suggestions ready");
     },
     onError: (err) => {
@@ -304,6 +318,9 @@ export function BrollResultsPanel({
           ),
         };
       });
+      if (scriptId != null) {
+        void utils.scripts.getBrollGeneration.invalidate({ scriptId });
+      }
       if (data.clips.length === 0) {
         toast.error("No new clip found for this beat");
       } else {
@@ -358,30 +375,84 @@ export function BrollResultsPanel({
       theme: result?.theme || undefined,
       excludeUrls: excludeUrls.length ? excludeUrls : undefined,
       clipsPerBeat: 1,
+      scriptId,
+      beatIndex: beat.index,
     });
   };
 
+  // Reset local state when the dialog opens for a different script/content.
   useEffect(() => {
     if (!open) {
       autoRanRef.current = false;
+      loadedScriptIdRef.current = undefined;
       return;
     }
-    if (!autoGenerate || autoRanRef.current) return;
-    if (!content.trim()) return;
-    if (gate.isLoading) return;
-    autoRanRef.current = true;
-    runGenerate();
-    // Intentionally only when dialog opens with autoGenerate.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, autoGenerate, content, gate.isLoading]);
-
-  useEffect(() => {
-    if (!open) return;
     setResult(null);
     setShowUpgrade(false);
     setRegeneratingBeatIndex(null);
     regeneratingBeatIndexRef.current = null;
+    autoRanRef.current = false;
+    loadedScriptIdRef.current = undefined;
   }, [open, content, scriptId]);
+
+  // Hydrate from saved generation (no credit). Skip suggestBroll when found.
+  useEffect(() => {
+    if (!open) return;
+    if (scriptId == null) return;
+    if (savedQuery.isLoading || savedQuery.isFetching) return;
+    if (loadedScriptIdRef.current === scriptId) return;
+
+    loadedScriptIdRef.current = scriptId;
+    if (savedQuery.data?.result) {
+      setResult(savedQuery.data.result);
+      autoRanRef.current = true; // prevent autoGenerate from burning a credit
+      return;
+    }
+    // No saved row: allow autoGenerate path below.
+  }, [
+    open,
+    scriptId,
+    savedQuery.isLoading,
+    savedQuery.isFetching,
+    savedQuery.data,
+  ]);
+
+  // Auto-generate only when no saved result will be loaded.
+  useEffect(() => {
+    if (!open) return;
+    if (!autoGenerate || autoRanRef.current) return;
+    if (!content.trim()) return;
+    if (gate.isLoading) return;
+    // Wait for saved lookup when scriptId is present.
+    if (scriptId != null) {
+      if (savedQuery.isLoading || savedQuery.isFetching) return;
+      if (savedQuery.data?.result) {
+        autoRanRef.current = true;
+        return;
+      }
+      if (loadedScriptIdRef.current !== scriptId) return;
+    }
+    autoRanRef.current = true;
+    runGenerate();
+    // Intentionally only when dialog opens with autoGenerate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    autoGenerate,
+    content,
+    gate.isLoading,
+    scriptId,
+    savedQuery.isLoading,
+    savedQuery.isFetching,
+    savedQuery.data,
+  ]);
+
+  const loadingSaved =
+    open &&
+    scriptId != null &&
+    (savedQuery.isLoading || savedQuery.isFetching) &&
+    !result &&
+    !suggestMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -409,7 +480,11 @@ export function BrollResultsPanel({
           <Button
             size="sm"
             onClick={runGenerate}
-            disabled={suggestMutation.isPending || !content.trim()}
+            disabled={
+              suggestMutation.isPending ||
+              !content.trim() ||
+              loadingSaved
+            }
             className="gap-1.5"
           >
             {suggestMutation.isPending ? (
@@ -433,14 +508,18 @@ export function BrollResultsPanel({
             />
           ) : null}
 
-          {suggestMutation.isPending && !result ? (
+          {(suggestMutation.isPending && !result) || loadingSaved ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              Splitting beats and finding stock clips...
+              {loadingSaved
+                ? "Loading saved B-roll..."
+                : "Splitting beats and finding stock clips..."}
             </div>
           ) : null}
 
-          {!suggestMutation.isPending && !result ? (
+          {!suggestMutation.isPending &&
+          !loadingSaved &&
+          !result ? (
             <div className="rounded-xl border border-dashed px-4 py-12 text-center">
               <Clapperboard className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">

@@ -2003,3 +2003,34 @@ export const carouselRemakes = mysqlTable(
 
 export type CarouselRemake = typeof carouselRemakes.$inferSelect;
 export type InsertCarouselRemake = typeof carouselRemakes.$inferInsert;
+
+import type { SuggestBrollResult } from "../shared/broll";
+
+/**
+ * Persisted B-roll generation for a saved script (beats + clips + theme).
+ * One row per script; upserted on full generate / per-beat regenerate.
+ */
+export const brollGenerations = mysqlTable(
+  "broll_generations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    scriptId: int("scriptId")
+      .notNull()
+      .references(() => savedScripts.id, { onDelete: "cascade" }),
+    /** Full SuggestBrollResult: beats (with clips), theme, attributionNote. */
+    beatsJson: json("beatsJson").$type<SuggestBrollResult>().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    scriptUnique: uniqueIndex("uniq_broll_generations_script").on(table.scriptId),
+    workspaceIdx: index("idx_broll_generations_workspace").on(table.workspaceId),
+  })
+);
+
+export type BrollGeneration = typeof brollGenerations.$inferSelect;
+export type InsertBrollGeneration = typeof brollGenerations.$inferInsert;

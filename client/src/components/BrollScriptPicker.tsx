@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FileText, Loader2, Search, X } from "lucide-react";
+import { Clapperboard, FileText, Loader2, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,8 +37,15 @@ export function BrollScriptPicker({
   const listQuery = trpc.scripts.list.useQuery(undefined, {
     staleTime: 30_000,
   });
+  const brollIdsQuery = trpc.scripts.listScriptIdsWithBroll.useQuery(undefined, {
+    staleTime: 30_000,
+  });
 
   const scripts = listQuery.data ?? [];
+  const brollIdSet = useMemo(
+    () => new Set(brollIdsQuery.data ?? []),
+    [brollIdsQuery.data]
+  );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return scripts;
@@ -113,6 +120,7 @@ export function BrollScriptPicker({
           <ul className="divide-y" role="listbox" aria-label="Scripts">
             {filtered.map((script) => {
               const isSelected = script.id === selectedId;
+              const hasBroll = brollIdSet.has(script.id);
               return (
                 <li key={script.id}>
                   <button
@@ -137,11 +145,22 @@ export function BrollScriptPicker({
                       <span className="line-clamp-1 text-sm font-medium text-foreground">
                         {script.title || "Untitled script"}
                       </span>
-                      {isSelected ? (
-                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                          Selected
-                        </span>
-                      ) : null}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {hasBroll ? (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                            title="Saved B-roll"
+                          >
+                            <Clapperboard className="h-3 w-3" aria-hidden />
+                            B-roll
+                          </span>
+                        ) : null}
+                        {isSelected ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Selected
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="line-clamp-2 text-xs text-muted-foreground">
                       {previewContent(script.content || "")}
