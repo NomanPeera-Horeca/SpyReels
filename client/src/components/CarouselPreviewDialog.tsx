@@ -13,9 +13,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { CarouselRenderer } from "@/components/CarouselRenderer";
+import { PostDateTimePicker } from "@/components/PostDateTimePicker";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Wand2 } from "lucide-react";
+import { Calendar, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { toBlob } from "html-to-image";
 import JSZip from "jszip";
@@ -25,6 +31,11 @@ export type CarouselPreviewDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template: CarouselTemplate | null;
+  /**
+   * When set, open in remake-completed mode: load via status only (no start).
+   * Pass null/undefined for a fresh template remake flow.
+   */
+  initialRemakeId?: number | null;
 };
 
 type SlideCountChoice = "auto" | "3" | "5" | "8" | "10" | "15" | "20";
@@ -153,6 +164,7 @@ export function CarouselPreviewDialog({
   open,
   onOpenChange,
   template,
+  initialRemakeId = null,
 }: CarouselPreviewDialogProps) {
   const [nicheInput, setNicheInput] = useState("");
   const [handleInput, setHandleInput] = useState("");
@@ -167,19 +179,43 @@ export function CarouselPreviewDialog({
   const [isExporting, setIsExporting] = useState(false);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<Record<string, string>>({});
   const [uploadedImagePool, setUploadedImagePool] = useState<string[]>([]);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [postDate, setPostDate] = useState<Date | undefined>(undefined);
+  const [postTime, setPostTime] = useState("09:00");
+  /**
+   * Read-only reopen while viewing the remake we opened from history.
+   * Exits once the user starts a new remake (activeRemakeId changes).
+   */
+  const isReopenMode =
+    initialRemakeId != null &&
+    (activeRemakeId == null || activeRemakeId === initialRemakeId);
   const carouselContainerRef = useRef<HTMLDivElement>(null);
 
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
-    enabled: open,
+    enabled: open && !isReopenMode,
   });
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery(undefined, {
     enabled: open,
   });
   const saveHandleMutation = trpc.carouselRemake.saveHandle.useMutation();
   const uploadImageMutation = trpc.carouselRemake.uploadSlideImage.useMutation();
+  const utils = trpc.useUtils();
   const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
     onError: (err) => {
       toast.error(err.message || "Failed to save text edit");
+    },
+  });
+  const updateScheduleMutation = trpc.carouselRemake.updateSchedule.useMutation({
+    onSuccess: () => {
+      toast.success("Schedule saved");
+      setScheduleOpen(false);
+      if (activeRemakeId != null) {
+        void utils.carouselRemake.status.invalidate({ remakeId: activeRemakeId });
+      }
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to save schedule");
     },
   });
 
@@ -195,9 +231,18 @@ export function CarouselPreviewDialog({
       setFormatChoice("post_4_5");
       setUploadedImageUrls({});
       setUploadedImagePool([]);
+      setScheduleOpen(false);
+      setPostDate(undefined);
+      setPostTime("09:00");
       return;
     }
-  }, [open]);
+    // Reopen saved remake: wire status query only (never call start).
+    if (initialRemakeId != null) {
+      setActiveRemakeId(initialRemakeId);
+      setRemakeSlideValues(null);
+      setShowOriginal(false);
+    }
+  }, [open, initialRemakeId]);
 
   useEffect(() => {
     if (open && defaultHandleQuery.data?.handle && !handleInput) {
@@ -217,6 +262,7 @@ export function CarouselPreviewDialog({
       setActiveRemakeId(data.remakeId);
       setRemakeSlideValues(null);
       setShowOriginal(false);
+      void utils.carouselRemake.list.invalidate();
       toast.success("Carousel remake started");
     },
     onError: (err) => {
@@ -240,14 +286,33 @@ export function CarouselPreviewDialog({
   useEffect(() => {
     const data = statusQuery.data;
     if (!data) return;
-    if (data.status === "completed" && data.slotValues) {
-      setRemakeSlideValues(data.slotValues);
+    if (data.status === "completed") {
+      setRemakeSlideValues(data.slotValues ?? {});
+      if (!isReopenMode) {
+        void utils.carouselRemake.list.invalidate();
+      }
     }
     if (data.status === "failed") {
       toast.error(data.errorMessage || "Carousel remake failed");
+      if (!isReopenMode) {
+        void utils.carouselRemake.list.invalidate();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync on remake identity / status transitions
   }, [activeRemakeId, statusQuery.data?.status, statusQuery.data?.id]);
+
+  // Sync planned schedule from server when remake status loads / updates.
+  useEffect(() => {
+    const data = statusQuery.data;
+    if (!data || data.status !== "completed") return;
+    setPostDate(data.postDate ? new Date(data.postDate) : undefined);
+    setPostTime(data.postTime || "09:00");
+  }, [
+    activeRemakeId,
+    statusQuery.data?.status,
+    statusQuery.data?.postDate,
+    statusQuery.data?.postTime,
+  ]);
 
   function handleSlotChange(slideId: string, slotId: string, value: string) {
     setRemakeSlideValues((prev) => {
@@ -273,6 +338,14 @@ export function CarouselPreviewDialog({
     startMutation.isPending ||
     statusQuery.data?.status === "processing" ||
     statusQuery.data?.status === "pending";
+
+  /** Reopen path: wait for status before showing generate form (avoids flash). */
+  const isLoadingReopen =
+    isReopenMode &&
+    activeRemakeId != null &&
+    remakeSlideValues == null &&
+    statusQuery.data?.status !== "failed" &&
+    !statusQuery.isError;
 
   const hasRemake = remakeSlideValues != null;
   const viewingRemake = hasRemake && !showOriginal;
@@ -505,10 +578,12 @@ export function CarouselPreviewDialog({
             </div>
 
             <div className="shrink-0 space-y-3 border-t border-border/40 p-4">
-              {isGenerating ? (
+              {isGenerating || isLoadingReopen ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Rewriting slide text for your niche…
+                  {isLoadingReopen
+                    ? "Loading your carousel…"
+                    : "Rewriting slide text for your niche…"}
                 </p>
               ) : null}
 
@@ -530,20 +605,93 @@ export function CarouselPreviewDialog({
                   >
                     Original
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setActiveRemakeId(null);
-                      setRemakeSlideValues(null);
-                      setShowOriginal(false);
-                    }}
-                  >
-                    Start over
-                  </Button>
+                  {!isReopenMode ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setActiveRemakeId(null);
+                        setRemakeSlideValues(null);
+                        setShowOriginal(false);
+                      }}
+                    >
+                      Start over
+                    </Button>
+                  ) : null}
+                  {statusQuery.data?.status === "completed" &&
+                  activeRemakeId != null ? (
+                    <Popover open={scheduleOpen} onOpenChange={setScheduleOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="gap-1.5">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {postDate
+                            ? postDate.toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "Schedule"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 space-y-3 p-3" align="start">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Plan post date</p>
+                          <p className="text-xs text-muted-foreground">
+                            For your reference only. SpyReels does not post to Instagram.
+                          </p>
+                        </div>
+                        <PostDateTimePicker
+                          date={postDate}
+                          onDateChange={setPostDate}
+                          time={postTime}
+                          onTimeChange={setPostTime}
+                          timezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                          compact
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={updateScheduleMutation.isPending || !postDate}
+                            onClick={() => {
+                              updateScheduleMutation.mutate({
+                                remakeId: activeRemakeId,
+                                postDate: postDate
+                                  ? postDate.toISOString()
+                                  : null,
+                                postTime: postTime || null,
+                              });
+                            }}
+                          >
+                            {updateScheduleMutation.isPending
+                              ? "Saving…"
+                              : "Save schedule"}
+                          </Button>
+                          {postDate || statusQuery.data?.postDate ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={updateScheduleMutation.isPending}
+                              onClick={() => {
+                                setPostDate(undefined);
+                                setPostTime("09:00");
+                                updateScheduleMutation.mutate({
+                                  remakeId: activeRemakeId,
+                                  postDate: null,
+                                  postTime: null,
+                                });
+                              }}
+                            >
+                              Clear
+                            </Button>
+                          ) : null}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  ) : null}
                 </div>
-              ) : (
+              ) : isLoadingReopen ? null : (
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <label className="block text-xs font-medium text-muted-foreground">
@@ -709,7 +857,7 @@ export function CarouselPreviewDialog({
               )}
 
               <div className="flex flex-wrap items-center gap-2">
-                {!hasRemake ? (
+                {!hasRemake && !isLoadingReopen ? (
                   <Button
                     type="button"
                     variant="default"

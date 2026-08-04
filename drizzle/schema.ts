@@ -1986,6 +1986,10 @@ export const carouselRemakes = mysqlTable(
     aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
     /** Resolved slide photo URLs keyed by slide id. */
     imageUrlsJson: json("imageUrlsJson"),
+    /** Planned Instagram post date (user reference only; not auto-post). */
+    postDate: timestamp("postDate"),
+    /** Preferred posting time HH:MM (user reference only; not auto-post). */
+    postTime: varchar("postTime", { length: 8 }),
     errorMessage: text("errorMessage"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

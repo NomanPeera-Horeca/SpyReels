@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import { carouselRemakes, users } from "../../drizzle/schema";
@@ -12,6 +12,40 @@ import { hasUnlimitedUsage } from "../usageBypass";
 import { countCarouselRemakesThisMonth } from "../carousel/db";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import { storagePut } from "../storage";
+
+/** First slide image URL from imageUrlsJson (string or per-slot map). */
+function firstThumbnailUrl(imageUrls: unknown): string | null {
+  if (!imageUrls || typeof imageUrls !== "object") return null;
+  const map = imageUrls as Record<string, string | Record<string, string>>;
+  for (const value of Object.values(map)) {
+    if (typeof value === "string" && value.length > 0) return value;
+    if (value && typeof value === "object") {
+      for (const slotUrl of Object.values(value)) {
+        if (typeof slotUrl === "string" && slotUrl.length > 0) return slotUrl;
+      }
+    }
+  }
+  return null;
+}
+
+/** Parse ISO or YYYY-MM-DD without timezone day-shift on date-only strings. */
+function parseDateSafe(dateStr: string): Date {
+  if (dateStr.includes("T")) return new Date(dateStr);
+  return new Date(dateStr + "T12:00:00");
+}
+
+/** Scheduled remakes first (soonest postDate), then newest created. */
+function compareRemakesForList(
+  a: { postDate: Date | null; createdAt: Date },
+  b: { postDate: Date | null; createdAt: Date }
+): number {
+  if (a.postDate && b.postDate) {
+    return a.postDate.getTime() - b.postDate.getTime();
+  }
+  if (a.postDate && !b.postDate) return -1;
+  if (!a.postDate && b.postDate) return 1;
+  return b.createdAt.getTime() - a.createdAt.getTime();
+}
 
 const DESIGN_OVERRIDE_SCHEMA = z.object({
   background: z.string().max(16),
@@ -188,6 +222,8 @@ export const carouselRemakeRouter = router({
         designOverride: row.designOverrideJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
+        postDate: row.postDate,
+        postTime: row.postTime,
         errorMessage: row.errorMessage,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -212,7 +248,11 @@ export const carouselRemakeRouter = router({
         });
       }
 
-      const conditions = [eq(carouselRemakes.workspaceId, ctx.workspaceId)];
+      const conditions = [
+        eq(carouselRemakes.workspaceId, ctx.workspaceId),
+        // History: completed + failed only (no stuck processing rows).
+        inArray(carouselRemakes.status, ["completed", "failed"]),
+      ];
       if (input?.templateId) {
         conditions.push(eq(carouselRemakes.templateId, input.templateId));
       }
@@ -224,13 +264,21 @@ export const carouselRemakeRouter = router({
           niche: carouselRemakes.niche,
           status: carouselRemakes.status,
           createdAt: carouselRemakes.createdAt,
+          postDate: carouselRemakes.postDate,
+          postTime: carouselRemakes.postTime,
+          imageUrlsJson: carouselRemakes.imageUrlsJson,
         })
         .from(carouselRemakes)
         .where(and(...conditions))
         .orderBy(desc(carouselRemakes.createdAt))
         .limit(input?.limit ?? 20);
 
-      return rows;
+      return rows
+        .map(({ imageUrlsJson, ...row }) => ({
+          ...row,
+          thumbnailUrl: firstThumbnailUrl(imageUrlsJson),
+        }))
+        .sort(compareRemakesForList);
     }),
 
   defaultNiche: protectedProcedure.query(async ({ ctx }) => {
@@ -282,6 +330,63 @@ export const carouselRemakeRouter = router({
       const key = `carousel-uploads/${ctx.user.id}/${Date.now()}.jpg`;
       const { url } = await storagePut(key, buffer, input.contentType);
       return { url };
+    }),
+
+  /**
+   * Store intended post date/time for user planning only.
+   * Does NOT auto-post to Instagram and does NOT count toward remake usage.
+   */
+  updateSchedule: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        postDate: z.string().nullable(),
+        postTime: z.string().max(8).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before scheduling",
+        });
+      }
+
+      const postDate = input.postDate ? parseDateSafe(input.postDate) : null;
+      const postTime = input.postTime?.trim() ? input.postTime.trim() : null;
+
+      await db
+        .update(carouselRemakes)
+        .set({ postDate, postTime })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, postDate, postTime };
     }),
 
   /**
