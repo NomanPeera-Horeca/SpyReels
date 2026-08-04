@@ -1991,6 +1991,8 @@ export const carouselRemakes = mysqlTable(
     /** Preferred posting time HH:MM (user reference only; not auto-post). */
     postTime: varchar("postTime", { length: 8 }),
     errorMessage: text("errorMessage"),
+    /** Soft delete; null means active. Filtered from list/status. */
+    deletedAt: timestamp("deletedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

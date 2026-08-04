@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import { carouselRemakes, users } from "../../drizzle/schema";
@@ -13,19 +13,60 @@ import { countCarouselRemakesThisMonth } from "../carousel/db";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import { storagePut } from "../storage";
 
+/** First URL from a slide entry (string or per-slot map). */
+function firstUrlFromSlideEntry(
+  value: string | Record<string, string> | undefined | null
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string" && value.length > 0) return value;
+  if (typeof value === "object") {
+    for (const slotUrl of Object.values(value)) {
+      if (typeof slotUrl === "string" && slotUrl.length > 0) return slotUrl;
+    }
+  }
+  return null;
+}
+
 /** First slide image URL from imageUrlsJson (string or per-slot map). */
 function firstThumbnailUrl(imageUrls: unknown): string | null {
   if (!imageUrls || typeof imageUrls !== "object") return null;
   const map = imageUrls as Record<string, string | Record<string, string>>;
   for (const value of Object.values(map)) {
-    if (typeof value === "string" && value.length > 0) return value;
-    if (value && typeof value === "object") {
-      for (const slotUrl of Object.values(value)) {
-        if (typeof slotUrl === "string" && slotUrl.length > 0) return slotUrl;
-      }
-    }
+    const url = firstUrlFromSlideEntry(value);
+    if (url) return url;
   }
   return null;
+}
+
+/**
+ * Ordered per-slide preview URLs from imageUrlsJson.
+ * Prefers slideStructureJson order when present; otherwise map insertion order.
+ */
+function orderedSlideImageUrls(
+  imageUrls: unknown,
+  slideStructure: unknown
+): string[] {
+  if (!imageUrls || typeof imageUrls !== "object") return [];
+  const map = imageUrls as Record<string, string | Record<string, string>>;
+
+  if (Array.isArray(slideStructure)) {
+    const ordered: string[] = [];
+    for (const slide of slideStructure) {
+      if (!slide || typeof slide !== "object") continue;
+      const id = (slide as { id?: unknown }).id;
+      if (typeof id !== "string" || !id) continue;
+      const url = firstUrlFromSlideEntry(map[id]);
+      if (url) ordered.push(url);
+    }
+    if (ordered.length > 0) return ordered;
+  }
+
+  const fallback: string[] = [];
+  for (const value of Object.values(map)) {
+    const url = firstUrlFromSlideEntry(value);
+    if (url) fallback.push(url);
+  }
+  return fallback;
 }
 
 /** Parse ISO or YYYY-MM-DD without timezone day-shift on date-only strings. */
@@ -202,7 +243,8 @@ export const carouselRemakeRouter = router({
         .where(
           and(
             eq(carouselRemakes.id, input.remakeId),
-            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
           )
         )
         .limit(1);
@@ -250,6 +292,7 @@ export const carouselRemakeRouter = router({
 
       const conditions = [
         eq(carouselRemakes.workspaceId, ctx.workspaceId),
+        isNull(carouselRemakes.deletedAt),
         // History: completed + failed only (no stuck processing rows).
         inArray(carouselRemakes.status, ["completed", "failed"]),
       ];
@@ -268,6 +311,7 @@ export const carouselRemakeRouter = router({
           postTime: carouselRemakes.postTime,
           aspectRatioOverride: carouselRemakes.aspectRatioOverride,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
+          slideStructureJson: carouselRemakes.slideStructureJson,
         })
         .from(carouselRemakes)
         .where(and(...conditions))
@@ -275,10 +319,21 @@ export const carouselRemakeRouter = router({
         .limit(input?.limit ?? 20);
 
       return rows
-        .map(({ imageUrlsJson, ...row }) => ({
-          ...row,
-          thumbnailUrl: firstThumbnailUrl(imageUrlsJson),
-        }))
+        .map(({ imageUrlsJson, slideStructureJson, ...row }) => {
+          const slideImageUrls = orderedSlideImageUrls(
+            imageUrlsJson,
+            slideStructureJson
+          );
+          return {
+            ...row,
+            thumbnailUrl: firstThumbnailUrl(imageUrlsJson) ?? slideImageUrls[0] ?? null,
+            slideImageUrls,
+            imageUrls: (imageUrlsJson ?? null) as Record<
+              string,
+              string | Record<string, string>
+            > | null,
+          };
+        })
         .sort(compareRemakesForList);
     }),
 
@@ -363,7 +418,8 @@ export const carouselRemakeRouter = router({
         .where(
           and(
             eq(carouselRemakes.id, input.remakeId),
-            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
           )
         )
         .limit(1);
@@ -422,7 +478,8 @@ export const carouselRemakeRouter = router({
         .where(
           and(
             eq(carouselRemakes.id, input.remakeId),
-            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
           )
         )
         .limit(1);
@@ -487,7 +544,8 @@ export const carouselRemakeRouter = router({
         .where(
           and(
             eq(carouselRemakes.id, input.remakeId),
-            eq(carouselRemakes.workspaceId, ctx.workspaceId)
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
           )
         )
         .limit(1);
@@ -509,5 +567,48 @@ export const carouselRemakeRouter = router({
         .where(eq(carouselRemakes.id, input.remakeId));
 
       return { remakeId: input.remakeId, aspectRatio: input.aspectRatio };
+    }),
+
+  /**
+   * Soft-delete a remake from Your Carousels.
+   * Auth + workspace ownership (same pattern as updateSlotValues).
+   * Does not refund monthly usage.
+   */
+  delete: protectedProcedure
+    .input(z.object({ remakeId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({ deletedAt: new Date() })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, deleted: true as const };
     }),
 });

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Calendar, Images, LayoutGrid } from "lucide-react";
+import { Images, LayoutGrid } from "lucide-react";
+import { toast } from "sonner";
 import {
   CAROUSEL_TEMPLATES,
   CAROUSEL_TEMPLATES_BY_ID,
@@ -8,34 +9,48 @@ import {
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { CarouselLibraryCard } from "@/components/CarouselLibraryCard";
 import { CarouselPreviewDialog } from "@/components/CarouselPreviewDialog";
+import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-
-function formatRemakeDate(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatScheduledBadge(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 export default function CarouselLibrary() {
   const [previewTemplate, setPreviewTemplate] =
     useState<CarouselTemplate | null>(null);
   const [openRemakeId, setOpenRemakeId] = useState<number | null>(null);
+  const [remakePendingDelete, setRemakePendingDelete] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
+  const utils = trpc.useUtils();
   const remakesQuery = trpc.carouselRemake.list.useQuery({ limit: 20 });
   const remakes = remakesQuery.data ?? [];
   const hasRemakes = remakes.length > 0;
+
+  const deleteMutation = trpc.carouselRemake.delete.useMutation({
+    onSuccess: (_data, variables) => {
+      void utils.carouselRemake.list.invalidate();
+      if (openRemakeId === variables.remakeId) {
+        setPreviewTemplate(null);
+        setOpenRemakeId(null);
+      }
+      setRemakePendingDelete(null);
+      toast.success("Carousel deleted");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete carousel");
+    },
+  });
 
   const templates = useMemo(
     () =>
@@ -60,6 +75,11 @@ export default function CarouselLibrary() {
   function closePreview() {
     setPreviewTemplate(null);
     setOpenRemakeId(null);
+  }
+
+  function handleConfirmDelete() {
+    if (!remakePendingDelete || deleteMutation.isPending) return;
+    deleteMutation.mutate({ remakeId: remakePendingDelete.id });
   }
 
   return (
@@ -102,60 +122,23 @@ export default function CarouselLibrary() {
             {remakes.map((remake) => {
               const template = CAROUSEL_TEMPLATES_BY_ID.get(remake.templateId);
               const templateName = template?.name ?? remake.templateId;
-              const isFailed = remake.status === "failed";
-              const isActive = openRemakeId === remake.id;
               return (
-                <button
+                <RemakeHistoryCard
                   key={remake.id}
-                  type="button"
+                  templateName={templateName}
+                  niche={remake.niche}
+                  status={remake.status}
+                  createdAt={remake.createdAt}
+                  postDate={remake.postDate}
+                  thumbnailUrl={remake.thumbnailUrl}
+                  slideImageUrls={remake.slideImageUrls}
+                  isActive={openRemakeId === remake.id}
                   disabled={!template}
                   onClick={() => openSavedRemake(remake.id, remake.templateId)}
-                  className={cn(
-                    "group flex flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors",
-                    "hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                    isActive && "ring-2 ring-primary/35",
-                    isFailed ? "border-destructive/30" : "border-border/50",
-                    !template && "cursor-not-allowed opacity-60"
-                  )}
-                >
-                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
-                    {remake.thumbnailUrl ? (
-                      <img
-                        src={remake.thumbnailUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-muted-foreground">
-                        {templateName}
-                      </div>
-                    )}
-                    {isFailed ? (
-                      <span className="absolute left-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-medium text-destructive-foreground">
-                        Failed
-                      </span>
-                    ) : remake.postDate ? (
-                      <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
-                        <Calendar className="h-2.5 w-2.5" />
-                        {formatScheduledBadge(remake.postDate)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="space-y-1 p-2.5">
-                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-                      {templateName}
-                    </p>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">
-                      {remake.niche}
-                    </p>
-                    <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Calendar className="h-3 w-3 shrink-0" />
-                      {remake.postDate
-                        ? `Scheduled ${formatRemakeDate(remake.postDate)}`
-                        : formatRemakeDate(remake.createdAt)}
-                    </p>
-                  </div>
-                </button>
+                  onDeleteRequest={() =>
+                    setRemakePendingDelete({ id: remake.id, name: templateName })
+                  }
+                />
               );
             })}
           </div>
@@ -198,6 +181,43 @@ export default function CarouselLibrary() {
         template={previewTemplate}
         initialRemakeId={openRemakeId}
       />
+
+      <AlertDialog
+        open={remakePendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) {
+            setRemakePendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this carousel?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {remakePendingDelete
+                ? `"${remakePendingDelete.name}" will be removed from Your Carousels. This does not refund monthly remake usage.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(
+                "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+                deleteMutation.isPending && "pointer-events-none opacity-50"
+              )}
+              onClick={(event) => {
+                event.preventDefault();
+                handleConfirmDelete();
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
