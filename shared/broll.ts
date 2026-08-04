@@ -1,4 +1,4 @@
-/** Shared types for B-Roll beat suggestions (Pexels video clips). */
+/** Shared types for B-Roll beat suggestions (stock video clips). */
 
 export type BrollClip = {
   id: number;
@@ -7,7 +7,7 @@ export type BrollClip = {
   durationSeconds: number;
   width: number;
   height: number;
-  /** Pexels video page URL (required for attribution). */
+  /** Stock video page URL. */
   sourceUrl: string;
   photographerName: string;
   photographerUrl: string;
@@ -25,8 +25,6 @@ export type BrollBeat = {
 
 export type SuggestBrollResult = {
   beats: BrollBeat[];
+  /** Kept for API compatibility; UI no longer displays attribution. */
   attributionNote: string;
 };
-
-export const BROLL_PEXELS_ATTRIBUTION =
-  "Videos provided by Pexels. Credit the photographer when you publish.";

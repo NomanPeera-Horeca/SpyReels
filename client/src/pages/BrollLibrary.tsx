@@ -48,7 +48,7 @@ export default function BrollLibrary() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">B-Roll Library</h1>
           <p className="text-sm text-muted-foreground">
-            Pick a script, get beat-matched stock video from Pexels
+            Pick a script, get beat-matched stock video
           </p>
         </div>
       </div>
@@ -58,7 +58,7 @@ export default function BrollLibrary() {
           <div>
             <h2 className="text-sm font-semibold text-foreground">Choose a script</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Single select. We split it into beats and search Pexels once per generation.
+              Single select. We split it into beats and search stock video once per generation.
             </p>
           </div>
           {selected ? (
@@ -81,7 +81,6 @@ export default function BrollLibrary() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Videos provided by Pexels. Credit the photographer when you publish.
         Limits count generation runs, not clip downloads.
       </p>
 

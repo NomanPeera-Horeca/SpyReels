@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Clapperboard,
-  ExternalLink,
   Loader2,
   Play,
   RefreshCw,
@@ -75,28 +74,11 @@ function ClipCard({
           </>
         )}
       </div>
-      <div className="space-y-1.5 p-2.5">
-        <p className="text-[11px] text-muted-foreground">
-          {clip.durationSeconds > 0 ? `${clip.durationSeconds}s` : "Clip"} · Pexels
-        </p>
-        <a
-          href={clip.photographerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-xs font-medium text-foreground hover:underline"
-        >
-          Photo by {clip.photographerName}
-        </a>
-        <a
-          href={clip.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-        >
-          View on Pexels
-          <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
+      {clip.durationSeconds > 0 ? (
+        <div className="p-2.5">
+          <p className="text-[11px] text-muted-foreground">{clip.durationSeconds}s</p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -116,7 +98,7 @@ function BeatBlock({ beat }: { beat: BrollBeat }) {
       </div>
       {beat.clips.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No matching Pexels clips for this beat. Try regenerating or editing the script.
+          No matching clips for this beat. Try regenerating or editing the script.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -137,7 +119,6 @@ export function BrollBeatsView({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">{result.attributionNote}</p>
       {result.beats.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No beats were returned. Try a longer script.
@@ -232,8 +213,7 @@ export function BrollResultsPanel({
           <DialogDescription>
             {title
               ? `Stock video ideas for "${title}".`
-              : "Stock video ideas matched to your script beats."}{" "}
-            Videos from Pexels. Credit the photographer when you publish.
+              : "Stock video ideas matched to your script beats."}
           </DialogDescription>
         </DialogHeader>
 
@@ -275,7 +255,7 @@ export function BrollResultsPanel({
           {suggestMutation.isPending && !result ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              Splitting beats and finding Pexels clips...
+              Splitting beats and finding stock clips...
             </div>
           ) : null}
 
@@ -286,8 +266,8 @@ export function BrollResultsPanel({
                 Ready to find B-roll
               </p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                We split your script into beats, then search Pexels for matching
-                stock video. One generation counts toward your monthly limit.
+                We split your script into beats, then search for matching stock
+                video. One generation counts toward your monthly limit.
               </p>
             </div>
           ) : null}

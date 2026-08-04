@@ -162,7 +162,7 @@ const BROLL_FAQ: FaqItem[] = [
   },
   {
     q: "Where do the video clips come from?",
-    a: "Clips come from Pexels stock video. Always credit the photographer when you publish. SpyReels does not host or sell the footage.",
+    a: "Clips come from Pexels stock video. SpyReels does not host or sell the footage.",
   },
   {
     q: "Does downloading a clip count against my limit?",

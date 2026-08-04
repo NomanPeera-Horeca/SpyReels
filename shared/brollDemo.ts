@@ -8,7 +8,6 @@
  */
 
 import type { SuggestBrollResult } from "./broll";
-import { BROLL_PEXELS_ATTRIBUTION } from "./broll";
 
 export const BROLL_DEMO_SCRIPT = `Stop scrolling if your Reels feel flat.
 Most creators film talking-head only and wonder why retention drops.
@@ -17,9 +16,9 @@ Show the problem, then cut to proof, then show the outcome.
 That simple beat structure is how faceless and hybrid Reels keep people watching.
 Try it on your next script and watch completion climb.`;
 
-/** Curated demo beats + placeholder clip metadata (real Pexels-style attribution shape). */
+/** Curated demo beats + placeholder clip metadata. */
 export const BROLL_DEMO_RESULT: SuggestBrollResult = {
-  attributionNote: BROLL_PEXELS_ATTRIBUTION,
+  attributionNote: "",
   beats: [
     {
       index: 0,

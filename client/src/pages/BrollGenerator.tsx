@@ -32,7 +32,7 @@ const BROLL_FAQ_ITEMS = [
   },
   {
     q: "Where do the video clips come from?",
-    a: "Clips come from Pexels stock video. Always credit the photographer when you publish. SpyReels does not host or sell the footage.",
+    a: "Clips come from Pexels stock video. SpyReels does not host or sell the footage.",
   },
   {
     q: "Does downloading a clip count against my limit?",
@@ -221,7 +221,6 @@ export default function BrollGenerator() {
             <li>Paste a finished Reel script (not an Instagram handle).</li>
             <li>We split it into visual beats with one AI call.</li>
             <li>Each beat gets a matching Pexels stock video suggestion.</li>
-            <li>Credit the photographer when you publish.</li>
           </ul>
         </section>
 
@@ -243,15 +242,11 @@ export default function BrollGenerator() {
               <tbody className="text-muted-foreground">
                 <tr className="border-b">
                   <td className="px-3 py-2">Beat split</td>
-                  <td className="px-3 py-2">3 to 6 visual moments from your script</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="px-3 py-2">Stock search</td>
-                  <td className="px-3 py-2">Pexels video match per beat</td>
+                  <td className="px-3 py-2">Visual moments covering your full script</td>
                 </tr>
                 <tr>
-                  <td className="px-3 py-2">Attribution</td>
-                  <td className="px-3 py-2">Photographer name + Pexels source link</td>
+                  <td className="px-3 py-2">Stock search</td>
+                  <td className="px-3 py-2">Pexels video match per beat</td>
                 </tr>
               </tbody>
             </table>
