@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Clapperboard,
+  Download,
   Loader2,
   Play,
   RefreshCw,
@@ -17,7 +18,12 @@ import {
 } from "@/components/ui/dialog";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
-import type { BrollBeat, SuggestBrollResult } from "@shared/broll";
+import {
+  beatFileIndex,
+  downloadAllBrollClipsAsZip,
+  downloadBrollClip,
+} from "@/lib/brollDownload";
+import type { BrollBeat, BrollClip, SuggestBrollResult } from "@shared/broll";
 
 export type BrollResultsPanelProps = {
   open: boolean;
@@ -31,17 +37,46 @@ export type BrollResultsPanelProps = {
   autoGenerate?: boolean;
 };
 
-function ClipCard({
-  clip,
+function primaryClip(beat: BrollBeat): BrollClip | undefined {
+  return beat.clips.find((c) => c.previewUrl?.trim()) ?? beat.clips[0];
+}
+
+function ShotRow({
+  beat,
+  regenerating,
+  onRegenerate,
 }: {
-  clip: BrollBeat["clips"][number];
+  beat: BrollBeat;
+  regenerating?: boolean;
+  onRegenerate?: (beat: BrollBeat) => void;
 }) {
+  const clip = primaryClip(beat);
   const [playing, setPlaying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const beatLabel = beatFileIndex(beat.index);
+
+  const handleDownload = async () => {
+    if (!clip?.previewUrl?.trim() || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadBrollClip(
+        clip.previewUrl,
+        `broll-beat-${beatLabel}.mp4`
+      );
+      toast.success(`Beat ${beatLabel} downloaded`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not download clip"
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="relative aspect-[9/16] max-h-56 bg-muted">
-        {playing && clip.previewUrl ? (
+    <div className="flex gap-3 rounded-lg border bg-card p-2.5 sm:p-3">
+      <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-md bg-muted sm:h-24 sm:w-16">
+        {playing && clip?.previewUrl ? (
           <video
             src={clip.previewUrl}
             className="h-full w-full object-cover"
@@ -51,7 +86,7 @@ function ClipCard({
             onEnded={() => setPlaying(false)}
             onError={() => setPlaying(false)}
           />
-        ) : (
+        ) : clip?.thumbnailUrl ? (
           <>
             <img
               src={clip.thumbnailUrl}
@@ -62,70 +97,157 @@ function ClipCard({
             {clip.previewUrl ? (
               <button
                 type="button"
-                className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors hover:bg-black/40"
+                className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors hover:bg-black/40"
                 onClick={() => setPlaying(true)}
-                aria-label="Play preview"
+                aria-label={`Play beat ${beatLabel}`}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90">
-                  <Play className="h-4 w-4 text-foreground" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90">
+                  <Play className="h-3 w-3 text-foreground" />
                 </span>
               </button>
             ) : null}
           </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Clapperboard className="h-4 w-4 text-muted-foreground" />
+          </div>
         )}
+        {clip && clip.durationSeconds > 0 ? (
+          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white">
+            {clip.durationSeconds}s
+          </span>
+        ) : null}
       </div>
-      {clip.durationSeconds > 0 ? (
-        <div className="p-2.5">
-          <p className="text-[11px] text-muted-foreground">{clip.durationSeconds}s</p>
+
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold tabular-nums text-muted-foreground">
+            {beatLabel}
+          </p>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {clip?.previewUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => void handleDownload()}
+                disabled={downloading || regenerating}
+                aria-label={`Download beat ${beatLabel}`}
+              >
+                {downloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            ) : null}
+            {onRegenerate ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onRegenerate(beat)}
+                disabled={regenerating}
+                aria-label={`Regenerate beat ${beatLabel}`}
+              >
+                {regenerating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+        <p className="text-sm leading-snug text-foreground">{beat.scriptText}</p>
+        {beat.visualSummary ? (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {beat.visualSummary}
+          </p>
+        ) : null}
+        {!clip ? (
+          <p className="text-xs text-muted-foreground">
+            No matching clip. Try regenerating this beat.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function BeatBlock({ beat }: { beat: BrollBeat }) {
-  return (
-    <section className="space-y-3 rounded-xl border p-3 sm:p-4">
-      <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Beat {beat.index + 1}
-        </p>
-        <p className="text-sm text-foreground">{beat.scriptText}</p>
-        <p className="text-xs text-muted-foreground">
-          Visual: {beat.visualSummary}
-          {beat.searchQuery ? ` · Search: ${beat.searchQuery}` : ""}
-        </p>
-      </div>
-      {beat.clips.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No matching clips for this beat. Try regenerating or editing the script.
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {beat.clips.map((clip) => (
-            <ClipCard key={`${beat.index}-${clip.id}`} clip={clip} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** Presentational list of beats + clips (shared by library dialog and public demo). */
+/** Presentational shot-list of beats + clips (shared by library dialog and public demo). */
 export function BrollBeatsView({
   result,
+  regeneratingBeatIndex = null,
+  onRegenerateBeat,
 }: {
   result: SuggestBrollResult;
+  regeneratingBeatIndex?: number | null;
+  /** When set, shows per-beat regenerate (authenticated panel only). */
+  onRegenerateBeat?: (beat: BrollBeat) => void;
 }) {
+  const [zipping, setZipping] = useState(false);
+
+  const handleDownloadAll = async () => {
+    if (zipping) return;
+    setZipping(true);
+    try {
+      const { added, skipped } = await downloadAllBrollClipsAsZip(result.beats);
+      if (skipped > 0) {
+        toast.success(`Downloaded ${added} clips (${skipped} skipped)`);
+      } else {
+        toast.success(`Downloaded ${added} clips as zip`);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not create zip"
+      );
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const hasAnyClip = result.beats.some((b) =>
+    b.clips.some((c) => c.previewUrl?.trim())
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {result.beats.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No beats were returned. Try a longer script.
         </p>
       ) : (
-        result.beats.map((beat) => <BeatBlock key={beat.index} beat={beat} />)
+        result.beats.map((beat) => (
+          <ShotRow
+            key={beat.index}
+            beat={beat}
+            regenerating={regeneratingBeatIndex === beat.index}
+            onRegenerate={onRegenerateBeat}
+          />
+        ))
       )}
+      {hasAnyClip ? (
+        <div className="pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full gap-1.5 sm:w-auto"
+            onClick={() => void handleDownloadAll()}
+            disabled={zipping}
+          >
+            {zipping ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Download all clips (.zip)
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -143,6 +265,10 @@ export function BrollResultsPanel({
   const utils = trpc.useUtils();
   const [result, setResult] = useState<SuggestBrollResult | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [regeneratingBeatIndex, setRegeneratingBeatIndex] = useState<
+    number | null
+  >(null);
+  const regeneratingBeatIndexRef = useRef<number | null>(null);
   const autoRanRef = useRef(false);
 
   const suggestMutation = trpc.scripts.suggestBroll.useMutation({
@@ -160,6 +286,36 @@ export function BrollResultsPanel({
         return;
       }
       toast.error(err.message || "B-roll generation failed");
+    },
+  });
+
+  const regenerateBeatMutation = trpc.scripts.regenerateBrollBeat.useMutation({
+    onSuccess: (data) => {
+      const beatIndex = regeneratingBeatIndexRef.current;
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      if (beatIndex == null) return;
+      setResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          beats: prev.beats.map((beat) =>
+            beat.index === beatIndex ? { ...beat, clips: data.clips } : beat
+          ),
+        };
+      });
+      if (data.clips.length === 0) {
+        toast.error("No new clip found for this beat");
+      } else {
+        toast.success("Beat clip updated");
+      }
+      // Intentionally do not invalidate billing: regenerateBrollBeat does not
+      // increment brollGenerationCount (product decision).
+    },
+    onError: (err) => {
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      toast.error(err.message || "Could not regenerate beat");
     },
   });
 
@@ -182,6 +338,29 @@ export function BrollResultsPanel({
     });
   };
 
+  const handleRegenerateBeat = (beat: BrollBeat) => {
+    if (regenerateBeatMutation.isPending) return;
+    const searchQuery = beat.searchQuery.trim() || beat.visualSummary.trim();
+    if (!searchQuery) {
+      toast.error("This beat has no search query to regenerate");
+      return;
+    }
+    const excludeUrls = beat.clips
+      .flatMap((c) => [c.previewUrl, c.sourceUrl])
+      .map((u) => u.trim())
+      .filter(Boolean);
+    setRegeneratingBeatIndex(beat.index);
+    regeneratingBeatIndexRef.current = beat.index;
+    regenerateBeatMutation.mutate({
+      searchQuery,
+      visualSummary: beat.visualSummary || undefined,
+      niche,
+      theme: result?.theme || undefined,
+      excludeUrls: excludeUrls.length ? excludeUrls : undefined,
+      clipsPerBeat: 1,
+    });
+  };
+
   useEffect(() => {
     if (!open) {
       autoRanRef.current = false;
@@ -200,6 +379,8 @@ export function BrollResultsPanel({
     if (!open) return;
     setResult(null);
     setShowUpgrade(false);
+    setRegeneratingBeatIndex(null);
+    regeneratingBeatIndexRef.current = null;
   }, [open, content, scriptId]);
 
   return (
@@ -236,7 +417,7 @@ export function BrollResultsPanel({
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
             )}
-            {result ? "Regenerate" : "Generate B-roll"}
+            {result ? "Regenerate all" : "Generate B-roll"}
           </Button>
         </div>
 
@@ -272,7 +453,13 @@ export function BrollResultsPanel({
             </div>
           ) : null}
 
-          {result ? <BrollBeatsView result={result} /> : null}
+          {result ? (
+            <BrollBeatsView
+              result={result}
+              regeneratingBeatIndex={regeneratingBeatIndex}
+              onRegenerateBeat={handleRegenerateBeat}
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

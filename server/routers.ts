@@ -279,7 +279,7 @@ import {
 import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
-import { suggestBrollForScript } from "./broll/suggestBroll";
+import { suggestBrollForScript, regenerateBrollBeat } from "./broll/suggestBroll";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
@@ -5693,6 +5693,34 @@ Return JSON only:
         // Count successful generation runs only (not per-clip downloads).
         await incrementUsage(ctx.user.id, "brollGenerationCount");
         return result;
+      }),
+
+    /**
+     * Re-search Pexels for a single beat (no LLM split, no full suggestBroll).
+     * Product decision: does NOT increment brollGenerationCount (cheaper op;
+     * currently unlimited per-beat re-search; can add a light limit later).
+     */
+    regenerateBrollBeat: protectedProcedure
+      .input(
+        z.object({
+          searchQuery: z.string().min(1).max(240),
+          visualSummary: z.string().max(500).optional(),
+          niche: z.string().max(120).optional(),
+          theme: z.string().max(240).optional(),
+          excludeUrls: z.array(z.string().max(2048)).max(40).optional(),
+          clipsPerBeat: z.number().int().min(1).max(3).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Intentionally no checkUsageLimit / incrementUsage for brollGenerationCount.
+        return regenerateBrollBeat({
+          searchQuery: input.searchQuery,
+          visualSummary: input.visualSummary,
+          niche: input.niche,
+          theme: input.theme,
+          excludeUrls: input.excludeUrls,
+          clipsPerBeat: input.clipsPerBeat,
+        });
       }),
   }),
 

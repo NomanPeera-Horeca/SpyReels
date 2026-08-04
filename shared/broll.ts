@@ -27,4 +27,6 @@ export type SuggestBrollResult = {
   beats: BrollBeat[];
   /** Kept for API compatibility; UI no longer displays attribution. */
   attributionNote: string;
+  /** Overall theme from beat split; used for per-beat re-search. */
+  theme?: string;
 };
