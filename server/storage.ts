@@ -20,6 +20,11 @@ const getS3Client = () => {
     region: "auto",
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    // AWS SDK 3.729+ defaults to CRC32 on every PutObject. That embeds
+    // x-amz-checksum-crc32=AAAAAA== into browser presigned PUT URLs and breaks
+    // Cloudflare R2 (and other S3-compatible stores). Only checksum when required.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 };
 
@@ -93,6 +98,10 @@ export async function storagePut(
 /**
  * Presigned PUT URL for browser/client direct upload to R2.
  * Caller must send the same Content-Type header when PUTting.
+ *
+ * R2 bucket CORS must allow PUT from the app origin with Content-Type
+ * (see Cloudflare R2 → bucket → Settings → CORS Policy). Without CORS,
+ * the browser reports a generic network error even when the URL is valid.
  */
 export async function storagePutPresigned(
   relKey: string,
@@ -110,7 +119,12 @@ export async function storagePutPresigned(
       Key: key,
       ContentType: contentType,
     }),
-    { expiresIn: expiresInSeconds }
+    {
+      expiresIn: expiresInSeconds,
+      // Default presigner only signs `host`; enforce Content-Type so the
+      // browser header must match what createUpload validated.
+      signableHeaders: new Set(["content-type"]),
+    }
   );
 
   return { key, uploadUrl, url: r2ObjectPublicUrl(key) };
