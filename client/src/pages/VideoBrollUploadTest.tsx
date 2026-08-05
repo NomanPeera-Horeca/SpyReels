@@ -24,6 +24,9 @@ export default function VideoBrollUploadTest() {
   const [progress, setProgress] = useState(0);
   const [id, setId] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [internalErrorDetail, setInternalErrorDetail] = useState<string | null>(
+    null
+  );
   const [transcript, setTranscript] = useState<VideoBrollTranscript | null>(
     null
   );
@@ -54,6 +57,7 @@ export default function VideoBrollUploadTest() {
     setStatusLabel(data.status);
     if (data.status === "failed") {
       setLocalError(data.errorMessage || "Transcription failed");
+      setInternalErrorDetail(data.internalErrorDetail ?? null);
       setPhase("error");
       return;
     }
@@ -71,6 +75,7 @@ export default function VideoBrollUploadTest() {
     setProgress(0);
     setId(null);
     setLocalError(null);
+    setInternalErrorDetail(null);
     setTranscript(null);
     setStatusLabel(null);
     setDurationSeconds(null);
@@ -80,6 +85,7 @@ export default function VideoBrollUploadTest() {
   const onFileChange = async (file: File | null) => {
     if (!file) return;
     setLocalError(null);
+    setInternalErrorDetail(null);
     setTranscript(null);
     setProgress(0);
 
@@ -197,6 +203,11 @@ export default function VideoBrollUploadTest() {
 
         {localError ? (
           <p className="text-sm text-destructive">{localError}</p>
+        ) : null}
+        {internalErrorDetail ? (
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs text-muted-foreground">
+            internalErrorDetail: {internalErrorDetail}
+          </pre>
         ) : null}
 
         {(phase === "done" || phase === "error") && (

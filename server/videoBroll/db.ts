@@ -74,6 +74,7 @@ export async function updateVideoBrollGeneration(
     transcript?: VideoBrollTranscript | null;
     insertionPoints?: VideoBrollInsertionPoint[] | null;
     errorMessage?: string | null;
+    internalErrorDetail?: string | null;
   }
 ): Promise<void> {
   const db = await getDb();

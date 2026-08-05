@@ -2068,6 +2068,8 @@ export const videoBrollGenerations = mysqlTable(
     /** Suggested insertion cuts with optional resolved Pexels clips. */
     insertionPoints: json("insertionPoints").$type<VideoBrollInsertionPoint[]>(),
     errorMessage: text("errorMessage"),
+    /** Technical failure detail (ffmpeg/Deepgram/stack). Not for end-user UI. */
+    internalErrorDetail: text("internalErrorDetail"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

@@ -18,7 +18,13 @@ export type ErrorCode =
 
 export type TranscriptionResult =
   | { success: true; transcript: string; segments: Segment[]; durationSec: number }
-  | { success: false; errorCode: ErrorCode; userMessage: string };
+  | {
+      success: false;
+      errorCode: ErrorCode;
+      userMessage: string;
+      /** Technical detail (ffmpeg/Deepgram/etc). Not shown to end users. */
+      reason?: string;
+    };
 
 const USER_MESSAGES: Record<ErrorCode, string> = {
   NETWORK_ERROR: "Having trouble connecting. Please try again in a moment.",
@@ -28,7 +34,7 @@ const USER_MESSAGES: Record<ErrorCode, string> = {
   REEL_TOO_LONG:
     "This reel is too long to transcribe. We support reels up to 10 minutes.",
   NO_SPEECH_DETECTED:
-    "Looks like this one's all vibes, no voice. Try a reel with narration to unlock scripts and hooks.",
+    "We couldn't find any spoken audio in this video. Make sure it has a voice track and try again.",
   DEEPGRAM_RATE_LIMIT:
     "Transcription is busy right now. Please try again in a minute.",
   DEEPGRAM_SERVICE_DOWN:
@@ -56,6 +62,7 @@ function fail(
     success: false,
     errorCode,
     userMessage: USER_MESSAGES[errorCode],
+    ...(reason ? { reason } : {}),
   };
 }
 

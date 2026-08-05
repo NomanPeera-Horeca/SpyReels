@@ -151,6 +151,7 @@ export const videoBrollRouter = router({
       await updateVideoBrollGeneration(input.id, {
         status: "uploading",
         errorMessage: null,
+        internalErrorDetail: null,
       });
 
       void runVideoBrollTranscription(input.id).catch((err) => {
@@ -180,6 +181,7 @@ export const videoBrollRouter = router({
         insertionPoints:
           (row.insertionPoints as VideoBrollInsertionPoint[] | null) ?? null,
         errorMessage: row.errorMessage,
+        internalErrorDetail: row.internalErrorDetail,
         sourceVideoUrl: row.sourceVideoUrl,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,

@@ -31,6 +31,8 @@ export async function runVideoBrollAnalysis(id: number): Promise<void> {
       await updateVideoBrollGeneration(id, {
         status: "failed",
         errorMessage: "No transcript segments available for analysis",
+        internalErrorDetail:
+          "No transcript segments available for analysis (transcript missing or empty segments)",
       });
       return;
     }
@@ -46,6 +48,7 @@ export async function runVideoBrollAnalysis(id: number): Promise<void> {
       status: "completed",
       insertionPoints,
       errorMessage: null,
+      internalErrorDetail: null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -57,6 +60,8 @@ export async function runVideoBrollAnalysis(id: number): Promise<void> {
       await updateVideoBrollGeneration(id, {
         status: "failed",
         errorMessage: message,
+        internalErrorDetail:
+          error instanceof Error ? error.stack ?? error.message : message,
       });
     } catch (updateErr) {
       console.error(`[videoBroll] failed to mark row ${id} failed:`, updateErr);

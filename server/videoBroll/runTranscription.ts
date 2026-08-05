@@ -40,6 +40,9 @@ export async function runVideoBrollTranscription(id: number): Promise<void> {
       await updateVideoBrollGeneration(id, {
         status: "failed",
         errorMessage: result.userMessage,
+        internalErrorDetail: result.reason
+          ? `${result.errorCode}: ${result.reason}`
+          : result.errorCode,
       });
       return;
     }
@@ -54,6 +57,7 @@ export async function runVideoBrollTranscription(id: number): Promise<void> {
       durationSeconds: Math.round(result.durationSec),
       transcript,
       errorMessage: null,
+      internalErrorDetail: null,
     });
     shouldAnalyze = true;
   } catch (error) {
@@ -66,6 +70,8 @@ export async function runVideoBrollTranscription(id: number): Promise<void> {
       await updateVideoBrollGeneration(id, {
         status: "failed",
         errorMessage: message,
+        internalErrorDetail:
+          error instanceof Error ? error.stack ?? error.message : message,
       });
     } catch (updateErr) {
       console.error(`[videoBroll] failed to mark row ${id} failed:`, updateErr);
