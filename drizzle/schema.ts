@@ -2062,6 +2062,19 @@ export const videoBrollGenerations = mysqlTable(
       .notNull(),
     /** R2 object URL for the uploaded source video. */
     sourceVideoUrl: varchar("sourceVideoUrl", { length: 1024 }).notNull(),
+    /** R2 object URL for demuxed source audio (.m4a); null when video-only fallback. */
+    sourceAudioUrl: varchar("sourceAudioUrl", { length: 1024 }),
+    /**
+     * Background video upload (independent of main status).
+     * pending | uploading | completed | failed | skipped
+     */
+    videoUploadStatus: mysqlEnum("videoUploadStatus", [
+      "pending",
+      "uploading",
+      "completed",
+      "failed",
+      "skipped",
+    ]),
     durationSeconds: int("durationSeconds"),
     /** Deepgram utterances (raw JSON). */
     transcript: json("transcript"),

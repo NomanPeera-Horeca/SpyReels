@@ -31,8 +31,23 @@ export async function runVideoBrollTranscription(id: number): Promise<void> {
 
     await updateVideoBrollGeneration(id, { status: "transcribing" });
 
+    // Prefer demuxed audio URL when present so transcription need not wait on video.
+    const mediaUrl =
+      row.sourceAudioUrl && row.sourceAudioUrl.length > 0
+        ? row.sourceAudioUrl
+        : row.sourceVideoUrl;
+
+    if (!mediaUrl || mediaUrl === "pending") {
+      await updateVideoBrollGeneration(id, {
+        status: "failed",
+        errorMessage: "No media URL available for transcription.",
+        internalErrorDetail: "missing_source_audio_and_video_url",
+      });
+      return;
+    }
+
     const result = await transcribeReel({
-      videoUrl: row.sourceVideoUrl,
+      videoUrl: mediaUrl,
       shortcode: `vbg-${id}`,
     });
 

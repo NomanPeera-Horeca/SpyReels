@@ -12,12 +12,18 @@ import type {
   VideoBrollInsertionPoint,
   VideoBrollStatus,
   VideoBrollTranscript,
+  VideoBrollVideoUploadStatus,
 } from "../../shared/videoBroll";
 import { getDb } from "../db";
 
 export async function createVideoBrollGeneration(
-  data: Pick<InsertVideoBrollGeneration, "userId" | "workspaceId" | "sourceVideoUrl"> & {
+  data: Pick<
+    InsertVideoBrollGeneration,
+    "userId" | "workspaceId" | "sourceVideoUrl"
+  > & {
     status?: VideoBrollStatus;
+    sourceAudioUrl?: string | null;
+    videoUploadStatus?: VideoBrollVideoUploadStatus | null;
   }
 ): Promise<number> {
   const db = await getDb();
@@ -26,6 +32,8 @@ export async function createVideoBrollGeneration(
     userId: data.userId,
     workspaceId: data.workspaceId,
     sourceVideoUrl: data.sourceVideoUrl,
+    sourceAudioUrl: data.sourceAudioUrl ?? null,
+    videoUploadStatus: data.videoUploadStatus ?? null,
     status: data.status ?? "pending",
   });
   return result[0].insertId;
@@ -70,6 +78,8 @@ export async function updateVideoBrollGeneration(
   data: {
     status?: VideoBrollStatus;
     sourceVideoUrl?: string;
+    sourceAudioUrl?: string | null;
+    videoUploadStatus?: VideoBrollVideoUploadStatus | null;
     durationSeconds?: number | null;
     transcript?: VideoBrollTranscript | null;
     insertionPoints?: VideoBrollInsertionPoint[] | null;
