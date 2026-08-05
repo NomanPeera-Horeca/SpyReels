@@ -9,6 +9,7 @@ import {
   type InsertVideoBrollGeneration,
 } from "../../drizzle/schema";
 import type {
+  VideoBrollInsertionPoint,
   VideoBrollStatus,
   VideoBrollTranscript,
 } from "../../shared/videoBroll";
@@ -71,6 +72,7 @@ export async function updateVideoBrollGeneration(
     sourceVideoUrl?: string;
     durationSeconds?: number | null;
     transcript?: VideoBrollTranscript | null;
+    insertionPoints?: VideoBrollInsertionPoint[] | null;
     errorMessage?: string | null;
   }
 ): Promise<void> {

@@ -2005,6 +2005,9 @@ export type CarouselRemake = typeof carouselRemakes.$inferSelect;
 export type InsertCarouselRemake = typeof carouselRemakes.$inferInsert;
 
 import type { SuggestBrollResult } from "../shared/broll";
+import type { VideoBrollInsertionPoint } from "../shared/videoBroll";
+
+export type { VideoBrollInsertionPoint };
 
 /**
  * Persisted B-roll generation for a saved script (beats + clips + theme).
@@ -2034,15 +2037,6 @@ export const brollGenerations = mysqlTable(
 
 export type BrollGeneration = typeof brollGenerations.$inferSelect;
 export type InsertBrollGeneration = typeof brollGenerations.$inferInsert;
-
-/** One suggested B-roll insertion cut derived from video transcript analysis. */
-export type VideoBrollInsertionPoint = {
-  timestampSeconds: number;
-  reason: string;
-  searchQuery: string;
-  pexelsClipUrl?: string | null;
-  pexelsClipId?: string | number | null;
-};
 
 /**
  * Video B-roll upload pipeline: user uploads a talking-head video,

@@ -1,6 +1,6 @@
 /**
- * Video B-roll upload + transcription (Phase 2).
- * createUpload → client PUT → confirmUpload → background transcribe → poll get.
+ * Video B-roll upload + transcription + analysis (Phase 2/3).
+ * createUpload → client PUT → confirmUpload → background transcribe → analyze → poll get.
  */
 
 import { TRPCError } from "@trpc/server";
@@ -10,6 +10,7 @@ import {
   VIDEO_BROLL_EXT_BY_MIME,
   VIDEO_BROLL_MAX_BYTES,
   type VideoBrollAllowedMime,
+  type VideoBrollInsertionPoint,
   type VideoBrollTranscript,
 } from "../../shared/videoBroll";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -176,6 +177,8 @@ export const videoBrollRouter = router({
         status: row.status,
         durationSeconds: row.durationSeconds,
         transcript: (row.transcript as VideoBrollTranscript | null) ?? null,
+        insertionPoints:
+          (row.insertionPoints as VideoBrollInsertionPoint[] | null) ?? null,
         errorMessage: row.errorMessage,
         sourceVideoUrl: row.sourceVideoUrl,
         createdAt: row.createdAt,

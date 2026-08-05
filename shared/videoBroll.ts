@@ -24,6 +24,15 @@ export type VideoBrollTranscript = {
   segments: VideoBrollTranscriptSegment[];
 };
 
+/** One suggested B-roll insertion cut from transcript analysis. */
+export type VideoBrollInsertionPoint = {
+  timestampSeconds: number;
+  reason: string;
+  searchQuery: string;
+  pexelsClipUrl?: string | null;
+  pexelsClipId?: string | number | null;
+};
+
 export const VIDEO_BROLL_MAX_BYTES = 200 * 1024 * 1024;
 
 export const VIDEO_BROLL_ALLOWED_MIME = [
