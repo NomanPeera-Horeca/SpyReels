@@ -64,6 +64,11 @@ const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"))
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
 
+/** THROWAWAY: video B-roll upload + transcription Phase 2 test. */
+const VideoBrollUploadTest = lazyWithRetry(
+  () => import("./pages/VideoBrollUploadTest")
+);
+
 const MobileMore = lazyWithRetry(() => import("./pages/MobileMore"));
 
 function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
@@ -140,6 +145,7 @@ function DesktopDashboardRouter() {
           <Route path="/studio" component={AiCoach} />
           <Route path="/carousel-library" component={CarouselLibrary} />
           <Route path="/broll-library" component={BrollLibrary} />
+          <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />

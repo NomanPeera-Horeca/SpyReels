@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
 import { workspacesRouter } from "./routers/workspacesRouter";
 import { carouselRemakeRouter } from "./routers/carouselRemakeRouter";
+import { videoBrollRouter } from "./routers/videoBrollRouter";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -991,6 +992,8 @@ export const appRouter = router({
   workspaces: workspacesRouter,
 
   carouselRemake: carouselRemakeRouter,
+
+  videoBroll: videoBrollRouter,
 
   activity: router({
     recordHeartbeat: protectedProcedure

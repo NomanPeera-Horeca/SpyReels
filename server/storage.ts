@@ -90,6 +90,32 @@ export async function storagePut(
   return { key, url };
 }
 
+/**
+ * Presigned PUT URL for browser/client direct upload to R2.
+ * Caller must send the same Content-Type header when PUTting.
+ */
+export async function storagePutPresigned(
+  relKey: string,
+  contentType: string,
+  expiresInSeconds = 3600
+): Promise<{ key: string; uploadUrl: string; url: string }> {
+  const client = getS3Client();
+  const bucket = getBucket();
+  const key = normalizeKey(relKey);
+
+  const uploadUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: contentType,
+    }),
+    { expiresIn: expiresInSeconds }
+  );
+
+  return { key, uploadUrl, url: r2ObjectPublicUrl(key) };
+}
+
 export async function storageReadBuffer(relKey: string): Promise<Buffer> {
   const client = getS3Client();
   const bucket = getBucket();
