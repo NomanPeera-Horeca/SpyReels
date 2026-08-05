@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { History, Loader2 } from "lucide-react";
+import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { AiCoachResultView, type CoachResultScript } from "@/components/AiCoachResultView";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
@@ -261,7 +262,7 @@ export default function AiCoach() {
       });
     },
     onError: (err) => {
-      toast.error(err.message);
+      toast.error(formatIdeaScriptErrorForUser(err, "script"));
       setPhase("idle");
     },
   });
@@ -312,7 +313,7 @@ export default function AiCoach() {
       posthog?.capture("ai_coach_script_refined", { script_id: data.id });
     },
     onError: (err) => {
-      toast.error(err.message);
+      toast.error(formatIdeaScriptErrorForUser(err, "script"));
       setPhase(result ? "result" : "idle");
     },
   });

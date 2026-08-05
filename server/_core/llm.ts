@@ -1,6 +1,19 @@
 import { ENV } from "./env";
 import { sanitizeAiOutput } from "../utils/sanitizeAiOutput";
-import { isRetryableLlmError } from "@shared/ideaScriptErrors";
+import {
+  formatIdeaScriptErrorForUser,
+  isRetryableLlmError,
+} from "@shared/ideaScriptErrors";
+
+function asUserFacingLlmError(error: unknown): Error {
+  const message = formatIdeaScriptErrorForUser(error, "script");
+  const next = new Error(message);
+  const status = (error as { status?: number })?.status;
+  if (typeof status === "number") {
+    (next as { status?: number }).status = status;
+  }
+  return next;
+}
 import Anthropic from "@anthropic-ai/sdk";
 
 const DEFAULT_LLM_MODEL = "claude-sonnet-4-6";
@@ -417,7 +430,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         );
 
         if (!isRetryableLlmError(err)) {
-          throw err;
+          throw asUserFacingLlmError(err);
         }
 
         if (attempt < 2) {
@@ -429,7 +442,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   if (!response) {
-    throw lastError instanceof Error ? lastError : new Error("LLM request failed");
+    throw asUserFacingLlmError(
+      lastError instanceof Error ? lastError : new Error("LLM request failed")
+    );
   }
 
   const toolUseContent = forcedSchemaTool

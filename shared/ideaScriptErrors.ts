@@ -26,6 +26,37 @@ function looksLikeApiPayload(message: string): boolean {
   return message.includes('{"type"') || message.includes("request_id") || message.includes("overloaded_error");
 }
 
+function formatRegainAccessDate(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function isProviderUsageLimitError(raw: string, lower: string): boolean {
+  return (
+    lower.includes("workspace api usage limits") ||
+    lower.includes("specified workspace api usage") ||
+    lower.includes("spend limit") ||
+    lower.includes("billing_limit") ||
+    lower.includes("credit balance is too low") ||
+    (lower.includes("regain access") &&
+      (lower.includes("usage limit") || lower.includes("api usage")))
+  );
+}
+
+function providerUsageLimitMessage(raw: string): string {
+  const match = raw.match(/regain access on (\d{4}-\d{2}-\d{2})/i);
+  if (match?.[1]) {
+    return `AI writing is temporarily unavailable while we refresh capacity. Please try again after ${formatRegainAccessDate(match[1])}.`;
+  }
+  return "AI writing is temporarily unavailable while we refresh capacity. Please try again shortly.";
+}
+
 /** User-safe copy for LLM failures (no raw API JSON). */
 export function formatIdeaScriptErrorForUser(
   error: unknown,
@@ -41,6 +72,10 @@ export function formatIdeaScriptErrorForUser(
   }
 
   const lower = raw.toLowerCase();
+
+  if (isProviderUsageLimitError(raw, lower)) {
+    return providerUsageLimitMessage(raw);
+  }
 
   if (lower.includes("overloaded") || raw.includes("529")) {
     return "That took too long to finish. Tap Retry and we will run it again.";
