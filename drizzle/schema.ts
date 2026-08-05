@@ -2034,3 +2034,57 @@ export const brollGenerations = mysqlTable(
 
 export type BrollGeneration = typeof brollGenerations.$inferSelect;
 export type InsertBrollGeneration = typeof brollGenerations.$inferInsert;
+
+/** One suggested B-roll insertion cut derived from video transcript analysis. */
+export type VideoBrollInsertionPoint = {
+  timestampSeconds: number;
+  reason: string;
+  searchQuery: string;
+  pexelsClipUrl?: string | null;
+  pexelsClipId?: string | number | null;
+};
+
+/**
+ * Video B-roll upload pipeline: user uploads a talking-head video,
+ * we transcribe + analyze, then suggest timed Pexels B-roll insertion points.
+ */
+export const videoBrollGenerations = mysqlTable(
+  "video_broll_generations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    status: mysqlEnum("status", [
+      "pending",
+      "uploading",
+      "transcribing",
+      "analyzing",
+      "completed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    /** R2 object URL for the uploaded source video. */
+    sourceVideoUrl: varchar("sourceVideoUrl", { length: 1024 }).notNull(),
+    durationSeconds: int("durationSeconds"),
+    /** Deepgram utterances (raw JSON). */
+    transcript: json("transcript"),
+    /** Suggested insertion cuts with optional resolved Pexels clips. */
+    insertionPoints: json("insertionPoints").$type<VideoBrollInsertionPoint[]>(),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceIdx: index("idx_video_broll_generations_workspace").on(table.workspaceId),
+    userCreatedIdx: index("idx_video_broll_generations_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type VideoBrollGeneration = typeof videoBrollGenerations.$inferSelect;
+export type InsertVideoBrollGeneration = typeof videoBrollGenerations.$inferInsert;
