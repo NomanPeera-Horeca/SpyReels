@@ -28,9 +28,9 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
       "Generate scroll-stopping Reels hooks from proven viral patterns. Preview free, no SpyReels account required.",
   },
   "/free-tools/broll-generator": {
-    h1: "Free Instagram Reel B-roll generator",
+    h1: "Turn Any Script Into a Fully B-Rolled Video - Free to Try",
     summary:
-      "Paste a Reel script and get beat-matched Pexels B-roll ideas. Demo preview free; live generation with a free account.",
+      "Paste your script or upload your video. SpyReels matches every beat to real Pexels footage or original AI clips. Preview free with no account; sign up to save; pay only to download.",
   },
   "/free-tools": {
     h1: "Free Instagram Reels tools",

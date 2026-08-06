@@ -157,24 +157,44 @@ const HOOKS_FAQ: FaqItem[] = [
 
 const BROLL_FAQ: FaqItem[] = [
   {
-    q: "Is this B-roll generator free?",
-    a: "Yes. Preview the fixed demo with no signup. Live generation for your own script needs a free SpyReels account. Monthly generation limits apply by plan.",
+    q: "Is the B-roll generator free?",
+    a: "Yes. You can paste a script or upload a video and generate a watermarked preview with no account and no credit card. Signing up (also free) removes the watermark and saves your project. You only pay when you download the full-resolution file.",
   },
   {
-    q: "Where do the video clips come from?",
-    a: "Clips come from Pexels stock video. SpyReels does not host or sell the footage.",
+    q: "Do I need to sign up to try it?",
+    a: "No. Generating a preview works with no login. You'll only be asked to sign up if you want to save your project or remove the watermark, and to pay only when you're ready to download the final file.",
   },
   {
-    q: "Does downloading a clip count against my limit?",
-    a: "No. Limits count successful B-roll generation runs for a script, not individual clip downloads or previews.",
+    q: "Do I need to upload a video, or can I just paste a script?",
+    a: "Either works. Paste a script to get B-roll matched before you film, or upload a video you've already recorded and SpyReels will transcribe it and match B-roll to your existing footage.",
   },
   {
-    q: "Can I use this for TikTok or YouTube Shorts?",
-    a: "Yes. Beat-matched B-roll works on any short-form platform. Adjust pacing to match your platform's style.",
+    q: "Where does the AI-generated B-roll come from?",
+    a: "SpyReels matches your script or transcript to real stock footage from Pexels' library, or generates an original AI video clip when no strong stock match exists.",
   },
   {
-    q: "Do I need an Instagram handle?",
-    a: "No. Paste your script text only. This tool does not scrape Instagram profiles.",
+    q: "Can I use this for YouTube Shorts or TikTok?",
+    a: "Yes. The generator supports vertical, horizontal, and square output so clips fit Reels, Shorts, TikTok, and standard YouTube without manual reformatting.",
+  },
+  {
+    q: "What is different about the free preview?",
+    a: "Free previews include a SpyReels watermark overlay so you can judge the match quality before paying. Downloads after payment are watermark-free. There is no resolution or duration cap on the free preview.",
+  },
+  {
+    q: "Does the free preview expire or get deleted?",
+    a: "Previews generated without an account are session-based and not saved. Sign up free to keep your project and come back to it later.",
+  },
+  {
+    q: "Do I need video editing experience?",
+    a: "No. The AI handles beat detection and clip matching automatically. You review the result and download, no timeline editing required.",
+  },
+  {
+    q: "What video formats can I upload?",
+    a: "MP4 and MOV are supported for the video-upload mode. Uploaded audio is automatically transcribed to detect beats.",
+  },
+  {
+    q: "How is this different from just searching Pexels myself?",
+    a: "SpyReels reads your full script or transcript, breaks it into the specific visual beats that need footage, and searches and places multiple matched clips automatically instead of manually reading each line and searching Pexels one keyword at a time.",
   },
 ];
 
@@ -463,21 +483,66 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            name: "Free Instagram Reel B-Roll Generator",
+            name: "SpyReels AI B-Roll Generator",
+            url: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
             applicationCategory: "MultimediaApplication",
-            operatingSystem: "Web Browser",
-            offers: {
-              "@type": "Offer",
-              price: "0",
-              priceCurrency: "USD",
-            },
+            operatingSystem: "Web",
             description:
-              "Paste a Reel script and get beat-matched Pexels B-roll ideas for Instagram Reels.",
+              "Generates matched B-roll footage from a script or uploaded video, combining Pexels stock clips and AI-generated video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
+            offers: [
+              {
+                "@type": "Offer",
+                name: "Free Preview",
+                price: "0",
+                priceCurrency: "USD",
+                description:
+                  "Generate a watermarked preview with no signup required. Full resolution, no duration cap.",
+              },
+              {
+                "@type": "Offer",
+                name: "Full Download",
+                priceCurrency: "USD",
+                description:
+                  "Full-resolution, watermark-free download after account signup and payment.",
+              },
+            ],
           },
         },
         {
           id: "broll-faq-schema",
           data: faqSchema(BROLL_FAQ),
+        },
+        {
+          id: "broll-howto-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "HowTo",
+            name: "How to generate B-roll with SpyReels",
+            description:
+              "Turn a script or an uploaded video into a fully B-rolled video using SpyReels' AI B-roll generator.",
+            step: [
+              {
+                "@type": "HowToStep",
+                name: "Paste your script or upload your video",
+                text: "Drop in a script you've written, or upload a talking-head video you've already filmed.",
+              },
+              {
+                "@type": "HowToStep",
+                name: "AI splits it into visual beats",
+                text: "SpyReels reads your script or transcript and breaks it into the specific moments that need a visual, in a single AI pass.",
+              },
+              {
+                "@type": "HowToStep",
+                name: "Each beat gets matched B-roll",
+                text: "Every beat is matched to real footage from Pexels' library or an original AI-generated clip, picked for the exact words being said.",
+              },
+              {
+                "@type": "HowToStep",
+                name: "Preview instantly, download when ready",
+                text: "Watch your watermarked preview immediately with no account. Sign up free to save your project and remove the watermark. Pay only to download full-resolution files.",
+              },
+            ],
+          },
         },
       ];
     case "/affiliate":

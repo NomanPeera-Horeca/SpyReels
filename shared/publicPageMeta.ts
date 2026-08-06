@@ -92,9 +92,9 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
       "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.",
   },
   "/free-tools/broll-generator": {
-    title: "Free Instagram Reel B-Roll Generator | SpyReels",
+    title: "Free AI B-Roll Generator - Paste a Script or Upload a Video | SpyReels",
     description:
-      "Paste a Reel script and get beat-matched Pexels B-roll ideas. Preview a free demo, then generate live clips with a free SpyReels account.",
+      "Generate matched B-roll from any script or video, free - no signup required to preview. SpyReels finds Pexels stock or AI-generated clips for every beat. Sign up to save, pay only to download.",
   },
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",

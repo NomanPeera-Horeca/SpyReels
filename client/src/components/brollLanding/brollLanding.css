@@ -1,0 +1,104 @@
+/* SpyReels B-Roll Generator landing - supplemental CSS from prototype styles.css */
+
+.broll-landing {
+  --broll-brand: #7c3aed;
+  --broll-brand-hover: #8b5cf6;
+  --broll-ink: #18181b;
+  --broll-ink-soft: #52525b;
+  --broll-surface-dark: #0a0a0f;
+  text-rendering: optimizeLegibility;
+}
+
+.broll-landing ::selection {
+  background: rgba(124, 58, 237, 0.2);
+}
+
+.broll-landing .reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 400ms ease-out, transform 400ms ease-out;
+  will-change: opacity, transform;
+}
+
+.broll-landing .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.broll-landing .clip-in {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  animation: brollClipIn 380ms ease-out forwards;
+}
+
+@keyframes brollClipIn {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.broll-landing .skeleton {
+  background: linear-gradient(100deg, #e4e4e7 30%, #f4f4f5 50%, #e4e4e7 70%);
+  background-size: 240% 100%;
+  animation: brollShimmer 1.25s linear infinite;
+}
+
+@keyframes brollShimmer {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* Anonymous preview watermark: diagonal tile + corner wordmark (CSS only this phase). */
+.broll-landing .watermark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='90'><text x='0' y='55' transform='rotate(-24 0 55)' font-family='DM Sans, Arial, sans-serif' font-size='13' font-weight='700' fill='white' fill-opacity='0.34' letter-spacing='1'>SPYREELS.AI</text></svg>");
+  background-repeat: repeat;
+  pointer-events: none;
+}
+
+.broll-landing .faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.broll-landing .faq .faq-icon {
+  transition: transform 180ms ease-out;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.broll-landing .faq[open] .faq-icon {
+  transform: rotate(45deg);
+}
+
+.broll-landing .faq summary:focus-visible {
+  outline: 2px solid var(--broll-brand);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .broll-landing {
+    scroll-behavior: auto;
+  }
+  .broll-landing .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .broll-landing .clip-in {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .broll-landing .skeleton {
+    animation: none;
+  }
+}

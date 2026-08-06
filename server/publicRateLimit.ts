@@ -40,3 +40,77 @@ export function isPublicIpRateLimited(ip: string): boolean {
   bucket.count += 1;
   return bucket.count > MAX_REQUESTS_PER_WINDOW;
 }
+
+/**
+ * Rolling 24h anonymous B-roll preview limiter (script + video modes).
+ * Process-local Map, same trade-offs as `isPublicIpRateLimited` (no Redis).
+ */
+const BROLL_PREVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+type DailyBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const brollPreviewBuckets = new Map<string, DailyBucket>();
+
+function getOrResetDailyBucket(
+  map: Map<string, DailyBucket>,
+  key: string,
+  windowMs: number
+): DailyBucket {
+  const now = Date.now();
+  let bucket = map.get(key);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    map.set(key, bucket);
+  }
+  return bucket;
+}
+
+/** Peek remaining anonymous B-roll previews without consuming. */
+export function peekAnonymousBrollPreviewQuota(
+  ip: string,
+  limit: number
+): { remaining: number; limit: number; resetAt: number } {
+  const bucket = getOrResetDailyBucket(
+    brollPreviewBuckets,
+    ip,
+    BROLL_PREVIEW_WINDOW_MS
+  );
+  return {
+    remaining: Math.max(0, limit - bucket.count),
+    limit,
+    resetAt: bucket.resetAt,
+  };
+}
+
+/**
+ * Consume one anonymous B-roll preview credit.
+ * Returns remaining after consume, or remaining: 0 + allowed: false when blocked.
+ */
+export function consumeAnonymousBrollPreview(
+  ip: string,
+  limit: number
+): { allowed: boolean; remaining: number; limit: number; resetAt: number } {
+  const bucket = getOrResetDailyBucket(
+    brollPreviewBuckets,
+    ip,
+    BROLL_PREVIEW_WINDOW_MS
+  );
+  if (bucket.count >= limit) {
+    return {
+      allowed: false,
+      remaining: 0,
+      limit,
+      resetAt: bucket.resetAt,
+    };
+  }
+  bucket.count += 1;
+  return {
+    allowed: true,
+    remaining: Math.max(0, limit - bucket.count),
+    limit,
+    resetAt: bucket.resetAt,
+  };
+}

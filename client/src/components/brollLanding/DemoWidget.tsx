@@ -1,0 +1,473 @@
+import { useEffect, useRef, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { extractVideoAudio } from "@/lib/extractVideoAudio";
+import type { BrollLandingMatch } from "@shared/brollLanding";
+import { BROLL_LANDING_SAMPLE_SCRIPT } from "./brollLandingCopy";
+
+type DemoWidgetProps = {
+  remaining: number | null;
+  watermarked: boolean;
+  canDownload: boolean;
+  isAuthenticated: boolean;
+  onQuotaChange: (remaining: number) => void;
+  onSignUp: () => void;
+  onDownloadLocked: () => void;
+  onDownloadUnlocked: (matches: BrollLandingMatch[]) => void;
+};
+
+type Mode = "script" | "video";
+type Phase = "idle" | "loading" | "results" | "error";
+
+const POLL_MS = 2000;
+const SKELETON_COUNT = 5;
+
+function formatDuration(start: number, end: number): string {
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+  return `${fmt(start)}-${fmt(end)}`;
+}
+
+function putBlob(
+  url: string,
+  body: Blob,
+  contentType: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed with HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(body);
+  });
+}
+
+export function DemoWidget({
+  remaining,
+  watermarked,
+  canDownload,
+  isAuthenticated,
+  onQuotaChange,
+  onSignUp,
+  onDownloadLocked,
+  onDownloadUnlocked,
+}: DemoWidgetProps) {
+  const [mode, setMode] = useState<Mode>("script");
+  const [script, setScript] = useState(BROLL_LANDING_SAMPLE_SCRIPT);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [matches, setMatches] = useState<BrollLandingMatch[]>([]);
+  const [beatsMatched, setBeatsMatched] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(0);
+  const [showWatermark, setShowWatermark] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [videoId, setVideoId] = useState<number | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [fileLabel, setFileLabel] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const previewScript = trpc.brollLanding.previewScript.useMutation();
+  const createVideoUpload = trpc.brollLanding.createVideoUpload.useMutation();
+  const confirmAudioUpload = trpc.brollLanding.confirmAudioUpload.useMutation();
+  const confirmVideoUpload = trpc.brollLanding.confirmVideoUpload.useMutation();
+  const confirmUpload = trpc.brollLanding.confirmUpload.useMutation();
+
+  const pollQuery = trpc.brollLanding.getVideo.useQuery(
+    { id: videoId!, accessToken: accessToken ?? undefined },
+    {
+      enabled: videoId != null && phase === "loading" && mode === "video",
+      refetchInterval: (query) => {
+        const s = query.state.data?.status;
+        if (s === "completed" || s === "failed") return false;
+        return POLL_MS;
+      },
+    }
+  );
+
+  useEffect(() => {
+    const data = pollQuery.data;
+    if (!data || phase !== "loading" || mode !== "video") return;
+    if (data.status === "failed") {
+      setError(data.errorMessage || "Video B-roll matching failed");
+      setPhase("error");
+      return;
+    }
+    if (data.status === "completed") {
+      setMatches(data.matches);
+      setBeatsMatched(data.beatsMatched);
+      setTotalSeconds(data.totalSeconds || 0);
+      setShowWatermark(data.watermarked);
+      setPhase("results");
+    }
+  }, [pollQuery.data, phase, mode]);
+
+  async function runScriptPreview() {
+    const trimmed = script.trim();
+    if (!trimmed) return;
+    setError(null);
+    setPhase("loading");
+    setMatches([]);
+    try {
+      const result = await previewScript.mutateAsync({ content: trimmed });
+      setMatches(result.matches);
+      setBeatsMatched(result.beatsMatched);
+      setTotalSeconds(result.totalSeconds);
+      setShowWatermark(result.watermarked);
+      onQuotaChange(result.remaining);
+      setPhase("results");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview failed");
+      setPhase("error");
+    }
+  }
+
+  async function runVideoPreview(file: File) {
+    setError(null);
+    setPhase("loading");
+    setMatches([]);
+    setFileLabel(file.name);
+    setVideoId(null);
+    setAccessToken(null);
+
+    try {
+      const audio = await extractVideoAudio(file, file.name);
+      const created = await createVideoUpload.mutateAsync({
+        filename: file.name,
+        contentType: file.type || "video/mp4",
+        contentLength: file.size,
+        ...(audio
+          ? {
+              audioContentType: audio.contentType,
+              audioContentLength: audio.blob.size,
+            }
+          : {}),
+      });
+
+      onQuotaChange(created.remaining);
+      setShowWatermark(created.watermarked);
+      setVideoId(created.id);
+      setAccessToken(created.accessToken);
+
+      if (audio && created.audioUploadUrl) {
+        await putBlob(created.audioUploadUrl, audio.blob, audio.contentType);
+        await confirmAudioUpload.mutateAsync({
+          id: created.id,
+          accessToken: created.accessToken ?? undefined,
+        });
+        void putBlob(created.uploadUrl, file, file.type || "video/mp4")
+          .then(() =>
+            confirmVideoUpload.mutateAsync({
+              id: created.id,
+              accessToken: created.accessToken ?? undefined,
+              success: true,
+            })
+          )
+          .catch(() =>
+            confirmVideoUpload.mutateAsync({
+              id: created.id,
+              accessToken: created.accessToken ?? undefined,
+              success: false,
+            })
+          );
+      } else {
+        await putBlob(created.uploadUrl, file, file.type || "video/mp4");
+        await confirmUpload.mutateAsync({
+          id: created.id,
+          accessToken: created.accessToken ?? undefined,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+      setPhase("error");
+    }
+  }
+
+  function onGenerate() {
+    if (mode === "script") {
+      void runScriptPreview();
+      return;
+    }
+    const file = fileRef.current?.files?.[0];
+    if (!file) {
+      setError("Choose an MP4 or MOV file first.");
+      setPhase("error");
+      return;
+    }
+    void runVideoPreview(file);
+  }
+
+  function onDownloadClick() {
+    if (canDownload) {
+      onDownloadUnlocked(matches);
+      return;
+    }
+    onDownloadLocked();
+  }
+
+  const loading = phase === "loading";
+  const showResults = phase === "results" || phase === "loading";
+
+  return (
+    <div
+      id="demo"
+      className="scroll-mt-24 rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-2xl shadow-black/40 sm:p-6"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Input mode"
+          className="inline-flex rounded-full bg-zinc-100 p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "script"}
+            onClick={() => setMode("script")}
+            className={`rounded-full px-4 py-1.5 font-ui text-[14px] font-bold transition ${
+              mode === "script"
+                ? "bg-white text-violet-700 shadow-sm"
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            Paste Script
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "video"}
+            onClick={() => setMode("video")}
+            className={`rounded-full px-4 py-1.5 font-ui text-[14px] font-bold transition ${
+              mode === "video"
+                ? "bg-white text-violet-700 shadow-sm"
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            Upload Video
+          </button>
+        </div>
+        <span className="hidden font-ui text-[12px] font-bold uppercase tracking-[0.05em] text-zinc-400 sm:block">
+          {remaining == null
+            ? "Free previews available"
+            : isAuthenticated
+              ? `${remaining} generation${remaining === 1 ? "" : "s"} left this month`
+              : `${remaining} free preview${remaining === 1 ? "" : "s"} left today`}
+        </span>
+      </div>
+
+      {mode === "script" ? (
+        <div className="mt-4">
+          <label htmlFor="script-input" className="sr-only">
+            Your script
+          </label>
+          <textarea
+            id="script-input"
+            rows={6}
+            spellCheck={false}
+            value={script}
+            onChange={(e) => setScript(e.target.value)}
+            className="w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-[15px] leading-[1.6] text-zinc-800 placeholder:text-zinc-400 focus:border-violet-500 focus:bg-white focus:ring-2 focus:ring-violet-200"
+            placeholder="Paste your script here…"
+          />
+        </div>
+      ) : (
+        <div className="mt-4">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="video/mp4,video/quicktime"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              setFileLabel(f?.name ?? null);
+              setError(null);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-6 py-9 text-center transition hover:border-violet-400"
+          >
+            <svg
+              width="30"
+              height="30"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className="text-violet-600"
+            >
+              <path
+                d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+            <p className="mt-3 font-ui text-[15px] font-bold text-zinc-800">
+              {fileLabel || "Drop an MP4 or MOV here"}
+            </p>
+            <p className="mt-1 text-[14px] text-zinc-500">
+              We transcribe the audio and match B-roll to your existing timeline.
+            </p>
+            <span className="mt-4 rounded-full border border-zinc-300 bg-white px-4 py-2 font-ui text-[14px] font-bold text-zinc-700">
+              Choose a file
+            </span>
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={onGenerate}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3.5 font-ui text-[15px] font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {loading
+          ? mode === "video"
+            ? "Transcribing and matching…"
+            : "Matching beats to footage…"
+          : phase === "results"
+            ? "Regenerate preview"
+            : "Generate My B-Roll Preview"}
+      </button>
+      <p className="mt-3 text-center font-ui text-[12px] font-medium text-zinc-400">
+        {isAuthenticated
+          ? "Signed in: previews are watermark-free. Download still needs a paid plan."
+          : "Anonymous previews include a watermark. Full resolution, no duration cap."}
+      </p>
+
+      {error ? (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          {error}
+        </p>
+      ) : null}
+
+      {showResults ? (
+        <div className="mt-5 border-t border-zinc-200 pt-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-ui text-[13px] font-bold uppercase tracking-[0.05em] text-zinc-500">
+              Matched B-roll
+            </h2>
+            <span className="font-ui text-[13px] font-medium text-zinc-400">
+              {phase === "results"
+                ? `${beatsMatched} beats matched · ${totalSeconds}s`
+                : ""}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {loading
+              ? Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                  <div key={i} className="rounded-lg">
+                    <div className="skeleton aspect-video w-full rounded-lg" />
+                    <div className="skeleton mt-2 h-3 w-4/5 rounded" />
+                  </div>
+                ))
+              : matches.map((m, i) => (
+                  <figure
+                    key={`${m.keyword}-${i}`}
+                    className="clip-in"
+                    style={{
+                      animationDelay: reduceMotion ? "0ms" : `${i * 80}ms`,
+                    }}
+                  >
+                    <div
+                      className={`relative aspect-video overflow-hidden rounded-lg border border-zinc-200 ${
+                        showWatermark || watermarked ? "watermark" : ""
+                      }`}
+                    >
+                      {m.posterUrl || m.clipUrl ? (
+                        <img
+                          src={m.posterUrl || m.clipUrl}
+                          alt={`Matched B-roll: ${m.keyword}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-xs text-zinc-400">
+                          No preview
+                        </div>
+                      )}
+                      {(showWatermark || watermarked) && (
+                        <span className="absolute bottom-1.5 right-1.5 z-10 font-ui text-[9px] font-bold uppercase tracking-wide text-white/85">
+                          SpyReels
+                        </span>
+                      )}
+                    </div>
+                    <figcaption className="mt-2 font-ui text-[12px] font-bold leading-snug text-zinc-700">
+                      Beat: "{m.beat}"
+                    </figcaption>
+                    <p className="text-[12px] leading-snug text-zinc-500">
+                      {m.keyword} · {m.source === "pexels" ? "Pexels" : "AI"} ·{" "}
+                      {formatDuration(m.start, m.end)}
+                    </p>
+                  </figure>
+                ))}
+          </div>
+
+          {phase === "results" && !isAuthenticated ? (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[14px] leading-snug text-violet-900">
+                Sign up free to remove the watermark and save this project.
+              </p>
+              <button
+                type="button"
+                onClick={onSignUp}
+                className="shrink-0 rounded-full bg-violet-600 px-4 py-2 text-center font-ui text-[14px] font-bold text-white transition hover:bg-violet-500"
+              >
+                Sign up free
+              </button>
+            </div>
+          ) : null}
+
+          {phase === "results" ? (
+            <button
+              type="button"
+              onClick={onDownloadClick}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-zinc-100 px-5 py-3 font-ui text-[15px] font-bold text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-700"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect
+                  x="3"
+                  y="7"
+                  width="10"
+                  height="7"
+                  rx="1.6"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+                <path
+                  d="M5.5 7V5a2.5 2.5 0 015 0v2"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Download full resolution
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}

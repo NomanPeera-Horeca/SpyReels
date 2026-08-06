@@ -44,6 +44,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "DM Sans", Inter, ui-sans-serif, sans-serif;
 }
 
 :root {

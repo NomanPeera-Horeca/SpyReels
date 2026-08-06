@@ -2046,10 +2046,17 @@ export const videoBrollGenerations = mysqlTable(
   "video_broll_generations",
   {
     id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    workspaceId: varchar("workspaceId", { length: 36 })
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** Null for anonymous landing-page previews (paired with accessToken). */
+    userId: int("userId"),
+    /** Null for anonymous landing-page previews. */
+    workspaceId: varchar("workspaceId", { length: 36 }).references(
+      () => workspaces.id,
+      { onDelete: "cascade" }
+    ),
+    /**
+     * Opaque token for anonymous poll/confirm. Null when owned by a workspace user.
+     */
+    accessToken: varchar("accessToken", { length: 64 }),
     status: mysqlEnum("status", [
       "pending",
       "uploading",
@@ -2091,6 +2098,9 @@ export const videoBrollGenerations = mysqlTable(
     userCreatedIdx: index("idx_video_broll_generations_user_created").on(
       table.userId,
       table.createdAt
+    ),
+    accessTokenIdx: index("idx_video_broll_generations_access_token").on(
+      table.accessToken
     ),
   })
 );

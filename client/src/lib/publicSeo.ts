@@ -50,17 +50,23 @@ export function applyStandardPageMeta(options: {
   canonicalUrl: string;
   ogType?: string;
   robots?: string;
+  /** Optional override; defaults to `description`. */
+  ogDescription?: string;
+  twitterDescription?: string;
 }) {
+  const ogDescription = options.ogDescription ?? options.description;
+  const twitterDescription =
+    options.twitterDescription ?? options.ogDescription ?? options.description;
   document.title = options.title;
   setPageDescription(options.description);
   setMeta("og:title", options.title);
-  setMeta("og:description", options.description);
+  setMeta("og:description", ogDescription);
   setMeta("og:image", DEFAULT_OG_IMAGE);
   setMeta("og:url", options.canonicalUrl);
   setMeta("og:type", options.ogType ?? "website");
   setMeta("twitter:card", "summary_large_image", "name");
   setMeta("twitter:title", options.title, "name");
-  setMeta("twitter:description", options.description, "name");
+  setMeta("twitter:description", twitterDescription, "name");
   setMeta("twitter:image", DEFAULT_OG_IMAGE, "name");
   setMeta("robots", options.robots ?? "index, follow", "name");
 }

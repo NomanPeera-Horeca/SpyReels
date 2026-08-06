@@ -17,10 +17,11 @@ import type {
 import { getDb } from "../db";
 
 export async function createVideoBrollGeneration(
-  data: Pick<
-    InsertVideoBrollGeneration,
-    "userId" | "workspaceId" | "sourceVideoUrl"
-  > & {
+  data: {
+    userId?: number | null;
+    workspaceId?: string | null;
+    accessToken?: string | null;
+    sourceVideoUrl: string;
     status?: VideoBrollStatus;
     sourceAudioUrl?: string | null;
     videoUploadStatus?: VideoBrollVideoUploadStatus | null;
@@ -28,14 +29,16 @@ export async function createVideoBrollGeneration(
 ): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(videoBrollGenerations).values({
-    userId: data.userId,
-    workspaceId: data.workspaceId,
+  const values: InsertVideoBrollGeneration = {
+    userId: data.userId ?? null,
+    workspaceId: data.workspaceId ?? null,
+    accessToken: data.accessToken ?? null,
     sourceVideoUrl: data.sourceVideoUrl,
     sourceAudioUrl: data.sourceAudioUrl ?? null,
     videoUploadStatus: data.videoUploadStatus ?? null,
     status: data.status ?? "pending",
-  });
+  };
+  const result = await db.insert(videoBrollGenerations).values(values);
   return result[0].insertId;
 }
 
@@ -67,6 +70,26 @@ export async function getVideoBrollGenerationForWorkspace(
         eq(videoBrollGenerations.id, id),
         eq(videoBrollGenerations.workspaceId, workspaceId),
         eq(videoBrollGenerations.userId, userId)
+      )
+    )
+    .limit(1);
+  return rows[0];
+}
+
+/** Anonymous landing preview: id + accessToken must both match. */
+export async function getVideoBrollGenerationByAccessToken(
+  id: number,
+  accessToken: string
+): Promise<VideoBrollGeneration | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(videoBrollGenerations)
+    .where(
+      and(
+        eq(videoBrollGenerations.id, id),
+        eq(videoBrollGenerations.accessToken, accessToken)
       )
     )
     .limit(1);
