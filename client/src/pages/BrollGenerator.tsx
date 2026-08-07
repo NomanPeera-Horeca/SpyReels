@@ -32,7 +32,7 @@ import {
   SampleGallery,
   SocialProof,
   UseCaseGrid,
-  WhyBroll,
+  WhenToUseBroll,
 } from "@/components/brollLanding/StaticSections";
 import "@/components/brollLanding/brollLanding.css";
 
@@ -299,7 +299,7 @@ export default function BrollGenerator() {
         <SocialProof />
         <HowItWorks />
         <InputModes />
-        <WhyBroll />
+        <WhenToUseBroll />
         <SampleGallery />
         <UseCaseGrid />
         <ComparisonTable />

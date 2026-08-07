@@ -159,24 +159,67 @@ export function InputModes() {
   );
 }
 
-export function WhyBroll() {
+export function WhenToUseBroll() {
+  const cards = [
+    {
+      icon: "🎙️",
+      title: "Smoothing out cuts between takes",
+      body: "When you're editing talking-head footage, hard cuts can feel jarring. B-roll works like a visual bridge, covering the jump while keeping the viewer locked in.",
+    },
+    {
+      icon: "👥",
+      title: "Bringing your script to life",
+      body: "Adding B-roll under narration makes the story land. Whether it's a shot of a city, a product close-up, or a moment being described, extra footage helps viewers see what they're hearing.",
+    },
+    {
+      icon: "▶️",
+      title: "Setting the scene",
+      body: "Establishing shots are a classic move, used to orient the viewer before the main action starts. A quick wide shot or a relevant cutaway sets the tone right away.",
+    },
+    {
+      icon: "🚀",
+      title: "Enhancing Reels and Shorts",
+      body: "Attention spans on short-form are unforgiving. Switching visuals every few seconds keeps content feeling dynamic instead of static.",
+    },
+    {
+      icon: "💼",
+      title: "Playing with camera angles",
+      body: "Overheads, close-ups, slow pans, creative angles turn a flat recording into something that feels shot with intention, not just a phone propped on a desk.",
+    },
+    {
+      icon: "📋",
+      title: "Planning ahead",
+      body: "Mapping out your B-roll before you film gives your story structure from the start, filling gaps and covering weak moments before they happen.",
+    },
+  ] as const;
+
   return (
     <section className="reveal bg-white py-12 lg:py-24">
-      <div className="mx-auto max-w-3xl px-6 lg:px-8">
-        <h2 className="font-display text-[26px] font-semibold leading-[1.2] tracking-[-0.015em] lg:text-[36px] lg:leading-[1.15]">
-          Why B-Roll Matters
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <h2 className="max-w-2xl font-display text-[26px] font-semibold leading-[1.2] tracking-[-0.015em] lg:text-[36px] lg:leading-[1.15]">
+          When to Use B-Roll
         </h2>
-        <p className="mt-6 text-[17px] leading-[1.7] text-zinc-700 lg:text-[19px]">
-          Static talking-head shots lose viewer attention within 8 to 10 seconds.
-          B-roll resets the visual every few seconds so the voiceover keeps
-          carrying the story instead of the viewer's eyes wandering.{" "}
-          <strong className="font-semibold text-zinc-900">
-            A B-roll generator reads a script or transcript, matches it to
-            relevant stock or AI-generated video clips, and inserts them into the
-            timeline automatically - turning a flat talking-head recording into a
-            visually dynamic edit without manual clip-hunting.
-          </strong>
+        <p className="mt-3 max-w-2xl text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
+          Here's when B-roll actually makes a difference.
         </p>
+        <ul className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+          {cards.map((card) => (
+            <li
+              key={card.title}
+              className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-violet-300 hover:shadow-lg hover:shadow-violet-100"
+            >
+              <span className="text-[28px] leading-none" aria-hidden="true">
+                {card.icon}
+              </span>
+              <h3 className="mt-4 font-sans text-[18px] font-semibold leading-snug lg:text-[20px]">
+                {card.title}
+              </h3>
+              <p className="mt-2 text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
+                {card.body}
+              </p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
