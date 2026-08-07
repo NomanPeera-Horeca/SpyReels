@@ -20,6 +20,7 @@ import {
   SocialProofBanner,
   StickySignupBar,
 } from "@/components/BlogConversion";
+import { PublicFooter } from "@/components/PublicFooter";
 
 const SPYREELS_LOGO =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
@@ -911,18 +912,7 @@ function BlogPostView({ slug }: { slug: string }) {
         </div>
       </main>
 
-      <footer className="border-t border-border/50 py-8 mt-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-muted-foreground/60">
-          <span>&copy; {new Date().getFullYear()} SpyReels</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/blog" className="hover:text-foreground">Blog</Link>
-            <Link href="/affiliate" className="hover:text-foreground">Affiliate</Link>
-            <Link href="/contact" className="hover:text-foreground">Contact</Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
 
       <StickySignupBar />
     </div>

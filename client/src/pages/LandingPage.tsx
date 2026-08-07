@@ -282,6 +282,32 @@ export default function LandingPage() {
       ]);
     };
   }, []);
+
+  // Footer links use /#how-it-works and /#faq. SPA render often misses native
+  // hash scroll, so scroll after mount (and on later hash changes).
+  useEffect(() => {
+    function scrollToHash() {
+      const id = window.location.hash.replace(/^#/, "");
+      if (!id) return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      el.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    }
+
+    const t = window.setTimeout(scrollToHash, 50);
+    window.addEventListener("hashchange", scrollToHash);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("hashchange", scrollToHash);
+    };
+  }, []);
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const handleGetStarted = () => {
     setShowLoginModal(true);

@@ -13,6 +13,7 @@ import {
   applyStandardPageMeta,
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
+import { PublicFooter } from "@/components/PublicFooter";
 
 const EXTENSION_TITLE = "Chrome Extension for Instagram Reels | Sort, Transcribe, and Save";
 const EXTENSION_DESCRIPTION =
@@ -426,23 +427,7 @@ export default function Extension() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border/30 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row">
-          <div className="flex items-center gap-2">
-            <img src={SPYREELS_LOGO} alt="SpyReels" className="h-6 w-6" />
-            <span className="text-sm text-muted-foreground">SpyReels</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
-            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-            <Link href="/blog" className="hover:text-foreground transition-colors">Blog</Link>
-            <Link href="/affiliate" className="hover:text-foreground transition-colors">Affiliate</Link>
-            <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
