@@ -337,7 +337,7 @@ export default function BrollGenerator() {
         <RelatedToolsGrid
           tools={[
             {
-              title: "Free Instagram viral hook generator",
+              title: "Viral Hook Generator for your Niche",
               href: "/free-tools/viral-hooks",
               imageUrl: RELATED_TOOL_THUMB_VIRAL_HOOKS,
             },
@@ -347,7 +347,7 @@ export default function BrollGenerator() {
               imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
             },
             {
-              title: "AI Personal Brand Coach",
+              title: "Free Viral Script Generator",
               href: "/features/ai-personal-brand-coach",
               imageUrl: RELATED_TOOL_THUMB_AI_COACH,
             },
