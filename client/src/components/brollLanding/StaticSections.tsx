@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import { Link } from "wouter";
 import alarmMp4 from "@/assets/broll-generator/clips/alarm.mp4";
 import calendarMp4 from "@/assets/broll-generator/clips/calendar.mp4";
 import journalMp4 from "@/assets/broll-generator/clips/journal.mp4";
@@ -246,15 +247,15 @@ export function SampleGallery() {
           </blockquote>
         </figure>
 
-        <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-3 sm:gap-6 lg:grid-cols-5">
+        <div className="mt-8 mx-auto grid max-w-4xl grid-cols-2 gap-5 sm:grid-cols-3 sm:gap-6 lg:grid-cols-5">
           {SAMPLE_CLIPS.map((clip) => (
             <figure key={clip.src}>
-              <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10">
+              <div className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10">
                 <video
                   src={clip.src}
                   aria-label={clip.label}
-                  width={640}
-                  height={360}
+                  width={360}
+                  height={640}
                   muted
                   loop
                   playsInline
@@ -326,96 +327,100 @@ export function UseCaseGrid() {
   );
 }
 
-export function ComparisonTable() {
+export function MoreFeatures() {
+  const features = [
+    {
+      title: "Viral Reel Finder",
+      body: "Point it at any competitor or inspiration account and see their reels ranked by an outlier score against that account's own median performance, not just raw view counts. That means you're seeing what actually overperforms for that specific creator, not just whatever went viral once.",
+      href: "/features/viral-reel-finder",
+      linkLabel: "Explore",
+    },
+    {
+      title: "AI Script Coach",
+      body: "Paste a reel link or a rough idea and get a full script back written in your own voice, based on the hooks and structure that already work in your niche. It's not a generic AI script, it's shaped around how you actually talk.",
+      href: "/features/ai-personal-brand-coach",
+      linkLabel: "Explore",
+    },
+    {
+      title: "Carousel Generator",
+      body: "Turn a script, idea, or piece of research into a swipeable, styled carousel ready to post, without opening Canva or a design tool. Useful for creators who post carousels alongside Reels to cover both formats from one research session.",
+      href: "/carousel-library",
+      linkLabel: "Open Carousel Library",
+    },
+    {
+      title: "Transcription",
+      body: "Every reel you save or research comes with a clean, timestamped transcript automatically. Search across transcripts, pull quotes for a script, or just skip re-watching a video to remember what someone said.",
+      href: "/saved",
+      linkLabel: "View Saved Reels",
+    },
+    {
+      title: "30-Day Content Planner",
+      body: "Feed in your best-performing research and get back a ready-to-shoot content calendar for the month. Instead of opening SpyReels each day wondering what to post, you get a plan you can batch-film against.",
+      href: "/features/30-day-content-plan",
+      linkLabel: "Explore",
+    },
+    {
+      title: "Production Notes",
+      body: "Alongside every generated script, get shot-by-shot notes and sound suggestions, so you're not guessing what b-roll or audio to pair with each line on filming day.",
+      href: "/scripts",
+      linkLabel: "Open Scripts",
+    },
+    {
+      title: "Hooks, Captions & Hashtags",
+      body: "Pull proven opening hooks and matching hashtag sets built for your niche, ready to paste in at publish time instead of writing captions from a blank box every time.",
+      href: "/free-tools/viral-hooks",
+      linkLabel: "Explore Viral Hooks",
+    },
+    {
+      title: "Remake on the Go via Telegram",
+      body: "Send any reel link to SpyReels through Telegram and get a remade script sent right back, no need to open the dashboard or sit at a laptop. Built for creators who spot inspiration mid-scroll and want to act on it immediately.",
+      href: "/settings",
+      linkLabel: "Connect Telegram",
+    },
+  ] as const;
+
   return (
-    <section
-      id="comparison"
-      className="reveal scroll-mt-20 bg-purple-50 py-12 lg:py-24"
-    >
+    <section className="reveal bg-purple-50 py-12 lg:py-24">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <h2 className="font-display text-[26px] font-semibold leading-[1.2] tracking-[-0.015em] lg:text-[36px] lg:leading-[1.15]">
-          SpyReels vs. Other B-Roll Tools
+        <h2 className="max-w-2xl font-display text-[26px] font-semibold leading-[1.2] tracking-[-0.015em] lg:text-[36px] lg:leading-[1.15]">
+          More Than B-Roll
         </h2>
-        <p className="mt-3 font-ui text-[13px] font-medium text-zinc-500 lg:hidden">
-          Swipe the table sideways to compare →
+        <p className="mt-3 max-w-3xl text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
+          Finding the right clip to match your script is only one part of putting
+          out consistent Reels. Most creators juggle five or six different tools
+          to go from an idea to a published post: one for research, one for
+          scripting, one for captions, one for scheduling. SpyReels was built to
+          close those gaps in one workspace, so b-roll is often just the first
+          thing people try before they find the rest.
         </p>
-        <div className="mt-8 overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
-          <table className="w-full min-w-[760px] border-collapse text-left text-[15px]">
-            <caption className="sr-only">
-              Feature comparison of SpyReels, Kapwing, Opus Clip, Captions and
-              Rewind.ai B-roll tools
-            </caption>
-            <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50">
-                <th
-                  scope="col"
-                  className="sticky left-0 z-10 border-r border-zinc-200 bg-zinc-50 p-4 font-ui text-[13px] font-bold uppercase tracking-[0.05em] text-zinc-500"
-                >
-                  Feature
-                </th>
-                <th className="p-4 font-ui text-[15px] font-bold text-violet-700">
-                  SpyReels
-                </th>
-                <th className="p-4 font-ui text-[15px] font-bold text-zinc-700">
-                  Kapwing
-                </th>
-                <th className="p-4 font-ui text-[15px] font-bold text-zinc-700">
-                  Opus Clip
-                </th>
-                <th className="p-4 font-ui text-[15px] font-bold text-zinc-700">
-                  Captions
-                </th>
-                <th className="p-4 font-ui text-[15px] font-bold text-zinc-700">
-                  Rewind.ai
-                </th>
-              </tr>
-            </thead>
-            <tbody className="text-zinc-600">
-              {[
-                ["Script input", "Yes", "Transcript-based", "Transcript-based", "Transcript-based", "Yes"],
-                ["Video upload input", "Yes", "Yes", "Yes", "Yes (mobile-first)", "Yes"],
-                ["Stock footage matching", "Yes", "Yes (+ iStock, Pixabay)", "Custom stock", "Limited", "Unclear"],
-                ["AI-generated clips (not just stock)", "Yes", "No", "No", "Yes", "Yes"],
-                ["Preview without signup", "Yes", "Partial", "No", "No", "Yes (fully open)"],
-                [
-                  "Sign up required to…",
-                  "Save project, remove watermark",
-                  "Start editing",
-                  "Start editing",
-                  "Start editing",
-                  "Never required",
-                ],
-                [
-                  "Pay only to…",
-                  "Download full resolution",
-                  "Remove watermark, unlock exports",
-                  "Remove watermark, unlock exports",
-                  "Remove watermark",
-                  "N/A (token-based, no paywall found)",
-                ],
-              ].map((row, idx, arr) => (
-                <tr
-                  key={row[0]}
-                  className={idx < arr.length - 1 ? "border-b border-zinc-100" : undefined}
-                >
-                  <th
-                    scope="row"
-                    className="sticky left-0 z-10 border-r border-zinc-200 bg-white p-4 text-left font-medium text-zinc-900"
-                  >
-                    {row[0]}
-                  </th>
-                  <td className="bg-violet-50/60 p-4 font-medium text-violet-900">
-                    {row[1]}
-                  </td>
-                  <td className="p-4">{row[2]}</td>
-                  <td className="p-4">{row[3]}</td>
-                  <td className="p-4">{row[4]}</td>
-                  <td className="p-4">{row[5]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-2">
+          {features.map((feature) => (
+            <li
+              key={feature.title}
+              className="rounded-2xl border border-zinc-200 bg-white p-6 transition hover:border-violet-300 hover:shadow-lg hover:shadow-violet-100"
+            >
+              <h3 className="font-sans text-[18px] font-semibold leading-snug lg:text-[20px]">
+                {feature.title}
+              </h3>
+              <p className="mt-2 text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
+                {feature.body}
+              </p>
+              <Link
+                href={feature.href}
+                className="mt-5 inline-block font-ui text-[14px] font-bold text-violet-700 underline-offset-4 hover:underline"
+              >
+                {feature.linkLabel} →
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-10 max-w-3xl text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
+          Most people come to SpyReels for one feature and end up using three or
+          four without meaning to, because the research, scripting, and planning
+          all pull from the same data instead of starting over each time. Start
+          with b-roll if that's what brought you here, and pull in the rest
+          whenever your workflow needs it.
+        </p>
       </div>
     </section>
   );

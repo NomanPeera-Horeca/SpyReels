@@ -23,11 +23,11 @@ import {
   BROLL_LANDING_TITLE,
 } from "@/components/brollLanding/brollLandingCopy";
 import {
-  ComparisonTable,
   Faq,
   FinalCta,
   HowItWorks,
   InputModes,
+  MoreFeatures,
   SampleGallery,
   SocialProof,
   UseCaseGrid,
@@ -307,7 +307,7 @@ export default function BrollGenerator() {
         <WhenToUseBroll />
         <SampleGallery />
         <UseCaseGrid />
-        <ComparisonTable />
+        <MoreFeatures />
         <Faq />
         <FinalCta />
 

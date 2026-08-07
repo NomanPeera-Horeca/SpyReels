@@ -1,6 +1,6 @@
 /**
  * One-shot: search Pexels (same helper as product) for gallery sample clips,
- * download SD MP4s, trim to ~3s, and write under client/src/assets/broll-generator/clips/.
+ * download SD MP4s, trim to ~7s portrait, and write under client/src/assets/broll-generator/clips/.
  *
  * Usage: PEXELS_API_KEY=... pnpm exec tsx scripts/source-broll-gallery-clips.ts
  */
@@ -59,7 +59,7 @@ async function download(url: string, dest: string): Promise<void> {
 }
 
 function trimCompress(input: string, output: string): void {
-  // ~3s loopable clip, small landscape-ish preview, muted audio stripped.
+  // ~7s loopable clip, small portrait preview, muted audio stripped.
   execFileSync(
     "ffmpeg",
     [
@@ -67,10 +67,10 @@ function trimCompress(input: string, output: string): void {
       "-i",
       input,
       "-t",
-      "3",
+      "7",
       "-an",
       "-vf",
-      "scale=640:-2:flags=lanczos",
+      "scale=360:-2:flags=lanczos",
       "-c:v",
       "libx264",
       "-preset",
@@ -103,11 +103,14 @@ async function main() {
     const candidates = await searchPexelsVideos(target.query, {
       perPage: 10,
       page: 1,
-      orientation: "landscape",
+      orientation: "portrait",
       excludeUrls: used,
     });
-    // Prefer short clips (2-15s) when available.
+    // Prefer 6-9s clips, then short clips (2-15s) when available.
     const pick =
+      candidates.find(
+        (c) => c.durationSeconds >= 6 && c.durationSeconds <= 9
+      ) ??
       candidates.find(
         (c) => c.durationSeconds >= 2 && c.durationSeconds <= 15
       ) ??
