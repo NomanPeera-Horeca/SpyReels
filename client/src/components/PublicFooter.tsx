@@ -88,10 +88,10 @@ export function PublicFooter() {
                 alt="SpyReels logo, Instagram Reels spy tool"
                 className="h-7 w-7"
               />
-              <span className="font-semibold tracking-tight">SpyReels</span>
+              <span className="font-semibold tracking-tight text-white">SpyReels</span>
             </Link>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Research, plan, and script Instagram Reels that actually get watched.
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              Research what's working, plan a month of content, and script Reels in your own voice, all in one place built for creators who want to grow faster.
             </p>
           </div>
 

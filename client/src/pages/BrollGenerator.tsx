@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -10,6 +11,14 @@ import {
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { AuthDialog } from "@/components/AuthDialog";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { trpc } from "@/lib/trpc";
 import { authHeadlineBrollGenerate } from "@/lib/authHeadlines";
 import type { BrollLandingMatch } from "@shared/brollLanding";
@@ -235,10 +244,27 @@ export default function BrollGenerator() {
 
           <div className="relative mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] lg:items-start lg:gap-16 lg:px-8">
             <div className="max-w-2xl">
-              <p className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 font-ui text-[12px] font-bold uppercase tracking-[0.05em] text-green-400 lg:text-[13px]">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                Free Preview · No Signup Required
-              </p>
+              <Breadcrumb>
+                <BreadcrumbList className="text-zinc-400">
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/">Home</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/free-tools/viral-hooks">Free Tools</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-zinc-200">
+                      B-Roll Generator
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
               <h1 className="mt-6 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] lg:text-[56px] lg:leading-[1.05]">
                 Free AI B-Roll Generator
               </h1>
@@ -277,9 +303,6 @@ export default function BrollGenerator() {
                 >
                   See a sample output first →
                 </a>
-                <p className="font-ui text-[13px] font-medium text-zinc-500">
-                  No credit card. No login. Preview in under 30 seconds.
-                </p>
               </div>
               <p className="mt-6 text-[13px] text-zinc-500">
                 By Noah Perry · Updated Aug 5, 2026 · 4 min read

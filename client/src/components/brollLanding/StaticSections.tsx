@@ -12,28 +12,28 @@ const SAMPLE_CLIPS = [
     src: alarmMp4,
     label: "B-roll clip: alarm clock going off at dawn, matched to the beat 'quit their morning routine'",
     caption:
-      'Beat: "quit their morning routine" → Clip: alarm clock at dawn',
+      'Script says "quit their morning routine"... SpyReels generated "An alarm clock at dawn"',
   },
   {
     src: calendarMp4,
     label: "B-roll clip: calendar with pen, matched to the beat 'by day 10'",
-    caption: 'Beat: "by day 10" → Clip: calendar page with pen',
+    caption: 'Script says "by day 10"... SpyReels generated "A calendar page with pen"',
   },
   {
     src: journalMp4,
     label: "B-roll clip: hand writing in a journal, matched to the beat 'the one habit that actually stuck'",
     caption:
-      'Beat: "the one habit that actually stuck" → Clip: hand writing in a journal',
+      'Script says "the one habit that actually stuck"... SpyReels generated "A hand writing in a journal"',
   },
   {
     src: coffeeMp4,
     label: "B-roll clip: coffee being poured in morning light, matched to the beat 'so simple'",
-    caption: 'Beat: "so simple" → Clip: pour-over coffee in morning light',
+    caption: 'Script says "so simple"... SpyReels generated "Pour-over coffee in morning light"',
   },
   {
     src: sunriseMp4,
     label: "B-roll clip: people running outdoors at sunrise, matched to the beat 'nobody told you sooner'",
-    caption: 'Beat: "nobody told you sooner" → Clip: runners at sunrise',
+    caption: 'Script says "nobody told you sooner"... SpyReels generated "Runners at sunrise"',
   },
 ] as const;
 
