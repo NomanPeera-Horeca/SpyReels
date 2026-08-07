@@ -256,9 +256,7 @@ export function DemoWidget({
         <span className="hidden font-ui text-[12px] font-bold uppercase tracking-[0.05em] text-zinc-400 sm:block">
           {remaining == null
             ? "Free previews available"
-            : isAuthenticated
-              ? `${remaining} generation${remaining === 1 ? "" : "s"} left this month`
-              : `${remaining} free preview${remaining === 1 ? "" : "s"} left today`}
+            : `${remaining} generation${remaining === 1 ? "" : "s"} left today`}
         </span>
       </div>
 

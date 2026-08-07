@@ -1,7 +1,8 @@
 /**
  * Public B-roll landing preview APIs for /free-tools/broll-generator.
- * Anonymous: IP daily rate limit + CSS watermark (full res, no duration cap).
- * Authenticated: no watermark; monthly brollGenerationCount for script mode.
+ * All visitors share the IP daily preview bucket (3 / rolling 24h) for this page.
+ * Anonymous: CSS watermark (full res, no duration cap).
+ * Authenticated: no watermark; monthly brollGenerationCount still enforced.
  * Download: paid plan only (server-side).
  */
 
@@ -120,82 +121,63 @@ async function buildQuota(ctx: {
     canDownload = isPaidPlan(sub?.plan ?? "free", sub?.stripeSubscriptionId);
   }
 
-  if (!ctx.user) {
-    const ip = clientIpFromRequest(ctx.req);
-    const peeked = peekAnonymousBrollPreviewQuota(
-      ip,
-      ANONYMOUS_BROLL_PREVIEW_DAILY_LIMIT
-    );
-    return {
-      remaining: peeked.remaining,
-      limit: peeked.limit,
-      watermarked: true,
-      canDownload: false,
-      isAuthenticated: false,
-    };
-  }
-
-  const usage = await checkUsageLimit(
-    ctx.user.id,
-    "brollGenerationCount",
-    ctx.user.openId,
-    { email: ctx.user.email, role: ctx.user.role }
+  // Landing counter always reflects the IP daily bucket (not monthly plan usage).
+  const ip = clientIpFromRequest(ctx.req);
+  const peeked = peekAnonymousBrollPreviewQuota(
+    ip,
+    ANONYMOUS_BROLL_PREVIEW_DAILY_LIMIT
   );
   return {
-    remaining: Math.max(0, usage.limit - usage.used),
-    limit: usage.limit,
-    watermarked: false,
+    remaining: peeked.remaining,
+    limit: peeked.limit,
+    watermarked: !isAuthenticated,
     canDownload,
-    isAuthenticated: true,
+    isAuthenticated,
   };
 }
 
 /**
- * Gate expensive preview work. Anonymous: IP daily bucket.
- * Authenticated script previews use monthly usage (consumed on success).
- * Authenticated video previews also consume one anonymous-style credit only
- * when unauthenticated; logged-in video uses monthly brollGenerationCount.
+ * Gate expensive preview work on the free-tools landing page.
+ * Always consumes the IP daily bucket (3 / rolling 24h) so the UI remaining
+ * count matches real gating for both anonymous and signed-in visitors.
+ * Authenticated users are also checked against monthly brollGenerationCount
+ * (incremented by the caller on success); owner/admin bypass that monthly cap.
  */
 async function assertPreviewAllowed(ctx: {
   user: { id: number; openId: string; email: string | null; role: string } | null;
   req: Parameters<typeof clientIpFromRequest>[0];
 }): Promise<{ remaining: number; limit: number; watermarked: boolean }> {
-  if (!ctx.user) {
-    const ip = clientIpFromRequest(ctx.req);
-    const consumed = consumeAnonymousBrollPreview(
-      ip,
-      ANONYMOUS_BROLL_PREVIEW_DAILY_LIMIT
+  if (ctx.user) {
+    const usage = await checkUsageLimit(
+      ctx.user.id,
+      "brollGenerationCount",
+      ctx.user.openId,
+      { email: ctx.user.email, role: ctx.user.role }
     );
-    if (!consumed.allowed) {
+    if (!usage.allowed) {
       throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message:
-          "You have used all free previews for today. Sign up free for more, or try again tomorrow.",
+        code: "FORBIDDEN",
+        message: `You have reached your monthly B-roll generation limit (${usage.used}/${usage.limit}). Upgrade for more.`,
       });
     }
-    return {
-      remaining: consumed.remaining,
-      limit: consumed.limit,
-      watermarked: true,
-    };
   }
 
-  const usage = await checkUsageLimit(
-    ctx.user.id,
-    "brollGenerationCount",
-    ctx.user.openId,
-    { email: ctx.user.email, role: ctx.user.role }
+  const ip = clientIpFromRequest(ctx.req);
+  const consumed = consumeAnonymousBrollPreview(
+    ip,
+    ANONYMOUS_BROLL_PREVIEW_DAILY_LIMIT
   );
-  if (!usage.allowed) {
+  if (!consumed.allowed) {
     throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `You have reached your monthly B-roll generation limit (${usage.used}/${usage.limit}). Upgrade for more.`,
+      code: "TOO_MANY_REQUESTS",
+      message:
+        "You have used all free previews for today. Try again in 24 hours.",
     });
   }
   return {
-    remaining: Math.max(0, usage.limit - usage.used - 1),
-    limit: usage.limit,
-    watermarked: false,
+    remaining: consumed.remaining,
+    limit: consumed.limit,
+    watermarked: !ctx.user,
   };
 }
 
