@@ -275,6 +275,28 @@ export function SampleGallery() {
 }
 
 export function UseCaseGrid() {
+  function scrollToDemoAndHighlight(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    const demo = document.getElementById("demo");
+    if (!demo) return;
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    demo.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+
+    demo.classList.remove("demo-panel-pulse");
+    // Restart CSS animation if the class was already present.
+    void demo.offsetWidth;
+    demo.classList.add("demo-panel-pulse");
+    window.setTimeout(() => {
+      demo.classList.remove("demo-panel-pulse");
+    }, 1600);
+  }
+
   return (
     <section className="reveal bg-white py-12 lg:py-24">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -283,10 +305,10 @@ export function UseCaseGrid() {
         </h2>
         <ul className="mt-10 grid grid-cols-2 gap-6 lg:grid-cols-4">
           {BROLL_LANDING_NICHES.map((item) => (
-            <li key={item.href}>
+            <li key={item.label}>
               <a
-                href={item.href}
-                rel="nofollow"
+                href="#demo"
+                onClick={scrollToDemoAndHighlight}
                 className="group flex h-full flex-col rounded-2xl border border-zinc-200 p-5 transition hover:border-violet-400 hover:bg-purple-50 lg:p-6"
               >
                 <span className="font-sans text-[16px] font-semibold leading-snug lg:text-[20px]">
@@ -352,7 +374,7 @@ export function ComparisonTable() {
               {[
                 ["Script input", "Yes", "Transcript-based", "Transcript-based", "Transcript-based", "Yes"],
                 ["Video upload input", "Yes", "Yes", "Yes", "Yes (mobile-first)", "Yes"],
-                ["Pexels stock matching", "Yes", "Yes (+ iStock, Pixabay)", "Custom stock", "Limited", "Unclear"],
+                ["Stock footage matching", "Yes", "Yes (+ iStock, Pixabay)", "Custom stock", "Limited", "Unclear"],
                 ["AI-generated clips (not just stock)", "Yes", "No", "No", "Yes", "Yes"],
                 ["Preview without signup", "Yes", "Partial", "No", "No", "Yes (fully open)"],
                 [
