@@ -48,7 +48,7 @@ export function SocialProof() {
           footage
         </p>
         <p className="font-ui text-[14px] font-medium text-zinc-300 lg:text-[15px]">
-          <span className="text-violet-400">◆</span> Pexels stock + AI-generated
+          <span className="text-violet-400">◆</span> Real footage + AI-generated
           B-roll
         </p>
         <p className="font-ui text-[14px] font-medium text-zinc-300 lg:text-[15px]">
@@ -77,16 +77,16 @@ export function HowItWorks() {
               d: "Drop in a script you've written, or upload a talking-head video you've already filmed.",
             },
             {
-              t: "AI splits it into visual beats",
-              d: "SpyReels reads your script or transcript and breaks it into the specific moments that need a visual - one AI pass, not sentence-by-sentence guessing.",
+              t: "We find the right shots",
+              d: "SpyReels reads through your content and figures out exactly where footage is needed, and what it should show.",
             },
             {
-              t: "Each beat gets matched B-roll",
-              d: "Every beat is matched to real footage from Pexels' library or an original AI-generated clip, picked for the exact words being said.",
+              t: "Get matched footage instantly",
+              d: "Every moment gets the right clip, real footage or AI-generated, picked for what's actually being said.",
             },
             {
-              t: "Preview instantly, download when ready",
-              d: "Watch your watermarked preview immediately with no account. Sign up free to save your project and remove the watermark. Pay only to download full-resolution files.",
+              t: "Download and share",
+              d: "Once it's ready, download your video and post it anywhere.",
             },
           ].map((step, i) => (
             <li
@@ -123,9 +123,9 @@ export function InputModes() {
               Start With a Script
             </h3>
             <p className="mt-2 text-[16px] leading-[1.6] text-zinc-600 lg:text-[17px]">
-              Paste text you've already written - a voiceover, a podcast excerpt,
-              a video outline - and get beat-matched B-roll before you ever pick
-              up a camera.
+              Paste text you've already written, a voiceover, a podcast excerpt,
+              a video outline, and get matched B-roll before you ever pick up a
+              camera.
             </p>
             <a
               href="#demo"

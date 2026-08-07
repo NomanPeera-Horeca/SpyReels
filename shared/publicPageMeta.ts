@@ -94,7 +94,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/free-tools/broll-generator": {
     title: "Free AI B-Roll Generator - Paste a Script or Upload a Video | SpyReels",
     description:
-      "Generate matched B-roll from any script or video, free - no signup required to preview. SpyReels finds Pexels stock or AI-generated clips for every beat. Sign up to save, pay only to download.",
+      "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically in the best free AI B-roll generator online. Preview free, no signup required.",
   },
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",

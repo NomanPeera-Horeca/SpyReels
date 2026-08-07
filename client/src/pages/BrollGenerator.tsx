@@ -82,7 +82,7 @@ export default function BrollGenerator() {
         {
           "@type": "ListItem",
           position: 3,
-          name: "B-Roll Generator",
+          name: "Free AI B-Roll Generator",
           item: BROLL_CANONICAL,
         },
       ],
@@ -91,12 +91,12 @@ export default function BrollGenerator() {
     injectSchemaScript("broll-software-schema", {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      name: "SpyReels AI B-Roll Generator",
+      name: "Free AI B-Roll Generator",
       url: BROLL_CANONICAL,
       applicationCategory: "MultimediaApplication",
       operatingSystem: "Web",
       description:
-        "Generates matched B-roll footage from a script or uploaded video, combining Pexels stock clips and AI-generated video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
+        "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
       offers: [
         {
           "@type": "Offer",
@@ -131,7 +131,7 @@ export default function BrollGenerator() {
       "@type": "HowTo",
       name: "How to generate B-roll with SpyReels",
       description:
-        "Turn a script or an uploaded video into a fully B-rolled video using SpyReels' AI B-roll generator.",
+        "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically using the free AI B-roll generator.",
       step: [
         {
           "@type": "HowToStep",
@@ -146,7 +146,7 @@ export default function BrollGenerator() {
         {
           "@type": "HowToStep",
           name: "Each beat gets matched B-roll",
-          text: "Every beat is matched to real footage from Pexels' library or an original AI-generated clip, picked for the exact words being said.",
+          text: "Every beat is matched to real stock footage or an original AI-generated clip, picked for the exact words being said.",
         },
         {
           "@type": "HowToStep",
@@ -235,16 +235,14 @@ export default function BrollGenerator() {
                 Free Preview · No Signup Required
               </p>
               <h1 className="mt-6 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] lg:text-[56px] lg:leading-[1.05]">
-                Turn Any Script Into a Fully B-Rolled Video -{" "}
-                <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent">
-                  Free to Try
-                </span>
+                Free AI B-Roll Generator
               </h1>
               <p className="mt-6 max-w-xl text-[16px] leading-[1.6] text-zinc-300 lg:text-[17px]">
-                Paste your script or upload your video. SpyReels matches every
-                beat to real Pexels footage or original AI clips - watch your
-                preview instantly, no account needed. Sign up to save it, pay
-                only when you're ready to download.
+                Paste your script, or upload footage you've already shot.
+                SpyReels matches every beat to real footage automatically and
+                turns it into a fully B-rolled video. Fine-tune any clip you
+                don't like, and more, in the best free AI B-roll generator
+                online.
               </p>
               <div className="mt-8 flex flex-col items-start gap-4">
                 <a
@@ -275,8 +273,7 @@ export default function BrollGenerator() {
                   See a sample output first →
                 </a>
                 <p className="font-ui text-[13px] font-medium text-zinc-500">
-                  No credit card. No login. Watermarked preview in under 30
-                  seconds.
+                  No credit card. No login. Preview in under 30 seconds.
                 </p>
               </div>
               <p className="mt-6 text-[13px] text-zinc-500">

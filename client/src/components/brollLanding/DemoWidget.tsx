@@ -344,11 +344,12 @@ export function DemoWidget({
             ? "Regenerate preview"
             : "Generate My B-Roll Preview"}
       </button>
-      <p className="mt-3 text-center font-ui text-[12px] font-medium text-zinc-400">
-        {isAuthenticated
-          ? "Signed in: previews are watermark-free. Download still needs a paid plan."
-          : "Anonymous previews include a watermark. Full resolution, no duration cap."}
-      </p>
+      {!isAuthenticated ? (
+        <p className="mt-3 text-center font-ui text-[12px] font-medium text-zinc-400">
+          Anonymous previews include a watermark. Full resolution, no duration
+          cap.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
@@ -412,7 +413,7 @@ export function DemoWidget({
                       Beat: "{m.beat}"
                     </figcaption>
                     <p className="text-[12px] leading-snug text-zinc-500">
-                      {m.keyword} · {m.source === "pexels" ? "Pexels" : "AI"} ·{" "}
+                      {m.keyword} · {m.source === "pexels" ? "Stock" : "AI"} ·{" "}
                       {formatDuration(m.start, m.end)}
                     </p>
                   </figure>

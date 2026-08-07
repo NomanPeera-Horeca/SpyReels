@@ -157,6 +157,22 @@ const HOOKS_FAQ: FaqItem[] = [
 
 const BROLL_FAQ: FaqItem[] = [
   {
+    q: "What is B-roll?",
+    a: "B-roll is the extra footage that plays while you're talking or narrating, things like close-ups, scenery, or clips of what you're describing. It's what makes a video feel put-together instead of just one person talking at the camera the whole time.",
+  },
+  {
+    q: "Why do videos need B-roll?",
+    a: "Watching one shot for too long gets boring fast, most people stop paying attention within a few seconds. B-roll breaks that up by giving the viewer something new to look at every few seconds, which keeps them watching longer.",
+  },
+  {
+    q: "What's the difference between AI-generated and real footage B-roll?",
+    a: "Real footage B-roll comes from actual video, filmed by someone. AI-generated B-roll is created from scratch by AI based on a description. Both can work, real footage tends to look more natural, AI-generated is useful when no real clip fits.",
+  },
+  {
+    q: "Can I plan my B-roll before I film anything?",
+    a: "Yes. If you paste in a script, SpyReels finds matching footage for it before you've recorded a single second, so you know exactly what shots you need going into filming.",
+  },
+  {
     q: "Is the B-roll generator free?",
     a: "Yes. You can paste a script or upload a video and generate a watermarked preview with no account and no credit card. Signing up (also free) removes the watermark and saves your project. You only pay when you download the full-resolution file.",
   },
@@ -170,7 +186,7 @@ const BROLL_FAQ: FaqItem[] = [
   },
   {
     q: "Where does the AI-generated B-roll come from?",
-    a: "SpyReels matches your script or transcript to real stock footage from Pexels' library, or generates an original AI video clip when no strong stock match exists.",
+    a: "SpyReels matches your script or transcript to real stock footage, or generates an original AI video clip when no strong stock match exists.",
   },
   {
     q: "Can I use this for YouTube Shorts or TikTok?",
@@ -193,8 +209,8 @@ const BROLL_FAQ: FaqItem[] = [
     a: "MP4 and MOV are supported for the video-upload mode. Uploaded audio is automatically transcribed to detect beats.",
   },
   {
-    q: "How is this different from just searching Pexels myself?",
-    a: "SpyReels reads your full script or transcript, breaks it into the specific visual beats that need footage, and searches and places multiple matched clips automatically instead of manually reading each line and searching Pexels one keyword at a time.",
+    q: "How is this different from just searching for stock footage myself?",
+    a: "SpyReels reads your full script or transcript, breaks it into the specific visual beats that need footage, and searches and places multiple matched clips automatically instead of manually reading each line and searching stock libraries one keyword at a time.",
   },
 ];
 
@@ -473,7 +489,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
             { name: "Home", item: `${SPYREELS_SITE_URL}/` },
             { name: "Free Tools", item: `${SPYREELS_SITE_URL}/free-tools` },
             {
-              name: "B-Roll Generator",
+              name: "Free AI B-Roll Generator",
               item: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
             },
           ]),
@@ -483,12 +499,12 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            name: "SpyReels AI B-Roll Generator",
+            name: "Free AI B-Roll Generator",
             url: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
             applicationCategory: "MultimediaApplication",
             operatingSystem: "Web",
             description:
-              "Generates matched B-roll footage from a script or uploaded video, combining Pexels stock clips and AI-generated video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
+              "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
             offers: [
               {
                 "@type": "Offer",
@@ -519,7 +535,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
             "@type": "HowTo",
             name: "How to generate B-roll with SpyReels",
             description:
-              "Turn a script or an uploaded video into a fully B-rolled video using SpyReels' AI B-roll generator.",
+              "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically using the free AI B-roll generator.",
             step: [
               {
                 "@type": "HowToStep",
@@ -534,7 +550,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               {
                 "@type": "HowToStep",
                 name: "Each beat gets matched B-roll",
-                text: "Every beat is matched to real footage from Pexels' library or an original AI-generated clip, picked for the exact words being said.",
+                text: "Every beat is matched to real stock footage or an original AI-generated clip, picked for the exact words being said.",
               },
               {
                 "@type": "HowToStep",
