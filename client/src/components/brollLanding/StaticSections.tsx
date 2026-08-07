@@ -1,38 +1,38 @@
-import alarmJpg from "@/assets/broll-generator/clips/alarm.jpg";
-import calendarJpg from "@/assets/broll-generator/clips/calendar.jpg";
-import journalJpg from "@/assets/broll-generator/clips/journal.jpg";
-import coffeeJpg from "@/assets/broll-generator/clips/coffee.jpg";
-import sunriseJpg from "@/assets/broll-generator/clips/sunrise.jpg";
+import type { MouseEvent } from "react";
+import alarmMp4 from "@/assets/broll-generator/clips/alarm.mp4";
+import calendarMp4 from "@/assets/broll-generator/clips/calendar.mp4";
+import journalMp4 from "@/assets/broll-generator/clips/journal.mp4";
+import coffeeMp4 from "@/assets/broll-generator/clips/coffee.mp4";
+import sunriseMp4 from "@/assets/broll-generator/clips/sunrise.mp4";
 import { BROLL_LANDING_FAQ, BROLL_LANDING_NICHES } from "./brollLandingCopy";
 
 const SAMPLE_CLIPS = [
   {
-    src: alarmJpg,
-    alt: "B-roll clip: alarm clock going off at dawn, matched to the beat 'quit their morning routine'",
+    src: alarmMp4,
+    label: "B-roll clip: alarm clock going off at dawn, matched to the beat 'quit their morning routine'",
     caption:
-      'Beat: "quit their morning routine" → Clip: alarm clock at dawn, Pexels',
+      'Beat: "quit their morning routine" → Clip: alarm clock at dawn',
   },
   {
-    src: calendarJpg,
-    alt: "B-roll clip: calendar with pen, matched to the beat 'by day 10'",
-    caption: 'Beat: "by day 10" → Clip: calendar page with pen, Pexels',
+    src: calendarMp4,
+    label: "B-roll clip: calendar with pen, matched to the beat 'by day 10'",
+    caption: 'Beat: "by day 10" → Clip: calendar page with pen',
   },
   {
-    src: journalJpg,
-    alt: "B-roll clip: hand writing in a journal, matched to the beat 'the one habit that actually stuck'",
+    src: journalMp4,
+    label: "B-roll clip: hand writing in a journal, matched to the beat 'the one habit that actually stuck'",
     caption:
-      'Beat: "the one habit that actually stuck" → Clip: hand writing in a journal, Pexels',
+      'Beat: "the one habit that actually stuck" → Clip: hand writing in a journal',
   },
   {
-    src: coffeeJpg,
-    alt: "B-roll clip: coffee being poured in morning light, matched to the beat 'so simple'",
-    caption:
-      'Beat: "so simple" → Clip: pour-over coffee in morning light, Pexels',
+    src: coffeeMp4,
+    label: "B-roll clip: coffee being poured in morning light, matched to the beat 'so simple'",
+    caption: 'Beat: "so simple" → Clip: pour-over coffee in morning light',
   },
   {
-    src: sunriseJpg,
-    alt: "B-roll clip: people running outdoors at sunrise, matched to the beat 'nobody told you sooner'",
-    caption: 'Beat: "nobody told you sooner" → Clip: runners at sunrise, Pexels',
+    src: sunriseMp4,
+    label: "B-roll clip: people running outdoors at sunrise, matched to the beat 'nobody told you sooner'",
+    caption: 'Beat: "nobody told you sooner" → Clip: runners at sunrise',
   },
 ] as const;
 
@@ -207,18 +207,18 @@ export function SampleGallery() {
           {SAMPLE_CLIPS.map((clip) => (
             <figure key={clip.src}>
               <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10">
-                <img
+                <video
                   src={clip.src}
-                  alt={clip.alt}
-                  width={800}
-                  height={500}
-                  loading="lazy"
-                  decoding="async"
+                  aria-label={clip.label}
+                  width={640}
+                  height={360}
+                  muted
+                  loop
+                  playsInline
+                  autoPlay
+                  preload="metadata"
                   className="h-full w-full object-cover"
                 />
-                <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 font-ui text-[10px] font-bold uppercase tracking-wide text-white">
-                  Pexels
-                </span>
               </div>
               <figcaption className="mt-2.5 text-[13px] leading-snug text-zinc-400 lg:text-[14px]">
                 {clip.caption}
@@ -226,10 +226,6 @@ export function SampleGallery() {
             </figure>
           ))}
         </div>
-        <p className="mt-6 font-ui text-[13px] font-medium text-zinc-500">
-          Example output rendered in the page HTML - identical for logged-out
-          visitors and crawlers. Footage via Pexels.
-        </p>
       </div>
     </section>
   );
