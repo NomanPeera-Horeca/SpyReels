@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -34,6 +33,12 @@ import {
   UseCaseGrid,
   WhenToUseBroll,
 } from "@/components/brollLanding/StaticSections";
+import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
+import {
+  RELATED_TOOL_THUMB_AI_COACH,
+  RELATED_TOOL_THUMB_VIRAL_FINDER,
+  RELATED_TOOL_THUMB_VIRAL_HOOKS,
+} from "@/components/relatedToolThumbs";
 import "@/components/brollLanding/brollLanding.css";
 
 const BROLL_PATH = "/free-tools/broll-generator";
@@ -306,39 +311,25 @@ export default function BrollGenerator() {
         <Faq />
         <FinalCta />
 
-        <section className="bg-white py-10">
-          <div className="mx-auto max-w-3xl px-6 text-sm text-zinc-500 lg:px-8">
-            <h2 className="font-display text-lg font-semibold text-zinc-900">
-              Related tools
-            </h2>
-            <ul className="mt-3 list-disc space-y-1 pl-5">
-              <li>
-                <Link
-                  href="/free-tools/viral-hooks"
-                  className="text-violet-700 hover:underline"
-                >
-                  Free Instagram viral hook generator
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/features/viral-reel-finder"
-                  className="text-violet-700 hover:underline"
-                >
-                  Viral Reel Finder
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/features/ai-personal-brand-coach"
-                  className="text-violet-700 hover:underline"
-                >
-                  AI Personal Brand Coach
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </section>
+        <RelatedToolsGrid
+          tools={[
+            {
+              title: "Free Instagram viral hook generator",
+              href: "/free-tools/viral-hooks",
+              imageUrl: RELATED_TOOL_THUMB_VIRAL_HOOKS,
+            },
+            {
+              title: "Viral Reel Finder",
+              href: "/features/viral-reel-finder",
+              imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
+            },
+            {
+              title: "AI Personal Brand Coach",
+              href: "/features/ai-personal-brand-coach",
+              imageUrl: RELATED_TOOL_THUMB_AI_COACH,
+            },
+          ]}
+        />
       </main>
 
       <PricingModal
