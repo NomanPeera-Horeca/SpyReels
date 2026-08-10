@@ -3,19 +3,13 @@
  * Endpoint: https://api.pexels.com/videos/search
  */
 
+import { pickRelevantCandidate } from "./checkClipRelevance";
+import type { StockVideoResult } from "./stockVideoTypes";
+
 const PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search";
 
-export type PexelsVideoResult = {
-  id: number;
-  thumbnailUrl: string;
-  previewUrl: string;
-  durationSeconds: number;
-  width: number;
-  height: number;
-  sourceUrl: string;
-  photographerName: string;
-  photographerUrl: string;
-};
+/** @deprecated Prefer StockVideoResult; kept as alias for call-site clarity. */
+export type PexelsVideoResult = StockVideoResult;
 
 type PexelsVideoFile = {
   id?: number;
@@ -63,7 +57,7 @@ function pickPreviewFile(files: PexelsVideoFile[] | undefined): string | null {
   return mid?.link ?? null;
 }
 
-function mapVideo(video: PexelsVideo): PexelsVideoResult | null {
+function mapVideo(video: PexelsVideo): StockVideoResult | null {
   if (video.id == null) return null;
   const previewUrl = pickPreviewFile(video.video_files);
   if (!previewUrl) return null;
@@ -90,6 +84,7 @@ function mapVideo(video: PexelsVideo): PexelsVideoResult | null {
     sourceUrl,
     photographerName,
     photographerUrl,
+    provider: "pexels",
   };
 }
 
@@ -105,7 +100,7 @@ export async function searchPexelsVideos(
     orientation?: "portrait" | "landscape" | "square";
     excludeUrls?: Set<string>;
   } = {}
-): Promise<PexelsVideoResult[]> {
+): Promise<StockVideoResult[]> {
   const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) {
     console.warn("[searchPexelsVideo] PEXELS_API_KEY not set");
@@ -138,7 +133,7 @@ export async function searchPexelsVideos(
     }
 
     const data = (await response.json()) as { videos?: PexelsVideo[] };
-    const results: PexelsVideoResult[] = [];
+    const results: StockVideoResult[] = [];
     for (const video of data.videos ?? []) {
       const mapped = mapVideo(video);
       if (!mapped) continue;
@@ -154,30 +149,38 @@ export async function searchPexelsVideos(
   }
 }
 
+export type SearchPexelsForBeatOptions = {
+  /** Beat / visual intent text for Haiku relevance. When set, rejects non-matches. */
+  relevanceText?: string;
+};
+
 /**
- * Pick the first unused video for a beat, preferring shorter clips suitable for B-roll.
+ * Fetch up to 8 Pexels candidates and pick the first that passes relevance.
+ * Returns null when none are relevant (caller may fall back to Pixabay).
+ * Page 2 only when page 1 is empty after excludeUrls, not when relevance rejects all.
  */
 export async function searchPexelsVideoForBeat(
   query: string,
-  excludeUrls: Set<string>
-): Promise<PexelsVideoResult | null> {
-  // Fetch a small page so we can skip already-used clips in-job.
+  excludeUrls: Set<string>,
+  options: SearchPexelsForBeatOptions = {}
+): Promise<StockVideoResult | null> {
+  const relevanceText = (options.relevanceText ?? query).trim();
+
   const candidates = await searchPexelsVideos(query, {
     perPage: 8,
     page: 1,
     excludeUrls,
   });
-  if (!candidates.length) {
-    // Retry without exclude filter on a later page if everything was deduped.
-    const fallback = await searchPexelsVideos(query, {
+
+  let pool = candidates;
+  if (!pool.length) {
+    pool = await searchPexelsVideos(query, {
       perPage: 8,
       page: 2,
       excludeUrls,
     });
-    return fallback[0] ?? null;
   }
+  if (!pool.length) return null;
 
-  // Prefer clips under ~20s when available.
-  const short = candidates.find((c) => c.durationSeconds > 0 && c.durationSeconds <= 20);
-  return short ?? candidates[0] ?? null;
+  return pickRelevantCandidate(pool, relevanceText);
 }
