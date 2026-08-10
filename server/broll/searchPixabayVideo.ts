@@ -164,7 +164,7 @@ export async function searchPixabayVideoForBeat(
   const relevanceText = (options.relevanceText ?? query).trim();
 
   const candidates = await searchPixabayVideos(query, {
-    perPage: 8,
+    perPage: 4,
     page: 1,
     excludeUrls,
   });
@@ -172,12 +172,12 @@ export async function searchPixabayVideoForBeat(
   let pool = candidates;
   if (!pool.length) {
     pool = await searchPixabayVideos(query, {
-      perPage: 8,
+      perPage: 4,
       page: 2,
       excludeUrls,
     });
   }
   if (!pool.length) return null;
 
-  return pickRelevantCandidate(pool, relevanceText);
+  return pickRelevantCandidate(pool, relevanceText, 4);
 }

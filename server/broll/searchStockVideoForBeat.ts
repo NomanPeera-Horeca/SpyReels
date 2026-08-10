@@ -1,6 +1,7 @@
 /**
  * Unified stock video search: Pexels first, Pixabay only when Pexels +
  * relevance return nothing usable. Sequential fallback (not parallel).
+ * Within each provider, relevance checks run in parallel (capped at 4).
  */
 
 import { searchPexelsVideoForBeat } from "./searchPexelsVideo";

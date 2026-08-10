@@ -155,7 +155,7 @@ export type SearchPexelsForBeatOptions = {
 };
 
 /**
- * Fetch up to 8 Pexels candidates and pick the first that passes relevance.
+ * Fetch up to 4 Pexels candidates and pick the first that passes relevance.
  * Returns null when none are relevant (caller may fall back to Pixabay).
  * Page 2 only when page 1 is empty after excludeUrls, not when relevance rejects all.
  */
@@ -167,7 +167,7 @@ export async function searchPexelsVideoForBeat(
   const relevanceText = (options.relevanceText ?? query).trim();
 
   const candidates = await searchPexelsVideos(query, {
-    perPage: 8,
+    perPage: 4,
     page: 1,
     excludeUrls,
   });
@@ -175,12 +175,12 @@ export async function searchPexelsVideoForBeat(
   let pool = candidates;
   if (!pool.length) {
     pool = await searchPexelsVideos(query, {
-      perPage: 8,
+      perPage: 4,
       page: 2,
       excludeUrls,
     });
   }
   if (!pool.length) return null;
 
-  return pickRelevantCandidate(pool, relevanceText);
+  return pickRelevantCandidate(pool, relevanceText, 4);
 }

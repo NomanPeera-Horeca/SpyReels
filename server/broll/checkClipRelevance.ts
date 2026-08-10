@@ -78,18 +78,32 @@ export function orderCandidatesForRelevance<
 /**
  * Walk ordered candidates until one passes relevance. Returns null if none pass
  * (signal for provider fallback). Does not silently return an irrelevant first hit.
+ * Relevance checks run in parallel; the earliest-ranked accept wins (not the fastest).
  */
 export async function pickRelevantCandidate<
   T extends { durationSeconds: number; thumbnailUrl: string },
->(candidates: T[], relevanceText: string): Promise<T | null> {
-  const ordered = orderCandidatesForRelevance(candidates);
+>(
+  candidates: T[],
+  relevanceText: string,
+  maxCandidates = 4
+): Promise<T | null> {
+  const ordered = orderCandidatesForRelevance(candidates).slice(
+    0,
+    Math.max(1, maxCandidates)
+  );
   const text = relevanceText.trim();
   if (!ordered.length) return null;
   if (!text) return ordered[0] ?? null;
 
-  for (const candidate of ordered) {
-    const ok = await checkClipRelevance(text, candidate.thumbnailUrl);
-    if (ok) return candidate;
+  const results = await Promise.all(
+    ordered.map(async (candidate) => ({
+      candidate,
+      ok: await checkClipRelevance(text, candidate.thumbnailUrl),
+    }))
+  );
+
+  for (const result of results) {
+    if (result.ok) return result.candidate;
   }
   return null;
 }
