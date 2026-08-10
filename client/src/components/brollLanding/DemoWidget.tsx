@@ -92,6 +92,7 @@ export function DemoWidget({
   const [rerollContext, setRerollContext] = useState("");
   const [rerollError, setRerollError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rerollContextRef = useRef<HTMLInputElement>(null);
   const restoreAppliedRef = useRef(false);
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -106,6 +107,15 @@ export function DemoWidget({
 
   const previewMatch =
     previewIndex != null ? (matches[previewIndex] ?? null) : null;
+  const previewIsNoMatch = previewMatch?.matchStatus === "no_match";
+
+  useEffect(() => {
+    if (previewIndex == null || !previewIsNoMatch || mode !== "script") return;
+    const id = window.setTimeout(() => {
+      rerollContextRef.current?.focus();
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [previewIndex, previewIsNoMatch, mode]);
 
   const pollQuery = trpc.brollLanding.getVideo.useQuery(
     { id: videoId!, accessToken: accessToken ?? undefined },
@@ -288,14 +298,14 @@ export function DemoWidget({
 
   function onDownloadClick() {
     if (canDownload) {
-      onDownloadUnlocked(matches);
+      onDownloadUnlocked(matches.filter((m) => m.matchStatus === "matched"));
       return;
     }
     onDownloadLocked();
   }
 
   function openBeatPreview(index: number) {
-    if (!matches[index]?.clipUrl) return;
+    if (!matches[index]) return;
     setPreviewIndex(index);
     setRerollContext("");
     setRerollError(null);
@@ -332,6 +342,9 @@ export function DemoWidget({
       setMatches((prev) => {
         const next = [...prev];
         next[previewIndex] = result.match;
+        setBeatsMatched(
+          next.filter((m) => m.matchStatus === "matched").length
+        );
         return next;
       });
       setRerollContext("");
@@ -505,7 +518,9 @@ export function DemoWidget({
                     <div className="skeleton mt-2 h-3 w-4/5 rounded" />
                   </div>
                 ))
-              : matches.map((m, i) => (
+              : matches.map((m, i) => {
+                  const isNoMatch = m.matchStatus === "no_match";
+                  return (
                   <figure
                     key={`${m.keyword}-${i}`}
                     className="clip-in"
@@ -516,14 +531,32 @@ export function DemoWidget({
                     <button
                       type="button"
                       onClick={() => openBeatPreview(i)}
-                      disabled={!m.clipUrl}
-                      className={`group relative block w-full overflow-hidden rounded-lg border border-zinc-200 text-left transition hover:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-default disabled:opacity-60 ${
-                        showWatermark || watermarked ? "watermark" : ""
+                      className={`group relative block w-full overflow-hidden rounded-lg border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                        isNoMatch
+                          ? "border-dashed border-zinc-300 hover:border-violet-400"
+                          : "border-zinc-200 hover:border-violet-400"
+                      } ${
+                        !isNoMatch && (showWatermark || watermarked)
+                          ? "watermark"
+                          : ""
                       }`}
-                      aria-label={`Play matched B-roll for beat: ${m.beat}`}
+                      aria-label={
+                        isNoMatch
+                          ? `No matching clip for beat: ${m.beat}. Add context to try again.`
+                          : `Play matched B-roll for beat: ${m.beat}`
+                      }
                     >
                       <div className="relative aspect-video">
-                        {m.posterUrl || m.clipUrl ? (
+                        {isNoMatch ? (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-zinc-50 px-3 text-center">
+                            <span className="font-ui text-[12px] font-bold text-zinc-600">
+                              No matching clip found
+                            </span>
+                            <span className="text-[11px] leading-snug text-zinc-400">
+                              Add context to try again
+                            </span>
+                          </div>
+                        ) : m.posterUrl || m.clipUrl ? (
                           <img
                             src={m.posterUrl || m.clipUrl}
                             alt={`Matched B-roll: ${m.keyword}`}
@@ -536,7 +569,7 @@ export function DemoWidget({
                             No preview
                           </div>
                         )}
-                        {m.clipUrl ? (
+                        {!isNoMatch && m.clipUrl ? (
                           <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-90 transition group-hover:bg-black/35">
                             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-violet-700 shadow-md">
                               <svg
@@ -551,7 +584,7 @@ export function DemoWidget({
                             </span>
                           </span>
                         ) : null}
-                        {(showWatermark || watermarked) && (
+                        {!isNoMatch && (showWatermark || watermarked) && (
                           <span className="absolute bottom-1.5 right-1.5 z-10 font-ui text-[9px] font-bold uppercase tracking-wide text-white/85">
                             SpyReels
                           </span>
@@ -562,12 +595,14 @@ export function DemoWidget({
                       Beat: "{m.beat}"
                     </figcaption>
                     <p className="text-[12px] leading-snug text-zinc-500">
-                      {m.keyword} ·{" "}
-                      {m.source === "ai" ? "AI" : "Stock"} ·{" "}
-                      {formatDuration(m.start, m.end)}
+                      {m.keyword}
+                      {isNoMatch
+                        ? " · No match"
+                        : ` · ${m.source === "ai" ? "AI" : "Stock"} · ${formatDuration(m.start, m.end)}`}
                     </p>
                   </figure>
-                ))}
+                  );
+                })}
           </div>
 
           {phase === "results" && !isAuthenticated ? (
@@ -632,7 +667,9 @@ export function DemoWidget({
         >
           <DialogTitle className="sr-only">
             {previewMatch
-              ? `Matched B-roll: ${previewMatch.beat}`
+              ? previewIsNoMatch
+                ? `No matching clip: ${previewMatch.beat}`
+                : `Matched B-roll: ${previewMatch.beat}`
               : "Matched B-roll clip"}
           </DialogTitle>
           <button
@@ -645,23 +682,35 @@ export function DemoWidget({
           </button>
           {previewMatch ? (
             <>
-              <div className="bg-black">
-                <ReelDialogVideo
-                  key={previewMatch.clipUrl}
-                  videoUrl={previewMatch.clipUrl}
-                  thumbnailUrl={previewMatch.posterUrl}
-                  className="aspect-video h-auto max-h-[min(70vh,480px)] w-full object-contain"
-                />
-              </div>
+              {previewIsNoMatch ? (
+                <div className="flex aspect-video max-h-[min(40vh,280px)] w-full flex-col items-center justify-center gap-2 bg-zinc-100 px-6 text-center">
+                  <p className="font-ui text-[15px] font-bold text-zinc-700">
+                    No matching clip found
+                  </p>
+                  <p className="text-[13px] leading-snug text-zinc-500">
+                    Add a short hint below and try again.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-black">
+                  <ReelDialogVideo
+                    key={previewMatch.clipUrl}
+                    videoUrl={previewMatch.clipUrl}
+                    thumbnailUrl={previewMatch.posterUrl}
+                    className="aspect-video h-auto max-h-[min(70vh,480px)] w-full object-contain"
+                  />
+                </div>
+              )}
               <div className="space-y-3 border-t border-zinc-200 px-4 py-3 sm:px-5">
                 <div className="space-y-1">
                   <p className="font-ui text-[13px] font-bold leading-snug text-zinc-800">
                     Beat: "{previewMatch.beat}"
                   </p>
                   <p className="text-[12px] leading-snug text-zinc-500">
-                    {previewMatch.keyword} ·{" "}
-                    {previewMatch.source === "ai" ? "AI" : "Stock"} ·{" "}
-                    {formatDuration(previewMatch.start, previewMatch.end)}
+                    {previewMatch.keyword}
+                    {previewIsNoMatch
+                      ? " · No match"
+                      : ` · ${previewMatch.source === "ai" ? "AI" : "Stock"} · ${formatDuration(previewMatch.start, previewMatch.end)}`}
                   </p>
                 </div>
                 {mode === "script" ? (
@@ -670,16 +719,19 @@ export function DemoWidget({
                       htmlFor="broll-reroll-context"
                       className="font-ui text-[12px] font-bold text-zinc-600"
                     >
-                      Wrong match? Add context and try again
+                      {previewIsNoMatch
+                        ? "Add context and try again"
+                        : "Wrong match? Add context and try again"}
                     </label>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         id="broll-reroll-context"
+                        ref={rerollContextRef}
                         type="text"
                         maxLength={120}
                         value={rerollContext}
                         onChange={(e) => setRerollContext(e.target.value)}
-                        placeholder='e.g. commercial kitchen'
+                        placeholder="e.g. commercial kitchen"
                         className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[14px] text-zinc-800 placeholder:text-zinc-400 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
                       />
                       <button

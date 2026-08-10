@@ -45,15 +45,28 @@ export type BrollPreviewSnapshot = {
 function isMatch(value: unknown): value is BrollLandingMatch {
   if (!value || typeof value !== "object") return false;
   const m = value as Record<string, unknown>;
-  return (
-    typeof m.beat === "string" &&
-    typeof m.keyword === "string" &&
-    typeof m.clipUrl === "string" &&
-    typeof m.posterUrl === "string" &&
-    (m.source === "pexels" || m.source === "pixabay" || m.source === "ai") &&
-    typeof m.start === "number" &&
-    typeof m.end === "number"
-  );
+  const matchStatus =
+    m.matchStatus === "no_match"
+      ? "no_match"
+      : m.matchStatus === "matched" || typeof m.clipUrl === "string"
+        ? "matched"
+        : null;
+  if (!matchStatus) return false;
+  if (
+    typeof m.beat !== "string" ||
+    typeof m.keyword !== "string" ||
+    typeof m.clipUrl !== "string" ||
+    typeof m.posterUrl !== "string" ||
+    !(m.source === "pexels" || m.source === "pixabay" || m.source === "ai") ||
+    typeof m.start !== "number" ||
+    typeof m.end !== "number"
+  ) {
+    return false;
+  }
+  if (matchStatus === "matched" && !m.clipUrl) return false;
+  // Normalize legacy stashes that omit matchStatus.
+  (m as { matchStatus: string }).matchStatus = matchStatus;
+  return true;
 }
 
 function parsePending(raw: string): BrollPendingPreview | null {

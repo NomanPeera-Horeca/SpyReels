@@ -30,6 +30,7 @@ import {
 import { suggestBrollForScript, regenerateBrollBeat } from "../broll/suggestBroll";
 import {
   mapInsertionPointsToLandingMatches,
+  countMatchedBeats,
   mapSuggestBrollToLandingMatches,
 } from "../brollLanding/mapPreviewMatches";
 import { getSubscription } from "../db";
@@ -239,7 +240,7 @@ export const brollLandingRouter = router({
         watermarked: gate.watermarked,
         remaining: gate.remaining,
         limit: gate.limit,
-        beatsMatched: matches.length,
+        beatsMatched: countMatchedBeats(matches),
         totalSeconds,
       };
     }),
@@ -526,7 +527,7 @@ export const brollLandingRouter = router({
         errorMessage: row.errorMessage,
         sourceVideoUrl: row.sourceVideoUrl,
         sourceAudioUrl: row.sourceAudioUrl ?? null,
-        beatsMatched: matches.length,
+        beatsMatched: countMatchedBeats(matches),
         totalSeconds: row.durationSeconds ?? 0,
       };
     }),
@@ -585,6 +586,7 @@ export const brollLandingRouter = router({
         source: clip.provider === "pixabay" ? "pixabay" : "pexels",
         start: input.start,
         end: input.end,
+        matchStatus: "matched",
       };
 
       return { match };

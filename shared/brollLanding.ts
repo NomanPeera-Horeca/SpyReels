@@ -2,15 +2,21 @@
 
 export type BrollLandingMatchSource = "pexels" | "pixabay" | "ai";
 
+/** Whether a beat found a stock clip or needs user context to retry. */
+export type BrollLandingMatchStatus = "matched" | "no_match";
+
 /** UI shape for matched preview clips (script or video mode). */
 export type BrollLandingMatch = {
   beat: string;
   keyword: string;
+  /** Empty when matchStatus is no_match. */
   clipUrl: string;
+  /** Empty when matchStatus is no_match. */
   posterUrl: string;
   source: BrollLandingMatchSource;
   start: number;
   end: number;
+  matchStatus: BrollLandingMatchStatus;
 };
 
 export const ANONYMOUS_BROLL_PREVIEW_DAILY_LIMIT = 3;
