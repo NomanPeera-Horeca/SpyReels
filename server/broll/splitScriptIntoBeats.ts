@@ -35,16 +35,25 @@ function countWords(content: string): number {
   return content.trim().split(/\s+/).filter(Boolean).length;
 }
 
+/**
+ * Split into sentence-like chunks for coverage heuristics / fallback.
+ * Numbered list markers ("1.", "2.") are kept with the following text so
+ * they do not inflate the sentence count or force fragmented beats.
+ */
 function splitSentences(content: string): string[] {
-  return content
-    .split(/(?<=[.!?])\s+|\n+/)
+  const normalized = content
+    .replace(/(^|\n)\s*(\d+)\.\s+/g, "$1$2. ")
+    .replace(/\n+/g, " ");
+  return normalized
+    .split(/(?<=(?<!\d)[.!?])\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
 /**
  * Minimum beats expected for adequate start-to-finish script coverage.
- * Roughly one beat per sentence / ~28 words, with floors for short scripts.
+ * Scales with word count; does not force short scripts past their natural beat count.
+ * Rough targets: ~60 words → 2-3, ~100 words with a numbered list → ~5-8, long scripts up to 12.
  */
 export function minBeatsForScript(content: string): number {
   const words = countWords(content);
@@ -54,9 +63,13 @@ export function minBeatsForScript(content: string): number {
   if (words < 30) return 1;
   if (words < 60) return Math.max(2, Math.min(Math.max(sentences, 2), 3));
 
-  const byWords = Math.ceil(words / 28);
-  const bySentences = Math.max(1, Math.ceil(sentences * 0.85));
-  return Math.min(12, Math.max(3, byWords, bySentences));
+  // ~1 beat per 35 words keeps a 100-word script near 3-4 from words alone.
+  const byWords = Math.ceil(words / 35);
+  // Soft sentence signal: do not let noisy punctuation dominate.
+  const bySentences = Math.max(1, Math.ceil(sentences * 0.6));
+  // Soft ceiling for medium scripts so a ~100w piece stays in the 5-8 band.
+  const softCap = words < 160 ? 8 : 12;
+  return Math.min(softCap, Math.max(3, byWords, Math.min(bySentences, softCap)));
 }
 
 function isUnderCovered(beats: ScriptBeat[], content: string): boolean {
