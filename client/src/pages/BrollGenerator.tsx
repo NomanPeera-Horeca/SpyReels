@@ -260,10 +260,11 @@ export default function BrollGenerator() {
   const canDownload = quotaQuery.data?.canDownload ?? false;
 
   return (
-    <div className="broll-landing min-h-screen bg-white text-zinc-900">
+    <div className="broll-landing min-h-screen bg-background text-foreground">
       <PublicHeader />
 
-      <main>
+      {/* Light chrome scoped to main content only so PublicHeader keeps theme tokens. */}
+      <main className="bg-white text-zinc-900">
         <section className="relative overflow-hidden bg-[#0a0a0f] pb-20 pt-16 text-white lg:pb-28 lg:pt-24">
           <div className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2 rounded-full bg-violet-600/25 blur-[140px]" />
           <div className="pointer-events-none absolute -bottom-56 right-[-120px] h-[420px] w-[620px] rounded-full bg-indigo-600/20 blur-[130px]" />
