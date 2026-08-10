@@ -3,11 +3,18 @@
  * Endpoint: https://api.pexels.com/videos/search
  */
 
-import { pickRelevantCandidate } from "./checkClipRelevance";
+import {
+  orderCandidatesForRelevance,
+  pickFromScoredCandidates,
+  scoreCandidatesForRelevance,
+} from "./checkClipRelevance";
 import type {
   StockProviderBeatResult,
   StockVideoResult,
 } from "./stockVideoTypes";
+
+const PAGE_SIZE = 4;
+const MAX_CANDIDATES_PER_PROVIDER = 8;
 
 const PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search";
 
@@ -158,10 +165,10 @@ export type SearchPexelsForBeatOptions = {
 };
 
 /**
- * Fetch up to 4 Pexels candidates and pick the first that passes relevance.
- * Returns empty when the provider has zero candidates.
- * Returns approximate (top-ranked) when candidates exist but none pass relevance.
- * Page 2 only when page 1 is empty after excludeUrls, not when relevance rejects all.
+ * Fetch Pexels candidates and pick by relevance score.
+ * Fast path: score page 1 (4). On all-below-threshold, deepen with page 2
+ * (up to 8 total) before returning approximate. Page 2 also used when page 1
+ * is empty after excludeUrls.
  */
 export async function searchPexelsVideoForBeat(
   query: string,
@@ -170,25 +177,80 @@ export async function searchPexelsVideoForBeat(
 ): Promise<StockProviderBeatResult> {
   const relevanceText = (options.relevanceText ?? query).trim();
 
-  const candidates = await searchPexelsVideos(query, {
-    perPage: 4,
+  const page1 = await searchPexelsVideos(query, {
+    perPage: PAGE_SIZE,
     page: 1,
     excludeUrls,
   });
 
-  let pool = candidates;
-  if (!pool.length) {
-    pool = await searchPexelsVideos(query, {
-      perPage: 4,
+  if (!page1.length) {
+    const page2Only = await searchPexelsVideos(query, {
+      perPage: PAGE_SIZE,
       page: 2,
       excludeUrls,
     });
+    if (!page2Only.length) return { status: "empty" };
+    const scored = await scoreCandidatesForRelevance(
+      page2Only,
+      relevanceText,
+      PAGE_SIZE
+    );
+    const pick = pickFromScoredCandidates(scored);
+    if (!pick) return { status: "empty" };
+    return {
+      status: pick.confidence,
+      video: { ...pick.candidate, matchConfidence: pick.confidence },
+    };
   }
-  if (!pool.length) return { status: "empty" };
 
-  const pick = await pickRelevantCandidate(pool, relevanceText, 4);
+  const scored1 = await scoreCandidatesForRelevance(
+    page1,
+    relevanceText,
+    PAGE_SIZE
+  );
+  const early = pickFromScoredCandidates(scored1);
+  if (early?.confidence === "high") {
+    return {
+      status: "high",
+      video: { ...early.candidate, matchConfidence: "high" },
+    };
+  }
+
+  const page2 = await searchPexelsVideos(query, {
+    perPage: PAGE_SIZE,
+    page: 2,
+    excludeUrls,
+  });
+  const seen = new Set(page1.map((c) => c.previewUrl));
+  const page2New = page2.filter((c) => !seen.has(c.previewUrl));
+
+  if (!page2New.length) {
+    if (!early) return { status: "empty" };
+    return {
+      status: "approximate",
+      video: { ...early.candidate, matchConfidence: "approximate" },
+    };
+  }
+
+  const scored2 = await scoreCandidatesForRelevance(
+    page2New,
+    relevanceText,
+    PAGE_SIZE
+  );
+  const scoreByUrl = new Map<string, number>();
+  for (const row of [...scored1, ...scored2]) {
+    scoreByUrl.set(row.candidate.previewUrl, row.score);
+  }
+  const combinedOrdered = orderCandidatesForRelevance([
+    ...page1,
+    ...page2New,
+  ]).slice(0, MAX_CANDIDATES_PER_PROVIDER);
+  const scoredCombined = combinedOrdered.map((candidate) => ({
+    candidate,
+    score: scoreByUrl.get(candidate.previewUrl) ?? 0,
+  }));
+  const pick = pickFromScoredCandidates(scoredCombined);
   if (!pick) return { status: "empty" };
-
   return {
     status: pick.confidence,
     video: { ...pick.candidate, matchConfidence: pick.confidence },

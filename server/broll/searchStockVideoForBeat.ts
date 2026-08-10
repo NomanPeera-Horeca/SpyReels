@@ -1,11 +1,12 @@
 /**
  * Unified stock video search: Pexels first, Pixabay only when Pexels has no
  * high-confidence match. Sequential fallback (not parallel).
- * Within each provider, relevance checks run in parallel (capped at 4).
+ * Within each provider, relevance scores run in parallel; page 2 deepens only
+ * when page 1 scores all fall below the high threshold (up to 8 candidates).
  *
  * Returns null only when both providers return zero candidates. If candidates
- * exist but all fail relevance, returns the top-ranked clip from the first
- * provider that had results, marked matchConfidence: "approximate".
+ * exist but none clear the threshold, returns the highest-scoring clip from
+ * the first provider that had results, marked matchConfidence: "approximate".
  */
 
 import { searchPexelsVideoForBeat } from "./searchPexelsVideo";
@@ -19,7 +20,7 @@ export type SearchStockVideoForBeatOptions = {
 
 /**
  * Prefer a high-confidence Pexels hit, then high-confidence Pixabay.
- * Fall back to an approximate clip from the first provider with results.
+ * Fall back to the best approximate clip from the first provider with results.
  * Null only when both providers are empty.
  */
 export async function searchStockVideoForBeat(

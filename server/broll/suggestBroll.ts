@@ -11,7 +11,10 @@ import {
 import { searchStockVideoForBeat } from "./searchStockVideoForBeat";
 import { splitScriptIntoBeats } from "./splitScriptIntoBeats";
 
-/** Prefix theme onto a beat query when it is not already present. */
+/**
+ * Legacy helper: niche + theme + beat query. Do not use for stock API retrieval;
+ * theme/niche belong in relevanceText only so the API query matches the UI keyword.
+ */
 export function buildSearchQuery(
   theme: string,
   beatQuery: string,
@@ -56,6 +59,35 @@ export function mergeUserContextIntoQuery(
     if (!out.some((x) => x.toLowerCase() === w.toLowerCase())) out.push(w);
   }
   return out.join(" ");
+}
+
+/** Clean stock API query: matches UI keyword (searchQuery || visualSummary). */
+export function beatStockSearchQuery(beat: {
+  searchQuery?: string;
+  visualSummary?: string;
+}): string {
+  return (beat.searchQuery || beat.visualSummary || "").trim();
+}
+
+/** Mood/context for Haiku; theme and niche stay out of the retrieval query. */
+export function beatRelevanceText(args: {
+  visualSummary?: string;
+  searchQuery?: string;
+  scriptText?: string;
+  theme?: string;
+  niche?: string;
+  userContext?: string;
+}): string {
+  return [
+    (args.userContext ?? "").trim(),
+    (args.visualSummary ?? "").trim() ||
+      (args.searchQuery ?? "").trim() ||
+      (args.scriptText ?? "").trim(),
+    (args.theme ?? "").trim(),
+    (args.niche ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function mapVideoToClip(video: {
@@ -106,18 +138,20 @@ export async function suggestBrollForScript(args: {
   const beats: BrollBeat[] = [];
 
   for (const beat of scriptBeats) {
-    const query = buildSearchQuery(
+    const query = beatStockSearchQuery(beat);
+    const relevanceText = beatRelevanceText({
+      visualSummary: beat.visualSummary,
+      searchQuery: beat.searchQuery,
+      scriptText: beat.scriptText,
       theme,
-      beat.searchQuery || beat.visualSummary,
-      args.niche
-    );
+      niche: args.niche,
+    });
 
     const clips: BrollClip[] = [];
     for (let i = 0; i < clipsPerBeat; i++) {
       const beatQuery = query || beat.visualSummary;
       const video = await searchStockVideoForBeat(beatQuery, usedUrls, {
-        relevanceText:
-          beat.visualSummary || beat.searchQuery || beat.scriptText || beatQuery,
+        relevanceText: relevanceText || beatQuery,
       });
       if (!video) break;
       usedUrls.add(video.previewUrl);
@@ -161,28 +195,25 @@ export async function regenerateBrollBeat(args: {
   const clipsPerBeat = Math.min(Math.max(args.clipsPerBeat ?? 1, 1), 3);
   const beatQuery =
     args.searchQuery.trim() || (args.visualSummary ?? "").trim();
-  const baseQuery = buildSearchQuery(args.theme ?? "", beatQuery, args.niche);
-  const query = mergeUserContextIntoQuery(
-    baseQuery || beatQuery,
-    args.userContext
-  );
+  // Stock API: clean beat query + optional user context only (no theme/niche).
+  const query = mergeUserContextIntoQuery(beatQuery, args.userContext);
 
   const usedUrls = new Set<string>(
     (args.excludeUrls ?? []).map((u) => u.trim()).filter(Boolean)
   );
 
-  const relevanceText = [
-    (args.userContext ?? "").trim(),
-    (args.visualSummary ?? "").trim(),
-    query || beatQuery,
-  ]
-    .filter(Boolean)
-    .join(" | ");
+  const relevanceText = beatRelevanceText({
+    userContext: args.userContext,
+    visualSummary: args.visualSummary,
+    searchQuery: args.searchQuery,
+    theme: args.theme,
+    niche: args.niche,
+  });
 
   const clips: BrollClip[] = [];
   for (let i = 0; i < clipsPerBeat; i++) {
     const video = await searchStockVideoForBeat(query || beatQuery, usedUrls, {
-      relevanceText,
+      relevanceText: relevanceText || query || beatQuery,
     });
     if (!video) break;
     usedUrls.add(video.previewUrl);
