@@ -4,7 +4,10 @@
  */
 
 import { pickRelevantCandidate } from "./checkClipRelevance";
-import type { StockVideoResult } from "./stockVideoTypes";
+import type {
+  StockProviderBeatResult,
+  StockVideoResult,
+} from "./stockVideoTypes";
 
 const PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search";
 
@@ -156,14 +159,15 @@ export type SearchPexelsForBeatOptions = {
 
 /**
  * Fetch up to 4 Pexels candidates and pick the first that passes relevance.
- * Returns null when none are relevant (caller may fall back to Pixabay).
+ * Returns empty when the provider has zero candidates.
+ * Returns approximate (top-ranked) when candidates exist but none pass relevance.
  * Page 2 only when page 1 is empty after excludeUrls, not when relevance rejects all.
  */
 export async function searchPexelsVideoForBeat(
   query: string,
   excludeUrls: Set<string>,
   options: SearchPexelsForBeatOptions = {}
-): Promise<StockVideoResult | null> {
+): Promise<StockProviderBeatResult> {
   const relevanceText = (options.relevanceText ?? query).trim();
 
   const candidates = await searchPexelsVideos(query, {
@@ -180,7 +184,13 @@ export async function searchPexelsVideoForBeat(
       excludeUrls,
     });
   }
-  if (!pool.length) return null;
+  if (!pool.length) return { status: "empty" };
 
-  return pickRelevantCandidate(pool, relevanceText, 4);
+  const pick = await pickRelevantCandidate(pool, relevanceText, 4);
+  if (!pick) return { status: "empty" };
+
+  return {
+    status: pick.confidence,
+    video: { ...pick.candidate, matchConfidence: pick.confidence },
+  };
 }

@@ -108,14 +108,22 @@ export function DemoWidget({
   const previewMatch =
     previewIndex != null ? (matches[previewIndex] ?? null) : null;
   const previewIsNoMatch = previewMatch?.matchStatus === "no_match";
+  const previewIsApproximate =
+    !previewIsNoMatch && previewMatch?.matchConfidence === "approximate";
 
   useEffect(() => {
-    if (previewIndex == null || !previewIsNoMatch || mode !== "script") return;
+    if (
+      previewIndex == null ||
+      (!previewIsNoMatch && !previewIsApproximate) ||
+      mode !== "script"
+    ) {
+      return;
+    }
     const id = window.setTimeout(() => {
       rerollContextRef.current?.focus();
     }, 50);
     return () => window.clearTimeout(id);
-  }, [previewIndex, previewIsNoMatch, mode]);
+  }, [previewIndex, previewIsNoMatch, previewIsApproximate, mode]);
 
   const pollQuery = trpc.brollLanding.getVideo.useQuery(
     { id: videoId!, accessToken: accessToken ?? undefined },
@@ -520,6 +528,8 @@ export function DemoWidget({
                 ))
               : matches.map((m, i) => {
                   const isNoMatch = m.matchStatus === "no_match";
+                  const isApproximate =
+                    !isNoMatch && m.matchConfidence === "approximate";
                   return (
                   <figure
                     key={`${m.keyword}-${i}`}
@@ -534,7 +544,9 @@ export function DemoWidget({
                       className={`group relative block w-full overflow-hidden rounded-lg border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                         isNoMatch
                           ? "border-dashed border-zinc-300 hover:border-violet-400"
-                          : "border-zinc-200 hover:border-violet-400"
+                          : isApproximate
+                            ? "border-amber-300 hover:border-amber-400"
+                            : "border-zinc-200 hover:border-violet-400"
                       } ${
                         !isNoMatch && (showWatermark || watermarked)
                           ? "watermark"
@@ -543,7 +555,9 @@ export function DemoWidget({
                       aria-label={
                         isNoMatch
                           ? `No matching clip for beat: ${m.beat}. Add context to try again.`
-                          : `Play matched B-roll for beat: ${m.beat}`
+                          : isApproximate
+                            ? `Approximate B-roll for beat: ${m.beat}. Add context to try again.`
+                            : `Play matched B-roll for beat: ${m.beat}`
                       }
                     >
                       <div className="relative aspect-video">
@@ -584,6 +598,11 @@ export function DemoWidget({
                             </span>
                           </span>
                         ) : null}
+                        {isApproximate ? (
+                          <span className="absolute left-1.5 top-1.5 z-10 rounded bg-amber-500/95 px-1.5 py-0.5 font-ui text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
+                            Approximate match
+                          </span>
+                        ) : null}
                         {!isNoMatch && (showWatermark || watermarked) && (
                           <span className="absolute bottom-1.5 right-1.5 z-10 font-ui text-[9px] font-bold uppercase tracking-wide text-white/85">
                             SpyReels
@@ -598,7 +617,7 @@ export function DemoWidget({
                       {m.keyword}
                       {isNoMatch
                         ? " · No match"
-                        : ` · ${m.source === "ai" ? "AI" : "Stock"} · ${formatDuration(m.start, m.end)}`}
+                        : ` · ${m.source === "ai" ? "AI" : "Stock"}${isApproximate ? " · Approximate" : ""} · ${formatDuration(m.start, m.end)}`}
                     </p>
                   </figure>
                   );
@@ -669,7 +688,9 @@ export function DemoWidget({
             {previewMatch
               ? previewIsNoMatch
                 ? `No matching clip: ${previewMatch.beat}`
-                : `Matched B-roll: ${previewMatch.beat}`
+                : previewIsApproximate
+                  ? `Approximate B-roll: ${previewMatch.beat}`
+                  : `Matched B-roll: ${previewMatch.beat}`
               : "Matched B-roll clip"}
           </DialogTitle>
           <button
@@ -692,13 +713,18 @@ export function DemoWidget({
                   </p>
                 </div>
               ) : (
-                <div className="bg-black">
+                <div className="relative bg-black">
                   <ReelDialogVideo
                     key={previewMatch.clipUrl}
                     videoUrl={previewMatch.clipUrl}
                     thumbnailUrl={previewMatch.posterUrl}
                     className="aspect-video h-auto max-h-[min(70vh,480px)] w-full object-contain"
                   />
+                  {previewIsApproximate ? (
+                    <span className="absolute left-3 top-3 z-10 rounded bg-amber-500/95 px-2 py-1 font-ui text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
+                      Approximate match
+                    </span>
+                  ) : null}
                 </div>
               )}
               <div className="space-y-3 border-t border-zinc-200 px-4 py-3 sm:px-5">
@@ -710,7 +736,7 @@ export function DemoWidget({
                     {previewMatch.keyword}
                     {previewIsNoMatch
                       ? " · No match"
-                      : ` · ${previewMatch.source === "ai" ? "AI" : "Stock"} · ${formatDuration(previewMatch.start, previewMatch.end)}`}
+                      : ` · ${previewMatch.source === "ai" ? "AI" : "Stock"}${previewIsApproximate ? " · Approximate" : ""} · ${formatDuration(previewMatch.start, previewMatch.end)}`}
                   </p>
                 </div>
                 {mode === "script" ? (
@@ -719,7 +745,7 @@ export function DemoWidget({
                       htmlFor="broll-reroll-context"
                       className="font-ui text-[12px] font-bold text-zinc-600"
                     >
-                      {previewIsNoMatch
+                      {previewIsNoMatch || previewIsApproximate
                         ? "Add context and try again"
                         : "Wrong match? Add context and try again"}
                     </label>

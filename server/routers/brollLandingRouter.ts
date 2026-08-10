@@ -587,6 +587,8 @@ export const brollLandingRouter = router({
         start: input.start,
         end: input.end,
         matchStatus: "matched",
+        matchConfidence:
+          clip.matchConfidence === "approximate" ? "approximate" : "high",
       };
 
       return { match };

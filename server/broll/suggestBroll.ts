@@ -69,6 +69,7 @@ function mapVideoToClip(video: {
   photographerName: string;
   photographerUrl: string;
   provider?: "pexels" | "pixabay";
+  matchConfidence?: "high" | "approximate";
 }): BrollClip {
   return {
     id: video.id,
@@ -81,6 +82,7 @@ function mapVideoToClip(video: {
     photographerName: video.photographerName,
     photographerUrl: video.photographerUrl,
     provider: video.provider ?? "pexels",
+    matchConfidence: video.matchConfidence ?? "high",
   };
 }
 

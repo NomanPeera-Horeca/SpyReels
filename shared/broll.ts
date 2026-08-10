@@ -1,5 +1,7 @@
 /** Shared types for B-Roll beat suggestions (stock video clips). */
 
+export type BrollMatchConfidence = "high" | "approximate";
+
 export type BrollClip = {
   id: number;
   thumbnailUrl: string;
@@ -13,6 +15,8 @@ export type BrollClip = {
   photographerUrl: string;
   /** Stock provider; defaults to pexels when omitted (legacy rows). */
   provider?: "pexels" | "pixabay";
+  /** high when relevance passed; approximate when best available after all failed. */
+  matchConfidence?: BrollMatchConfidence;
 };
 
 export type BrollBeat = {

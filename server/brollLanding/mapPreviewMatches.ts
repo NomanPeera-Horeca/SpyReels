@@ -56,6 +56,8 @@ export function mapSuggestBrollToLandingMatches(
       start,
       end,
       matchStatus: "matched",
+      matchConfidence:
+        clip.matchConfidence === "approximate" ? "approximate" : "high",
     });
   }
 
@@ -78,6 +80,7 @@ export function mapInsertionPointsToLandingMatches(
       start,
       end,
       matchStatus: hasClip ? "matched" : "no_match",
+      matchConfidence: hasClip ? "high" : undefined,
     };
   });
 }

@@ -5,7 +5,10 @@
  */
 
 import { pickRelevantCandidate } from "./checkClipRelevance";
-import type { StockVideoResult } from "./stockVideoTypes";
+import type {
+  StockProviderBeatResult,
+  StockVideoResult,
+} from "./stockVideoTypes";
 
 const PIXABAY_VIDEO_SEARCH_URL = "https://pixabay.com/api/videos/";
 
@@ -154,13 +157,13 @@ export type SearchPixabayForBeatOptions = {
 
 /**
  * Fetch Pixabay candidates and pick the first that passes relevance.
- * Same contract as searchPexelsVideoForBeat (null = no relevant match).
+ * Same contract as searchPexelsVideoForBeat.
  */
 export async function searchPixabayVideoForBeat(
   query: string,
   excludeUrls: Set<string>,
   options: SearchPixabayForBeatOptions = {}
-): Promise<StockVideoResult | null> {
+): Promise<StockProviderBeatResult> {
   const relevanceText = (options.relevanceText ?? query).trim();
 
   const candidates = await searchPixabayVideos(query, {
@@ -177,7 +180,13 @@ export async function searchPixabayVideoForBeat(
       excludeUrls,
     });
   }
-  if (!pool.length) return null;
+  if (!pool.length) return { status: "empty" };
 
-  return pickRelevantCandidate(pool, relevanceText, 4);
+  const pick = await pickRelevantCandidate(pool, relevanceText, 4);
+  if (!pick) return { status: "empty" };
+
+  return {
+    status: pick.confidence,
+    video: { ...pick.candidate, matchConfidence: pick.confidence },
+  };
 }

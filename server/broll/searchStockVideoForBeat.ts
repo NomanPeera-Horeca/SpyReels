@@ -1,7 +1,11 @@
 /**
- * Unified stock video search: Pexels first, Pixabay only when Pexels +
- * relevance return nothing usable. Sequential fallback (not parallel).
+ * Unified stock video search: Pexels first, Pixabay only when Pexels has no
+ * high-confidence match. Sequential fallback (not parallel).
  * Within each provider, relevance checks run in parallel (capped at 4).
+ *
+ * Returns null only when both providers return zero candidates. If candidates
+ * exist but all fail relevance, returns the top-ranked clip from the first
+ * provider that had results, marked matchConfidence: "approximate".
  */
 
 import { searchPexelsVideoForBeat } from "./searchPexelsVideo";
@@ -14,8 +18,9 @@ export type SearchStockVideoForBeatOptions = {
 };
 
 /**
- * Try Pexels (with relevance). On null, try Pixabay with the same query and
- * the same relevance check. Returns null when neither provider has a match.
+ * Prefer a high-confidence Pexels hit, then high-confidence Pixabay.
+ * Fall back to an approximate clip from the first provider with results.
+ * Null only when both providers are empty.
  */
 export async function searchStockVideoForBeat(
   query: string,
@@ -26,7 +31,13 @@ export async function searchStockVideoForBeat(
   const opts = { relevanceText };
 
   const fromPexels = await searchPexelsVideoForBeat(query, excludeUrls, opts);
-  if (fromPexels) return fromPexels;
+  if (fromPexels.status === "high") return fromPexels.video;
 
-  return searchPixabayVideoForBeat(query, excludeUrls, opts);
+  const fromPixabay = await searchPixabayVideoForBeat(query, excludeUrls, opts);
+  if (fromPixabay.status === "high") return fromPixabay.video;
+
+  if (fromPexels.status === "approximate") return fromPexels.video;
+  if (fromPixabay.status === "approximate") return fromPixabay.video;
+
+  return null;
 }

@@ -75,10 +75,16 @@ export function orderCandidatesForRelevance<
   return short.concat(rest);
 }
 
+export type PickRelevantResult<T> = {
+  candidate: T;
+  confidence: "high" | "approximate";
+};
+
 /**
- * Walk ordered candidates until one passes relevance. Returns null if none pass
- * (signal for provider fallback). Does not silently return an irrelevant first hit.
- * Relevance checks run in parallel; the earliest-ranked accept wins (not the fastest).
+ * Check candidates in parallel; pick the earliest-ranked accept as high.
+ * If the pool is non-empty but nothing passes, return the top-ranked candidate
+ * as approximate (caller may still try another provider for a high match first).
+ * Returns null only when the candidate pool is empty.
  */
 export async function pickRelevantCandidate<
   T extends { durationSeconds: number; thumbnailUrl: string },
@@ -86,14 +92,16 @@ export async function pickRelevantCandidate<
   candidates: T[],
   relevanceText: string,
   maxCandidates = 4
-): Promise<T | null> {
+): Promise<PickRelevantResult<T> | null> {
   const ordered = orderCandidatesForRelevance(candidates).slice(
     0,
     Math.max(1, maxCandidates)
   );
   const text = relevanceText.trim();
   if (!ordered.length) return null;
-  if (!text) return ordered[0] ?? null;
+  if (!text) {
+    return { candidate: ordered[0]!, confidence: "high" };
+  }
 
   const results = await Promise.all(
     ordered.map(async (candidate) => ({
@@ -103,7 +111,10 @@ export async function pickRelevantCandidate<
   );
 
   for (const result of results) {
-    if (result.ok) return result.candidate;
+    if (result.ok) {
+      return { candidate: result.candidate, confidence: "high" };
+    }
   }
-  return null;
+
+  return { candidate: ordered[0]!, confidence: "approximate" };
 }

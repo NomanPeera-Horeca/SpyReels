@@ -64,8 +64,15 @@ function isMatch(value: unknown): value is BrollLandingMatch {
     return false;
   }
   if (matchStatus === "matched" && !m.clipUrl) return false;
-  // Normalize legacy stashes that omit matchStatus.
+  // Normalize legacy stashes that omit matchStatus / matchConfidence.
   (m as { matchStatus: string }).matchStatus = matchStatus;
+  if (
+    matchStatus === "matched" &&
+    m.matchConfidence !== "approximate" &&
+    m.matchConfidence !== "high"
+  ) {
+    (m as { matchConfidence: string }).matchConfidence = "high";
+  }
   return true;
 }
 
