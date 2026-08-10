@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -22,6 +22,13 @@ import {
 import { trpc } from "@/lib/trpc";
 import { authHeadlineBrollGenerate } from "@/lib/authHeadlines";
 import type { BrollLandingMatch } from "@shared/brollLanding";
+import {
+  clearBrollPendingPreview,
+  peekBrollPendingPreview,
+  stashBrollPreviewBeforeCheckout,
+  type BrollPendingPreview,
+  type BrollPreviewSnapshot,
+} from "@/lib/brollPendingPreview";
 import { DemoWidget } from "@/components/brollLanding/DemoWidget";
 import { PricingModal } from "@/components/brollLanding/PricingModal";
 import { useScrollReveal } from "@/components/brollLanding/useScrollReveal";
@@ -62,11 +69,27 @@ export default function BrollGenerator() {
   const [authHeadline, setAuthHeadline] = useState("");
   const [pricingOpen, setPricingOpen] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [restorePending, setRestorePending] =
+    useState<BrollPendingPreview | null>(null);
+  const snapshotRef = useRef<BrollPreviewSnapshot | null>(null);
   const quotaQuery = trpc.brollLanding.quota.useQuery(undefined, {
     refetchOnWindowFocus: true,
   });
   const checkoutMutation = trpc.billing.checkout.useMutation();
   const downloadMutation = trpc.brollLanding.downloadClips.useMutation();
+
+  useEffect(() => {
+    setRestorePending(peekBrollPendingPreview());
+  }, []);
+
+  const handleSnapshotChange = useCallback((snapshot: BrollPreviewSnapshot) => {
+    snapshotRef.current = snapshot;
+  }, []);
+
+  const handleRestoreConsumed = useCallback(() => {
+    clearBrollPendingPreview();
+    setRestorePending(null);
+  }, []);
 
   useEffect(() => {
     if (quotaQuery.data) {
@@ -218,6 +241,9 @@ export default function BrollGenerator() {
       openSignup();
       return;
     }
+    if (snapshotRef.current) {
+      stashBrollPreviewBeforeCheckout(snapshotRef.current);
+    }
     try {
       const { url } = await checkoutMutation.mutateAsync({
         planId: "starter",
@@ -320,6 +346,9 @@ export default function BrollGenerator() {
               onDownloadUnlocked={(m) => {
                 void handleDownloadUnlocked(m);
               }}
+              restorePending={restorePending}
+              onRestoreConsumed={handleRestoreConsumed}
+              onSnapshotChange={handleSnapshotChange}
             />
           </div>
         </section>
