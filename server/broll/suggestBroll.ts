@@ -1,5 +1,6 @@
 /**
- * Orchestrate beat split + Pexels video search with in-job clip dedupe.
+ * Orchestrate beat split + stock video search with in-job clip dedupe.
+ * Pexels first, Pixabay fallback via searchStockVideoForBeat.
  */
 
 import {
@@ -7,7 +8,7 @@ import {
   type BrollClip,
   type SuggestBrollResult,
 } from "../../shared/broll";
-import { searchPexelsVideoForBeat } from "./searchPexelsVideo";
+import { searchStockVideoForBeat } from "./searchStockVideoForBeat";
 import { splitScriptIntoBeats } from "./splitScriptIntoBeats";
 
 /** Prefix theme onto a beat query when it is not already present. */
@@ -33,6 +34,30 @@ export function buildSearchQuery(
   return parts.join(" ").trim();
 }
 
+/**
+ * Merge optional user reroll context into a short stock search query (max ~6 words).
+ * Context words lead so "commercial kitchen" wins over a vague base query.
+ */
+export function mergeUserContextIntoQuery(
+  baseQuery: string,
+  userContext?: string
+): string {
+  const base = baseQuery.trim();
+  const ctx = (userContext ?? "").trim();
+  if (!ctx) return base;
+  if (!base) {
+    return ctx.split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+  }
+
+  const ctxWords = ctx.split(/\s+/).filter(Boolean).slice(0, 4);
+  const out: string[] = [...ctxWords];
+  for (const w of base.split(/\s+/).filter(Boolean)) {
+    if (out.length >= 6) break;
+    if (!out.some((x) => x.toLowerCase() === w.toLowerCase())) out.push(w);
+  }
+  return out.join(" ");
+}
+
 function mapVideoToClip(video: {
   id: number;
   thumbnailUrl: string;
@@ -43,6 +68,7 @@ function mapVideoToClip(video: {
   sourceUrl: string;
   photographerName: string;
   photographerUrl: string;
+  provider?: "pexels" | "pixabay";
 }): BrollClip {
   return {
     id: video.id,
@@ -54,6 +80,7 @@ function mapVideoToClip(video: {
     sourceUrl: video.sourceUrl,
     photographerName: video.photographerName,
     photographerUrl: video.photographerUrl,
+    provider: video.provider ?? "pexels",
   };
 }
 
@@ -85,10 +112,11 @@ export async function suggestBrollForScript(args: {
 
     const clips: BrollClip[] = [];
     for (let i = 0; i < clipsPerBeat; i++) {
-      const video = await searchPexelsVideoForBeat(
-        query || beat.visualSummary,
-        usedUrls
-      );
+      const beatQuery = query || beat.visualSummary;
+      const video = await searchStockVideoForBeat(beatQuery, usedUrls, {
+        relevanceText:
+          beat.visualSummary || beat.searchQuery || beat.scriptText || beatQuery,
+      });
       if (!video) break;
       usedUrls.add(video.previewUrl);
       usedUrls.add(video.sourceUrl);
@@ -112,7 +140,7 @@ export async function suggestBrollForScript(args: {
 }
 
 /**
- * Re-search Pexels for a single beat (no LLM split).
+ * Re-search stock video for a single beat (no LLM split).
  *
  * Product decision: does NOT increment brollGenerationCount. Full
  * suggestBroll still gates usage; per-beat re-search is currently unlimited
@@ -125,19 +153,35 @@ export async function regenerateBrollBeat(args: {
   theme?: string;
   excludeUrls?: string[];
   clipsPerBeat?: number;
+  /** Extra user hint, e.g. "commercial kitchen", merged into the stock query. */
+  userContext?: string;
 }): Promise<{ clips: BrollClip[] }> {
   const clipsPerBeat = Math.min(Math.max(args.clipsPerBeat ?? 1, 1), 3);
   const beatQuery =
     args.searchQuery.trim() || (args.visualSummary ?? "").trim();
-  const query = buildSearchQuery(args.theme ?? "", beatQuery, args.niche);
+  const baseQuery = buildSearchQuery(args.theme ?? "", beatQuery, args.niche);
+  const query = mergeUserContextIntoQuery(
+    baseQuery || beatQuery,
+    args.userContext
+  );
 
   const usedUrls = new Set<string>(
     (args.excludeUrls ?? []).map((u) => u.trim()).filter(Boolean)
   );
 
+  const relevanceText = [
+    (args.userContext ?? "").trim(),
+    (args.visualSummary ?? "").trim(),
+    query || beatQuery,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
   const clips: BrollClip[] = [];
   for (let i = 0; i < clipsPerBeat; i++) {
-    const video = await searchPexelsVideoForBeat(query || beatQuery, usedUrls);
+    const video = await searchStockVideoForBeat(query || beatQuery, usedUrls, {
+      relevanceText,
+    });
     if (!video) break;
     usedUrls.add(video.previewUrl);
     usedUrls.add(video.sourceUrl);

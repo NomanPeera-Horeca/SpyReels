@@ -27,7 +27,7 @@ import {
   type VideoBrollTranscript,
   type VideoBrollVideoUploadStatus,
 } from "../../shared/videoBroll";
-import { suggestBrollForScript } from "../broll/suggestBroll";
+import { suggestBrollForScript, regenerateBrollBeat } from "../broll/suggestBroll";
 import {
   mapInsertionPointsToLandingMatches,
   mapSuggestBrollToLandingMatches,
@@ -532,6 +532,65 @@ export const brollLandingRouter = router({
     }),
 
   /**
+   * Per-beat re-search on the landing preview (script mode).
+   * Does NOT consume the IP daily preview bucket or monthly generation count.
+   */
+  regenerateBeat: publicProcedure
+    .input(
+      z.object({
+        beat: z.string().min(1).max(200),
+        keyword: z.string().min(1).max(240),
+        searchQuery: z.string().max(240).optional(),
+        visualSummary: z.string().max(500).optional(),
+        userContext: z.string().max(120).optional(),
+        excludeUrls: z.array(z.string().max(2048)).max(40).optional(),
+        start: z.number(),
+        end: z.number(),
+        source: z.enum(["pexels", "pixabay", "ai"]).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const searchQuery =
+        (input.searchQuery || input.keyword || "").trim() ||
+        (input.visualSummary || "").trim();
+      if (!searchQuery) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Missing search query for this beat.",
+        });
+      }
+
+      const result = await regenerateBrollBeat({
+        searchQuery,
+        visualSummary: input.visualSummary || input.beat,
+        userContext: input.userContext,
+        excludeUrls: input.excludeUrls,
+        clipsPerBeat: 1,
+      });
+
+      const clip = result.clips[0];
+      if (!clip) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            "No relevant stock clip found for that context. Try different wording.",
+        });
+      }
+
+      const match: BrollLandingMatch = {
+        beat: input.beat,
+        keyword: input.keyword,
+        clipUrl: clip.previewUrl || clip.sourceUrl,
+        posterUrl: clip.thumbnailUrl,
+        source: clip.provider === "pixabay" ? "pixabay" : "pexels",
+        start: input.start,
+        end: input.end,
+      };
+
+      return { match };
+    }),
+
+  /**
    * Server-side download unlock. Never trust a disabled client button alone.
    * Returns clip URLs only when the user has an active paid plan.
    */
@@ -545,7 +604,7 @@ export const brollLandingRouter = router({
               keyword: z.string().max(240),
               clipUrl: z.string().url().max(2048),
               posterUrl: z.string().max(2048).optional(),
-              source: z.enum(["pexels", "ai"]),
+              source: z.enum(["pexels", "pixabay", "ai"]),
               start: z.number(),
               end: z.number(),
             })

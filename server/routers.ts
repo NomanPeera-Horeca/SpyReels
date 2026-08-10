@@ -5734,6 +5734,7 @@ Return JSON only:
           theme: z.string().max(240).optional(),
           excludeUrls: z.array(z.string().max(2048)).max(40).optional(),
           clipsPerBeat: z.number().int().min(1).max(3).optional(),
+          userContext: z.string().max(120).optional(),
           scriptId: z.number().int().positive().optional(),
           beatIndex: z.number().int().min(0).optional(),
         })
@@ -5751,6 +5752,7 @@ Return JSON only:
           theme: input.theme,
           excludeUrls: input.excludeUrls,
           clipsPerBeat: input.clipsPerBeat,
+          userContext: input.userContext,
         });
 
         if (

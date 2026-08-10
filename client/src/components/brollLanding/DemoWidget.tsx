@@ -88,9 +88,9 @@ export function DemoWidget({
   const [videoId, setVideoId] = useState<number | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
-  const [previewMatch, setPreviewMatch] = useState<BrollLandingMatch | null>(
-    null
-  );
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [rerollContext, setRerollContext] = useState("");
+  const [rerollError, setRerollError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const restoreAppliedRef = useRef(false);
   const reduceMotion =
@@ -102,6 +102,10 @@ export function DemoWidget({
   const confirmAudioUpload = trpc.brollLanding.confirmAudioUpload.useMutation();
   const confirmVideoUpload = trpc.brollLanding.confirmVideoUpload.useMutation();
   const confirmUpload = trpc.brollLanding.confirmUpload.useMutation();
+  const regenerateBeat = trpc.brollLanding.regenerateBeat.useMutation();
+
+  const previewMatch =
+    previewIndex != null ? (matches[previewIndex] ?? null) : null;
 
   const pollQuery = trpc.brollLanding.getVideo.useQuery(
     { id: videoId!, accessToken: accessToken ?? undefined },
@@ -119,7 +123,9 @@ export function DemoWidget({
     if (!restorePending || restoreAppliedRef.current) return;
     restoreAppliedRef.current = true;
     setError(null);
-    setPreviewMatch(null);
+    setPreviewIndex(null);
+    setRerollContext("");
+    setRerollError(null);
 
     if (restorePending.mode === "script") {
       setMode("script");
@@ -286,6 +292,54 @@ export function DemoWidget({
       return;
     }
     onDownloadLocked();
+  }
+
+  function openBeatPreview(index: number) {
+    if (!matches[index]?.clipUrl) return;
+    setPreviewIndex(index);
+    setRerollContext("");
+    setRerollError(null);
+  }
+
+  function closeBeatPreview() {
+    setPreviewIndex(null);
+    setRerollContext("");
+    setRerollError(null);
+  }
+
+  async function onTryAgainWithContext() {
+    if (previewIndex == null || !previewMatch || mode !== "script") return;
+    const ctx = rerollContext.trim();
+    if (!ctx) {
+      setRerollError("Add a short hint, e.g. commercial kitchen.");
+      return;
+    }
+    setRerollError(null);
+    try {
+      const result = await regenerateBeat.mutateAsync({
+        beat: previewMatch.beat,
+        keyword: previewMatch.keyword,
+        searchQuery: previewMatch.keyword,
+        visualSummary: previewMatch.beat,
+        userContext: ctx,
+        excludeUrls: [previewMatch.clipUrl, previewMatch.posterUrl].filter(
+          Boolean
+        ),
+        start: previewMatch.start,
+        end: previewMatch.end,
+        source: previewMatch.source,
+      });
+      setMatches((prev) => {
+        const next = [...prev];
+        next[previewIndex] = result.match;
+        return next;
+      });
+      setRerollContext("");
+    } catch (err) {
+      setRerollError(
+        err instanceof Error ? err.message : "Could not find a better clip"
+      );
+    }
   }
 
   const loading = phase === "loading";
@@ -461,9 +515,7 @@ export function DemoWidget({
                   >
                     <button
                       type="button"
-                      onClick={() => {
-                        if (m.clipUrl) setPreviewMatch(m);
-                      }}
+                      onClick={() => openBeatPreview(i)}
                       disabled={!m.clipUrl}
                       className={`group relative block w-full overflow-hidden rounded-lg border border-zinc-200 text-left transition hover:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-default disabled:opacity-60 ${
                         showWatermark || watermarked ? "watermark" : ""
@@ -510,7 +562,8 @@ export function DemoWidget({
                       Beat: "{m.beat}"
                     </figcaption>
                     <p className="text-[12px] leading-snug text-zinc-500">
-                      {m.keyword} · {m.source === "pexels" ? "Stock" : "AI"} ·{" "}
+                      {m.keyword} ·{" "}
+                      {m.source === "ai" ? "AI" : "Stock"} ·{" "}
                       {formatDuration(m.start, m.end)}
                     </p>
                   </figure>
@@ -570,7 +623,7 @@ export function DemoWidget({
       <Dialog
         open={previewMatch != null}
         onOpenChange={(open) => {
-          if (!open) setPreviewMatch(null);
+          if (!open) closeBeatPreview();
         }}
       >
         <DialogContent
@@ -586,7 +639,7 @@ export function DemoWidget({
             type="button"
             aria-label="Close"
             className="absolute right-3 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/70"
-            onClick={() => setPreviewMatch(null)}
+            onClick={closeBeatPreview}
           >
             <X className="h-4 w-4" />
           </button>
@@ -594,20 +647,61 @@ export function DemoWidget({
             <>
               <div className="bg-black">
                 <ReelDialogVideo
+                  key={previewMatch.clipUrl}
                   videoUrl={previewMatch.clipUrl}
                   thumbnailUrl={previewMatch.posterUrl}
                   className="aspect-video h-auto max-h-[min(70vh,480px)] w-full object-contain"
                 />
               </div>
-              <div className="space-y-1 border-t border-zinc-200 px-4 py-3 sm:px-5">
-                <p className="font-ui text-[13px] font-bold leading-snug text-zinc-800">
-                  Beat: "{previewMatch.beat}"
-                </p>
-                <p className="text-[12px] leading-snug text-zinc-500">
-                  {previewMatch.keyword} ·{" "}
-                  {previewMatch.source === "pexels" ? "Stock" : "AI"} ·{" "}
-                  {formatDuration(previewMatch.start, previewMatch.end)}
-                </p>
+              <div className="space-y-3 border-t border-zinc-200 px-4 py-3 sm:px-5">
+                <div className="space-y-1">
+                  <p className="font-ui text-[13px] font-bold leading-snug text-zinc-800">
+                    Beat: "{previewMatch.beat}"
+                  </p>
+                  <p className="text-[12px] leading-snug text-zinc-500">
+                    {previewMatch.keyword} ·{" "}
+                    {previewMatch.source === "ai" ? "AI" : "Stock"} ·{" "}
+                    {formatDuration(previewMatch.start, previewMatch.end)}
+                  </p>
+                </div>
+                {mode === "script" ? (
+                  <div className="space-y-2 border-t border-zinc-100 pt-3">
+                    <label
+                      htmlFor="broll-reroll-context"
+                      className="font-ui text-[12px] font-bold text-zinc-600"
+                    >
+                      Wrong match? Add context and try again
+                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        id="broll-reroll-context"
+                        type="text"
+                        maxLength={120}
+                        value={rerollContext}
+                        onChange={(e) => setRerollContext(e.target.value)}
+                        placeholder='e.g. commercial kitchen'
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[14px] text-zinc-800 placeholder:text-zinc-400 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
+                      />
+                      <button
+                        type="button"
+                        disabled={regenerateBeat.isPending}
+                        onClick={() => {
+                          void onTryAgainWithContext();
+                        }}
+                        className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 font-ui text-[14px] font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {regenerateBeat.isPending ? "Searching…" : "Try again"}
+                      </button>
+                    </div>
+                    {rerollError ? (
+                      <p className="text-[12px] text-red-600">{rerollError}</p>
+                    ) : (
+                      <p className="text-[12px] text-zinc-400">
+                        Free re-search. Does not use a daily generation.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </>
           ) : null}
