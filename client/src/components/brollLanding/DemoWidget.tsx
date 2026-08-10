@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { extractVideoAudio } from "@/lib/extractVideoAudio";
 import type { BrollLandingMatch } from "@shared/brollLanding";
+import { ReelDialogVideo } from "@/components/ReelDialogVideo";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type {
+  BrollPendingPreview,
+  BrollPreviewSnapshot,
+} from "@/lib/brollPendingPreview";
 import { BROLL_LANDING_SAMPLE_SCRIPT } from "./brollLandingCopy";
 
 type DemoWidgetProps = {
@@ -13,6 +24,11 @@ type DemoWidgetProps = {
   onSignUp: () => void;
   onDownloadLocked: () => void;
   onDownloadUnlocked: (matches: BrollLandingMatch[]) => void;
+  /** One-shot restore after Stripe back-nav (cleared via onRestoreConsumed). */
+  restorePending?: BrollPendingPreview | null;
+  onRestoreConsumed?: () => void;
+  /** Latest preview snapshot for checkout stash. */
+  onSnapshotChange?: (snapshot: BrollPreviewSnapshot) => void;
 };
 
 type Mode = "script" | "video";
@@ -57,6 +73,9 @@ export function DemoWidget({
   onSignUp,
   onDownloadLocked,
   onDownloadUnlocked,
+  restorePending = null,
+  onRestoreConsumed,
+  onSnapshotChange,
 }: DemoWidgetProps) {
   const [mode, setMode] = useState<Mode>("script");
   const [script, setScript] = useState(BROLL_LANDING_SAMPLE_SCRIPT);
@@ -69,7 +88,11 @@ export function DemoWidget({
   const [videoId, setVideoId] = useState<number | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
+  const [previewMatch, setPreviewMatch] = useState<BrollLandingMatch | null>(
+    null
+  );
   const fileRef = useRef<HTMLInputElement>(null);
+  const restoreAppliedRef = useRef(false);
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -91,6 +114,59 @@ export function DemoWidget({
       },
     }
   );
+
+  useEffect(() => {
+    if (!restorePending || restoreAppliedRef.current) return;
+    restoreAppliedRef.current = true;
+    setError(null);
+    setPreviewMatch(null);
+
+    if (restorePending.mode === "script") {
+      setMode("script");
+      setScript(restorePending.script || BROLL_LANDING_SAMPLE_SCRIPT);
+      setMatches(restorePending.matches);
+      setBeatsMatched(restorePending.beatsMatched);
+      setTotalSeconds(restorePending.totalSeconds);
+      setShowWatermark(watermarked);
+      setVideoId(null);
+      setAccessToken(null);
+      setPhase("results");
+    } else {
+      setMode("video");
+      setMatches([]);
+      setBeatsMatched(0);
+      setTotalSeconds(0);
+      setShowWatermark(watermarked);
+      setVideoId(restorePending.videoId);
+      setAccessToken(restorePending.accessToken);
+      setFileLabel("Restored upload");
+      setPhase("loading");
+    }
+    onRestoreConsumed?.();
+  }, [restorePending, onRestoreConsumed, watermarked]);
+
+  useEffect(() => {
+    onSnapshotChange?.({
+      mode,
+      script,
+      matches,
+      beatsMatched,
+      totalSeconds,
+      videoId,
+      accessToken,
+      phase,
+    });
+  }, [
+    mode,
+    script,
+    matches,
+    beatsMatched,
+    totalSeconds,
+    videoId,
+    accessToken,
+    phase,
+    onSnapshotChange,
+  ]);
 
   useEffect(() => {
     const data = pollQuery.data;
@@ -383,30 +459,53 @@ export function DemoWidget({
                       animationDelay: reduceMotion ? "0ms" : `${i * 80}ms`,
                     }}
                   >
-                    <div
-                      className={`relative aspect-video overflow-hidden rounded-lg border border-zinc-200 ${
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (m.clipUrl) setPreviewMatch(m);
+                      }}
+                      disabled={!m.clipUrl}
+                      className={`group relative block w-full overflow-hidden rounded-lg border border-zinc-200 text-left transition hover:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-default disabled:opacity-60 ${
                         showWatermark || watermarked ? "watermark" : ""
                       }`}
+                      aria-label={`Play matched B-roll for beat: ${m.beat}`}
                     >
-                      {m.posterUrl || m.clipUrl ? (
-                        <img
-                          src={m.posterUrl || m.clipUrl}
-                          alt={`Matched B-roll: ${m.keyword}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-xs text-zinc-400">
-                          No preview
-                        </div>
-                      )}
-                      {(showWatermark || watermarked) && (
-                        <span className="absolute bottom-1.5 right-1.5 z-10 font-ui text-[9px] font-bold uppercase tracking-wide text-white/85">
-                          SpyReels
-                        </span>
-                      )}
-                    </div>
+                      <div className="relative aspect-video">
+                        {m.posterUrl || m.clipUrl ? (
+                          <img
+                            src={m.posterUrl || m.clipUrl}
+                            alt={`Matched B-roll: ${m.keyword}`}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-xs text-zinc-400">
+                            No preview
+                          </div>
+                        )}
+                        {m.clipUrl ? (
+                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-90 transition group-hover:bg-black/35">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-violet-700 shadow-md">
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 16 16"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path d="M4.5 2.8v10.4L13.2 8 4.5 2.8z" />
+                              </svg>
+                            </span>
+                          </span>
+                        ) : null}
+                        {(showWatermark || watermarked) && (
+                          <span className="absolute bottom-1.5 right-1.5 z-10 font-ui text-[9px] font-bold uppercase tracking-wide text-white/85">
+                            SpyReels
+                          </span>
+                        )}
+                      </div>
+                    </button>
                     <figcaption className="mt-2 font-ui text-[12px] font-bold leading-snug text-zinc-700">
                       Beat: "{m.beat}"
                     </figcaption>
@@ -467,6 +566,53 @@ export function DemoWidget({
           ) : null}
         </div>
       ) : null}
+
+      <Dialog
+        open={previewMatch != null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewMatch(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="flex max-h-[92vh] w-[min(96vw,640px)] max-w-[96vw] flex-col gap-0 overflow-hidden border-zinc-200 bg-white p-0 text-zinc-900 sm:max-w-[640px]"
+        >
+          <DialogTitle className="sr-only">
+            {previewMatch
+              ? `Matched B-roll: ${previewMatch.beat}`
+              : "Matched B-roll clip"}
+          </DialogTitle>
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute right-3 top-3 z-50 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/70"
+            onClick={() => setPreviewMatch(null)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+          {previewMatch ? (
+            <>
+              <div className="bg-black">
+                <ReelDialogVideo
+                  videoUrl={previewMatch.clipUrl}
+                  thumbnailUrl={previewMatch.posterUrl}
+                  className="aspect-video h-auto max-h-[min(70vh,480px)] w-full object-contain"
+                />
+              </div>
+              <div className="space-y-1 border-t border-zinc-200 px-4 py-3 sm:px-5">
+                <p className="font-ui text-[13px] font-bold leading-snug text-zinc-800">
+                  Beat: "{previewMatch.beat}"
+                </p>
+                <p className="text-[12px] leading-snug text-zinc-500">
+                  {previewMatch.keyword} ·{" "}
+                  {previewMatch.source === "pexels" ? "Stock" : "AI"} ·{" "}
+                  {formatDuration(previewMatch.start, previewMatch.end)}
+                </p>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
