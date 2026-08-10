@@ -1,6 +1,6 @@
 /** Shared types for the public /free-tools/broll-generator landing preview. */
 
-export type BrollLandingMatchSource = "pexels" | "ai";
+export type BrollLandingMatchSource = "pexels" | "pixabay" | "ai";
 
 /** UI shape for matched preview clips (script or video mode). */
 export type BrollLandingMatch = {

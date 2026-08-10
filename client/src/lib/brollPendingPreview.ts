@@ -50,7 +50,7 @@ function isMatch(value: unknown): value is BrollLandingMatch {
     typeof m.keyword === "string" &&
     typeof m.clipUrl === "string" &&
     typeof m.posterUrl === "string" &&
-    (m.source === "pexels" || m.source === "ai") &&
+    (m.source === "pexels" || m.source === "pixabay" || m.source === "ai") &&
     typeof m.start === "number" &&
     typeof m.end === "number"
   );

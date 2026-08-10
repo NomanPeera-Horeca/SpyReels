@@ -3,8 +3,17 @@
  */
 
 import type { SuggestBrollResult } from "../../shared/broll";
-import type { BrollLandingMatch } from "../../shared/brollLanding";
+import type {
+  BrollLandingMatch,
+  BrollLandingMatchSource,
+} from "../../shared/brollLanding";
 import type { VideoBrollInsertionPoint } from "../../shared/videoBroll";
+
+function stockSource(
+  provider: "pexels" | "pixabay" | null | undefined
+): BrollLandingMatchSource {
+  return provider === "pixabay" ? "pixabay" : "pexels";
+}
 
 export function mapSuggestBrollToLandingMatches(
   result: SuggestBrollResult
@@ -24,7 +33,7 @@ export function mapSuggestBrollToLandingMatches(
       keyword: beat.searchQuery || beat.visualSummary,
       clipUrl: clip.previewUrl || clip.sourceUrl,
       posterUrl: clip.thumbnailUrl,
-      source: "pexels",
+      source: stockSource(clip.provider),
       start,
       end,
     });
@@ -46,7 +55,7 @@ export function mapInsertionPointsToLandingMatches(
         keyword: p.searchQuery || "matched clip",
         clipUrl: p.pexelsClipUrl as string,
         posterUrl: p.pexelsClipUrl as string,
-        source: "pexels" as const,
+        source: stockSource(p.clipProvider),
         start,
         end,
       };

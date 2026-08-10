@@ -11,6 +11,8 @@ export type BrollClip = {
   sourceUrl: string;
   photographerName: string;
   photographerUrl: string;
+  /** Stock provider; defaults to pexels when omitted (legacy rows). */
+  provider?: "pexels" | "pixabay";
 };
 
 export type BrollBeat = {

@@ -50,6 +50,8 @@ export type VideoBrollInsertionPoint = {
   searchQuery: string;
   pexelsClipUrl?: string | null;
   pexelsClipId?: string | number | null;
+  /** Which stock provider supplied the clip URL (pexelsClipUrl). */
+  clipProvider?: "pexels" | "pixabay" | null;
 };
 
 export const VIDEO_BROLL_MAX_BYTES = 200 * 1024 * 1024;

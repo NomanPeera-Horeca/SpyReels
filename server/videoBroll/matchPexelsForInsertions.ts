@@ -1,8 +1,9 @@
 /**
- * Resolve Pexels clips for each LLM insertion point (in-job URL dedupe).
+ * Resolve stock clips for each LLM insertion point (in-job URL dedupe).
+ * Pexels first, Pixabay fallback via searchStockVideoForBeat.
  */
 
-import { searchPexelsVideoForBeat } from "../broll/searchPexelsVideo";
+import { searchStockVideoForBeat } from "../broll/searchStockVideoForBeat";
 import type { VideoBrollInsertionPoint } from "../../shared/videoBroll";
 
 export async function matchPexelsForInsertions(
@@ -14,7 +15,9 @@ export async function matchPexelsForInsertions(
   const results: VideoBrollInsertionPoint[] = [];
 
   for (const point of points) {
-    const video = await searchPexelsVideoForBeat(point.searchQuery, usedUrls);
+    const video = await searchStockVideoForBeat(point.searchQuery, usedUrls, {
+      relevanceText: point.searchQuery || point.reason,
+    });
     if (video) {
       usedUrls.add(video.previewUrl);
       usedUrls.add(video.sourceUrl);
@@ -22,12 +25,14 @@ export async function matchPexelsForInsertions(
         ...point,
         pexelsClipUrl: video.previewUrl,
         pexelsClipId: video.id,
+        clipProvider: video.provider,
       });
     } else {
       results.push({
         ...point,
         pexelsClipUrl: null,
         pexelsClipId: null,
+        clipProvider: null,
       });
     }
   }
