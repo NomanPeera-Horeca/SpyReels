@@ -3,7 +3,8 @@
  * All visitors share the IP daily preview bucket (3 / rolling 24h) for this page.
  * Anonymous: CSS watermark (full res, no duration cap).
  * Authenticated: no watermark; monthly brollGenerationCount still enforced.
- * Download: paid plan only (server-side).
+ * Download: paid users get source clip URLs directly; free/unpaid go through
+ * watermark_jobs (see watermarkJobsRouter).
  */
 
 import { randomBytes } from "crypto";

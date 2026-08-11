@@ -14,7 +14,8 @@
     "cap:sync": "pnpm build && npx cap sync",
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
-    "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts"
+    "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts",
+    "watermark:cron": "tsx scripts/process-watermark-jobs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

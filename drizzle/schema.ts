@@ -2107,3 +2107,45 @@ export const videoBrollGenerations = mysqlTable(
 
 export type VideoBrollGeneration = typeof videoBrollGenerations.$inferSelect;
 export type InsertVideoBrollGeneration = typeof videoBrollGenerations.$inferInsert;
+
+/**
+ * Background ffmpeg watermark burns for free/unpaid B-roll clip downloads.
+ * Paid users skip this table and download the source clip directly.
+ * Apply DDL via Railway console (Bug #63); do not drizzle-kit push.
+ */
+export const watermarkJobs = mysqlTable(
+  "watermark_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sourceClipUrl: text("sourceClipUrl").notNull(),
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    outputUrl: text("outputUrl"),
+    /** Authenticated requester; null for anonymous session downloads. */
+    userId: int("userId"),
+    /** Opaque client session for anonymous poll/ownership. */
+    sessionId: varchar("sessionId", { length: 64 }),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    statusCreatedIdx: index("idx_watermark_jobs_status_created").on(
+      table.status,
+      table.createdAt
+    ),
+    sourceStatusIdx: index("idx_watermark_jobs_source_status").on(
+      table.sourceClipUrl,
+      table.status
+    ),
+  })
+);
+
+export type WatermarkJob = typeof watermarkJobs.$inferSelect;
+export type InsertWatermarkJob = typeof watermarkJobs.$inferInsert;

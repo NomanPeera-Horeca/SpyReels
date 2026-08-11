@@ -96,6 +96,36 @@ export async function storagePut(
 }
 
 /**
+ * Stream a local file to R2 without loading the whole object into a Buffer.
+ * Prefer this for ffmpeg watermark outputs on memory-constrained workers.
+ */
+export async function storagePutFromFile(
+  relKey: string,
+  filePath: string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  const { createReadStream } = await import("node:fs");
+  const { stat } = await import("node:fs/promises");
+  const client = getS3Client();
+  const bucket = getBucket();
+  const key = normalizeKey(relKey);
+  const { size } = await stat(filePath);
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: createReadStream(filePath),
+      ContentType: contentType,
+      ContentLength: size,
+    })
+  );
+
+  const url = r2ObjectPublicUrl(key);
+  return { key, url };
+}
+
+/**
  * Presigned PUT URL for browser/client direct upload to R2.
  * Caller must send the same Content-Type header when PUTting.
  *

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { extractVideoAudio } from "@/lib/extractVideoAudio";
+import { downloadClipWithWatermarkGate } from "@/lib/watermarkDownload";
 import type { BrollLandingMatch } from "@shared/brollLanding";
 import { ReelDialogVideo } from "@/components/ReelDialogVideo";
 import {
@@ -91,6 +93,7 @@ export function DemoWidget({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [rerollContext, setRerollContext] = useState("");
   const [rerollError, setRerollError] = useState<string | null>(null);
+  const [preparingDownload, setPreparingDownload] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const rerollContextRef = useRef<HTMLInputElement>(null);
   const restoreAppliedRef = useRef(false);
@@ -104,6 +107,8 @@ export function DemoWidget({
   const confirmVideoUpload = trpc.brollLanding.confirmVideoUpload.useMutation();
   const confirmUpload = trpc.brollLanding.confirmUpload.useMutation();
   const regenerateBeat = trpc.brollLanding.regenerateBeat.useMutation();
+  const requestWatermark = trpc.watermarkJobs.requestDownload.useMutation();
+  const utils = trpc.useUtils();
 
   const previewMatch =
     previewIndex != null ? (matches[previewIndex] ?? null) : null;
@@ -304,12 +309,54 @@ export function DemoWidget({
     void runVideoPreview(file);
   }
 
-  function onDownloadClick() {
-    if (canDownload) {
-      onDownloadUnlocked(matches.filter((m) => m.matchStatus === "matched"));
+  async function onDownloadClick() {
+    const matched = matches.filter(
+      (m) => m.matchStatus === "matched" && m.clipUrl.trim()
+    );
+    if (matched.length === 0) {
+      toast.error("No matched clips to download yet.");
       return;
     }
-    onDownloadLocked();
+
+    // Paid users still go through requestDownload, which returns kind:direct
+    // and never creates a watermark_jobs row.
+    setPreparingDownload(true);
+    const api = {
+      requestDownload: (input: {
+        sourceClipUrl: string;
+        sessionId?: string;
+      }) => requestWatermark.mutateAsync(input),
+      getStatus: (input: { jobId: number; sessionId?: string }) =>
+        utils.client.watermarkJobs.getStatus.query(input),
+    };
+
+    try {
+      for (let i = 0; i < matched.length; i++) {
+        const m = matched[i]!;
+        const label = String(i + 1).padStart(2, "0");
+        await downloadClipWithWatermarkGate(
+          api,
+          m.clipUrl,
+          `broll-beat-${label}.mp4`,
+          (p) => {
+            if (p.phase === "preparing") {
+              toast.message("Preparing your download…");
+            }
+          }
+        );
+      }
+      toast.success(
+        matched.length === 1
+          ? "Clip downloaded"
+          : `Downloaded ${matched.length} clips`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not download clips"
+      );
+    } finally {
+      setPreparingDownload(false);
+    }
   }
 
   function openBeatPreview(index: number) {
@@ -642,8 +689,9 @@ export function DemoWidget({
           {phase === "results" ? (
             <button
               type="button"
-              onClick={onDownloadClick}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-zinc-100 px-5 py-3 font-ui text-[15px] font-bold text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-700"
+              onClick={() => void onDownloadClick()}
+              disabled={preparingDownload}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-zinc-100 px-5 py-3 font-ui text-[15px] font-bold text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <svg
                 width="15"
@@ -668,7 +716,9 @@ export function DemoWidget({
                   strokeLinecap="round"
                 />
               </svg>
-              Download full resolution
+              {preparingDownload
+                ? "Preparing your download…"
+                : "Download full resolution"}
             </button>
           ) : null}
         </div>

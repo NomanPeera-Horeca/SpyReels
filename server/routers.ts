@@ -7,6 +7,7 @@ import { workspacesRouter } from "./routers/workspacesRouter";
 import { carouselRemakeRouter } from "./routers/carouselRemakeRouter";
 import { videoBrollRouter } from "./routers/videoBrollRouter";
 import { brollLandingRouter } from "./routers/brollLandingRouter";
+import { watermarkJobsRouter } from "./routers/watermarkJobsRouter";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -995,6 +996,8 @@ export const appRouter = router({
   carouselRemake: carouselRemakeRouter,
 
   videoBroll: videoBrollRouter,
+
+  watermarkJobs: watermarkJobsRouter,
 
   brollLanding: brollLandingRouter,
 

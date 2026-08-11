@@ -20,10 +20,15 @@ import { useUsageGate } from "@/hooks/useUsageGate";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   beatFileIndex,
-  downloadAllBrollClipsAsZip,
-  downloadBrollClip,
 } from "@/lib/brollDownload";
+import {
+  downloadClipWithWatermarkGate,
+  resolveClipDownloadUrl,
+  type WatermarkJobsApi,
+} from "@/lib/watermarkDownload";
 import type { BrollBeat, BrollClip, SuggestBrollResult } from "@shared/broll";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 export type BrollResultsPanelProps = {
   open: boolean;
@@ -45,23 +50,34 @@ function ShotRow({
   beat,
   regenerating,
   onRegenerate,
+  watermarkApi,
 }: {
   beat: BrollBeat;
   regenerating?: boolean;
   onRegenerate?: (beat: BrollBeat) => void;
+  watermarkApi: WatermarkJobsApi;
 }) {
   const clip = primaryClip(beat);
   const [playing, setPlaying] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const beatLabel = beatFileIndex(beat.index);
 
   const handleDownload = async () => {
     if (!clip?.previewUrl?.trim() || downloading) return;
     setDownloading(true);
+    setPreparing(false);
     try {
-      await downloadBrollClip(
+      await downloadClipWithWatermarkGate(
+        watermarkApi,
         clip.previewUrl,
-        `broll-beat-${beatLabel}.mp4`
+        `broll-beat-${beatLabel}.mp4`,
+        (p) => {
+          if (p.phase === "preparing") {
+            setPreparing(true);
+            toast.message("Preparing your download…");
+          }
+        }
       );
       toast.success(`Beat ${beatLabel} downloaded`);
     } catch (err) {
@@ -70,6 +86,7 @@ function ShotRow({
       );
     } finally {
       setDownloading(false);
+      setPreparing(false);
     }
   };
 
@@ -133,7 +150,11 @@ function ShotRow({
                 className="h-7 w-7"
                 onClick={() => void handleDownload()}
                 disabled={downloading || regenerating}
-                aria-label={`Download beat ${beatLabel}`}
+                aria-label={
+                  preparing
+                    ? `Preparing download for beat ${beatLabel}`
+                    : `Download beat ${beatLabel}`
+                }
               >
                 {downloading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -167,6 +188,11 @@ function ShotRow({
             {beat.visualSummary}
           </p>
         ) : null}
+        {preparing ? (
+          <p className="text-xs text-muted-foreground">
+            Preparing your download…
+          </p>
+        ) : null}
         {!clip ? (
           <p className="text-xs text-muted-foreground">
             No matching clip. Try regenerating this beat.
@@ -189,12 +215,60 @@ export function BrollBeatsView({
   onRegenerateBeat?: (beat: BrollBeat) => void;
 }) {
   const [zipping, setZipping] = useState(false);
+  const [preparingZip, setPreparingZip] = useState(false);
+  const requestDownload = trpc.watermarkJobs.requestDownload.useMutation();
+  const utils = trpc.useUtils();
+
+  const watermarkApi: WatermarkJobsApi = {
+    requestDownload: (input) => requestDownload.mutateAsync(input),
+    getStatus: (input) => utils.client.watermarkJobs.getStatus.query(input),
+  };
 
   const handleDownloadAll = async () => {
     if (zipping) return;
     setZipping(true);
+    setPreparingZip(false);
     try {
-      const { added, skipped } = await downloadAllBrollClipsAsZip(result.beats);
+      const zip = new JSZip();
+      let added = 0;
+      let skipped = 0;
+
+      for (const beat of result.beats) {
+        const clip = beat.clips.find((c) => c.previewUrl?.trim());
+        if (!clip?.previewUrl?.trim()) {
+          skipped += 1;
+          continue;
+        }
+        const filename = `broll-beat-${beatFileIndex(beat.index)}.mp4`;
+        try {
+          const url = await resolveClipDownloadUrl(
+            watermarkApi,
+            clip.previewUrl,
+            (p) => {
+              if (p.phase === "preparing") {
+                setPreparingZip(true);
+                toast.message("Preparing your download…");
+              }
+            }
+          );
+          const response = await fetch(url);
+          if (!response.ok) {
+            skipped += 1;
+            continue;
+          }
+          zip.file(filename, await response.blob());
+          added += 1;
+        } catch {
+          skipped += 1;
+        }
+      }
+
+      if (added === 0) {
+        throw new Error("No clips available to zip");
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      saveAs(zipBlob, "broll-clips.zip");
       if (skipped > 0) {
         toast.success(`Downloaded ${added} clips (${skipped} skipped)`);
       } else {
@@ -206,6 +280,7 @@ export function BrollBeatsView({
       );
     } finally {
       setZipping(false);
+      setPreparingZip(false);
     }
   };
 
@@ -226,6 +301,7 @@ export function BrollBeatsView({
             beat={beat}
             regenerating={regeneratingBeatIndex === beat.index}
             onRegenerate={onRegenerateBeat}
+            watermarkApi={watermarkApi}
           />
         ))
       )}
@@ -244,7 +320,9 @@ export function BrollBeatsView({
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Download all clips (.zip)
+            {preparingZip
+              ? "Preparing your download…"
+              : "Download all clips (.zip)"}
           </Button>
         </div>
       ) : null}
