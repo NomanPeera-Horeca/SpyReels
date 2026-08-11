@@ -31,6 +31,11 @@ const EXTENSION_SEED = [
     name: "Support reply",
     description: "Manual reply via Resend",
   },
+  {
+    slug: "watermark_download_ready",
+    name: "Watermark download ready",
+    description: "Free-tier B-roll clip ready email with direct download link.",
+  },
 ] as const;
 
 async function main() {

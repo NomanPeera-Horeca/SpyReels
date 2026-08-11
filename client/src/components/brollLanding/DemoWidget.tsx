@@ -4,6 +4,16 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { extractVideoAudio } from "@/lib/extractVideoAudio";
 import { downloadClipWithWatermarkGate } from "@/lib/watermarkDownload";
+import {
+  clearBrollPendingDownload,
+  peekBrollPendingDownload,
+  stashBrollPendingDownload,
+} from "@/lib/brollPendingDownload";
+import {
+  stashBrollPreviewBeforeCheckout,
+  type BrollPendingPreview,
+  type BrollPreviewSnapshot,
+} from "@/lib/brollPendingPreview";
 import type { BrollLandingMatch } from "@shared/brollLanding";
 import { ReelDialogVideo } from "@/components/ReelDialogVideo";
 import {
@@ -11,10 +21,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type {
-  BrollPendingPreview,
-  BrollPreviewSnapshot,
-} from "@/lib/brollPendingPreview";
 import { BROLL_LANDING_SAMPLE_SCRIPT } from "./brollLandingCopy";
 
 type DemoWidgetProps = {
@@ -309,24 +315,12 @@ export function DemoWidget({
     void runVideoPreview(file);
   }
 
-  async function onDownloadClick() {
-    const matched = matches.filter(
-      (m) => m.matchStatus === "matched" && m.clipUrl.trim()
-    );
-    if (matched.length === 0) {
-      toast.error("No matched clips to download yet.");
-      return;
-    }
-
-    // Paid users still go through requestDownload, which returns kind:direct
-    // and never creates a watermark_jobs row.
+  async function runMatchedDownloads(matched: BrollLandingMatch[]) {
     setPreparingDownload(true);
     const api = {
-      requestDownload: (input: {
-        sourceClipUrl: string;
-        sessionId?: string;
-      }) => requestWatermark.mutateAsync(input),
-      getStatus: (input: { jobId: number; sessionId?: string }) =>
+      requestDownload: (input: { sourceClipUrl: string }) =>
+        requestWatermark.mutateAsync(input),
+      getStatus: (input: { jobId: number }) =>
         utils.client.watermarkJobs.getStatus.query(input),
     };
 
@@ -358,6 +352,64 @@ export function DemoWidget({
       setPreparingDownload(false);
     }
   }
+
+  async function onDownloadClick() {
+    const matched = matches.filter(
+      (m) => m.matchStatus === "matched" && m.clipUrl.trim()
+    );
+    if (matched.length === 0) {
+      toast.error("No matched clips to download yet.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      if (onSnapshotChange) {
+        // Ensure parent has latest snapshot, then stash for post-auth restore.
+        onSnapshotChange({
+          mode,
+          script,
+          matches,
+          beatsMatched,
+          totalSeconds,
+          videoId,
+          accessToken,
+          phase: phase === "results" ? "results" : phase,
+        });
+      }
+      stashBrollPreviewBeforeCheckout({
+        mode,
+        script,
+        matches,
+        beatsMatched,
+        totalSeconds,
+        videoId,
+        accessToken,
+        phase: "results",
+      });
+      stashBrollPendingDownload();
+      onSignUp();
+      return;
+    }
+
+    await runMatchedDownloads(matched);
+  }
+
+  const autoDownloadStartedRef = useRef(false);
+
+  // After AuthDialog return (returnTo landing URL), restore may have filled
+  // matches; auto-retry the download the user started while logged out.
+  useEffect(() => {
+    if (!isAuthenticated || phase !== "results" || preparingDownload) return;
+    if (autoDownloadStartedRef.current) return;
+    if (!peekBrollPendingDownload()) return;
+    const matched = matches.filter(
+      (m) => m.matchStatus === "matched" && m.clipUrl.trim()
+    );
+    if (matched.length === 0) return;
+    autoDownloadStartedRef.current = true;
+    clearBrollPendingDownload();
+    void runMatchedDownloads(matched);
+  }, [isAuthenticated, phase, matches, preparingDownload]);
 
   function openBeatPreview(index: number) {
     if (!matches[index]) return;

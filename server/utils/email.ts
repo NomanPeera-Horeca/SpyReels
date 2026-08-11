@@ -173,6 +173,17 @@ export async function sendPaymentConfirmationEmail(
   return sendEmail(toEmail, firstName, planName, planPrice, nextBillingDate);
 }
 
+export async function sendWatermarkDownloadReadyEmail(
+  toEmail: string,
+  firstName: string,
+  downloadUrl: string
+): Promise<void> {
+  const { sendWatermarkDownloadReadyEmail: sendEmail } = await import(
+    "./email.js"
+  );
+  return sendEmail(toEmail, firstName, downloadUrl);
+}
+
 /** Founder outreach (admin panel). Plain text only. */
 export async function sendOutreachPlainTextEmail(
   toEmail: string,

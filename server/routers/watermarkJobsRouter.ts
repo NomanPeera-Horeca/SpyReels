@@ -1,12 +1,12 @@
 /**
  * Request / poll watermarked clip downloads for free and unpaid users.
- * Paid users receive a direct pass-through to the source clip URL.
+ * Requires authentication. Paid users receive a direct pass-through URL.
  */
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getSubscription } from "../db";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { isPaidPlan } from "../userActivity";
 import {
   createWatermarkJob,
@@ -16,58 +16,43 @@ import {
 } from "../watermark/db";
 
 const clipUrlSchema = z.string().url().max(2048);
-const sessionIdSchema = z.string().min(8).max(64).optional();
 
 function canAccessJob(
   job: {
     userId: number | null;
-    sessionId: string | null;
   },
   ctx: {
     user: { id: number } | null;
-  },
-  sessionId?: string
+  }
 ): boolean {
   if (ctx.user && job.userId != null && job.userId === ctx.user.id) {
     return true;
   }
-  if (sessionId && job.sessionId && job.sessionId === sessionId) {
-    return true;
-  }
-  // Completed outputs are cacheable by source URL; allow status read when
-  // the caller supplied no conflicting owner (anonymous reuse of cache).
-  if (job.userId == null && job.sessionId == null) {
-    return true;
-  }
-  // Shared completed cache: any requester may read completed jobs keyed by URL.
   return false;
 }
 
 export const watermarkJobsRouter = router({
   /**
-   * Paid → `{ kind: "direct", downloadUrl }`.
+   * Requires signup. Paid → `{ kind: "direct", downloadUrl }` (no job row).
    * Free/unpaid → reuse completed/active job or enqueue pending, return job id.
    */
-  requestDownload: publicProcedure
+  requestDownload: protectedProcedure
     .input(
       z.object({
         sourceClipUrl: clipUrlSchema,
-        sessionId: sessionIdSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user) {
-        const sub = await getSubscription(ctx.user.id);
-        const paid = isPaidPlan(
-          sub?.plan ?? "free",
-          sub?.stripeSubscriptionId
-        );
-        if (paid) {
-          return {
-            kind: "direct" as const,
-            downloadUrl: input.sourceClipUrl,
-          };
-        }
+      const sub = await getSubscription(ctx.user.id);
+      const paid = isPaidPlan(
+        sub?.plan ?? "free",
+        sub?.stripeSubscriptionId
+      );
+      if (paid) {
+        return {
+          kind: "direct" as const,
+          downloadUrl: input.sourceClipUrl,
+        };
       }
 
       const completed = await findCompletedWatermarkJob(input.sourceClipUrl);
@@ -92,8 +77,8 @@ export const watermarkJobsRouter = router({
 
       const created = await createWatermarkJob({
         sourceClipUrl: input.sourceClipUrl,
-        userId: ctx.user?.id ?? null,
-        sessionId: input.sessionId ?? null,
+        userId: ctx.user.id,
+        sessionId: null,
       });
 
       return {
@@ -104,11 +89,10 @@ export const watermarkJobsRouter = router({
       };
     }),
 
-  getStatus: publicProcedure
+  getStatus: protectedProcedure
     .input(
       z.object({
         jobId: z.number().int().positive(),
-        sessionId: sessionIdSchema,
       })
     )
     .query(async ({ ctx, input }) => {
@@ -121,8 +105,7 @@ export const watermarkJobsRouter = router({
       }
 
       const owned =
-        canAccessJob(job, ctx, input.sessionId) ||
-        job.status === "completed";
+        canAccessJob(job, ctx) || job.status === "completed";
       if (!owned) {
         throw new TRPCError({
           code: "FORBIDDEN",

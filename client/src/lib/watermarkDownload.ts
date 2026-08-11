@@ -1,25 +1,9 @@
 /**
  * Client helpers for watermarked B-roll clip downloads (free/unpaid path).
+ * Requires an authenticated session (requestDownload / getStatus are protected).
  */
 
 import { downloadBrollClip } from "@/lib/brollDownload";
-
-const SESSION_KEY = "spyreels_watermark_session";
-
-export function getOrCreateWatermarkSessionId(): string {
-  try {
-    const existing = localStorage.getItem(SESSION_KEY)?.trim();
-    if (existing && existing.length >= 8) return existing;
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID().replace(/-/g, "")
-        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
-    localStorage.setItem(SESSION_KEY, id);
-    return id;
-  } catch {
-    return `anon${Date.now().toString(36)}`;
-  }
-}
 
 const POLL_MS = 2500;
 const MAX_POLLS = 120; // ~5 minutes at 2.5s
@@ -33,7 +17,6 @@ export type WatermarkDownloadProgress =
 export type WatermarkJobsApi = {
   requestDownload: (input: {
     sourceClipUrl: string;
-    sessionId?: string;
   }) => Promise<
     | { kind: "direct"; downloadUrl: string }
     | {
@@ -51,7 +34,6 @@ export type WatermarkJobsApi = {
   >;
   getStatus: (input: {
     jobId: number;
-    sessionId?: string;
   }) => Promise<{
     jobId: number;
     status: "pending" | "processing" | "completed" | "failed";
@@ -69,10 +51,8 @@ export async function resolveClipDownloadUrl(
   sourceClipUrl: string,
   onProgress?: (p: WatermarkDownloadProgress) => void
 ): Promise<string> {
-  const sessionId = getOrCreateWatermarkSessionId();
   const requested = await api.requestDownload({
     sourceClipUrl,
-    sessionId,
   });
 
   if (requested.kind === "direct") {
@@ -96,7 +76,6 @@ export async function resolveClipDownloadUrl(
     await new Promise((r) => setTimeout(r, POLL_MS));
     const status = await api.getStatus({
       jobId,
-      sessionId,
     });
     if (status.status === "completed" && status.outputUrl) {
       onProgress?.({ phase: "ready" });

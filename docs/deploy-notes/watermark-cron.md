@@ -41,5 +41,11 @@ pnpm tsx scripts/process-watermark-jobs.ts
 
 ## Schema
 
-Apply `drizzle/0082_watermark_jobs.sql` via Railway MySQL console (Bug #63). Do
-not `drizzle-kit push` this until schema drift is resolved.
+Apply via Railway MySQL console (Bug #63). Do not `drizzle-kit push` until
+schema drift is resolved:
+
+1. `drizzle/0082_watermark_jobs.sql` (create table)
+2. `drizzle/0083_watermark_jobs_email_sent_at.sql` (one-shot email guard)
+
+Optional admin catalog: run `pnpm tsx scripts/backfill-email-templates.ts` (or
+the extensions seed) so `watermark_download_ready` appears in email_templates.

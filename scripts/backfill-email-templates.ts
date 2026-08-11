@@ -20,6 +20,11 @@ const SEED = [
     name: "Payment confirmation",
     description: "Stripe checkout success receipt and onboarding CTAs.",
   },
+  {
+    slug: "watermark_download_ready",
+    name: "Watermark download ready",
+    description: "Free-tier B-roll clip ready email with direct download link.",
+  },
 ] as const;
 
 async function main() {

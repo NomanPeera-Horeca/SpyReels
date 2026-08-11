@@ -2127,11 +2127,13 @@ export const watermarkJobs = mysqlTable(
       .default("pending")
       .notNull(),
     outputUrl: text("outputUrl"),
-    /** Authenticated requester; null for anonymous session downloads. */
+    /** Authenticated requester (required for free downloads after auth gate). */
     userId: int("userId"),
-    /** Opaque client session for anonymous poll/ownership. */
+    /** Opaque client session; unused for gated downloads, kept for legacy rows. */
     sessionId: varchar("sessionId", { length: 64 }),
     errorMessage: text("errorMessage"),
+    /** Set after the one-shot "download ready" email is sent. */
+    emailSentAt: timestamp("emailSentAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

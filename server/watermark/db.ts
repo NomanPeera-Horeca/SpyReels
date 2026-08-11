@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { watermarkJobs, type WatermarkJob } from "../../drizzle/schema";
 import { getDb } from "../db";
 
@@ -136,6 +136,22 @@ export async function markWatermarkJobFailed(
       errorMessage: errorMessage.slice(0, 2000),
     })
     .where(eq(watermarkJobs.id, id));
+}
+
+export async function tryMarkWatermarkEmailSent(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updated = await db
+    .update(watermarkJobs)
+    .set({ emailSentAt: new Date() })
+    .where(
+      and(
+        eq(watermarkJobs.id, id),
+        eq(watermarkJobs.status, "completed"),
+        isNull(watermarkJobs.emailSentAt)
+      )
+    );
+  return Number(updated[0]?.affectedRows ?? 0) > 0;
 }
 
 export async function listStaleProcessingWatermarkJobs(

@@ -12,6 +12,7 @@ import {
   markWatermarkJobCompleted,
   markWatermarkJobFailed,
 } from "./db";
+import { maybeSendWatermarkReadyEmail } from "./notifyReady";
 
 export const WATERMARK_MAX_SOURCE_BYTES = 120 * 1024 * 1024;
 
@@ -201,6 +202,7 @@ export async function processWatermarkJob(jobId: number): Promise<void> {
     );
     await markWatermarkJobCompleted(jobId, url);
     console.log(`[watermark] job ${jobId} completed → ${url}`);
+    await maybeSendWatermarkReadyEmail(jobId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await markWatermarkJobFailed(jobId, message);
