@@ -15,7 +15,8 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts",
-    "watermark:cron": "tsx scripts/process-watermark-jobs.ts"
+    "watermark:cron": "tsx scripts/process-watermark-jobs.ts",
+    "watermark:worker": "tsx scripts/watermark-worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
