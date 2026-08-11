@@ -39,6 +39,27 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Canonical host: apex spyreels.ai (matches SPYREELS_SITE_URL / OAUTH_SERVER_URL).
+  // www and apex both resolve in DNS; without this, sessionStorage restore breaks
+  // when OAuth or other redirects cross hosts.
+  app.use((req, res, next) => {
+    const rawHost = (
+      req.headers["x-forwarded-host"] ||
+      req.headers.host ||
+      ""
+    )
+      .toString()
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    const host = rawHost?.replace(/:\d+$/, "") ?? "";
+    if (host === "www.spyreels.ai") {
+      const pathAndQuery = req.originalUrl || "/";
+      return res.redirect(301, `https://spyreels.ai${pathAndQuery}`);
+    }
+    next();
+  });
+
   // Stripe webhook MUST be registered BEFORE express.json() for signature verification
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     try {

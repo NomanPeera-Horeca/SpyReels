@@ -211,7 +211,15 @@ export default function BrollGenerator() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  function stashPreviewIfPresent(): void {
+    const snapshot = snapshotRef.current;
+    if (snapshot?.phase === "results") {
+      stashBrollPreviewBeforeCheckout(snapshot);
+    }
+  }
+
   function openSignup() {
+    stashPreviewIfPresent();
     setAuthHeadline(authHeadlineBrollGenerate());
     setAuthOpen(true);
   }
@@ -261,7 +269,10 @@ export default function BrollGenerator() {
 
   return (
     <div className="broll-landing min-h-screen bg-background text-foreground">
-      <PublicHeader />
+      <PublicHeader
+        onBeforeAuthOpen={stashPreviewIfPresent}
+        authReturnTo={BROLL_PATH}
+      />
 
       {/* Light chrome scoped to main content only so PublicHeader keeps theme tokens. */}
       <main className="bg-white text-zinc-900">

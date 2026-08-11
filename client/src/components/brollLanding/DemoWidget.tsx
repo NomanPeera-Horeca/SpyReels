@@ -9,10 +9,9 @@ import {
   peekBrollPendingDownload,
   stashBrollPendingDownload,
 } from "@/lib/brollPendingDownload";
-import {
-  stashBrollPreviewBeforeCheckout,
-  type BrollPendingPreview,
-  type BrollPreviewSnapshot,
+import type {
+  BrollPendingPreview,
+  BrollPreviewSnapshot,
 } from "@/lib/brollPendingPreview";
 import type { BrollLandingMatch } from "@shared/brollLanding";
 import { ReelDialogVideo } from "@/components/ReelDialogVideo";
@@ -363,29 +362,8 @@ export function DemoWidget({
     }
 
     if (!isAuthenticated) {
-      if (onSnapshotChange) {
-        // Ensure parent has latest snapshot, then stash for post-auth restore.
-        onSnapshotChange({
-          mode,
-          script,
-          matches,
-          beatsMatched,
-          totalSeconds,
-          videoId,
-          accessToken,
-          phase: phase === "results" ? "results" : phase,
-        });
-      }
-      stashBrollPreviewBeforeCheckout({
-        mode,
-        script,
-        matches,
-        beatsMatched,
-        totalSeconds,
-        videoId,
-        accessToken,
-        phase: "results",
-      });
+      // Preview stash happens in parent openSignup / PublicHeader onBeforeAuthOpen.
+      // Only the download intent flag is specific to this button.
       stashBrollPendingDownload();
       onSignUp();
       return;
@@ -870,7 +848,7 @@ export function DemoWidget({
                         }}
                         className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 font-ui text-[14px] font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        {regenerateBeat.isPending ? "Searching…" : "Try again"}
+                        {regenerateBeat.isPending ? "Searching…" : "Regenerate match"}
                       </button>
                     </div>
                     {rerollError ? (

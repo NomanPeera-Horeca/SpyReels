@@ -44,6 +44,8 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 const getBaseUrl = (): string => {
+  // Must match the apex canonical host (www redirects to spyreels.ai).
+  // Set OAUTH_SERVER_URL=https://spyreels.ai in production; never www.
   const url = process.env.OAUTH_SERVER_URL || "https://spyreels.ai";
   return url.replace(/\/$/, "");
 };

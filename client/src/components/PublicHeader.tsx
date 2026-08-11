@@ -34,7 +34,15 @@ const PUBLIC_NAV_LINKS = [
   },
 ];
 
-export function PublicHeader() {
+export function PublicHeader({
+  onBeforeAuthOpen,
+  authReturnTo,
+}: {
+  /** Called before opening AuthDialog (e.g. stash landing preview). */
+  onBeforeAuthOpen?: () => void;
+  /** Post-auth redirect path. Defaults to current pathname when set as a route. */
+  authReturnTo?: string;
+} = {}) {
   const { user } = useAuth();
   const posthog = usePostHog();
   const [pathname] = useLocation();
@@ -48,9 +56,16 @@ export function PublicHeader() {
       window.location.href = "/";
       return;
     }
+    onBeforeAuthOpen?.();
     setAuthMode(mode);
     setAuthOpen(true);
   };
+
+  const resolvedReturnTo =
+    authReturnTo ||
+    (pathname.startsWith("/") && !pathname.startsWith("//")
+      ? pathname
+      : undefined);
 
   const closeMobileNav = () => setMobileNavOpen(false);
 
@@ -235,6 +250,7 @@ export function PublicHeader() {
         open={authOpen}
         onOpenChange={setAuthOpen}
         defaultMode={authMode}
+        returnTo={resolvedReturnTo}
       />
     </>
   );
