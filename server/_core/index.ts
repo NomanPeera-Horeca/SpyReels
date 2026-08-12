@@ -108,6 +108,12 @@ async function startServer() {
   app.get("/hooks", (_req, res) => {
     res.redirect(301, "/free-tools/viral-hooks");
   });
+  app.get("/features/tiktok-viral-video-finder", (_req, res) => {
+    res.redirect(301, "/free-tools/tiktok-viral-video-finder");
+  });
+  app.get("/features/youtube-shorts-viral-finder", (_req, res) => {
+    res.redirect(301, "/free-tools/youtube-shorts-viral-finder");
+  });
 
   for (const [fromSlug, toSlug] of Object.entries(BLOG_SLUG_REDIRECTS)) {
     app.get(`/blog/${fromSlug}`, (_req, res) => {
@@ -138,8 +144,9 @@ async function startServer() {
         { loc: "/free-tools", priority: "0.8", changefreq: "weekly" },
         { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
         { loc: "/free-tools/broll-generator", priority: "0.9", changefreq: "weekly" },
+        { loc: "/free-tools/tiktok-viral-video-finder", priority: "0.9", changefreq: "weekly" },
+        { loc: "/free-tools/youtube-shorts-viral-finder", priority: "0.9", changefreq: "weekly" },
         { loc: "/features/viral-reel-finder", priority: "0.8", changefreq: "weekly" },
-        { loc: "/features/tiktok-viral-video-finder", priority: "0.8", changefreq: "weekly" },
         { loc: "/features/30-day-content-plan", priority: "0.8", changefreq: "weekly" },
         { loc: "/features/ai-personal-brand-coach", priority: "0.8", changefreq: "weekly" },
         { loc: "/pricing", priority: "0.8", changefreq: "monthly" },

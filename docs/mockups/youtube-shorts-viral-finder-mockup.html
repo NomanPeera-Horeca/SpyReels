@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouTube Shorts Finder Mockup | SpyReels (review before wire)</title>
+  <meta name="description" content="Mockup: free YouTube Shorts finder by channel. Spy any public channel, sort viral Shorts by outlier score, remake in your voice." />
+  <style>
+    :root {
+      --bg: #000;
+      --panel: #111116;
+      --card: #16161d;
+      --line: #2a2a35;
+      --text: #f5f5f7;
+      --muted: #a1a1aa;
+      --purple: #8b5cf6;
+      --purple-2: #6366f1;
+      --purple-soft: #a78bfa;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --yes: #4ade80;
+      --partial: #fb923c;
+      --no: #71717a;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    a { color: var(--purple-soft); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    .muted { color: var(--muted); }
+
+    /* Top mockup banner */
+    .mock-banner {
+      position: sticky;
+      top: 0;
+      z-index: 80;
+      background: #1a1030;
+      border-bottom: 1px solid #3b2a63;
+      color: #ddd6fe;
+      font-size: 12px;
+      padding: 8px 14px;
+      text-align: center;
+    }
+    .mock-banner strong { color: #fff; }
+
+    /* Header */
+    .site-header {
+      position: sticky;
+      top: 33px;
+      z-index: 70;
+      backdrop-filter: blur(14px);
+      background: rgba(0,0,0,0.72);
+      border-bottom: 1px solid rgba(42,42,53,0.8);
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      min-height: 64px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .logo-mark {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: radial-gradient(circle at 30% 30%, #c4b5fd, #7c3aed 60%, #312e81);
+      box-shadow: 0 0 18px rgba(124,58,237,0.45);
+    }
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-left: auto;
+      font-size: 14px;
+    }
+    .nav-links a { color: var(--muted); text-decoration: none; }
+    .nav-links a:hover { color: #fff; }
+    .btn-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #7c3aed, #6366f1);
+      color: #fff;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 0 28px rgba(124,58,237,0.35);
+      white-space: nowrap;
+    }
+    .btn-pill:hover { filter: brightness(1.06); text-decoration: none; }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 56px 0 28px;
+      text-align: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #2f2f3a;
+      background: #0e0e14;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+    }
+    .hero h1 {
+      margin: 18px auto 12px;
+      max-width: 18ch;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+    .hero h1 .accent { color: var(--purple-soft); }
+    .hero .sub {
+      margin: 0 auto 22px;
+      max-width: 46ch;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .search-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: min(640px, 100%);
+      margin: 0 auto;
+      padding: 6px;
+      border-radius: 999px;
+      background: #121218;
+      border: 1px solid var(--line);
+    }
+    .search-bar input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: #fff;
+      font-size: 15px;
+      padding: 10px 14px;
+    }
+    .search-bar .btn-pill { min-height: 42px; }
+    .try {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .try button {
+      border: 0;
+      background: none;
+      color: var(--purple-soft);
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+    }
+    .try button:hover { text-decoration: underline; }
+
+    /* Results preview */
+    .preview {
+      margin: 28px auto 40px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .preview-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .demo-pill {
+      letter-spacing: 0;
+      text-transform: none;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #0f0f14;
+    }
+    .preview-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+    }
+    .preview-meta .handle { font-weight: 700; font-size: 1.05rem; }
+    .sorts { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .sort {
+      border: 1px solid var(--line);
+      background: #0f0f14;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .sort.active {
+      background: rgba(139,92,246,0.18);
+      border-color: #5b21b6;
+      color: #ddd6fe;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 0 16px 16px;
+    }
+    @media (max-width: 980px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+    .reel-card {
+      border-radius: 16px;
+      background: var(--card);
+      border: 1px solid #242430;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .thumb {
+      position: relative;
+      aspect-ratio: 9/12;
+      background: linear-gradient(160deg, #2a1848, #0b1220 50%, #1a0f14);
+    }
+    .reel-card:nth-child(2) .thumb { background: linear-gradient(160deg, #0f3b2e, #0b1220 55%, #12203a); }
+    .reel-card:nth-child(3) .thumb { background: linear-gradient(160deg, #16345a, #0b1220 55%, #3a1a12); }
+    .reel-card:nth-child(4) .thumb { background: linear-gradient(160deg, #3a1a12, #0b1220 55%, #1f1638); }
+    .badge-x {
+      position: absolute;
+      left: 10px; top: 10px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.78);
+      color: #86efac;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .views {
+      position: absolute;
+      left: 10px; bottom: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+    .reel-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .hook-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8b8b98;
+    }
+    .hook { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .reel-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid #2a2a35;
+    }
+    .eng { font-size: 12px; color: var(--muted); }
+    .remake {
+      border: 0;
+      background: transparent;
+      color: var(--purple-soft);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      white-space: nowrap;
+    }
+    .remake:hover { color: #c4b5fd; }
+
+    .preview-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Proof */
+    .proof {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+      margin: 48px auto;
+      align-items: stretch;
+    }
+    @media (max-width: 860px) { .proof { grid-template-columns: 1fr; } }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    .stat {
+      padding: 8px 0;
+    }
+    .stat .n {
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    .stat .l {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .quote {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      padding: 18px;
+    }
+    .quote p { margin: 0 0 14px; font-size: 15px; }
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      color: #fff; font-weight: 700; font-size: 12px;
+    }
+
+    /* Sections */
+    section.block { padding: 56px 0; border-top: 1px solid #16161d; }
+    section.block h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      letter-spacing: -0.02em;
+    }
+    section.block .lead { margin: 0 0 24px; color: var(--muted); max-width: 62ch; }
+
+    .def p { color: var(--muted); max-width: 72ch; font-size: 1.05rem; }
+    .def strong { color: #fff; }
+    .bullets { margin: 20px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .bullets li {
+      display: grid;
+      grid-template-columns: 14px 1fr;
+      gap: 10px;
+      color: var(--muted);
+    }
+    .bullets .sq {
+      width: 10px; height: 10px; margin-top: 7px;
+      background: var(--purple);
+      border-radius: 2px;
+    }
+    .bullets strong { color: #fff; }
+
+    .cards-3, .cards-4, .cards-2 {
+      display: grid;
+      gap: 12px;
+    }
+    .cards-3 { grid-template-columns: repeat(3, 1fr); }
+    .cards-4 { grid-template-columns: repeat(2, 1fr); }
+    .cards-2 { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 900px) {
+      .cards-3, .cards-4, .cards-2 { grid-template-columns: 1fr; }
+    }
+    .info-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      padding: 18px;
+    }
+    .info-card .num {
+      color: var(--purple-soft);
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .info-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .info-card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    /* Compare table */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .col-spy { background: rgba(124,58,237,0.08); }
+    .yes { color: var(--yes); font-weight: 700; }
+    .partial { color: var(--partial); font-weight: 600; }
+    .no { color: var(--no); }
+    .footnote { margin-top: 12px; font-size: 12px; color: var(--muted); }
+
+    .personas {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .personas { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .personas { grid-template-columns: 1fr; } }
+    .persona h3 { margin: 0 0 8px; font-size: 1rem; }
+    .persona p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    /* FAQ */
+    .faq details {
+      border-bottom: 1px solid var(--line);
+      padding: 16px 0;
+    }
+    .faq summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary .icon { color: var(--purple-soft); font-weight: 400; }
+    .faq details[open] summary .icon::before { content: "−"; }
+    .faq details:not([open]) summary .icon::before { content: "+"; }
+    .faq .answer {
+      margin: 12px 0 4px;
+      color: var(--muted);
+      max-width: 72ch;
+    }
+
+    .tool-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 800px) { .tool-cards { grid-template-columns: 1fr; } }
+    .tool-card {
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      padding: 18px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .tool-card:hover { border-color: #4c1d95; text-decoration: none; }
+    .tool-card h3 { margin: 0 0 8px; font-size: 1rem; color: #fff; }
+    .tool-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .compare-links {
+      margin-top: 18px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .compare-links a { margin: 0 4px; }
+
+    .final {
+      text-align: center;
+      padding: 64px 0 120px;
+    }
+    .final h2 { margin: 0 0 10px; font-size: clamp(1.8rem, 4vw, 2.6rem); }
+    .final p { margin: 0 auto 22px; color: var(--muted); max-width: 42ch; }
+    .final .search-bar { margin-bottom: 0; }
+
+    /* Sticky action bar */
+    .sticky-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 60;
+      width: min(980px, calc(100% - 24px));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(18,18,24,0.92);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    .sticky-bar .label {
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 600;
+      padding-left: 8px;
+    }
+    .sticky-bar .search-bar {
+      flex: 1;
+      width: auto;
+      margin: 0;
+      border: 0;
+      background: #0c0c10;
+    }
+    @media (max-width: 720px) {
+      .sticky-bar { flex-direction: column; border-radius: 18px; align-items: stretch; }
+      .sticky-bar .label { padding: 4px 8px 0; }
+      .nav-links { display: none; }
+      .site-header { top: 33px; }
+    }
+
+    /* Modal */
+    .modal-root[hidden] { display: none; }
+    .modal-root {
+      position: fixed; inset: 0; z-index: 100;
+      display: grid; place-items: center; padding: 20px;
+    }
+    .backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.72); }
+    .modal {
+      position: relative;
+      width: min(420px, 100%);
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: #121218;
+      padding: 22px;
+    }
+    .modal h3 { margin: 0 0 8px; font-size: 1.2rem; }
+    .modal p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+    .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .toast {
+      position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+      z-index: 110; padding: 10px 14px; border-radius: 999px;
+      background: #18181f; border: 1px solid var(--line); font-size: 13px;
+      opacity: 0; pointer-events: none; transition: opacity 160ms ease;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+
+
+<body>
+  <div class="mock-banner">
+    <strong>MOCKUP ONLY</strong> · proposed URL <code>/features/youtube-shorts-viral-finder</code> · same layout as TikTok finder · YouTube Shorts copy · not wired ·
+    <label style="margin-left:8px;cursor:pointer"><input type="checkbox" id="signedInToggle" /> Simulate signed in</label>
+  </div>
+
+  <header class="site-header">
+    <div class="wrap nav">
+      <a class="logo" href="#top"><span class="logo-mark" aria-hidden="true"></span>SpyReels</a>
+      <nav class="nav-links" aria-label="Page sections">
+        <a href="#how-it-works">How it works</a>
+        <a href="#what-you-get">What you get</a>
+        <a href="#compare">Compare</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://spyreels.ai/pricing">Pricing</a>
+        <a href="#" id="signInNav">Sign in</a>
+      </nav>
+      <a class="btn-pill" href="#" id="startFreeTop">Start free</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero wrap">
+      <span class="badge"><span class="dot"></span> Free YouTube Shorts finder · by channel</span>
+      <h1>YouTube Shorts Finder: any creator&apos;s most viral Shorts, <span class="accent">remade in your voice.</span></h1>
+      <p class="sub">Paste a public YouTube handle or channel link. A free YouTube Shorts viral finder that sorts by views, engagement and outlier score.</p>
+      <form class="search-bar" id="heroForm">
+        <input name="handle" type="text" placeholder="@ username or YouTube channel link" autocomplete="username" />
+        <button class="btn-pill" type="submit">Find their best Shorts</button>
+      </form>
+      <p class="try">
+        or try
+        <button type="button" data-handle="mrbeast">@mrbeast</button> ·
+        <button type="button" data-handle="mkbhd">@mkbhd</button> ·
+        <button type="button" data-handle="aliabdaal">@aliabdaal</button> ·
+        <button type="button" data-handle="souravjoshivlogs">@souravjoshivlogs</button>
+      </p>
+    </section>
+
+    <section class="preview wrap" id="results" aria-label="Results preview">
+      <div class="preview-top">
+        <span>Results preview</span>
+        <span class="demo-pill">demo data</span>
+      </div>
+      <div class="preview-meta">
+        <div>
+          <div class="handle" id="activeHandle">@mrbeast</div>
+          <div class="muted" style="font-size:13px">52 Shorts · median 8.2M views</div>
+        </div>
+        <div class="sorts" role="tablist" aria-label="Sort mode">
+          <button type="button" class="sort active" data-sort="outlier">Outlier score</button>
+          <button type="button" class="sort" data-sort="views">Views</button>
+          <button type="button" class="sort" data-sort="engagement">Engagement</button>
+        </div>
+      </div>
+      <div class="grid" id="reelGrid"></div>
+      <div class="preview-foot">
+        <span>Every Short here can be remade in your own voice, with a script and shot list.</span>
+        <button type="button" class="btn-ghost" id="seeFullList">See the full list free</button>
+      </div>
+    </section>
+
+    <section class="proof wrap" aria-label="Social proof">
+      <div class="stats">
+        <div class="stat"><div class="n">12,000+</div><div class="l">Creators</div></div>
+        <div class="stat"><div class="n">2.4M+</div><div class="l">Videos analysed</div></div>
+        <div class="stat"><div class="n">180,000+</div><div class="l">Scripts generated</div></div>
+        <div class="stat"><div class="n">~9 min</div><div class="l">Research to script</div></div>
+      </div>
+      <aside class="quote">
+        <p>&ldquo;I stopped guessing which Short to remake. I spy peer channels, sort by outlier, and film the pattern.&rdquo;</p>
+        <div class="who">
+          <span class="avatar">SK</span>
+          <span>Sam K. · @local.finance.clips · 19K subscribers</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="block wrap def" id="direct-answer">
+      <h2>What is a YouTube Shorts finder?</h2>
+      <p>
+        A <strong>YouTube Shorts finder</strong> (also called a <strong>YouTube Shorts viral finder</strong> or
+        <strong>YouTube short finder</strong>) helps you find Shorts that already work.
+        SpyReels is built for the <strong>by channel / username</strong> job: paste any public YouTube handle or channel link,
+        then sort that creator&apos;s Shorts by views, engagement rate and outlier score
+        (how far a Short beat that channel&apos;s own median). You get the winning hooks in text, then remake any of them in your own voice.
+      </p>
+      <ul class="bullets">
+        <li><span class="sq"></span><span><strong>By channel, not keyword chaos.</strong> Browsing trending Shorts shows random hits. Spying a peer channel shows formats you can actually copy.</span></li>
+        <li><span class="sq"></span><span><strong>Outlier score, not raw views.</strong> A 400K Short on a 8K channel beats a 4M Short on a mega-creator when you are still growing.</span></li>
+      </ul>
+    </section>
+
+    <section class="block wrap" id="how-it-works">
+      <h2>How to find viral YouTube Shorts on any channel</h2>
+      <p class="lead">Three steps. Paste a handle, read the outliers, remake the winner in your voice.</p>
+      <div class="cards-3">
+        <article class="info-card">
+          <div class="num">01</div>
+          <h3>Paste a public YouTube handle.</h3>
+          <p>Username or channel link. No login to their account, no browser extension. Start free.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">02</div>
+          <h3>Sort viral Shorts.</h3>
+          <p>Rank by outlier score, views or engagement. See what beat that channel&apos;s own baseline, not just what got lucky once.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">03</div>
+          <h3>Remake it in your voice.</h3>
+          <p>Open a winner, read the hook transcript, and turn it into your script with shot notes, on-screen text and a sound to use.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="block wrap" id="go-viral">
+      <h2>How to go viral on YouTube Shorts with research</h2>
+      <p class="lead">
+        &ldquo;How to go viral on YouTube Shorts&rdquo; is usually answered with posting times and hashtags.
+        The pattern that repeats: study winners on channels like yours, copy the structure, change the angle.
+      </p>
+      <div class="cards-3">
+        <article class="info-card">
+          <div class="num">01</div>
+          <h3>Pick 3 peer channels</h3>
+          <p>Same niche, same size band or one rung above you. Not MrBeast unless you are MrBeast.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">02</div>
+          <h3>Find their viral Shorts</h3>
+          <p>Sort by outlier score. Read the first 3 seconds of the top five. Write down the shared hook pattern.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">03</div>
+          <h3>Ship your version fast</h3>
+          <p>Remake in your voice, post while the format is still warm, then test a second hook on the same idea.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="block wrap" id="what-you-get">
+      <h2>What you get from every YouTube Shorts search</h2>
+      <p class="lead">Four outputs per channel. Keyword libraries stop at discovery. SpyReels continues to a remake.</p>
+      <div class="cards-4">
+        <article class="info-card">
+          <div class="num">01</div>
+          <h3>Ranked Shorts, not a date feed</h3>
+          <p>Their recent public Shorts reordered by performance. YouTube shows newest first. A Shorts finder shows best first.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">02</div>
+          <h3>Outlier score vs their median</h3>
+          <p>Every Short scored as a multiple of that channel&apos;s median views so copyable winners rise to the top.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">03</div>
+          <h3>Hook transcript in text</h3>
+          <p>The opening seconds written out so you can scan five winners in a minute instead of rewatching them.</p>
+        </article>
+        <article class="info-card">
+          <div class="num">04</div>
+          <h3>Remade in your voice</h3>
+          <p>Same idea, your angle, your words: script, shot list, on-screen text, sound, teleprompter.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="block wrap" id="compare">
+      <h2>YouTube Shorts finder vs other tools</h2>
+      <p class="lead">
+        Straight comparison. Keyword libraries browse trends. SpyReels spies a channel&apos;s winners and remakes them.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="col-spy">SpyReels</th>
+              <th>Keyword libraries</th>
+              <th>YouTube native</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Free to start</td>
+              <td class="col-spy yes">Yes</td>
+              <td class="yes">Often</td>
+              <td class="yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Find viral Shorts by username / channel</td>
+              <td class="col-spy yes">Yes (core)</td>
+              <td class="partial">Partial</td>
+              <td class="partial">Manual scroll</td>
+            </tr>
+            <tr>
+              <td>Search millions by keyword / topic</td>
+              <td class="col-spy no">No</td>
+              <td class="yes">Yes</td>
+              <td class="partial">Search</td>
+            </tr>
+            <tr>
+              <td>Outlier score vs that channel&apos;s median</td>
+              <td class="col-spy yes">Yes</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+            </tr>
+            <tr>
+              <td>Hook transcript in text</td>
+              <td class="col-spy yes">Yes</td>
+              <td class="partial">Varies</td>
+              <td class="no">No</td>
+            </tr>
+            <tr>
+              <td>Remake in your own voice (script + notes)</td>
+              <td class="col-spy yes">Yes</td>
+              <td class="partial">Editor path</td>
+              <td class="no">No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">
+        If you need a giant keyword catalog of Shorts, a library tool is a fair pick. If you need any creator&apos;s most viral Shorts remade in your voice, that is SpyReels.
+      </p>
+    </section>
+
+    <section class="block wrap" id="glossary">
+      <h2>Key Shorts terms, explained</h2>
+      <p class="lead">Short definitions so the metrics on this YouTube Shorts finder make sense.</p>
+      <div class="cards-4">
+        <article class="info-card">
+          <h3>Shorts feed</h3>
+          <p>Where YouTube surfaces vertical videos to people who do not subscribe. Most Shorts growth starts here.</p>
+        </article>
+        <article class="info-card">
+          <h3>Outlier score</h3>
+          <p>How many times a Short beat that channel&apos;s own median views. The signal SpyReels sorts by first.</p>
+        </article>
+        <article class="info-card">
+          <h3>Hook</h3>
+          <p>The first 1 to 3 seconds that stop the swipe. Study hooks across outliers before you invent a new one.</p>
+        </article>
+        <article class="info-card">
+          <h3>Repurposing</h3>
+          <p>Keeping the proven structure and rewriting it in your voice. Not re-uploading someone else&apos;s Short.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="block wrap" id="who">
+      <h2>Who uses this free YouTube Shorts viral finder</h2>
+      <div class="personas" style="margin-top:20px">
+        <article class="persona">
+          <h3>Creators under 50K</h3>
+          <p>Spy channels one rung above you. Film against their outliers instead of guessing on the Shorts feed.</p>
+        </article>
+        <article class="persona">
+          <h3>Local businesses</h3>
+          <p>Gyms, salons, cafes: see what works for the same business type, then remake it locally.</p>
+        </article>
+        <article class="persona">
+          <h3>Agencies</h3>
+          <p>Run a client&apos;s competitor set in one sitting and hand back scripts, not a spreadsheet of links.</p>
+        </article>
+        <article class="persona">
+          <h3>Faceless channels</h3>
+          <p>Spot listicle and explainer formats repeating in a niche, then remake them with your angle and voice.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="block wrap faq" id="faq">
+      <h2>YouTube Shorts finder questions people actually ask</h2>
+      <details open>
+        <summary>What is the best free YouTube Shorts finder? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          It depends on the job. Keyword libraries are best for browsing trends by topic. SpyReels is the free YouTube Shorts finder
+          for the by-channel job: paste a public handle, sort viral Shorts by outlier score, then remake winners in your voice. Start free.
+        </p>
+      </details>
+      <details>
+        <summary>How do I find viral YouTube Shorts on a channel? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Open a Shorts finder that supports username or channel search, paste the handle, and sort by outlier score or views.
+          Native YouTube mostly shows recent uploads, so the best Shorts stay buried. SpyReels surfaces them first.
+        </p>
+      </details>
+      <details>
+        <summary>Is there a YouTube Shorts finder by username? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Yes. SpyReels is built for that. Paste @username or a channel URL. Private or unlisted content cannot be researched.
+        </p>
+      </details>
+      <details>
+        <summary>How do I find viral YouTube Shorts for free? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Use a free YouTube Shorts viral finder, spy 3 peer channels, sort by outlier score, and read the hooks on the top five.
+          The shared pattern is what you remake, not the exact video.
+        </p>
+      </details>
+      <details>
+        <summary>How to go viral on YouTube Shorts without guessing? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Research first. Find viral Shorts from channels like yours, copy the structure (hook, pacing, payoff), change the story to your niche, and post consistently.
+          SpyReels turns that research into a script you can film the same day.
+        </p>
+      </details>
+      <details>
+        <summary>Can I paste a YouTube channel link? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Yes. Paste a public channel URL or @username. Private channels cannot be researched.
+        </p>
+      </details>
+      <details>
+        <summary>Is this the same as searching millions of Shorts by keyword? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          No. That is a different product. SpyReels spies one creator at a time and ranks their catalogue.
+          If you only need a keyword search across a giant library, use a keyword library tool.
+        </p>
+      </details>
+      <details>
+        <summary>Can I use findings for TikTok and Instagram Reels too? <span class="icon" aria-hidden="true"></span></summary>
+        <p class="answer">
+          Yes. Formats that win on Shorts often travel. Remake the script once, then adapt the cut for TikTok or Reels.
+          SpyReels also has a TikTok Viral Video Finder and an Instagram Viral Reel Finder.
+        </p>
+      </details>
+    </section>
+
+    <section class="block wrap" id="related">
+      <h2>Related tools (wired in production)</h2>
+      <p class="lead">In production this uses the same Related tools image grid: Instagram · TikTok · B-roll · Script (excludes this page).</p>
+      <div class="tool-cards" style="margin-top:20px">
+        <a class="tool-card" href="https://spyreels.ai/features/viral-reel-finder">
+          <h3>Instagram Viral Reel Finder →</h3>
+          <p>Spy a public Instagram handle, sort outliers, remake in your voice.</p>
+        </a>
+        <a class="tool-card" href="https://spyreels.ai/features/tiktok-viral-video-finder">
+          <h3>TikTok Viral Video Finder →</h3>
+          <p>Same workflow for TikTok creators.</p>
+        </a>
+        <a class="tool-card" href="https://spyreels.ai/free-tools/broll-generator">
+          <h3>B-Roll Generator →</h3>
+          <p>Match real footage to every beat of your script.</p>
+        </a>
+      </div>
+    </section>
+
+    <section class="final wrap" id="try">
+      <h2>Try the YouTube Shorts finder on one channel</h2>
+      <p>Start free. Spy a public handle and see outliers before we ask for anything.</p>
+      <form class="search-bar" id="footerForm">
+        <input name="handle" type="text" placeholder="@ username or YouTube channel link" autocomplete="username" />
+        <button class="btn-pill" type="submit">Find best Shorts</button>
+      </form>
+    </section>
+  </main>
+
+  <div class="sticky-bar" id="stickyBar">
+    <div class="label">Any creator&apos;s viral Shorts, ranked</div>
+    <form class="search-bar" id="stickyForm">
+      <input name="handle" type="text" placeholder="@ username or link" autocomplete="username" />
+      <button class="btn-pill" type="submit">Find best Shorts</button>
+    </form>
+  </div>
+
+  <div class="modal-root" id="signInModal" hidden>
+    <div class="backdrop" data-close></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="signInTitle">
+      <h3 id="signInTitle">Sign in to remake this Short</h3>
+      <p>Remake opens the script flow in your SpyReels account. Start free.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-pill" id="signInCta" style="flex:1">Sign in to continue</button>
+        <button type="button" class="btn-ghost" data-close>Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      const DEMO = {
+        mrbeast: {
+          label: "@mrbeast",
+          meta: "52 Shorts · median 8.2M views",
+          reels: [
+            { x: "5.6x median", views: "98.7M views", hook: "I spent 50 hours buried alive", eng: "4.8% eng." },
+            { x: "3.8x median", views: "62.1M views", hook: "Last to leave the circle wins", eng: "3.9% eng." },
+            { x: "2.9x median", views: "41.4M views", hook: "I built 100 wells in Africa", eng: "3.2% eng." },
+            { x: "2.2x median", views: "29.6M views", hook: "Giving a fan a private island", eng: "2.7% eng." },
+          ],
+        },
+        mkbhd: {
+          label: "@mkbhd",
+          meta: "40 Shorts · median 1.1M views",
+          reels: [
+            { x: "7.2x median", views: "7.9M views", hook: "This phone change nobody talks about", eng: "6.1% eng." },
+            { x: "4.5x median", views: "4.9M views", hook: "I was wrong about this camera", eng: "5.2% eng." },
+            { x: "3.1x median", views: "3.4M views", hook: "The charging myth that wastes money", eng: "4.4% eng." },
+            { x: "2.4x median", views: "2.6M views", hook: "Stop buying this accessory", eng: "3.8% eng." },
+          ],
+        },
+        aliabdaal: {
+          label: "@aliabdaal",
+          meta: "38 Shorts · median 420K views",
+          reels: [
+            { x: "9.1x median", views: "3.8M views", hook: "The productivity system I actually use", eng: "7.4% eng." },
+            { x: "5.2x median", views: "2.2M views", hook: "Stop optimizing your morning routine", eng: "5.9% eng." },
+            { x: "3.6x median", views: "1.5M views", hook: "How I batch a week of content in 1 day", eng: "4.8% eng." },
+            { x: "2.5x median", views: "1.0M views", hook: "The note-taking method that stuck", eng: "4.1% eng." },
+          ],
+        },
+        souravjoshivlogs: {
+          label: "@souravjoshivlogs",
+          meta: "60 Shorts · median 2.4M views",
+          reels: [
+            { x: "6.4x median", views: "15.4M views", hook: "Family vlog moment that broke the chart", eng: "5.5% eng." },
+            { x: "4.1x median", views: "9.8M views", hook: "This daily habit changed our routine", eng: "4.6% eng." },
+            { x: "3.0x median", views: "7.2M views", hook: "Behind the scenes nobody expected", eng: "3.9% eng." },
+            { x: "2.3x median", views: "5.5M views", hook: "One tip that grew the channel", eng: "3.3% eng." },
+          ],
+        },
+      };
+
+      const grid = document.getElementById("reelGrid");
+      const activeHandle = document.getElementById("activeHandle");
+      const activeMeta = document.querySelector(".preview-meta .muted");
+      const modal = document.getElementById("signInModal");
+      const toast = document.getElementById("toast");
+      const signedInToggle = document.getElementById("signedInToggle");
+      let toastTimer = null;
+
+      function isSignedIn() { return Boolean(signedInToggle.checked); }
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+      }
+      function openSignIn() { modal.hidden = false; document.getElementById("signInCta").focus(); }
+      function closeSignIn() { modal.hidden = true; }
+
+      function normalizeHandle(raw) {
+        return String(raw || "")
+          .trim()
+          .replace(/^@/, "")
+          .replace(/https?:\/\/(www\.)?youtube\.com\/@?/i, "")
+          .replace(/https?:\/\/(www\.)?youtube\.com\/(c|channel|user)\//i, "")
+          .split(/[/?#]/)[0]
+          .toLowerCase();
+      }
+
+      function renderReels(key) {
+        const data = DEMO[key] || DEMO.mrbeast;
+        activeHandle.textContent = data.label;
+        activeMeta.textContent = data.meta;
+        grid.innerHTML = data.reels.map((r) => `
+          <article class="reel-card">
+            <div class="thumb" aria-hidden="true">
+              <span class="badge-x">${r.x}</span>
+              <span class="views">${r.views}</span>
+            </div>
+            <div class="reel-body">
+              <div class="hook-label">Hook · 0-3s</div>
+              <p class="hook">"${r.hook}"</p>
+              <div class="reel-foot">
+                <span class="eng">${r.eng}</span>
+                <button type="button" class="remake js-remake">Remake in my voice →</button>
+              </div>
+            </div>
+          </article>
+        `).join("");
+        grid.querySelectorAll(".js-remake").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (!isSignedIn()) { openSignIn(); return; }
+            showToast("Signed in · remake would start");
+          });
+        });
+      }
+
+      function runSearch(raw) {
+        const key = normalizeHandle(raw);
+        if (!key) { showToast("Enter a public YouTube handle"); return; }
+        if (!DEMO[key]) {
+          openSignIn();
+          showToast("@" + key + " needs a free account in production");
+          return;
+        }
+        renderReels(key);
+        document.getElementById("results").scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast("Loaded demo for @" + key);
+      }
+
+      function bindForm(form) {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          runSearch(new FormData(form).get("handle"));
+        });
+      }
+      bindForm(document.getElementById("heroForm"));
+      bindForm(document.getElementById("footerForm"));
+      bindForm(document.getElementById("stickyForm"));
+
+      document.querySelectorAll("[data-handle]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const h = btn.getAttribute("data-handle");
+          document.querySelectorAll('input[name="handle"]').forEach((el) => { el.value = h; });
+          runSearch(h);
+        });
+      });
+      document.querySelectorAll(".sort").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".sort").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          showToast("Sort: " + btn.getAttribute("data-sort") + " (visual only in mockup)");
+        });
+      });
+      function gateAuth(e) {
+        e.preventDefault();
+        if (!isSignedIn()) openSignIn();
+        else showToast("Would continue signed-in flow");
+      }
+      document.getElementById("startFreeTop").addEventListener("click", gateAuth);
+      document.getElementById("signInNav").addEventListener("click", gateAuth);
+      document.getElementById("seeFullList").addEventListener("click", gateAuth);
+      modal.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", closeSignIn));
+      document.getElementById("signInCta").addEventListener("click", () => {
+        closeSignIn();
+        showToast("Would send user to login / start free");
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !modal.hidden) closeSignIn();
+      });
+      renderReels("mrbeast");
+    })();
+  </script>
+</body>
+</html>

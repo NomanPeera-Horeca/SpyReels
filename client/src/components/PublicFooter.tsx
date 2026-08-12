@@ -23,7 +23,6 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
     title: "Product",
     links: [
       { label: "Viral Reel Finder", href: "/features/viral-reel-finder" },
-      { label: "TikTok Viral Video Finder", href: "/features/tiktok-viral-video-finder" },
       { label: "30-Day Content Plan", href: "/features/30-day-content-plan" },
       { label: "AI Personal Brand Coach", href: "/features/ai-personal-brand-coach" },
       { label: "Pricing", href: "/pricing" },
@@ -36,6 +35,8 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "Viral Hooks", href: "/free-tools/viral-hooks" },
       { label: "B-Roll Generator", href: "/free-tools/broll-generator" },
+      { label: "TikTok Viral Video Finder", href: "/free-tools/tiktok-viral-video-finder" },
+      { label: "YouTube Shorts Viral Finder", href: "/free-tools/youtube-shorts-viral-finder" },
     ],
   },
   {

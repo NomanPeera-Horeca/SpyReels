@@ -386,14 +386,13 @@ export default function BrollGenerator() {
             },
             {
               title: "TikTok Viral Video Finder",
-              href: "/features/tiktok-viral-video-finder",
+              href: "/free-tools/tiktok-viral-video-finder",
               imageUrl: RELATED_TOOL_THUMB_TIKTOK_FINDER,
             },
             {
               title: "YouTube Shorts Viral Finder",
-              href: "/features/youtube-shorts-viral-finder",
+              href: "/free-tools/youtube-shorts-viral-finder",
               imageUrl: RELATED_TOOL_THUMB_YOUTUBE_FINDER,
-              comingSoon: true,
             },
             {
               title: "AI Script Generator",

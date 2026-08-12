@@ -22,15 +22,14 @@ const INSTAGRAM_FINDER: RelatedToolItem = {
 
 const TIKTOK_FINDER: RelatedToolItem = {
   title: "TikTok Viral Video Finder",
-  href: "/features/tiktok-viral-video-finder",
+  href: "/free-tools/tiktok-viral-video-finder",
   imageUrl: RELATED_TOOL_THUMB_TIKTOK_FINDER,
 };
 
 const YOUTUBE_FINDER: RelatedToolItem = {
   title: "YouTube Shorts Viral Finder",
-  href: "/features/youtube-shorts-viral-finder",
+  href: "/free-tools/youtube-shorts-viral-finder",
   imageUrl: RELATED_TOOL_THUMB_YOUTUBE_FINDER,
-  comingSoon: true,
 };
 
 const BROLL_GENERATOR: RelatedToolItem = {
@@ -49,7 +48,7 @@ export type FinderRelatedPlatform = "instagram" | "tiktok" | "youtube";
 
 /**
  * Related tools for finder LPs: the other platforms + B-roll + script generator.
- * Excludes the page you are already on. YouTube stays comingSoon until that page ships.
+ * Excludes the page you are already on.
  */
 export function getFinderRelatedTools(current: FinderRelatedPlatform): RelatedToolItem[] {
   const finders =

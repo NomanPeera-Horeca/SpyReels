@@ -167,6 +167,41 @@ const TIKTOK_FINDER_FAQ: FaqItem[] = [
   },
 ];
 
+const YOUTUBE_SHORTS_FINDER_FAQ: FaqItem[] = [
+  {
+    q: "What is the best free YouTube Shorts finder?",
+    a: "It depends on the job. Keyword libraries are best for browsing trends by topic. SpyReels is the free YouTube Shorts finder for the by-channel job: paste a public handle, sort viral Shorts by outlier score, then remake winners in your voice. Start free.",
+  },
+  {
+    q: "How do I find viral YouTube Shorts on a channel?",
+    a: "Open a Shorts finder that supports username or channel search, paste the handle, and sort by outlier score or views. Native YouTube mostly shows recent uploads, so the best Shorts stay buried. SpyReels surfaces them first.",
+  },
+  {
+    q: "Is there a YouTube Shorts finder by username?",
+    a: "Yes. SpyReels is built for that. Paste @username or a channel URL. Private or unlisted content cannot be researched.",
+  },
+  {
+    q: "How do I find viral YouTube Shorts for free?",
+    a: "Use a free YouTube Shorts viral finder, spy 3 peer channels, sort by outlier score, and read the hooks on the top five. The shared pattern is what you remake, not the exact video.",
+  },
+  {
+    q: "How to go viral on YouTube Shorts without guessing?",
+    a: "Research first. Find viral Shorts from channels like yours, copy the structure (hook, pacing, payoff), change the story to your niche, and post consistently. SpyReels turns that research into a script you can film the same day.",
+  },
+  {
+    q: "Can I paste a YouTube channel link?",
+    a: "Yes. Paste a public channel URL or @username. Private channels cannot be researched.",
+  },
+  {
+    q: "Is this the same as searching millions of Shorts by keyword?",
+    a: "No. That is a different product. SpyReels spies one creator at a time and ranks their catalogue. If you only need a keyword search across a giant library, use a keyword library tool.",
+  },
+  {
+    q: "Can I use findings for TikTok and Instagram Reels too?",
+    a: "Yes. Formats that win on Shorts often travel. Remake the script once, then adapt the cut for TikTok or Reels. SpyReels also has a TikTok Viral Video Finder and an Instagram Viral Reel Finder.",
+  },
+];
+
 const HOOKS_FAQ: FaqItem[] = [
   {
     q: "Is this really free?",
@@ -421,19 +456,19 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: faqSchema(FINDER_FAQ),
         },
       ];
-    case "/features/tiktok-viral-video-finder":
+    case "/free-tools/tiktok-viral-video-finder":
       return [
         {
           id: "tt-finder-breadcrumb-schema",
           data: breadcrumbSchema([
             { name: "Home", item: `${SPYREELS_SITE_URL}/` },
             {
-              name: "Features",
-              item: `${SPYREELS_SITE_URL}/features/tiktok-viral-video-finder`,
+              name: "Free Tools",
+              item: `${SPYREELS_SITE_URL}/free-tools`,
             },
             {
               name: "TikTok Finder",
-              item: `${SPYREELS_SITE_URL}/features/tiktok-viral-video-finder`,
+              item: `${SPYREELS_SITE_URL}/free-tools/tiktok-viral-video-finder`,
             },
           ]),
         },
@@ -463,6 +498,50 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
         {
           id: "tt-finder-faq-schema",
           data: faqSchema(TIKTOK_FINDER_FAQ),
+        },
+      ];
+    case "/free-tools/youtube-shorts-viral-finder":
+      return [
+        {
+          id: "yt-finder-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            {
+              name: "Free Tools",
+              item: `${SPYREELS_SITE_URL}/free-tools`,
+            },
+            {
+              name: "YouTube Shorts Finder",
+              item: `${SPYREELS_SITE_URL}/free-tools/youtube-shorts-viral-finder`,
+            },
+          ]),
+        },
+        {
+          id: "yt-finder-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SpyReels YouTube Shorts Finder",
+            alternateName: [
+              "YouTube Shorts Finder",
+              "YouTube Shorts Viral Finder",
+              "YouTube Short Finder",
+            ],
+            applicationCategory: "MultimediaApplication",
+            operatingSystem: "Web Browser",
+            offers: {
+              "@type": "AggregateOffer",
+              lowPrice: "0",
+              highPrice: "99",
+              priceCurrency: "USD",
+            },
+            description:
+              "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+          },
+        },
+        {
+          id: "yt-finder-faq-schema",
+          data: faqSchema(YOUTUBE_SHORTS_FINDER_FAQ),
         },
       ];
     case "/features/30-day-content-plan":
@@ -750,7 +829,8 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/",
   "/pricing",
   "/features/viral-reel-finder",
-  "/features/tiktok-viral-video-finder",
+  "/free-tools/tiktok-viral-video-finder",
+  "/free-tools/youtube-shorts-viral-finder",
   "/features/30-day-content-plan",
   "/features/ai-personal-brand-coach",
   "/free-tools/viral-hooks",

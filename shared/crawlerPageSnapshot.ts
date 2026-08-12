@@ -22,10 +22,15 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
     summary:
       "Find top-performing Reels by views and engagement rate, transcribe hooks, and turn research into scripts.",
   },
-  "/features/tiktok-viral-video-finder": {
+  "/free-tools/tiktok-viral-video-finder": {
     h1: "TikTok Finder: any creator's most viral videos",
     summary:
       "Free TikTok finder by username. Sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.",
+  },
+  "/free-tools/youtube-shorts-viral-finder": {
+    h1: "YouTube Shorts Finder: any channel's most viral Shorts",
+    summary:
+      "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
   },
   "/free-tools/viral-hooks": {
     h1: "Free Instagram Viral Hook Generator",

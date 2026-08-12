@@ -39,6 +39,7 @@ const Affiliate = lazyWithRetry(() => import("./pages/Affiliate"));
 const About = lazyWithRetry(() => import("./pages/About"));
 const ViralReelFinder = lazyWithRetry(() => import("./pages/ViralReelFinder"));
 const TikTokViralVideoFinder = lazyWithRetry(() => import("./pages/TikTokViralVideoFinder"));
+const YouTubeShortsViralFinder = lazyWithRetry(() => import("./pages/YouTubeShortsViralFinder"));
 const ThirtyDayContentPlanFeature = lazyWithRetry(() => import("./pages/ThirtyDayContentPlanFeature"));
 const AiPersonalBrandCoachFeature = lazyWithRetry(() => import("./pages/AiPersonalBrandCoachFeature"));
 const BlogList = lazyWithRetry(() => import("./pages/BlogList"));
@@ -207,16 +208,33 @@ function Router() {
         <Route path="/s/:token" component={PublicScriptView} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
         <Route path="/free-tools/broll-generator" component={BrollGenerator} />
+        <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
+        <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
-        <Route path="/features/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />
         <Route path="/hooks">
           {() => {
             if (typeof window !== "undefined") {
               window.location.replace("/free-tools/viral-hooks");
+            }
+            return null;
+          }}
+        </Route>
+        <Route path="/features/tiktok-viral-video-finder">
+          {() => {
+            if (typeof window !== "undefined") {
+              window.location.replace("/free-tools/tiktok-viral-video-finder");
+            }
+            return null;
+          }}
+        </Route>
+        <Route path="/features/youtube-shorts-viral-finder">
+          {() => {
+            if (typeof window !== "undefined") {
+              window.location.replace("/free-tools/youtube-shorts-viral-finder");
             }
             return null;
           }}

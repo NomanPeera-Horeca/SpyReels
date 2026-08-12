@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -19,6 +20,8 @@ import {
   authHeadlineSeeViralReels,
   authHeadlineSpyHandle,
 } from "@/lib/authHeadlines";
+import { formatNumber } from "@/lib/formatNumber";
+import { trpc } from "@/lib/trpc";
 import {
   applyStandardPageMeta,
   cleanupSchemaScripts,
@@ -27,8 +30,12 @@ import {
 } from "@/lib/publicSeo";
 import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
 import { cn } from "@/lib/utils";
+import {
+  PUBLIC_TIKTOK_DEMO_HANDLES,
+  isPublicTikTokDemoHandle,
+} from "@shared/publicTikTokDemoAccounts";
 
-const PAGE_PATH = "/features/tiktok-viral-video-finder";
+const PAGE_PATH = "/free-tools/tiktok-viral-video-finder";
 const PAGE_TITLE = "TikTok Finder - Viral Videos by Username | SpyReels";
 const PAGE_DESCRIPTION =
   "Free TikTok finder by username. Paste any public handle, sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.";
@@ -114,199 +121,6 @@ const COMPARE_ROWS = [
 
 type SortMode = "outlier" | "views" | "engagement";
 
-type DemoVideo = {
-  id: string;
-  viewsLabel: string;
-  viewCount: number;
-  engagementRate: number;
-  hook: string;
-  outlierLabel: string;
-  outlier: number;
-};
-
-type DemoAccount = {
-  handle: string;
-  meta: string;
-  videos: DemoVideo[];
-};
-
-const DEMO_ACCOUNTS: Record<string, DemoAccount> = {
-  mrbeast: {
-    handle: "mrbeast",
-    meta: "48 TikToks · median 12M views",
-    videos: [
-      {
-        id: "mb1",
-        viewsLabel: "74M views",
-        viewCount: 74_000_000,
-        engagementRate: 4.1,
-        hook: "I spent 50 hours buried alive",
-        outlierLabel: "6.2x median",
-        outlier: 6.2,
-      },
-      {
-        id: "mb2",
-        viewsLabel: "42M views",
-        viewCount: 42_000_000,
-        engagementRate: 3.2,
-        hook: "Last to leave the circle wins $500,000",
-        outlierLabel: "3.5x median",
-        outlier: 3.5,
-      },
-      {
-        id: "mb3",
-        viewsLabel: "33M views",
-        viewCount: 33_000_000,
-        engagementRate: 2.9,
-        hook: "I built 100 wells in Africa",
-        outlierLabel: "2.8x median",
-        outlier: 2.8,
-      },
-      {
-        id: "mb4",
-        viewsLabel: "25M views",
-        viewCount: 25_000_000,
-        engagementRate: 2.4,
-        hook: "Giving a fan a private island",
-        outlierLabel: "2.1x median",
-        outlier: 2.1,
-      },
-    ],
-  },
-  garyvee: {
-    handle: "garyvee",
-    meta: "36 TikToks · median 890K views",
-    videos: [
-      {
-        id: "gv1",
-        viewsLabel: "8.1M views",
-        viewCount: 8_100_000,
-        engagementRate: 5.2,
-        hook: "Stop chasing overnight virality",
-        outlierLabel: "9.1x median",
-        outlier: 9.1,
-      },
-      {
-        id: "gv2",
-        viewsLabel: "3.9M views",
-        viewCount: 3_900_000,
-        engagementRate: 3.8,
-        hook: "Attention is the asset, not the algorithm",
-        outlierLabel: "4.4x median",
-        outlier: 4.4,
-      },
-      {
-        id: "gv3",
-        viewsLabel: "2.7M views",
-        viewCount: 2_700_000,
-        engagementRate: 3.1,
-        hook: "Document, do not create",
-        outlierLabel: "3.0x median",
-        outlier: 3.0,
-      },
-      {
-        id: "gv4",
-        viewsLabel: "1.9M views",
-        viewCount: 1_900_000,
-        engagementRate: 2.6,
-        hook: "Patience is a competitive advantage",
-        outlierLabel: "2.2x median",
-        outlier: 2.2,
-      },
-    ],
-  },
-  aliabdaal: {
-    handle: "aliabdaal",
-    meta: "40 TikToks · median 210K views",
-    videos: [
-      {
-        id: "aa1",
-        viewsLabel: "2.3M views",
-        viewCount: 2_300_000,
-        engagementRate: 7.4,
-        hook: "The productivity system I actually use",
-        outlierLabel: "11x median",
-        outlier: 11,
-      },
-      {
-        id: "aa2",
-        viewsLabel: "1.3M views",
-        viewCount: 1_300_000,
-        engagementRate: 5.9,
-        hook: "Stop optimizing your morning routine",
-        outlierLabel: "6.2x median",
-        outlier: 6.2,
-      },
-      {
-        id: "aa3",
-        viewsLabel: "860K views",
-        viewCount: 860_000,
-        engagementRate: 4.8,
-        hook: "How I batch a week of content in 1 day",
-        outlierLabel: "4.1x median",
-        outlier: 4.1,
-      },
-      {
-        id: "aa4",
-        viewsLabel: "610K views",
-        viewCount: 610_000,
-        engagementRate: 4.1,
-        hook: "The note-taking method that stuck",
-        outlierLabel: "2.9x median",
-        outlier: 2.9,
-      },
-    ],
-  },
-  humphreytalks: {
-    handle: "humphreytalks",
-    meta: "44 TikToks · median 95K views",
-    videos: [
-      {
-        id: "ht1",
-        viewsLabel: "1.3M views",
-        viewCount: 1_300_000,
-        engagementRate: 9.8,
-        hook: "Stop doing cardio for fat loss. Do this.",
-        outlierLabel: "14x median",
-        outlier: 14,
-      },
-      {
-        id: "ht2",
-        viewsLabel: "710K views",
-        viewCount: 710_000,
-        engagementRate: 8.1,
-        hook: "The dumbbell mistake killing your gains",
-        outlierLabel: "7.5x median",
-        outlier: 7.5,
-      },
-      {
-        id: "ht3",
-        viewsLabel: "455K views",
-        viewCount: 455_000,
-        engagementRate: 6.6,
-        hook: "What I eat in a day at 12% body fat",
-        outlierLabel: "4.8x median",
-        outlier: 4.8,
-      },
-      {
-        id: "ht4",
-        viewsLabel: "304K views",
-        viewCount: 304_000,
-        engagementRate: 5.4,
-        hook: "Why I quit tracking macros",
-        outlierLabel: "3.2x median",
-        outlier: 3.2,
-      },
-    ],
-  },
-};
-
-const DEMO_HANDLES = Object.keys(DEMO_ACCOUNTS) as (keyof typeof DEMO_ACCOUNTS)[];
-
-function isDemoHandle(handle: string): boolean {
-  return handle in DEMO_ACCOUNTS;
-}
-
 function parseTikTokHandle(raw: string): string {
   const trimmed = raw.trim();
   const fromUrl = trimmed.match(/tiktok\.com\/@?([^/?#\s]+)/i);
@@ -315,6 +129,23 @@ function parseTikTokHandle(raw: string): string {
 
 function isValidTikTokHandle(handle: string): boolean {
   return /^[a-z0-9._]{2,24}$/i.test(handle);
+}
+
+function outlierMultiple(viewCount: number, median: number): number | null {
+  if (!median || median <= 0 || !viewCount) return null;
+  return viewCount / median;
+}
+
+function formatOutlier(multiple: number | null): string | null {
+  if (multiple == null || !Number.isFinite(multiple) || multiple < 1) return null;
+  if (multiple >= 10) return `${Math.round(multiple)}x median`;
+  return `${multiple.toFixed(1).replace(/\.0$/, "")}x median`;
+}
+
+function hookPreview(caption: string): string {
+  const cleaned = caption.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Open this TikTok to study the hook";
+  return cleaned.length > 90 ? `${cleaned.slice(0, 87)}...` : cleaned;
 }
 
 function toneClass(tone: "yes" | "partial" | "no"): string {
@@ -331,15 +162,46 @@ function formatDisplayDate(value: Date): string {
   });
 }
 
+function TikTokMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <path
+        fill="#25F4EE"
+        d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"
+        transform="translate(-0.6,0.4)"
+        opacity="0.85"
+      />
+      <path
+        fill="#FE2C55"
+        d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"
+        transform="translate(0.6,-0.4)"
+        opacity="0.85"
+      />
+      <path
+        fill="currentColor"
+        d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"
+      />
+    </svg>
+  );
+}
+
 type HandleFormProps = {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   submitLabel: string;
   compact?: boolean;
+  isLoading?: boolean;
 };
 
-function HandleForm({ value, onChange, onSubmit, submitLabel, compact }: HandleFormProps) {
+function HandleForm({
+  value,
+  onChange,
+  onSubmit,
+  submitLabel,
+  compact,
+  isLoading,
+}: HandleFormProps) {
   return (
     <form
       onSubmit={(e) => {
@@ -348,18 +210,16 @@ function HandleForm({ value, onChange, onSubmit, submitLabel, compact }: HandleF
       }}
       className={
         compact
-          ? "flex w-full items-center gap-2 rounded-full border border-border bg-background p-1 pl-3"
-          : "flex w-full flex-col gap-2 rounded-full border border-border bg-card/70 p-1.5 sm:flex-row sm:items-center sm:pl-5"
+          ? "flex w-full items-center gap-2 rounded-full border border-primary/35 bg-background p-1 pl-3"
+          : "flex w-full flex-col gap-2 rounded-full border border-primary/35 bg-card/70 p-1.5 shadow-[0_0_0_1px_hsl(var(--primary)/0.12)] sm:flex-row sm:items-center sm:pl-4"
       }
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-0">
-        <span className="shrink-0 text-muted-foreground" aria-hidden>
-          @
-        </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2 px-2 sm:px-0">
+        <TikTokMark className="h-5 w-5 shrink-0 text-foreground" />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="username or TikTok profile link"
+          placeholder="@username"
           aria-label="TikTok username or profile link"
           autoComplete="off"
           spellCheck={false}
@@ -370,20 +230,18 @@ function HandleForm({ value, onChange, onSubmit, submitLabel, compact }: HandleF
         type="submit"
         size={compact ? "sm" : "lg"}
         className={compact ? "shrink-0 rounded-full" : "min-h-11 shrink-0 rounded-full"}
+        disabled={isLoading}
       >
-        <Search className="h-4 w-4" aria-hidden />
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Search className="h-4 w-4" aria-hidden />
+        )}
         {submitLabel}
       </Button>
     </form>
   );
 }
-
-const THUMB_GRADIENTS = [
-  "from-[#2a1848] via-[#0b1220] to-[#1a0f14]",
-  "from-[#0f3b2e] via-[#0b1220] to-[#12203a]",
-  "from-[#16345a] via-[#0b1220] to-[#3a1a12]",
-  "from-[#3a1a12] via-[#0b1220] to-[#1f1638]",
-];
 
 export default function TikTokViralVideoFinder() {
   useCanonical(PAGE_PATH);
@@ -392,7 +250,7 @@ export default function TikTokViralVideoFinder() {
   const updatedLabel = formatDisplayDate(new Date());
 
   const [handleInput, setHandleInput] = useState("");
-  const [activeHandle, setActiveHandle] = useState<string>(DEMO_HANDLES[0]);
+  const [activeHandle, setActiveHandle] = useState<string>(PUBLIC_TIKTOK_DEMO_HANDLES[0]);
   const [sortMode, setSortMode] = useState<SortMode>("outlier");
   const [authOpen, setAuthOpen] = useState(false);
   const [authHeadline, setAuthHeadline] = useState("");
@@ -404,19 +262,29 @@ export default function TikTokViralVideoFinder() {
   const [heroBarVisible, setHeroBarVisible] = useState(true);
   const [footerCtaVisible, setFooterCtaVisible] = useState(false);
 
-  const demo = DEMO_ACCOUNTS[activeHandle] ?? DEMO_ACCOUNTS.mrbeast;
+  const demo = trpc.tiktokScrape.publicDemo.useQuery(
+    { handle: activeHandle },
+    { staleTime: 300_000, retry: 1 }
+  );
 
   const sortedVideos = useMemo(() => {
-    const copy = [...demo.videos];
+    const videos = demo.data?.videos ?? [];
+    const median = demo.data?.medianViewCount ?? 0;
+    const copy = [...videos];
     if (sortMode === "views") {
       copy.sort((a, b) => b.viewCount - a.viewCount);
     } else if (sortMode === "engagement") {
       copy.sort((a, b) => b.engagementRate - a.engagementRate);
     } else {
-      copy.sort((a, b) => b.outlier - a.outlier || b.viewCount - a.viewCount);
+      copy.sort((a, b) => {
+        const ao = outlierMultiple(a.viewCount, median) ?? 0;
+        const bo = outlierMultiple(b.viewCount, median) ?? 0;
+        if (bo !== ao) return bo - ao;
+        return b.viewCount - a.viewCount;
+      });
     }
     return copy;
-  }, [demo, sortMode]);
+  }, [demo.data, sortMode]);
 
   function openAuth(opts: { headline?: string; returnTo?: string } = {}) {
     if (authLoading) return;
@@ -442,7 +310,7 @@ export default function TikTokViralVideoFinder() {
     if (!parsed) return;
     setHandleInput(parsed);
     if (!isValidTikTokHandle(parsed)) return;
-    if (isDemoHandle(parsed)) {
+    if (isPublicTikTokDemoHandle(parsed)) {
       setActiveHandle(parsed);
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -456,7 +324,7 @@ export default function TikTokViralVideoFinder() {
 
   function requireSeeViralSignIn() {
     openAuth({
-      headline: authHeadlineSeeViralReels(`@${demo.handle}`),
+      headline: authHeadlineSeeViralReels(`@${demo.data?.handle ?? activeHandle}`),
       returnTo: RESEARCH_RETURN,
     });
   }
@@ -491,8 +359,8 @@ export default function TikTokViralVideoFinder() {
         {
           "@type": "ListItem",
           position: 2,
-          name: "Features",
-          item: PAGE_CANONICAL,
+          name: "Free Tools",
+          item: `${SPYREELS_SITE_URL}/free-tools`,
         },
         {
           "@type": "ListItem",
@@ -614,12 +482,13 @@ export default function TikTokViralVideoFinder() {
             value={handleInput}
             onChange={setHandleInput}
             onSubmit={() => submitHandle(handleInput)}
-            submitLabel="Find their best TikToks"
+            submitLabel="Find Viral TikToks"
+            isLoading={demo.isFetching}
           />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           or try{" "}
-          {DEMO_HANDLES.map((handle, i) => (
+          {PUBLIC_TIKTOK_DEMO_HANDLES.map((handle, i) => (
             <span key={handle}>
               {i > 0 ? " · " : null}
               <button
@@ -645,14 +514,21 @@ export default function TikTokViralVideoFinder() {
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground">
           <span>Results preview</span>
           <span className="rounded-full border border-border px-2.5 py-1 normal-case tracking-normal">
-            demo data
+            live TikTok data
           </span>
         </div>
 
+
+
+
         <div className="flex flex-wrap items-center gap-3 px-4 py-4">
           <div>
-            <div className="font-semibold">@{demo.handle}</div>
-            <div className="text-xs text-muted-foreground">{demo.meta}</div>
+            <div className="font-semibold">@{demo.data?.handle ?? activeHandle}</div>
+            <div className="text-xs text-muted-foreground">
+              {demo.data
+                ? `${demo.data.totalVideoCount} TikToks · median ${formatNumber(demo.data.medianViewCount)} views`
+                : "Loading catalog"}
+            </div>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
             {(
@@ -679,46 +555,76 @@ export default function TikTokViralVideoFinder() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3 lg:grid-cols-4">
-          {sortedVideos.map((video, index) => (
-            <article
-              key={video.id}
-              className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/60"
+        {demo.isPending ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading top TikToks
+          </div>
+        ) : demo.isError ? (
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            The demo catalog is unavailable right now.{" "}
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => openAuth({ returnTo: RESEARCH_RETURN })}
             >
-              <div
-                className={cn(
-                  "relative aspect-[9/14] overflow-hidden bg-gradient-to-br",
-                  THUMB_GRADIENTS[index % THUMB_GRADIENTS.length]
-                )}
-              >
-                <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                  {video.outlierLabel}
-                </span>
-                <span className="absolute bottom-2 left-2 text-sm font-bold text-white drop-shadow">
-                  {video.viewsLabel}
-                </span>
-              </div>
-              <div className="flex flex-1 flex-col gap-2 p-3">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Hook · 0-3s
-                </p>
-                <p className="line-clamp-3 text-sm font-semibold leading-snug">{video.hook}</p>
-                <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
-                  <span className="text-[11px] text-muted-foreground">
-                    {video.engagementRate.toFixed(1)}% eng.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={requireRemakeSignIn}
-                    className="text-xs font-semibold text-primary hover:underline"
-                  >
-                    Remake in my voice →
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+              Start free
+            </button>{" "}
+            to research any public handle.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3 lg:grid-cols-4">
+            {sortedVideos.map((video) => {
+              const multiple = formatOutlier(
+                outlierMultiple(video.viewCount, demo.data?.medianViewCount ?? 0)
+              );
+              return (
+                <article
+                  key={video.id}
+                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/60"
+                >
+                  <div className="relative aspect-[9/14] overflow-hidden bg-muted">
+                    <ReelGridThumbnail
+                      className="h-full w-full"
+                      thumbnailUrl={video.thumbnailUrl}
+                      fallbackLabel="No thumbnail"
+                    />
+                    {multiple ? (
+                      <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                        {multiple}
+                      </span>
+                    ) : null}
+                    <span className="absolute bottom-2 left-2 text-sm font-bold text-white drop-shadow">
+                      {formatNumber(video.viewCount)} views
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Hook · 0-3s
+                    </p>
+                    <p className="line-clamp-3 text-sm font-semibold leading-snug">
+                      {hookPreview(video.caption)}
+                    </p>
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        {video.engagementRate > 0
+                          ? `${video.engagementRate.toFixed(1)}% eng.`
+                          : "eng. n/a"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={requireRemakeSignIn}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Remake in my voice →
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-4 text-sm text-muted-foreground">
           <span>
@@ -1058,7 +964,7 @@ export default function TikTokViralVideoFinder() {
               value={handleInput}
               onChange={setHandleInput}
               onSubmit={() => submitHandle(handleInput)}
-              submitLabel="Find best TikToks"
+              submitLabel="Find Viral TikToks"
             />
           </div>
         </section>
@@ -1077,7 +983,7 @@ export default function TikTokViralVideoFinder() {
                   value={handleInput}
                   onChange={setHandleInput}
                   onSubmit={() => submitHandle(handleInput)}
-                  submitLabel="Find best TikToks"
+                  submitLabel="Find Viral TikToks"
                 />
               </div>
             </div>

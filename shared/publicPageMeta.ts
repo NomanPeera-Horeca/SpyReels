@@ -101,10 +101,15 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
     description:
       "Search any Instagram creator's Reels, sort by views and engagement rate, then remake the best ones in your own voice in seconds and go viral.",
   },
-  "/features/tiktok-viral-video-finder": {
+  "/free-tools/tiktok-viral-video-finder": {
     title: "TikTok Finder - Viral Videos by Username | SpyReels",
     description:
       "Free TikTok finder by username. Paste any public handle, sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.",
+  },
+  "/free-tools/youtube-shorts-viral-finder": {
+    title: "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels",
+    description:
+      "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
   },
   "/features/30-day-content-plan": {
     title: "30-Day Instagram Content Plan | SpyReels",

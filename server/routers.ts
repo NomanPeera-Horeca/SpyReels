@@ -22,6 +22,11 @@ import {
   isPublicDemoHandle,
 } from "@shared/publicDemoAccounts";
 import {
+  PUBLIC_TIKTOK_DEMO_HANDLES,
+  PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT,
+  isPublicTikTokDemoHandle,
+} from "@shared/publicTikTokDemoAccounts";
+import {
   buildClarificationWizard,
   buildFilmingFormatWizard,
   filmingFormatLabelFromId,
@@ -75,6 +80,8 @@ import { countViralityDiagnosticJobsThisMonth } from "./virality/db";
 import { runViralityDiagnosticJob } from "./virality/runJob";
 import { runTikTokScrapeJob } from "./tiktokScrape/runJob";
 import { runTikTokTranscription } from "./tiktokScrape/runTranscription";
+import { mirrorTiktokThumbnailsBounded } from "./tiktokScrape/mediaMirror";
+import { fetchTikTokVideoInfo, scrapeTikTokVideos } from "./tiktok";
 import { runYouTubeScrapeJob } from "./youtubeScrape/runJob";
 import { fetchYouTubeTranscript } from "./youtube";
 import { discoveryProcedure } from "./discovery/trpc";
@@ -264,7 +271,6 @@ import {
   searchReelsByHandle,
   runWithScrapeCallContext,
 } from "./instagram";
-import { fetchTikTokVideoInfo } from "./tiktok";
 import { isDurableReelVideoUrl } from "./reelVideoR2";
 import {
   isDurableTiktokVideoUrl,
@@ -861,6 +867,67 @@ const PUBLIC_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
 /** Short TTL for inactive / zero-usable probes so fallthrough stays cheap. */
 const PUBLIC_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
 const publicDemoCache = new Map<string, { expiresAt: number; payload: PublicDemoPayload }>();
+
+type PublicTikTokDemoPayload = {
+  handle: string;
+  totalVideoCount: number;
+  medianViewCount: number;
+  followerCount: number;
+  videos: {
+    id: string;
+    awemeId: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    shareCount: number;
+    engagementRate: number;
+    thumbnailUrl: string;
+    durationSec: number | null;
+    postedAt: Date;
+    videoPageUrl: string;
+  }[];
+};
+
+const PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
+const PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
+const publicTikTokDemoCache = new Map<
+  string,
+  { expiresAt: number; payload: PublicTikTokDemoPayload }
+>();
+
+function emptyPublicTikTokDemoPayload(handle: string): PublicTikTokDemoPayload {
+  return {
+    handle,
+    totalVideoCount: 0,
+    medianViewCount: 0,
+    followerCount: 0,
+    videos: [],
+  };
+}
+
+function readPublicTikTokDemoCache(handle: string): PublicTikTokDemoPayload | null {
+  const hit = publicTikTokDemoCache.get(handle);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    publicTikTokDemoCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writePublicTikTokDemoCache(
+  handle: string,
+  payload: PublicTikTokDemoPayload
+): void {
+  const empty = payload.videos.length === 0;
+  publicTikTokDemoCache.set(handle, {
+    expiresAt:
+      Date.now() +
+      (empty ? PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS : PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS),
+    payload,
+  });
+}
 
 type PublicProfilePreviewPayload =
   | {
@@ -8179,6 +8246,123 @@ Return JSON only:
   }),
 
   tiktokScrape: router({
+    /**
+     * Logged-out TikTok finder landing preview. Allow-list only
+     * (`PUBLIC_TIKTOK_DEMO_HANDLES`), capped at `PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT`,
+     * display fields only — never videoUrl / download URLs.
+     */
+    publicDemo: publicProcedure
+      .input(z.object({ handle: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
+        const requested = (input?.handle ?? "")
+          .replace(/^@/, "")
+          .trim()
+          .toLowerCase();
+        const tryOrder: string[] = [];
+        if (isPublicTikTokDemoHandle(requested)) tryOrder.push(requested);
+        for (const h of PUBLIC_TIKTOK_DEMO_HANDLES) {
+          if (!tryOrder.includes(h)) tryOrder.push(h);
+        }
+
+        for (const handle of tryOrder) {
+          const cached = readPublicTikTokDemoCache(handle);
+          if (cached) {
+            if (cached.videos.length > 0) return cached;
+            continue;
+          }
+
+          try {
+            const result = await scrapeTikTokVideos(handle, undefined, {
+              maxVideos: Math.max(PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT * 3, 24),
+              timeoutMs: 45_000,
+            });
+
+            const sorted = [...result.videos].sort(
+              (a, b) => b.viewCount - a.viewCount
+            );
+            const top = sorted.slice(0, PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT);
+            if (top.length === 0) {
+              writePublicTikTokDemoCache(handle, emptyPublicTikTokDemoPayload(handle));
+              continue;
+            }
+
+            const mirrored = await mirrorTiktokThumbnailsBounded(
+              top.map((v) => ({
+                awemeId: v.awemeId,
+                thumbnailUrl: v.thumbnailUrl,
+              }))
+            );
+
+            const viewCounts = result.videos
+              .map((v) => v.viewCount)
+              .filter((n) => Number.isFinite(n) && n > 0)
+              .sort((a, b) => a - b);
+            let medianViewCount = 0;
+            if (viewCounts.length > 0) {
+              const mid = Math.floor(viewCounts.length / 2);
+              medianViewCount =
+                viewCounts.length % 2 === 0
+                  ? Math.round(
+                      (viewCounts[mid - 1]! + viewCounts[mid]!) / 2
+                    )
+                  : viewCounts[mid]!;
+            }
+
+            const followerCount = result.followerCount || 0;
+            const payload: PublicTikTokDemoPayload = {
+              handle: result.videos[0]?.ownerUsername || handle,
+              totalVideoCount: result.videos.length,
+              medianViewCount,
+              followerCount,
+              videos: top.map((v) => ({
+                id: v.awemeId,
+                awemeId: v.awemeId,
+                caption: v.caption ?? "",
+                viewCount: v.viewCount,
+                likeCount: v.likeCount,
+                commentCount: v.commentCount,
+                shareCount: v.shareCount,
+                engagementRate:
+                  followerCount > 0
+                    ? Math.round(
+                        ((v.likeCount + v.commentCount + v.shareCount) /
+                          followerCount) *
+                          10000
+                      ) / 100
+                    : 0,
+                thumbnailUrl: mirrored.get(v.awemeId) || v.thumbnailUrl || "",
+                durationSec: v.durationSec,
+                postedAt: v.postedAt,
+                videoPageUrl: v.videoPageUrl,
+              })),
+            };
+
+            writePublicTikTokDemoCache(handle, payload);
+            return payload;
+          } catch (err) {
+            console.warn(
+              `[tiktokScrape.publicDemo] handle=@${handle} failed:`,
+              err instanceof Error ? err.message : err
+            );
+            writePublicTikTokDemoCache(handle, emptyPublicTikTokDemoPayload(handle));
+            continue;
+          }
+        }
+
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This creator isn't available",
+        });
+      }),
+
     start: protectedProcedure
       .input(
         z.object({
