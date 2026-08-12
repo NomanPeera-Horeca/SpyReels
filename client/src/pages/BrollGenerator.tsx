@@ -52,8 +52,9 @@ import {
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import {
   RELATED_TOOL_THUMB_AI_COACH,
+  RELATED_TOOL_THUMB_TIKTOK_FINDER,
   RELATED_TOOL_THUMB_VIRAL_FINDER,
-  RELATED_TOOL_THUMB_VIRAL_HOOKS,
+  RELATED_TOOL_THUMB_YOUTUBE_FINDER,
 } from "@/components/relatedToolThumbs";
 import "@/components/brollLanding/brollLanding.css";
 
@@ -376,24 +377,26 @@ export default function BrollGenerator() {
         <FinalCta />
 
         <RelatedToolsGrid
+          subtitle="Cross-platform research and the tools that turn winners into videos."
           tools={[
             {
-              title: "Viral Hook Generator for your Niche",
-              href: "/free-tools/viral-hooks",
-              imageUrl: RELATED_TOOL_THUMB_VIRAL_HOOKS,
-            },
-            {
-              title: "Viral Reel Finder",
+              title: "Instagram Viral Reel Finder",
               href: "/features/viral-reel-finder",
               imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
             },
             {
               title: "TikTok Viral Video Finder",
               href: "/features/tiktok-viral-video-finder",
-              imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
+              imageUrl: RELATED_TOOL_THUMB_TIKTOK_FINDER,
             },
             {
-              title: "Free Viral Script Generator",
+              title: "YouTube Shorts Viral Finder",
+              href: "/features/youtube-shorts-viral-finder",
+              imageUrl: RELATED_TOOL_THUMB_YOUTUBE_FINDER,
+              comingSoon: true,
+            },
+            {
+              title: "AI Script Generator",
               href: "/features/ai-personal-brand-coach",
               imageUrl: RELATED_TOOL_THUMB_AI_COACH,
             },

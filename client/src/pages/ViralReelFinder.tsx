@@ -14,6 +14,8 @@ import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
+import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
+import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -648,7 +650,7 @@ export default function ViralReelFinder() {
             </button>
           </nav>
           <Button className="rounded-full" onClick={() => openAuth({ returnTo: "/research" })}>
-            Start free - no card
+            Start free
           </Button>
         </div>
       </header>
@@ -1080,40 +1082,7 @@ export default function ViralReelFinder() {
         </section>
 
         <section className="border-t border-border py-14">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            What to do with the Reels you find
-          </h2>
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            <Link
-              href="/features/tiktok-viral-video-finder"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">TikTok Viral Video Finder →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Same workflow for TikTok: spy a public handle, sort outliers, remake in your voice.
-              </p>
-            </Link>
-            <Link
-              href="/features/ai-personal-brand-coach"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">Reel script generator →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Script, shot list, on-screen text and a trending sound to use. Plus a teleprompter.
-              </p>
-            </Link>
-            <Link
-              href="/features/30-day-content-plan"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">30-day content plan →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Thirty days where every day is already a script, grounded in what&apos;s working in
-                your niche.
-              </p>
-            </Link>
-          </div>
-          <p className="mt-5 text-sm text-muted-foreground">
+          <p className="mb-5 text-sm text-muted-foreground">
             Comparing options?{" "}
             <Link href="/blog/spyreels-vs-meedro" className="text-primary hover:underline">
               SpyReels vs Meedro
@@ -1134,7 +1103,14 @@ export default function ViralReelFinder() {
             </Link>
           </p>
         </section>
+      </main>
 
+      <RelatedToolsGrid
+        subtitle="Cross-platform research and the tools that turn winners into videos."
+        tools={getFinderRelatedTools("instagram")}
+      />
+
+      <div className="mx-auto max-w-6xl px-4 pb-28">
         <section
           ref={footerCtaRef}
           id="try"
@@ -1142,7 +1118,7 @@ export default function ViralReelFinder() {
         >
           <h2 className="text-3xl font-bold tracking-tight">Try it on one account</h2>
           <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-            Free tier, no credit card. You will see results before we ask you for anything.
+            Start free. You will see results before we ask you for anything.
           </p>
           <div className="mx-auto mt-6 max-w-xl text-left">
             <HandleForm
@@ -1156,7 +1132,7 @@ export default function ViralReelFinder() {
             <div className="mt-3">{sharedPreview}</div>
           </div>
         </section>
-      </main>
+      </div>
 
       {showStickyBar ? (
         <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-5xl flex-col gap-2 sm:inset-x-4">

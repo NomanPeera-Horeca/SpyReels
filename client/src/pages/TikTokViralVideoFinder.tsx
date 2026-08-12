@@ -5,6 +5,8 @@ import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
+import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
+import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -1021,40 +1023,7 @@ export default function TikTokViralVideoFinder() {
         </section>
 
         <section className="border-t border-border py-14">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            What to do with the TikToks you find
-          </h2>
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            <Link
-              href="/features/viral-reel-finder"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">Instagram Viral Reel Finder →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Same workflow for Instagram Reels: spy a handle, sort outliers, remake in your
-                voice.
-              </p>
-            </Link>
-            <Link
-              href="/features/ai-personal-brand-coach"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">Script generator →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Script, shot list, on-screen text and a sound to use. Plus a teleprompter.
-              </p>
-            </Link>
-            <Link
-              href="/free-tools/viral-hooks"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">Free viral hooks →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Scroll-stopping hook patterns you can pair with the outliers you just found.
-              </p>
-            </Link>
-          </div>
-          <p className="mt-5 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Also:{" "}
             <Link href="/pricing" className="text-primary hover:underline">
               Pricing
@@ -1065,7 +1034,14 @@ export default function TikTokViralVideoFinder() {
             </Link>
           </p>
         </section>
+      </main>
 
+      <RelatedToolsGrid
+        subtitle="Cross-platform research and the tools that turn winners into videos."
+        tools={getFinderRelatedTools("tiktok")}
+      />
+
+      <div className="mx-auto max-w-6xl px-4 pb-28">
         <section
           ref={footerCtaRef}
           id="try"
@@ -1086,7 +1062,7 @@ export default function TikTokViralVideoFinder() {
             />
           </div>
         </section>
-      </main>
+      </div>
 
       {showStickyBar ? (
         <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-5xl flex-col gap-2 sm:inset-x-4">
