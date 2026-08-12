@@ -143,9 +143,10 @@ export default function Home() {
 
   // Landing-page handoff after sign-in: restore handle and optionally start spy.
   useEffect(() => {
-    const { handle: pending, autostart } = consumeResearchPendingHandle();
+    const { handle: pending, autostart, platform: pendingPlatform } =
+      consumeResearchPendingHandle();
     if (!pending) return;
-    setPlatform("instagram");
+    setPlatform(pendingPlatform);
     setHandle(pending);
     setHandleError(null);
     pendingAutostartRef.current = autostart;

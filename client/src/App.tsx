@@ -38,6 +38,7 @@ const Contact = lazyWithRetry(() => import("./pages/Contact"));
 const Affiliate = lazyWithRetry(() => import("./pages/Affiliate"));
 const About = lazyWithRetry(() => import("./pages/About"));
 const ViralReelFinder = lazyWithRetry(() => import("./pages/ViralReelFinder"));
+const TikTokViralVideoFinder = lazyWithRetry(() => import("./pages/TikTokViralVideoFinder"));
 const ThirtyDayContentPlanFeature = lazyWithRetry(() => import("./pages/ThirtyDayContentPlanFeature"));
 const AiPersonalBrandCoachFeature = lazyWithRetry(() => import("./pages/AiPersonalBrandCoachFeature"));
 const BlogList = lazyWithRetry(() => import("./pages/BlogList"));
@@ -209,6 +210,7 @@ function Router() {
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
+        <Route path="/features/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />
         <Route path="/hooks">

@@ -1085,6 +1085,15 @@ export default function ViralReelFinder() {
           </h2>
           <div className="mt-6 grid gap-3 md:grid-cols-3">
             <Link
+              href="/features/tiktok-viral-video-finder"
+              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
+            >
+              <h3 className="font-semibold">TikTok Viral Video Finder →</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Same workflow for TikTok: spy a public handle, sort outliers, remake in your voice.
+              </p>
+            </Link>
+            <Link
               href="/features/ai-personal-brand-coach"
               className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
             >
@@ -1101,15 +1110,6 @@ export default function ViralReelFinder() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Thirty days where every day is already a script, grounded in what&apos;s working in
                 your niche.
-              </p>
-            </Link>
-            <Link
-              href="/carousel-library"
-              className="rounded-2xl border border-border bg-card/40 p-5 hover:border-primary/40"
-            >
-              <h3 className="font-semibold">Instagram carousel generator →</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                39 proven carousel formats, filled with your niche.
               </p>
             </Link>
           </div>

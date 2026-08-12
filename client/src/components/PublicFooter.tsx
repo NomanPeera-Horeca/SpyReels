@@ -23,6 +23,7 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
     title: "Product",
     links: [
       { label: "Viral Reel Finder", href: "/features/viral-reel-finder" },
+      { label: "TikTok Viral Video Finder", href: "/features/tiktok-viral-video-finder" },
       { label: "30-Day Content Plan", href: "/features/30-day-content-plan" },
       { label: "AI Personal Brand Coach", href: "/features/ai-personal-brand-coach" },
       { label: "Pricing", href: "/pricing" },

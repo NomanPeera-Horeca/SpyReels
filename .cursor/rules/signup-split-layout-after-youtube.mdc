@@ -1,0 +1,14 @@
+---
+description: After YouTube finder page ships, redesign signup to match Viral Video Finder style
+alwaysApply: true
+---
+
+# Signup UI (post YouTube finder)
+
+After the YouTube Shorts viral finder marketing page ships, redesign SpyReels signup / AuthDialog to match the Viral Video Finder (`viralvideofinder.com/register`) pattern:
+
+- Split layout: form on the left, testimonial / social-proof wall on the right
+- Dark theme, clear "Create your account" / join headline, Google continue + email/password
+- Do not start this redesign until the YouTube finder page is done and Noman asks for it
+- Do not copy VVF branding, pink accents, or competitor names into SpyReels; keep SpyReels brand tokens
+- Avoid "no card required" phrasing; prefer free / Start free framing

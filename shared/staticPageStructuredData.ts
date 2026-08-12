@@ -120,7 +120,7 @@ const FINDER_FAQ: FaqItem[] = [
   },
   {
     q: "How much does the SpyReels viral reel finder cost?",
-    a: "You can start on the free tier with no credit card. Paid plans unlock more research sessions, transcriptions, and AI script generation. See current pricing on the SpyReels pricing page for limits on each plan.",
+    a: "You can start on the free tier. Paid plans unlock more research sessions, transcriptions, and AI script generation. See current pricing on the SpyReels pricing page for limits on each plan.",
   },
   {
     q: "What types of creators is SpyReels built for?",
@@ -129,6 +129,41 @@ const FINDER_FAQ: FaqItem[] = [
   {
     q: "Can I generate scripts based on the viral Reels I find?",
     a: "Yes. After you find and transcribe a winning Reel, SpyReels can help you generate a new script based on the same structure while keeping your voice. Use the editor and teleprompter to go from research to filming in one workflow.",
+  },
+];
+
+const TIKTOK_FINDER_FAQ: FaqItem[] = [
+  {
+    q: "What is the best free TikTok finder?",
+    a: "It depends on the job. Keyword libraries are best for browsing trends by topic. SpyReels is the free TikTok finder for the by-username job: paste a public handle, sort viral TikTok videos by outlier score, then remake winners in your voice. Start free.",
+  },
+  {
+    q: "How do I find viral TikTok videos on a profile?",
+    a: "Open a TikTok finder that supports username search, paste the handle, and sort by outlier score or views. Native TikTok only shows recent posts in order, so the best videos stay buried. SpyReels surfaces them first.",
+  },
+  {
+    q: "Is there a TikTok video finder by username?",
+    a: "Yes. SpyReels is built for that. Paste @username or a profile link. We do not claim to reverse-search by image or recover deleted TikToks.",
+  },
+  {
+    q: "How do I find viral TikToks for free?",
+    a: "Use a free TikTok viral video finder, spy 3 peer accounts, sort by outlier score, and read the hooks on the top five. The shared pattern is what you remake, not the exact video.",
+  },
+  {
+    q: "How to go viral on TikTok without guessing?",
+    a: "Research first. Find viral TikTok videos from accounts like yours, copy the structure (hook, pacing, payoff), change the story to your niche, and post consistently. SpyReels turns that research into a script you can film the same day.",
+  },
+  {
+    q: "Can I paste a TikTok profile link?",
+    a: "Yes. Paste a public profile URL or @username. Private accounts cannot be researched.",
+  },
+  {
+    q: "Is this the same as searching millions of TikToks by keyword?",
+    a: "No. That is a different product. SpyReels spies one creator at a time and ranks their catalogue. If you only need a keyword mood search across a giant library, use a keyword library tool.",
+  },
+  {
+    q: "Can I use findings for Reels and YouTube Shorts too?",
+    a: "Yes. Formats that win on TikTok often travel. Remake the script once, then adapt the cut for Reels or Shorts. SpyReels also has an Instagram Viral Reel Finder.",
   },
 ];
 
@@ -384,6 +419,50 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
         {
           id: "finder-faq-schema",
           data: faqSchema(FINDER_FAQ),
+        },
+      ];
+    case "/features/tiktok-viral-video-finder":
+      return [
+        {
+          id: "tt-finder-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            {
+              name: "Features",
+              item: `${SPYREELS_SITE_URL}/features/tiktok-viral-video-finder`,
+            },
+            {
+              name: "TikTok Finder",
+              item: `${SPYREELS_SITE_URL}/features/tiktok-viral-video-finder`,
+            },
+          ]),
+        },
+        {
+          id: "tt-finder-software-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SpyReels TikTok Finder",
+            alternateName: [
+              "TikTok Finder",
+              "TikTok Viral Video Finder",
+              "TikTok Video Finder",
+            ],
+            applicationCategory: "MultimediaApplication",
+            operatingSystem: "Web Browser",
+            offers: {
+              "@type": "AggregateOffer",
+              lowPrice: "0",
+              highPrice: "99",
+              priceCurrency: "USD",
+            },
+            description:
+              "Free TikTok finder by username. Sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.",
+          },
+        },
+        {
+          id: "tt-finder-faq-schema",
+          data: faqSchema(TIKTOK_FINDER_FAQ),
         },
       ];
     case "/features/30-day-content-plan":
@@ -671,6 +750,7 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/",
   "/pricing",
   "/features/viral-reel-finder",
+  "/features/tiktok-viral-video-finder",
   "/features/30-day-content-plan",
   "/features/ai-personal-brand-coach",
   "/free-tools/viral-hooks",

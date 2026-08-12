@@ -388,6 +388,11 @@ export default function BrollGenerator() {
               imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
             },
             {
+              title: "TikTok Viral Video Finder",
+              href: "/features/tiktok-viral-video-finder",
+              imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
+            },
+            {
               title: "Free Viral Script Generator",
               href: "/features/ai-personal-brand-coach",
               imageUrl: RELATED_TOOL_THUMB_AI_COACH,

@@ -139,6 +139,7 @@ async function startServer() {
         { loc: "/free-tools/viral-hooks", priority: "0.9", changefreq: "weekly" },
         { loc: "/free-tools/broll-generator", priority: "0.9", changefreq: "weekly" },
         { loc: "/features/viral-reel-finder", priority: "0.8", changefreq: "weekly" },
+        { loc: "/features/tiktok-viral-video-finder", priority: "0.8", changefreq: "weekly" },
         { loc: "/features/30-day-content-plan", priority: "0.8", changefreq: "weekly" },
         { loc: "/features/ai-personal-brand-coach", priority: "0.8", changefreq: "weekly" },
         { loc: "/pricing", priority: "0.8", changefreq: "monthly" },
