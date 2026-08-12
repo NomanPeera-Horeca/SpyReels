@@ -33,6 +33,7 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
   {
     title: "Free Tools",
     links: [
+      { label: "All Free Tools", href: "/free-tools" },
       { label: "Viral Hooks", href: "/free-tools/viral-hooks" },
       { label: "B-Roll Generator", href: "/free-tools/broll-generator" },
       { label: "TikTok Viral Video Finder", href: "/free-tools/tiktok-viral-video-finder" },

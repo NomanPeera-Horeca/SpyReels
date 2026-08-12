@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Free Instagram Reels Tools | SpyReels (MOCKUP)</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root {
+      --bg: #07070b;
+      --bg-elev: #121218;
+      --bg-card: #16161e;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --primary: #8b5cf6;
+      --primary-soft: rgba(139, 92, 246, 0.18);
+      --star: #fbbf24;
+      --radius: 16px;
+      --max: 1120px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    .banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #3b1d6e;
+      color: #efe7ff;
+      text-align: center;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .banner code {
+      background: rgba(0,0,0,0.25);
+      padding: 1px 6px;
+      border-radius: 6px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 16px 20px;
+    }
+    .logo {
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      font-size: 18px;
+    }
+    .nav-links {
+      display: none;
+      gap: 18px;
+      margin-left: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links .active { color: var(--text); }
+    .nav-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    .btn-ghost {
+      color: var(--muted);
+      background: transparent;
+    }
+    .btn-ghost:hover { color: var(--text); }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+
+    .hero {
+      text-align: center;
+      padding: 48px 20px 28px;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .eyebrow {
+      display: inline-block;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(36px, 6vw, 56px);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+    }
+    .hero .lead {
+      margin: 16px auto 0;
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .trust {
+      margin-top: 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .stars { color: var(--star); letter-spacing: 1px; }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px 20px 36px;
+    }
+    .filter {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-elev);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    .filter:hover,
+    .filter.is-active {
+      border-color: rgba(139, 92, 246, 0.55);
+      background: var(--primary-soft);
+      color: var(--text);
+    }
+    .filter svg { width: 18px; height: 18px; }
+
+    .section {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 12px 20px 64px;
+    }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 40px);
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+    @media (min-width: 700px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: flex; }
+    }
+    @media (min-width: 980px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .card {
+      display: block;
+      border-radius: calc(var(--radius) + 4px);
+      background: transparent;
+      transition: transform 0.18s ease;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .card-media {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 16 / 11;
+      position: relative;
+    }
+    .card-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .card-title {
+      margin: 12px 4px 0;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    .card-desc {
+      margin: 4px 4px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .hidden { display: none !important; }
+
+    /* End banner: only change from original page */
+    .end-banner {
+      max-width: var(--max);
+      margin: 0 auto 72px;
+      padding: 0 20px;
+    }
+    .end-banner a {
+      display: block;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #0b0a0f;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .end-banner a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 50px rgba(124, 58, 237, 0.22);
+    }
+    .end-banner img {
+      width: 100%;
+      height: auto;
+    }
+
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 20px 56px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 800px) {
+      .footer-inner { grid-template-columns: 1.2fr repeat(3, 1fr); }
+    }
+    .footer h3 {
+      margin: 0 0 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .footer ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>MOCKUP ONLY</strong> · proposed URL <code>/free-tools</code> · OpusClip-style tools hub · end banner = go-viral image · not wired
+  </div>
+
+  <header class="nav">
+    <a class="logo" href="https://spyreels.ai/">SpyReels</a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="https://spyreels.ai/features/viral-reel-finder">Features</a>
+      <a class="active" href="#tools">Free Tools</a>
+      <a href="https://spyreels.ai/#how-it-works">How It Works</a>
+      <a href="https://spyreels.ai/pricing">Pricing</a>
+      <a href="https://spyreels.ai/#faq">FAQ</a>
+      <a href="https://spyreels.ai/blog">Blog</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="btn btn-ghost" href="https://spyreels.ai/">Log In</a>
+      <a class="btn btn-primary" href="https://spyreels.ai/">Start Free →</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="eyebrow">Free tools for Reels, TikTok and Shorts</div>
+    <h1>SpyReels Free Tools</h1>
+    <p class="lead">
+      SpyReels Free Tools is a hub of free creator tools to find viral videos by username,
+      generate hooks, match B-roll, and write scripts. Browse the tools below and start free.
+    </p>
+    <div class="trust">
+      <span class="stars" aria-hidden="true">★★★★★</span>
+      <span>Trusted by 12,000+ creators</span>
+    </div>
+  </section>
+
+  <div class="filters" role="tablist" aria-label="Tool categories">
+    <button class="filter is-active" data-filter="all" title="All tools" aria-label="All tools">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h14"/></svg>
+    </button>
+    <button class="filter" data-filter="finders" title="Viral finders" aria-label="Viral finders">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+    </button>
+    <button class="filter" data-filter="hooks" title="Hooks" aria-label="Hooks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M7 8h10M7 16h10"/></svg>
+    </button>
+    <button class="filter" data-filter="broll" title="B-roll" aria-label="B-roll">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
+    </button>
+    <button class="filter" data-filter="scripts" title="Scripts" aria-label="Scripts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+    </button>
+  </div>
+
+  <section class="section" id="tools">
+    <div class="section-head">
+      <h2>Popular tools</h2>
+      <p>Start free on every tool</p>
+    </div>
+
+    <div class="grid" id="tool-grid">
+      <a class="card" data-cat="hooks" href="https://spyreels.ai/free-tools/viral-hooks">
+        <div class="card-media">
+          <img src="./related-tools-assets/viral-hooks.png" alt="Viral hook generator preview" />
+        </div>
+        <div class="card-title">Instagram Viral Hook Generator</div>
+        <div class="card-desc">Paste an idea. Get 10 scroll-stopping hooks with spoken lines and on-screen text.</div>
+      </a>
+
+      <a class="card" data-cat="broll" href="https://spyreels.ai/free-tools/broll-generator">
+        <div class="card-media">
+          <img src="./related-tools-assets/broll-generator.png" alt="B-roll generator preview" />
+        </div>
+        <div class="card-title">AI B-Roll Generator</div>
+        <div class="card-desc">Paste a script or upload footage. Match every beat to real clips automatically.</div>
+      </a>
+
+      <a class="card" data-cat="finders" href="https://spyreels.ai/free-tools/tiktok-viral-video-finder">
+        <div class="card-media">
+          <img src="./related-tools-assets/tiktok-viral-video-finder.png" alt="TikTok viral video finder preview" />
+        </div>
+        <div class="card-title">TikTok Viral Video Finder</div>
+        <div class="card-desc">Paste any public TikTok username. Sort by views, engagement and outlier score.</div>
+      </a>
+
+      <a class="card" data-cat="finders" href="https://spyreels.ai/free-tools/youtube-shorts-viral-finder">
+        <div class="card-media">
+          <img src="./related-tools-assets/youtube-shorts-viral-finder.png" alt="YouTube Shorts viral finder preview" />
+        </div>
+        <div class="card-title">YouTube Shorts Viral Finder</div>
+        <div class="card-desc">Spy any channel's Shorts, rank outliers, then remake winners in your voice.</div>
+      </a>
+
+      <a class="card" data-cat="finders" href="https://spyreels.ai/features/viral-reel-finder">
+        <div class="card-media">
+          <img src="./related-tools-assets/viral-reel-finder.png" alt="Instagram viral reel finder preview" />
+        </div>
+        <div class="card-title">Instagram Viral Reel Finder</div>
+        <div class="card-desc">Find any account's best Reels by views and engagement, then remake them.</div>
+      </a>
+
+      <a class="card" data-cat="scripts" href="https://spyreels.ai/features/ai-personal-brand-coach">
+        <div class="card-media">
+          <img src="./related-tools-assets/ai-script-coach.png" alt="AI script generator preview" />
+        </div>
+        <div class="card-title">AI Script Generator</div>
+        <div class="card-desc">Turn a viral pattern into a full script in your voice with production notes.</div>
+      </a>
+    </div>
+  </section>
+
+  <section class="end-banner" aria-label="Go viral CTA">
+    <a href="https://spyreels.ai/">
+      <img
+        src="./related-tools-assets/go-viral-banner.png?v=final"
+        alt="Stop guessing, start going viral. Find what's working. Remake it in your voice and go viral. Join 12,000+ creators already going viral."
+      />
+    </a>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div>
+        <div class="logo" style="margin-bottom:10px">SpyReels</div>
+        <p>Free Instagram Reels tools for research, hooks, B-roll and scripts.</p>
+      </div>
+      <div>
+        <h3>Free Tools</h3>
+        <ul>
+          <li><a href="https://spyreels.ai/free-tools/viral-hooks">Viral Hooks</a></li>
+          <li><a href="https://spyreels.ai/free-tools/broll-generator">B-Roll Generator</a></li>
+          <li><a href="https://spyreels.ai/free-tools/tiktok-viral-video-finder">TikTok Finder</a></li>
+          <li><a href="https://spyreels.ai/free-tools/youtube-shorts-viral-finder">YouTube Shorts Finder</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Product</h3>
+        <ul>
+          <li><a href="https://spyreels.ai/features/viral-reel-finder">Viral Reel Finder</a></li>
+          <li><a href="https://spyreels.ai/features/30-day-content-plan">30-Day Content Plan</a></li>
+          <li><a href="https://spyreels.ai/features/ai-personal-brand-coach">AI Personal Brand Coach</a></li>
+          <li><a href="https://spyreels.ai/pricing">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Company</h3>
+        <ul>
+          <li><a href="https://spyreels.ai/about">About</a></li>
+          <li><a href="https://spyreels.ai/contact">Contact</a></li>
+          <li><a href="https://spyreels.ai/affiliate">Affiliate</a></li>
+          <li><a href="https://spyreels.ai/blog">Blog</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const buttons = Array.from(document.querySelectorAll(".filter"));
+    const cards = Array.from(document.querySelectorAll(".card"));
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        buttons.forEach((b) => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        const filter = btn.getAttribute("data-filter");
+        cards.forEach((card) => {
+          const cat = card.getAttribute("data-cat");
+          const show = filter === "all" || cat === filter;
+          card.classList.toggle("hidden", !show);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

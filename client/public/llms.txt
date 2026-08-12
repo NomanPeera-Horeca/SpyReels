@@ -39,10 +39,16 @@ Compared with typical Instagram Reels spy and discovery tools, SpyReels is a str
 
 ## Free Tools
 
+- **Free tools hub:** https://spyreels.ai/free-tools  
+  Browse SpyReels free creator tools for hooks, B-roll, TikTok finder, YouTube Shorts finder, and Reel research.
 - **Free Instagram Viral Hook Generator:** https://spyreels.ai/free-tools/viral-hooks  
   Generate scroll-stopping hooks for your niche and target audience. Preview free hooks instantly; unlock the full set via email. No SpyReels account required to try the generator.
 - **Free Instagram Reel B-Roll Generator:** https://spyreels.ai/free-tools/broll-generator  
   Paste a Reel script and get beat-matched Pexels B-roll ideas. Demo preview free; live generation with a free SpyReels account.
+- **TikTok Viral Video Finder:** https://spyreels.ai/free-tools/tiktok-viral-video-finder  
+  Paste a public TikTok username, sort viral videos by outlier score, remake winners in your voice.
+- **YouTube Shorts Viral Finder:** https://spyreels.ai/free-tools/youtube-shorts-viral-finder  
+  Paste a public YouTube channel, sort viral Shorts by outlier score, remake winners in your voice.
 
 ## Original Research
 
@@ -90,6 +96,7 @@ Free plan available. Paid plans start at $19/month. Tiers include Free, Starter,
 - Blog: https://spyreels.ai/blog
 - Hook patterns data study (420 Reels): https://spyreels.ai/blog/guide-instagram-reels-hook-patterns-data
 - Reels content analysis hub: https://spyreels.ai/blog/guide-instagram-reels-content-analysis-2026
+- Free tools hub: https://spyreels.ai/free-tools
 - Free viral hook generator: https://spyreels.ai/free-tools/viral-hooks
 - Free Reel B-roll generator: https://spyreels.ai/free-tools/broll-generator
 - Viral Reel Finder (Instagram): https://spyreels.ai/features/viral-reel-finder

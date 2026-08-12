@@ -18,7 +18,7 @@ import {
 const PUBLIC_NAV_LINKS = [
   { href: "/#features", label: "Features", type: "anchor" as const },
   {
-    href: "/free-tools/viral-hooks",
+    href: "/free-tools",
     label: "Free Tools",
     type: "route" as const,
   },
@@ -70,7 +70,7 @@ export function PublicHeader({
   const closeMobileNav = () => setMobileNavOpen(false);
 
   const onFreeToolsClick = (e: MouseEvent) => {
-    if (pathname === "/free-tools/viral-hooks") {
+    if (pathname === "/free-tools") {
       e.preventDefault();
       window.scrollTo({ top: 0, behavior: "smooth" });
     }

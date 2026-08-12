@@ -25,6 +25,7 @@ const YouTubeScrapingProgress = lazyWithRetry(() => import("./pages/YouTubeScrap
 const History = lazyWithRetry(() => import("./pages/History"));
 const HookGenerator = lazyWithRetry(() => import("@/pages/HookGenerator"));
 const BrollGenerator = lazyWithRetry(() => import("@/pages/BrollGenerator"));
+const FreeTools = lazyWithRetry(() => import("./pages/FreeTools"));
 const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
 const ScriptEditor = lazyWithRetry(() => import("./pages/ScriptEditor"));
@@ -206,6 +207,7 @@ function Router() {
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/invitations/accept/:token" component={AcceptInvitation} />
         <Route path="/s/:token" component={PublicScriptView} />
+        <Route path="/free-tools" component={FreeTools} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
         <Route path="/free-tools/broll-generator" component={BrollGenerator} />
         <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />

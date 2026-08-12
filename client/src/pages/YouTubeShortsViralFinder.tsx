@@ -7,6 +7,7 @@ import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
+import { YouTubeMark } from "@/components/PlatformHandleMarks";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -351,18 +352,16 @@ function HandleForm({ value, onChange, onSubmit, submitLabel, compact }: HandleF
       }}
       className={
         compact
-          ? "flex w-full items-center gap-2 rounded-full border border-border bg-background p-1 pl-3"
-          : "flex w-full flex-col gap-2 rounded-full border border-border bg-card/70 p-1.5 sm:flex-row sm:items-center sm:pl-5"
+          ? "flex w-full items-center gap-2 rounded-full border border-primary/35 bg-background p-1 pl-3"
+          : "flex w-full flex-col gap-2 rounded-full border border-primary/35 bg-card/70 p-1.5 shadow-[0_0_0_1px_hsl(var(--primary)/0.12)] sm:flex-row sm:items-center sm:pl-4"
       }
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-0">
-        <span className="shrink-0 text-muted-foreground" aria-hidden>
-          @
-        </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2 px-2 sm:px-0">
+        <YouTubeMark className="h-5 w-5 shrink-0" />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="username or YouTube channel link"
+          placeholder="@username"
           aria-label="YouTube username or channel link"
           autoComplete="off"
           spellCheck={false}
@@ -617,7 +616,7 @@ export default function YouTubeShortsViralFinder() {
             value={handleInput}
             onChange={setHandleInput}
             onSubmit={() => submitHandle(handleInput)}
-            submitLabel="Find their best Shorts"
+            submitLabel="Find Viral Shorts"
           />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
@@ -1059,7 +1058,7 @@ export default function YouTubeShortsViralFinder() {
               value={handleInput}
               onChange={setHandleInput}
               onSubmit={() => submitHandle(handleInput)}
-              submitLabel="Find best Shorts"
+              submitLabel="Find Viral Shorts"
             />
           </div>
         </section>
@@ -1078,7 +1077,7 @@ export default function YouTubeShortsViralFinder() {
                   value={handleInput}
                   onChange={setHandleInput}
                   onSubmit={() => submitHandle(handleInput)}
-                  submitLabel="Find best Shorts"
+                  submitLabel="Find Viral Shorts"
                 />
               </div>
             </div>

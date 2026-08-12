@@ -17,6 +17,7 @@ import { PublicFooter } from "@/components/PublicFooter";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { InstagramMark } from "@/components/PlatformHandleMarks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -199,18 +200,16 @@ function HandleForm({
       }}
       className={
         compact
-          ? "flex w-full items-center gap-2 rounded-full border border-border bg-background p-1 pl-3"
-          : "flex w-full flex-col gap-2 rounded-full border border-border bg-card/70 p-1.5 sm:flex-row sm:items-center sm:pl-5"
+          ? "flex w-full items-center gap-2 rounded-full border border-primary/35 bg-background p-1 pl-3"
+          : "flex w-full flex-col gap-2 rounded-full border border-primary/35 bg-card/70 p-1.5 shadow-[0_0_0_1px_hsl(var(--primary)/0.12)] sm:flex-row sm:items-center sm:pl-4"
       }
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 sm:px-0">
-        <span className="shrink-0 text-muted-foreground" aria-hidden>
-          @
-        </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2 px-2 sm:px-0">
+        <InstagramMark className="h-5 w-5 shrink-0 text-foreground" />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="username or profile link"
+          placeholder="@username"
           aria-label="Instagram username or profile link"
           autoComplete="off"
           spellCheck={false}
@@ -675,7 +674,7 @@ export default function ViralReelFinder() {
             value={handleInput}
             onChange={setHandleInput}
             onSubmit={() => submitHandle(handleInput)}
-            submitLabel="Find their best Reels"
+            submitLabel="Find Viral Reels"
             isLoading={demo.isFetching}
             status={handleInputStatus}
           />
@@ -1125,7 +1124,7 @@ export default function ViralReelFinder() {
               value={handleInput}
               onChange={setHandleInput}
               onSubmit={() => submitHandle(handleInput)}
-              submitLabel="Find best Reels"
+              submitLabel="Find Viral Reels"
               isLoading={demo.isFetching}
               status={handleInputStatus}
             />
@@ -1148,7 +1147,7 @@ export default function ViralReelFinder() {
                   value={handleInput}
                   onChange={setHandleInput}
                   onSubmit={() => submitHandle(handleInput)}
-                  submitLabel="Find best Reels"
+                  submitLabel="Find Viral Reels"
                   isLoading={demo.isFetching}
                   status={handleInputStatus}
                 />

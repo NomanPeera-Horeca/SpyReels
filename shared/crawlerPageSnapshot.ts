@@ -43,8 +43,9 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
       "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video.",
   },
   "/free-tools": {
-    h1: "Free Instagram Reels tools",
-    summary: "Free hook generator and research tools for nano and micro Instagram creators.",
+    h1: "SpyReels Free Tools",
+    summary:
+      "Free creator tools to find viral videos by username, generate hooks, match B-roll, and write scripts. Start free.",
   },
   "/about": {
     h1: "About SpyReels and Noah Perry",

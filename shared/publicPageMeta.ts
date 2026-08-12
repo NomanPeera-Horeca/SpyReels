@@ -84,7 +84,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/free-tools": {
     title: "Free Instagram Reels Tools | SpyReels",
     description:
-      "Free Instagram Reels tools for creators. Generate viral hooks, find winning content patterns, and grow faster with SpyReels.",
+      "Free SpyReels tools for creators: viral hook generator, B-roll, TikTok finder, YouTube Shorts finder, and Reel research. Start free.",
   },
   "/free-tools/viral-hooks": {
     title: "Free Instagram Viral Hook Generator | SpyReels",

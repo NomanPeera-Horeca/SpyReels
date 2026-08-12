@@ -202,6 +202,29 @@ const YOUTUBE_SHORTS_FINDER_FAQ: FaqItem[] = [
   },
 ];
 
+const FREE_TOOLS_HUB_FAQ: FaqItem[] = [
+  {
+    q: "What free tools does SpyReels offer?",
+    a: "SpyReels Free Tools includes a viral hook generator, AI B-roll generator, TikTok viral video finder, YouTube Shorts viral finder, Instagram viral Reel finder, and an AI script generator. Start free and move from research to a remake in one place.",
+  },
+  {
+    q: "Do I need a SpyReels account to try these tools?",
+    a: "Most tools let you preview free without a paid plan. Some flows ask you to sign up to unlock the full result or save your work. You can start free.",
+  },
+  {
+    q: "Are these tools only for Instagram?",
+    a: "No. The hub covers Instagram Reels, TikTok, and YouTube Shorts. Formats that win on one platform often travel, so you can research once and adapt the remake.",
+  },
+  {
+    q: "What is a viral finder by username?",
+    a: "A username finder spies one public creator at a time and ranks their videos by views, engagement, and outlier score versus that account's own median. That is different from keyword libraries that browse millions of clips by topic.",
+  },
+  {
+    q: "How do I go viral without guessing?",
+    a: "Find what already works on peer accounts, remake the structure in your voice, and post consistently. SpyReels connects research, hooks, B-roll, and scripts so you spend less time scrolling and more time filming.",
+  },
+];
+
 const HOOKS_FAQ: FaqItem[] = [
   {
     q: "Is this really free?",
@@ -604,6 +627,66 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           },
         },
       ];
+    case "/free-tools":
+      return [
+        {
+          id: "free-tools-breadcrumb-schema",
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Free Tools", item: `${SPYREELS_SITE_URL}/free-tools` },
+          ]),
+        },
+        {
+          id: "free-tools-itemlist-schema",
+          data: {
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: "SpyReels Free Tools",
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Instagram Viral Hook Generator",
+                url: `${SPYREELS_SITE_URL}/free-tools/viral-hooks`,
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: "AI B-Roll Generator",
+                url: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
+              },
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: "TikTok Viral Video Finder",
+                url: `${SPYREELS_SITE_URL}/free-tools/tiktok-viral-video-finder`,
+              },
+              {
+                "@type": "ListItem",
+                position: 4,
+                name: "YouTube Shorts Viral Finder",
+                url: `${SPYREELS_SITE_URL}/free-tools/youtube-shorts-viral-finder`,
+              },
+              {
+                "@type": "ListItem",
+                position: 5,
+                name: "Instagram Viral Reel Finder",
+                url: `${SPYREELS_SITE_URL}/features/viral-reel-finder`,
+              },
+              {
+                "@type": "ListItem",
+                position: 6,
+                name: "AI Script Generator",
+                url: `${SPYREELS_SITE_URL}/features/ai-personal-brand-coach`,
+              },
+            ],
+          },
+        },
+        {
+          id: "free-tools-faq-schema",
+          data: faqSchema(FREE_TOOLS_HUB_FAQ),
+        },
+      ];
     case "/free-tools/viral-hooks":
       return [
         {
@@ -829,6 +912,7 @@ export const STATIC_PAGE_JSON_LD_PATHS = [
   "/",
   "/pricing",
   "/features/viral-reel-finder",
+  "/free-tools",
   "/free-tools/tiktok-viral-video-finder",
   "/free-tools/youtube-shorts-viral-finder",
   "/features/30-day-content-plan",
