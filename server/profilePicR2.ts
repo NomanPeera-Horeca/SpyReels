@@ -1,12 +1,19 @@
 import { r2ObjectPublicUrl, storageHead, storagePut } from "./storage";
 
+export type ProfilePicPlatform = "instagram" | "tiktok" | "youtube";
+
 /**
- * R2 key for a creator's profile avatar. One canonical file per handle
- * (idempotent re-uploads / overwrites).
+ * R2 key for a creator's profile avatar. Instagram keeps the legacy
+ * handle-only path; TikTok/YouTube are namespaced so same-handle collisions
+ * cannot overwrite each other.
  */
-export function profilePicR2Key(cleanHandle: string): string {
+export function profilePicR2Key(
+  cleanHandle: string,
+  platform: ProfilePicPlatform = "instagram"
+): string {
   const h = cleanHandle.replace(/^@/, "").trim().toLowerCase();
-  return `profile-pics/${h}.jpg`;
+  if (platform === "instagram") return `profile-pics/${h}.jpg`;
+  return `profile-pics/${platform}/${h}.jpg`;
 }
 
 /**
@@ -17,9 +24,10 @@ export function profilePicR2Key(cleanHandle: string): string {
  */
 export async function ensureProfilePicOnR2(
   cleanHandle: string,
-  sourcePicUrl: string | null | undefined
+  sourcePicUrl: string | null | undefined,
+  platform: ProfilePicPlatform = "instagram"
 ): Promise<string> {
-  const key = profilePicR2Key(cleanHandle);
+  const key = profilePicR2Key(cleanHandle, platform);
   if (await storageHead(key)) {
     return r2ObjectPublicUrl(key);
   }

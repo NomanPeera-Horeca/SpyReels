@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import {
   Loader2,
   Clock,
@@ -18,6 +18,8 @@ import {
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import { resolveFromParamFallback } from "@shared/appNavigation";
+import { useAppBack } from "@/hooks/useAppBack";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +40,13 @@ import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import Tooltip from "@/components/Tooltip";
 import { PlatformVideoCard } from "@/components/PlatformVideoCard";
 import {
-  LIBRARY_REMAKE_CTA_LABEL,
-  READY_TO_FILM_CTA_LABEL,
+  libraryRemakeKey,
+  type LibraryRemakeSource,
+  type LibraryRemakeStage,
+  type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
+import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
+import { buildLibraryOneClickRemake } from "@/lib/oneClickRemakeAction";
 import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type {
   PlatformResearchConfig,
@@ -106,6 +112,18 @@ export default function PlatformResearch({
   initialJobId?: number;
 }) {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const fromPage = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("from") || null;
+  }, [searchString]);
+  const researchBackFallback = useMemo(() => {
+    const resolved = resolveFromParamFallback(fromPage);
+    return resolved === "/research"
+      ? `/research?platform=${config.platform}`
+      : resolved;
+  }, [fromPage, config.platform]);
+  const handleResearchBack = useAppBack(researchBackFallback);
   const utils = trpc.useUtils();
   const [handle, setHandle] = useState("");
   const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
@@ -417,12 +435,141 @@ export default function PlatformResearch({
     };
   }, [sortedVideos, config.platform, utils.transcribe.status]);
 
+  const toLibrarySource = useCallback(
+    (videoId: number): LibraryRemakeSource =>
+      config.platform === "tiktok"
+        ? { source: "tiktok", tiktokVideoId: videoId }
+        : { source: "youtube", youtubeVideoId: videoId },
+    [config.platform]
+  );
+
+  const transcribeStatusInputForVideo = useCallback(
+    (videoId: number) =>
+      config.platform === "tiktok"
+        ? { tiktokVideoId: videoId }
+        : { youtubeVideoId: videoId },
+    [config.platform]
+  );
+
+  const applyTxStatus = useCallback(
+    (
+      videoId: number,
+      status: {
+        status: string;
+        transcript?: string | null;
+        segments?: unknown;
+      }
+    ) => {
+      setTxStatusById((prev) => ({
+        ...prev,
+        [videoId]: {
+          status: status.status,
+          transcript: status.transcript,
+          segments: status.segments,
+        },
+      }));
+      if (status.status === "completed" || status.status === "failed") {
+        setPendingTranscriptions((prev) => {
+          if (!prev.has(videoId)) return prev;
+          const next = new Set(prev);
+          next.delete(videoId);
+          return next;
+        });
+      }
+    },
+    []
+  );
+
+  // Keep standalone modal/card "Transcribe" pending in sync (remake uses the
+  // library chain). Previously we only fetched once on mutate settle, so a
+  // still-processing response left the CTA stuck on "Transcribing...".
+  useEffect(() => {
+    if (pendingTranscriptions.size === 0) return;
+    let cancelled = false;
+    const ids = Array.from(pendingTranscriptions);
+
+    const poll = async () => {
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const status = await utils.transcribe.status.fetch(
+              transcribeStatusInputForVideo(id) as never
+            );
+            if (cancelled || !status) return;
+            applyTxStatus(id, status);
+          } catch {
+            /* ignore per-video poll failures */
+          }
+        })
+      );
+    };
+
+    void poll();
+    const timer = window.setInterval(() => {
+      void poll();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    pendingTranscriptions,
+    utils.transcribe.status,
+    transcribeStatusInputForVideo,
+    applyTxStatus,
+  ]);
+
   const transcribeMutation = trpc.transcribe.start.useMutation({
-    onError: (err) => {
+    onSuccess: (data, variables) => {
+      const videoId = variables.tiktokVideoId ?? variables.youtubeVideoId;
+      if (data.status === "completed") {
+        if (videoId != null) {
+          setPendingTranscriptions((prev) => {
+            const next = new Set(prev);
+            next.delete(videoId);
+            return next;
+          });
+          void utils.transcribe.status
+            .fetch(transcribeStatusInputForVideo(videoId) as never)
+            .then((status) => {
+              if (status) applyTxStatus(videoId, status);
+            })
+            .catch(() => undefined);
+        }
+        toast.success("Transcription ready");
+        return;
+      }
+      if (
+        data.status === "processing" &&
+        "queuePending" in data &&
+        (data as { queuePending?: boolean }).queuePending
+      ) {
+        toast.info("Added to queue", {
+          description: "Will start when a slot is free.",
+        });
+      } else {
+        toast.info("Transcription started", {
+          description: "Processing audio... This may take up to a minute.",
+        });
+      }
+    },
+    onError: (err, variables) => {
+      const videoId = variables.tiktokVideoId ?? variables.youtubeVideoId;
+      if (videoId != null) {
+        setPendingTranscriptions((prev) => {
+          const next = new Set(prev);
+          next.delete(videoId);
+          return next;
+        });
+        setTxStatusById((prev) => ({
+          ...prev,
+          [videoId]: { status: "failed" },
+        }));
+      }
       if (err instanceof TRPCClientError && err.data?.code === "FORBIDDEN") {
         toast.error("Monthly transcription limit reached.");
       } else {
-        toast.error(err.message);
+        toast.error("Transcription failed", { description: err.message });
       }
     },
   });
@@ -433,41 +580,7 @@ export default function PlatformResearch({
       ...prev,
       [videoId]: { status: "processing" },
     }));
-    const input =
-      config.platform === "tiktok"
-        ? { tiktokVideoId: videoId }
-        : { youtubeVideoId: videoId };
-    transcribeMutation.mutate(input as never, {
-      onSettled: () => {
-        void utils.transcribe.status
-          .fetch(input as never)
-          .then((status) => {
-            if (!status) return;
-            setTxStatusById((prev) => ({
-              ...prev,
-              [videoId]: {
-                status: status.status,
-                transcript: status.transcript,
-                segments: status.segments,
-              },
-            }));
-            if (status.status === "completed" || status.status === "failed") {
-              setPendingTranscriptions((prev) => {
-                const next = new Set(prev);
-                next.delete(videoId);
-                return next;
-              });
-            }
-          })
-          .catch(() => {
-            setPendingTranscriptions((prev) => {
-              const next = new Set(prev);
-              next.delete(videoId);
-              return next;
-            });
-          });
-      },
-    });
+    transcribeMutation.mutate(transcribeStatusInputForVideo(videoId) as never);
   };
 
   const triggerRecreatePulse = (videoId: number) => {
@@ -490,6 +603,75 @@ export default function PlatformResearch({
     []
   );
 
+  const getRemakeStateRef = useRef<(key: string) => LibraryRemakeState>(
+    () => ({ stage: "idle", progressPercent: 0 })
+  );
+
+  const libraryRemakeOnStageChange = useCallback(
+    (
+      source: LibraryRemakeSource,
+      stage: LibraryRemakeStage,
+      prevStage: LibraryRemakeStage | undefined
+    ) => {
+      const videoId =
+        source.source === "tiktok"
+          ? source.tiktokVideoId
+          : source.source === "youtube"
+            ? source.youtubeVideoId
+            : null;
+      if (videoId == null) return;
+
+      if (
+        prevStage === "transcribing" &&
+        (stage === "generating" ||
+          stage === "inspiration" ||
+          stage === "ready" ||
+          stage === "error")
+      ) {
+        void utils.transcribe.status
+          .fetch(transcribeStatusInputForVideo(videoId) as never)
+          .then((status) => {
+            if (status) applyTxStatus(videoId, status);
+          })
+          .catch(() => undefined);
+      }
+
+      if (stage === "ready" && prevStage !== "ready") {
+        void utils.recreate.checkBatch.invalidate();
+        toast.success("Your remake is ready", {
+          action: {
+            label: "Open",
+            onClick: () => {
+              const st = getRemakeStateRef.current(libraryRemakeKey(source));
+              if (st.scriptId != null) {
+                triggerOpenMyScript(videoId, st.scriptId);
+              } else {
+                setGridModalVideoId(videoId);
+              }
+            },
+          },
+        });
+      }
+    },
+    [
+      applyTxStatus,
+      transcribeStatusInputForVideo,
+      triggerOpenMyScript,
+      utils.recreate.checkBatch,
+      utils.transcribe.status,
+    ]
+  );
+
+  const {
+    getRemakeState,
+    startRemake,
+    retryRemake,
+    startInspirationSave,
+    VoiceGateDialog,
+  } = useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
+
+  getRemakeStateRef.current = getRemakeState;
+
   const handleSubmit = () => {
     const trimmed = handle.trim().replace(/^@/, "");
     if (!trimmed) return;
@@ -506,65 +688,52 @@ export default function PlatformResearch({
   const showResults = job?.status === "completed" && videosData != null;
 
   const buildOneClick = (video: PlatformVideoLike): OneClickRemakeAction => {
+    const librarySource = toLibrarySource(video.id);
     const tx = txStatusById[video.id];
     const hasTranscription = tx?.status === "completed";
     const isNoSpeech =
       hasTranscription &&
       !String(tx?.transcript ?? "").trim() &&
       !(Array.isArray(tx?.segments) && tx.segments.length > 0);
-    const isProcessing =
-      pendingTranscriptions.has(video.id) ||
-      tx?.status === "processing" ||
-      tx?.status === "pending";
     const batchEntry = recreateMap[video.id] as RecreateBatchEntry | undefined;
     const recreateSt = videoRecreateState(batchEntry);
 
-    if (isProcessing) {
-      return {
-        label: "Transcribing...",
-        disabled: true,
-        loading: true,
-        onClick: () => {},
-      };
+    return buildLibraryOneClickRemake({
+      openScriptReelId: video.id,
+      isNoSpeech: !!isNoSpeech,
+      alreadyTranscribed: hasTranscription && !isNoSpeech,
+      idleNotRemakeable: false,
+      classification: {},
+      batchRecreateSt: recreateSt,
+      batchEntry,
+      hookState: getRemakeState(libraryRemakeKey(librarySource)),
+      librarySource,
+      startRemake,
+      retryRemake,
+      startInspirationSave,
+      triggerOpenMyScript,
+    });
+  };
+
+  const isVideoProcessing = (videoId: number) => {
+    const tx = txStatusById[videoId];
+    const hookState = getRemakeState(
+      libraryRemakeKey(toLibrarySource(videoId))
+    );
+    if (
+      hookState.stage === "transcribing" ||
+      hookState.stage === "generating"
+    ) {
+      return true;
     }
-    if (recreateSt === "generating") {
-      return {
-        label: "Generating...",
-        disabled: true,
-        loading: true,
-        onClick: () => {},
-      };
+    if (tx?.status === "completed" || tx?.status === "failed") {
+      return false;
     }
-    if (recreateSt === "ready" && batchEntry?.latestScriptId) {
-      return {
-        label: READY_TO_FILM_CTA_LABEL,
-        tone: "ready",
-        tooltip: "Open your script and record in the teleprompter",
-        onClick: () =>
-          triggerOpenMyScript(video.id, batchEntry.latestScriptId),
-      };
-    }
-    if (isNoSpeech) {
-      return {
-        label: "No voice",
-        disabled: true,
-        tooltip: "No transcript available. Click the reel to view details.",
-        onClick: () => {},
-      };
-    }
-    if (hasTranscription) {
-      return {
-        label: LIBRARY_REMAKE_CTA_LABEL,
-        onClick: () => triggerRecreatePulse(video.id),
-      };
-    }
-    return {
-      label: LIBRARY_REMAKE_CTA_LABEL,
-      onClick: () => {
-        runTranscribe(video.id);
-        triggerRecreatePulse(video.id);
-      },
-    };
+    return (
+      pendingTranscriptions.has(videoId) ||
+      tx?.status === "processing" ||
+      tx?.status === "pending"
+    );
   };
 
   return (
@@ -706,9 +875,7 @@ export default function PlatformResearch({
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 shrink-0 p-0"
-                    onClick={() =>
-                      setLocation(`/research?platform=${config.platform}`)
-                    }
+                    onClick={handleResearchBack}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
@@ -853,10 +1020,7 @@ export default function PlatformResearch({
                     !(
                       Array.isArray(tx?.segments) && tx.segments.length > 0
                     );
-                  const isProcessing =
-                    pendingTranscriptions.has(video.id) ||
-                    tx?.status === "processing" ||
-                    tx?.status === "pending";
+                  const isProcessing = isVideoProcessing(video.id);
                   const isFailed = tx?.status === "failed";
                   const isSaved = !!savedMap[video.id];
                   const batchEntry = recreateMap[video.id] as
@@ -990,11 +1154,7 @@ export default function PlatformResearch({
               hasTranscription={
                 txStatusById[gridModalVideo.id]?.status === "completed"
               }
-              isProcessing={
-                pendingTranscriptions.has(gridModalVideo.id) ||
-                txStatusById[gridModalVideo.id]?.status === "processing" ||
-                txStatusById[gridModalVideo.id]?.status === "pending"
-              }
+              isProcessing={isVideoProcessing(gridModalVideo.id)}
               isNoSpeech={
                 txStatusById[gridModalVideo.id]?.status === "completed" &&
                 !String(txStatusById[gridModalVideo.id]?.transcript ?? "").trim() &&
@@ -1026,11 +1186,7 @@ export default function PlatformResearch({
               hasTranscription={
                 txStatusById[gridModalVideo.id]?.status === "completed"
               }
-              isProcessing={
-                pendingTranscriptions.has(gridModalVideo.id) ||
-                txStatusById[gridModalVideo.id]?.status === "processing" ||
-                txStatusById[gridModalVideo.id]?.status === "pending"
-              }
+              isProcessing={isVideoProcessing(gridModalVideo.id)}
               isNoSpeech={
                 txStatusById[gridModalVideo.id]?.status === "completed" &&
                 !String(txStatusById[gridModalVideo.id]?.transcript ?? "").trim() &&
@@ -1056,6 +1212,7 @@ export default function PlatformResearch({
           )
         ) : null}
       </GridReelWorkflowDialog>
+      {VoiceGateDialog}
     </div>
   );
 }

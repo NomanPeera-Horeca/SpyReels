@@ -11,6 +11,7 @@ import {
 } from "./db";
 import { getPersonalWorkspaceId } from "./personalWorkspace";
 import { enqueueCollectedReelIngest } from "./collectedReelWorker";
+import type { CollectedVideoPlatform } from "./socialVideoUrl";
 
 export type CollectedReelSource = "telegram" | "url_paste" | "extension";
 
@@ -30,10 +31,21 @@ export async function ingestCollectedReelByShortcode(opts: {
   reelUrl: string;
   source: CollectedReelSource;
   workspaceId?: string;
+  platform?: CollectedVideoPlatform;
 }): Promise<CollectedReelIngestResult> {
-  const { userId, shortcode, reelUrl, source } = opts;
+  const {
+    userId,
+    shortcode,
+    reelUrl,
+    source,
+    platform = "instagram",
+  } = opts;
   const workspaceId = opts.workspaceId ?? (await getPersonalWorkspaceId(userId));
-  const existing = await getCollectedReelByShortcode(workspaceId, shortcode);
+  const existing = await getCollectedReelByShortcode(
+    workspaceId,
+    shortcode,
+    platform
+  );
 
   if (existing && collectedReelBlocksDuplicate(existing)) {
     return { action: "duplicate", id: existing.id };
@@ -45,6 +57,7 @@ export async function ingestCollectedReelByShortcode(opts: {
       errorMessage: null,
       reelUrl,
       source,
+      platform,
       fetchAttempts: 0,
       nextFetchAt: null,
       lastFetchAt: null,
@@ -59,6 +72,7 @@ export async function ingestCollectedReelByShortcode(opts: {
     shortcode,
     reelUrl,
     source,
+    platform,
     status: "pending",
     fetchAttempts: 0,
   });

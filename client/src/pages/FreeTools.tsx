@@ -270,7 +270,7 @@ export default function FreeTools() {
             No tools in this category
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-10 lg:grid-cols-3 lg:gap-x-10 lg:gap-y-12">
             {visibleTools.map((tool) => (
               <Link
                 key={tool.href}
@@ -285,10 +285,10 @@ export default function FreeTools() {
                     loading="lazy"
                   />
                 </div>
-                <h3 className="mt-3 text-base font-semibold tracking-tight group-hover:text-primary">
+                <h3 className="mt-4 text-base font-semibold tracking-tight group-hover:text-primary">
                   {tool.title}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{tool.description}</p>
+                <p className="mt-1.5 text-sm text-muted-foreground">{tool.description}</p>
               </Link>
             ))}
           </div>

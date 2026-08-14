@@ -1,7 +1,7 @@
 /**
  * Telegram Bot integration for SpyReels.
- * Users connect their Telegram account, then share Instagram Reel links
- * to the bot from mobile. The bot fetches metadata and saves them as
+ * Users connect their Telegram account, then share Instagram / TikTok / YouTube
+ * video links to the bot from mobile. The bot fetches metadata and saves them as
  * "collected reels" in the user's SpyReels dashboard.
  */
 
@@ -13,9 +13,9 @@ import {
 } from "./db";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
-  canonicalInstagramReelUrl,
-  extractAllInstagramReelShortcodes,
-} from "./instagramUrl";
+  extractAllCollectedVideoUrls,
+  parseCollectedVideoUrl,
+} from "./socialVideoUrl";
 
 const TELEGRAM_API = "https://api.telegram.org/bot";
 
@@ -43,9 +43,9 @@ async function sendMessage(chatId: string, text: string, parseMode: string = "HT
   }
 }
 
-// ── Parse Instagram URL from message ──
+// ── Combine message text for URL parsing ──
 
-/** Combine message text, caption, and link entities (Instagram share-to-Telegram). */
+/** Combine message text, caption, and link entities (share-to-Telegram). */
 function messageTextForUrlParsing(message: {
   text?: string;
   caption?: string;
@@ -73,23 +73,6 @@ function messageTextForUrlParsing(message: {
   addEntities(message.entities, message.text);
   addEntities(message.caption_entities, message.caption);
   return parts.join("\n");
-}
-
-function reelUrlFromMessage(text: string, shortcode: string): string {
-  const urlMatch = text.match(
-    new RegExp(`https?:\\/\\/[^\\s]*instagram\\.com[^\\s]*${shortcode}[^\\s]*`, "i")
-  );
-  if (urlMatch) {
-    return urlMatch[0].replace(/[.,;:!?)\\]]+$/, "");
-  }
-  const igMatch = text.match(
-    new RegExp(`[^\\s]*instagram\\.com[^\\s]*${shortcode}[^\\s]*`, "i")
-  );
-  if (igMatch) {
-    const raw = igMatch[0].replace(/[.,;:!?)\\]]+$/, "");
-    return raw.startsWith("http") ? raw : `https://${raw}`;
-  }
-  return canonicalInstagramReelUrl(shortcode);
 }
 
 // ── Handle incoming Telegram messages ──
@@ -188,8 +171,8 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     await sendMessage(chatId,
       `✅ <b>Connected successfully!</b>\n\n` +
       `Your Telegram is now linked to SpyReels. 🎉\n\n` +
-      `Now just share any Instagram Reel link here and it will appear in your <b>Collected Reels</b> tab on the dashboard.\n\n` +
-      `<b>Quick tip:</b> On Instagram mobile, tap Share → Share to Telegram → Select this chat → Send!`
+      `Share Instagram Reel, TikTok, or YouTube Shorts links here and they will appear in your <b>Collected Reels</b> tab.\n\n` +
+      `<b>Quick tip:</b> On mobile, tap Share → Telegram → Select this chat → Send!`
     );
     return;
   }
@@ -197,10 +180,11 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   // Check if user is connected
   const connection = await getTelegramConnectionByChatId(chatId);
   if (!connection) {
-    // Check if it looks like an Instagram URL
-    if (text.includes("instagram.com") || text.includes("instagr.am")) {
+    const looksLikeVideo =
+      /instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be/i.test(text);
+    if (looksLikeVideo) {
       await sendMessage(chatId,
-        `🔗 I see an Instagram link, but you need to connect your SpyReels account first!\n\n` +
+        `🔗 I see a video link, but you need to connect your SpyReels account first!\n\n` +
         `1. Go to <a href="https://spyreels.ai/settings">spyreels.ai/settings</a>\n` +
         `2. Click "Connect Telegram"\n` +
         `3. Send me the 6-digit code`
@@ -213,33 +197,50 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     return;
   }
 
-  // Extract Instagram URLs from message
-  const shortcodes = extractAllInstagramReelShortcodes(text);
+  // Extract Instagram / TikTok / YouTube URLs (resolve short TikTok links)
+  let parsedVideos = extractAllCollectedVideoUrls(text);
+  if (parsedVideos.length === 0) {
+    const candidates = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
+    for (const raw of candidates) {
+      const cleaned = raw.replace(/[.,;:!?)]+$/, "");
+      const parsed = await parseCollectedVideoUrl(cleaned);
+      if (parsed) parsedVideos.push(parsed);
+    }
+  }
 
-  if (shortcodes.length === 0) {
+  // Dedupe
+  const seen = new Set<string>();
+  parsedVideos = parsedVideos.filter((v) => {
+    const key = `${v.platform}:${v.externalId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (parsedVideos.length === 0) {
     await sendMessage(chatId,
-      `I didn't find any Instagram Reel links in your message. 🤔\n\n` +
-      `Share a link like:\nhttps://www.instagram.com/reel/ABC123/\n\n` +
-      `Or share directly from the Instagram app!`
+      `I didn't find any video links in your message. 🤔\n\n` +
+      `Share an Instagram Reel, TikTok, or YouTube Shorts link.\n\n` +
+      `Or share directly from the app!`
     );
     return;
   }
 
-  // Process each shortcode
+  // Process each video
   const userId = connection.userId;
   let saved = 0;
   let retried = 0;
   let duplicates = 0;
   let errors = 0;
 
-  for (const shortcode of shortcodes) {
+  for (const video of parsedVideos) {
     try {
-      const reelUrl = reelUrlFromMessage(text, shortcode);
       const result = await ingestCollectedReelByShortcode({
         userId,
-        shortcode,
-        reelUrl,
+        shortcode: video.externalId,
+        reelUrl: video.canonicalUrl,
         source: "telegram",
+        platform: video.platform,
       });
 
       if (result.action === "duplicate") {
@@ -250,17 +251,20 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
         saved++;
       }
     } catch (err) {
-      console.error(`[Telegram] Error saving reel ${shortcode}:`, err);
+      console.error(
+        `[Telegram] Error saving ${video.platform} ${video.externalId}:`,
+        err
+      );
       errors++;
     }
   }
 
   // Send confirmation
   const parts: string[] = [];
-  if (saved > 0) parts.push(`✅ ${saved} reel${saved > 1 ? "s" : ""} saved to your dashboard!`);
+  if (saved > 0) parts.push(`✅ ${saved} video${saved > 1 ? "s" : ""} saved to your dashboard!`);
   if (retried > 0) {
     parts.push(
-      `🔄 ${retried} reel${retried > 1 ? "s" : ""} re-queued (previous fetch failed or was still loading).`
+      `🔄 ${retried} video${retried > 1 ? "s" : ""} re-queued (previous fetch failed or was still loading).`
     );
   }
   if (duplicates > 0) parts.push(`⚠️ ${duplicates} already in your collection.`);
@@ -268,7 +272,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 
   let reply = parts.join("\n");
   if (saved > 0) {
-    reply += `\n\n📊 View in <a href="https://spyreels.ai/collected">Collected Reels</a> to transcribe and generate scripts!`;
+    reply += `\n\n📊 View in <a href="https://spyreels.ai/collected">Collected Reels</a> to remake into your voice!`;
   }
 
   await sendMessage(chatId, reply);

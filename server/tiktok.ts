@@ -8,8 +8,8 @@ import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
 
-/** Interactive preview refresh: one ScrapeCreators attempt, fail fast for UI. */
-export const INTERACTIVE_TIKTOK_FETCH_TIMEOUT_MS = 8_000;
+/** Interactive preview refresh: short timeout, a couple of tries for UI. */
+export const INTERACTIVE_TIKTOK_FETCH_TIMEOUT_MS = 15_000;
 
 function requireApiKey(): string {
   const key = process.env.SCRAPECREATORS_API_KEY?.trim();
@@ -151,21 +151,147 @@ export interface TikTokVideoInfo {
   videoUrl: string;
 }
 
+/** Full single-video payload for Collected Reels ingest. */
+export interface TikTokVideoDetails {
+  awemeId: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  durationSec: number;
+  postedAt: Date | null;
+  ownerUsername: string;
+  ownerFullName: string;
+  ownerProfilePicUrl: string;
+  videoPageUrl: string;
+}
+
 export interface TikTokScrapeResult {
   videos: TikTokVideoData[];
   followerCount: number;
   profilePicUrl: string;
 }
 
+function firstUrlFromList(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  for (const entry of value) {
+    if (typeof entry === "string" && entry.trim()) return entry.trim();
+  }
+  return "";
+}
+
+/**
+ * ScrapeCreators often leaves top-level play_addr.url_list empty while
+ * bit_rate[].play_addr still has playable CDN links. Prefer no-watermark.
+ */
+export function extractTikTokPlayUrl(video: any): string {
+  if (!video || typeof video !== "object") return "";
+
+  const noWm = firstUrlFromList(video.download_no_watermark_addr?.url_list);
+  if (noWm) return noWm;
+
+  const topPlay = firstUrlFromList(video.play_addr?.url_list);
+  if (topPlay && video.has_watermark === false) return topPlay;
+
+  if (Array.isArray(video.bit_rate)) {
+    for (const tier of video.bit_rate) {
+      const fromBit = firstUrlFromList(tier?.play_addr?.url_list);
+      if (fromBit) return fromBit;
+    }
+  }
+
+  if (topPlay) return topPlay;
+
+  const download = firstUrlFromList(video.download_addr?.url_list);
+  if (download) return download;
+
+  const h264 = firstUrlFromList(video.play_addr_h264?.url_list);
+  if (h264) return h264;
+
+  return "";
+}
+
+function extractTikTokCoverUrl(video: any): string {
+  if (!video || typeof video !== "object") return "";
+  return (
+    firstUrlFromList(video.cover?.url_list) ||
+    firstUrlFromList(video.origin_cover?.url_list) ||
+    firstUrlFromList(video.dynamic_cover?.url_list) ||
+    ""
+  );
+}
+
+function mapAwemeDetailToTikTokDetails(
+  data: any,
+  fallbackUrl: string
+): TikTokVideoDetails | null {
+  const detail = data?.aweme_detail ?? data?.aweme_details ?? null;
+  if (!detail || typeof detail !== "object") return null;
+
+  const awemeId = String(detail.aweme_id ?? detail.id ?? "").trim();
+  const video = detail.video;
+  const videoUrl = extractTikTokPlayUrl(video);
+  const thumbnailUrl = extractTikTokCoverUrl(video);
+  if (!awemeId && !videoUrl && !thumbnailUrl) return null;
+
+  const author = detail.author || {};
+  const ownerUsername = String(
+    author.unique_id || author.uniqueId || ""
+  ).replace(/^@/, "");
+  const postedAtSeconds = toFiniteNumber(detail.create_time);
+  const postedAt =
+    postedAtSeconds > 0 ? new Date(postedAtSeconds * 1000) : null;
+  const statistics = detail.statistics || {};
+
+  return {
+    awemeId: awemeId || "",
+    videoUrl,
+    thumbnailUrl,
+    caption: String(detail.desc || ""),
+    viewCount: toFiniteNumber(statistics.play_count),
+    likeCount: toFiniteNumber(statistics.digg_count),
+    commentCount: toFiniteNumber(statistics.comment_count),
+    durationSec: toFiniteNumber(video?.duration) / 1000,
+    postedAt:
+      postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null,
+    ownerUsername,
+    ownerFullName: String(author.nickname || author.unique_id || ""),
+    ownerProfilePicUrl: String(
+      firstUrlFromList(author.avatar_larger?.url_list) ||
+        firstUrlFromList(author.avatar_thumb?.url_list) ||
+        author.avatarLarger ||
+        author.avatarThumb ||
+        ""
+    ),
+    videoPageUrl:
+      String(detail.share_url || detail.url || "").trim() ||
+      (ownerUsername && awemeId
+        ? `https://www.tiktok.com/@${ownerUsername}/video/${awemeId}`
+        : fallbackUrl),
+  };
+}
+
 export async function fetchTikTokVideoInfo(
   videoPageUrl: string,
   options?: { mode?: "default" | "interactive" }
 ): Promise<TikTokVideoInfo | null> {
+  const details = await fetchTikTokVideoDetails(videoPageUrl, options);
+  if (!details?.videoUrl) return null;
+  return { videoUrl: details.videoUrl };
+}
+
+export async function fetchTikTokVideoDetails(
+  videoPageUrl: string,
+  options?: { mode?: "default" | "interactive" }
+): Promise<TikTokVideoDetails | null> {
   const url = videoPageUrl.trim();
   if (!url) return null;
 
   const interactive = options?.mode === "interactive";
-  const maxTries = interactive ? 1 : 5;
+  // Preview UI used to fail on a single 8s timeout; give it a second shot.
+  const maxTries = interactive ? 2 : 5;
   const requestTimeoutMs = interactive
     ? INTERACTIVE_TIKTOK_FETCH_TIMEOUT_MS
     : undefined;
@@ -183,13 +309,29 @@ export async function fetchTikTokVideoInfo(
         typeof data === "object" &&
         (data as any).success !== false
       ) {
+        const details = mapAwemeDetailToTikTokDetails(data, url);
+        if (details?.videoUrl) {
+          return details;
+        }
+        // Last-chance direct extract if mapping skipped an odd payload shape
         const video = (data as any).aweme_detail?.video;
-        const videoUrl =
-          video?.download_no_watermark_addr?.url_list?.[0] ||
-          video?.play_addr?.url_list?.[0] ||
-          "";
-        if (typeof videoUrl === "string" && videoUrl.trim()) {
-          return { videoUrl: videoUrl.trim() };
+        const videoUrl = extractTikTokPlayUrl(video);
+        if (videoUrl) {
+          return {
+            awemeId: String((data as any).aweme_detail?.aweme_id || ""),
+            videoUrl,
+            thumbnailUrl: extractTikTokCoverUrl(video),
+            caption: String((data as any).aweme_detail?.desc || ""),
+            viewCount: 0,
+            likeCount: 0,
+            commentCount: 0,
+            durationSec: 0,
+            postedAt: null,
+            ownerUsername: "",
+            ownerFullName: "",
+            ownerProfilePicUrl: "",
+            videoPageUrl: url,
+          };
         }
       }
 
@@ -215,7 +357,7 @@ export async function fetchTikTokVideoInfo(
   return null;
 }
 
-async function fetchTikTokProfile(
+export async function fetchTikTokProfile(
   handle: string
 ): Promise<TikTokProfileInfo> {
   const cleanHandle = cleanTikTokHandle(handle);
@@ -307,10 +449,7 @@ function parseTikTokVideo(
 
   const video = item?.video;
   const statistics = item?.statistics;
-  const videoUrl =
-    video?.download_no_watermark_addr?.url_list?.[0] ||
-    video?.play_addr?.url_list?.[0] ||
-    "";
+  const videoUrl = extractTikTokPlayUrl(video);
   const ownerUsername = String(
     item?.author?.unique_id || item?.author?.uniqueId || fallbackHandle
   );
@@ -322,7 +461,7 @@ function parseTikTokVideo(
     likeCount: toFiniteNumber(statistics?.digg_count),
     commentCount: toFiniteNumber(statistics?.comment_count),
     shareCount: toFiniteNumber(statistics?.share_count),
-    thumbnailUrl: String(video?.cover?.url_list?.[0] || ""),
+    thumbnailUrl: extractTikTokCoverUrl(video),
     videoUrl: String(videoUrl),
     videoPageUrl: String(
       item?.url ||

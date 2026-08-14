@@ -105,11 +105,14 @@ const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
 
 function sourceBadge(reel: CollectedRow): string {
+  const platform = (reel.platform || "instagram").toLowerCase();
+  if (platform === "tiktok") return "TikTok";
+  if (platform === "youtube") return "YouTube";
   return reel.source === "telegram"
     ? "TG"
     : reel.source === "extension"
       ? "EXT"
-      : "URL";
+      : "IG";
 }
 
 function collectedRowToLibraryRemakeSource(
@@ -903,7 +906,7 @@ export default function CollectedReels() {
                 Connect Telegram to Collect Reels from Mobile
               </h3>
               <p className="mb-3 text-xs text-muted-foreground">
-                Share Instagram Reel links directly from your phone to the SpyReels Telegram bot. They&apos;ll appear
+                Share Instagram, TikTok, or YouTube links from your phone to the SpyReels Telegram bot. They&apos;ll appear
                 here automatically for transcription and script generation.
               </p>
               <Button
@@ -925,7 +928,7 @@ export default function CollectedReels() {
           <div className="flex items-center gap-2 text-xs text-emerald-400">
             <Send className="h-3.5 w-3.5" />
             <span>
-              Telegram connected{botUsername ? `: share Reel links to @${botUsername}` : ""}. They&apos;ll appear here
+              Telegram connected{botUsername ? `: share video links to @${botUsername}` : ""}. They&apos;ll appear here
               automatically.
             </span>
           </div>
@@ -936,7 +939,7 @@ export default function CollectedReels() {
         <div className="relative flex-1">
           <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Paste Instagram Reel URL here..."
+            placeholder="Paste Instagram, TikTok, or YouTube URL..."
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
@@ -956,7 +959,7 @@ export default function CollectedReels() {
           <Inbox className="mb-4 h-12 w-12 text-muted-foreground/30" />
           <h2 className="mb-2 text-lg font-medium text-foreground">No collected reels yet</h2>
           <p className="mb-4 max-w-md text-sm text-muted-foreground">
-            Collect reels by sharing Instagram links to the Telegram bot from your phone, or paste URLs above.
+            Collect videos by sharing Instagram, TikTok, or YouTube links to the Telegram bot, or paste URLs above.
           </p>
         </div>
       )}

@@ -28,7 +28,11 @@ function writeNavStack(stack: string[]): void {
 }
 
 /** Loading gates that should not appear when the user taps back from a destination screen. */
-const TRANSIENT_APP_ROUTES = new Set(["/scraping"]);
+const TRANSIENT_APP_ROUTES = new Set([
+  "/scraping",
+  "/tiktok-scraping",
+  "/youtube-scraping",
+]);
 
 function isTransientAppRoute(path: string): boolean {
   const pathname = (path.split("?")[0] || "/").trim() || "/";

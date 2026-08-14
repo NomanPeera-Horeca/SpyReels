@@ -203,8 +203,8 @@ export default function Settings() {
         </div>
 
         <p className="text-xs text-muted-foreground mb-4">
-          Connect your Telegram account to collect Instagram Reels from your
-          phone. Share any Reel link to the SpyReels bot and it appears in your
+          Connect your Telegram account to collect Instagram, TikTok, and YouTube
+          videos from your phone. Share any Reel link to the SpyReels bot and it appears in your
           Collected Reels tab.
         </p>
 
@@ -224,7 +224,7 @@ export default function Settings() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1 ml-6">
-                Share Instagram Reel links to{" "}
+                Share Instagram, TikTok, or YouTube links to{" "}
                 {telegramQuery.data?.botUsername ? (
                   <a
                     href={`https://t.me/${telegramQuery.data.botUsername}`}
@@ -343,9 +343,8 @@ export default function Settings() {
                       Start sharing Reel links!
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Once connected, share any Instagram Reel link to the bot
-                      from your phone. On Instagram: tap Share → Share to
-                      Telegram → select SpyReels Bot.
+                      Once connected, share any Instagram, TikTok, or YouTube link to the bot
+                      from your phone. On mobile: tap Share → Telegram → select SpyReels Bot.
                     </p>
                   </div>
                 </div>

@@ -115,8 +115,13 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   );
 
   const fetchTranscribeStatus = useCallback(
-    (input: { reelId: number } | { featuredReelId: number }) =>
-      trpcUtils.transcribe.status.fetch(input),
+    (
+      input:
+        | { reelId: number }
+        | { featuredReelId: number }
+        | { tiktokVideoId: number }
+        | { youtubeVideoId: number }
+    ) => trpcUtils.transcribe.status.fetch(input),
     [trpcUtils]
   );
 
@@ -206,6 +211,54 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
                 }
               );
             }
+          } else if (source.source === "tiktok") {
+            const result = await transcribeStartMutation.mutateAsync({
+              tiktokVideoId: source.tiktokVideoId,
+            });
+            if (cancelledRef.current.has(key)) return;
+            if (result.status !== "completed") {
+              await waitForLibraryTranscriptionReady(
+                fetchTranscribeStatus,
+                { tiktokVideoId: source.tiktokVideoId },
+                {
+                  isCancelled: () => cancelledRef.current.has(key),
+                  onAttempt: (attempt) =>
+                    patchState(source, {
+                      stage: "transcribing",
+                      progressPercent: libraryEasedPercent(
+                        "transcribing",
+                        attempt,
+                        LIBRARY_TRANSCRIBE_MAX
+                      ),
+                      tiktokVideoId: source.tiktokVideoId,
+                    }),
+                }
+              );
+            }
+          } else if (source.source === "youtube") {
+            const result = await transcribeStartMutation.mutateAsync({
+              youtubeVideoId: source.youtubeVideoId,
+            });
+            if (cancelledRef.current.has(key)) return;
+            if (result.status !== "completed") {
+              await waitForLibraryTranscriptionReady(
+                fetchTranscribeStatus,
+                { youtubeVideoId: source.youtubeVideoId },
+                {
+                  isCancelled: () => cancelledRef.current.has(key),
+                  onAttempt: (attempt) =>
+                    patchState(source, {
+                      stage: "transcribing",
+                      progressPercent: libraryEasedPercent(
+                        "transcribing",
+                        attempt,
+                        LIBRARY_TRANSCRIBE_MAX
+                      ),
+                      youtubeVideoId: source.youtubeVideoId,
+                    }),
+                }
+              );
+            }
           } else {
             const result = await transcribeStartMutation.mutateAsync({
               reelId: source.reelId,
@@ -269,11 +322,23 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
                 topic: "",
                 gradeLevel: "auto" as const,
               }
-            : {
-                reelId: reelId!,
-                topic: "",
-                gradeLevel: "auto" as const,
-              };
+            : source.source === "tiktok"
+              ? {
+                  tiktokVideoId: source.tiktokVideoId,
+                  topic: "",
+                  gradeLevel: "auto" as const,
+                }
+              : source.source === "youtube"
+                ? {
+                    youtubeVideoId: source.youtubeVideoId,
+                    topic: "",
+                    gradeLevel: "auto" as const,
+                  }
+                : {
+                    reelId: reelId!,
+                    topic: "",
+                    gradeLevel: "auto" as const,
+                  };
 
         const generateResult = await generateMutation.mutateAsync(generateInput);
         if (cancelledRef.current.has(key)) return;
@@ -408,6 +473,24 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
           const existing = await trpcUtils.saved.check.fetch({ reelId: source.reelId });
           if (!existing.saved) {
             await toggleSaveMutation.mutateAsync({ reelId: source.reelId, jobId });
+          }
+        } else if (source.source === "tiktok") {
+          const existing = await trpcUtils.saved.check.fetch({
+            tiktokVideoId: source.tiktokVideoId,
+          });
+          if (!existing.saved) {
+            await toggleSaveMutation.mutateAsync({
+              tiktokVideoId: source.tiktokVideoId,
+            });
+          }
+        } else if (source.source === "youtube") {
+          const existing = await trpcUtils.saved.check.fetch({
+            youtubeVideoId: source.youtubeVideoId,
+          });
+          if (!existing.saved) {
+            await toggleSaveMutation.mutateAsync({
+              youtubeVideoId: source.youtubeVideoId,
+            });
           }
         } else {
           if (reelId == null && source.transcriptionReelId != null) {

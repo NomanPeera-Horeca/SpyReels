@@ -899,6 +899,8 @@ export const collectedReels = mysqlTable(
     .references(() => workspaces.id, {
       onDelete: "cascade",
     }),
+  /** instagram | tiktok | youtube — shortcode holds platform external id */
+  platform: varchar("platform", { length: 16 }).default("instagram").notNull(),
   shortcode: varchar("shortcode", { length: 64 }).notNull(),
   caption: text("caption"),
   viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
@@ -926,6 +928,9 @@ export const collectedReels = mysqlTable(
   },
   (table) => ({
     workspaceIdx: index("idx_collected_reels_workspace").on(table.workspaceId),
+    workspacePlatformShortcodeIdx: index(
+      "idx_collected_reels_workspace_platform_shortcode"
+    ).on(table.workspaceId, table.platform, table.shortcode),
     ingestDueIdx: index("idx_collected_reels_ingest_due").on(
       table.status,
       table.nextFetchAt,

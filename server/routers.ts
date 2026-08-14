@@ -81,6 +81,7 @@ import { runViralityDiagnosticJob } from "./virality/runJob";
 import { runTikTokScrapeJob } from "./tiktokScrape/runJob";
 import { runTikTokTranscription } from "./tiktokScrape/runTranscription";
 import { mirrorTiktokThumbnailsBounded } from "./tiktokScrape/mediaMirror";
+import { repairTikTokProfilePicsBounded } from "./tiktokScrape/repairProfilePics";
 import { fetchTikTokVideoInfo, scrapeTikTokVideos } from "./tiktok";
 import { runYouTubeScrapeJob } from "./youtubeScrape/runJob";
 import { fetchYouTubeTranscript } from "./youtube";
@@ -281,10 +282,6 @@ import {
   enqueueCollectedReelRefresh,
 } from "./collectedReelWorker";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
-import {
-  canonicalInstagramReelUrl,
-  parseInstagramReelShortcode,
-} from "./instagramUrl";
 import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
@@ -4737,17 +4734,28 @@ Return JSON only:
         return { saved: true } as const;
       }),
 
-    /** Check if a reel is saved (either source). */
+    /** Check if a reel is saved (any source). */
     check: protectedProcedure
       .input(
         z
           .object({
             reelId: z.number().optional(),
             featuredReelId: z.number().optional(),
+            tiktokVideoId: z.number().optional(),
+            youtubeVideoId: z.number().optional(),
           })
           .refine(
-            (d) => (d.reelId != null) !== (d.featuredReelId != null),
-            { message: "Provide exactly one of reelId or featuredReelId" }
+            (d) =>
+              [
+                d.reelId,
+                d.featuredReelId,
+                d.tiktokVideoId,
+                d.youtubeVideoId,
+              ].filter((id) => id != null).length === 1,
+            {
+              message:
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+            }
           )
       )
       .query(async ({ ctx, input }) => {
@@ -4757,6 +4765,24 @@ Return JSON only:
               ctx.workspaceId,
               ctx.user.id,
               input.featuredReelId
+            ),
+          };
+        }
+        if (input.tiktokVideoId != null) {
+          return {
+            saved: await isTiktokVideoSaved(
+              ctx.workspaceId,
+              ctx.user.id,
+              input.tiktokVideoId
+            ),
+          };
+        }
+        if (input.youtubeVideoId != null) {
+          return {
+            saved: await isYoutubeVideoSaved(
+              ctx.workspaceId,
+              ctx.user.id,
+              input.youtubeVideoId
             ),
           };
         }
@@ -7074,32 +7100,34 @@ Return JSON only:
         return { success: true };
       }),
 
-    /** Add a reel by URL (manual paste from web UI) */
+    /** Add a reel by URL (Instagram / TikTok / YouTube paste from web UI) */
     addByUrl: protectedProcedure
       .input(z.object({ url: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const shortcode = parseInstagramReelShortcode(input.url);
-        if (!shortcode) {
+        const { parseCollectedVideoUrl } = await import("./socialVideoUrl");
+        const parsed = await parseCollectedVideoUrl(input.url);
+        if (!parsed) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "Could not parse Instagram Reel URL. Use a link like instagram.com/reel/ABC123/ or instagram.com/username/reel/ABC123/",
+              "Could not parse that link. Paste an Instagram Reel, TikTok video, or YouTube Shorts URL.",
           });
         }
 
-        const reelUrl = canonicalInstagramReelUrl(shortcode, input.url);
         const ingest = await ingestCollectedReelByShortcode({
           userId: ctx.user.id,
           workspaceId: ctx.workspaceId,
-          shortcode,
-          reelUrl,
+          shortcode: parsed.externalId,
+          reelUrl: parsed.canonicalUrl,
           source: "url_paste",
+          platform: parsed.platform,
         });
 
         return {
           id: ingest.id,
           duplicate: ingest.action === "duplicate",
           retried: ingest.action === "retried",
+          platform: parsed.platform,
         };
       }),
 
@@ -7164,7 +7192,11 @@ Return JSON only:
         if (reel.status !== "ready") {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Reel metadata not ready yet" });
         }
-        if (!reel.videoUrl) {
+
+        const platform = (reel.platform || "instagram").toLowerCase();
+        const isYouTube = platform === "youtube";
+
+        if (!isYouTube && !reel.videoUrl) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No video URL available for this reel" });
         }
 
@@ -7178,9 +7210,7 @@ Return JSON only:
         }
         await incrementUsage(ctx.user.id, "transcribeCount");
 
-        // Check if transcription already exists for this shortcode (via reels table)
-        // For collected reels, we store transcription data directly in a separate approach:
-        // We'll create a temporary reel entry to reuse the transcription system
+        // Create a temporary reel entry to reuse the remake / transcription UX
         const tempReelData = {
           jobId: 0, // 0 = collected reel, not from a scrape job
           workspaceId: reel.workspaceId,
@@ -7197,7 +7227,6 @@ Return JSON only:
           ownerUsername: reel.ownerUsername || "",
         };
 
-        // Check if we already have a reel entry for this shortcode
         const { getDb } = await import("./db");
         const { reels: reelsTable, collectedReels } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
@@ -7216,7 +7245,6 @@ Return JSON only:
           .set({ transcriptionReelId: reelId })
           .where(eq(collectedReels.id, input.collectedReelId));
 
-        // Check for existing transcription
         const existingTranscription = await getTranscriptionByReelId(reelId);
         if (existingTranscription && existingTranscription.status === "completed") {
           return { reelId, transcriptionId: existingTranscription.id, status: "completed" as const };
@@ -7225,14 +7253,47 @@ Return JSON only:
           return { reelId, transcriptionId: existingTranscription.id, status: "processing" as const };
         }
 
-        // Create transcription
+        // YouTube: caption track via ScrapeCreators (no MP4 download)
+        if (isYouTube) {
+          const transcriptResult = await fetchYouTubeTranscript(reel.reelUrl);
+          if (!transcriptResult) {
+            const transcriptionId = await createTranscription({
+              reelId,
+              transcript: "",
+              segments: [],
+              hookAnalysis: "",
+              status: "completed",
+              queuedAt: new Date(),
+              startedAt: new Date(),
+            });
+            return { reelId, transcriptionId, status: "completed" as const };
+          }
+
+          const hookAnalysis = await analyzeHook(
+            transcriptResult.transcript,
+            reel.caption || "",
+            reel.thumbnailUrl || "",
+            transcriptResult.segments,
+            "YouTube Short"
+          );
+          const transcriptionId = await createTranscription({
+            reelId,
+            transcript: transcriptResult.transcript,
+            segments: transcriptResult.segments,
+            hookAnalysis,
+            status: "completed",
+            queuedAt: new Date(),
+            startedAt: new Date(),
+          });
+          return { reelId, transcriptionId, status: "completed" as const };
+        }
+
         const transcriptionId = await createTranscription({
           reelId,
           status: "processing",
           queuedAt: new Date(),
         });
 
-        // Run transcription in background (reuse existing logic)
         runTranscription(transcriptionId, {
           id: reelId,
           shortcode: reel.shortcode,
@@ -8541,7 +8602,15 @@ Return JSON only:
         }
       }
 
-      return jobs.map((job) => ({
+      const repaired = await repairTikTokProfilePicsBounded(jobs);
+      const jobsWithPics = repaired.size
+        ? jobs.map((job) => {
+            const next = repaired.get(job.id);
+            return next ? { ...job, profilePicUrl: next } : job;
+          })
+        : jobs;
+
+      return jobsWithPics.map((job) => ({
         ...job,
         reelStats: rollupMap.get(job.id) ?? null,
       }));
@@ -8638,17 +8707,32 @@ Return JSON only:
           return { videoUrl: existing };
         }
 
-        const fresh = await fetchTikTokVideoInfo(video.videoPageUrl, {
-          mode: "interactive",
-        });
-        if (!fresh?.videoUrl?.trim()) {
+        const pageCandidates = [
+          (video.videoPageUrl ?? "").trim(),
+          video.ownerUsername && video.awemeId
+            ? `https://www.tiktok.com/@${video.ownerUsername.replace(/^@/, "")}/video/${video.awemeId}`
+            : "",
+        ].filter((u, i, arr) => u && arr.indexOf(u) === i);
+
+        let freshUrl = "";
+        for (const pageUrl of pageCandidates) {
+          const fresh = await fetchTikTokVideoInfo(pageUrl, {
+            mode: "interactive",
+          });
+          if (fresh?.videoUrl?.trim()) {
+            freshUrl = fresh.videoUrl.trim();
+            break;
+          }
+        }
+
+        if (!freshUrl) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Could not retrieve a fresh video URL for this TikTok.",
           });
         }
 
-        const videoUrl = fresh.videoUrl.trim();
+        const videoUrl = freshUrl;
         scheduleTiktokVideoMirror(video.id, video.awemeId, videoUrl);
         await db
           .update(tiktokVideos)

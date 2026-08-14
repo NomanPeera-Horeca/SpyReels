@@ -1,6 +1,7 @@
 /**
  * Durable background ingest for Collected Reels (Telegram / URL paste).
- * Retries with backoff via nextFetchAt; marks ready only when R2 has a thumbnail.
+ * Retries with backoff via nextFetchAt; marks ready only when R2 has a thumbnail
+ * (or video). YouTube may be thumbnail-only (remake uses captions).
  */
 
 import {
@@ -9,9 +10,10 @@ import {
   listCollectedReelsDueForIngest,
   updateCollectedReel,
 } from "./db";
-import { fetchCollectedReelMetadata } from "./collectedReelFetch";
+import { fetchCollectedReelMetadataForPlatform } from "./collectedReelFetch";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import { ensureReelVideoOnR2 } from "./reelVideoR2";
+import type { CollectedVideoPlatform } from "./socialVideoUrl";
 
 export const COLLECTED_REEL_MAX_FETCH_ATTEMPTS = 24;
 
@@ -21,8 +23,23 @@ function backoffMs(attempt: number): number {
   return Math.min(90_000 * Math.max(attempt, 1), 10 * 60_000);
 }
 
-function pendingStatusMessage(attempt: number): string {
-  return `Fetching reel from Instagram (attempt ${attempt} of ${COLLECTED_REEL_MAX_FETCH_ATTEMPTS})…`;
+function platformOf(reel: { platform?: string | null }): CollectedVideoPlatform {
+  const p = (reel.platform || "instagram").toLowerCase();
+  if (p === "tiktok" || p === "youtube") return p;
+  return "instagram";
+}
+
+function pendingStatusMessage(
+  platform: CollectedVideoPlatform,
+  attempt: number
+): string {
+  const label =
+    platform === "tiktok"
+      ? "TikTok"
+      : platform === "youtube"
+        ? "YouTube"
+        : "Instagram";
+  return `Fetching ${label} video (attempt ${attempt} of ${COLLECTED_REEL_MAX_FETCH_ATTEMPTS})…`;
 }
 
 export function enqueueCollectedReelIngest(reelId: number): void {
@@ -44,9 +61,14 @@ async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
   const reel = await getCollectedReelById(reelId);
   if (!reel || reel.status !== "pending") return;
 
+  const platform = platformOf(reel);
   const preferUrl = reel.reelUrl?.trim() || undefined;
   try {
-    const outcome = await fetchCollectedReelMetadata(reel.shortcode, preferUrl);
+    const outcome = await fetchCollectedReelMetadataForPlatform(
+      platform,
+      reel.shortcode,
+      preferUrl
+    );
     if (!outcome.ok) {
       await updateCollectedReel(reelId, {
         status: "failed",
@@ -56,14 +78,22 @@ async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
     }
     const data = outcome.data;
     const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(reel.shortcode, (data.thumbnailUrl || "").trim() || null),
-      ensureReelVideoOnR2(reel.shortcode, (data.videoUrl || "").trim() || null),
+      ensureReelThumbnailOnR2(
+        reel.shortcode,
+        (data.thumbnailUrl || "").trim() || null
+      ),
+      platform === "youtube"
+        ? Promise.resolve("")
+        : ensureReelVideoOnR2(
+            reel.shortcode,
+            (data.videoUrl || "").trim() || null
+          ),
     ]);
     if (!stableThumb.trim() && !stableVid.trim()) {
       await updateCollectedReel(reelId, {
         status: "failed",
         errorMessage:
-          "Could not download reel media. Try Retry or paste the link again.",
+          "Could not download video media. Try Retry or paste the link again.",
       });
       return;
     }
@@ -97,18 +127,23 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
   const reel = await getCollectedReelById(reelId);
   if (!reel || reel.status !== "pending") return;
 
+  const platform = platformOf(reel);
   const attempt = (reel.fetchAttempts ?? 0) + 1;
   const preferUrl = reel.reelUrl?.trim() || undefined;
 
   await updateCollectedReel(reelId, {
     fetchAttempts: attempt,
     lastFetchAt: new Date(),
-    errorMessage: pendingStatusMessage(attempt),
+    errorMessage: pendingStatusMessage(platform, attempt),
     nextFetchAt: null,
   });
 
   try {
-    const outcome = await fetchCollectedReelMetadata(reel.shortcode, preferUrl);
+    const outcome = await fetchCollectedReelMetadataForPlatform(
+      platform,
+      reel.shortcode,
+      preferUrl
+    );
 
     if (!outcome.ok) {
       if (attempt >= COLLECTED_REEL_MAX_FETCH_ATTEMPTS) {
@@ -133,7 +168,9 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
 
     const [stableThumb, stableVid] = await Promise.all([
       ensureReelThumbnailOnR2(reel.shortcode, thumbCand || null),
-      ensureReelVideoOnR2(reel.shortcode, vidCand || null),
+      platform === "youtube"
+        ? Promise.resolve("")
+        : ensureReelVideoOnR2(reel.shortcode, vidCand || null),
     ]);
 
     const hasR2Thumb = stableThumb.trim().length > 0;
@@ -144,13 +181,13 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
         await updateCollectedReel(reelId, {
           status: "failed",
           errorMessage:
-            "Could not download reel media after several attempts. Try Retry or paste the link again.",
+            "Could not download video media after several attempts. Try Retry or paste the link again.",
           nextFetchAt: null,
         });
       } else {
         await updateCollectedReel(reelId, {
           status: "pending",
-          errorMessage: pendingStatusMessage(attempt),
+          errorMessage: pendingStatusMessage(platform, attempt),
           nextFetchAt: new Date(Date.now() + backoffMs(attempt)),
         });
       }
@@ -163,7 +200,7 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
       likeCount: data.likeCount > 0 ? data.likeCount : reel.likeCount || 0,
       commentCount: data.commentCount > 0 ? data.commentCount : reel.commentCount || 0,
       thumbnailUrl: hasR2Thumb ? stableThumb : reel.thumbnailUrl,
-      videoUrl: hasR2Video ? stableVid : reel.videoUrl,
+      videoUrl: hasR2Video ? stableVid : platform === "youtube" ? null : reel.videoUrl,
       duration: data.duration || reel.duration || null,
       postedAt: data.postedAt || reel.postedAt || null,
       ownerUsername: data.ownerUsername || reel.ownerUsername || null,
@@ -198,9 +235,11 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
 export async function processCollectedReelRefresh(reelId: number): Promise<void> {
   const reel = await getCollectedReelById(reelId);
   if (!reel || reel.status !== "ready") return;
+  const platform = platformOf(reel);
 
   try {
-    const outcome = await fetchCollectedReelMetadata(
+    const outcome = await fetchCollectedReelMetadataForPlatform(
+      platform,
       reel.shortcode,
       reel.reelUrl?.trim() || undefined
     );
@@ -216,7 +255,9 @@ export async function processCollectedReelRefresh(reelId: number): Promise<void>
     const vidCand = (data.videoUrl || reel.videoUrl || "").trim();
     const [stableThumb, stableVid] = await Promise.all([
       ensureReelThumbnailOnR2(reel.shortcode, thumbCand || null),
-      ensureReelVideoOnR2(reel.shortcode, vidCand || null),
+      platform === "youtube"
+        ? Promise.resolve("")
+        : ensureReelVideoOnR2(reel.shortcode, vidCand || null),
     ]);
 
     await updateCollectedReel(reelId, {
@@ -225,7 +266,11 @@ export async function processCollectedReelRefresh(reelId: number): Promise<void>
       likeCount: data.likeCount > 0 ? data.likeCount : reel.likeCount || 0,
       commentCount: data.commentCount > 0 ? data.commentCount : reel.commentCount || 0,
       thumbnailUrl: stableThumb.trim() ? stableThumb : reel.thumbnailUrl,
-      videoUrl: stableVid.trim() ? stableVid : reel.videoUrl,
+      videoUrl: stableVid.trim()
+        ? stableVid
+        : platform === "youtube"
+          ? reel.videoUrl
+          : reel.videoUrl,
       duration: data.duration || reel.duration || null,
       postedAt: data.postedAt || reel.postedAt || null,
       ownerUsername: data.ownerUsername || reel.ownerUsername || null,

@@ -134,11 +134,13 @@ export function ReelDialogVideo({
         key={reelId ?? code ?? resolvedSrc}
         src={resolvedSrc}
         poster={thumb || undefined}
-        controls
-        playsInline
-        loop={false}
-        preload="metadata"
-        className={className}
+            controls
+            playsInline
+            controlsList="nofullscreen"
+            disablePictureInPicture
+            loop={false}
+            preload="metadata"
+            className={className}
         onError={() => setVideoFailed(true)}
         onEnded={() => {
           videoRef.current?.pause();

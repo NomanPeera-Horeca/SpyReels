@@ -587,3 +587,95 @@ export async function fetchYouTubeTranscript(
 
   return null;
 }
+
+export interface YouTubeVideoDetails {
+  videoId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  durationSec: number;
+  postedAt: Date | null;
+  ownerUsername: string;
+  ownerFullName: string;
+  videoPageUrl: string;
+}
+
+/**
+ * Single YouTube video/Short metadata via ScrapeCreators.
+ * Does not return a downloadable MP4 (YouTube remake uses caption transcripts).
+ */
+export async function fetchYouTubeVideoDetails(
+  videoPageUrl: string
+): Promise<YouTubeVideoDetails | null> {
+  const url = videoPageUrl.trim();
+  if (!url) return null;
+
+  const maxTries = 5;
+  for (let attempt = 1; attempt <= maxTries; attempt++) {
+    try {
+      const { status, data } = await scGet("/v1/youtube/video", { url });
+
+      if (status === 404 || responseLooksNotFound(status, data)) {
+        return null;
+      }
+
+      if (
+        status === 200 &&
+        data &&
+        typeof data === "object" &&
+        (data as any).success !== false
+      ) {
+        const videoId = String((data as any).id || "").trim();
+        if (!videoId) return null;
+
+        const channel = (data as any).channel || {};
+        const durationMs = toFiniteNumber((data as any).durationMs);
+        const publishRaw = (data as any).publishDate;
+        let postedAt: Date | null = null;
+        if (typeof publishRaw === "string" && publishRaw.trim()) {
+          const d = new Date(publishRaw);
+          if (!Number.isNaN(d.getTime())) postedAt = d;
+        }
+
+        return {
+          videoId,
+          title: String((data as any).title || ""),
+          description: String((data as any).description || ""),
+          thumbnailUrl: String(
+            (data as any).thumbnail ||
+              `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+          ),
+          viewCount: toFiniteNumber((data as any).viewCountInt),
+          likeCount: toFiniteNumber((data as any).likeCountInt),
+          commentCount: toFiniteNumber((data as any).commentCountInt),
+          durationSec: durationMs > 0 ? Math.round(durationMs / 1000) : 0,
+          postedAt,
+          ownerUsername: String(channel.handle || channel.id || "").replace(
+            /^@/,
+            ""
+          ),
+          ownerFullName: String(channel.title || ""),
+          videoPageUrl: String((data as any).url || url),
+        };
+      }
+
+      if (attempt < maxTries) {
+        await sleep(status === 429 ? 2000 * attempt : 1000 * attempt);
+      }
+    } catch (error) {
+      if (attempt >= maxTries) {
+        console.warn(
+          `[YouTube] Failed to fetch video details for ${url}:`,
+          error instanceof Error ? error.message : error
+        );
+        return null;
+      }
+      await sleep(1000 * attempt);
+    }
+  }
+
+  return null;
+}

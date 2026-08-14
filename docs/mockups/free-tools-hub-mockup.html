@@ -195,14 +195,22 @@
     .grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 18px;
+      gap: 32px;
     }
     @media (min-width: 700px) {
-      .grid { grid-template-columns: repeat(2, 1fr); }
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+        column-gap: 32px;
+        row-gap: 40px;
+      }
       .nav-links { display: flex; }
     }
     @media (min-width: 980px) {
-      .grid { grid-template-columns: repeat(3, 1fr); }
+      .grid {
+        grid-template-columns: repeat(3, 1fr);
+        column-gap: 40px;
+        row-gap: 48px;
+      }
     }
 
     .card {
@@ -226,13 +234,13 @@
       object-fit: cover;
     }
     .card-title {
-      margin: 12px 4px 0;
+      margin: 16px 4px 0;
       font-size: 16px;
       font-weight: 650;
       letter-spacing: -0.01em;
     }
     .card-desc {
-      margin: 4px 4px 0;
+      margin: 6px 4px 0;
       color: var(--muted);
       font-size: 13px;
     }

@@ -2327,6 +2327,7 @@ export async function deleteTelegramConnection(id: number): Promise<void> {
 // ── Collected Reels ──
 
 let collectedReelIngestColumnsCached: boolean | undefined;
+let collectedReelPlatformColumnCached: boolean | undefined;
 
 /** Migration 0044 — probe so staging can deploy before SQL is applied. */
 export async function hasCollectedReelIngestColumns(): Promise<boolean> {
@@ -2352,26 +2353,62 @@ export async function hasCollectedReelIngestColumns(): Promise<boolean> {
   return collectedReelIngestColumnsCached;
 }
 
+/** Migration 0084 — Instagram / TikTok / YouTube platform column. */
+export async function hasCollectedReelPlatformColumn(): Promise<boolean> {
+  if (collectedReelPlatformColumnCached !== undefined) {
+    return collectedReelPlatformColumnCached;
+  }
+  const db = await getDb();
+  if (!db) {
+    collectedReelPlatformColumnCached = false;
+    return false;
+  }
+  try {
+    await db.execute(sql`SELECT platform FROM collected_reels LIMIT 0`);
+    collectedReelPlatformColumnCached = true;
+  } catch {
+    collectedReelPlatformColumnCached = false;
+    console.warn(
+      "[db] collected_reels.platform missing — run drizzle/0084_collected_reels_platform.sql"
+    );
+  }
+  return collectedReelPlatformColumnCached;
+}
+
 export async function collectedReelsColumnsForQuery() {
-  return collectedReelsSelectColumns(await hasCollectedReelIngestColumns());
+  return collectedReelsSelectColumns(
+    await hasCollectedReelIngestColumns(),
+    await hasCollectedReelPlatformColumn()
+  );
 }
 
-function collectedReelsSelectColumns(includeIngest: boolean) {
+function collectedReelsSelectColumns(
+  includeIngest: boolean,
+  includePlatform: boolean
+) {
   const all = getTableColumns(collectedReels);
-  if (includeIngest) return all;
-  const {
-    fetchAttempts: _a,
-    lastFetchAt: _b,
-    nextFetchAt: _c,
-    fetchProvider: _d,
-    ...core
-  } = all;
-  return core;
+  let cols: Record<string, unknown> = all;
+  if (!includeIngest) {
+    const {
+      fetchAttempts: _a,
+      lastFetchAt: _b,
+      nextFetchAt: _c,
+      fetchProvider: _d,
+      ...core
+    } = cols as typeof all;
+    cols = core;
+  }
+  if (!includePlatform) {
+    const { platform: _p, ...core } = cols as typeof all & { platform?: unknown };
+    cols = core;
+  }
+  return cols as ReturnType<typeof getTableColumns<typeof collectedReels>>;
 }
 
-function withIngestDefaults(row: Record<string, unknown>): CollectedReel {
+function withCollectedDefaults(row: Record<string, unknown>): CollectedReel {
   return {
     ...row,
+    platform: (row.platform as string | undefined) ?? "instagram",
     fetchAttempts: (row.fetchAttempts as number | undefined) ?? 0,
     lastFetchAt: (row.lastFetchAt as Date | null | undefined) ?? null,
     nextFetchAt: (row.nextFetchAt as Date | null | undefined) ?? null,
@@ -2379,15 +2416,19 @@ function withIngestDefaults(row: Record<string, unknown>): CollectedReel {
   } as CollectedReel;
 }
 
-async function stripIngestFieldsIfNeeded<T extends Record<string, unknown>>(
+async function stripCollectedOptionalFieldsIfNeeded<T extends Record<string, unknown>>(
   data: T
 ): Promise<Partial<T>> {
-  if (await hasCollectedReelIngestColumns()) return data;
   const out = { ...data };
-  delete out.fetchAttempts;
-  delete out.lastFetchAt;
-  delete out.nextFetchAt;
-  delete out.fetchProvider;
+  if (!(await hasCollectedReelIngestColumns())) {
+    delete out.fetchAttempts;
+    delete out.lastFetchAt;
+    delete out.nextFetchAt;
+    delete out.fetchProvider;
+  }
+  if (!(await hasCollectedReelPlatformColumn())) {
+    delete out.platform;
+  }
   return out;
 }
 
@@ -2397,7 +2438,11 @@ export async function createCollectedReel(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const workspaceId = data.workspaceId ?? (await getPersonalWorkspaceId(data.userId));
-  const values = (await stripIngestFieldsIfNeeded({ ...data, workspaceId })) as InsertCollectedReel;
+  const values = (await stripCollectedOptionalFieldsIfNeeded({
+    ...data,
+    workspaceId,
+    platform: data.platform ?? "instagram",
+  })) as InsertCollectedReel;
   const result = await db.insert(collectedReels).values(values);
   return result[0].insertId;
 }
@@ -2406,34 +2451,36 @@ export async function getCollectedReelsByWorkspace(workspaceId: string): Promise
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
+  const includePlatform = await hasCollectedReelPlatformColumn();
   const rows = await db
-    .select(collectedReelsSelectColumns(includeIngest))
+    .select(collectedReelsSelectColumns(includeIngest, includePlatform))
     .from(collectedReels)
     .where(eq(collectedReels.workspaceId, workspaceId))
     .orderBy(desc(collectedReels.createdAt));
-  return includeIngest ? (rows as CollectedReel[]) : rows.map((r) => withIngestDefaults(r));
+  return rows.map((r) => withCollectedDefaults(r as Record<string, unknown>));
 }
 
 export async function getCollectedReelById(id: number): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
+  const includePlatform = await hasCollectedReelPlatformColumn();
   const result = await db
-    .select(collectedReelsSelectColumns(includeIngest))
+    .select(collectedReelsSelectColumns(includeIngest, includePlatform))
     .from(collectedReels)
     .where(eq(collectedReels.id, id))
     .limit(1);
   const row = result[0];
   if (!row) return undefined;
-  return includeIngest ? (row as CollectedReel) : withIngestDefaults(row);
+  return withCollectedDefaults(row as Record<string, unknown>);
 }
 
 export async function updateCollectedReel(id: number, data: Partial<Omit<CollectedReel, "id" | "createdAt">>): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const patch = (await stripIngestFieldsIfNeeded(data)) as Partial<
-    Omit<CollectedReel, "id" | "createdAt">
-  >;
+  const patch = (await stripCollectedOptionalFieldsIfNeeded(
+    data as Record<string, unknown>
+  )) as Partial<Omit<CollectedReel, "id" | "createdAt">>;
   await db.update(collectedReels).set(patch).where(eq(collectedReels.id, id));
 }
 
@@ -2462,19 +2509,28 @@ export async function deleteFailedCollectedReelsByWorkspace(workspaceId: string)
 
 export async function getCollectedReelByShortcode(
   workspaceId: string,
-  shortcode: string
+  shortcode: string,
+  platform: string = "instagram"
 ): Promise<CollectedReel | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
+  const includePlatform = await hasCollectedReelPlatformColumn();
+  const conditions = [
+    eq(collectedReels.workspaceId, workspaceId),
+    eq(collectedReels.shortcode, shortcode),
+  ];
+  if (includePlatform) {
+    conditions.push(eq(collectedReels.platform, platform));
+  }
   const result = await db
-    .select(collectedReelsSelectColumns(includeIngest))
+    .select(collectedReelsSelectColumns(includeIngest, includePlatform))
     .from(collectedReels)
-    .where(and(eq(collectedReels.workspaceId, workspaceId), eq(collectedReels.shortcode, shortcode)))
+    .where(and(...conditions))
     .limit(1);
   const row = result[0];
   if (!row) return undefined;
-  return includeIngest ? (row as CollectedReel) : withIngestDefaults(row);
+  return withCollectedDefaults(row as Record<string, unknown>);
 }
 
 /** Pending collected reels due for background ingest (worker / sweeper). */
@@ -2482,19 +2538,20 @@ export async function listCollectedReelsDueForIngest(limit: number): Promise<Col
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const includeIngest = await hasCollectedReelIngestColumns();
+  const includePlatform = await hasCollectedReelPlatformColumn();
   if (!includeIngest) {
     const rows = await db
-      .select(collectedReelsSelectColumns(false))
+      .select(collectedReelsSelectColumns(false, includePlatform))
       .from(collectedReels)
       .where(eq(collectedReels.status, "pending"))
       .orderBy(asc(collectedReels.createdAt))
       .limit(limit);
-    return rows.map((r) => withIngestDefaults(r));
+    return rows.map((r) => withCollectedDefaults(r as Record<string, unknown>));
   }
   const now = new Date();
   const maxAttempts = 24;
   const rows = await db
-    .select(collectedReelsSelectColumns(true))
+    .select(collectedReelsSelectColumns(true, includePlatform))
     .from(collectedReels)
     .where(
       and(
@@ -2505,7 +2562,7 @@ export async function listCollectedReelsDueForIngest(limit: number): Promise<Col
     )
     .orderBy(asc(collectedReels.createdAt))
     .limit(limit);
-  return rows as CollectedReel[];
+  return rows.map((r) => withCollectedDefaults(r as Record<string, unknown>));
 }
 
 

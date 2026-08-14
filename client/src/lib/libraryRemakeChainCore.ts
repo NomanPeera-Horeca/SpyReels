@@ -17,7 +17,9 @@ export type LibraryRemakeSource =
       collectedReelId: number;
       /** When list row already mapped collected -> reels.id */
       transcriptionReelId?: number | null;
-    };
+    }
+  | { source: "tiktok"; tiktokVideoId: number }
+  | { source: "youtube"; youtubeVideoId: number };
 
 export type LibraryRemakeState = {
   stage: LibraryRemakeStage;
@@ -27,6 +29,8 @@ export type LibraryRemakeState = {
   reelId?: number;
   featuredReelId?: number;
   collectedReelId?: number;
+  tiktokVideoId?: number;
+  youtubeVideoId?: number;
   scriptId?: number;
   classificationReason?: string | null;
 };
@@ -61,6 +65,10 @@ export function libraryRemakeKey(source: LibraryRemakeSource): string {
       return `featured:${source.featuredReelId}`;
     case "collected":
       return `collected:${source.collectedReelId}`;
+    case "tiktok":
+      return `tiktok:${source.tiktokVideoId}`;
+    case "youtube":
+      return `youtube:${source.youtubeVideoId}`;
   }
 }
 
@@ -85,18 +93,30 @@ export function isTranscriptionReadyForRecreate(
 }
 
 export type TranscribeStatusFetch = (
-  input: { reelId: number } | { featuredReelId: number }
+  input:
+    | { reelId: number }
+    | { featuredReelId: number }
+    | { tiktokVideoId: number }
+    | { youtubeVideoId: number }
 ) => Promise<{
   status: string;
   transcript?: string | null;
   segments?: unknown;
 } | null>;
 
+export type TranscribeStatusInput =
+  | { reelId: number }
+  | { featuredReelId: number }
+  | { tiktokVideoId: number }
+  | { youtubeVideoId: number };
+
 export function transcribeStatusInput(
   source: LibraryRemakeSource,
   reelId: number | undefined,
   featuredReelId: number | undefined
-): { reelId: number } | { featuredReelId: number } {
+): TranscribeStatusInput {
+  if (source.source === "tiktok") return { tiktokVideoId: source.tiktokVideoId };
+  if (source.source === "youtube") return { youtubeVideoId: source.youtubeVideoId };
   if (source.source === "featured") return { featuredReelId: source.featuredReelId };
   const rid =
     reelId ?? (source.source === "user" ? source.reelId : source.transcriptionReelId ?? undefined);
@@ -111,7 +131,7 @@ export function transcribeStatusInput(
  */
 export async function waitForLibraryTranscriptionReady(
   fetchStatus: TranscribeStatusFetch,
-  statusInput: { reelId: number } | { featuredReelId: number },
+  statusInput: TranscribeStatusInput,
   opts: {
     isCancelled?: () => boolean;
     onAttempt?: (attempt: number) => void;
@@ -143,7 +163,7 @@ export async function waitForLibraryTranscriptionReady(
  */
 export async function assertLibraryTranscriptionReadyOnce(
   fetchStatus: TranscribeStatusFetch,
-  statusInput: { reelId: number } | { featuredReelId: number }
+  statusInput: TranscribeStatusInput
 ): Promise<void> {
   const tx = await fetchStatus(statusInput);
   if (isTranscriptionReadyForRecreate(tx)) return;
@@ -193,12 +213,21 @@ export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {
 export function resolveLibraryIds(
   source: LibraryRemakeSource,
   transcriptionReelId?: number
-): Pick<LibraryRemakeState, "reelId" | "featuredReelId" | "collectedReelId"> {
+): Pick<
+  LibraryRemakeState,
+  "reelId" | "featuredReelId" | "collectedReelId" | "tiktokVideoId" | "youtubeVideoId"
+> {
   if (source.source === "featured") {
     return { featuredReelId: source.featuredReelId };
   }
   if (source.source === "user") {
     return { reelId: source.reelId };
+  }
+  if (source.source === "tiktok") {
+    return { tiktokVideoId: source.tiktokVideoId };
+  }
+  if (source.source === "youtube") {
+    return { youtubeVideoId: source.youtubeVideoId };
   }
   return {
     collectedReelId: source.collectedReelId,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { usePostHog } from "@posthog/react";
-import { Loader2, Play, X } from "lucide-react";
+import { Loader2, Maximize2, Play, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
@@ -51,7 +52,10 @@ export function DashboardReelGridMedia({
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
   const [videoFailed, setVideoFailed] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  /** Portrait lightbox instead of native landscape fullscreen (native FS breaks 9:16 reels). */
+  const [enlarged, setEnlarged] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const enlargedVideoRef = useRef<HTMLVideoElement>(null);
   const userPausedRef = useRef(false);
   const programmaticPauseRef = useRef(false);
   const fallbackId = useId();
@@ -77,6 +81,7 @@ export function DashboardReelGridMedia({
   const pauseVideoElement = useCallback((programmatic: boolean) => {
     programmaticPauseRef.current = programmatic;
     videoRef.current?.pause();
+    enlargedVideoRef.current?.pause();
   }, []);
 
   const setPlaying = useCallback(
@@ -85,6 +90,7 @@ export function DashboardReelGridMedia({
         pauseVideoElement(true);
         releaseGridVideoPlay(playerId);
         userPausedRef.current = false;
+        setEnlarged(false);
       } else {
         userPausedRef.current = false;
       }
@@ -149,7 +155,7 @@ export function DashboardReelGridMedia({
 
   const tryPlay = useCallback(() => {
     if (userPausedRef.current) return;
-    const v = videoRef.current;
+    const v = enlarged ? enlargedVideoRef.current : videoRef.current;
     if (!v || v.paused === false) return;
     const p = v.play();
     void p
@@ -161,7 +167,7 @@ export function DashboardReelGridMedia({
         setVideoFailed(true);
         setPlaying(false);
       });
-  }, [capturePreviewEvent, setPlaying]);
+  }, [capturePreviewEvent, setPlaying, enlarged]);
 
   const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
     const current = resolvedSrc || (videoUrl ?? "").trim();
@@ -248,6 +254,104 @@ export function DashboardReelGridMedia({
     void startPlayback();
   }, [autoStart, startPlayback]);
 
+  const openEnlarged = useCallback(() => {
+    const inline = videoRef.current;
+    const t = inline?.currentTime ?? 0;
+    const wasPaused = inline ? inline.paused : false;
+    programmaticPauseRef.current = true;
+    inline?.pause();
+    setEnlarged(true);
+    // Sync into lightbox after portal mounts
+    window.setTimeout(() => {
+      const enlargedEl = enlargedVideoRef.current;
+      if (!enlargedEl) return;
+      const seekAndMaybePlay = () => {
+        try {
+          enlargedEl.currentTime = t;
+        } catch {
+          // ignore seek errors before metadata
+        }
+        if (!wasPaused && !userPausedRef.current) {
+          void enlargedEl.play().catch(() => undefined);
+        }
+      };
+      if (enlargedEl.readyState >= 1) seekAndMaybePlay();
+      else enlargedEl.addEventListener("loadedmetadata", seekAndMaybePlay, { once: true });
+    }, 0);
+  }, []);
+
+  const closeEnlarged = useCallback(() => {
+    const enlargedEl = enlargedVideoRef.current;
+    const t = enlargedEl?.currentTime ?? 0;
+    const wasPaused = enlargedEl ? enlargedEl.paused : true;
+    setEnlarged(false);
+    window.setTimeout(() => {
+      const inline = videoRef.current;
+      if (!inline) return;
+      try {
+        inline.currentTime = t;
+      } catch {
+        // ignore
+      }
+      if (!wasPaused && !userPausedRef.current) {
+        void inline.play().catch(() => undefined);
+      }
+    }, 0);
+  }, []);
+
+  // Block native browser fullscreen (landscape letterboxing of vertical reels).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !playing) return;
+
+    const redirectNativeFullscreen = () => {
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element | null;
+      };
+      const fsEl =
+        document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      if (fsEl === v) {
+        const exit =
+          document.exitFullscreen?.bind(document) ||
+          (document as Document & { webkitExitFullscreen?: () => Promise<void> })
+            .webkitExitFullscreen?.bind(document);
+        void exit?.().catch(() => undefined);
+        openEnlarged();
+      }
+    };
+
+    const onWebkitBegin = (e: Event) => {
+      e.preventDefault?.();
+      openEnlarged();
+    };
+
+    v.addEventListener("fullscreenchange", redirectNativeFullscreen);
+    document.addEventListener("fullscreenchange", redirectNativeFullscreen);
+    v.addEventListener("webkitbeginfullscreen", onWebkitBegin as EventListener);
+    return () => {
+      v.removeEventListener("fullscreenchange", redirectNativeFullscreen);
+      document.removeEventListener("fullscreenchange", redirectNativeFullscreen);
+      v.removeEventListener(
+        "webkitbeginfullscreen",
+        onWebkitBegin as EventListener
+      );
+    };
+  }, [playing, resolvedSrc, openEnlarged]);
+
+  useEffect(() => {
+    if (!enlarged) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeEnlarged();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [enlarged, closeEnlarged]);
+
   const handleVideoLoadedData = () => {
     tryPlay();
   };
@@ -274,6 +378,51 @@ export function DashboardReelGridMedia({
     stopPlayback();
   };
 
+  const lightbox =
+    enlarged && resolvedSrc && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-3 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Enlarged video preview"
+            onClick={closeEnlarged}
+          >
+            <div
+              className="relative flex h-full max-h-[100dvh] w-full max-w-[min(100vw,calc(100dvh*9/16))] items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <video
+                ref={enlargedVideoRef}
+                src={resolvedSrc}
+                poster={thumb || undefined}
+                controls
+                playsInline
+                controlsList="nofullscreen"
+                disablePictureInPicture
+                loop={false}
+                preload="auto"
+                className="max-h-[100dvh] max-w-full rounded-lg bg-black object-contain"
+                onPause={handleVideoPause}
+                onPlay={handleVideoPlay}
+                onError={handleVideoError}
+                onEnded={handleVideoEnded}
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90"
+                aria-label="Close enlarged video"
+                title="Close"
+                onClick={closeEnlarged}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <div className={cn("relative h-full w-full", className)}>
       {playing && resolvedSrc && !videoFailed ? (
@@ -285,6 +434,8 @@ export function DashboardReelGridMedia({
             poster={thumb || undefined}
             controls
             playsInline
+            controlsList="nofullscreen"
+            disablePictureInPicture
             loop={false}
             preload="metadata"
             className="absolute inset-0 h-full w-full object-cover"
@@ -294,6 +445,21 @@ export function DashboardReelGridMedia({
             onError={handleVideoError}
             onEnded={handleVideoEnded}
           />
+          <button
+            type="button"
+            className={cn(
+              "absolute z-30 flex items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90",
+              isCompact ? "right-10 top-8 h-7 w-7" : "right-12 top-12 h-8 w-8"
+            )}
+            aria-label="Enlarge video"
+            title="Enlarge"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEnlarged();
+            }}
+          >
+            <Maximize2 className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+          </button>
           <button
             type="button"
             className={cn(
@@ -362,6 +528,7 @@ export function DashboardReelGridMedia({
           ) : null}
         </>
       )}
+      {lightbox}
     </div>
   );
 }

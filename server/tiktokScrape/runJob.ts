@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { tiktokScrapeJobs, tiktokVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { scrapeTikTokVideos } from "../tiktok";
+import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { mirrorTiktokThumbnailsBounded } from "./mediaMirror";
 
 function failureMessageForHandle(handle: string, message: string): string {
@@ -133,6 +134,14 @@ export async function runTikTokScrapeJob(
       (video) => video.outsideSpyWindow !== true
     ).length;
 
+    // TikTok CDN avatars expire (x-expires). Mirror like Instagram so Creator Radar stays durable.
+    const durableProfilePic =
+      (await ensureProfilePicOnR2(
+        cleanHandle,
+        result.profilePicUrl,
+        "tiktok"
+      )) || result.profilePicUrl || "";
+
     await db
       .update(tiktokScrapeJobs)
       .set({
@@ -140,7 +149,7 @@ export async function runTikTokScrapeJob(
         totalVideos: result.videos.length,
         videosFound: result.videos.length,
         followerCount: result.followerCount,
-        profilePicUrl: result.profilePicUrl,
+        profilePicUrl: durableProfilePic,
         currentStep: "complete",
         progressPercent: 100,
         errorMessage: null,
