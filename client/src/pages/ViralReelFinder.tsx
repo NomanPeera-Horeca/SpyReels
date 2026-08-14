@@ -12,6 +12,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { FinderHandleForm } from "@/components/FinderHandleForm";
 import { PublicFooter } from "@/components/PublicFooter";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
@@ -585,9 +586,17 @@ export default function ViralReelFinder() {
       </header>
 
       <section className="mx-auto max-w-5xl px-4 pb-8 pt-10 text-center sm:pt-16">
+        <PublicBreadcrumb
+          className="mb-4 flex justify-center"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Free Tools", href: "/free-tools" },
+            { label: "Viral Reel Finder" },
+          ]}
+        />
         <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden />
-          Free reel finder &amp; reel spy tool · no card
+          Free reel finder and reel spy tool
         </span>
         <h1 className="mx-auto mt-5 max-w-3xl text-[1.65rem] font-bold leading-tight tracking-tight sm:text-5xl sm:leading-tight">
           <span className="hidden sm:inline">
@@ -972,7 +981,7 @@ export default function ViralReelFinder() {
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               [
-                "Creators under 50K",
+                "Growing creators",
                 "Find the three accounts one rung above you and film against their outliers instead of guessing.",
               ],
               [

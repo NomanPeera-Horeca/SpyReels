@@ -79,7 +79,7 @@ export function blogIndexHeadMeta(): PageHeadMeta {
     title: seo?.title ?? "Instagram Reels Growth Blog - SpyReels",
     description:
       seo?.description ??
-      "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.",
+      "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for creators by SpyReels.",
     canonical: canonicalUrlForPathname("/blog"),
     ogImage: DEFAULT_OG_IMAGE,
     ogType: "website",

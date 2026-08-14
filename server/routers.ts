@@ -492,7 +492,7 @@ const hookGeneratorRouter = router({
           {
             role: "system",
             content: withAiFormattingRules(
-              "You are a viral Instagram Reels hook strategist working with nano and micro creators under 50K followers. You write hooks that stop the scroll in the first 2 seconds. You understand what works on Reels specifically: high specificity, personal stakes, counter-intuitive truths, and emotional triggers. You reject generic AI-sounding language and clichés. Respond with valid JSON only, no prose, no markdown, no code fences."
+              "You are a viral Instagram Reels hook strategist. You write hooks that stop the scroll in the first 2 seconds. You understand what works on Reels specifically: high specificity, personal stakes, counter-intuitive truths, and emotional triggers. You reject generic AI-sounding language and clichés. Respond with valid JSON only, no prose, no markdown, no code fences."
             ),
           },
           {

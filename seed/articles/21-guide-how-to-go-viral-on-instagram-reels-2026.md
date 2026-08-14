@@ -109,7 +109,7 @@ Virality rewards volume over time. Three Reels per week you sustain beats seven 
 | Cadence | Best for | Risk |
 | --- | --- | --- |
 | 2x per week | Side hustlers, high production | Slow learning |
-| 3x per week | Most creators under 50K | Balanced |
+| 3x per week | Most growing creators | Balanced |
 | 5x per week | Full-time creators with systems | Burnout if no batching |
 | Daily | Teams or simple formats only | Quality dips without process |
 

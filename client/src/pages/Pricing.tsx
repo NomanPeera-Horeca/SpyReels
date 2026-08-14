@@ -657,7 +657,7 @@ function renderFeatureValue(value: FeatureValue) {
 
 const PRICING_TITLE = "SpyReels Pricing - Plans for Nano and Micro Instagram Creators";
 const PRICING_DESCRIPTION =
-  "Simple pricing for SpyReels. Free tier, Starter, and Pro plans. No credits, no surprises. Built for creators under 50K followers.";
+  "Simple pricing for SpyReels. Free tier, Starter, and Pro plans. No credits, no surprises. Built for creators who want to grow on Reels.";
 const PRICING_CANONICAL = `${SPYREELS_SITE_URL}/pricing`;
 
 export default function Pricing() {

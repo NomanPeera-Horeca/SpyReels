@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { FinderHandleForm } from "@/components/FinderHandleForm";
 import { PublicFooter } from "@/components/PublicFooter";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
 import { YouTubeMark } from "@/components/PlatformHandleMarks";
@@ -327,14 +328,6 @@ function toneClass(tone: "yes" | "partial" | "no"): string {
   return "text-muted-foreground";
 }
 
-function formatDisplayDate(value: Date): string {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 const THUMB_GRADIENTS = [
   "from-[#2a1848] via-[#0b1220] to-[#1a0f14]",
   "from-[#0f3b2e] via-[#0b1220] to-[#12203a]",
@@ -346,7 +339,6 @@ export default function YouTubeShortsViralFinder() {
   useCanonical(PAGE_PATH);
   const { user, loading: authLoading } = useAuth();
   const isSignedIn = Boolean(user);
-  const updatedLabel = formatDisplayDate(new Date());
 
   const [handleInput, setHandleInput] = useState("");
   const [activeHandle, setActiveHandle] = useState<string>(DEMO_HANDLES[0]);
@@ -552,6 +544,14 @@ export default function YouTubeShortsViralFinder() {
       </header>
 
       <section className="mx-auto max-w-5xl px-4 pb-8 pt-10 text-center sm:pt-16">
+        <PublicBreadcrumb
+          className="mb-4 flex justify-center"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Free Tools", href: "/free-tools" },
+            { label: "YouTube Shorts Viral Finder" },
+          ]}
+        />
         <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden />
           Free YouTube Shorts finder · by channel
@@ -562,9 +562,6 @@ export default function YouTubeShortsViralFinder() {
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:text-lg">
           {HERO_SUBHEAD}
-        </p>
-        <p className="mx-auto mt-3 text-sm text-muted-foreground">
-          By Noah Perry · Updated {updatedLabel}
         </p>
         <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl text-left">
           <FinderHandleForm
@@ -939,7 +936,7 @@ export default function YouTubeShortsViralFinder() {
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               [
-                "Creators under 50K",
+                "Growing creators",
                 "Spy channels one rung above you. Film against their outliers instead of guessing on the Shorts feed.",
               ],
               [

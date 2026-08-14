@@ -1,0 +1,16 @@
+---
+description: When adding any new page, flag footer / related-tools / internal-link opportunities before finishing.
+alwaysApply: true
+---
+
+# Internal linking on new pages
+
+Whenever a new page ships (free tool, feature page, niche subpage, marketing page, or other public URL):
+
+1. **Proactively report** whether it should be linked from:
+   - the shared site Footer
+   - a Related tools / RelatedToolsGrid section on other relevant pages
+   - homepage hubs, blog, or other existing internal-link surfaces
+2. Do this as part of finishing the page build. Do not wait to be asked.
+3. Prefer adding real links only to pages that resolve (no fabricated URLs, no known 404 niche stubs unless they are intentionally live).
+4. Orphaned live pages (no inbound internal links) are a crawl/discovery problem — flag them explicitly.

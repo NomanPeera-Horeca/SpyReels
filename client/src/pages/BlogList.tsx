@@ -16,7 +16,7 @@ import {
 
 const BLOG_TITLE = "Instagram Reels Growth Blog - SpyReels";
 const BLOG_DESCRIPTION =
-  "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.";
+  "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for creators by SpyReels.";
 const BLOG_CANONICAL = `${SPYREELS_SITE_URL}/blog`;
 
 export default function BlogList() {
@@ -125,7 +125,7 @@ export default function BlogList() {
             Instagram Reels Growth Blog by SpyReels
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mb-4">
-            Read the latest from SpyReels on growing on Instagram Reels. We cover viral hooks, scripting, transcription, and competitor research for nano and micro creators.
+            Read the latest from SpyReels on growing on Instagram Reels. We cover viral hooks, scripting, transcription, and competitor research for creators.
           </p>
         </div>
 

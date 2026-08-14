@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
 import {
@@ -18,7 +19,7 @@ const PAGE_DESCRIPTION =
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}/features/30-day-content-plan`;
 
 const DIRECT_ANSWER =
-  "A 30-day Instagram content plan is a calendar of Reel ideas mapped across four weeks so you always know what to film next. SpyReels generates niche-tailored ideas, lets you capture sparks from research on the Spark Deck, approve cards on your calendar, and open AI Personal Brand Coach to write each script. Built for nano and micro creators under 50,000 followers who need consistency without guessing every Sunday night.";
+  "A 30-day Instagram content plan is a calendar of Reel ideas mapped across four weeks so you always know what to film next. SpyReels generates niche-tailored ideas, lets you capture sparks from research on the Spark Deck, approve cards on your calendar, and open AI Personal Brand Coach to write each script. Built for creators who need consistency without guessing every Sunday night.";
 
 const FAQ_ITEMS = [
   {
@@ -43,7 +44,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Who is this built for?",
-    a: "SpyReels is built for nano and micro Instagram creators under 50,000 followers who post Reels weekly and want a repeatable system instead of last-minute brainstorming.",
+    a: "SpyReels is built for Instagram creators who post Reels weekly and want a repeatable system instead of last-minute brainstorming.",
   },
 ];
 
@@ -55,17 +56,8 @@ const WORKFLOW_ROWS = [
   { step: "Film with teleprompter", detail: "Delivery cues and production notes included" },
 ];
 
-function formatDisplayDate(value: Date): string {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export default function ThirtyDayContentPlanFeature() {
   useCanonical("/features/30-day-content-plan");
-  const updatedLabel = formatDisplayDate(new Date());
 
   useEffect(() => {
     applyStandardPageMeta({
@@ -102,7 +94,7 @@ export default function ThirtyDayContentPlanFeature() {
       operatingSystem: "Web Browser",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       description:
-        "30-day Instagram Reels content calendar with Spark Deck and AI script writing for nano and micro creators.",
+        "30-day Instagram Reels content calendar with Spark Deck and AI script writing for creators.",
     });
 
     injectSchemaScript("plan-faq-schema", {
@@ -129,9 +121,14 @@ export default function ThirtyDayContentPlanFeature() {
       <PublicHeader />
 
       <main className="max-w-4xl mx-auto px-4 py-12 sm:py-16">
-        <p className="text-sm text-muted-foreground mb-6">
-          By Noah Perry · Updated {updatedLabel}
-        </p>
+        <PublicBreadcrumb
+          className="mb-6"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Features", href: "/#features" },
+            { label: "30-Day Content Plan" },
+          ]}
+        />
 
         <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
           30-day Instagram content plan for Reels creators

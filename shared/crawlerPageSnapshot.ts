@@ -33,9 +33,9 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
       "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
   },
   "/free-tools/viral-hooks": {
-    h1: "Free Instagram Viral Hook Generator",
+    h1: "Viral Hook Generator",
     summary:
-      "Generate scroll-stopping Reels hooks from proven viral patterns. Preview free, no SpyReels account required.",
+      "Free AI viral hook generator for Reels, TikTok, and Shorts. Spoken lines plus on-screen text from proven patterns, then expand into a full SpyReels script.",
   },
   "/free-tools/broll-generator": {
     h1: "Free AI B-Roll Generator",
@@ -50,7 +50,7 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
   "/about": {
     h1: "About SpyReels and Noah Perry",
     summary:
-      "SpyReels helps creators under 50K find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
+      "SpyReels helps creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
   },
   "/contact": {
     h1: "Contact SpyReels",

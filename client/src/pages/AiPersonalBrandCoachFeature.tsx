@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
 import {
@@ -54,17 +55,8 @@ const MODE_ROWS = [
   { mode: "New hooks", use: "Generate alternate openings for the same idea" },
 ];
 
-function formatDisplayDate(value: Date): string {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export default function AiPersonalBrandCoachFeature() {
   useCanonical("/features/ai-personal-brand-coach");
-  const updatedLabel = formatDisplayDate(new Date());
 
   useEffect(() => {
     applyStandardPageMeta({
@@ -128,9 +120,14 @@ export default function AiPersonalBrandCoachFeature() {
       <PublicHeader />
 
       <main className="max-w-4xl mx-auto px-4 py-12 sm:py-16">
-        <p className="text-sm text-muted-foreground mb-6">
-          By Noah Perry · Updated {updatedLabel}
-        </p>
+        <PublicBreadcrumb
+          className="mb-6"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Features", href: "/#features" },
+            { label: "AI Personal Brand Coach" },
+          ]}
+        />
 
         <h1 className="mb-6 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
           AI Personal Brand Coach for Instagram Reels

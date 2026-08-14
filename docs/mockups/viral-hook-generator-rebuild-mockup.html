@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MOCKUP · Viral Hook Generator | SpyReels</title>
+  <style>
+    :root {
+      --bg: #0c0b12;
+      --panel: #14121c;
+      --panel-2: #1a1724;
+      --line: #2c2740;
+      --text: #f4f2f8;
+      --muted: #9b96ad;
+      --primary: #8b5cf6;
+      --primary-2: #a78bfa;
+      --ok: #4ade80;
+      --card: #12101a;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1000px 480px at 50% -12%, rgba(139, 92, 246, 0.22), transparent 55%),
+        radial-gradient(700px 360px at 90% 20%, rgba(99, 102, 241, 0.08), transparent 50%),
+        var(--bg);
+      line-height: 1.55;
+    }
+    a { color: var(--primary-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .mock-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #1f1638;
+      border-bottom: 1px solid #3b2a63;
+      color: #ddd6fe;
+      font-size: 12px;
+      padding: 10px 16px;
+      text-align: center;
+    }
+    .mock-banner strong { color: #fff; }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(12,11,18,0.85);
+      backdrop-filter: blur(16px);
+    }
+    .nav .bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px;
+      height: 64px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      font-size: 17px;
+    }
+    .logo img { width: 36px; height: 36px; display: block; }
+    .nav-links {
+      margin-left: auto;
+      display: none;
+      gap: 22px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .nav-links a:hover { color: #fff; text-decoration: none; }
+    .nav-links .earn { color: var(--primary-2); }
+    .header-ctas { display: flex; gap: 8px; align-items: center; }
+    .nav-login {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 8px;
+      background: transparent;
+      color: #fff;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 12px;
+      cursor: pointer;
+      min-height: 40px;
+    }
+    .nav-cta {
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 12px;
+      cursor: pointer;
+      min-height: 40px;
+    }
+    @media (min-width: 800px) { .nav-links { display: flex; } }
+
+    .wrap { max-width: 920px; margin: 0 auto; padding: 8px 20px 80px; }
+    .wide { max-width: 1100px; margin: 0 auto; padding: 0 20px 72px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      background: rgba(139, 92, 246, 0.12);
+      color: var(--primary-2);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+    }
+
+    .hero { text-align: center; padding: 28px 0 8px; }
+    .crumbs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 0 0 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .crumbs a { color: var(--muted); }
+    .crumbs a:hover { color: #fff; text-decoration: none; }
+    .crumbs .sep { opacity: 0.55; }
+    .crumbs .current { color: #e8e4f5; }
+    .hero h1 {
+      margin: 16px auto 10px;
+      max-width: 16ch;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--primary-2);
+      text-decoration: underline;
+      text-decoration-thickness: 6px;
+      text-underline-offset: 8px;
+      text-decoration-color: rgba(167, 139, 250, 0.45);
+    }
+    .sub {
+      margin: 0 auto;
+      max-width: 42rem;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .answer {
+      margin: 14px auto 0;
+      max-width: 44rem;
+      color: #d4d0e0;
+      font-size: 15px;
+    }
+    .proof {
+      margin: 16px auto 0;
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px 12px;
+      color: #e8e4f5;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .stars {
+      color: #fbbf24;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      line-height: 1;
+    }
+    .stars svg { width: 15px; height: 15px; display: block; }
+    .faces {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+    }
+    .faces img {
+      display: block;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid #1a1228;
+      box-shadow: 0 0 0 1.5px rgba(167, 139, 250, 0.55);
+      margin: 0 0 0 -10px;
+      background: #121218;
+      flex-shrink: 0;
+    }
+    .faces img:first-child { margin-left: 0; }
+    .proof .used-by { font-weight: 600; color: #d4d0e0; }
+    .proof .used-by strong { color: #fff; font-weight: 800; }
+
+    .tool {
+      margin: 28px auto 0;
+      max-width: 640px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(26, 23, 36, 0.95), rgba(18, 16, 26, 0.98));
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(139, 92, 246, 0.12);
+      text-align: left;
+    }
+    .tool-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-2);
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 7px;
+    }
+    textarea, select, input[type="email"] {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #0d0b14;
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+      outline: none;
+    }
+    textarea:focus, select:focus, input:focus {
+      border-color: rgba(139, 92, 246, 0.7);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .row-2 {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (min-width: 640px) {
+      .row-2 { grid-template-columns: 1fr 1fr; }
+    }
+    .tones {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .tone {
+      border: 1px solid var(--line);
+      background: #0d0b14;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tone.active {
+      border-color: rgba(139, 92, 246, 0.7);
+      background: rgba(139, 92, 246, 0.15);
+      color: #fff;
+    }
+    .gen {
+      margin-top: 16px;
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .gen:disabled { opacity: 0.6; cursor: wait; }
+    .hint {
+      margin: 10px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .results { margin-top: 18px; display: none; }
+    .results.show { display: block; }
+    .result-card {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .result-card .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .result-card .spoken { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .result-card .onscreen {
+      display: inline-block;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .locked {
+      border: 1px dashed rgba(139, 92, 246, 0.5);
+      background: rgba(139, 92, 246, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .locked h3 { margin: 0 0 6px; font-size: 16px; }
+    .locked p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+    .teaser {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .teaser strong { color: var(--primary-2); }
+
+    section.block { padding: 56px 0 0; }
+    section.block h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+    section.block > p.lead {
+      margin: 0 0 22px;
+      color: var(--muted);
+      max-width: 46rem;
+    }
+
+    .steps {
+      position: relative;
+      display: grid;
+      gap: 18px;
+    }
+    @media (min-width: 860px) {
+      .steps { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+      .steps::before {
+        content: "";
+        position: absolute;
+        top: 18px;
+        left: 10%;
+        right: 10%;
+        height: 2px;
+        background: rgba(139, 92, 246, 0.45);
+        z-index: 0;
+      }
+    }
+    .step {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      padding: 0 6px;
+    }
+    .step .n {
+      width: 36px;
+      height: 36px;
+      margin: 0 auto 10px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: none;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18);
+    }
+    .step h3 { margin: 0 0 4px; font-size: 15px; font-weight: 800; }
+    .step p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .cards-4 {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 800px) { .cards-4 { grid-template-columns: repeat(4, 1fr); } }
+    .feat {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .feat .icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--primary-2);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .feat h3 { margin: 0 0 6px; font-size: 15px; }
+    .feat p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    table.compare {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+    table.compare th, table.compare td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+    table.compare th { background: var(--panel-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    table.compare tr:last-child td { border-bottom: 0; }
+    table.compare td:first-child { font-weight: 700; }
+    .yes { color: var(--ok); font-weight: 700; }
+    .no { color: #f87171; }
+    .partial { color: #fbbf24; }
+
+    .tools {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 720px) { .tools { grid-template-columns: repeat(3, 1fr); } }
+    .tool-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 16px;
+      display: block;
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .tool-card:hover {
+      border-color: rgba(139, 92, 246, 0.55);
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+    .tool-card .thumb {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      height: auto;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0a0910;
+      border: 1px solid var(--line);
+      margin-bottom: 12px;
+      display: block;
+      font-size: 0;
+    }
+    .tool-card .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .tool-card h3 { margin: 0 0 4px; font-size: 15px; }
+    .tool-card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .tool-card .go { margin-top: 10px; color: var(--primary-2); font-size: 13px; font-weight: 700; }
+
+    .bridge {
+      margin-top: 48px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      background:
+        radial-gradient(600px 220px at 20% 0%, rgba(139,92,246,0.22), transparent 60%),
+        var(--panel);
+      border-radius: 22px;
+      padding: 28px 22px;
+      text-align: center;
+    }
+    .bridge h2 { margin: 0 0 10px; font-size: clamp(1.4rem, 3vw, 2rem); }
+    .bridge h2 span { color: var(--primary-2); }
+    .bridge p { margin: 0 auto 18px; max-width: 40rem; color: var(--muted); }
+    .bridge .cta {
+      display: inline-flex;
+      border: 0;
+      border-radius: 999px;
+      background: #fff;
+      color: #4c1d95;
+      font-weight: 800;
+      padding: 12px 18px;
+      cursor: pointer;
+    }
+
+    .faq details {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+    }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .faq p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+
+    .patterns {
+      display: grid;
+      gap: 8px;
+    }
+    @media (min-width: 720px) { .patterns { grid-template-columns: 1fr 1fr; } }
+    .pat {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .pat strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .pat span { color: var(--muted); font-size: 13px; }
+
+    .final {
+      margin-top: 48px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      border-radius: 22px;
+      overflow: hidden;
+    }
+    .final-banner {
+      display: block;
+      width: 100%;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      background: #0a0a12;
+    }
+    .final-banner:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 40px rgba(91, 33, 182, 0.35);
+    }
+    .final-banner img {
+      display: block;
+      width: 100%;
+      height: auto;
+      vertical-align: middle;
+    }
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .pill {
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #ede9fe;
+      background: rgba(255,255,255,0.06);
+    }
+
+    footer.site {
+      border-top: 1px solid var(--line);
+      background: #0a0910;
+      padding: 48px 20px 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+    }
+    @media (min-width: 900px) {
+      .footer-inner { grid-template-columns: 1.2fr 2.5fr; gap: 36px; }
+    }
+    .footer-brand p {
+      margin: 12px 0 0;
+      max-width: 36ch;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .footer-cols {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    @media (min-width: 700px) {
+      .footer-cols { grid-template-columns: repeat(5, 1fr); }
+    }
+    .footer-cols h4 {
+      margin: 0 0 10px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+      font-weight: 700;
+    }
+    .footer-cols ul { list-style: none; margin: 0; padding: 0; }
+    .footer-cols li { margin-bottom: 8px; }
+    .footer-cols a { color: var(--muted); font-size: 14px; }
+    .footer-cols a:hover { color: #fff; text-decoration: none; }
+    .footer-bottom {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      text-align: right;
+      font-size: 12px;
+      color: rgba(155,150,173,0.7);
+    }
+
+    /* One-click hook animation (on top of existing before/after phone) */
+    .hook-anim-wrap { margin: 18px auto 0; max-width: 420px; }
+    .hook-phone {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      max-height: 520px;
+      margin: 0 auto;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(139,92,246,0.2);
+    }
+    .hook-phone img.base {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    }
+    .hook-layer {
+      position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%);
+      width: 86%; text-align: center; z-index: 3; pointer-events: none;
+    }
+    .hook-line {
+      opacity: 0; transform: translateY(16px) scale(0.92); filter: blur(4px);
+      transition: 0.4s cubic-bezier(0.2,0.9,0.2,1); margin: 0 auto 8px;
+    }
+    .hook-phone.is-hooked .hook-line {
+      opacity: 1; transform: none; filter: none;
+    }
+    .hook-phone.is-hooked .hook-line:nth-child(1) { transition-delay: 0.05s; }
+    .hook-phone.is-hooked .hook-line:nth-child(2) { transition-delay: 0.18s; }
+    .hook-phone.is-hooked .hook-line:nth-child(3) { transition-delay: 0.32s; }
+    .hook-phone.is-hooked .hook-line:nth-child(4) { transition-delay: 0.46s; }
+    .hook-line.soft { color: #fff; font-size: 15px; font-weight: 600; text-shadow: 0 2px 10px #000; }
+    .hook-line.pill-yellow {
+      display: inline-block; background: #facc15; color: #111; font-weight: 900;
+      font-size: 26px; padding: 4px 12px; border-radius: 8px;
+    }
+    .hook-line.pill-green {
+      display: inline-block; background: #22c55e; color: #fff; font-weight: 900;
+      font-size: 24px; padding: 4px 12px; border-radius: 8px;
+    }
+    .hook-line.big { color: #fff; font-size: 28px; font-weight: 900; text-shadow: 0 3px 14px #000; }
+    .one-click-btn {
+      position: absolute; z-index: 4; left: 50%; bottom: 9%; transform: translateX(-50%);
+      border: 0; border-radius: 999px; background: #fff; color: #111;
+      font-weight: 800; font-size: 12px; padding: 10px 14px; cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45); white-space: nowrap;
+    }
+    .hook-phone.is-hooked .one-click-btn { background: var(--ok); color: #052e16; }
+    .click-cursor {
+      position: absolute; z-index: 5; width: 42px; height: 42px; border-radius: 50%;
+      border: 2px solid #fff; background: rgba(139,92,246,0.35);
+      left: 50%; bottom: 11%; transform: translate(-50%, 20px) scale(0.7);
+      opacity: 0; pointer-events: none;
+    }
+    .hook-phone.is-clicking .click-cursor { animation: tapPulse 0.7s ease forwards; }
+    @keyframes tapPulse {
+      0% { opacity: 0; transform: translate(-50%, 28px) scale(0.6); }
+      35% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      70% { box-shadow: 0 0 0 16px rgba(167,139,250,0); }
+      100% { opacity: 0; }
+    }
+    .hook-anim-hint {
+      margin: 10px 0 0; text-align: center; font-size: 12px; color: var(--muted);
+    }
+    .hook-anim-hint strong { color: #fff; }
+
+    .toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: #1f1638;
+      border: 1px solid #5b21b6;
+      color: #ede9fe;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+      z-index: 60;
+      max-width: 280px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+    .toast.show { display: block; }
+
+    /* Before / After comparison slider */
+    .compare-visual {
+      margin: 28px auto 0;
+      max-width: 420px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: #0a0910;
+      padding: 14px;
+    }
+    .ba-slider {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      max-height: 560px;
+      margin: 0 auto;
+      border-radius: 16px;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      cursor: ew-resize;
+      background: #000;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.08),
+        0 24px 60px rgba(0,0,0,0.55),
+        0 0 40px rgba(255, 90, 40, 0.18);
+    }
+    .ba-slider img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      display: block;
+    }
+    .ba-after-clip {
+      position: absolute;
+      inset: 0;
+      width: 50%;
+      overflow: hidden;
+    }
+    .ba-after-clip img {
+      /* Full frame width so crop reveals correctly while sliding */
+      width: var(--ba-full-w, 100%);
+      max-width: none;
+    }
+    .ba-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 3px;
+      background: #fff;
+      transform: translateX(-50%);
+      z-index: 3;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+    }
+    .ba-handle::after {
+      content: "⟷";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      background: #fff;
+      color: #111;
+      font-size: 16px;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+    .ba-tag {
+      position: absolute;
+      bottom: 14px;
+      z-index: 4;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .ba-tag.before {
+      left: 12px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .ba-tag.after {
+      right: 12px;
+      background: #fff;
+      color: #111;
+    }
+    .ba-hint {
+      margin: 10px 0 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .product-showcase {
+      margin-top: 40px;
+      text-align: center;
+    }
+    .product-showcase .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+    }
+    .product-showcase .logo-mark img {
+      width: 28px;
+      height: 28px;
+    }
+    .checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      justify-content: center;
+      margin: 18px auto 22px;
+      max-width: 640px;
+      color: #ddd6fe;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .checks span::before {
+      content: "✓";
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, 0.25);
+      color: var(--primary-2);
+      font-size: 11px;
+    }
+    .product-hero {
+      margin: 0 auto;
+      max-width: 920px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      overflow: hidden;
+      background: #0a0910;
+    }
+    .product-hero img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .product-cta {
+      margin-top: 18px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 13px 22px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="mock-banner">
+    <strong>HTML MOCKUP ONLY</strong> · not wired to production ·
+    interactive generate + unlock demo · approve this before React
+  </div>
+
+  <header class="nav">
+    <div class="bar">
+      <a class="logo" href="#">
+        <img
+          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+          alt="SpyReels"
+          width="36"
+          height="36"
+        />
+        SpyReels
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#">Features</a>
+        <a href="#">Free Tools</a>
+        <a href="#">How It Works</a>
+        <a href="#">Pricing</a>
+        <a href="#">FAQ</a>
+        <a href="#">Blog</a>
+        <a class="earn" href="#">✦ Earn 20%</a>
+      </nav>
+      <div class="header-ctas">
+        <button class="nav-login" type="button" onclick="toast('Would open login')">Log In</button>
+        <button class="nav-cta" type="button" onclick="toast('Would open signup')">Start Free</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="#">Home</a>
+        <span class="sep">›</span>
+        <a href="#">Free Tools</a>
+        <span class="sep">›</span>
+        <span class="current">Viral Hook Generator</span>
+      </nav>
+      <div class="badge"><span class="dot"></span> Free tool · Viral hooks</div>
+      <h1>Viral <em>Hook Generator</em></h1>
+      <p class="sub">Engage viewers from the first second. Free AI hooks for Reels, TikTok, and Shorts.</p>
+      <p class="answer">
+        A viral hook generator writes the first 1 to 3 seconds of your short video so people stop scrolling.
+        SpyReels gives you spoken lines plus on-screen text from proven Reel patterns, then lets you expand any hook into a full script.
+      </p>
+      <div class="proof" aria-label="Rated 4.5 stars. Used by 12,000+ creators">
+        <span class="stars" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24">
+            <defs>
+              <linearGradient id="halfStar" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="50%" stop-color="#fbbf24"/>
+                <stop offset="50%" stop-color="rgba(251,191,36,0.25)"/>
+              </linearGradient>
+            </defs>
+            <path fill="url(#halfStar)" d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/>
+          </svg>
+        </span>
+        <span class="faces" aria-hidden="true">
+          <img src="proof-faces/face-1.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-2.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-3.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-4.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-5.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-6.png?v=flat1" alt="" width="32" height="32" />
+        </span>
+        <span class="used-by">Used by <strong>12,000+</strong> creators</span>
+      </div>
+    </section>
+
+    <div class="tool" id="tool">
+      <div class="tool-head">⚡ Viral Hook Generator</div>
+      <form id="hook-form">
+        <label for="topic">What is your video about?</label>
+        <textarea id="topic" placeholder="e.g. productivity tips for founders who keep quitting morning routines" required minlength="10"></textarea>
+
+        <div class="row-2">
+          <div>
+            <label for="platform">Platform</label>
+            <select id="platform">
+              <option>Instagram Reels</option>
+              <option>TikTok</option>
+              <option>YouTube Shorts</option>
+              <option>Any short-form</option>
+            </select>
+          </div>
+          <div>
+            <label for="style">Hook style</label>
+            <select id="style">
+              <option>Curiosity gap</option>
+              <option>Contrarian</option>
+              <option>Mistake call-out</option>
+              <option>Result-first</option>
+              <option>Question</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Tone</label>
+          <div class="tones" id="tones">
+            <button type="button" class="tone active" data-tone="Energetic">Energetic</button>
+            <button type="button" class="tone" data-tone="Direct">Direct</button>
+            <button type="button" class="tone" data-tone="Storyteller">Storyteller</button>
+            <button type="button" class="tone" data-tone="Witty">Witty</button>
+            <button type="button" class="tone" data-tone="Calm">Calm</button>
+          </div>
+        </div>
+
+        <button class="gen" id="gen-btn" type="submit">✨ Generate 10 hooks</button>
+      </form>
+
+      <div class="results" id="results" aria-live="polite"></div>
+    </div>
+
+    <!-- Fold 2 visual: one-click animation (moved up so landers see it fast) -->
+    <section class="block" id="one-click-demo" style="padding-top:56px">
+      <h2 style="text-align:center">Generate a viral hook in one click</h2>
+      <p class="lead" style="text-align:center;margin-left:auto;margin-right:auto">
+        Watch it: one tap drops scroll-stopping on-screen text on your Reel.
+      </p>
+      <div class="hook-anim-wrap">
+        <div class="hook-phone" id="hook-phone" aria-label="Animated demo: one click adds on-screen hooks">
+          <img class="base" src="hook-mockup-before.png" alt="Raw talking-head Reel before hook text" />
+          <div class="hook-layer" aria-hidden="true">
+            <div class="hook-line soft">this is how you</div>
+            <div class="hook-line pill-yellow">GET</div>
+            <div class="hook-line pill-green">10X</div>
+            <div class="hook-line big">more VIEWS 🔥</div>
+          </div>
+          <div class="click-cursor" aria-hidden="true"></div>
+          <button class="one-click-btn" id="one-click" type="button">✨ Generate hook</button>
+        </div>
+        <p class="hook-anim-hint"><strong>One click</strong> · raw take → hooked captions</p>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>How to generate viral hooks with SpyReels</h2>
+      <p class="lead">Four clear steps from blank idea to a scroll-stopping open you can film today.</p>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><h3>Describe your video</h3><p>Enter your Reel topic or idea in a few words or sentences.</p></div>
+        <div class="step"><div class="n">2</div><h3>Pick your style</h3><p>Curiosity, contrarian, mistake call-out, result-first, or question.</p></div>
+        <div class="step"><div class="n">3</div><h3>Generate hooks</h3><p>Get 10 scroll-stopping opens with spoken lines + on-screen text.</p></div>
+        <div class="step"><div class="n">4</div><h3>Copy and film</h3><p>Use as-is, or turn any hook into a full SpyReels script.</p></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Why video hooks matter</h2>
+      <p class="lead">
+        You have about two seconds before someone scrolls. A strong hook sets the promise, sparks curiosity,
+        and signals to Instagram, TikTok, and YouTube that your video deserves more watch time.
+      </p>
+    </section>
+
+    <section class="block">
+      <div class="badge" style="margin-bottom:12px">Hooks</div>
+      <h2>What makes a great viral hook?</h2>
+      <p class="lead">Short-form winners share the same four traits.</p>
+      <div class="cards-4">
+        <div class="feat"><div class="icon">👁</div><h3>Emotional precision</h3><p>Curiosity, FOMO, surprise, or relief in the first frame.</p></div>
+        <div class="feat"><div class="icon">⚡</div><h3>Instant first impression</h3><p>No warm-up. Punch in under 2 seconds.</p></div>
+        <div class="feat"><div class="icon">⏱</div><h3>Built for the algorithm</h3><p>Retention starts at second one. Hooks protect watch time.</p></div>
+        <div class="feat"><div class="icon">🔥</div><h3>Open loop psychology</h3><p>Leave a gap the viewer has to close by watching.</p></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>10 viral hook patterns</h2>
+      <p class="lead">Steal the structure. Swap in your niche.</p>
+      <div class="patterns" id="patterns"></div>
+    </section>
+
+    <section class="block">
+      <h2>Viral hook generator vs ChatGPT vs Copy.ai</h2>
+      <p class="lead">ChatGPT and Copy.ai write generic openings. SpyReels is trained on millions of viral videos and hooks, so the output is built for short-form that already works.</p>
+      <div style="overflow-x:auto">
+        <table class="compare">
+          <thead>
+            <tr><th>Capability</th><th>SpyReels</th><th>ChatGPT</th><th>Copy.ai</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Spoken + on-screen text</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+            <tr><td>Reel / TikTok / Shorts patterns</td><td class="yes">Yes</td><td class="partial">Manual</td><td class="partial">Generic</td></tr>
+            <tr><td>Turn hook into full script</td><td class="yes">Yes</td><td class="partial">Prompting</td><td class="no">No</td></tr>
+            <tr><td>Spy competitor viral Reels</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+            <tr><td>Start without a paid plan</td><td class="yes">Yes</td><td class="partial">Account</td><td class="yes">Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="wide">
+    <section class="block">
+      <h2>Other free creator tools</h2>
+      <p class="lead">Improve views with research and remake tools that sit next to this generator.</p>
+      <div class="tools">
+        <a class="tool-card" href="#">
+          <div class="thumb"><img src="viral-reel-finder.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>Viral Reel Finder</h3>
+          <p>Spy any Instagram handle. Sort by outlier score.</p>
+          <div class="go">Explore →</div>
+        </a>
+        <a class="tool-card" href="#">
+          <div class="thumb"><img src="tiktok-viral-video-finder.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>TikTok Viral Finder</h3>
+          <p>Find a creator’s most viral TikToks by username.</p>
+          <div class="go">Explore →</div>
+        </a>
+        <a class="tool-card" href="#">
+          <div class="thumb"><img src="broll-generator.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>AI B-Roll Generator</h3>
+          <p>Match B-roll to every beat in your script.</p>
+          <div class="go">Explore →</div>
+        </a>
+      </div>
+    </section>
+
+    <section class="bridge">
+      <h2>You&apos;ve got the <span>hook</span>. Now make the Reel.</h2>
+      <p>
+        This free tool wrote the first three seconds. SpyReels expands it into a ready-to-film script,
+        then helps you spy competitor Reels and remake winners in your voice.
+      </p>
+      <p style="font-weight:800;color:#fff;margin:0 auto 18px;max-width:40rem;text-align:center">
+        Viral Hook Generator gives you the words. SpyReels gives you the script.
+      </p>
+
+      <div class="compare-visual" aria-label="Before and after hook comparison">
+        <div class="ba-slider" id="ba-slider" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Drag to compare before and after">
+          <img src="hook-mockup-before.png" alt="Before: raw talking-head Reel with no hook text" id="ba-before" />
+          <div class="ba-after-clip" id="ba-after-clip">
+            <img src="hook-mockup-after.png" alt="After: same Reel with viral on-screen hook text" id="ba-after" />
+          </div>
+          <div class="ba-handle" id="ba-handle"></div>
+          <span class="ba-tag before">Before</span>
+          <span class="ba-tag after">After</span>
+        </div>
+        <p class="ba-hint">Drag the slider · raw take vs hook with on-screen text</p>
+      </div>
+
+      <button class="cta" type="button" style="margin-top:18px" onclick="toast('Would open signup / Viral Reel Finder')">Try SpyReels free →</button>
+    </section>
+
+    <section class="block faq">
+      <h2>Frequently asked questions</h2>
+      <details open>
+        <summary>What is a viral hook generator?</summary>
+        <p>It is an AI tool that writes scroll-stopping opening lines for short videos. SpyReels focuses on spoken hooks plus on-screen text for Reels, TikTok, and Shorts.</p>
+      </details>
+      <details>
+        <summary>Can I try the viral hook generator without paying?</summary>
+        <p>Yes. You can generate hooks and see results before you start a SpyReels plan.</p>
+      </details>
+      <details>
+        <summary>How do I create a hook for Instagram Reels or TikTok?</summary>
+        <p>State the promise or curiosity gap in the first 1 to 2 seconds, match on-screen text to the spoken line, then deliver on the promise in the body.</p>
+      </details>
+      <details>
+        <summary>What makes a good short-form video hook?</summary>
+        <p>Specificity, emotion, and an open loop. Vague intros get scrolled. Concrete claims and pattern interrupts keep viewers.</p>
+      </details>
+      <details>
+        <summary>How is SpyReels different from Copy.ai or ChatGPT?</summary>
+        <p>ChatGPT, Claude, and tools like Copy.ai write generic openings from general knowledge. SpyReels is trained on millions of viral videos and hooks, so every line is shaped by patterns that already stopped the scroll. That is why the result feels different from what a general AI chat tool can produce.</p>
+      </details>
+    </section>
+
+    <section class="final" aria-label="Generate viral hooks">
+      <a
+        class="final-banner"
+        href="#tool"
+        onclick="document.getElementById('tool').scrollIntoView({behavior:'smooth'}); return false;"
+      >
+        <img
+          src="ai-viral-hook-generator-banner.png"
+          alt="Your next viral Hook starts here. Generate viral hooks now."
+          width="1400"
+          height="560"
+        />
+      </a>
+    </section>
+  </div>
+
+  <footer class="site">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="logo" href="#">
+          <img
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+            alt="SpyReels"
+            width="28"
+            height="28"
+            style="width:28px;height:28px"
+          />
+          SpyReels
+        </a>
+        <p>Research what is working, plan a month of content, and script Reels in your own voice, all in one place built for creators who want to grow faster.</p>
+      </div>
+      <div class="footer-cols">
+        <div>
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Contact</a></li>
+            <li><a href="#">Affiliate</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#">Viral Reel Finder</a></li>
+            <li><a href="#">30-Day Content Plan</a></li>
+            <li><a href="#">AI Personal Brand Coach</a></li>
+            <li><a href="#">Pricing</a></li>
+            <li><a href="#">How It Works</a></li>
+            <li><a href="#">Extension</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Free Tools</h4>
+          <ul>
+            <li><a href="#">All Free Tools</a></li>
+            <li><a href="#">Viral Hooks</a></li>
+            <li><a href="#">B-Roll Generator</a></li>
+            <li><a href="#">TikTok Viral Video Finder</a></li>
+            <li><a href="#">YouTube Shorts Viral Finder</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Terms</a></li>
+            <li><a href="#">Privacy</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; 2026 SpyReels. All rights reserved.</div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const PATTERNS = [
+      ["Cost reveal", "I was paying $4K/month until I changed this one thing"],
+      ["Mistake call-out", "Stop doing X if you actually want Y"],
+      ["Curiosity loop", "The real reason X fails is not what you think"],
+      ["Contrarian", "Everyone says X. They are wrong."],
+      ["Result-first", "I cut X by 40% in 30 days. Here is how."],
+      ["Question hook", "Why does X never work the way they promise?"],
+      ["Specific number", "3 things I wish I knew before starting X"],
+      ["Time-bound", "I tried X for 30 days. Results shocked me."],
+      ["Personal stake", "If you are stuck at X, this changed everything"],
+      ["Authority flip", "I am a [pro]. Here is what they will not tell you"],
+    ];
+    document.getElementById("patterns").innerHTML = PATTERNS.map(([n, e]) =>
+      `<div class="pat"><strong>${n}</strong><span>“${e}”</span></div>`
+    ).join("");
+
+    let tone = "Energetic";
+    document.getElementById("tones").addEventListener("click", (e) => {
+      const btn = e.target.closest(".tone");
+      if (!btn) return;
+      document.querySelectorAll(".tone").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      tone = btn.dataset.tone;
+    });
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(window.__t);
+      window.__t = setTimeout(() => el.classList.remove("show"), 2200);
+    }
+
+    function buildHooks(topic, platform, style) {
+      const short = topic.trim().replace(/\s+/g, " ").slice(0, 42);
+      const base = [
+        {
+          pattern: style,
+          spoken: `Stop scrolling if you still struggle with ${short}...`,
+          onscreen: "STOP DOING THIS",
+        },
+        {
+          pattern: "Curiosity gap",
+          spoken: `The real reason ${short} fails is not what coaches sell you.`,
+          onscreen: "NOT WHAT YOU THINK",
+        },
+        {
+          pattern: "Result-first",
+          spoken: `I fixed ${short} in 14 days. Here is the boring system that worked.`,
+          onscreen: "14-DAY FIX",
+        },
+        {
+          pattern: "Contrarian",
+          spoken: `Everyone on ${platform} copies the same ${short} advice. That is why it fails.`,
+          onscreen: "COPYING IS KILLING YOU",
+        },
+        {
+          pattern: "Question",
+          spoken: `Why does ${short} never stick past day 10?`,
+          onscreen: "WHY DAY 10?",
+        },
+        {
+          pattern: "Mistake call-out",
+          spoken: `If you are still doing ${short} this way, you are wasting the algorithm.`,
+          onscreen: "WASTING REACH",
+        },
+        {
+          pattern: "Specific number",
+          spoken: `3 ${tone.toLowerCase()} hooks that made my ${platform} views 4x.`,
+          onscreen: "3 HOOKS · 4X VIEWS",
+        },
+        {
+          pattern: "Time-bound",
+          spoken: `I posted about ${short} every day for 30 days. One hook changed everything.`,
+          onscreen: "DAY 30 SURPRISE",
+        },
+        {
+          pattern: "Personal stake",
+          spoken: `I almost quit ${platform} until I rewrote my open for ${short}.`,
+          onscreen: "ALMOST QUIT",
+        },
+        {
+          pattern: "Authority flip",
+          spoken: `I have remade 200 ${platform} winners. Here is the ${short} hook pattern.`,
+          onscreen: "200 REMAKES",
+        },
+      ];
+      return base;
+    }
+
+    const form = document.getElementById("hook-form");
+    const results = document.getElementById("results");
+    const genBtn = document.getElementById("gen-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const topic = document.getElementById("topic").value.trim();
+      if (topic.length < 10) return;
+      const platform = document.getElementById("platform").value;
+      const style = document.getElementById("style").value;
+      genBtn.disabled = true;
+      genBtn.textContent = "Generating 10 hooks...";
+      await new Promise((r) => setTimeout(r, 900));
+      const hooks = buildHooks(topic, platform, style);
+      const free = hooks.slice(0, 2);
+      const locked = hooks.slice(2);
+      results.classList.add("show");
+      results.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong style="font-size:16px">Your hooks</strong>
+          <span style="font-size:12px;color:var(--muted);font-weight:700">2 ready · 8 waiting</span>
+        </div>
+        ${free.map((h, i) => `
+          <div class="result-card">
+            <div class="meta"><span>#${i + 1} · ${h.pattern}</span><span>${tone} · ${platform}</span></div>
+            <div class="spoken">${h.spoken}</div>
+            <div class="onscreen">${h.onscreen}</div>
+          </div>
+        `).join("")}
+        <div class="locked" id="unlock-box">
+          <h3>See the rest of your hooks</h3>
+          <p>Pattern previews below. Continue to get the full set with on-screen text.</p>
+          ${locked.map((h, i) => `
+            <div class="teaser"><strong>#${i + 3} ${h.pattern}</strong> · ${h.spoken.slice(0, 48)}...</div>
+          `).join("")}
+          <form id="unlock-form" style="margin-top:12px;display:grid;gap:8px">
+            <input type="email" required placeholder="your@email.com" />
+            <button class="gen" type="submit">Get all 10 hooks</button>
+          </form>
+        </div>
+      `;
+      genBtn.disabled = false;
+      genBtn.textContent = "✨ Generate 10 hooks";
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      document.getElementById("unlock-form").addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        results.innerHTML = `
+          <div style="border:1px solid rgba(74,222,128,0.35);background:rgba(74,222,128,0.1);border-radius:12px;padding:12px;margin-bottom:12px;font-size:14px">
+            ✓ All 10 hooks unlocked · copy emailed
+          </div>
+          ${hooks.map((h, i) => `
+            <div class="result-card">
+              <div class="meta"><span>#${i + 1} · ${h.pattern}</span><button type="button" onclick="toast('Would expand hook #${i + 1} into full script')" style="border:0;background:transparent;color:var(--primary-2);font-weight:800;cursor:pointer">Turn into script →</button></div>
+              <div class="spoken">${h.spoken}</div>
+              <div class="onscreen">${h.onscreen}</div>
+            </div>
+          `).join("")}
+          <div class="locked" style="border-style:solid;text-align:center">
+            <h3>Love this hook? Write the full Reel in 30 seconds.</h3>
+            <p>SpyReels expands your hook into a ready-to-film script with delivery notes.</p>
+            <button class="gen" type="button" onclick="toast('Would open AuthDialog / expand API')" style="max-width:320px;margin:0 auto">Turn hook #1 into full script</button>
+          </div>
+        `;
+        toast("Unlocked (mock)");
+      });
+    });
+
+    // Before / After drag slider
+    (function initBeforeAfter() {
+      const root = document.getElementById("ba-slider");
+      const clip = document.getElementById("ba-after-clip");
+      const afterImg = document.getElementById("ba-after");
+      const handle = document.getElementById("ba-handle");
+      if (!root || !clip || !afterImg || !handle) return;
+
+      const syncWidth = () => {
+        const w = root.getBoundingClientRect().width;
+        afterImg.style.width = `${w}px`;
+        root.style.setProperty("--ba-full-w", `${w}px`);
+      };
+      syncWidth();
+      window.addEventListener("resize", syncWidth);
+
+      let dragging = false;
+      const setPos = (clientX) => {
+        const rect = root.getBoundingClientRect();
+        let pct = ((clientX - rect.left) / rect.width) * 100;
+        pct = Math.max(4, Math.min(96, pct));
+        clip.style.width = `${pct}%`;
+        handle.style.left = `${pct}%`;
+        root.setAttribute("aria-valuenow", String(Math.round(pct)));
+      };
+
+      const onDown = (e) => {
+        dragging = true;
+        root.classList.add("dragging");
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        setPos(x);
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        setPos(x);
+      };
+      const onUp = () => {
+        dragging = false;
+        root.classList.remove("dragging");
+      };
+
+      root.addEventListener("mousedown", onDown);
+      root.addEventListener("touchstart", onDown, { passive: true });
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("touchmove", onMove, { passive: true });
+      window.addEventListener("mouseup", onUp);
+      window.addEventListener("touchend", onUp);
+    })();
+
+    // One-click hook animation loop (fold 2 demo)
+    (function initHookDemo() {
+      const phone = document.getElementById("hook-phone");
+      const btn = document.getElementById("one-click");
+      if (!phone || !btn) return;
+      let locked = false;
+
+      function playOnce() {
+        if (locked) return;
+        locked = true;
+        phone.classList.remove("is-hooked");
+        phone.classList.add("is-clicking");
+        btn.textContent = "✨ Generate hook";
+
+        setTimeout(() => {
+          phone.classList.remove("is-clicking");
+          phone.classList.add("is-hooked");
+          btn.textContent = "✓ Done";
+        }, 420);
+
+        setTimeout(() => {
+          phone.classList.remove("is-hooked");
+          btn.textContent = "✨ Generate hook";
+          locked = false;
+        }, 3200);
+      }
+
+      btn.addEventListener("click", playOnce);
+      playOnce();
+      setInterval(playOnce, 4200);
+    })();
+  </script>
+</body>
+</html>

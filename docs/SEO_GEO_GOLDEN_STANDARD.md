@@ -81,14 +81,28 @@ Not just a name string. Full object:
 - `wordCount` — calculated from content
 - `mainEntityOfPage` — points to canonical URL
 
-### 8. Visible byline + dates on page
-Above the H1 or just below it:
+### 8. Visible byline + dates (BLOG POSTS ONLY)
+On **blog posts** only, above the H1 or just below it:
 - "By Noah Perry"
 - "Published [date]"
 - "Updated [date]" (only if different from published)
 - "[X] min read" (calculated from word count, 200 wpm)
 
-This signals E-E-A-T (Expertise, Experience, Authority, Trust) to Google.
+This signals E-E-A-T (Expertise, Experience, Authority, Trust) to Google on articles.
+
+**Never put byline / "Updated …" / "X min read" on marketing pages:** free tools, feature pages, comparison pages, homepage, pricing, or other acquisition LPs. That pattern is for blogs. On marketing pages use social proof instead (stars + faces + "Used by 12,000+ creators" or equivalent).
+
+### 8b. Marketing landing page copy bans (NEVER on-page unless Noman asks)
+These phrases are fine in **meta title / meta description** when needed for SEO. They are **banned in visible landing-page body copy** (hero, tool UI microcopy, CTAs, FAQs, footers, banners). They read as generic AI SaaS filler:
+
+- "no card" / "no credit card" / "no credit card required"
+- "preview 2 free" / "2 free" / "X free then unlock"
+- "unlock with email" / "free preview" / "Free preview · Unlock with email"
+- "Built for nano & micro creators" (use real social proof instead)
+
+Prefer: stars (realistic **4.5**, not fake perfect 5.0), overlapping creator faces (same stack as go-viral / other SpyReels marketing), and **"Used by 12,000+ creators"**.
+
+If a gated tool needs email, use plain product language ("Get all 10 hooks", "Continue") without "free preview / unlock with email / no card" framing.
 
 ### 9. FAQ section at bottom
 - Minimum 5 questions per blog post
@@ -107,6 +121,17 @@ This signals E-E-A-T (Expertise, Experience, Authority, Trust) to Google.
 - Every page links to 3-5 other relevant pages
 - Use descriptive anchor text (the target page's keyword, not "click here")
 - Cluster related content (hub pages link to spoke pages, spokes link to hub)
+
+### 12. Visible breadcrumbs on marketing landing pages
+Every free-tool and feature marketing page must show **visible** breadcrumbs above the H1 (not schema-only), matching the B-Roll Generator pattern:
+
+- Example: `Home > Free Tools > Viral Hook Generator`
+- Example: `Home > Features > Viral Reel Finder`
+- Parents are muted links; current page is the active (non-link) crumb
+- Use shared `PublicBreadcrumb` so chrome stays consistent
+- Still emit BreadcrumbList JSON-LD (rule 5) in addition to the visible UI
+
+Applies to: Viral Hook Generator, B-Roll Generator, TikTok / YouTube / Instagram finders, Free Tools hub, 30-Day Content Plan LP, AI Script / Coach feature LP, and any new marketing LP.
 
 ---
 
@@ -160,12 +185,15 @@ Before any `git push` of a new page, verify:
 - [ ] BreadcrumbList schema present
 - [ ] Author object full (name + url)
 - [ ] Publisher object full (name + logo)
-- [ ] dateModified present
-- [ ] Visible byline + dates rendered
+- [ ] dateModified present (schema; blogs also show visible dates)
+- [ ] Visible byline + dates rendered (**blog posts only**; never on marketing LPs)
+- [ ] Marketing LP copy audited: no "no card" / "2 free" / "unlock with email" / "free preview" / blog byline on-page
+- [ ] Marketing LP social proof uses realistic rating (prefer 4.5) + faces + 12,000+ when showing trust
 - [ ] At least 3 H2 sections (or 5 for blog posts)
 - [ ] FAQ section with min 3-5 questions
 - [ ] At least 1 table or comparison section
 - [ ] At least 3 internal links to related pages
+- [ ] Visible breadcrumbs above H1 on marketing free-tool / feature LPs (`PublicBreadcrumb`)
 - [ ] sitemap.xml updated
 - [ ] Submitted to GSC for indexing
 
@@ -209,5 +237,5 @@ Every competitor has weak GEO right now. This is the window to win.
 
 ---
 
-**Last updated: May 21, 2026**
+**Last updated: Aug 14, 2026**
 **Owner: Claude (audit responsibility) + Noman (ship decisions)**

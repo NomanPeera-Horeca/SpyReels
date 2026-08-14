@@ -54,7 +54,7 @@ const HOME_FAQ: FaqItem[] = [
   },
   {
     q: "Do I need to be a big creator for this to work?",
-    a: "This is built specifically for creators under 50K followers who are trying to grow. The strategy of studying what works and replicating it is exactly how most big creators built their audience in the first place.",
+    a: "This is built for creators who are trying to grow. The strategy of studying what works and replicating it is exactly how most big creators built their audience in the first place.",
   },
   {
     q: "What if I don't like it after paying?",
@@ -124,7 +124,7 @@ const FINDER_FAQ: FaqItem[] = [
   },
   {
     q: "What types of creators is SpyReels built for?",
-    a: "SpyReels is built for nano and micro Instagram creators under 50,000 followers who need leverage without a full research team. Coaches, educators, local businesses, and personal brands use it to study what works before they record.",
+    a: "SpyReels is built for Instagram creators who need leverage without a full research team. Coaches, educators, local businesses, and personal brands use it to study what works before they record.",
   },
   {
     q: "Can I generate scripts based on the viral Reels I find?",
@@ -227,24 +227,24 @@ const FREE_TOOLS_HUB_FAQ: FaqItem[] = [
 
 const HOOKS_FAQ: FaqItem[] = [
   {
-    q: "Is this really free?",
-    a: "Yes. You get a preview of generated hooks with no signup. To unlock the full set, we ask for your email to send them to you. No credit card, no subscription required.",
+    q: "What is a viral hook generator?",
+    a: "It is an AI tool that writes scroll-stopping opening lines for short videos. SpyReels focuses on spoken hooks plus on-screen text for Reels, TikTok, and Shorts.",
   },
   {
-    q: "Do I need to sign up for SpyReels?",
-    a: "No signup needed to use the hook generator. If you want to find viral Reels in your niche, transcribe them, or generate full scripts, that is the SpyReels product. The hook generator is a free standalone tool.",
+    q: "Can I try the viral hook generator without paying?",
+    a: "Yes. You can generate hooks and see results before you start a SpyReels plan.",
   },
   {
-    q: "How accurate are these hooks?",
-    a: "Our AI is trained on viral Instagram Reels patterns. It cannot guarantee that any specific hook will go viral, but it generates options that follow proven structures used by creators who consistently get high views. You should adapt and test.",
+    q: "How do I create a hook for Instagram Reels or TikTok?",
+    a: "State the promise or curiosity gap in the first 1 to 2 seconds, match on-screen text to the spoken line, then deliver on the promise in the body.",
   },
   {
-    q: "Can I use these hooks on TikTok or YouTube Shorts?",
-    a: "Yes. The hook patterns work across all short-form video platforms because they are based on attention psychology, not platform-specific tricks. Optimize the delivery for each platform.",
+    q: "What makes a good short-form video hook?",
+    a: "Specificity, emotion, and an open loop. Vague intros get scrolled. Concrete claims and pattern interrupts keep viewers.",
   },
   {
-    q: "What makes SpyReels' hook generator different from Copy.ai or Ahrefs?",
-    a: "Most hook generators give generic AI output. We focus specifically on Instagram Reels for nano and micro creators. The hook patterns are tuned for vertical video and short attention spans. We also let you specify your target audience so the hooks fit your actual viewer.",
+    q: "How is SpyReels different from Copy.ai or ChatGPT?",
+    a: "ChatGPT, Claude, and tools like Copy.ai write generic openings from general knowledge. SpyReels is trained on millions of viral videos and hooks, so every line is shaped by patterns that already stopped the scroll. That is why the result feels different from what a general AI chat tool can produce.",
   },
 ];
 
@@ -392,7 +392,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               description: "Free tier available",
             },
             description:
-              "Instagram Reels spy tool with analytics, transcription, and AI script generation for nano and micro creators.",
+              "Instagram Reels spy tool with analytics, transcription, and AI script generation for creators.",
           },
         },
         {
@@ -471,7 +471,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               priceCurrency: "USD",
             },
             description:
-              "AI-powered viral Instagram Reel finder for nano and micro creators. Surfaces viral content by view count and engagement, then transcribes and generates scripts.",
+              "AI-powered viral Instagram Reel finder for creators. Surfaces viral content by view count and engagement, then transcribes and generates scripts.",
           },
         },
         {
@@ -705,7 +705,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
           data: {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            name: "Free Instagram Viral Hook Generator",
+            name: "Viral Hook Generator",
             applicationCategory: "MultimediaApplication",
             operatingSystem: "Web Browser",
             offers: {
@@ -714,7 +714,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               priceCurrency: "USD",
             },
             description:
-              "Free tool that generates viral Instagram Reels hooks tailored to your niche and audience using AI.",
+              "Free AI viral hook generator for Reels, TikTok, and Shorts. Spoken lines plus on-screen text from proven patterns.",
           },
         },
         {

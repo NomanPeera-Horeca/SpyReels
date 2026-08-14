@@ -84,12 +84,12 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/pricing": {
     title: "SpyReels Pricing - Plans for Nano and Micro Instagram Creators",
     description:
-      "Simple pricing for SpyReels. Free tier, Starter, and Pro plans. No credits, no surprises. Built for creators under 50K followers.",
+      "Simple pricing for SpyReels. Free tier, Starter, and Pro plans. No credits, no surprises. Built for creators who want to grow on Reels.",
   },
   "/blog": {
     title: "Instagram Reels Growth Blog - SpyReels",
     description:
-      "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for nano and micro creators by SpyReels.",
+      "Articles on Instagram Reels, viral hooks, content strategy, and creator growth. Tips for creators by SpyReels.",
   },
   "/free-tools": {
     title: "Free Instagram Reels Tools | SpyReels",
@@ -97,9 +97,9 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
       "Free SpyReels tools for creators: viral hook generator, B-roll, TikTok finder, YouTube Shorts finder, and Reel research. Start free.",
   },
   "/free-tools/viral-hooks": {
-    title: "Free Instagram Viral Hook Generator | SpyReels",
+    title: "Free Viral Hook Generator for Reels, TikTok & Shorts | SpyReels",
     description:
-      "Generate scroll-stopping viral hooks for your Instagram Reels. Free AI tool that analyzes viral reels and gives you proven hook patterns tailored to your video idea. No signup needed for preview.",
+      "Free AI viral hook generator for Reels, TikTok, and Shorts. Get spoken lines plus on-screen text from proven patterns, then expand any hook into a full SpyReels script.",
   },
   "/free-tools/broll-generator": {
     title: "Free AI B-Roll Generator - Paste a Script or Upload a Video | SpyReels",
@@ -144,7 +144,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/about": {
     title: "About SpyReels and Noah Perry",
     description:
-      "Learn about SpyReels and founder Noah Perry. We help nano and micro creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
+      "Learn about SpyReels and founder Noah Perry. We help creators find viral Reels, plan 30 days of content, and write scripts with AI Personal Brand Coach.",
   },
   "/terms": {
     title: "Terms of Service - SpyReels",

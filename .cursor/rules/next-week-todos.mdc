@@ -1,0 +1,15 @@
+---
+description: When Noman asks for todos / next week / agenda, read and present docs/NEXT_WEEK_TODOS.md
+alwaysApply: true
+---
+
+# Next-week todos (always bring when asked)
+
+Whenever the user asks for **todos**, **next week**, **agenda**, **what’s next**, **priorities**, or similar:
+
+1. Read `docs/NEXT_WEEK_TODOS.md` first (do not invent a separate list from memory).
+2. Present open items grouped **P0 → P3**, concise checkbox-style bullets.
+3. Mention anything newly finished since the file was last updated, and offer to check items off in that file.
+4. Ask which item to start if they have not already picked one.
+
+Keep the file current: when work ships or priorities change, update `docs/NEXT_WEEK_TODOS.md` in the same turn (or ask before editing if unclear).

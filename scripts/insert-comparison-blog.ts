@@ -56,7 +56,7 @@ SpyReels focuses on Instagram Reels specifically. If you need cross-platform res
 
 ### Best for
 
-Nano and micro creators under 50K followers who want to stop guessing and start posting scripts built from proven viral patterns in their niche.
+Creators who want to stop guessing and start posting scripts built from proven viral patterns in their niche.
 
 ## Meedro: Best All-in-One Content Engine
 

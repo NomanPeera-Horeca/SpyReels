@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -10,15 +9,8 @@ import {
 } from "@/lib/publicSeo";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { AuthDialog } from "@/components/AuthDialog";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { trpc } from "@/lib/trpc";
 import { authHeadlineBrollGenerate } from "@/lib/authHeadlines";
 import type { BrollLandingMatch } from "@shared/brollLanding";
@@ -283,27 +275,15 @@ export default function BrollGenerator() {
 
           <div className="relative mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] lg:items-start lg:gap-16 lg:px-8">
             <div className="max-w-2xl">
-              <Breadcrumb>
-                <BreadcrumbList className="text-zinc-400">
-                  <BreadcrumbItem>
-                    <BreadcrumbLink asChild>
-                      <Link href="/">Home</Link>
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbLink asChild>
-                      <Link href="/free-tools/viral-hooks">Free Tools</Link>
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage className="text-zinc-200">
-                      B-Roll Generator
-                    </BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
+              <PublicBreadcrumb
+                listClassName="text-zinc-400"
+                pageClassName="text-zinc-200"
+                items={[
+                  { label: "Home", href: "/" },
+                  { label: "Free Tools", href: "/free-tools" },
+                  { label: "B-Roll Generator" },
+                ]}
+              />
               <h1 className="mt-6 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] lg:text-[56px] lg:leading-[1.05]">
                 Free AI B-Roll Generator
               </h1>
@@ -343,9 +323,6 @@ export default function BrollGenerator() {
                   See a sample output first →
                 </a>
               </div>
-              <p className="mt-6 text-[13px] text-zinc-500">
-                By Noah Perry · Updated Aug 5, 2026 · 4 min read
-              </p>
             </div>
 
             <DemoWidget

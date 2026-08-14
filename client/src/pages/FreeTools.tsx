@@ -13,6 +13,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PublicFooter } from "@/components/PublicFooter";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -214,6 +215,13 @@ export default function FreeTools() {
       <PublicHeader />
 
       <section className="mx-auto max-w-3xl px-4 pb-8 pt-12 text-center sm:pt-16">
+        <PublicBreadcrumb
+          className="mb-4 flex justify-center"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Free Tools" },
+          ]}
+        />
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-primary">
           Free tools for Reels, TikTok and Shorts
         </p>

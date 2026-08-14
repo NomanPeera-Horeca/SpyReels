@@ -195,9 +195,9 @@ export default function Contact() {
 
         <section className="relative mt-12 rounded-2xl border border-border/60 bg-muted/30 p-6 text-center sm:p-8">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            SpyReels is an AI-powered Instagram Reels platform for nano and micro
-            creators. Find viral content in your niche, transcribe it, and turn
-            ideas into scripts you can film today.
+            SpyReels is an AI-powered Instagram Reels platform for creators.
+            Find viral content in your niche, transcribe it, and turn ideas into
+            scripts you can film today.
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
             <Link href="/about" className="font-medium text-primary hover:underline">

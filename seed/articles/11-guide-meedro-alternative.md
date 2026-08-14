@@ -42,7 +42,7 @@ Price alone is not the decision. Compare what you get per hour saved. If SpyReel
 
 Stay on Meedro if you run an agency that needs one dashboard for many clients, heavy multilingual output, and AI agents that push daily script ideas across niches. Stay if your deliverable is reporting, not filming.
 
-Switch toward SpyReels if you are under fifty thousand followers, publish Reels weekly, and your growth constraint is packaging and hooks, not follower charts.
+Switch toward SpyReels if you publish Reels weekly and your growth constraint is packaging and hooks, not follower charts.
 
 ## How to switch from Meedro without losing momentum
 

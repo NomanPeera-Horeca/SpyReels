@@ -198,7 +198,7 @@ const FAQ = [
   },
   {
     q: "Do I need to be a big creator for this to work?",
-    a: "This is built specifically for creators under 50K followers who are trying to grow. The strategy of studying what works and replicating it is exactly how most big creators built their audience in the first place.",
+    a: "This is built for creators who are trying to grow. The strategy of studying what works and replicating it is exactly how most big creators built their audience in the first place.",
   },
   {
     q: "What if I don't like it after paying?",
@@ -262,7 +262,7 @@ export default function LandingPage() {
         description: "Free tier available",
       },
       description:
-        "Instagram Reels tool with viral research, 30-day content planning, AI Personal Brand Coach scripts, and teleprompter for nano and micro creators.",
+        "Instagram Reels tool with viral research, 30-day content planning, AI Personal Brand Coach scripts, and teleprompter for creators.",
     });
 
     injectSchemaScript("home-faq-schema", {
