@@ -3,16 +3,14 @@ import { Link } from "wouter";
 import {
   ArrowRight,
   BadgeCheck,
-  CheckCircle2,
   ImageIcon,
   Loader2,
   Lock,
-  Search,
-  XCircle,
 } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
+import { FinderHandleForm } from "@/components/FinderHandleForm";
 import { PublicFooter } from "@/components/PublicFooter";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
@@ -171,74 +169,6 @@ function toneClass(tone: "yes" | "partial" | "no"): string {
   if (tone === "yes") return "font-semibold text-emerald-400";
   if (tone === "partial") return "font-medium text-orange-400";
   return "text-muted-foreground";
-}
-
-type HandleFormProps = {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  submitLabel: string;
-  compact?: boolean;
-  isLoading?: boolean;
-  status?: "idle" | "loading" | "found" | "error";
-};
-
-function HandleForm({
-  value,
-  onChange,
-  onSubmit,
-  submitLabel,
-  compact,
-  isLoading,
-  status = "idle",
-}: HandleFormProps) {
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
-      }}
-      className={
-        compact
-          ? "flex w-full items-center gap-2 rounded-full border border-primary/35 bg-background p-1 pl-3"
-          : "flex w-full flex-col gap-2 rounded-full border border-primary/35 bg-card/70 p-1.5 shadow-[0_0_0_1px_hsl(var(--primary)/0.12)] sm:flex-row sm:items-center sm:pl-4"
-      }
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-2 px-2 sm:px-0">
-        <InstagramMark className="h-5 w-5 shrink-0 text-foreground" />
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="@username"
-          aria-label="Instagram username or profile link"
-          autoComplete="off"
-          spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        {status === "loading" ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
-        ) : null}
-        {status === "found" ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
-        ) : null}
-        {status === "error" ? (
-          <XCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
-        ) : null}
-      </div>
-      <Button
-        type="submit"
-        size={compact ? "sm" : "lg"}
-        className={compact ? "shrink-0 rounded-full" : "min-h-11 shrink-0 rounded-full"}
-      >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Search className="h-4 w-4" aria-hidden />
-        )}
-        {submitLabel}
-      </Button>
-    </form>
-  );
 }
 
 type FoundProfile = {
@@ -654,33 +584,35 @@ export default function ViralReelFinder() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-5xl px-4 pb-8 pt-12 text-center sm:pt-16">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+      <section className="mx-auto max-w-5xl px-4 pb-8 pt-10 text-center sm:pt-16">
+        <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden />
           Free reel finder &amp; reel spy tool · no card
         </span>
-        <h1 className="mx-auto mt-5 max-w-3xl text-3xl font-bold tracking-tight sm:text-5xl">
+        <h1 className="mx-auto mt-5 max-w-3xl text-[1.65rem] font-bold leading-tight tracking-tight sm:text-5xl sm:leading-tight">
           <span className="hidden sm:inline">
             Any Instagram account&apos;s viral Reels,{" "}
           </span>
           <span className="sm:hidden">Any account&apos;s viral Reels,{" "}</span>
           <span className="text-primary">remade in your voice.</span>
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+        <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:text-lg">
           {HERO_SUBHEAD}
         </p>
         <div ref={heroBarRef} className="mx-auto mt-7 max-w-xl text-left">
-          <HandleForm
+          <FinderHandleForm
             value={handleInput}
             onChange={setHandleInput}
             onSubmit={() => submitHandle(handleInput)}
             submitLabel="Find Viral Reels"
+            platformMark={<InstagramMark className="h-5 w-5" />}
+            ariaLabel="Instagram username or profile link"
             isLoading={demo.isFetching}
             status={handleInputStatus}
           />
           <div className="mt-3">{sharedPreview}</div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
           or try{" "}
           {PUBLIC_DEMO_HANDLES.map((handle, i) => (
             <span key={handle}>
@@ -691,7 +623,7 @@ export default function ViralReelFinder() {
                   setHandleInput(handle);
                   submitHandle(handle);
                 }}
-                className="text-primary hover:underline"
+                className="font-medium text-primary hover:underline"
               >
                 @{handle}
               </button>
@@ -705,7 +637,7 @@ export default function ViralReelFinder() {
         id="results"
         className="mx-auto mb-10 max-w-6xl overflow-hidden rounded-2xl border border-border bg-card/40"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           <span>Results preview</span>
           <span className="rounded-full border border-border px-2.5 py-1 normal-case tracking-normal">
             demo data
@@ -1120,11 +1052,13 @@ export default function ViralReelFinder() {
             Start free. You will see results before we ask you for anything.
           </p>
           <div className="mx-auto mt-6 max-w-xl text-left">
-            <HandleForm
+            <FinderHandleForm
               value={handleInput}
               onChange={setHandleInput}
               onSubmit={() => submitHandle(handleInput)}
               submitLabel="Find Viral Reels"
+              platformMark={<InstagramMark className="h-5 w-5" />}
+              ariaLabel="Instagram username or profile link"
               isLoading={demo.isFetching}
               status={handleInputStatus}
             />
@@ -1136,18 +1070,20 @@ export default function ViralReelFinder() {
       {showStickyBar ? (
         <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-5xl flex-col gap-2 sm:inset-x-4">
           {sharedPreview}
-          <div className="rounded-full border border-border bg-card/95 p-2 shadow-2xl backdrop-blur-xl">
+          <div className="rounded-2xl border border-border bg-card/95 p-2 shadow-2xl backdrop-blur-xl sm:rounded-full">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 sm:pl-3">
               <p className="hidden shrink-0 px-2 text-sm font-semibold sm:block">
                 Any account&apos;s viral Reels, ranked
               </p>
               <div className="min-w-0 flex-1">
-                <HandleForm
+                <FinderHandleForm
                   compact
                   value={handleInput}
                   onChange={setHandleInput}
                   onSubmit={() => submitHandle(handleInput)}
                   submitLabel="Find Viral Reels"
+                  platformMark={<InstagramMark className="h-5 w-5" />}
+                  ariaLabel="Instagram username or profile link"
                   isLoading={demo.isFetching}
                   status={handleInputStatus}
                 />
