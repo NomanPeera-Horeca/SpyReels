@@ -196,7 +196,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
       }`}
       onClick={(e) => e.stopPropagation()}
     >
-      {!hideBookmark && !collectionMode && !firstVisitMode && !inspirationSaveCta && (
+      {!hideBookmark && !firstVisitMode && !inspirationSaveCta && (
         <Button
           variant="ghost"
           size="sm"

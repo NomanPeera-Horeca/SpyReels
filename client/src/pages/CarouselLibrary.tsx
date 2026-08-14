@@ -9,6 +9,7 @@ import {
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { CarouselLibraryCard } from "@/components/CarouselLibraryCard";
 import { CarouselPreviewDialog } from "@/components/CarouselPreviewDialog";
+import { ContentToCarouselPanel } from "@/components/ContentToCarouselPanel";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import {
   AlertDialog,
@@ -72,6 +73,17 @@ export default function CarouselLibrary() {
     setOpenRemakeId(remakeId);
   }
 
+  function openContentRemake(remakeId: number, templateId: string) {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId) ?? null;
+    if (!template) {
+      toast.error("Generated template is unavailable");
+      return;
+    }
+    void utils.carouselRemake.list.invalidate();
+    setPreviewTemplate(template);
+    setOpenRemakeId(remakeId);
+  }
+
   function closePreview() {
     setPreviewTemplate(null);
     setOpenRemakeId(null);
@@ -91,10 +103,26 @@ export default function CarouselLibrary() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Carousel Library</h1>
           <p className="text-sm text-muted-foreground">
-            Remake proven viral carousels for your niche
+            Turn content into carousels, or remake proven templates for your niche
           </p>
         </div>
       </div>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">
+            Content to Carousel
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Paste a post, topic, or URL. Generate slides, then swap backgrounds.
+          </p>
+        </div>
+        <ContentToCarouselPanel
+          onStarted={({ remakeId, templateId }) =>
+            openContentRemake(remakeId, templateId)
+          }
+        />
+      </section>
 
       <section className="space-y-3">
         <div>

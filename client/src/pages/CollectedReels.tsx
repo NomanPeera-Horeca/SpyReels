@@ -38,6 +38,8 @@ import {
   Instagram,
   Music2,
   Youtube,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
@@ -99,8 +101,10 @@ const SORT_OPTIONS = [
   { value: "likes", label: "Highest Likes", icon: Heart },
   { value: "comments", label: "Highest Comments", icon: MessageCircle },
   { value: "engagement", label: "Highest Engagement Rate", icon: TrendingUp },
-  { value: "date_newest", label: "Date (Newest)", icon: Calendar },
-  { value: "date_oldest", label: "Date (Oldest)", icon: Calendar },
+  { value: "added_newest", label: "Added (Newest)", icon: Calendar },
+  { value: "added_oldest", label: "Added (Oldest)", icon: Calendar },
+  { value: "posted_newest", label: "Posted (Newest)", icon: Calendar },
+  { value: "posted_oldest", label: "Posted (Oldest)", icon: Calendar },
 ];
 
 const RECREATE_BATCH_STALE_MS = 300_000;
@@ -178,6 +182,30 @@ export default function CollectedReels() {
   const reelsRef = useRef(collectedRows);
   reelsRef.current = collectedRows;
 
+  const mirrorReelIds = useMemo(
+    () =>
+      collectedRows
+        .map((r) => r.transcriptionReelId)
+        .filter((id): id is number => id != null && id > 0),
+    [collectedRows]
+  );
+
+  const savedBatchQuery = trpc.saved.checkBatch.useQuery(
+    { reelIds: mirrorReelIds },
+    { enabled: mirrorReelIds.length > 0 }
+  );
+  const savedMap = savedBatchQuery.data ?? {};
+
+  const toggleCollectedSave = trpc.collected.toggleSave.useMutation({
+    onSuccess: (data) => {
+      void utils.saved.checkBatch.invalidate();
+      void utils.saved.list.invalidate();
+      void utils.collected.list.invalidate();
+      toast.success(data.saved ? "Saved" : "Removed from saved");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "grid";
     try {
@@ -248,7 +276,7 @@ export default function CollectedReels() {
     [setLocation]
   );
 
-  const [sortBy, setSortBy] = useState("date_newest");
+  const [sortBy, setSortBy] = useState("added_newest");
   const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   const [dateFilter, setDateFilter] = useState("all");
   const [urlInput, setUrlInput] = useState("");
@@ -444,19 +472,37 @@ export default function CollectedReels() {
         return all.sort(
           (a, b) => (getEngagementRate(b) || 0) - (getEngagementRate(a) || 0)
         );
-      case "date_oldest":
+      case "posted_oldest":
         return all.sort((a, b) => {
-          const aTime = a.postedAt ? new Date(a.postedAt).getTime() : 0;
-          const bTime = b.postedAt ? new Date(b.postedAt).getTime() : 0;
+          const aTime = a.postedAt
+            ? new Date(a.postedAt).getTime()
+            : new Date(a.createdAt).getTime();
+          const bTime = b.postedAt
+            ? new Date(b.postedAt).getTime()
+            : new Date(b.createdAt).getTime();
           return aTime - bTime;
         });
-      case "date_newest":
-      default:
+      case "posted_newest":
         return all.sort((a, b) => {
-          const aTime = a.postedAt ? new Date(a.postedAt).getTime() : new Date(a.createdAt).getTime();
-          const bTime = b.postedAt ? new Date(b.postedAt).getTime() : new Date(b.createdAt).getTime();
+          const aTime = a.postedAt
+            ? new Date(a.postedAt).getTime()
+            : new Date(a.createdAt).getTime();
+          const bTime = b.postedAt
+            ? new Date(b.postedAt).getTime()
+            : new Date(b.createdAt).getTime();
           return bTime - aTime;
         });
+      case "added_oldest":
+        return all.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      case "added_newest":
+      default:
+        return all.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
     }
   }, [filteredReels, sortBy]);
 
@@ -530,7 +576,8 @@ export default function CollectedReels() {
   const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
     useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
 
-  const currentSortOption = SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[4];
+  const currentSortOption =
+    SORT_OPTIONS.find((o) => o.value === sortBy) || SORT_OPTIONS[4];
 
   const gridModalRow = useMemo(
     () =>
@@ -551,23 +598,54 @@ export default function CollectedReels() {
   const telegramReels = collectedRows.filter((r) => r.source === "telegram");
   const failedCount = collectedRows.filter((r) => r.status === "failed").length;
 
-  const noopSave = () => {};
+  function isCollectedSaved(reel: CollectedRow): boolean {
+    const mirrorId = reel.transcriptionReelId;
+    if (mirrorId == null || mirrorId <= 0) return false;
+    return !!savedMap[mirrorId];
+  }
 
-  function renderGridRemoveButton(reelId: number) {
+  function renderGridSaveAndRemove(reel: CollectedRow) {
+    const isSaved = isCollectedSaved(reel);
+    const ready = reel.status === "ready";
     return (
-      <button
-        type="button"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur transition-colors hover:bg-destructive/90 hover:text-white"
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteMutation.mutate({ id: reelId });
-        }}
-        disabled={deleteMutation.isPending}
-        title="Remove from collection"
-        aria-label="Remove from collection"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-1.5">
+        {ready ? (
+          <button
+            type="button"
+            className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur transition-colors ${
+              isSaved
+                ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
+                : "bg-black/55 text-white/90 hover:bg-black/75"
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleCollectedSave.mutate({ collectedReelId: reel.id });
+            }}
+            disabled={toggleCollectedSave.isPending}
+            title={isSaved ? "Remove from saved" : "Save reel"}
+            aria-label={isSaved ? "Remove from saved" : "Save reel"}
+          >
+            {isSaved ? (
+              <BookmarkCheck className="h-4 w-4" />
+            ) : (
+              <Bookmark className="h-4 w-4" />
+            )}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur transition-colors hover:bg-destructive/90 hover:text-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteMutation.mutate({ id: reel.id });
+          }}
+          disabled={deleteMutation.isPending}
+          title="Remove from collection"
+          aria-label="Remove from collection"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     );
   }
 
@@ -756,7 +834,7 @@ export default function CollectedReels() {
           source={{ source: "user_job", reelId: actionReelId, jobId: 0 }}
           reelId={actionReelId}
           reelUrl={hasIg ? reel.reelUrl! : "https://www.instagram.com/"}
-          isSaved={false}
+          isSaved={isCollectedSaved(reel)}
           hasTranscription={hasTranscription}
           isProcessing={isProcessingForStrip}
           isFailed={transcriptionFailed}
@@ -767,8 +845,11 @@ export default function CollectedReels() {
           compact={compact || gridTile}
           hideBookmark={gridTile}
           hideExternalLink={hideExternal || !hasIg}
-          onToggleSave={noopSave}
-          saveBusy={false}
+          onToggleSave={() => {
+            if (reel.status !== "ready") return;
+            toggleCollectedSave.mutate({ collectedReelId: reel.id });
+          }}
+          saveBusy={toggleCollectedSave.isPending}
           onTranscribe={() => {}}
           onExpand={() => {
             if (mappedReelId == null || isNoSpeech) return;
@@ -1227,7 +1308,7 @@ export default function CollectedReels() {
                 mediaPlatform={
                   collectedPlatform(reel) === "tiktok" ? "tiktok" : "instagram"
                 }
-                topRight={renderGridRemoveButton(reel.id)}
+                topRight={renderGridSaveAndRemove(reel)}
                 mediaLabel={
                   <span className="inline-flex items-center gap-0.5 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
                     <SourcePlatformBadge reel={reel} />

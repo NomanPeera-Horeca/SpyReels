@@ -202,7 +202,8 @@ function buildCarouselRemakePrompt(
   templateDescription: string,
   slides: CarouselSlideSpec[],
   niche: string,
-  lockedFacts: LockedSlideFacts = new Map()
+  lockedFacts: LockedSlideFacts = new Map(),
+  sourceContent?: string
 ): string {
   const hasAverageNotPair = slides.some(slideHasAverageNotLinePair);
   const unlockedAverageSlides = slides.filter(
@@ -241,6 +242,35 @@ ${slotLines}`;
 9. For slides with an "average" slot that are NOT marked LOCKED: you may invent niche-fit average claims, but you MUST NOT name real brands, companies, restaurants, products, or public figures. Use unnamed framing only (e.g. "a fast-food giant", "the average restaurant", "most independent cafes"). Never write McDonald's, Chipotle, Nobu, or any other real named entity in average or not_line.
 `
       : "";
+
+  const trimmedSource = sourceContent?.trim() ?? "";
+  if (trimmedSource.length > 0) {
+    return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
+
+Creator niche / audience context (optional):
+${niche || "General creators"}
+
+Source content to convert (this is the material; extract and reshape, do not invent a new topic):
+"""
+${trimmedSource.slice(0, 8000)}
+"""
+
+Template: ${templateName}
+${templateDescription}
+
+Rules:
+1. Use the source content as the only source of ideas. Keep the creator's points; tighten for mobile slides.
+2. Hook slide first (role hook), CTA slide last (role cta). Middle slides deliver one clear point each.
+3. Prefer short postable lines. Aim for under ~40 words of readable text per slide across its slots combined when budgets allow.
+4. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
+5. Preserve each slide's viral beat described in "Viral why".
+6. For slots with role "kicker":
+   - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
+   - If the slot label is "Number" or "Step number": use "01", "02", etc.
+   - If the slot label is "Stat": use a short striking number from the source when available.
+7. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
+${slideBlocks}`;
+  }
 
   return `You rewrite Instagram carousel slide text for a creator's niche. The template layout, fonts, colors, and slide order are LOCKED. You only rewrite slot text.
 
@@ -369,7 +399,8 @@ async function invokeCarouselRemakeOnce(
   slides: CarouselSlideSpec[],
   niche: string,
   lockedFacts: LockedSlideFacts = new Map(),
-  repairNote?: string
+  repairNote?: string,
+  sourceContent?: string
 ): Promise<CarouselSlideValuesMap> {
   const schema = buildCarouselRemakeJsonSchema(slides);
   const basePrompt = buildCarouselRemakePrompt(
@@ -377,19 +408,22 @@ async function invokeCarouselRemakeOnce(
     templateDescription,
     slides,
     niche,
-    lockedFacts
+    lockedFacts,
+    sourceContent
   );
   const userPrompt = repairNote
     ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${repairNote}`
     : basePrompt;
 
+  const systemLine = sourceContent?.trim()
+    ? "You convert source content into carousel slide text for SpyReels. Respect character budgets strictly. Return structured tool output only."
+    : "You rewrite carousel slide text for SpyReels. Respect character budgets strictly. Return structured tool output only.";
+
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: withAiFormattingRules(
-          "You rewrite carousel slide text for SpyReels. Respect character budgets strictly. Return structured tool output only."
-        ),
+        content: withAiFormattingRules(systemLine),
       },
       { role: "user", content: userPrompt },
     ],
@@ -565,11 +599,14 @@ export async function generateCarouselRemake(
     slideCountOption?: number | "auto";
     uploadedImageUrls?: Record<string, string>;
     uploadedImagePool?: string[];
+    /** When set, convert this source text into slides instead of niche-only rewrite. */
+    sourceContent?: string;
   }
 ): Promise<void> {
   const slideCountOption = options?.slideCountOption;
   const uploadedImageUrls = options?.uploadedImageUrls;
   const uploadedImagePool = options?.uploadedImagePool;
+  const sourceContent = options?.sourceContent?.trim() || undefined;
   const db = await getDb();
   if (!db) {
     console.error(`[carouselRemake] ${remakeId}: database unavailable`);
@@ -603,12 +640,10 @@ export async function generateCarouselRemake(
       }
     }
 
-    // Per-job vetted fact selection (ids not reused across slides in this remake).
-    const lockedFacts = selectVettedFactsForSlides(
-      template.id,
-      niche,
-      effectiveSlides
-    );
+    // Skip vetted facts for content-to-carousel; source text is authoritative.
+    const lockedFacts = sourceContent
+      ? (new Map() as LockedSlideFacts)
+      : selectVettedFactsForSlides(template.id, niche, effectiveSlides);
     if (lockedFacts.size > 0) {
       console.log(
         `[carouselRemake] ${remakeId}: locked ${lockedFacts.size} vetted fact(s): ${[
@@ -624,7 +659,9 @@ export async function generateCarouselRemake(
       template.description,
       effectiveSlides,
       niche,
-      lockedFacts
+      lockedFacts,
+      undefined,
+      sourceContent
     );
     let validation = validateBudgets(effectiveSlides, values, lockedFacts);
 
@@ -635,7 +672,8 @@ export async function generateCarouselRemake(
         effectiveSlides,
         niche,
         lockedFacts,
-        validation.issues.join("\n")
+        validation.issues.join("\n"),
+        sourceContent
       );
       validation = validateBudgets(effectiveSlides, values, lockedFacts);
       if (!validation.ok) {

@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpyReels · Content to Carousel (competitor-inspired mockup)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #070709;
+      --panel: #101014;
+      --card: #16161b;
+      --line: rgba(255,255,255,0.09);
+      --text: #fafafa;
+      --muted: #a1a1aa;
+      --purple: #7c3aed;
+      --purple-2: #8b5cf6;
+      --soft: rgba(124, 58, 237, 0.16);
+      --ok: #34d399;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(700px 380px at 15% -5%, rgba(124,58,237,0.28), transparent 60%),
+        radial-gradient(560px 300px at 90% 5%, rgba(56,189,248,0.08), transparent 55%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 18px 48px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .brand b { color: var(--text); }
+    .dot {
+      width: 8px; height: 8px; border-radius: 99px; background: var(--purple);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.55rem, 3vw, 2.1rem);
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+    }
+    .sub {
+      margin: 0 0 22px;
+      max-width: 58ch;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    /* Competitor pattern: ONE screen, input left / preview right */
+    .stage {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .stage { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+    }
+    .tab {
+      flex: 1;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 8px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab.on {
+      background: var(--soft);
+      color: #ede9fe;
+    }
+
+    .pad { padding: 16px; }
+
+    label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    textarea, input[type="url"], input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      padding: 14px;
+      font: inherit;
+      font-size: 14px;
+      line-height: 1.45;
+      resize: vertical;
+    }
+    textarea:focus, input:focus {
+      outline: 2px solid rgba(124,58,237,0.45);
+      outline-offset: 1px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta-row strong { color: var(--text); font-weight: 600; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    @media (max-width: 520px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+    .field {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .field select {
+      width: 100%;
+      margin-top: 6px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary {
+      width: 100%;
+      margin-top: 14px;
+      background: linear-gradient(180deg, var(--purple-2), var(--purple));
+      color: white;
+      box-shadow: 0 10px 28px rgba(124,58,237,0.35);
+    }
+    .btn-primary:hover { filter: brightness(1.06); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+    .btn-ghost:hover { color: var(--text); }
+
+    .seo-box {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.025);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .seo-box b { color: var(--text); }
+
+    /* Preview phone — PostNitro / Predis style centerpiece */
+    .preview-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .preview-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 0 2px;
+    }
+    .preview-head span {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .phone-stage {
+      display: grid;
+      place-items: center;
+      padding: 18px 12px 8px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background:
+        radial-gradient(400px 220px at 50% 0%, rgba(124,58,237,0.18), transparent 70%),
+        var(--panel);
+      min-height: 560px;
+    }
+
+    .phone {
+      width: min(300px, 100%);
+      aspect-ratio: 4 / 5;
+      border-radius: 22px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 30px 70px rgba(0,0,0,0.55);
+      background: #0b0b0f;
+    }
+    .phone.empty {
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .phone-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: brightness(0.52) saturate(1.05);
+    }
+    .phone-bg.video::after {
+      content: "VIDEO";
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+    }
+    .phone-copy {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 22px 18px 34px;
+      color: #fff;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.6);
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ddd6fe;
+      margin-bottom: 8px;
+    }
+    .headline {
+      margin: 0 0 8px;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 27px;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+    }
+    .body {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.4;
+      color: rgba(255,255,255,0.92);
+    }
+    .wc {
+      margin-top: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      opacity: 0.85;
+    }
+    .dots {
+      position: absolute;
+      left: 0; right: 0; bottom: 12px;
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      z-index: 2;
+    }
+    .dots i {
+      width: 5px; height: 5px; border-radius: 99px;
+      background: rgba(255,255,255,0.35);
+    }
+    .dots i.on { width: 14px; border-radius: 99px; background: #fff; }
+
+    /* Bottom filmstrip like competitors */
+    .strip {
+      display: none;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px 2px;
+    }
+    .strip.show { display: flex; }
+    .thumb {
+      flex: 0 0 auto;
+      width: 64px;
+      height: 80px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-size: cover;
+      background-position: center;
+      cursor: pointer;
+      position: relative;
+    }
+    .thumb.on { border-color: var(--purple); }
+    .thumb span {
+      position: absolute;
+      left: 4px; bottom: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 4px #000;
+    }
+
+    /* Background drawer — PostNitro-style on selected slide */
+    .drawer {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .drawer.show { display: block; }
+    .drawer-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .drawer-top h2 {
+      margin: 0;
+      font-size: 14px;
+    }
+    .seg {
+      display: flex;
+      gap: 4px;
+      background: rgba(255,255,255,0.03);
+      padding: 4px;
+      border-radius: 10px;
+    }
+    .seg button {
+      border: 0;
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .seg button.on {
+      background: var(--soft);
+      color: #ede9fe;
+    }
+    .drawer-body { padding: 12px; }
+    .search {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .search input { flex: 1; }
+    .providers {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .providers button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .providers button.on {
+      border-color: rgba(124,58,237,0.55);
+      background: var(--soft);
+      color: #ede9fe;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 700px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .shot {
+      aspect-ratio: 3/4;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-size: cover;
+      background-position: center;
+      cursor: pointer;
+      position: relative;
+    }
+    .shot.on { border-color: var(--purple); }
+    .shot em {
+      position: absolute;
+      left: 5px; bottom: 5px;
+      font-style: normal;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .hidden { display: none !important; }
+    .note {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> SpyReels mockup · inspired by PostNitro / Predis / InstaCarousel</div>
+    <h1>Turn content into an Instagram carousel</h1>
+    <p class="sub">
+      Competitor pattern: paste once, generate, edit on a phone preview, swap backgrounds.
+      SEO slide rule baked in: keep each slide under ~40 words.
+    </p>
+
+    <div class="stage">
+      <!-- LEFT: one input card (PostNitro-style) -->
+      <section class="card" id="input-card">
+        <div class="tabs" role="tablist">
+          <button class="tab on" type="button" data-mode="paste">Paste text</button>
+          <button class="tab" type="button" data-mode="topic">Topic</button>
+          <button class="tab" type="button" data-mode="url">URL</button>
+        </div>
+        <div class="pad">
+          <div id="mode-paste">
+            <label for="content">Your content</label>
+            <textarea id="content" rows="12">Restaurant owners keep guessing what to post.
+
+Here is the system that works:
+1. Spy competitor Reels that already hit in your niche
+2. Steal the hook structure, not the words
+3. Rewrite in your voice with SpyReels Bot
+4. Film with the teleprompter before the idea goes cold
+
+Most owners overthink the camera.
+The winners overthink the hook.
+
+Want the full weekly plan? Save this carousel and start with one Remake today.</textarea>
+          </div>
+          <div id="mode-topic" class="hidden">
+            <label for="topic">Topic</label>
+            <input id="topic" type="text" value="4-step system for restaurant owners to stop guessing Reels" />
+          </div>
+          <div id="mode-url" class="hidden">
+            <label for="url">Blog / newsletter URL</label>
+            <input id="url" type="url" placeholder="https://..." value="https://spyreels.ai/blog/instagram-reels-hooks" />
+          </div>
+
+          <div class="meta-row">
+            <span>Source: <strong id="src-words">0</strong> words · ideal 150 to 800</span>
+            <span id="src-status" class="ok">Good length for a carousel</span>
+          </div>
+
+          <div class="controls">
+            <div class="field">
+              <label style="margin:0">Slides</label>
+              <select id="slide-count">
+                <option>5</option>
+                <option selected>6</option>
+                <option>7</option>
+                <option>8</option>
+                <option>10</option>
+              </select>
+            </div>
+            <div class="field">
+              <label style="margin:0">Style</label>
+              <select id="style">
+                <option selected>Photo-led (IG 4:5)</option>
+                <option>Bold list</option>
+                <option>Notebook</option>
+                <option>Stat contrast</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="seo-box">
+            <b>SEO / swipe rules from competitor tools:</b>
+            hook slide first · 5 to 10 slides · max ~40 words per slide · short headline (3 to 7 words) · CTA last.
+            SpyReels will also auto-pull Pexels / Pixabay backgrounds (photo or short video).
+          </div>
+
+          <button class="btn btn-primary" type="button" id="generate">Generate carousel</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: phone preview -->
+      <section class="preview-col">
+        <div class="preview-head">
+          <span>Live preview · 1080×1350</span>
+          <span id="preview-label">Waiting for content</span>
+        </div>
+        <div class="phone-stage">
+          <div class="phone empty" id="phone-empty">
+            Paste a post, topic, or URL.<br />Hit Generate to see slides here.
+          </div>
+          <div class="phone hidden" id="phone">
+            <div class="phone-bg" id="phone-bg"></div>
+            <div class="phone-copy">
+              <div class="kicker" id="kicker">SLIDE 1 · HOOK</div>
+              <h3 class="headline" id="headline">Stop guessing what to post</h3>
+              <p class="body" id="body">A simple 4-step system restaurant owners use to steal what already works.</p>
+              <div class="wc" id="slide-wc">22 words · under 40</div>
+            </div>
+            <div class="dots" id="dots"></div>
+          </div>
+        </div>
+        <div class="strip" id="strip"></div>
+        <div class="actions-row hidden" id="after-actions">
+          <button class="btn btn-ghost" type="button" id="open-bg">Change background</button>
+          <button class="btn btn-ghost" type="button">Download PNGs</button>
+          <button class="btn btn-primary" type="button" style="width:auto;margin:0;box-shadow:none;">Save to My Carousels</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Background picker drawer -->
+    <section class="drawer" id="drawer" style="margin-top:16px;">
+      <div class="drawer-top">
+        <h2>Background for this slide</h2>
+        <div class="seg">
+          <button class="on" type="button" data-media="photo">Photos</button>
+          <button type="button" data-media="video">Videos</button>
+        </div>
+      </div>
+      <div class="drawer-body">
+        <div class="search">
+          <input type="text" id="q" value="restaurant kitchen night" />
+          <button class="btn btn-ghost" type="button">Search</button>
+        </div>
+        <div class="providers">
+          <button class="on" type="button" data-p="pexels">Pexels</button>
+          <button type="button" data-p="pixabay">Pixabay</button>
+          <button type="button" data-p="auto">Auto (both)</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <p class="note">
+          Same stock stack as B-roll: Pexels first, Pixabay fallback. Photos for stills, videos for looping slide BGs.
+        </p>
+      </div>
+    </section>
+
+    <p class="note">
+      Competitor takeaways used here: PostNitro (paste / URL / topic + slide count on one screen),
+      Predis (prompt to draft then edit), InstaCarousel (paste blog/thread → slides).
+      Not a 3-step wizard.
+    </p>
+  </div>
+
+  <script>
+    const slides = [
+      {
+        kicker: "SLIDE 1 · HOOK",
+        headline: "Stop guessing what to post",
+        body: "A simple 4-step system restaurant owners use to steal what already works.",
+        query: "restaurant owner thinking",
+        bg: "https://images.pexels.com/photos/3184292/pexels-photo-3184292.jpeg?auto=compress&cs=tinysrgb&w=800"
+      },
+      {
+        kicker: "SLIDE 2 · STEP 1",
+        headline: "Spy Reels that already hit",
+        body: "Find competitor posts in your niche that prove demand before you film.",
+        query: "chef plating food",
+        bg: "https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=800"
+      },
+      {
+        kicker: "SLIDE 3 · STEP 2",
+        headline: "Steal structure, not words",
+        body: "Keep the pattern. Rewrite the line so it sounds like your brand.",
+        query: "notebook writing desk",
+        bg: "https://images.pexels.com/photos/261579/pexels-photo-261579.jpeg?auto=compress&cs=tinysrgb&w=800"
+      },
+      {
+        kicker: "SLIDE 4 · STEP 3",
+        headline: "Rewrite in your voice",
+        body: "Turn the transcript into a ready-to-film script with SpyReels Bot.",
+        query: "laptop cafe night",
+        bg: "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&cs=tinysrgb&w=800"
+      },
+      {
+        kicker: "SLIDE 5 · STEP 4",
+        headline: "Film while it is fresh",
+        body: "Open the teleprompter and record before the idea goes cold.",
+        query: "creator filming phone",
+        bg: "https://images.pexels.com/photos/3379934/pexels-photo-3379934.jpeg?auto=compress&cs=tinysrgb&w=800"
+      },
+      {
+        kicker: "SLIDE 6 · CTA",
+        headline: "Save this. Remake one.",
+        body: "Open Spy Viral Reels tonight and ship one winner while momentum is high.",
+        query: "restaurant neon sign night",
+        bg: "https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=800"
+      }
+    ];
+
+    const stock = [
+      "https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/941861/pexels-photo-941861.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/3184183/pexels-photo-3184183.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/1581384/pexels-photo-1581384.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/4252137/pexels-photo-4252137.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=600",
+      "https://images.pexels.com/photos/261579/pexels-photo-261579.jpeg?auto=compress&cs=tinysrgb&w=600"
+    ];
+
+    let active = 0;
+    let generated = false;
+    let media = "photo";
+    let provider = "pexels";
+
+    function countWords(s) {
+      return (s.trim().match(/\S+/g) || []).length;
+    }
+
+    function updateSourceMeta() {
+      const mode = document.querySelector(".tab.on").dataset.mode;
+      let text = "";
+      if (mode === "paste") text = document.getElementById("content").value;
+      if (mode === "topic") text = document.getElementById("topic").value;
+      if (mode === "url") text = "blog article placeholder words ".repeat(40);
+      const n = countWords(text);
+      document.getElementById("src-words").textContent = String(n);
+      const st = document.getElementById("src-status");
+      if (mode === "topic" && n < 4) {
+        st.textContent = "Add a clearer topic";
+        st.className = "warn";
+      } else if (mode === "paste" && n < 80) {
+        st.textContent = "A bit short · aim for 150+ words";
+        st.className = "warn";
+      } else if (mode === "paste" && n > 1200) {
+        st.textContent = "Long · AI will extract highlights";
+        st.className = "warn";
+      } else {
+        st.textContent = "Good length for a carousel";
+        st.className = "ok";
+      }
+    }
+
+    function renderPhone() {
+      const s = slides[active];
+      const words = countWords(s.headline + " " + s.body);
+      document.getElementById("phone-bg").style.backgroundImage = "url('" + s.bg + "')";
+      document.getElementById("phone-bg").classList.toggle("video", media === "video");
+      document.getElementById("kicker").textContent = s.kicker;
+      document.getElementById("headline").textContent = s.headline;
+      document.getElementById("body").textContent = s.body;
+      document.getElementById("slide-wc").textContent =
+        words + " words · " + (words <= 40 ? "under 40 ✓" : "trim for mobile");
+      document.getElementById("slide-wc").style.color = words <= 40 ? "#bbf7d0" : "#fde68a";
+      document.getElementById("q").value = s.query;
+      document.getElementById("preview-label").textContent =
+        "Slide " + (active + 1) + " of " + slides.length;
+
+      const dots = document.getElementById("dots");
+      dots.innerHTML = "";
+      slides.forEach((_, i) => {
+        const d = document.createElement("i");
+        if (i === active) d.classList.add("on");
+        dots.appendChild(d);
+      });
+
+      const strip = document.getElementById("strip");
+      strip.innerHTML = "";
+      slides.forEach((slide, i) => {
+        const t = document.createElement("button");
+        t.type = "button";
+        t.className = "thumb" + (i === active ? " on" : "");
+        t.style.backgroundImage = "url('" + slide.bg + "')";
+        t.innerHTML = "<span>" + (i + 1) + "</span>";
+        t.addEventListener("click", () => {
+          active = i;
+          renderPhone();
+          renderGrid();
+        });
+        strip.appendChild(t);
+      });
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      stock.forEach((url, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "shot" + (slides[active].bg === url ? " on" : "");
+        b.style.backgroundImage = "url('" + url + "')";
+        const label =
+          media === "video"
+            ? (provider === "pixabay" ? "Pixabay video" : "Pexels video")
+            : i % 2 ? "Pixabay" : "Pexels";
+        b.innerHTML = "<em>" + label + "</em>";
+        b.addEventListener("click", () => {
+          slides[active].bg = url;
+          renderPhone();
+          renderGrid();
+        });
+        grid.appendChild(b);
+      });
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("on"));
+        tab.classList.add("on");
+        document.getElementById("mode-paste").classList.toggle("hidden", tab.dataset.mode !== "paste");
+        document.getElementById("mode-topic").classList.toggle("hidden", tab.dataset.mode !== "topic");
+        document.getElementById("mode-url").classList.toggle("hidden", tab.dataset.mode !== "url");
+        updateSourceMeta();
+      });
+    });
+
+    document.getElementById("content").addEventListener("input", updateSourceMeta);
+    document.getElementById("topic").addEventListener("input", updateSourceMeta);
+
+    document.getElementById("generate").addEventListener("click", () => {
+      generated = true;
+      active = 0;
+      document.getElementById("phone-empty").classList.add("hidden");
+      document.getElementById("phone").classList.remove("hidden");
+      document.getElementById("strip").classList.add("show");
+      document.getElementById("after-actions").classList.remove("hidden");
+      document.getElementById("drawer").classList.add("show");
+      renderPhone();
+      renderGrid();
+    });
+
+    document.getElementById("open-bg").addEventListener("click", () => {
+      document.getElementById("drawer").classList.add("show");
+      document.getElementById("drawer").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    document.querySelectorAll("[data-media]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-media]").forEach((b) => b.classList.remove("on"));
+        btn.classList.add("on");
+        media = btn.dataset.media;
+        renderPhone();
+        renderGrid();
+      });
+    });
+
+    document.querySelectorAll("[data-p]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-p]").forEach((b) => b.classList.remove("on"));
+        btn.classList.add("on");
+        provider = btn.dataset.p;
+        renderGrid();
+      });
+    });
+
+    updateSourceMeta();
+  </script>
+</body>
+</html>

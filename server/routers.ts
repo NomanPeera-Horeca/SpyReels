@@ -281,7 +281,7 @@ import {
   enqueueCollectedReelIngest,
   enqueueCollectedReelRefresh,
 } from "./collectedReelWorker";
-import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
+import { ingestCollectedReelByShortcode, ensureCollectedMirrorReel } from "./collectedReelIngest";
 import { sendHookGeneratorHooksEmail } from "./utils/email";
 import { classifyTranscript } from "./_core/classifyTranscript";
 import { invokeLLM } from "./_core/llm";
@@ -7194,6 +7194,40 @@ Return JSON only:
         return { refreshed: count };
       }),
 
+    /** Save / unsave a collected reel into Saved Reels (same bookmark as Creator Radar). */
+    toggleSave: protectedProcedure
+      .input(z.object({ collectedReelId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const reel = await assertCollectedReelInWorkspace(
+          input.collectedReelId,
+          ctx
+        );
+        if (reel.status !== "ready") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Reel metadata not ready yet",
+          });
+        }
+
+        const reelId = await ensureCollectedMirrorReel(reel);
+        const alreadySaved = await isReelSaved(
+          ctx.workspaceId,
+          ctx.user.id,
+          reelId
+        );
+        if (alreadySaved) {
+          await unsaveReel(ctx.workspaceId, ctx.user.id, reelId);
+          return { saved: false as const, reelId };
+        }
+        await saveReel({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          reelId,
+          jobId: 0,
+        });
+        return { saved: true as const, reelId };
+      }),
+
     /** Transcribe a collected reel */
     transcribe: protectedProcedure
       .input(z.object({ collectedReelId: z.number() }))
@@ -7220,40 +7254,7 @@ Return JSON only:
         }
         await incrementUsage(ctx.user.id, "transcribeCount");
 
-        // Create a temporary reel entry to reuse the remake / transcription UX
-        const tempReelData = {
-          jobId: 0, // 0 = collected reel, not from a scrape job
-          workspaceId: reel.workspaceId,
-          shortcode: reel.shortcode,
-          caption: reel.caption || "",
-          viewCount: reel.viewCount || 0,
-          likeCount: reel.likeCount || 0,
-          commentCount: reel.commentCount || 0,
-          thumbnailUrl: reel.thumbnailUrl || "",
-          videoUrl: reel.videoUrl || "",
-          reelUrl: reel.reelUrl,
-          duration: reel.duration || 0,
-          postedAt: reel.postedAt || new Date(),
-          ownerUsername: reel.ownerUsername || "",
-        };
-
-        const { getDb } = await import("./db");
-        const { reels: reelsTable, collectedReels } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
-        const db = await getDb();
-        if (!db) throw new Error("Database not available");
-
-        let reelId: number;
-        if (reel.transcriptionReelId != null && reel.transcriptionReelId > 0) {
-          reelId = reel.transcriptionReelId;
-        } else {
-          const result = await db.insert(reelsTable).values(tempReelData);
-          reelId = result[0].insertId;
-        }
-
-        await db.update(collectedReels)
-          .set({ transcriptionReelId: reelId })
-          .where(eq(collectedReels.id, input.collectedReelId));
+        const reelId = await ensureCollectedMirrorReel(reel);
 
         const existingTranscription = await getTranscriptionByReelId(reelId);
         if (existingTranscription && existingTranscription.status === "completed") {

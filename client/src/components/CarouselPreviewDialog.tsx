@@ -21,7 +21,7 @@ import {
 import { CarouselRenderer } from "@/components/CarouselRenderer";
 import { PostDateTimePicker } from "@/components/PostDateTimePicker";
 import { trpc } from "@/lib/trpc";
-import { Calendar, Loader2, Wand2 } from "lucide-react";
+import { Calendar, ImageIcon, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { toBlob } from "html-to-image";
 import JSZip from "jszip";
@@ -195,6 +195,14 @@ export function CarouselPreviewDialog({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [postDate, setPostDate] = useState<Date | undefined>(undefined);
   const [postTime, setPostTime] = useState("09:00");
+  const [bgPickerOpen, setBgPickerOpen] = useState(false);
+  const [bgSlideId, setBgSlideId] = useState<string | null>(null);
+  const [bgSlotId, setBgSlotId] = useState<string | null>(null);
+  const [bgQuery, setBgQuery] = useState("creator content");
+  const [bgProvider, setBgProvider] = useState<"pexels" | "pixabay" | "auto">(
+    "auto"
+  );
+  const [bgSearchKey, setBgSearchKey] = useState(0);
   /**
    * Read-only reopen while viewing the remake we opened from history.
    * Exits once the user starts a new remake (activeRemakeId changes).
@@ -233,6 +241,20 @@ export function CarouselPreviewDialog({
       toast.error(err.message || "Failed to save format");
     },
   });
+  const updateImageUrlsMutation = trpc.carouselRemake.updateImageUrls.useMutation({
+    onSuccess: (data) => {
+      if (activeRemakeId != null) {
+        utils.carouselRemake.status.setData({ remakeId: activeRemakeId }, (prev) =>
+          prev ? { ...prev, imageUrls: data.imageUrls } : prev
+        );
+      }
+      void utils.carouselRemake.list.invalidate();
+      toast.success("Background updated");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to update background");
+    },
+  });
   const updateScheduleMutation = trpc.carouselRemake.updateSchedule.useMutation({
     onSuccess: () => {
       toast.success("Schedule saved");
@@ -262,6 +284,12 @@ export function CarouselPreviewDialog({
       setScheduleOpen(false);
       setPostDate(undefined);
       setPostTime("09:00");
+      setBgPickerOpen(false);
+      setBgSlideId(null);
+      setBgSlotId(null);
+      setBgQuery("creator content");
+      setBgProvider("auto");
+      setBgSearchKey(0);
       return;
     }
     // Reopen saved remake: wire status query only (never call start).
@@ -430,6 +458,37 @@ export function CarouselPreviewDialog({
       : undefined;
 
   const effectiveSlideCount = effectiveSlides?.length ?? template?.slides.length ?? 0;
+
+  const imageEditableSlides = (effectiveSlides ?? template?.slides ?? []).filter(
+    (slide) => (slide.imageSlots?.length ?? 0) > 0
+  );
+  const activeBgSlide =
+    imageEditableSlides.find((s) => s.id === bgSlideId) ??
+    imageEditableSlides[0] ??
+    null;
+  const activeBgSlots = activeBgSlide?.imageSlots ?? [];
+  const activeBgSlotId =
+    activeBgSlots.find((s) => s.id === bgSlotId)?.id ??
+    activeBgSlots[0]?.id ??
+    null;
+
+  const stockPhotosQuery = trpc.carouselRemake.searchStockPhotos.useQuery(
+    {
+      query: bgQuery.trim() || "creator content",
+      provider: bgProvider,
+      page: 1,
+    },
+    {
+      enabled:
+        open &&
+        bgPickerOpen &&
+        viewingRemake &&
+        statusQuery.data?.status === "completed" &&
+        bgSearchKey > 0 &&
+        bgQuery.trim().length > 0,
+      staleTime: 60_000,
+    }
+  );
 
   const catalogPreviewImages = template
     ? resolveTemplatePreviewImageUrls(template)
@@ -645,7 +704,10 @@ export function CarouselPreviewDialog({
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {isLoadingReopen
-                    ? "Loading your carousel…"
+                    ? statusQuery.data?.status === "processing" ||
+                      statusQuery.data?.status === "pending"
+                      ? "Generating your carousel…"
+                      : "Loading your carousel…"
                     : "Rewriting slide text for your niche…"}
                 </p>
               ) : null}
@@ -785,6 +847,214 @@ export function CarouselPreviewDialog({
                           );
                         })}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {viewingRemake &&
+                  statusQuery.data?.status === "completed" &&
+                  imageEditableSlides.length > 0 ? (
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => {
+                          const first = imageEditableSlides[0];
+                          setBgSlideId(first?.id ?? null);
+                          setBgSlotId(first?.imageSlots?.[0]?.id ?? null);
+                          const hint =
+                            first?.imageSlots?.[0]?.searchQueryHint?.slice(0, 80) ??
+                            "creator content";
+                          setBgQuery(hint);
+                          setBgPickerOpen((openNow) => !openNow);
+                          if (!bgPickerOpen) {
+                            setBgSearchKey((k) => k + 1);
+                          }
+                        }}
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        {bgPickerOpen ? "Hide backgrounds" : "Change background"}
+                      </Button>
+
+                      {bgPickerOpen ? (
+                        <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {imageEditableSlides.map((slide, index) => {
+                              const active = slide.id === (activeBgSlide?.id ?? "");
+                              return (
+                                <button
+                                  key={slide.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setBgSlideId(slide.id);
+                                    setBgSlotId(slide.imageSlots?.[0]?.id ?? null);
+                                    const hint =
+                                      slide.imageSlots?.[0]?.searchQueryHint?.slice(
+                                        0,
+                                        80
+                                      ) ?? bgQuery;
+                                    setBgQuery(hint);
+                                    setBgSearchKey((k) => k + 1);
+                                  }}
+                                  className={`rounded-md border px-2 py-1 text-xs ${
+                                    active
+                                      ? "border-primary bg-primary/10 text-foreground"
+                                      : "border-input bg-card text-muted-foreground"
+                                  }`}
+                                >
+                                  Slide{" "}
+                                  {(effectiveSlides ?? template?.slides ?? []).findIndex(
+                                    (s) => s.id === slide.id
+                                  ) + 1 || index + 1}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {activeBgSlots.length > 1 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {activeBgSlots.map((slot) => {
+                                const active = slot.id === activeBgSlotId;
+                                return (
+                                  <button
+                                    key={slot.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setBgSlotId(slot.id);
+                                      setBgQuery(
+                                        slot.searchQueryHint?.slice(0, 80) ?? bgQuery
+                                      );
+                                      setBgSearchKey((k) => k + 1);
+                                    }}
+                                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                                      active
+                                        ? "border-primary bg-primary/10 text-foreground"
+                                        : "border-input text-muted-foreground"
+                                    }`}
+                                  >
+                                    {slot.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+
+                          <div className="flex flex-wrap gap-2">
+                            <Input
+                              value={bgQuery}
+                              onChange={(e) => setBgQuery(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  setBgSearchKey((k) => k + 1);
+                                }
+                              }}
+                              placeholder="Search photos…"
+                              className="h-8 min-w-[160px] flex-1 bg-card text-xs"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setBgSearchKey((k) => k + 1)}
+                              disabled={bgQuery.trim().length === 0}
+                            >
+                              Search
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {(
+                              [
+                                { id: "auto", label: "Auto (both)" },
+                                { id: "pexels", label: "Pexels" },
+                                { id: "pixabay", label: "Pixabay" },
+                              ] as const
+                            ).map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  setBgProvider(p.id);
+                                  setBgSearchKey((k) => k + 1);
+                                }}
+                                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                                  bgProvider === p.id
+                                    ? "border-primary bg-primary/10 text-foreground"
+                                    : "border-input text-muted-foreground"
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {stockPhotosQuery.isFetching ? (
+                            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Searching stock photos…
+                            </p>
+                          ) : null}
+
+                          {stockPhotosQuery.isError ? (
+                            <p className="text-xs text-destructive">
+                              {stockPhotosQuery.error.message ||
+                                "Stock search failed"}
+                            </p>
+                          ) : null}
+
+                          {!stockPhotosQuery.isFetching &&
+                          bgSearchKey > 0 &&
+                          (stockPhotosQuery.data?.photos.length ?? 0) === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              No photos found. Try another query or provider.
+                            </p>
+                          ) : null}
+
+                          {(stockPhotosQuery.data?.photos.length ?? 0) > 0 ? (
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {stockPhotosQuery.data!.photos.map((photo) => (
+                                <button
+                                  key={photo.id}
+                                  type="button"
+                                  disabled={
+                                    updateImageUrlsMutation.isPending ||
+                                    activeRemakeId == null ||
+                                    !activeBgSlide
+                                  }
+                                  onClick={() => {
+                                    if (activeRemakeId == null || !activeBgSlide) {
+                                      return;
+                                    }
+                                    updateImageUrlsMutation.mutate({
+                                      remakeId: activeRemakeId,
+                                      slideId: activeBgSlide.id,
+                                      url: photo.url,
+                                      slotId: activeBgSlotId ?? undefined,
+                                    });
+                                  }}
+                                  className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-transparent bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+                                  style={{
+                                    backgroundImage: `url(${photo.thumbUrl})`,
+                                    backgroundSize: "cover",
+                                    backgroundPosition: "center",
+                                  }}
+                                  title={
+                                    photo.photographer
+                                      ? `${photo.provider} · ${photo.photographer}`
+                                      : photo.provider
+                                  }
+                                >
+                                  <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+                                    {photo.provider}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

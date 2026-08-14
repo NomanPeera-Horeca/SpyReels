@@ -11,7 +11,46 @@ import { getPlanLimits, type PlanId } from "../stripe/products";
 import { hasUnlimitedUsage } from "../usageBypass";
 import { countCarouselRemakesThisMonth } from "../carousel/db";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
+import { searchStockPhotos as searchStockPhotosLib } from "../carousel/searchStockPhotos";
+import {
+  CarouselSourceUrlError,
+  resolveCarouselSourceFromUrl,
+} from "../carousel/fetchSocialVideoSourceText";
 import { storagePut } from "../storage";
+
+/** Maps content-to-carousel style picker → curated template ids. */
+const CONTENT_STYLE_TO_TEMPLATE: Record<string, string> = {
+  photo: "photo_story_test",
+  bold: "five_mistakes_listicle",
+  notebook: "notebook_tips_grid",
+  stat: "average_vs_not",
+};
+
+async function assertCarouselRemakeQuota(user: {
+  id: number;
+  openId: string;
+  email: string | null;
+  role: string | null;
+}): Promise<void> {
+  if (
+    hasUnlimitedUsage({
+      openId: user.openId,
+      email: user.email,
+      role: user.role,
+    })
+  ) {
+    return;
+  }
+  const sub = await getUserSubscription(user.id);
+  const limits = getPlanLimits(sub.plan as PlanId);
+  const used = await countCarouselRemakesThisMonth(user.id);
+  if (used >= limits.carouselRemakes) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `Monthly carousel remake limit reached (${used}/${limits.carouselRemakes}). Resets ${firstDayOfNextMonthUtc()}.`,
+    });
+  }
+}
 
 /** First URL from a slide entry (string or per-slot map). */
 function firstUrlFromSlideEntry(
@@ -567,6 +606,205 @@ export const carouselRemakeRouter = router({
         .where(eq(carouselRemakes.id, input.remakeId));
 
       return { remakeId: input.remakeId, aspectRatio: input.aspectRatio };
+    }),
+
+  /**
+   * Content → carousel: paste / topic / URL → template remake with source-aware prompt.
+   */
+  generateFromContent: protectedProcedure
+    .input(
+      z.object({
+        mode: z.enum(["paste", "topic", "url"]),
+        content: z.string().min(1).max(12000),
+        slideCount: z.number().int().min(5).max(10).default(6),
+        style: z.enum(["photo", "bold", "notebook", "stat"]).default("photo"),
+        aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const templateId = CONTENT_STYLE_TO_TEMPLATE[input.style];
+      if (!templateId || !CAROUSEL_TEMPLATES_BY_ID.has(templateId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Unknown carousel style",
+        });
+      }
+
+      await assertCarouselRemakeQuota({
+        id: ctx.user.id,
+        openId: ctx.user.openId,
+        email: ctx.user.email,
+        role: ctx.user.role,
+      });
+
+      let sourceContent = input.content.trim();
+      if (input.mode === "url") {
+        try {
+          sourceContent = await resolveCarouselSourceFromUrl(sourceContent, {
+            userId: ctx.user.id,
+            openId: ctx.user.openId,
+          });
+        } catch (err) {
+          if (err instanceof CarouselSourceUrlError) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: err.message,
+            });
+          }
+          throw err;
+        }
+      } else if (input.mode === "topic") {
+        if (sourceContent.length < 8) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Topic is too short. Add a clearer topic or paste content.",
+          });
+        }
+        sourceContent = `Create an Instagram carousel about: ${sourceContent}`;
+      } else if (sourceContent.length < 40) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Paste more content (aim for at least a short paragraph).",
+        });
+      }
+
+      let nicheLabel = sourceContent.slice(0, 120).replace(/\s+/g, " ").trim();
+      try {
+        nicheLabel = await resolveCarouselNiche(ctx.user.id, nicheLabel, {
+          businessDescription: ctx.user.businessDescription,
+          targetAudience: ctx.user.targetAudience,
+        });
+      } catch {
+        // Content-to-carousel can run without a saved niche profile.
+      }
+
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      // slideCount in UI is total slides; generator uses middle-list count.
+      const middleCount = Math.min(Math.max(input.slideCount - 2, 3), 18);
+
+      const insertResult = await db.insert(carouselRemakes).values({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        templateId,
+        niche: nicheLabel.slice(0, 500),
+        status: "processing",
+        aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
+      });
+      const remakeId = insertResult[0].insertId;
+      if (!remakeId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create carousel remake",
+        });
+      }
+
+      generateCarouselRemake(remakeId, templateId, nicheLabel, {
+        slideCountOption: middleCount,
+        sourceContent,
+      }).catch((err: unknown) => {
+        console.error(`Carousel from content ${remakeId} failed:`, err);
+      });
+
+      return { remakeId, status: "processing" as const, templateId };
+    }),
+
+  /** Browse Pexels / Pixabay photos for slide backgrounds. */
+  searchStockPhotos: protectedProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(200),
+        provider: z.enum(["pexels", "pixabay", "auto"]).default("auto"),
+        page: z.number().int().min(1).max(20).default(1),
+      })
+    )
+    .query(async ({ input }) => {
+      const photos = await searchStockPhotosLib({
+        query: input.query,
+        provider: input.provider,
+        page: input.page,
+        perPage: 12,
+      });
+      return { photos };
+    }),
+
+  /** Replace one slide image URL on a completed remake. */
+  updateImageUrls: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        url: z.string().url().max(2048),
+        slotId: z.string().min(1).max(128).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          imageUrlsJson: carouselRemakes.imageUrlsJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before changing images",
+        });
+      }
+
+      const current =
+        row.imageUrlsJson && typeof row.imageUrlsJson === "object"
+          ? ({ ...(row.imageUrlsJson as Record<string, unknown>) } as Record<
+              string,
+              string | Record<string, string>
+            >)
+          : {};
+
+      if (input.slotId) {
+        const existing = current[input.slideId];
+        if (typeof existing === "string" || !existing) {
+          current[input.slideId] = { [input.slotId]: input.url };
+        } else {
+          current[input.slideId] = { ...existing, [input.slotId]: input.url };
+        }
+      } else {
+        current[input.slideId] = input.url;
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({ imageUrlsJson: current })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, imageUrls: current };
     }),
 
   /**
