@@ -6969,13 +6969,23 @@ Return JSON only:
           ...collectedRest
         } = row;
 
+        const r2PublicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "")
+          .replace(/\/+$/, "")
+          .trim();
+        const isR2MediaUrl = (url: string) =>
+          Boolean(r2PublicBase && url.startsWith(r2PublicBase));
+
         const preferTxnMedia = (
           fromTxnReel: string | null | undefined,
           fromCollected: string | null | undefined
         ): string | null => {
           const a = (fromTxnReel ?? "").trim();
-          if (a) return fromTxnReel ?? null;
           const b = (fromCollected ?? "").trim();
+          // Prefer durable R2 over ephemeral CDN (TikTok covers expire / may be HEIC).
+          if (b && isR2MediaUrl(b) && (!a || !isR2MediaUrl(a))) {
+            return fromCollected ?? null;
+          }
+          if (a) return fromTxnReel ?? null;
           return b ? fromCollected ?? null : null;
         };
 

@@ -35,6 +35,9 @@ import {
   Calendar,
   Grid3X3,
   List,
+  Instagram,
+  Music2,
+  Youtube,
 } from "lucide-react";
 import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
@@ -104,15 +107,43 @@ const RECREATE_BATCH_STALE_MS = 300_000;
 const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
 
-function sourceBadge(reel: CollectedRow): string {
+function collectedPlatform(
+  reel: CollectedRow
+): "instagram" | "tiktok" | "youtube" {
   const platform = (reel.platform || "instagram").toLowerCase();
-  if (platform === "tiktok") return "TikTok";
-  if (platform === "youtube") return "YouTube";
-  return reel.source === "telegram"
-    ? "TG"
-    : reel.source === "extension"
-      ? "EXT"
-      : "IG";
+  if (platform === "tiktok" || platform === "youtube") return platform;
+  return "instagram";
+}
+
+/** Match Creator Radar / research: Lucide platform mark + short label. */
+function SourcePlatformBadge({ reel }: { reel: CollectedRow }) {
+  const platform = collectedPlatform(reel);
+  const icon =
+    platform === "instagram" ? (
+      <Instagram className="h-3 w-3" aria-hidden />
+    ) : platform === "tiktok" ? (
+      <Music2 className="h-3 w-3" aria-hidden />
+    ) : (
+      <Youtube className="h-3 w-3" aria-hidden />
+    );
+
+  const label =
+    platform === "tiktok"
+      ? "TikTok"
+      : platform === "youtube"
+        ? "YouTube"
+        : reel.source === "telegram"
+          ? "TG"
+          : reel.source === "extension"
+            ? "EXT"
+            : "IG";
+
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {icon}
+      <span>{label}</span>
+    </span>
+  );
 }
 
 function collectedRowToLibraryRemakeSource(
@@ -1016,8 +1047,8 @@ export default function CollectedReels() {
                           width={56}
                           height={72}
                         />
-                        <span className="pointer-events-none absolute right-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
-                          {sourceBadge(reel)}
+                        <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
+                          <SourcePlatformBadge reel={reel} />
                         </span>
                         {reel.duration ? (
                           <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 font-mono text-[9px] text-white">
@@ -1027,7 +1058,10 @@ export default function CollectedReels() {
                         ) : null}
                       </>
                     ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+                      <div className="relative flex h-full w-full flex-col items-center justify-center gap-1">
+                        <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-black/70 px-0.5 text-[8px] text-white">
+                          <SourcePlatformBadge reel={reel} />
+                        </span>
                         {isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : isFailed ? (
@@ -1190,10 +1224,13 @@ export default function CollectedReels() {
                 onInlinePlayStop={() =>
                   setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
                 }
+                mediaPlatform={
+                  collectedPlatform(reel) === "tiktok" ? "tiktok" : "instagram"
+                }
                 topRight={renderGridRemoveButton(reel.id)}
                 mediaLabel={
-                  <span className="rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
-                    {sourceBadge(reel)}
+                  <span className="inline-flex items-center gap-0.5 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
+                    <SourcePlatformBadge reel={reel} />
                   </span>
                 }
                 statusChip={

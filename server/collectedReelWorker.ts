@@ -12,6 +12,7 @@ import {
 } from "./db";
 import { fetchCollectedReelMetadataForPlatform } from "./collectedReelFetch";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import { ensureTiktokThumbnailOnR2 } from "./tiktokThumbnailR2";
 import { ensureReelVideoOnR2 } from "./reelVideoR2";
 import type { CollectedVideoPlatform } from "./socialVideoUrl";
 
@@ -27,6 +28,42 @@ function platformOf(reel: { platform?: string | null }): CollectedVideoPlatform 
   const p = (reel.platform || "instagram").toLowerCase();
   if (p === "tiktok" || p === "youtube") return p;
   return "instagram";
+}
+
+/** TikTok covers need HEIC→JPEG via ensureTiktokThumbnailOnR2; IG/YT use reel-thumbs. */
+async function mirrorCollectedThumbnail(
+  platform: CollectedVideoPlatform,
+  mediaId: string,
+  sourceUrl: string | null
+): Promise<string> {
+  if (platform === "tiktok") {
+    return ensureTiktokThumbnailOnR2(mediaId, sourceUrl);
+  }
+  return ensureReelThumbnailOnR2(mediaId, sourceUrl);
+}
+
+function isOurR2PublicUrl(url: string): boolean {
+  const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(
+    /\/+$/,
+    ""
+  );
+  return Boolean(publicBase && url.startsWith(publicBase));
+}
+
+/**
+ * Prefer durable R2 thumbs. For TikTok, never keep ephemeral CDN covers
+ * (they expire / may be HEIC) when we have video or a fresh fetch failed.
+ */
+function thumbnailToPersist(
+  platform: CollectedVideoPlatform,
+  mirrored: string,
+  previous: string | null | undefined
+): string | null {
+  const next = mirrored.trim();
+  if (next && isOurR2PublicUrl(next)) return next;
+  if (platform === "tiktok") return null;
+  if (next) return next;
+  return previous?.trim() || null;
 }
 
 function pendingStatusMessage(
@@ -78,7 +115,8 @@ async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
     }
     const data = outcome.data;
     const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(
+      mirrorCollectedThumbnail(
+        platform,
         reel.shortcode,
         (data.thumbnailUrl || "").trim() || null
       ),
@@ -89,7 +127,8 @@ async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
             (data.videoUrl || "").trim() || null
           ),
     ]);
-    if (!stableThumb.trim() && !stableVid.trim()) {
+    const persistedThumb = thumbnailToPersist(platform, stableThumb, null);
+    if (!persistedThumb && !stableVid.trim()) {
       await updateCollectedReel(reelId, {
         status: "failed",
         errorMessage:
@@ -102,7 +141,7 @@ async function processCollectedReelIngestLegacy(reelId: number): Promise<void> {
       viewCount: data.viewCount || 0,
       likeCount: data.likeCount || 0,
       commentCount: data.commentCount || 0,
-      thumbnailUrl: stableThumb.trim() ? stableThumb : null,
+      thumbnailUrl: persistedThumb,
       videoUrl: stableVid.trim() ? stableVid : null,
       duration: data.duration || null,
       postedAt: data.postedAt || null,
@@ -167,16 +206,21 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
     const vidCand = (data.videoUrl || reel.videoUrl || "").trim();
 
     const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(reel.shortcode, thumbCand || null),
+      mirrorCollectedThumbnail(platform, reel.shortcode, thumbCand || null),
       platform === "youtube"
         ? Promise.resolve("")
         : ensureReelVideoOnR2(reel.shortcode, vidCand || null),
     ]);
 
-    const hasR2Thumb = stableThumb.trim().length > 0;
+    const persistedThumb = thumbnailToPersist(
+      platform,
+      stableThumb,
+      reel.thumbnailUrl
+    );
+    const hasR2Thumb = Boolean(persistedThumb && isOurR2PublicUrl(persistedThumb));
     const hasR2Video = stableVid.trim().length > 0;
 
-    if (!hasR2Thumb && !hasR2Video) {
+    if (!hasR2Thumb && !hasR2Video && !persistedThumb) {
       if (attempt >= COLLECTED_REEL_MAX_FETCH_ATTEMPTS) {
         await updateCollectedReel(reelId, {
           status: "failed",
@@ -199,7 +243,7 @@ export async function processCollectedReelIngest(reelId: number): Promise<void> 
       viewCount: data.viewCount > 0 ? data.viewCount : reel.viewCount || 0,
       likeCount: data.likeCount > 0 ? data.likeCount : reel.likeCount || 0,
       commentCount: data.commentCount > 0 ? data.commentCount : reel.commentCount || 0,
-      thumbnailUrl: hasR2Thumb ? stableThumb : reel.thumbnailUrl,
+      thumbnailUrl: persistedThumb,
       videoUrl: hasR2Video ? stableVid : platform === "youtube" ? null : reel.videoUrl,
       duration: data.duration || reel.duration || null,
       postedAt: data.postedAt || reel.postedAt || null,
@@ -254,18 +298,25 @@ export async function processCollectedReelRefresh(reelId: number): Promise<void>
     const thumbCand = (data.thumbnailUrl || reel.thumbnailUrl || "").trim();
     const vidCand = (data.videoUrl || reel.videoUrl || "").trim();
     const [stableThumb, stableVid] = await Promise.all([
-      ensureReelThumbnailOnR2(reel.shortcode, thumbCand || null),
+      mirrorCollectedThumbnail(platform, reel.shortcode, thumbCand || null),
       platform === "youtube"
         ? Promise.resolve("")
         : ensureReelVideoOnR2(reel.shortcode, vidCand || null),
     ]);
+
+    const persistedThumb = thumbnailToPersist(
+      platform,
+      stableThumb,
+      reel.thumbnailUrl
+    );
 
     await updateCollectedReel(reelId, {
       caption: data.caption || reel.caption || null,
       viewCount: data.viewCount > 0 ? data.viewCount : reel.viewCount || 0,
       likeCount: data.likeCount > 0 ? data.likeCount : reel.likeCount || 0,
       commentCount: data.commentCount > 0 ? data.commentCount : reel.commentCount || 0,
-      thumbnailUrl: stableThumb.trim() ? stableThumb : reel.thumbnailUrl,
+      thumbnailUrl:
+        platform === "tiktok" ? persistedThumb : persistedThumb ?? reel.thumbnailUrl,
       videoUrl: stableVid.trim()
         ? stableVid
         : platform === "youtube"
