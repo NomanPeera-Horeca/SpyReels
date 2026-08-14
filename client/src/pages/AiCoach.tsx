@@ -12,7 +12,9 @@ import {
 } from "@shared/studioCoachUi";
 import { buildCoachModeActions, type CoachModeAction } from "@shared/coachModeActions";
 import {
+  buildIdeaStarterChips,
   buildIdeaStarterHeroSubhead,
+  buildIdeaStarterNichePill,
   buildIdeaStarterPanelHeader,
 } from "@shared/ideaStarterPrompts";
 import type { CoachAction } from "@shared/studioCoachAgent";
@@ -151,6 +153,14 @@ export default function AiCoach() {
   );
   const writePanelHeader = useMemo(
     () => buildIdeaStarterPanelHeader(onboardingState),
+    [onboardingState]
+  );
+  const nichePill = useMemo(
+    () => buildIdeaStarterNichePill(onboardingState),
+    [onboardingState]
+  );
+  const starterChips = useMemo(
+    () => buildIdeaStarterChips(onboardingState),
     [onboardingState]
   );
 
@@ -798,7 +808,9 @@ export default function AiCoach() {
         modeActions={modeActions}
         onActionApplied={handleActionApplied}
         heroSubhead={heroSubhead}
-        writePanelHeader={writePanelHeader}
+        writeScriptHeader={writePanelHeader}
+        nichePill={nichePill}
+        starterChips={starterChips}
       />
     );
   }

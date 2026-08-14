@@ -141,9 +141,27 @@ function displayTopicLabel(ctx: StarterPromptContext | null | undefined): string
     .join(" ");
 }
 
+/**
+ * Audience for UI chrome only. Long onboarding bios must never become hero copy
+ * (Claude/Perplexity empty states stay short).
+ */
+export function shortAudienceForUi(
+  audience: string | null | undefined,
+  maxLen = 42
+): string | null {
+  const raw = audience?.trim().replace(/^for\s+/i, "").trim() ?? "";
+  if (!raw) return null;
+  if (raw.includes("\n") || raw.length > maxLen) return null;
+  // Freeform bios ("I create content for CEOs...") are not a short audience label.
+  if (/^(i|we)\s+(create|make|am|are|help|teach|sell|work|post)/i.test(raw)) {
+    return null;
+  }
+  return raw;
+}
+
 function buildFallbackChips(ctx: StarterPromptContext | null | undefined): StarterChip[] {
   const topic = displayTopicLabel(ctx);
-  const audience = ctx?.targetAudience?.trim();
+  const audience = shortAudienceForUi(ctx?.targetAudience);
   const audienceClause = audience ? ` for ${audience}` : "";
 
   return [
@@ -189,7 +207,7 @@ export function buildIdeaStarterPrompts(ctx: StarterPromptContext | null | undef
 
 export function buildIdeaStarterHeadline(ctx: StarterPromptContext | null | undefined): string {
   const topic = displayTopicLabel(ctx);
-  const audience = ctx?.targetAudience?.trim();
+  const audience = shortAudienceForUi(ctx?.targetAudience);
   if (audience) {
     return `What ${topic} Reel should we write for ${audience}?`;
   }
@@ -201,11 +219,22 @@ export function buildIdeaStarterPanelHeader(ctx: StarterPromptContext | null | u
   return `Ideas for ${topic}`;
 }
 
+/** Short empty-state line under the H1. Never dump onboarding bios here. */
 export function buildIdeaStarterHeroSubhead(ctx: StarterPromptContext | null | undefined): string {
   const topic = displayTopicLabel(ctx);
-  const audience = ctx?.targetAudience?.trim().replace(/^for\s+/i, "").trim();
+  const audience = shortAudienceForUi(ctx?.targetAudience);
   if (audience) {
-    return `Turn a ${topic} idea into a script tailored for ${audience}.`;
+    return `Scripts for ${topic} · ${audience}`;
   }
-  return `Turn a ${topic} idea into a ready-to-film script.`;
+  if (topic && topic.toLowerCase() !== "general") {
+    return `Ready-to-film ${topic} Reels in your voice`;
+  }
+  return "Ready-to-film Reel scripts in your voice";
+}
+
+/** Compact niche pill label for Claude-style empty state. */
+export function buildIdeaStarterNichePill(ctx: StarterPromptContext | null | undefined): string | null {
+  const topic = displayTopicLabel(ctx);
+  if (!topic || topic.toLowerCase() === "general") return null;
+  return topic;
 }
