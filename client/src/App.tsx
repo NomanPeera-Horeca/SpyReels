@@ -14,6 +14,7 @@ import { MobileAppLayoutSkeleton } from "./components/MobileAppLayoutSkeleton";
 import { MobileCreateAppProvider } from "./contexts/MobileCreateAppContext";
 import { isMobileCreateApp, isMobileCreateAllowedPath } from "@/lib/mobileCreateApp";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { RetellChatWidget } from "@/components/RetellChatWidget";
 
 const NotFound = lazyWithRetry(() => import("@/pages/NotFound"));
 const OnboardingPage = lazyWithRetry(() => import("@/pages/onboarding"));
@@ -260,6 +261,7 @@ function App() {
           <UpgradeProvider>
             <Toaster richColors />
             <Router />
+            <RetellChatWidget />
           </UpgradeProvider>
         </TooltipProvider>
       </ThemeProvider>
