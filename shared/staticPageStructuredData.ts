@@ -646,7 +646,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               {
                 "@type": "ListItem",
                 position: 1,
-                name: "Instagram Viral Hook Generator",
+                name: "Viral Hook Generator",
                 url: `${SPYREELS_SITE_URL}/free-tools/viral-hooks`,
               },
               {

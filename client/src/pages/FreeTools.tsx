@@ -56,7 +56,7 @@ type HubTool = {
 
 const HUB_TOOLS: HubTool[] = [
   {
-    title: "Instagram Viral Hook Generator",
+    title: "Viral Hook Generator",
     description:
       "Paste an idea. Get 10 scroll-stopping hooks with spoken lines and on-screen text.",
     href: "/free-tools/viral-hooks",
