@@ -30,24 +30,29 @@ const POPULAR_GUIDES = [
     description: "Question hooks averaged 5.67% ER in our study. See which patterns win.",
   },
   {
-    href: "/blog/guide-instagram-reels-content-analysis-2026",
-    title: "420 Reels content analysis study",
-    description: "Original research on hooks, formats, and engagement across 14 creators.",
-  },
-  {
     href: "/blog/guide-find-viral-reels-your-niche",
     title: "How to find viral Reels in your niche",
     description: "Research methods to spot winning Reels before you film.",
   },
   {
-    href: "/blog/guide-instagram-reels-script-generator",
-    title: "Instagram Reels script generator guide",
-    description: "Turn viral patterns into scripts you can film today.",
-  },
-  {
     href: "/blog/guide-spy-on-competitor-instagram-reels",
     title: "How to spy on competitor Instagram Reels",
     description: "Study rivals without guessing what is working.",
+  },
+  {
+    href: "/blog/guide-best-time-to-post-reels-2026",
+    title: "Best time to post Reels in 2026",
+    description: "Posting windows that help nano creators get more reach.",
+  },
+  {
+    href: "/blog/guide-instagram-reels-analytics-tool",
+    title: "Instagram Reels analytics tool guide",
+    description: "What to measure so you stop posting blind.",
+  },
+  {
+    href: "/features/30-day-content-plan",
+    title: "30-day Instagram content plan",
+    description: "Turn research into a month of scripts you can film.",
   },
 ] as const;
 

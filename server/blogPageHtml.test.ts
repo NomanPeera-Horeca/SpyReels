@@ -93,8 +93,9 @@ describe("enrichSpaHtmlForPublicPath", () => {
       "/?ref=taaft_feat&utm_source=taaft_feat&utm_medium=referral",
       async () => undefined
     );
-    expect(out).toContain('rel="canonical" href="https://spyreels.ai/"');
-    expect(out).toContain("Instagram Reels Spy Tool");
+    expect(out.status).toBe(200);
+    expect(out.html).toContain('rel="canonical" href="https://spyreels.ai/"');
+    expect(out.html).toContain("Instagram Reels Tool");
   });
 
   it("injects extension meta with non-brand-first title", async () => {
@@ -103,9 +104,14 @@ describe("enrichSpaHtmlForPublicPath", () => {
       "/extension",
       async () => undefined
     );
-    expect(out).toContain("<title>Chrome Extension for Instagram Reels | Sort, Transcribe, and Save</title>");
-    expect(out).toContain('rel="canonical" href="https://spyreels.ai/extension"');
-    expect(out).not.toContain("<title>SpyReels - Viral Instagram Reels Intelligence</title>");
+    expect(out.status).toBe(200);
+    expect(out.html).toContain(
+      "<title>Chrome Extension for Instagram Reels | Sort, Transcribe, and Save</title>"
+    );
+    expect(out.html).toContain('rel="canonical" href="https://spyreels.ai/extension"');
+    expect(out.html).not.toContain(
+      "<title>SpyReels - Viral Instagram Reels Intelligence</title>"
+    );
   });
 
   it("strips query string from blog post canonical", async () => {
@@ -133,45 +139,49 @@ describe("enrichSpaHtmlForPublicPath", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
         }) as never
     );
-    expect(out).toContain('rel="canonical" href="https://spyreels.ai/blog/guide-meedro-alternative"');
+    expect(out.status).toBe(200);
+    expect(out.html).toContain(
+      'rel="canonical" href="https://spyreels.ai/blog/guide-meedro-alternative"'
+    );
   });
 
   it.each(STATIC_PAGE_JSON_LD_PATHS)(
     "injects server-side JSON-LD for static page %s",
     async (pathname) => {
       const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, pathname, async () => undefined);
-      expect(out).toContain('type="application/ld+json"');
+      expect(out.status).toBe(200);
+      expect(out.html).toContain('type="application/ld+json"');
       if (pathname === "/") {
-        expect(out).toContain('id="home-software-schema"');
-        expect(out).toContain('id="home-faq-schema"');
-        expect(out).toContain('"@type":"SoftwareApplication"');
+        expect(out.html).toContain('id="home-software-schema"');
+        expect(out.html).toContain('id="home-faq-schema"');
+        expect(out.html).toContain('"@type":"SoftwareApplication"');
       }
       if (pathname === "/pricing") {
-        expect(out).toContain('id="pricing-product-schema"');
-        expect(out).toContain('id="pricing-faq-schema"');
+        expect(out.html).toContain('id="pricing-product-schema"');
+        expect(out.html).toContain('id="pricing-faq-schema"');
       }
       if (pathname === "/features/viral-reel-finder") {
-        expect(out).toContain('id="finder-software-schema"');
-        expect(out).toContain('id="finder-faq-schema"');
+        expect(out.html).toContain('id="finder-software-schema"');
+        expect(out.html).toContain('id="finder-faq-schema"');
       }
       if (pathname === "/free-tools/viral-hooks") {
-        expect(out).toContain('id="hooks-software-schema"');
+        expect(out.html).toContain('id="hooks-software-schema"');
       }
       if (pathname === "/affiliate") {
-        expect(out).toContain('id="affiliate-faq-schema"');
+        expect(out.html).toContain('id="affiliate-faq-schema"');
       }
       if (pathname === "/about") {
-        expect(out).toContain('id="about-person-schema"');
-        expect(out).toContain('id="about-organization-schema"');
+        expect(out.html).toContain('id="about-person-schema"');
+        expect(out.html).toContain('id="about-organization-schema"');
       }
       if (pathname === "/contact") {
-        expect(out).toContain('id="contact-organization-schema"');
+        expect(out.html).toContain('id="contact-organization-schema"');
       }
       if (pathname === "/extension") {
-        expect(out).toContain('id="extension-software-schema"');
+        expect(out.html).toContain('id="extension-software-schema"');
       }
-      expect(out).toContain('id="seo-crawler-snapshot"');
-      expect(out).toContain("<h1>");
+      expect(out.html).toContain('id="seo-crawler-snapshot"');
+      expect(out.html).toContain("<h1>");
     }
   );
 
@@ -200,8 +210,26 @@ describe("enrichSpaHtmlForPublicPath", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
         }) as never
     );
-    expect(out).toContain("<h1>Best Meedro Alternative</h1>");
-    expect(out).toContain("Short excerpt for crawlers");
+    expect(out.status).toBe(200);
+    expect(out.html).toContain("<h1>Best Meedro Alternative</h1>");
+    expect(out.html).toContain("Short excerpt for crawlers");
+  });
+
+  it("returns HTTP 404 with noindex for unknown public paths like /$", async () => {
+    const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, "/$", async () => undefined);
+    expect(out.status).toBe(404);
+    expect(out.html).toContain('name="robots" content="noindex, nofollow"');
+    expect(out.html).toContain("Page Not Found | SpyReels");
+  });
+
+  it("returns HTTP 404 for missing blog slugs", async () => {
+    const out = await enrichSpaHtmlForPublicPath(
+      SAMPLE_HTML,
+      "/blog/spy-on-competitor-instagram-reels-strategy",
+      async () => undefined
+    );
+    expect(out.status).toBe(404);
+    expect(out.html).toContain('name="robots" content="noindex, nofollow"');
   });
 });
 

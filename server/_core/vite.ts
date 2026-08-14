@@ -70,8 +70,15 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`
       );
       let page = await vite.transformIndexHtml(url, template);
-      page = await enrichSpaHtmlForPublicPath(page, req.originalUrl, getBlogPostBySlug);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      const enriched = await enrichSpaHtmlForPublicPath(
+        page,
+        req.originalUrl,
+        getBlogPostBySlug
+      );
+      res
+        .status(enriched.status)
+        .set({ "Content-Type": "text/html" })
+        .end(enriched.html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -141,11 +148,15 @@ export function serveStatic(app: Express) {
   app.use("*", async (req: Request, res: Response) => {
     try {
       let html = await readIndexHtml();
-      html = await enrichSpaHtmlForPublicPath(html, req.originalUrl, getBlogPostBySlug);
+      const enriched = await enrichSpaHtmlForPublicPath(
+        html,
+        req.originalUrl,
+        getBlogPostBySlug
+      );
       res
-        .status(200)
+        .status(enriched.status)
         .set({ "Content-Type": "text/html", ...htmlNoCacheHeaders })
-        .end(html);
+        .end(enriched.html);
     } catch (err) {
       console.error("[SPA] Failed to serve index.html:", err);
       res.set(htmlNoCacheHeaders);

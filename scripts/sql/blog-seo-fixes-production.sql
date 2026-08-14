@@ -7,6 +7,9 @@ UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guid
 
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-spy-on-competitor-instagram-reels', updatedAt = NOW() WHERE slug = 'how-to-spy-on-viral-instagram-reels';
 
+-- Legacy alternate slug (may not exist as a row; safe if 0 rows). App also 301s this path.
+UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-spy-on-competitor-instagram-reels', updatedAt = NOW() WHERE slug = 'spy-on-competitor-instagram-reels-strategy';
+
 UPDATE blog_posts SET noIndex = 1, canonicalUrl = 'https://spyreels.ai/blog/guide-instagram-reels-script-generator', updatedAt = NOW() WHERE slug = 'how-to-write-instagram-reels-scripts-that-go-viral';
 
 UPDATE blog_posts SET metaTitle = 'Best Instagram Reels Tools 2026 | SpyReels', metaDescription = 'Best Instagram Reels tools in 2026 compared: SpyReels, Meedro, ViralFindr, and Descript. See pricing, features, and which fits script-first creators.', updatedAt = NOW() WHERE slug = 'best-instagram-reels-tools-2026';

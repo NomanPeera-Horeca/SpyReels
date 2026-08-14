@@ -317,16 +317,31 @@ function injectCanonicalFallbackMeta(html: string, pathname: string): string {
   });
 }
 
+function injectNotFoundMeta(html: string): string {
+  return injectPageHeadMeta(html, {
+    title: "Page Not Found | SpyReels",
+    description: "This SpyReels page does not exist or has moved.",
+    canonical: `${SITE_URL}/404`,
+    robots: "noindex, nofollow",
+  });
+}
+
+export type SpaPublicHtmlResult = {
+  html: string;
+  /** HTTP status for crawlers. Private app shells stay 200. */
+  status: number;
+};
+
 export async function enrichSpaHtmlForPublicPath(
   html: string,
   originalUrl: string,
   loadPostBySlug: (slug: string) => Promise<BlogPost | undefined>
-): Promise<string> {
+): Promise<SpaPublicHtmlResult> {
   const pathname = pathnameFromRequestUrl(originalUrl);
   const hasQueryString = originalUrl.includes("?");
 
   if (isPrivateAppPath(pathname)) {
-    return html;
+    return { html, status: 200 };
   }
 
   if (pathname === "/blog") {
@@ -335,14 +350,18 @@ export async function enrichSpaHtmlForPublicPath(
     if (snapshot) {
       enriched = injectCrawlerSnapshot(enriched, snapshot);
     }
-    return enriched;
+    return { html: enriched, status: 200 };
   }
 
   const slug = parseBlogSlugFromPath(pathname);
   if (slug) {
     const post = await loadPostBySlug(slug);
     if (!post || post.status !== "published") {
-      return hasQueryString ? injectCanonicalFallbackMeta(html, pathname) : html;
+      // Missing / draft blog URLs must not soft-404 as 200 SPA shells.
+      const notFoundHtml = hasQueryString
+        ? injectCanonicalFallbackMeta(injectNotFoundMeta(html), pathname)
+        : injectNotFoundMeta(html);
+      return { html: notFoundHtml, status: 404 };
     }
 
     let enriched = injectPageHeadMeta(html, blogPostHeadMeta(post));
@@ -351,7 +370,7 @@ export async function enrichSpaHtmlForPublicPath(
       h1: post.title,
       summary: post.excerpt || post.metaDescription || undefined,
     });
-    return enriched;
+    return { html: enriched, status: 200 };
   }
 
   const staticSeo = getStaticPublicPageSeo(pathname);
@@ -368,12 +387,16 @@ export async function enrichSpaHtmlForPublicPath(
     if (snapshot) {
       enriched = injectCrawlerSnapshot(enriched, snapshot);
     }
-    return enriched;
+    return { html: enriched, status: 200 };
   }
 
   if (hasQueryString) {
-    return injectCanonicalFallbackMeta(html, pathname);
+    // Tracking variants of known pages already handled above. Unknown path +
+    // query still gets a clean noindex 404 rather than a soft 404 shell.
+    return { html: injectNotFoundMeta(html), status: 404 };
   }
 
-  return html;
+  // Junk paths like "/$" were returning 200 SPA HTML and showing as
+  // "Crawled - currently not indexed" / soft 404 in GSC.
+  return { html: injectNotFoundMeta(html), status: 404 };
 }
