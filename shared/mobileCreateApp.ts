@@ -9,7 +9,7 @@ export type MobileCreateTabId = keyof typeof MOBILE_CREATE_TAB_PATHS;
 
 export function mobileCreateTabForPath(pathname: string): MobileCreateTabId {
   if (pathname === "/plan") return "today";
-  if (pathname === "/studio") return "write";
+  if (pathname === "/studio" || pathname === "/ai-studio") return "write";
   if (pathname.startsWith("/scripts")) return "scripts";
   if (
     pathname === "/more" ||
@@ -27,6 +27,7 @@ export function isMobileCreateAllowedPath(pathname: string): boolean {
   const allowedPrefixes = [
     "/plan",
     "/studio",
+    "/ai-studio",
     "/scripts",
     "/more",
     "/settings",
