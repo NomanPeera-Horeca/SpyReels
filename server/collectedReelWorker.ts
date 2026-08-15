@@ -52,7 +52,7 @@ function isOurR2PublicUrl(url: string): boolean {
 
 /**
  * Prefer durable R2 thumbs. For TikTok, never keep ephemeral CDN covers
- * (they expire / may be HEIC) when we have video or a fresh fetch failed.
+ * or legacy reel-thumbs HEIC objects (browsers show a blank tile).
  */
 function thumbnailToPersist(
   platform: CollectedVideoPlatform,
@@ -60,7 +60,10 @@ function thumbnailToPersist(
   previous: string | null | undefined
 ): string | null {
   const next = mirrored.trim();
-  if (next && isOurR2PublicUrl(next)) return next;
+  if (next && isOurR2PublicUrl(next)) {
+    if (platform === "tiktok" && next.includes("/reel-thumbs/")) return null;
+    return next;
+  }
   if (platform === "tiktok") return null;
   if (next) return next;
   return previous?.trim() || null;
@@ -297,8 +300,22 @@ export async function processCollectedReelRefresh(reelId: number): Promise<void>
     const data = outcome.data;
     const thumbCand = (data.thumbnailUrl || reel.thumbnailUrl || "").trim();
     const vidCand = (data.videoUrl || reel.videoUrl || "").trim();
+    const existingThumb = (reel.thumbnailUrl || "").trim();
+    // Old TikTok collects stored HEIC under reel-thumbs/; force remirror to
+    // tiktok-thumbs JPEG so grid tiles are visible in browsers.
+    const forceTiktokThumbRemirror =
+      platform === "tiktok" &&
+      (existingThumb.includes("/reel-thumbs/") ||
+        !existingThumb.includes("/tiktok-thumbs/"));
+
     const [stableThumb, stableVid] = await Promise.all([
-      mirrorCollectedThumbnail(platform, reel.shortcode, thumbCand || null),
+      platform === "tiktok"
+        ? ensureTiktokThumbnailOnR2(
+            reel.shortcode,
+            (data.thumbnailUrl || existingThumb || "").trim() || null,
+            { force: forceTiktokThumbRemirror }
+          )
+        : mirrorCollectedThumbnail(platform, reel.shortcode, thumbCand || null),
       platform === "youtube"
         ? Promise.resolve("")
         : ensureReelVideoOnR2(reel.shortcode, vidCand || null),

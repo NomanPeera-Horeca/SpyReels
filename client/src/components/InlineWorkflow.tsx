@@ -385,6 +385,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   // action strip scrolls this into view + pulse; respects reduced motion.
   const recreateSectionRef = useRef<HTMLDivElement | null>(null);
   const pendingOpenScriptScrollRef = useRef(false);
+  const pendingAutoFilmRef = useRef(false);
 
   const runRecreateScrollPulse = useCallback(() => {
     const node = recreateSectionRef.current;
@@ -412,6 +413,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     if (sig.openScriptId != null) {
       setActiveScriptId(sig.openScriptId);
       pendingOpenScriptScrollRef.current = true;
+      pendingAutoFilmRef.current = true;
       return;
     }
     const timer = window.setTimeout(() => {
@@ -631,12 +633,20 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
     !effectiveIsNoSpeech;
 
   useEffect(() => {
-    if (!pendingOpenScriptScrollRef.current) return;
+    if (!pendingOpenScriptScrollRef.current && !pendingAutoFilmRef.current) return;
     if (script?.status === "failed") {
       pendingOpenScriptScrollRef.current = false;
+      pendingAutoFilmRef.current = false;
       return;
     }
     if (scriptQuery.data?.status !== "completed") return;
+
+    if (pendingAutoFilmRef.current && displayScript.trim()) {
+      pendingAutoFilmRef.current = false;
+      setShowTeleprompter(true);
+    }
+
+    if (!pendingOpenScriptScrollRef.current) return;
     const node = recreateSectionRef.current;
     if (!node) return;
     pendingOpenScriptScrollRef.current = false;
@@ -656,7 +666,12 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       node.classList.remove("pulse-highlight");
     }, 2100);
     return () => window.clearTimeout(removeTimer);
-  }, [scriptQuery.data?.status, scriptQuery.data?.id, script?.status]);
+  }, [
+    scriptQuery.data?.status,
+    scriptQuery.data?.id,
+    script?.status,
+    displayScript,
+  ]);
 
   useEffect(() => {
     if (generatedScript && !editedScript) {

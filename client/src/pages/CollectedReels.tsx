@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { usePostHog } from "@posthog/react";
 import type { inferRouterOutputs } from "@trpc/server";
-import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import type { AppRouter } from "../../../server/routers";
@@ -71,7 +70,6 @@ import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
-import { scriptFilmPath } from "@shared/scriptFilm";
 
 type CollectedRow = inferRouterOutputs<AppRouter>["collected"]["list"][number];
 type ViewMode = "list" | "grid";
@@ -163,7 +161,6 @@ function collectedRowToLibraryRemakeSource(
 
 export default function CollectedReels() {
   const posthog = usePostHog();
-  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const transcribeGate = useUsageGate("transcribeCount");
 
@@ -260,20 +257,20 @@ export default function CollectedReels() {
 
   const triggerOpenMyScript = useCallback(
     (mappedReelId: number, openScriptId: number) => {
-      if (viewModeRef.current === "grid") {
-        setLocation(scriptFilmPath(openScriptId));
-        return;
-      }
       const list = reelsRef.current;
       const item = list.find((r) => r.transcriptionReelId === mappedReelId);
-      if (item) setExpandedCollectedId(item.id);
+      if (viewModeRef.current === "grid") {
+        if (item) setGridModalCollectedId(item.id);
+      } else if (item) {
+        setExpandedCollectedId(item.id);
+      }
       setRecreatePulse((prev) => ({
         reelId: mappedReelId,
         nonce: (prev?.reelId === mappedReelId ? prev.nonce : 0) + 1,
         openScriptId,
       }));
     },
-    [setLocation]
+    []
   );
 
   const [sortBy, setSortBy] = useState("added_newest");

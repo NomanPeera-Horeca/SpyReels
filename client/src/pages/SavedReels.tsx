@@ -30,7 +30,6 @@ import {
   List,
 } from "lucide-react";
 import { mergeRemakeability } from "@/lib/remakeability";
-import { scriptFilmPath } from "@shared/scriptFilm";
 import { useUsageGate } from "@/hooks/useUsageGate";
 import {
   useLibraryRemakeChain,
@@ -220,20 +219,20 @@ export default function SavedReels() {
 
   const triggerOpenMyScript = useCallback(
     (reelId: number, openScriptId: number) => {
-      if (viewModeRef.current === "grid") {
-        setLocation(scriptFilmPath(openScriptId));
-        return;
-      }
       const list = savedReelsRef.current;
       const item = list.find((s) => s.reel.id === reelId);
-      if (item) setExpandedSavedId(item.id);
+      if (viewModeRef.current === "grid") {
+        if (item) setGridModalSavedId(item.id);
+      } else if (item) {
+        setExpandedSavedId(item.id);
+      }
       setRecreatePulse((prev) => ({
         reelId,
         nonce: (prev?.reelId === reelId ? prev.nonce : 0) + 1,
         openScriptId,
       }));
     },
-    [setLocation]
+    []
   );
 
   const [sortBy, setSortBy] = useState("date");
