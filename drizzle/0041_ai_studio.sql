@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS `ai_studio_scenes` (
   `errorMessage` text NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
+  PRIMARY KEY (`jobId`,`sceneOrder`),
   KEY `idx_ai_studio_scenes_job` (`jobId`),
-  UNIQUE KEY `uq_ai_studio_scene_order` (`jobId`,`sceneOrder`)
+  KEY `idx_ai_studio_scenes_external_id` (`id`)
 );
