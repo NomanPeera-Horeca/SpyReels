@@ -11,6 +11,7 @@ import {
   getVideoJob,
   markCreatorProfileReady,
   updateCreatorProfileAssets,
+  updateVideoJob,
 } from "./repository";
 import {
   completePersistentAiStudioJob,
@@ -210,6 +211,27 @@ export function registerAiStudioRoutes(app: Express): void {
       const jobId = z.string().uuid().parse(req.params.jobId);
       const input = z.object({ outputUrl: z.string().url(), outputKey: z.string().optional() }).parse(req.body);
       await completePersistentAiStudioJob({ jobId, ...input });
+      res.json({ success: true });
+    } catch (error) {
+      handleError(res, error);
+    }
+  });
+
+  app.post("/api/ai-studio/internal/jobs/:jobId/fail", async (req, res) => {
+    try {
+      requireWorkerSecret(req);
+      const jobId = z.string().uuid().parse(req.params.jobId);
+      const input = z.object({
+        error: z.string().min(1).max(5000),
+        step: z.string().min(1).max(120).optional(),
+      }).parse(req.body);
+      await updateVideoJob({
+        id: jobId,
+        status: "failed",
+        progress: 100,
+        currentStep: input.step || "Final video composition failed",
+        error: input.error,
+      });
       res.json({ success: true });
     } catch (error) {
       handleError(res, error);
