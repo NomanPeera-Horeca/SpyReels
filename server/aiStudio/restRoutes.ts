@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { createContext } from "../_core/context";
 import { createAiStudioUpload } from "./assets";
+import { provisionCreatorProfile } from "./provisioning";
 import {
   createCreatorProfile,
   createVideoJob,
   getCreatorProfile,
   getVideoJob,
   markCreatorProfileReady,
+  updateCreatorProfileAssets,
 } from "./repository";
 import {
   completePersistentAiStudioJob,
@@ -21,9 +24,7 @@ import {
 async function requireAuth(req: Request, res: Response) {
   const ctx = await createContext({ req, res });
   if (!ctx.user || !ctx.workspaceId) {
-    const error = new Error("Unauthorized");
-    (error as Error & { status?: number }).status = 401;
-    throw error;
+    throw Object.assign(new Error("Unauthorized"), { status: 401 });
   }
   return { userId: ctx.user.id, workspaceId: ctx.workspaceId };
 }
@@ -55,6 +56,12 @@ const createUploadSchema = z.object({
   contentLength: z.number().int().positive().max(500 * 1024 * 1024),
 });
 
+const confirmUploadSchema = z.object({
+  profileId: z.string().uuid(),
+  kind: z.enum(["training-video", "voice-sample"]),
+  key: z.string().min(1).max(1000),
+});
+
 const createVideoSchema = z.object({
   creatorProfileId: z.string().uuid(),
   scriptId: z.string().max(64).optional(),
@@ -68,8 +75,9 @@ export function registerAiStudioRoutes(app: Express): void {
     try {
       const auth = await requireAuth(req, res);
       const input = createProfileSchema.parse(req.body);
-      const id = crypto.randomUUID();
+      const id = randomUUID();
       const profile = await createCreatorProfile({
+        id,
         ...auth,
         name: input.name,
         consentConfirmed: true,
@@ -105,6 +113,44 @@ export function registerAiStudioRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/ai-studio/uploads/confirm", async (req, res) => {
+    try {
+      const auth = await requireAuth(req, res);
+      const input = confirmUploadSchema.parse(req.body);
+      const expectedPrefix = `ai-studio/${auth.workspaceId}/profiles/${input.profileId}/`;
+      if (!input.key.startsWith(expectedPrefix)) {
+        return res.status(403).json({ error: "Upload does not belong to this profile" });
+      }
+      const profile = await getCreatorProfile({ id: input.profileId, ...auth });
+      if (!profile) return res.status(404).json({ error: "AI creator profile not found" });
+      await updateCreatorProfileAssets({
+        id: input.profileId,
+        ...auth,
+        ...(input.kind === "training-video"
+          ? { trainingVideoKey: input.key }
+          : { voiceSampleKey: input.key }),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      handleError(res, error);
+    }
+  });
+
+  app.post("/api/ai-studio/profiles/:profileId/provision", async (req, res) => {
+    try {
+      const auth = await requireAuth(req, res);
+      const profileId = z.string().uuid().parse(req.params.profileId);
+      const profile = await getCreatorProfile({ id: profileId, ...auth });
+      if (!profile) return res.status(404).json({ error: "AI creator profile not found" });
+      void provisionCreatorProfile({ profileId, ...auth }).catch(error => {
+        console.error(`[aiStudio] creator provisioning ${profileId} failed`, error);
+      });
+      res.status(202).json({ profileId, status: "training" });
+    } catch (error) {
+      handleError(res, error);
+    }
+  });
+
   app.post("/api/ai-studio/profiles/:profileId/ready", async (req, res) => {
     try {
       const auth = await requireAuth(req, res);
@@ -130,7 +176,7 @@ export function registerAiStudioRoutes(app: Express): void {
       const profile = await getCreatorProfile({ id: input.creatorProfileId, ...auth });
       if (!profile) return res.status(404).json({ error: "AI creator profile not found" });
       if (profile.status !== "ready" && process.env.AI_STUDIO_USE_MOCK_PROVIDERS !== "true") {
-        return res.status(412).json({ error: "Finish AI clone setup before generating a video" });
+        return res.status(412).json({ error: "Your AI clone is still training" });
       }
       const job = await createVideoJob({
         ...input,
