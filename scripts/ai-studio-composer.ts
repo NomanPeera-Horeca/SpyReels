@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -161,18 +161,18 @@ async function compose(manifest: RenderManifest): Promise<{ key: string; url: st
   }
 }
 
-async function callback(jobId: string, output: { key: string; url: string }): Promise<void> {
+async function postCallback(jobId: string, path: "complete" | "fail", body: unknown): Promise<void> {
   const baseUrl = requireEnv("AI_STUDIO_CALLBACK_BASE_URL").replace(/\/+$/, "");
   const secret = requireEnv("AI_STUDIO_WORKER_SECRET");
-  const response = await fetch(`${baseUrl}/api/ai-studio/internal/jobs/${jobId}/complete`, {
+  const response = await fetch(`${baseUrl}/api/ai-studio/internal/jobs/${jobId}/${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${secret}`,
     },
-    body: JSON.stringify({ outputUrl: output.url, outputKey: output.key }),
+    body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Completion callback failed (${response.status}): ${await response.text()}`);
+  if (!response.ok) throw new Error(`${path} callback failed (${response.status}): ${await response.text()}`);
 }
 
 const app = express();
@@ -200,10 +200,19 @@ app.post("/compose", async (req, res) => {
       const manifest = (await response.json()) as RenderManifest;
       if (manifest.jobId !== jobId) throw new Error("Manifest job ID does not match request");
       const output = await compose(manifest);
-      await callback(jobId, output);
+      await postCallback(jobId, "complete", { outputUrl: output.url, outputKey: output.key });
       console.log(`[aiStudioComposer] completed ${jobId}: ${output.url}`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown composer error";
       console.error(`[aiStudioComposer] failed ${jobId}`, error);
+      try {
+        await postCallback(jobId, "fail", {
+          error: message,
+          step: "Final video composition failed",
+        });
+      } catch (callbackError) {
+        console.error(`[aiStudioComposer] failure callback failed ${jobId}`, callbackError);
+      }
     }
   })();
 });
