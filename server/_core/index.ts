@@ -14,6 +14,7 @@ import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
+import { registerAiStudioRoutes } from "../aiStudio/restRoutes";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -39,9 +40,6 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  // Canonical host: apex spyreels.ai (matches SPYREELS_SITE_URL / OAUTH_SERVER_URL).
-  // www and apex both resolve in DNS; without this, sessionStorage restore breaks
-  // when OAuth or other redirects cross hosts.
   app.use((req, res, next) => {
     const rawHost = (
       req.headers["x-forwarded-host"] ||
@@ -60,7 +58,6 @@ async function startServer() {
     next();
   });
 
-  // Stripe webhook MUST be registered BEFORE express.json() for signature verification
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     try {
       const { constructWebhookEvent, handleWebhookEvent } = await import("../stripe/stripe-service");
@@ -69,7 +66,6 @@ async function startServer() {
 
       const event = constructWebhookEvent(req.body, sig);
 
-      // Handle test events
       if (event.id.startsWith("evt_test_")) {
         console.log("[Webhook] Test event detected, returning verification response");
         return res.json({ verified: true });
@@ -86,23 +82,20 @@ async function startServer() {
 
   registerResendWebhookRoutes(app);
 
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
-  // Extension REST API (for Chrome extension)
   app.use("/api/extension", createExtensionRouter());
   app.use("/api/ext", createExtensionRouter());
+  registerAiStudioRoutes(app);
 
-  // Telegram Bot webhook
   app.post("/api/telegram/webhook", async (req, res) => {
     try {
       await handleTelegramUpdate(req.body);
       res.json({ ok: true });
     } catch (err: any) {
       console.error("[Telegram Webhook] Error:", err.message);
-      res.json({ ok: true }); // Always return 200 to Telegram
+      res.json({ ok: true });
     }
   });
   app.get("/hooks", (_req, res) => {
@@ -121,7 +114,6 @@ async function startServer() {
     });
   }
 
-  // SEO: robots.txt
   app.get("/robots.txt", (_req, res) => {
     res.type("text/plain").send(
       [
@@ -176,6 +168,7 @@ async function startServer() {
         "Disallow: /settings",
         "Disallow: /billing",
         "Disallow: /studio",
+        "Disallow: /ai-studio",
         "Disallow: /plan",
         "Disallow: /collected",
         "Disallow: /onboarding",
@@ -196,7 +189,6 @@ async function startServer() {
     );
   });
 
-  // SEO: sitemap.xml
   app.get("/sitemap.xml", async (_req, res) => {
     try {
       const { getPublishedIndexableBlogPosts } = await import("../db");
@@ -205,7 +197,6 @@ async function startServer() {
       const now = new Date().toISOString().split("T")[0];
 
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
-      // Static pages
       const staticPages = [
         { loc: "/", priority: "1.0", changefreq: "weekly" },
         { loc: "/extension", priority: "0.8", changefreq: "monthly" },
@@ -228,7 +219,6 @@ async function startServer() {
       for (const page of staticPages) {
         xml += `  <url>\n    <loc>${baseUrl}${page.loc}</loc>\n    <lastmod>${now}</lastmod>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority}</priority>\n  </url>\n`;
       }
-      // Blog posts
       for (const post of posts) {
         const lastmod = post.updatedAt ? new Date(post.updatedAt).toISOString().split("T")[0] : now;
         xml += `  <url>\n    <loc>${baseUrl}/blog/${post.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
@@ -243,7 +233,6 @@ async function startServer() {
 
   registerPublicScriptShareRoutes(app);
 
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -251,7 +240,6 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
@@ -272,7 +260,6 @@ async function startServer() {
     startCollectedReelIngestSweeper();
     startScrapeJobZombieSweeper();
 
-    // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {
       setupTelegramWebhook("https://spyreels.ai").catch((err) => {
         console.error("[Telegram] Webhook setup failed:", err);
