@@ -52,10 +52,9 @@ const CollectedReels = lazyWithRetry(() => import("./pages/CollectedReels"));
 const Discovery = lazyWithRetry(() => import("./pages/Discovery"));
 const CreatorDiscovery = lazyWithRetry(() => import("./pages/CreatorDiscovery"));
 const ViralityDiagnostic = lazyWithRetry(() => import("./pages/ViralityDiagnostic"));
-// Idea to Script paused: keep page file, route redirects to /studio
-// const IdeaToScript = lazyWithRetry(() => import("./pages/IdeaToScript"));
 const ThirtyDayPlan = lazyWithRetry(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazyWithRetry(() => import("./pages/AiCoach"));
+const AiStudio = lazyWithRetry(() => import("./pages/AiStudio"));
 const CarouselLibrary = lazyWithRetry(() => import("./pages/CarouselLibrary"));
 const BrollLibrary = lazyWithRetry(() => import("./pages/BrollLibrary"));
 const PasteScript = lazyWithRetry(() => import("./pages/PasteScript"));
@@ -64,22 +63,13 @@ const AdminEntry = lazyWithRetry(() => import("./admin/AdminEntry"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const AcceptInvitation = lazyWithRetry(() => import("./pages/AcceptInvitation"));
 const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"));
-
-/** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
-
-/** THROWAWAY: video B-roll upload + transcription Phase 2 test. */
-const VideoBrollUploadTest = lazyWithRetry(
-  () => import("./pages/VideoBrollUploadTest")
-);
-
+const VideoBrollUploadTest = lazyWithRetry(() => import("./pages/VideoBrollUploadTest"));
 const MobileMore = lazyWithRetry(() => import("./pages/MobileMore"));
 
 function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  if (!isMobileCreateAllowedPath(location)) {
-    return <Redirect to="/plan" />;
-  }
+  if (!isMobileCreateAllowedPath(location)) return <Redirect to="/plan" />;
   return <>{children}</>;
 }
 
@@ -99,6 +89,7 @@ function MobileCreateRouter() {
             <Route path="/dashboard" component={MobileHomeRedirect} />
             <Route path="/plan" component={ThirtyDayPlan} />
             <Route path="/studio" component={AiCoach} />
+            <Route path="/ai-studio" component={AiStudio} />
             <Route path="/scripts" component={MyScripts} />
             <Route path="/scripts/:id" component={ScriptEditor} />
             <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
@@ -127,19 +118,9 @@ function DesktopDashboardRouter() {
           <Route path="/tiktok-scraping" component={TikTokScrapingProgress} />
           <Route path="/youtube-scraping" component={YouTubeScrapingProgress} />
           <Route path="/dashboard" component={Dashboard} />
-          <Route path="/discovery">
-            {isDiscoveryV1Enabled ? <Discovery /> : <Redirect to="/dashboard" />}
-          </Route>
-          <Route path="/discover-creators">
-            {isDiscoveryV1Enabled ? (
-              <CreatorDiscovery />
-            ) : (
-              <Redirect to="/dashboard" />
-            )}
-          </Route>
-          <Route path="/my-virality-report">
-            <ViralityDiagnostic />
-          </Route>
+          <Route path="/discovery">{isDiscoveryV1Enabled ? <Discovery /> : <Redirect to="/dashboard" />}</Route>
+          <Route path="/discover-creators">{isDiscoveryV1Enabled ? <CreatorDiscovery /> : <Redirect to="/dashboard" />}</Route>
+          <Route path="/my-virality-report"><ViralityDiagnostic /></Route>
           <Route path="/saved" component={SavedReels} />
           <Route path="/scripts" component={MyScripts} />
           <Route path="/scripts/:id" component={ScriptEditor} />
@@ -147,6 +128,7 @@ function DesktopDashboardRouter() {
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
+          <Route path="/ai-studio" component={AiStudio} />
           <Route path="/carousel-library" component={CarouselLibrary} />
           <Route path="/broll-library" component={BrollLibrary} />
           <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
@@ -177,25 +159,13 @@ function DesktopDashboardRouter() {
 
 function DashboardRouter() {
   const [mobileCreate] = useState(() => isMobileCreateApp());
-
-  return (
-    <MobileCreateAppProvider active={mobileCreate}>
-      {mobileCreate ? <MobileCreateRouter /> : <DesktopDashboardRouter />}
-    </MobileCreateAppProvider>
-  );
+  return <MobileCreateAppProvider active={mobileCreate}>{mobileCreate ? <MobileCreateRouter /> : <DesktopDashboardRouter />}</MobileCreateAppProvider>;
 }
 
 function Router() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
       <Switch>
-        {/* Public pages - no dashboard layout */}
         <Route path="/terms" component={TermsOfService} />
         <Route path="/privacy" component={PrivacyPolicy} />
         <Route path="/contact" component={Contact} />
@@ -213,41 +183,14 @@ function Router() {
         <Route path="/free-tools/broll-generator" component={BrollGenerator} />
         <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
-        {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />
-        <Route path="/hooks">
-          {() => {
-            if (typeof window !== "undefined") {
-              window.location.replace("/free-tools/viral-hooks");
-            }
-            return null;
-          }}
-        </Route>
-        <Route path="/features/tiktok-viral-video-finder">
-          {() => {
-            if (typeof window !== "undefined") {
-              window.location.replace("/free-tools/tiktok-viral-video-finder");
-            }
-            return null;
-          }}
-        </Route>
-        <Route path="/features/youtube-shorts-viral-finder">
-          {() => {
-            if (typeof window !== "undefined") {
-              window.location.replace("/free-tools/youtube-shorts-viral-finder");
-            }
-            return null;
-          }}
-        </Route>
-        {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
-        <Route>
-          <OnboardingGate>
-            <DashboardRouter />
-          </OnboardingGate>
-        </Route>
+        <Route path="/hooks">{() => { if (typeof window !== "undefined") window.location.replace("/free-tools/viral-hooks"); return null; }}</Route>
+        <Route path="/features/tiktok-viral-video-finder">{() => { if (typeof window !== "undefined") window.location.replace("/free-tools/tiktok-viral-video-finder"); return null; }}</Route>
+        <Route path="/features/youtube-shorts-viral-finder">{() => { if (typeof window !== "undefined") window.location.replace("/free-tools/youtube-shorts-viral-finder"); return null; }}</Route>
+        <Route><OnboardingGate><DashboardRouter /></OnboardingGate></Route>
       </Switch>
     </Suspense>
   );
