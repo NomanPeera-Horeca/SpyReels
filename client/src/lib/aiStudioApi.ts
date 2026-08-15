@@ -19,6 +19,20 @@ export type AiStudioJob = {
   updatedAt: string;
 };
 
+export type AiStudioProfile = {
+  id: string;
+  status: "draft" | "training" | "ready" | "failed";
+  name: string;
+  trainingVideoKey?: string | null;
+  voiceSampleKey?: string | null;
+  providerMetadata?: Record<string, unknown> | null;
+  profile: {
+    voiceId?: string;
+    avatarId?: string;
+    presenterStyle: string;
+  } & Record<string, unknown>;
+};
+
 export type AiStudioSceneInput = {
   id: string;
   order: number;
@@ -56,12 +70,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export async function createAiStudioProfile(input: {
   name: string;
   presenterStyle: "office" | "podcast" | "whiteboard" | "warehouse" | "studio" | "walking";
-}) {
-  return request<{
-    id: string;
-    status: string;
-    profile: Record<string, unknown>;
-  }>("/api/ai-studio/profiles", {
+}): Promise<AiStudioProfile> {
+  return request<AiStudioProfile>("/api/ai-studio/profiles", {
     method: "POST",
     body: JSON.stringify({
       name: input.name,
@@ -85,6 +95,10 @@ export async function createAiStudioProfile(input: {
       },
     }),
   });
+}
+
+export async function getAiStudioProfile(profileId: string): Promise<AiStudioProfile> {
+  return request<AiStudioProfile>(`/api/ai-studio/profiles/${profileId}`);
 }
 
 export async function uploadAiStudioTrainingFile(input: {
@@ -112,7 +126,24 @@ export async function uploadAiStudioTrainingFile(input: {
     body: input.file,
   });
   if (!upload.ok) throw new Error(`Training upload failed (${upload.status})`);
+
+  await request<{ success: true }>("/api/ai-studio/uploads/confirm", {
+    method: "POST",
+    body: JSON.stringify({
+      profileId: input.profileId,
+      kind: input.kind,
+      key: prepared.key,
+    }),
+  });
+
   return { key: prepared.key, url: prepared.url };
+}
+
+export async function provisionAiStudioProfile(profileId: string): Promise<void> {
+  await request(`/api/ai-studio/profiles/${profileId}/provision`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export async function markAiStudioProfileReady(input: {
@@ -124,6 +155,23 @@ export async function markAiStudioProfileReady(input: {
     method: "POST",
     body: JSON.stringify({ voiceId: input.voiceId, avatarId: input.avatarId }),
   });
+}
+
+export async function waitForAiStudioProfile(
+  profileId: string,
+  onUpdate: (profile: AiStudioProfile) => void,
+  options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {}
+): Promise<AiStudioProfile> {
+  const intervalMs = options.intervalMs ?? 3000;
+  const timeoutAt = Date.now() + (options.timeoutMs ?? 20 * 60_000);
+  while (Date.now() < timeoutAt) {
+    if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const profile = await getAiStudioProfile(profileId);
+    onUpdate(profile);
+    if (profile.status === "ready" || profile.status === "failed") return profile;
+    await new Promise(resolve => window.setTimeout(resolve, intervalMs));
+  }
+  throw new Error("Your AI clone is still training. SpyReels will keep it in progress.");
 }
 
 export async function createAiStudioVideo(input: {
