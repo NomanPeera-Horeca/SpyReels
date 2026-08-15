@@ -1,16 +1,6 @@
 export type AiStudioJob = {
   id: string;
-  status:
-    | "queued"
-    | "directing"
-    | "generating_voice"
-    | "generating_presenter"
-    | "collecting_broll"
-    | "composing"
-    | "quality_check"
-    | "completed"
-    | "failed"
-    | "cancelled";
+  status: "queued" | "directing" | "generating_voice" | "generating_presenter" | "collecting_broll" | "composing" | "quality_check" | "completed" | "failed" | "cancelled";
   progress: number;
   currentStep: string;
   outputUrl?: string;
@@ -26,11 +16,7 @@ export type AiStudioProfile = {
   trainingVideoKey?: string | null;
   voiceSampleKey?: string | null;
   providerMetadata?: Record<string, unknown> | null;
-  profile: {
-    voiceId?: string;
-    avatarId?: string;
-    presenterStyle: string;
-  } & Record<string, unknown>;
+  profile: { voiceId?: string; avatarId?: string; presenterStyle: string } & Record<string, unknown>;
 };
 
 export type AiStudioSceneInput = {
@@ -55,15 +41,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const response = await fetch(path, {
     credentials: "include",
     ...options,
-    headers: {
-      "content-type": "application/json",
-      ...(options.headers ?? {}),
-    },
+    headers: { "content-type": "application/json", ...(options.headers ?? {}) },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error || `AI Studio request failed (${response.status})`);
-  }
+  if (!response.ok) throw new Error(payload?.error || `AI Studio request failed (${response.status})`);
   return payload as T;
 }
 
@@ -87,17 +68,13 @@ export async function createAiStudioProfile(input: {
         ctaEnergy: 0.75,
         captionStyle: "bold_keywords",
         captionHighlightHex: "#FACC15",
-        favoriteTransitions: [
-          "Here is the problem",
-          "And this is where it gets expensive",
-          "Remember this",
-        ],
+        favoriteTransitions: ["Here is the problem", "And this is where it gets expensive", "Remember this"],
       },
     }),
   });
 }
 
-export async function getAiStudioProfile(profileId: string): Promise<AiStudioProfile> {
+export function getAiStudioProfile(profileId: string): Promise<AiStudioProfile> {
   return request<AiStudioProfile>(`/api/ai-studio/profiles/${profileId}`);
 }
 
@@ -106,19 +83,16 @@ export async function uploadAiStudioTrainingFile(input: {
   kind: "training-video" | "voice-sample";
   file: File;
 }): Promise<{ key: string; url: string }> {
-  const prepared = await request<{ key: string; uploadUrl: string; url: string }>(
-    "/api/ai-studio/uploads",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        profileId: input.profileId,
-        kind: input.kind,
-        filename: input.file.name,
-        contentType: input.file.type,
-        contentLength: input.file.size,
-      }),
-    }
-  );
+  const prepared = await request<{ key: string; uploadUrl: string; url: string }>("/api/ai-studio/uploads", {
+    method: "POST",
+    body: JSON.stringify({
+      profileId: input.profileId,
+      kind: input.kind,
+      filename: input.file.name,
+      contentType: input.file.type,
+      contentLength: input.file.size,
+    }),
+  });
 
   const upload = await fetch(prepared.uploadUrl, {
     method: "PUT",
@@ -129,13 +103,8 @@ export async function uploadAiStudioTrainingFile(input: {
 
   await request<{ success: true }>("/api/ai-studio/uploads/confirm", {
     method: "POST",
-    body: JSON.stringify({
-      profileId: input.profileId,
-      kind: input.kind,
-      key: prepared.key,
-    }),
+    body: JSON.stringify({ profileId: input.profileId, kind: input.kind, key: prepared.key }),
   });
-
   return { key: prepared.key, url: prepared.url };
 }
 
@@ -146,11 +115,7 @@ export async function provisionAiStudioProfile(profileId: string): Promise<void>
   });
 }
 
-export async function markAiStudioProfileReady(input: {
-  profileId: string;
-  voiceId?: string;
-  avatarId?: string;
-}) {
+export async function markAiStudioProfileReady(input: { profileId: string; voiceId?: string; avatarId?: string }) {
   return request<{ success: true }>(`/api/ai-studio/profiles/${input.profileId}/ready`, {
     method: "POST",
     body: JSON.stringify({ voiceId: input.voiceId, avatarId: input.avatarId }),
@@ -159,7 +124,7 @@ export async function markAiStudioProfileReady(input: {
 
 export async function waitForAiStudioProfile(
   profileId: string,
-  onUpdate: (profile: AiStudioProfile) => void,
+  onUpdate: (profile: AiStudioProfile) => void = () => undefined,
   options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<AiStudioProfile> {
   const intervalMs = options.intervalMs ?? 3000;
@@ -168,13 +133,16 @@ export async function waitForAiStudioProfile(
     if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const profile = await getAiStudioProfile(profileId);
     onUpdate(profile);
-    if (profile.status === "ready" || profile.status === "failed") return profile;
+    if (profile.status === "ready") return profile;
+    if (profile.status === "failed") {
+      throw new Error(String(profile.providerMetadata?.error || "AI clone training failed"));
+    }
     await new Promise(resolve => window.setTimeout(resolve, intervalMs));
   }
   throw new Error("Your AI clone is still training. SpyReels will keep it in progress.");
 }
 
-export async function createAiStudioVideo(input: {
+async function submitAiStudioVideo(input: {
   creatorProfileId: string;
   title: string;
   scenes: AiStudioSceneInput[];
@@ -190,7 +158,22 @@ export async function createAiStudioVideo(input: {
   });
 }
 
-export async function getAiStudioJob(jobId: string): Promise<AiStudioJob> {
+export async function createAiStudioVideo(input: {
+  creatorProfileId: string;
+  title: string;
+  scenes: AiStudioSceneInput[];
+}): Promise<AiStudioJob> {
+  const profile = await getAiStudioProfile(input.creatorProfileId);
+  if (profile.status !== "ready" && import.meta.env.DEV) {
+    await markAiStudioProfileReady({ profileId: input.creatorProfileId });
+  } else if (profile.status !== "ready") {
+    if (profile.status !== "training") await provisionAiStudioProfile(input.creatorProfileId);
+    await waitForAiStudioProfile(input.creatorProfileId);
+  }
+  return submitAiStudioVideo(input);
+}
+
+export function getAiStudioJob(jobId: string): Promise<AiStudioJob> {
   return request<AiStudioJob>(`/api/ai-studio/jobs/${jobId}`);
 }
 
