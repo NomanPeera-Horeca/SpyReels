@@ -31,7 +31,7 @@ async function createElevenLabsInstantVoiceClone(input: {
   form.append("remove_background_noise", "false");
   form.append(
     "files",
-    new Blob([sample], { type: contentTypeFromKey(input.sampleKey) }),
+    new Blob([new Uint8Array(sample)], { type: contentTypeFromKey(input.sampleKey) }),
     input.sampleKey.split("/").pop() || "voice-sample.mp3"
   );
 
