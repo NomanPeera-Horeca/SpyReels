@@ -232,6 +232,42 @@ const discoveryV1EnabledForClient = parseDiscoveryV1Enabled(
   process.env.NODE_ENV
 );
 
+/**
+ * PostHog sourcemap upload must not fail the production build.
+ * Render deploys were blocked when PostHog CLI returned API server_error.
+ */
+function withNonFatalPosthogUpload(plugin: Plugin): Plugin {
+  const writeBundle = plugin.writeBundle;
+  if (!writeBundle) return plugin;
+
+  const wrap = (fn: (...args: unknown[]) => unknown) =>
+    async (...args: unknown[]) => {
+      try {
+        await fn(...args);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[posthog-rollup-plugin] Sourcemap upload failed (continuing build): ${message}`
+        );
+      }
+    };
+
+  if (typeof writeBundle === "function") {
+    return { ...plugin, writeBundle: wrap(writeBundle as (...args: unknown[]) => unknown) };
+  }
+
+  const handler = writeBundle.handler;
+  if (typeof handler !== "function") return plugin;
+
+  return {
+    ...plugin,
+    writeBundle: {
+      ...writeBundle,
+      handler: wrap(handler as (...args: unknown[]) => unknown),
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const buildPlugins = [...plugins];
   if (
@@ -240,19 +276,21 @@ export default defineConfig(({ mode }) => {
     process.env.POSTHOG_PROJECT_ID
   ) {
     buildPlugins.push(
-      posthogRollup({
-        personalApiKey: process.env.POSTHOG_API_KEY,
-        projectId: process.env.POSTHOG_PROJECT_ID,
-        host:
-          process.env.POSTHOG_HOST ??
-          process.env.VITE_PUBLIC_POSTHOG_HOST ??
-          "https://us.i.posthog.com",
-        sourcemaps: {
-          enabled: true,
-          releaseName: "spyreels",
-          deleteAfterUpload: true,
-        },
-      }) as Plugin
+      withNonFatalPosthogUpload(
+        posthogRollup({
+          personalApiKey: process.env.POSTHOG_API_KEY,
+          projectId: process.env.POSTHOG_PROJECT_ID,
+          host:
+            process.env.POSTHOG_HOST ??
+            process.env.VITE_PUBLIC_POSTHOG_HOST ??
+            "https://us.i.posthog.com",
+          sourcemaps: {
+            enabled: true,
+            releaseName: "spyreels",
+            deleteAfterUpload: true,
+          },
+        }) as Plugin
+      )
     );
   }
 
