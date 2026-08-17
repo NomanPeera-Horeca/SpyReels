@@ -330,7 +330,7 @@
 - [x] BUG: Collected Reels views stay at 0 after Refresh/Refresh All - root cause: Instagram restricts play_count for unauthenticated page scrapes (returns null). Fix: preserve existing values when refresh returns 0, only update when new data is better. Likes/comments DO update correctly.
 - [x] BACKEND: Cross-reference collected reels with Account Monitoring data to pull view counts (matches by shortcode, picks highest viewCount from any scrape job)
 - [x] UI: Show views + engagement rate when cross-referenced data available, hide both when views are 0 and account not monitored
-- [ ] BUG: Stripe integration not working - investigate and fix
+- [x] BUG: Stripe integration not working - investigated Aug 17: WORKING (low volume); PostHog completion events sparse
 - [x] UI: Replace all Post Date pickers with date + preferred time picker (friendly date display + time dropdown) - created reusable PostDateTimePicker component, updated PasteScript.tsx and ScriptEditor.tsx
 - [x] BUG: Search Reels page (/search) showing 404 on deployed site - added missing route and import in App.tsx
 - [x] CAPTION: Research-backed AI caption generator with SEO-optimized captions for Instagram Reels

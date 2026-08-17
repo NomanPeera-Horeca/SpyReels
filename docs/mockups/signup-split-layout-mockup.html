@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpyReels · Signup (VVF-style layout mockup)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --proof-bg: rgba(243, 244, 246, 0.72);
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --purple: #7c3aed;
+      --purple-2: #8b5cf6;
+      --purple-soft: #ede9fe;
+      --teal: #0d9488;
+      --star: #fbbf24;
+      --radius-card: 28px;
+      --radius-pill: 999px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgba(124,58,237,0.08), transparent 55%),
+        radial-gradient(700px 380px at 95% 0%, rgba(13,148,136,0.06), transparent 50%),
+        var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .topbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 24px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      font-size: 18px;
+    }
+    .brand-mark {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, #7c3aed, #a78bfa 55%, #2dd4bf);
+      display: grid; place-items: center;
+      color: #fff; font-size: 14px; font-weight: 800;
+      box-shadow: 0 6px 16px rgba(124,58,237,0.28);
+    }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .icon-btn, .dash-btn {
+      height: 38px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .icon-btn { width: 38px; padding: 0; justify-content: center; }
+
+    .stage {
+      max-width: 1180px;
+      margin: 8px auto 28px;
+      padding: 0 24px 24px;
+    }
+
+    .mock-note {
+      width: fit-content;
+      margin: 0 auto 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #5b21b6;
+      background: var(--purple-soft);
+      border: 1px solid #ddd6fe;
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .panel {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.92fr) minmax(340px, 1.08fr);
+      background: var(--card);
+      border-radius: var(--radius-card);
+      box-shadow:
+        0 1px 2px rgba(16,24,40,0.04),
+        0 24px 60px rgba(16,24,40,0.08);
+      overflow: hidden;
+      height: min(720px, calc(100vh - 150px));
+      border: 1px solid rgba(229,231,235,0.9);
+    }
+    @media (max-width: 960px) {
+      .panel {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 0;
+      }
+      .proof { display: none; }
+    }
+
+    /* LEFT form */
+    .form {
+      padding: 40px 44px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: #fff;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    @media (max-width: 640px) {
+      .form { padding: 32px 22px 28px; }
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--purple);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.7rem, 2.4vw, 2.05rem);
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+      font-weight: 800;
+    }
+    .lead {
+      margin: 0 0 26px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+      max-width: 38ch;
+    }
+
+    .google {
+      width: 100%;
+      height: 48px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background .15s, border-color .15s;
+    }
+    .google:hover { background: #fafafa; border-color: #d1d5db; }
+    .google svg { width: 18px; height: 18px; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 18px 0;
+      color: #9ca3af;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #4b5563;
+      margin: 0 0 7px;
+    }
+    .field { margin-bottom: 14px; }
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      height: 48px;
+      border-radius: 12px;
+      border: 1.5px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 15px;
+      padding: 0 14px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+    }
+
+    .primary {
+      width: 100%;
+      height: 50px;
+      margin-top: 6px;
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: var(--purple);
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(124,58,237,0.28);
+      transition: filter .15s, transform .1s;
+    }
+    .primary:hover { filter: brightness(1.05); }
+    .primary:active { transform: translateY(1px); }
+
+    .switch {
+      margin: 16px 0 0;
+      text-align: center;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+    .switch a, .switch button {
+      border: 0;
+      background: none;
+      color: #2563eb;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: none;
+    }
+    .switch a:hover, .switch button:hover { text-decoration: underline; }
+
+    .error {
+      display: none;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      font-size: 13px;
+    }
+    .error.show { display: block; }
+
+    /* RIGHT proof masonry */
+    .proof {
+      position: relative;
+      padding: 28px 22px 22px;
+      background: linear-gradient(180deg, #eef2ff 0%, #f3f4f6 40%, #eef2f7 100%);
+      border-left: 1px solid rgba(229,231,235,0.9);
+      overflow: hidden;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .proof-title {
+      margin: 0 0 14px;
+      padding: 0 8px;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .masonry-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      mask-image: linear-gradient(180deg, transparent 0%, #000 6%, #000 92%, transparent 100%);
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 6%, #000 92%, transparent 100%);
+    }
+    .masonry {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-content: start;
+      animation: drift 48s linear infinite;
+    }
+    @keyframes drift {
+      from { transform: translateY(0); }
+      to { transform: translateY(-50%); }
+    }
+    .masonry:hover { animation-play-state: paused; }
+
+    .t-card {
+      background: #fff;
+      border: 1px solid rgba(229,231,235,0.95);
+      border-radius: 16px;
+      padding: 14px 14px 12px;
+      box-shadow: 0 8px 20px rgba(16,24,40,0.04);
+    }
+    .stars {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 8px;
+      color: var(--star);
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+    .t-card p {
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #1f2937;
+    }
+    .t-card mark {
+      background: transparent;
+      color: var(--teal);
+      font-weight: 650;
+      padding: 0;
+    }
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 999px;
+      display: grid; place-items: center;
+      color: #fff; font-size: 12px; font-weight: 700;
+      flex: none;
+    }
+    .who strong { display: block; font-size: 13px; }
+    .who span { font-size: 12px; color: var(--muted); }
+
+    .footer {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .footer a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .footer a:hover { color: var(--text); }
+    .blog-pill {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1.5px solid #99f6e4;
+      color: var(--teal) !important;
+      font-weight: 650 !important;
+      background: #fff;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%) translateY(16px);
+      opacity: 0;
+      pointer-events: none;
+      background: #111827;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 550;
+      transition: opacity .2s, transform .2s;
+      z-index: 40;
+      max-width: min(420px, calc(100vw - 32px));
+      text-align: center;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    body[data-mode="login"] .eyebrow-signup { display: none; }
+    body[data-mode="signup"] .eyebrow-login { display: none; }
+  </style>
+</head>
+<body data-mode="signup">
+  <header class="topbar">
+    <a class="brand" href="#">
+      <span class="brand-mark">S</span>
+      SpyReels
+    </a>
+    <div class="top-actions">
+      <button type="button" class="icon-btn" id="themeBtn" title="Theme (mock)">☀</button>
+      <button type="button" class="dash-btn" id="dashBtn">← Dashboard</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="mock-note">Interactive mockup · VVF layout · SpyReels branding</div>
+
+    <div class="panel">
+      <section class="form" aria-label="Create account">
+        <p class="eyebrow eyebrow-signup">Create your account</p>
+        <p class="eyebrow eyebrow-login">Welcome back</p>
+        <h1 id="headline">Join SpyReels</h1>
+        <p class="lead" id="lead">
+          Spy trending creators, preview viral videos, and remake scripts in your voice - all in one place.
+        </p>
+
+        <div class="error" id="error" role="alert"></div>
+
+        <button type="button" class="google" id="googleBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#EA4335" d="M12 10.2v3.6h5.1c-.2 1.2-.9 2.3-1.9 3l3.1 2.4c1.8-1.7 2.9-4.1 2.9-7 0-.7-.1-1.3-.2-1.9H12z"/>
+            <path fill="#34A853" d="M6.6 14.3l-.7.5-2.4 1.9C5.2 19.7 8.4 22 12 22c2.7 0 4.9-.9 6.5-2.4l-3.1-2.4c-.9.6-2 1-3.4 1-2.6 0-4.8-1.7-5.6-4.1z"/>
+            <path fill="#4A90E2" d="M3.5 7.3C2.9 8.5 2.5 9.9 2.5 11.4s.4 2.9 1 4.1c0 .1 3.1-2.4 3.1-2.4-.2-.6-.3-1.2-.3-1.7 0-.6.1-1.1.3-1.7L3.5 7.3z"/>
+            <path fill="#FBBC05" d="M12 5.8c1.5 0 2.8.5 3.8 1.5l2.8-2.8C16.9 2.7 14.7 1.8 12 1.8 8.4 1.8 5.2 4.1 3.5 7.3l3.1 2.4C7.2 7.5 9.4 5.8 12 5.8z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div class="divider">OR</div>
+
+        <form id="authForm">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" placeholder="you@example.com" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" placeholder="••••••••" required minlength="8" />
+          </div>
+          <button type="submit" class="primary" id="submitBtn">Create account</button>
+        </form>
+
+        <p class="switch" id="switchLine">
+          Already have an account?
+          <button type="button" id="switchBtn">Log in</button>
+        </p>
+      </section>
+
+      <aside class="proof" aria-label="Loved by our users">
+        <h2 class="proof-title">Loved by our users <span aria-hidden="true">💜</span></h2>
+        <div class="masonry-wrap">
+          <div class="masonry" id="masonry"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div>© 2026 SpyReels. All rights reserved.</div>
+    <div class="footer-links">
+      <a class="blog-pill" href="#">Visit Blog</a>
+      <a href="#">Contact Us</a>
+      <a href="#">Suggestions</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Privacy Policy</a>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const TESTIMONIALS = [
+      {
+        quote: 'I used to spend <mark>3 hours a day scrolling</mark> trying to find what was trending. Now I open SpyReels, pick a viral outlier, and ship by lunch.',
+        name: 'Maya Chen',
+        meta: '@mayamakes',
+        color: '#7c3aed',
+      },
+      {
+        quote: 'Honestly skeptical at first. Two weeks in I remade a Reel that booked a brand deal. <mark>Paid for itself</mark> many times over.',
+        name: 'Priya Sharma',
+        meta: '@priyacooks',
+        color: '#0d9488',
+      },
+      {
+        quote: 'Pitched a client using spy + remake insights. Closed a retainer the next week. The data tells a story execs actually care about.',
+        name: 'Rafael Mendes',
+        meta: 'Senior Strategist, Pivot Co.',
+        color: '#2563eb',
+      },
+      {
+        quote: 'Our team finally stopped pitching vague trend decks. We walk in with examples, transcripts, and proof of traction.',
+        name: 'Jordan Reyes',
+        meta: 'Head of Social, Northline',
+        color: '#db2777',
+      },
+      {
+        quote: 'The hook breakdowns alone changed how I script. I stopped rambling in the first five seconds.',
+        name: 'Nina Flores',
+        meta: '@ninacuts',
+        color: '#ea580c',
+      },
+      {
+        quote: 'I used to save random videos and forget why they worked. Now every example comes with a reason I can apply on camera.',
+        name: 'Sofia Lane',
+        meta: '@sofiamoves',
+        color: '#4f46e5',
+      },
+      {
+        quote: 'I stopped copying trends blindly and started adapting them on purpose. Calmer posting because I know the angle before I film.',
+        name: 'Kiara Moon',
+        meta: '@kiarablends',
+        color: '#0891b2',
+      },
+      {
+        quote: 'SpyReels replaced my old swipe folders and half-finished brainstorm docs. Everything I need to remake lives in one place.',
+        name: 'Cam Brooks',
+        meta: 'Strategy Lead, Current',
+        color: '#7c3aed',
+      },
+      {
+        quote: 'Every time a student says they have no ideas, I open SpyReels. Ten minutes later they have formats and a script direction.',
+        name: 'Dev Patel',
+        meta: '@devteaches',
+        color: '#16a34a',
+      },
+      {
+        quote: 'We use it to sanity-check creative angles before spending on production. Saves us from expensive bad bets.',
+        name: 'Omar Haddad',
+        meta: 'Performance Lead, Lantern',
+        color: '#9333ea',
+      },
+    ];
+
+    function cardHTML(t) {
+      const initial = t.name.trim().charAt(0).toUpperCase();
+      return `
+        <article class="t-card">
+          <div class="stars" aria-label="5 stars">★★★★★</div>
+          <p>${t.quote}</p>
+          <div class="who">
+            <div class="avatar" style="background:${t.color}">${initial}</div>
+            <div>
+              <strong>${t.name}</strong>
+              <span>${t.meta}</span>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    const masonry = document.getElementById("masonry");
+    // Duplicate list so infinite scroll loop looks seamless
+    masonry.innerHTML = [...TESTIMONIALS, ...TESTIMONIALS].map(cardHTML).join("");
+
+    const body = document.body;
+    const headline = document.getElementById("headline");
+    const lead = document.getElementById("lead");
+    const submitBtn = document.getElementById("submitBtn");
+    const switchBtn = document.getElementById("switchBtn");
+    const switchLine = document.getElementById("switchLine");
+    const errorEl = document.getElementById("error");
+    const toast = document.getElementById("toast");
+    let toastTimer;
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function setMode(mode) {
+      body.dataset.mode = mode;
+      errorEl.classList.remove("show");
+      if (mode === "signup") {
+        headline.textContent = "Join SpyReels";
+        lead.textContent =
+          "Spy trending creators, preview viral videos, and remake scripts in your voice - all in one place.";
+        submitBtn.textContent = "Create account";
+        switchLine.innerHTML =
+          'Already have an account? <button type="button" id="switchBtn">Log in</button>';
+      } else {
+        headline.textContent = "Welcome back";
+        lead.textContent =
+          "Log in to keep spying viral videos and remaking scripts in your voice.";
+        submitBtn.textContent = "Log in";
+        switchLine.innerHTML =
+          'New here? <button type="button" id="switchBtn">Create account</button>';
+      }
+      document.getElementById("switchBtn").addEventListener("click", () => {
+        setMode(body.dataset.mode === "signup" ? "login" : "signup");
+      });
+    }
+
+    switchBtn.addEventListener("click", () => {
+      setMode(body.dataset.mode === "signup" ? "login" : "signup");
+    });
+
+    document.getElementById("googleBtn").addEventListener("click", () => {
+      showToast("Mock: would redirect to Google OAuth.");
+    });
+    document.getElementById("dashBtn").addEventListener("click", () => {
+      showToast("Mock: would go to dashboard / home.");
+    });
+    document.getElementById("themeBtn").addEventListener("click", () => {
+      showToast("Mock: theme toggle (light/dark) — layout matches VVF.");
+    });
+
+    document.getElementById("authForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      if (!email) {
+        errorEl.textContent = "Enter your email to continue.";
+        errorEl.classList.add("show");
+        return;
+      }
+      if (password.length < 8) {
+        errorEl.textContent = "Password must be at least 8 characters.";
+        errorEl.classList.add("show");
+        return;
+      }
+      errorEl.classList.remove("show");
+      showToast(
+        body.dataset.mode === "signup"
+          ? "Mock: account created for " + email
+          : "Mock: logged in as " + email
+      );
+    });
+  </script>
+</body>
+</html>

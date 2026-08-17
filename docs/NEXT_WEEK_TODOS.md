@@ -7,28 +7,32 @@
 
 ## P0 — ship / unblock (do first)
 
-- [ ] Run prod migration `drizzle/0084_collected_reels_platform.sql` (Collected Reels platform column)
-- [ ] **Backfill / refresh viral video data for big creators** (Gary Vee–tier and similar)
-  - Problem: product says “viral” but many tracked accounts have not been updated in ~3 months (stale Reels/TikTok/Shorts)
-  - [ ] Identify stale high-profile handles (Gary Vee class + other hero demo accounts)
-  - [ ] Re-scrape / backfill recent videos so finder + discovery demos show fresh outliers
-  - [ ] Confirm UI dates / last-updated reflect the refresh (no “viral” claims on dead data)
+- [x] Run prod migration `drizzle/0084_collected_reels_platform.sql` (Collected Reels platform column) — verified on maglev Aug 17: column + index present; IG/TikTok/YouTube rows live
+- [x] **Backfill / refresh viral video data for big creators** (Gary Vee–tier public demos) — done Aug 17 on maglev
+  - [x] Identify stale high-profile handles (Gary Vee class + other hero demo accounts)
+  - [x] Re-scrape public demo heroes: `garyvee`, `humphreytalks`, `russellbrunson`, `codiesanchez` (4/4 success, ~98 featured_reels, R2 thumbs/videos)
+  - [x] Confirm freshness: newest posts Aug 8–16 (was ~Apr / Feb stale)
+  - [ ] **In progress:** remakeable talk/business batch (14 accounts unlocked, scrape running): jayshetty, the.holistic.psychologist, grantcardone, dailystoic, yung_pueblo, ryanserhant, danmartell, thedankoe, aliabdaal, sahilbloom, naval, thebudgetnista, therealbrianmark, neilpatel
+    - Excludes music/sports-highlight mega celebs
+    - After scrape: transcribe batch → mark `viralFlag` only on spoken (`transcriptionStatus=completed`) reels → appear in featured catalog for remake/script
 - [ ] GSC after deploy of indexing harden (`459b23c`):
   - [ ] Validate soft 404 / duplicate fixes in Page indexing
   - [ ] **Request indexing** only on canonical URLs (never noindexed legacy duplicates)
   - [ ] Spot-check homepage if Popular Guides links changed crawl discovery
-- [ ] QA mobile finders after `4696dd7` on clean Safari + Chrome (no password-manager extensions):
-  - [ ] `/features/viral-reel-finder`
-  - [ ] TikTok viral finder page
-  - [ ] YouTube Shorts viral finder page
-  - Confirm icon/input/CTA stack, readable “or try” copy, no layout crush
+- [x] QA mobile finders after `4696dd7` (automated Playwright Aug 17 — iPhone 14 + Pixel 7 vs prod):
+  - [x] `/features/viral-reel-finder`
+  - [x] TikTok viral finder page
+  - [x] YouTube Shorts viral finder page
+  - Result: **no layout crush / no horizontal overflow**; input + Find CTA stack correctly; screenshots in `docs/qa/mobile-finders-2026-08-17/`
+  - Minor: header “Start free” tap height ~36px (nav, not hero); TikTok hero may show spinner on first paint if live demo prefetch runs
+  - Script to re-run: `pnpm exec tsx scripts/mobile-finder-qa.ts`
 
 ## P1 — conversion / growth
 
 - [x] **Viral Hook Generator rebuild** (`/free-tools/viral-hooks`) — mockup approved and wired to React (keep generate/unlock/expand API)
   - [x] Confirm primary keyword + DataForSEO volumes (US)
-  - [ ] Approve HTML mockup → ship SEO body + meta + StoryCut-style layout (SpyReels wedge)
-  - [ ] Related tools + product bridge CTA; GSC index canonical
+  - [x] SEO body + meta + StoryCut-style layout shipped in `HookGenerator.tsx` (title/description, FAQ + FAQ schema, SoftwareApplication schema, RelatedToolsGrid, product bridge CTAs)
+  - [x] GSC **Request indexing** on `https://spyreels.ai/free-tools/viral-hooks` (done manually)
 - [ ] **Hook Generator Templates library** (product roadmap / good-to-have → acquisition)
   - Inspiration: IG / Later-style “hook generator templates for content creators” grids (curiosity, hot takes, numbered steals, 1K vs 1M hooks, etc.)
   - Goal: browsable gallery of proven hook templates (with social proof / pattern labels) users can tap → fill → generate / copy
@@ -49,7 +53,7 @@
   - Public route already exists at `/features/30-day-content-plan` (`ThirtyDayContentPlanFeature.tsx`) — audit vs Golden Standard; rebuild/improve if thin or not converting
   - Goal: cold traffic understands “niche + goal → full month of ideas” in ~2 folds, then CTA into signup → `/plan`
   - Work: keyword research (DataForSEO) → mockup (shared PublicHeader/PublicFooter) → ship → footer/related tools/internal links → GSC index canonical
-- [ ] Signup / AuthDialog split-layout redesign (YouTube finder is shipped; wait for Noman to greenlight, then build VVF-style split: form left, social proof right, SpyReels tokens only)
+- [x] Signup / AuthDialog split-layout redesign (VVF-style card: form left, testimonials right; SpyReels purple; wired Aug 17 in `AuthDialog.tsx`; placeholder quotes TBD swap later)
 - [ ] **Carousel Library growth pack**
   - [ ] Research / steal patterns from viral carousel posts (IG / LinkedIn / TikTok carousels that actually perform)
   - [ ] Add a batch of new templates into Carousel Library (not one-offs; enough variety for niches SpyReels already serves)
@@ -76,7 +80,11 @@
   - [ ] Competitive + UX research (how top B-roll / stock-match tools present script → beats → clips)
   - [ ] Mockup a polished flow: script picker, beat preview, clip grid/player, generation status
   - [ ] Ship redesign matching SpyReels app chrome (not just marketing aesthetics)
-- [ ] Stripe integration not working — investigate and fix (`todo.md`)
+- [x] Stripe / checkout investigation (Aug 17) — **WORKING**, low volume (not a dead billing path)
+  - Evidence: active Pro sub (user 31463, period end 2026-09-04); checkout still creates `stripeCustomerId` on abandoned starts
+  - PostHog `checkout_completed` is missing/sparse (analytics gap), do not treat as proof checkout is broken
+  - Optional: Noman smoke-test Upgrade → Stripe Checkout → confirm webhook 200; improve PostHog server capture if desired
+  - Closed vague `todo.md` “Stripe not working” as investigate-done (working)
 - [ ] History / Account Monitoring: show clear error message on failed scrape jobs
 - [ ] Replace temp SVG `RelatedToolsGrid` thumbs with real product preview images
 - [ ] Commit or discard untracked drafts still sitting local (outreach CSVs, mockups, preview HTML) so the repo stays clean
@@ -84,6 +92,21 @@
 
 ## P3 — backlog (only if P0–P2 clear)
 
+- [ ] **Buzzli competitive teardown → SpyReels roadmap** (LinkedIn “SpyReels-class” product)
+  - Competitor: [buzzli.io](https://buzzli.io/) — personal branding + LinkedIn content stack (agents, viral posts, carousels, profile analysis, credits)
+  - **Research spike (1–2 sessions):** walk Agents Marketplace, Viral Posts, Carousels, Profile Analyzer, Idea/Post Generation, Personalized Content Plan, GPT Mode onboarding; note pricing/credits and what actually ships vs vapor
+  - **Steal / adapt for SpyReels (do not clone LinkedIn):**
+    - **GPT Mode onboarding:** copy prompt → paste ChatGPT/Claude JSON → auto-fill Brand Coach / niche / voice (faster than a long form; pairs with Postbeam voice-train idea)
+    - **Agents Marketplace pattern:** packaged “jobs” (e.g. weekly niche research → script ideas, news → Reel hooks, competitor watch → remake queue) vs one generic chat
+    - **Viral Posts library:** already our wedge on short-form; compare their browse/filter/recreate UX and credit gating
+    - **Profile analysis:** IG/TikTok/YT channel audit → gaps + content plan (we have finder + 30-day plan; they sell “profile → strategy”)
+    - **Scheduled / autopilot posts:** optional later; SpyReels today stops at remake/script/carousel (posting automation is a different product bet)
+  - Deliverable: short notes in this file or `docs/competitive-buzzli.md` with P0/P1 product bets only (ignore LinkedIn-only surface)
+- [ ] **Voice brand-train interview (optional)** — later SpyReels differentiator
+  - Inspiration: Postbeam “Meet Marv” onboarding (`/onboarding/interview`): optional voice call to train AI on the creator’s voice, stories, and style (skip + finish later OK; min session length)
+  - Product fit: feed Brand Coach / remake / carousel / script gen so output sounds like *them*, not generic AI
+  - Scope later: onboarding step and/or Settings “train my voice”; Retell (or similar) call → transcript → durable voice profile; never block signup
+  - Note: optional + highly recommended framing; do not ship until Brand Coach persistence and remake quality baselines are solid
 - [ ] REWRITE toolbar leftovers in `todo.md` (grade/timing/delivery cues parity) if still incomplete in product
 - [ ] SEO follow-through on homepage vs Viral Reel Finder traffic shift (internal links, hubs, not more duplicate posts)
 - [ ] Track `.cursor/rules/internal-linking-on-new-pages.mdc` if we want it in git (currently untracked)
