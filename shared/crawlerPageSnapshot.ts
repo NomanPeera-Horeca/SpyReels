@@ -42,6 +42,21 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
     summary:
       "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video.",
   },
+  "/free-tools/ai-script-generator": {
+    h1: "AI Script Generator",
+    summary:
+      "Free AI script generator for Reels, TikTok, and Shorts. Spoken script, filming notes, caption, and music direction. Start free.",
+  },
+  "/free-tools/tiktok-script-generator": {
+    h1: "AI TikTok Script Generator",
+    summary:
+      "Free AI TikTok script generator with filming notes, caption, and music direction. Write viral TikTok scripts and film in Studio.",
+  },
+  "/free-tools/instagram-reels-script-generator": {
+    h1: "Instagram Reels Script Generator",
+    summary:
+      "Free Instagram Reels script generator with filming notes, caption, and music. Write a Reel script and shoot in Studio.",
+  },
   "/free-tools": {
     h1: "SpyReels Free Tools",
     summary:

@@ -106,6 +106,21 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
     description:
       "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically in the best free AI B-roll generator online. Preview free, no signup required.",
   },
+  "/free-tools/ai-script-generator": {
+    title: "Free AI Script Generator for Reels, TikTok & Shorts | SpyReels",
+    description:
+      "Free AI script generator for Reels, TikTok, and Shorts. Get spoken script, filming notes, caption, and music direction. Start free with SpyReels.",
+  },
+  "/free-tools/tiktok-script-generator": {
+    title: "Free AI TikTok Script Generator | SpyReels",
+    description:
+      "Free AI TikTok script generator with filming notes, caption, and music direction. Write viral TikTok scripts and film in SpyReels Studio. Start free.",
+  },
+  "/free-tools/instagram-reels-script-generator": {
+    title: "Free Instagram Reels Script Generator | SpyReels",
+    description:
+      "Free Instagram Reels script generator with filming notes, caption, and music. Write a Reel script and shoot in SpyReels Studio. Start free.",
+  },
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",
     description:

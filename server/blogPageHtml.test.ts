@@ -222,6 +222,17 @@ describe("enrichSpaHtmlForPublicPath", () => {
     expect(out.html).toContain("Page Not Found | SpyReels");
   });
 
+  it.each([
+    "/free-tools/ai-script-generator",
+    "/free-tools/tiktok-script-generator",
+    "/free-tools/instagram-reels-script-generator",
+  ])("returns HTTP 200 with SEO meta for %s", async (pathname) => {
+    const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, pathname, async () => undefined);
+    expect(out.status).toBe(200);
+    expect(out.html).toContain(`rel="canonical" href="https://spyreels.ai${pathname}"`);
+    expect(out.html).not.toContain("Page Not Found | SpyReels");
+  });
+
   it("returns HTTP 404 for missing blog slugs", async () => {
     const out = await enrichSpaHtmlForPublicPath(
       SAMPLE_HTML,
