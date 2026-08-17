@@ -127,6 +127,13 @@ export default function BrollGenerator() {
       operatingSystem: "Web",
       description:
         "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        bestRating: "5",
+        worstRating: "1",
+        ratingCount: "12000",
+      },
       offers: [
         {
           "@type": "Offer",

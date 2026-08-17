@@ -40,7 +40,7 @@ const BROLL_GENERATOR: RelatedToolItem = {
 
 const AI_SCRIPT_GENERATOR: RelatedToolItem = {
   title: "AI Script Generator",
-  href: "/features/ai-personal-brand-coach",
+  href: "/free-tools/ai-script-generator",
   imageUrl: RELATED_TOOL_THUMB_AI_COACH,
 };
 

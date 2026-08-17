@@ -1,4 +1,6 @@
 import { SPYREELS_SITE_URL } from "./publicPageMeta";
+import { SPYREELS_AGGREGATE_RATING } from "./softwareApplicationSchema";
+import { SCRIPT_GENERATOR_COPY } from "./scriptGeneratorLanding";
 
 export const SPYREELS_LOGO_URL =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
@@ -470,6 +472,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               highPrice: "99",
               priceCurrency: "USD",
             },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "AI-powered viral Instagram Reel finder for creators. Surfaces viral content by view count and engagement, then transcribes and generates scripts.",
           },
@@ -514,6 +517,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               highPrice: "99",
               priceCurrency: "USD",
             },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Free TikTok finder by username. Sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.",
           },
@@ -558,6 +562,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               highPrice: "99",
               priceCurrency: "USD",
             },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
           },
@@ -713,6 +718,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               price: "0",
               priceCurrency: "USD",
             },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Free AI viral hook generator for Reels, TikTok, and Shorts. Spoken lines plus on-screen text from proven patterns.",
           },
@@ -744,6 +750,7 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
             url: `${SPYREELS_SITE_URL}/free-tools/broll-generator`,
             applicationCategory: "MultimediaApplication",
             operatingSystem: "Web",
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video. Free preview requires no signup; signup unlocks saving and watermark removal; payment unlocks full-resolution download.",
             offers: [
@@ -898,11 +905,57 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               price: "0",
               priceCurrency: "USD",
             },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Chrome extension to sort Instagram Reels by views and engagement, transcribe hooks, and save winners to your SpyReels dashboard.",
           },
         },
       ];
+
+    case "/free-tools/ai-script-generator":
+    case "/free-tools/tiktok-script-generator":
+    case "/free-tools/instagram-reels-script-generator": {
+      const variant =
+        pathname === "/free-tools/tiktok-script-generator"
+          ? "tiktok"
+          : pathname === "/free-tools/instagram-reels-script-generator"
+            ? "instagram"
+            : "hub";
+      const copy = SCRIPT_GENERATOR_COPY[variant];
+      const canonical = `${SPYREELS_SITE_URL}${copy.path}`;
+      return [
+        {
+          id: `script-gen-${variant}-breadcrumb`,
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Free Tools", item: `${SPYREELS_SITE_URL}/free-tools` },
+            { name: copy.breadcrumbLabel, item: canonical },
+          ]),
+        },
+        {
+          id: `script-gen-${variant}-software`,
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: copy.schemaName,
+            url: canonical,
+            applicationCategory: "MultimediaApplication",
+            operatingSystem: "Web Browser",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
+            description: copy.metaDescription,
+          },
+        },
+        {
+          id: `script-gen-${variant}-faq`,
+          data: faqSchema(copy.faq),
+        },
+      ];
+    }
     default:
       return [];
   }

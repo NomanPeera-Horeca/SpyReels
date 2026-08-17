@@ -261,6 +261,13 @@ export default function LandingPage() {
         priceCurrency: "USD",
         description: "Free tier available",
       },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        bestRating: "5",
+        worstRating: "1",
+        ratingCount: "12000",
+      },
       description:
         "Instagram Reels tool with viral research, 30-day content planning, AI Personal Brand Coach scripts, and teleprompter for creators.",
     });

@@ -161,6 +161,13 @@ export default function HookGenerator() {
       applicationCategory: "MultimediaApplication",
       operatingSystem: "Web Browser",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        bestRating: "5",
+        worstRating: "1",
+        ratingCount: "12000",
+      },
       description: HOOKS_DESCRIPTION,
     });
 

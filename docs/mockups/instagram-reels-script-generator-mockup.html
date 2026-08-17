@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MOCKUP · Instagram Reels Script Generator | SpyReels</title>
+  <style>
+    :root {
+      --bg: #0c0b12;
+      --panel: #14121c;
+      --panel-2: #1a1724;
+      --line: #2c2740;
+      --text: #f4f2f8;
+      --muted: #9b96ad;
+      --primary: #8b5cf6;
+      --primary-2: #a78bfa;
+      --ok: #4ade80;
+      --card: #12101a;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1000px 480px at 50% -12%, rgba(139, 92, 246, 0.22), transparent 55%),
+        radial-gradient(700px 360px at 90% 20%, rgba(99, 102, 241, 0.08), transparent 50%),
+        var(--bg);
+      line-height: 1.55;
+    }
+    a { color: var(--primary-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .mock-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #1f1638;
+      border-bottom: 1px solid #3b2a63;
+      color: #ddd6fe;
+      font-size: 12px;
+      padding: 10px 16px;
+      text-align: center;
+    }
+    .mock-banner strong { color: #fff; }
+
+    .nav {
+      position: sticky;
+      top: 40px;
+      z-index: 40;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(12,11,18,0.85);
+      backdrop-filter: blur(16px);
+    }
+    .nav .bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px;
+      height: 64px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      font-size: 17px;
+    }
+    .logo img { width: 36px; height: 36px; display: block; }
+    .nav-links {
+      margin-left: auto;
+      display: none;
+      gap: 22px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .nav-links a:hover { color: #fff; text-decoration: none; }
+    .header-ctas { display: flex; gap: 8px; align-items: center; }
+    .nav-login, .nav-cta {
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 12px;
+      cursor: pointer;
+      min-height: 40px;
+    }
+    .nav-login {
+      border: 1px solid rgba(255,255,255,0.14);
+      background: transparent;
+      color: #fff;
+      font-weight: 600;
+    }
+    .nav-cta {
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+    }
+    @media (min-width: 800px) { .nav-links { display: flex; } }
+
+    .wrap { max-width: 920px; margin: 0 auto; padding: 8px 20px 80px; }
+    .wide { max-width: 1100px; margin: 0 auto; padding: 0 20px 72px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      background: rgba(139, 92, 246, 0.12);
+      color: var(--primary-2);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+    }
+
+    .hero { text-align: center; padding: 28px 0 8px; }
+    .crumbs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 0 0 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .crumbs a { color: var(--muted); }
+    .crumbs a:hover { color: #fff; text-decoration: none; }
+    .crumbs .sep { opacity: 0.55; }
+    .crumbs .current { color: #e8e4f5; }
+    .hero h1 {
+      margin: 16px auto 10px;
+      max-width: 18ch;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--primary-2);
+      text-decoration: underline;
+      text-decoration-thickness: 6px;
+      text-underline-offset: 8px;
+      text-decoration-color: rgba(167, 139, 250, 0.45);
+    }
+    .sub {
+      margin: 0 auto;
+      max-width: 42rem;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .answer {
+      margin: 14px auto 0;
+      max-width: 46rem;
+      color: #d4d0e0;
+      font-size: 15px;
+    }
+    .proof {
+      margin: 16px auto 0;
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px 12px;
+      color: #e8e4f5;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .stars {
+      color: #fbbf24;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      line-height: 1;
+    }
+    .stars svg { width: 15px; height: 15px; display: block; }
+    .faces {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+    }
+    .faces img {
+      display: block;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid #1a1228;
+      box-shadow: 0 0 0 1.5px rgba(167, 139, 250, 0.55);
+      margin: 0 0 0 -10px;
+      background: #121218;
+      flex-shrink: 0;
+    }
+    .faces img:first-child { margin-left: 0; }
+    .proof .used-by { font-weight: 600; color: #d4d0e0; }
+    .proof .used-by strong { color: #fff; font-weight: 800; }
+
+    .tool {
+      margin: 28px auto 0;
+      max-width: 680px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(26, 23, 36, 0.95), rgba(18, 16, 26, 0.98));
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(139, 92, 246, 0.12);
+      text-align: left;
+    }
+    .tool-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-2);
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 7px;
+    }
+    textarea, select {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #0d0b14;
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+      outline: none;
+    }
+    textarea:focus, select:focus {
+      border-color: rgba(139, 92, 246, 0.7);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .row-2 {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (min-width: 640px) {
+      .row-2 { grid-template-columns: 1fr 1fr; }
+    }
+    .tones {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .tone {
+      border: 1px solid var(--line);
+      background: #0d0b14;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tone.active {
+      border-color: rgba(139, 92, 246, 0.7);
+      background: rgba(139, 92, 246, 0.15);
+      color: #fff;
+    }
+    .gen {
+      margin-top: 16px;
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .gen:disabled { opacity: 0.6; cursor: wait; }
+    .hint {
+      margin: 10px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .results { margin-top: 18px; display: none; }
+    .results.show { display: block; }
+    .script-card {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .script-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(139, 92, 246, 0.08);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    .script-meta span {
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: 999px;
+      padding: 4px 8px;
+      color: var(--primary-2);
+    }
+    .beat {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .beat:last-child { border-bottom: 0; }
+    .beat .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--primary-2);
+      margin-bottom: 6px;
+    }
+    .beat .spoken {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      line-height: 1.4;
+    }
+    .beat .note {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .beat.locked-beat {
+      position: relative;
+      filter: blur(3px);
+      user-select: none;
+      opacity: 0.55;
+    }
+
+    .pack-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 14px 0 10px;
+    }
+    .pack-tab {
+      border: 1px solid var(--line);
+      background: #0d0b14;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .pack-tab.active {
+      border-color: rgba(139, 92, 246, 0.7);
+      background: rgba(139, 92, 246, 0.15);
+      color: #fff;
+    }
+    .pack-panel { display: none; }
+    .pack-panel.active { display: block; }
+    .pack-panel .line {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: #e8e4f5;
+      line-height: 1.45;
+    }
+    .pack-panel .line strong {
+      color: var(--primary-2);
+      font-weight: 800;
+      display: inline-block;
+      min-width: 5.5rem;
+    }
+    .pack-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .pack-chip {
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      background: rgba(139, 92, 246, 0.1);
+      color: #ddd6fe;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pack-promise {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (min-width: 560px) {
+      .pack-promise { grid-template-columns: repeat(4, 1fr); }
+    }
+    .pack-promise span {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      color: #ddd6fe;
+    }
+
+    .locked {
+      border: 1px dashed rgba(139, 92, 246, 0.5);
+      background: rgba(139, 92, 246, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .locked h3 { margin: 0 0 6px; font-size: 16px; }
+    .locked p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+    .locked .cta {
+      border: 0;
+      border-radius: 10px;
+      background: #fff;
+      color: #4c1d95;
+      font-weight: 800;
+      padding: 10px 14px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    section.block { padding: 56px 0 0; }
+    section.block h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+    section.block > p.lead {
+      margin: 0 0 22px;
+      color: var(--muted);
+      max-width: 46rem;
+    }
+
+    .steps {
+      position: relative;
+      display: grid;
+      gap: 18px;
+    }
+    @media (min-width: 860px) {
+      .steps { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+      .steps::before {
+        content: "";
+        position: absolute;
+        top: 18px;
+        left: 10%;
+        right: 10%;
+        height: 2px;
+        background: rgba(139, 92, 246, 0.45);
+        z-index: 0;
+      }
+    }
+    .step {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 0 6px;
+    }
+    .step .n {
+      width: 36px;
+      height: 36px;
+      margin: 0 auto 10px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18);
+    }
+    .step h3 { margin: 0 0 4px; font-size: 15px; font-weight: 800; }
+    .step p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .cards-4 {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 800px) { .cards-4 { grid-template-columns: repeat(4, 1fr); } }
+    .feat {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .feat .icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--primary-2);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .feat h3 { margin: 0 0 6px; font-size: 15px; }
+    .feat p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    table.compare, table.heit {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+    table.compare th, table.compare td,
+    table.heit th, table.heit td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+    table.compare th, table.heit th {
+      background: var(--panel-2);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    table.compare tr:last-child td,
+    table.heit tr:last-child td { border-bottom: 0; }
+    table.compare td:first-child,
+    table.heit td:first-child { font-weight: 700; }
+    .yes { color: var(--ok); font-weight: 700; }
+    .no { color: #f87171; }
+    .partial { color: #fbbf24; }
+
+    .tools {
+      display: grid;
+      gap: 12px;
+    }
+    @media (min-width: 720px) { .tools { grid-template-columns: repeat(3, 1fr); } }
+    .tool-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 16px;
+      display: block;
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .tool-card:hover {
+      border-color: rgba(139, 92, 246, 0.55);
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+    .tool-card .thumb {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0a0910;
+      border: 1px solid var(--line);
+      margin-bottom: 12px;
+      display: block;
+      font-size: 0;
+    }
+    .tool-card .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .tool-card h3 { margin: 0 0 4px; font-size: 15px; }
+    .tool-card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .tool-card .go { margin-top: 10px; color: var(--primary-2); font-size: 13px; font-weight: 700; }
+
+    .bridge {
+      margin-top: 48px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      background:
+        radial-gradient(600px 220px at 20% 0%, rgba(139,92,246,0.22), transparent 60%),
+        var(--panel);
+      border-radius: 22px;
+      padding: 28px 22px;
+      text-align: center;
+    }
+    .bridge h2 { margin: 0 0 10px; font-size: clamp(1.4rem, 3vw, 2rem); }
+    .bridge h2 span { color: var(--primary-2); }
+    .bridge p { margin: 0 auto 18px; max-width: 40rem; color: var(--muted); }
+    .bridge .cta {
+      display: inline-flex;
+      border: 0;
+      border-radius: 999px;
+      background: #fff;
+      color: #4c1d95;
+      font-weight: 800;
+      padding: 12px 18px;
+      cursor: pointer;
+    }
+    .product-hero {
+      margin: 0 auto 18px;
+      max-width: 820px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      overflow: hidden;
+      background: #0a0910;
+    }
+    .product-hero img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .faq details {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+    }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .faq p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+
+    .final {
+      margin-top: 48px;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: 22px;
+      padding: 36px 22px;
+      text-align: center;
+      background:
+        radial-gradient(500px 200px at 50% 0%, rgba(139,92,246,0.25), transparent 65%),
+        var(--panel);
+    }
+    .final h2 { margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 2.1rem); }
+    .final p { margin: 0 auto 16px; max-width: 36rem; color: var(--muted); }
+    .final .cta {
+      border: 0;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 13px 22px;
+      cursor: pointer;
+    }
+
+    footer.site {
+      border-top: 1px solid var(--line);
+      background: #0a0910;
+      padding: 48px 20px 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+    }
+    @media (min-width: 900px) {
+      .footer-inner { grid-template-columns: 1.2fr 2.5fr; gap: 36px; }
+    }
+    .footer-brand p {
+      margin: 12px 0 0;
+      max-width: 36ch;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .footer-cols {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    @media (min-width: 700px) {
+      .footer-cols { grid-template-columns: repeat(5, 1fr); }
+    }
+    .footer-cols h4 {
+      margin: 0 0 10px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+      font-weight: 700;
+    }
+    .footer-cols ul { list-style: none; margin: 0; padding: 0; }
+    .footer-cols li { margin-bottom: 8px; }
+    .footer-cols a { color: var(--muted); font-size: 14px; }
+    .footer-cols a:hover { color: #fff; text-decoration: none; }
+    .footer-bottom {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      text-align: right;
+      font-size: 12px;
+      color: rgba(155,150,173,0.7);
+    }
+
+    .toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: #1f1638;
+      border: 1px solid #5b21b6;
+      color: #ede9fe;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+      z-index: 60;
+      max-width: 280px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="mock-banner">
+    <strong>HTML MOCKUP ONLY</strong> · not wired to production ·
+    Instagram Reels keyword page · film pack UI · approve before React · primary: script for Instagram Reel / Reels script generator
+  </div>
+
+  <header class="nav">
+    <div class="bar">
+      <a class="logo" href="#">
+        <img
+          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+          alt="SpyReels"
+          width="36"
+          height="36"
+        />
+        SpyReels
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#">Features</a>
+        <a href="#">Free Tools</a>
+        <a href="#">How It Works</a>
+        <a href="#">Pricing</a>
+        <a href="#">FAQ</a>
+        <a href="#">Blog</a>
+      </nav>
+      <div class="header-ctas">
+        <button class="nav-login" type="button" onclick="toast('Would open login')">Log In</button>
+        <button class="nav-cta" type="button" onclick="toast('Would open signup')">Start Free</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="#">Home</a>
+        <span class="sep">›</span>
+        <a href="#">Free Tools</a>
+        <span class="sep">›</span>
+        <span class="current">Instagram Reels Script Generator</span>
+      </nav>
+      <h1>Instagram <em>Reels Script</em> Generator</h1>
+      <p class="sub">Script for Instagram Reels with filming notes, caption, and music. Ready to shoot, not just draft.</p>
+      <p class="answer">
+        An Instagram Reels script generator turns your topic into a ready-to-film Reel pack: spoken HEIT script, production and filming notes, caption, and music mood. SpyReels shapes output from viral Reel patterns, then opens Studio with teleprompter. Blog how-to stays separate; this page is the tool.
+      </p>
+      <div class="proof" aria-label="Rated 4.5 stars. Used by 12,000+ creators">
+        <span class="stars" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/></svg>
+          <svg viewBox="0 0 24 24">
+            <defs>
+              <linearGradient id="halfStar" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="50%" stop-color="#fbbf24"/>
+                <stop offset="50%" stop-color="rgba(251,191,36,0.25)"/>
+              </linearGradient>
+            </defs>
+            <path fill="url(#halfStar)" d="M12 2l2.9 6.9L22 10l-5 4.7L18.2 22 12 18.2 5.8 22 7 14.7 2 10l7.1-1.1L12 2z"/>
+          </svg>
+        </span>
+        <span class="faces" aria-hidden="true">
+          <img src="proof-faces/face-1.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-2.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-3.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-4.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-5.png?v=flat1" alt="" width="32" height="32" />
+          <img src="proof-faces/face-6.png?v=flat1" alt="" width="32" height="32" />
+        </span>
+        <span class="used-by">Used by <strong>12,000+</strong> creators</span>
+      </div>
+    </section>
+
+    <div class="tool" id="tool">
+      <div class="tool-head">✦ Instagram Reels Script Generator</div>
+      <form id="script-form">
+        <label for="topic">What is your video about?</label>
+        <textarea
+          id="topic"
+          placeholder="e.g. I help service businesses book more clients with a 3-step Instagram offer"
+          required
+          minlength="10"
+        ></textarea>
+
+        <div class="row-2">
+          <div>
+            <label for="platform">Platform</label>
+            <select id="platform" disabled>
+              <option selected>Instagram Reels</option>
+            </select>
+          </div>
+          <div>
+            <label for="length">Length</label>
+            <select id="length">
+              <option>15 to 30 seconds</option>
+              <option selected>30 to 45 seconds</option>
+              <option>45 to 60 seconds</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Tone</label>
+          <div class="tones" id="tones">
+            <button type="button" class="tone active" data-tone="Direct">Direct</button>
+            <button type="button" class="tone" data-tone="Storyteller">Storyteller</button>
+            <button type="button" class="tone" data-tone="Energetic">Energetic</button>
+            <button type="button" class="tone" data-tone="Calm">Calm</button>
+            <button type="button" class="tone" data-tone="Witty">Witty</button>
+          </div>
+        </div>
+
+        <button class="gen" id="gen-btn" type="submit">✦ Generate Instagram Script</button>
+      </form>
+
+      <div class="results" id="results" aria-live="polite"></div>
+    </div>
+
+    <section class="block">
+      <h2>How to generate a ready-to-film script with SpyReels</h2>
+      <p class="lead">Four steps from blank idea to a pack you can shoot today.</p>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><h3>Describe the idea</h3><p>Topic, audience pain, or offer in a few sentences.</p></div>
+        <div class="step"><div class="n">2</div><h3>Pick platform and length</h3><p>Reels, TikTok, or Shorts with a duration that fits the beat.</p></div>
+        <div class="step"><div class="n">3</div><h3>Generate the Instagram script</h3><p>Spoken HEIT script, filming notes, caption, and music mood.</p></div>
+        <div class="step"><div class="n">4</div><h3>Open in Studio</h3><p>Edit in your voice, then film with the built-in teleprompter.</p></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>What you get</h2>
+      <p class="lead">
+        Generic tools dump lines. SpyReels returns a ready-to-film pack shaped by viral short-form patterns,
+        then connects to remake research and Studio so you can shoot the same day.
+      </p>
+      <div class="cards-4">
+        <div class="feat"><div class="icon">1</div><h3>Spoken script</h3><p>Hook, engagement, insight, takeaway with a clear CTA.</p></div>
+        <div class="feat"><div class="icon">2</div><h3>Filming notes</h3><p>Shots, B-roll cues, and delivery tips per beat.</p></div>
+        <div class="feat"><div class="icon">3</div><h3>Caption</h3><p>Post caption ready to paste with a soft CTA.</p></div>
+        <div class="feat"><div class="icon">4</div><h3>Music direction</h3><p>Energy, tempo, and mood so audio matches the open.</p></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>HEIT script structure (SpyReels framework)</h2>
+      <p class="lead">Every generated script maps to Hook, Engagement, Insight, Takeaway.</p>
+      <div style="overflow-x:auto">
+        <table class="heit">
+          <thead>
+            <tr><th>Beat</th><th>Job</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Hook</td><td>Stop the scroll</td><td>Stop posting daily if you are still invisible.</td></tr>
+            <tr><td>Engagement</td><td>Prove relevance</td><td>I wasted 90 days on random content tips.</td></tr>
+            <tr><td>Insight</td><td>Deliver value</td><td>One offer video with a clear CTA beats 30 tips.</td></tr>
+            <tr><td>Takeaway</td><td>Close + CTA</td><td>Save this, then film one offer Reel this week.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>AI script generator vs ChatGPT vs generic tools</h2>
+      <p class="lead">
+        ChatGPT writes paragraphs. SpyReels writes short-form scripts shaped by viral patterns, then connects
+        to Studio, teleprompter, and remake workflows.
+      </p>
+      <div style="overflow-x:auto">
+        <table class="compare">
+          <thead>
+            <tr><th>Capability</th><th>SpyReels</th><th>ChatGPT</th><th>Generic script tools</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>HEIT / short-form structure</td><td class="yes">Yes</td><td class="partial">Prompting</td><td class="partial">Varies</td></tr>
+            <tr><td>Production / filming notes</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Sometimes</td></tr>
+            <tr><td>Caption + music direction</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Rare</td></tr>
+            <tr><td>Teleprompter + Studio</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+            <tr><td>Spy viral Reels to remake</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+            <tr><td>Start free</td><td class="yes">Yes</td><td class="partial">Account</td><td class="yes">Often</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="wide">
+        <section class="block">
+      <h2>Related script tools</h2>
+      <p class="lead">Same film pack engine. Different primary keyword.</p>
+      <div class="tools">
+        <a class="tool-card" href="ai-script-generator-mockup.html">
+          <div class="thumb"><img src="ai-script-coach.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>AI Script Generator</h3>
+          <p>Hub page for platform-agnostic “AI script generator” search.</p>
+          <div class="go">Open mockup →</div>
+        </a>
+        <a class="tool-card" href="tiktok-script-generator-mockup.html">
+          <div class="thumb"><img src="tiktok-viral-video-finder.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>AI TikTok Script Generator</h3>
+          <p>Film pack optimized for TikTok pacing and CTAs.</p>
+          <div class="go">Open mockup →</div>
+        </a>
+        <a class="tool-card" href="#">
+          <div class="thumb"><img src="viral-hooks.png" alt="" width="640" height="400" loading="lazy" /></div>
+          <h3>Viral Hook Generator</h3>
+          <p>10 scroll-stopping opens with spoken + on-screen text.</p>
+          <div class="go">Explore →</div>
+        </a>
+      </div>
+    </section>
+
+    <section class="bridge">
+      <h2>You&apos;ve got the <span>film pack</span>. Now shoot it.</h2>
+      <p>
+        Spoken script, filming notes, caption, and music direction in one place. SpyReels Studio saves the pack
+        in your voice and opens the teleprompter so you can film today.
+      </p>
+      <div class="product-hero">
+        <img src="ai-script-coach.png" alt="SpyReels Studio AI script coach interface" width="1200" height="675" loading="lazy" />
+      </div>
+      <button class="cta" type="button" onclick="toast('Would open signup → /studio')">Generate Instagram Script →</button>
+    </section>
+
+    <section class="block faq">
+      <h2>Frequently asked questions</h2>
+      <details open>
+        <summary>What is an AI script generator?</summary>
+        <p>
+          It turns a topic into a full short-form video pack: spoken script, filming notes, caption, and music direction.
+          SpyReels focuses on Reels, TikTok, and Shorts with HEIT structure.
+        </p>
+      </details>
+      <details>
+        <summary>Do I only get dialogue, or the full film pack?</summary>
+        <p>
+          You get the full pack: spoken HEIT script, production and filming notes, post caption, and music mood.
+          That is the SpyReels wedge versus tools that only dump lines.
+        </p>
+      </details>
+      <details>
+        <summary>Is the SpyReels script generator free to try?</summary>
+        <p>Yes. You can generate a preview pack free. Create a free account to unlock the full pack and film in Studio.</p>
+      </details>
+      <details>
+        <summary>How is this different from ChatGPT or GravityWrite?</summary>
+        <p>
+          ChatGPT and generic writers dump text. SpyReels returns filming notes, caption, and music direction with the script,
+          then connects to Studio, teleprompter, and viral remake research.
+        </p>
+      </details>
+      <details>
+        <summary>Should I use the TikTok or Instagram page instead?</summary>
+        <p>
+          Use this hub for platform-agnostic searches like “AI script generator.” Use the TikTok or Instagram Reels pages
+          when that is the exact query. Same engine; different primary keyword.
+        </p>
+      </details>
+      <details>
+        <summary>How is this different from a transcript tool?</summary>
+        <p>
+          Transcript tools turn an existing video into text. This generator writes a new script pack from your idea.
+          SpyReels also has separate Instagram / TikTok / YouTube transcript pages for video-to-text.
+        </p>
+      </details>
+    </section>
+
+    <section class="final" aria-label="Generate a script">
+      <h2>Your next Instagram script starts here</h2>
+      <p>Describe the idea. Get script, filming notes, caption, and music. Then shoot in Studio.</p>
+      <button
+        class="cta"
+        type="button"
+        onclick="document.getElementById('tool').scrollIntoView({behavior:'smooth'})"
+      >
+        Generate Instagram Script
+      </button>
+    </section>
+  </div>
+
+  <footer class="site">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="logo" href="#">
+          <img
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+            alt="SpyReels"
+            width="28"
+            height="28"
+            style="width:28px;height:28px"
+          />
+          SpyReels
+        </a>
+        <p>Research what is working, plan a month of content, and script Reels in your own voice.</p>
+      </div>
+      <div class="footer-cols">
+        <div>
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#">Viral Reel Finder</a></li>
+            <li><a href="#">AI Personal Brand Coach</a></li>
+            <li><a href="#">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Free Tools</h4>
+          <ul>
+            <li><a href="#">All Free Tools</a></li>
+            <li><a href="#">Viral Hooks</a></li>
+            <li><a href="#">AI Script Generator</a></li>
+            <li><a href="#">B-Roll Generator</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Terms</a></li>
+            <li><a href="#">Privacy</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">© SpyReels · mockup only</div>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    window.MOCK_PLATFORM = "Instagram Reels";
+    let activeTone = "Direct";
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2200);
+    }
+
+    document.getElementById("tones").addEventListener("click", (e) => {
+      const btn = e.target.closest(".tone");
+      if (!btn) return;
+      document.querySelectorAll("#tones .tone").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeTone = btn.dataset.tone;
+    });
+
+    function buildPack(topic, platform, length, tone) {
+      const short = topic.trim().replace(/\s+/g, " ").slice(0, 72);
+      return {
+        meta: [platform, length, tone + " tone", "Instagram script"],
+        beats: [
+          {
+            tag: "Hook",
+            spoken: "Stop scrolling if you still write Reels from a blank page.",
+            note: "On-screen: STOP writing blank. Close-up, eye contact.",
+            locked: false,
+          },
+          {
+            tag: "Engagement",
+            spoken: "I used to overthink every line until I stole the structure from winners in my niche.",
+            note: "Cutaway: phone scroll → SpyReels finder screenshot.",
+            locked: false,
+          },
+          {
+            tag: "Insight",
+            spoken:
+              "Here is the move for “" +
+              short +
+              "”: open with a hard claim, prove it in one story beat, then give one action.",
+            note: "Talking head + 1 B-roll insert mid-beat.",
+            locked: true,
+          },
+          {
+            tag: "Takeaway + CTA",
+            spoken: "Save this, generate your Instagram script, then shoot one offer video before you post tips again.",
+            note: "End card: Start free · SpyReels Studio",
+            locked: true,
+          },
+        ],
+        filming: [
+          { k: "Setup", v: "Chest-up talking head, soft front light, clean background." },
+          { k: "B-roll", v: "Phone scroll, calendar, client DM screenshot (blurred)." },
+          { k: "Delivery", v: "Punch the hook. Pause 0.5s after the claim. Smile on CTA." },
+          { k: "Cut points", v: "Hard cut every 2 to 4 seconds after the open." },
+        ],
+        caption:
+          "Still writing Instagram Reels from a blank page? Steal the structure winners already proved. Save this, then film one offer Reel this week. #reels #instagramreels",
+        music: [
+          { k: "Mood", v: "Confident, modern, slight urgency." },
+          { k: "Tempo", v: "Mid-tempo beat that hits on cuts." },
+          { k: "Avoid", v: "Soft lo-fi under a punchy hook (energy mismatch)." },
+          { k: "Drop", v: "Let the first beat land under your opening claim." },
+        ],
+      };
+    }
+
+    function renderPack(pack) {
+      const beatsHtml = pack.beats
+        .map(
+          (b) => `
+          <div class="beat ${b.locked ? "locked-beat" : ""}">
+            <div class="tag">${b.tag}</div>
+            <p class="spoken">${b.spoken}</p>
+            <p class="note">${b.note}</p>
+          </div>`
+        )
+        .join("");
+
+      const filmingHtml = pack.filming
+        .map((row) => `<p class="line"><strong>${row.k}</strong> ${row.v}</p>`)
+        .join("");
+      const musicHtml = pack.music
+        .map((row) => `<p class="line"><strong>${row.k}</strong> ${row.v}</p>`)
+        .join("");
+
+      return `
+        <div class="script-card">
+          <div class="script-meta">${pack.meta.map((m) => `<span>${m}</span>`).join("")}</div>
+          <div class="pack-tabs" id="pack-tabs">
+            <button type="button" class="pack-tab active" data-panel="script">Spoken script</button>
+            <button type="button" class="pack-tab" data-panel="filming">Filming notes</button>
+            <button type="button" class="pack-tab" data-panel="caption">Caption</button>
+            <button type="button" class="pack-tab" data-panel="music">Music</button>
+          </div>
+          <div class="pack-panel active" data-panel="script">${beatsHtml}</div>
+          <div class="pack-panel" data-panel="filming" style="padding:14px 16px">${filmingHtml}</div>
+          <div class="pack-panel" data-panel="caption" style="padding:14px 16px">
+            <p class="line">${pack.caption}</p>
+            <div class="pack-chips">
+              <span class="pack-chip">Soft CTA</span>
+              <span class="pack-chip">Save-worthy</span>
+              <span class="pack-chip">Platform-ready</span>
+            </div>
+          </div>
+          <div class="pack-panel" data-panel="music" style="padding:14px 16px">${musicHtml}</div>
+        </div>
+        <div class="locked">
+          <h3>Unlock the full Instagram script in Studio</h3>
+          <p>
+            Preview shows Hook + Engagement on the script tab. Create a free account to reveal Insight + CTA,
+            full filming notes, caption, music direction, and teleprompter.
+          </p>
+          <button class="cta" type="button" onclick="toast('Would open signup → /studio')">
+            ✦ Generate Instagram Script
+          </button>
+        </div>
+      `;
+    }
+
+    document.getElementById("script-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const topic = document.getElementById("topic").value;
+      const platformEl = document.getElementById("platform");
+      const platform = platformEl ? platformEl.value : (window.MOCK_PLATFORM || "Any short-form");
+      const length = document.getElementById("length").value;
+      const btn = document.getElementById("gen-btn");
+      const results = document.getElementById("results");
+
+      btn.disabled = true;
+      btn.textContent = "Generating…";
+      results.classList.remove("show");
+      results.innerHTML = "";
+
+      setTimeout(() => {
+        const pack = buildPack(topic, platform, length, activeTone);
+        results.innerHTML = renderPack(pack);
+        results.classList.add("show");
+        btn.disabled = false;
+        btn.textContent = "✦ Generate Instagram Script";
+
+        const tabs = document.getElementById("pack-tabs");
+        if (tabs) {
+          tabs.addEventListener("click", (ev) => {
+            const tab = ev.target.closest(".pack-tab");
+            if (!tab) return;
+            const id = tab.dataset.panel;
+            tabs.querySelectorAll(".pack-tab").forEach((t) => t.classList.toggle("active", t === tab));
+            results.querySelectorAll(".pack-panel").forEach((p) => {
+              p.classList.toggle("active", p.dataset.panel === id);
+            });
+          });
+        }
+
+        results.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 700);
+    });
+  </script>
+</body>
+</html>

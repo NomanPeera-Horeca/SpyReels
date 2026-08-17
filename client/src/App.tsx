@@ -26,6 +26,17 @@ const YouTubeScrapingProgress = lazyWithRetry(() => import("./pages/YouTubeScrap
 const History = lazyWithRetry(() => import("./pages/History"));
 const HookGenerator = lazyWithRetry(() => import("@/pages/HookGenerator"));
 const BrollGenerator = lazyWithRetry(() => import("@/pages/BrollGenerator"));
+const AiScriptGeneratorHubPage = lazyWithRetry(() =>
+  import("@/pages/AiScriptGeneratorLanding").then((m) => ({ default: m.AiScriptGeneratorHubPage }))
+);
+const TikTokScriptGeneratorPage = lazyWithRetry(() =>
+  import("@/pages/AiScriptGeneratorLanding").then((m) => ({ default: m.TikTokScriptGeneratorPage }))
+);
+const InstagramReelsScriptGeneratorPage = lazyWithRetry(() =>
+  import("@/pages/AiScriptGeneratorLanding").then((m) => ({
+    default: m.InstagramReelsScriptGeneratorPage,
+  }))
+);
 const FreeTools = lazyWithRetry(() => import("./pages/FreeTools"));
 const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
@@ -211,6 +222,12 @@ function Router() {
         <Route path="/free-tools" component={FreeTools} />
         <Route path="/free-tools/viral-hooks" component={HookGenerator} />
         <Route path="/free-tools/broll-generator" component={BrollGenerator} />
+        <Route path="/free-tools/ai-script-generator" component={AiScriptGeneratorHubPage} />
+        <Route path="/free-tools/tiktok-script-generator" component={TikTokScriptGeneratorPage} />
+        <Route
+          path="/free-tools/instagram-reels-script-generator"
+          component={InstagramReelsScriptGeneratorPage}
+        />
         <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}

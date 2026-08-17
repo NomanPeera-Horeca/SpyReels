@@ -470,6 +470,13 @@ export default function YouTubeShortsViralFinder() {
         highPrice: "99",
         priceCurrency: "USD",
       },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        bestRating: "5",
+        worstRating: "1",
+        ratingCount: "12000",
+      },
       description: PAGE_DESCRIPTION,
       dateModified: new Date().toISOString().slice(0, 10),
       author: {

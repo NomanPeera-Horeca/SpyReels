@@ -35,6 +35,9 @@ const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "All Free Tools", href: "/free-tools" },
       { label: "Viral Hooks", href: "/free-tools/viral-hooks" },
+      { label: "AI Script Generator", href: "/free-tools/ai-script-generator" },
+      { label: "TikTok Script Generator", href: "/free-tools/tiktok-script-generator" },
+      { label: "Instagram Reels Script Generator", href: "/free-tools/instagram-reels-script-generator" },
       { label: "B-Roll Generator", href: "/free-tools/broll-generator" },
       { label: "TikTok Viral Video Finder", href: "/free-tools/tiktok-viral-video-finder" },
       { label: "YouTube Shorts Viral Finder", href: "/free-tools/youtube-shorts-viral-finder" },

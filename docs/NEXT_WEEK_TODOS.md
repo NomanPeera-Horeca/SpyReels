@@ -12,9 +12,9 @@
   - [x] Identify stale high-profile handles (Gary Vee class + other hero demo accounts)
   - [x] Re-scrape public demo heroes: `garyvee`, `humphreytalks`, `russellbrunson`, `codiesanchez` (4/4 success, ~98 featured_reels, R2 thumbs/videos)
   - [x] Confirm freshness: newest posts Aug 8–16 (was ~Apr / Feb stale)
-  - [ ] **In progress:** remakeable talk/business batch (14 accounts unlocked, scrape running): jayshetty, the.holistic.psychologist, grantcardone, dailystoic, yung_pueblo, ryanserhant, danmartell, thedankoe, aliabdaal, sahilbloom, naval, thebudgetnista, therealbrianmark, neilpatel
+  - [ ] **Remakeable talk/business batch:** scrape run finished Aug 17 (~63 min): **3/14 success** (neilpatel, sahilbloom, naval → 90 featured_reels). **11 hard failures** after Instagram fetch (MySQL “connection closed” / ECONNRESET / R2 DNS) — retry those accounts, then transcribe → mark `viralFlag` only on spoken reels
+    - Failures to retry: danmartell, thebudgetnista, grantcardone, ryanserhant, aliabdaal, thedankoe, therealbrianmark, dailystoic, jayshetty, the.holistic.psychologist, yung_pueblo
     - Excludes music/sports-highlight mega celebs
-    - After scrape: transcribe batch → mark `viralFlag` only on spoken (`transcriptionStatus=completed`) reels → appear in featured catalog for remake/script
 - [ ] GSC after deploy of indexing harden (`459b23c`):
   - [ ] Validate soft 404 / duplicate fixes in Page indexing
   - [ ] **Request indexing** only on canonical URLs (never noindexed legacy duplicates)
@@ -38,16 +38,31 @@
   - Goal: browsable gallery of proven hook templates (with social proof / pattern labels) users can tap → fill → generate / copy
   - Work: research viral hook template patterns → seed a template catalog → UI in free tool and/or in-app → optional public SEO page that ranks for “hook templates”
   - Wedge vs static Google Docs guides: SpyReels templates are interactive + expand into full scripts / finder remakes
-- [ ] **Find Creators / Creator Discovery marketing landing page** (acquisition)
+- [ ] **Find Creators / Creator Discovery marketing landing page** (acquisition) — **tomorrow (Aug 18)**
   - Source: product already live in staging/app at `/discovery` (`CreatorDiscovery.tsx`)
   - Goal: public SEO + conversion page (not just gated app UI) so cold traffic can land, understand, and sign up
-  - Work: keyword research (DataForSEO) → mockup → Golden Standard page → route in footer/free-tools/related tools → GSC
-  - Pitch wedge from PRD: “Find your competitors and steal their viral hooks” (lookalike / niche creator search)
-  - Note: `/discovery` is currently app-private / robots Disallow; marketing URL should be a separate public path (e.g. `/features/find-creators` or similar) that CTAs into signup → `/discovery`
-- [ ] **Script Generator marketing landing page** (acquisition + SEO)
-  - Today: script generator only lives in-app, so it cannot rank organically
-  - Goal: public Golden Standard page that ranks for script-generator / Reel script / AI script intents and CTAs into signup → in-app generator
-  - Work: keyword research (DataForSEO, cannibalization check vs hooks / blog) → mockup → page + meta + schema → footer/related tools/internal links → GSC index canonical
+  - Pitch: **Find Instagram creators in any niche** to spy on, understand structure, and remake their content (not hire UGC / run brand campaigns)
+  - **Competitor research (do before mockup):**
+    - [ ] [Collabstr](https://collabstr.com) search/marketplace (UGC filters, creator cards, niche browse) — note what to steal for discovery UX vs ignore (price/hire intent)
+    - [ ] [Upfluence free tool](https://www.upfluence.com/find-instagram-influencers-free) “Find Instagram Creators In Any Location” — location-led free-tool LP pattern
+    - [ ] [Hypefy](https://business.hypefy.ai) brand onboarding / discovery flow — what they collect and how they position for brands
+    - Deliverable: short notes in plan/mockup brief (filters, hero CTA, wedge vs hire-marketplace)
+  - Work: keyword research → competitor notes → mockup → Golden Standard page → footer/free-tools/related tools → GSC
+  - Note: `/discovery` is app-private / robots Disallow; marketing URL should be a separate public path (e.g. `/features/find-creators`) that CTAs into signup → `/discovery`
+- [x] **Script Generator marketing pages** (acquisition + SEO) — hub + TikTok + Instagram wired Aug 17
+  - Live routes: `/free-tools/ai-script-generator`, `/free-tools/tiktok-script-generator`, `/free-tools/instagram-reels-script-generator`
+  - Schema: SoftwareApplication + **aggregateRating 4.5 / 12000** + Free offer (ElevenLabs-style SERP) also backfilled on Hooks, B-roll, finders, homepage, Brand Coach, 30-day plan
+  - After deploy: GSC request indexing on the three canonicals (+ optionally other free tools for stars refresh)
+  - Phase 2 still open: YouTube Shorts script generator page
+- [ ] **Transcript free-tool pages (3)** — Instagram / YouTube / TikTok (acquisition + SEO)
+  - Why: SERP for `instagram script` is dominated by **Reel → text / transcript** tools (SpeakApp, GetTheScript, Tokscript); PASF also shows `script generator from video`. Separate intent from *writing* scripts.
+  - Ship as **three Golden Standard pages** (not one thin hub):
+    - [ ] Instagram Reel transcript generator (Reels to text / paste URL)
+    - [ ] YouTube transcript / Shorts transcript page
+    - [ ] TikTok transcript generator
+  - Product wedge: transcript → spy structure → remake / expand into SpyReels script (not “no login forever” commodity clone)
+  - Work: keyword research per platform → cannibalization check → mockups → routes under `/free-tools/` → Free Tools hub + footer + related tools → GSC
+  - Sequence: after Script Generator page ships (or parallel once Script Generator is approved)
 - [ ] **30-Day Content Plan marketing landing page** (acquisition + SEO)
   - Product lives in-app at `/plan` (goal + platforms → Generate My 30-Day Plan)
   - Public route already exists at `/features/30-day-content-plan` (`ThirtyDayContentPlanFeature.tsx`) — audit vs Golden Standard; rebuild/improve if thin or not converting

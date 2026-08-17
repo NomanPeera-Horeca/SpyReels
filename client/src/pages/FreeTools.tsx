@@ -98,9 +98,25 @@ const HUB_TOOLS: HubTool[] = [
   {
     title: "AI Script Generator",
     description:
-      "Turn a viral pattern into a full script in your voice with production notes.",
-    href: "/features/ai-personal-brand-coach",
+      "Turn an idea into a viral script with filming notes, caption, and music direction.",
+    href: "/free-tools/ai-script-generator",
     imageUrl: RELATED_TOOL_THUMB_AI_COACH,
+    category: "scripts",
+  },
+  {
+    title: "AI TikTok Script Generator",
+    description:
+      "Generate TikTok scripts with filming notes, caption, and music. Start free.",
+    href: "/free-tools/tiktok-script-generator",
+    imageUrl: RELATED_TOOL_THUMB_TIKTOK_FINDER,
+    category: "scripts",
+  },
+  {
+    title: "Instagram Reels Script Generator",
+    description:
+      "Write Instagram Reel scripts with filming notes, caption, and music direction.",
+    href: "/free-tools/instagram-reels-script-generator",
+    imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
     category: "scripts",
   },
 ];
