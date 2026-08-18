@@ -14,12 +14,12 @@ import {
   SCRIPT_GENERATOR_COPY,
   SCRIPT_GENERATOR_PENDING_KEY,
   SCRIPT_GENERATOR_RESEARCH_STEPS,
+  SCRIPT_GENERATOR_WAIT_FEATURES,
   SCRIPT_LENGTHS,
   SCRIPT_TONES,
   type ScriptGeneratorPending,
   type ScriptGeneratorVariant,
   type ScriptPack,
-  type ScriptPackBeat,
 } from "@shared/scriptGeneratorLanding";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
@@ -52,21 +52,6 @@ import studioPng from "@/assets/related-tools/ai-script-coach.png";
 
 const PROOF_FACES = [face1, face2, face3, face4, face5, face6];
 
-const LOCKED_PLACEHOLDER_BEATS: ScriptPackBeat[] = [
-  {
-    tag: "Insight",
-    spoken: "Your researched insight beat unlocks after you create a free account.",
-    note: "Filming note unlocks in Studio.",
-    locked: true,
-  },
-  {
-    tag: "Takeaway + CTA",
-    spoken: "Your researched takeaway and CTA unlock after you create a free account.",
-    note: "End card unlocks in Studio.",
-    locked: true,
-  },
-];
-
 function readPendingScript(): ScriptGeneratorPending | null {
   try {
     const raw = sessionStorage.getItem(SCRIPT_GENERATOR_PENDING_KEY);
@@ -85,16 +70,6 @@ function stashPendingScript(pending: ScriptGeneratorPending) {
 
 function clearPendingScript() {
   sessionStorage.removeItem(SCRIPT_GENERATOR_PENDING_KEY);
-}
-
-function teaserPackFromPreview(meta: string[], freeBeats: ScriptPackBeat[]): ScriptPack {
-  return {
-    meta,
-    beats: [...freeBeats.map((b) => ({ ...b, locked: false })), ...LOCKED_PLACEHOLDER_BEATS],
-    filming: [{ k: "Setup", v: "Full filming notes unlock in Studio after signup." }],
-    caption: "Full caption unlocks in Studio after signup.",
-    music: [{ k: "Mood", v: "Full music direction unlocks in Studio after signup." }],
-  };
 }
 
 type PackTab = "script" | "filming" | "caption" | "music";
@@ -183,7 +158,8 @@ export default function AiScriptGeneratorLanding({
   const previewMutation = trpc.scriptGenerator.preview.useMutation({
     onSuccess: (data) => {
       setSessionToken(data.sessionToken);
-      setPack(teaserPackFromPreview(data.meta, data.freeBeats));
+      // Full pack is ready; UI only hides post-retention + extras until signup.
+      setPack(data.pack);
       setTab("script");
       setError("");
     },
@@ -497,31 +473,51 @@ export default function AiScriptGeneratorLanding({
 
           {researching ? (
             <div
-              className="mt-5 rounded-2xl border border-[#2c2740] bg-[#12101a] px-5 py-10 text-center"
+              className="mt-5 rounded-2xl border border-[#2c2740] bg-[#12101a] px-5 py-6 text-left"
               aria-live="polite"
               aria-busy="true"
             >
-              <div className="mx-auto mb-4 flex h-10 items-end justify-center gap-1.5" aria-hidden>
-                {[0, 1, 2, 3].map((i) => (
-                  <span
-                    key={i}
-                    className="w-2 animate-pulse rounded-full bg-[#8b5cf6]"
-                    style={{
-                      height: `${18 + ((i * 7) % 16)}px`,
-                      animationDelay: `${i * 120}ms`,
-                    }}
-                  />
-                ))}
+              <div className="mb-4 flex items-center gap-3 border-b border-[#2c2740] pb-4">
+                <div className="flex h-9 items-end justify-center gap-1" aria-hidden>
+                  {[0, 1, 2, 3].map((i) => (
+                    <span
+                      key={i}
+                      className="w-1.5 animate-pulse rounded-full bg-[#8b5cf6]"
+                      style={{
+                        height: `${14 + ((i * 6) % 14)}px`,
+                        animationDelay: `${i * 120}ms`,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold text-white">
+                    {SCRIPT_GENERATOR_RESEARCH_STEPS[researchStep]}
+                  </p>
+                  <p className="text-xs text-[#9b96ad]">
+                    {researchElapsed.toFixed(1)}s · your teaser is almost ready
+                  </p>
+                </div>
               </div>
-              <p className="text-lg font-extrabold text-white">
-                {SCRIPT_GENERATOR_RESEARCH_STEPS[researchStep]}
-              </p>
-              <p className="mt-2 text-sm text-[#9b96ad]">
-                {researchElapsed.toFixed(1)}s · building your real hook and engagement
-              </p>
-              <p className="mx-auto mt-5 max-w-sm text-xs leading-relaxed text-[#6f6a82]">
-                SpyReels researches your angle first, then shows a teaser. Sign in to open the full
-                script in Studio.
+              <h3 className="mb-3 text-[15px] font-extrabold tracking-tight text-white">
+                What SpyReels can do
+              </h3>
+              <ul className="space-y-3">
+                {SCRIPT_GENERATOR_WAIT_FEATURES.map((item) => (
+                  <li key={item.title} className="flex gap-2.5">
+                    <span
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#a78bfa]"
+                      aria-hidden
+                    />
+                    <div>
+                      <p className="text-[13px] font-bold text-[#e8e4f5]">{item.title}</p>
+                      <p className="text-[12px] leading-snug text-[#9b96ad]">{item.body}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-center text-[11px] text-[#6f6a82]">
+                Sign in after the teaser to open the full script in Studio.
               </p>
             </div>
           ) : null}
@@ -544,7 +540,7 @@ export default function AiScriptGeneratorLanding({
                     [
                       ["script", "Spoken script"],
                       ["filming", "Filming notes"],
-                      ["caption", "Caption"],
+                      ["caption", "Caption + tags"],
                       ["music", "Music"],
                     ] as const
                   ).map(([id, label]) => (
@@ -584,32 +580,52 @@ export default function AiScriptGeneratorLanding({
                     </div>
                   ) : null}
                   {tab === "filming" ? (
-                    <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
-                      {pack.filming.map((row) => (
-                        <p key={row.k} className="text-sm text-[#e8e4f5]">
-                          <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
-                            {row.k}
-                          </strong>
-                          {row.v}
-                        </p>
-                      ))}
+                    <div className="relative">
+                      <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
+                        {pack.filming.map((row) => (
+                          <p key={row.k} className="text-sm text-[#e8e4f5]">
+                            <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
+                              {row.k}
+                            </strong>
+                            {row.v}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-semibold text-[#d4d0e0]">
+                        Filming notes ready. Sign in to open in Studio.
+                      </p>
                     </div>
                   ) : null}
                   {tab === "caption" ? (
-                    <p className="select-none text-sm leading-relaxed text-[#e8e4f5] opacity-55 blur-[3px]" aria-hidden>
-                      {pack.caption}
-                    </p>
+                    <div className="relative">
+                      <div className="select-none space-y-3 opacity-55 blur-[3px]" aria-hidden>
+                        <p className="text-sm leading-relaxed text-[#e8e4f5]">{pack.caption}</p>
+                        {pack.hashtags?.length ? (
+                          <p className="text-sm leading-relaxed text-[#c4b5fd]">
+                            {pack.hashtags.map((tag) => `#${tag}`).join(" ")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-semibold text-[#d4d0e0]">
+                        Caption + hashtags ready. Sign in to open in Studio.
+                      </p>
+                    </div>
                   ) : null}
                   {tab === "music" ? (
-                    <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
-                      {pack.music.map((row) => (
-                        <p key={row.k} className="text-sm text-[#e8e4f5]">
-                          <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
-                            {row.k}
-                          </strong>
-                          {row.v}
-                        </p>
-                      ))}
+                    <div className="relative">
+                      <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
+                        {pack.music.map((row) => (
+                          <p key={row.k} className="text-sm text-[#e8e4f5]">
+                            <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
+                              {row.k}
+                            </strong>
+                            {row.v}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-semibold text-[#d4d0e0]">
+                        Music direction ready. Sign in to open in Studio.
+                      </p>
                     </div>
                   ) : null}
                 </div>
@@ -620,9 +636,8 @@ export default function AiScriptGeneratorLanding({
                   script in Studio
                 </h3>
                 <p className="mb-3 text-[13px] text-[#9b96ad]">
-                  This preview is from real research on your topic. Hook + Engagement are unlocked. Create a
-                  free account to open Insight + CTA, filming notes, caption, music, and teleprompter on your
-                  script page.
+                  Real research is done. Hook + Engagement stay open. Insight, CTA, filming notes, caption,
+                  hashtags, and music are ready behind the gate. Sign in to open the full script in Studio.
                 </p>
                 <Button
                   type="button"
@@ -683,7 +698,7 @@ export default function AiScriptGeneratorLanding({
             {[
               ["Spoken script", "Hook, engagement, insight, takeaway with a clear CTA."],
               ["Filming notes", "Shots, B-roll cues, and delivery tips per beat."],
-              ["Caption", "Post caption ready to paste with a soft CTA."],
+              ["Caption + hashtags", "Post caption and tags ready to paste with a soft CTA."],
               ["Music direction", "Energy, tempo, and mood so audio matches the open."],
             ].map(([title, body], i) => (
               <div key={title} className="rounded-2xl border border-[#2c2740] bg-[#14121c] p-4">
@@ -753,7 +768,7 @@ export default function AiScriptGeneratorLanding({
                 {[
                   ["HEIT / short-form structure", "Yes", "Prompting", "Varies"],
                   ["Production / filming notes", "Yes", "No", "Sometimes"],
-                  ["Caption + music direction", "Yes", "No", "Rare"],
+                  ["Caption + hashtags + music", "Yes", "No", "Rare"],
                   ["Teleprompter + Studio", "Yes", "No", "No"],
                   ["Spy viral Reels to remake", "Yes", "No", "No"],
                   ["Start free", "Yes", "Account", "Often"],

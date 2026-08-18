@@ -171,6 +171,8 @@ export type ScriptPack = {
   beats: ScriptPackBeat[];
   filming: Array<{ k: string; v: string }>;
   caption: string;
+  /** Hashtags without leading #; UI can display with #. */
+  hashtags: string[];
   music: Array<{ k: string; v: string }>;
 };
 
@@ -192,6 +194,26 @@ export const SCRIPT_GENERATOR_RESEARCH_STEPS = [
   "Brainstorming engaging angles",
   "Structuring for maximum impact",
   "Developing the main content",
+] as const;
+
+/** Shown during generate wait to convert attention into product desire. */
+export const SCRIPT_GENERATOR_WAIT_FEATURES = [
+  {
+    title: "Spy viral Reels by handle",
+    body: "Sort any public creator by views, engagement, and outlier score, then remake winners.",
+  },
+  {
+    title: "AI Personal Brand Coach",
+    body: "Scripts in your voice with HEIT structure, filming notes, and Studio teleprompter.",
+  },
+  {
+    title: "30-day content plan",
+    body: "A full month of niche ideas, approved cards, and one-click scripts.",
+  },
+  {
+    title: "B-roll + carousel tools",
+    body: "Match footage to your script and turn long posts into swipe carousels.",
+  },
 ] as const;
 
 export function buildDemoScriptPack(
@@ -241,8 +263,11 @@ export function buildDemoScriptPack(
       { k: "Cut points", v: "Hard cut every 2 to 4 seconds after the open." },
     ],
     caption: isTikTok
-      ? "Still writing TikToks from a blank page? Steal the structure winners already proved. Save this, then film one offer TikTok this week. #tiktok #fyp"
-      : "Still writing Reels from a blank page? Steal the structure winners already proved. Save this, then film one offer Reel this week. #reels #contentcreator",
+      ? "Still writing TikToks from a blank page? Steal the structure winners already proved. Save this, then film one offer TikTok this week."
+      : "Still writing Reels from a blank page? Steal the structure winners already proved. Save this, then film one offer Reel this week.",
+    hashtags: isTikTok
+      ? ["tiktok", "fyp", "contentcreator", "script", "viral"]
+      : ["reels", "instagramreels", "contentcreator", "script", "viral"],
     music: [
       { k: "Mood", v: "Confident, modern, slight urgency." },
       { k: "Tempo", v: "Mid-tempo beat that hits on cuts." },

@@ -6,13 +6,20 @@ import {
 } from "@shared/scriptGeneratorLanding";
 import { coachScripts } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
-import { getDb, markOnboardingComplete, updateUserPersonalization } from "./db";
+import {
+  createSavedScript,
+  ensureDefaultTags,
+  getDb,
+  markOnboardingComplete,
+  updateUserPersonalization,
+} from "./db";
 import { routeOnboardingNicheSlugs } from "./onboardingRouteNiche";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { sanitizeAiOutputDeep } from "./utils/sanitizeAiOutput";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import { mapCoachScriptRow, type GeneratedCoachScript } from "./studioGenerateScript";
-import { buildProductionNotesJson, combineBodyFromSections } from "@shared/coachScriptSections";
+import { buildProductionNotesJson, combineBodyFromSections, countWords, flattenViralScriptForCopy } from "@shared/coachScriptSections";
+import { assignScriptingTag } from "./ideaScriptExtras";
 
 const SESSION_TTL_MS = 1000 * 60 * 30;
 
@@ -27,6 +34,8 @@ export type ScriptGeneratorSession = {
 
 export type ScriptGeneratorPreviewResult = {
   meta: string[];
+  /** Full pack is generated; UI hides post-retention beats + extras until signup. */
+  pack: ScriptPack;
   freeBeats: ScriptPackBeat[];
   lockedBeatCount: number;
   sessionToken: string;
@@ -64,6 +73,8 @@ export function decodeScriptGeneratorSession(token: string): ScriptGeneratorSess
       message: "Session expired. Please generate your script again.",
     });
   }
+  const meta = Array.isArray(parsed.pack.meta) ? parsed.pack.meta : [parsed.platform].filter(Boolean);
+  parsed.pack = normalizePack(parsed.pack as unknown as Record<string, unknown>, meta);
   return parsed;
 }
 
@@ -110,6 +121,8 @@ function normalizePack(raw: Record<string, unknown>, meta: string[]): ScriptPack
     };
   });
 
+  const hashtags = normalizeHashtags(raw.hashtags, meta);
+
   return {
     meta,
     beats: beats.map((b, i) => ({ ...b, locked: i >= 2 })),
@@ -117,12 +130,50 @@ function normalizePack(raw: Record<string, unknown>, meta: string[]): ScriptPack
       filming.filter((f) => f.v).length > 0
         ? filming.filter((f) => f.v)
         : [{ k: "Setup", v: "Chest-up talking head, soft front light, clean background." }],
-    caption: String(raw.caption ?? "").trim() || "Save this and film your next short this week.",
+    caption: stripTrailingHashtags(String(raw.caption ?? "").trim()) || "Save this and film your next short this week.",
+    hashtags,
     music:
       music.filter((m) => m.v).length > 0
         ? music.filter((m) => m.v)
         : [{ k: "Mood", v: "Confident, modern, slight urgency." }],
   };
+}
+
+function stripTrailingHashtags(caption: string): string {
+  return caption.replace(/(?:\s*#[\w]+)+\s*$/g, "").trim();
+}
+
+function normalizeHashtags(raw: unknown, meta: string[]): string[] {
+  const out: string[] = [];
+  const push = (value: string) => {
+    const tag = value
+      .replace(/^#/, "")
+      .trim()
+      .replace(/\s+/g, "")
+      .replace(/[^\w]/g, "");
+    if (tag && !out.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      out.push(tag);
+    }
+  };
+
+  if (Array.isArray(raw)) {
+    for (const item of raw) push(String(item ?? ""));
+  } else if (typeof raw === "string") {
+    for (const part of raw.split(/[\s,]+/)) push(part);
+  }
+
+  if (out.length === 0) {
+    const joined = meta.join(" ").toLowerCase();
+    if (joined.includes("tiktok")) {
+      ["tiktok", "fyp", "contentcreator", "script", "viral"].forEach(push);
+    } else if (joined.includes("reel") || joined.includes("instagram")) {
+      ["reels", "instagramreels", "contentcreator", "script", "viral"].forEach(push);
+    } else {
+      ["shorts", "contentcreator", "script", "viral", "creator"].forEach(push);
+    }
+  }
+
+  return out.slice(0, 10);
 }
 
 export async function previewScriptGeneratorPack(args: {
@@ -166,7 +217,8 @@ RULES:
 - Insight: one clear valuable move tied to the topic.
 - Takeaway + CTA: one action + soft save/follow CTA.
 - Each beat needs a short filming note (on-screen text, cutaway, or delivery cue).
-- Caption: one post caption with a soft CTA (no more than 280 chars).
+- Caption: one post caption with a soft CTA (no more than 280 chars). Do not put hashtags inside the caption string.
+- Hashtags: 5 to 8 relevant hashtags as an array of strings WITHOUT the # symbol.
 - Music: mood, tempo, avoid, and drop cues.
 
 Return JSON with this exact shape:
@@ -184,6 +236,7 @@ Return JSON with this exact shape:
     { "k": "Cut points", "v": "..." }
   ],
   "caption": "...",
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "music": [
     { "k": "Mood", "v": "..." },
     { "k": "Tempo", "v": "..." },
@@ -228,10 +281,16 @@ Return JSON with this exact shape:
 
   return {
     meta,
+    pack,
     freeBeats: pack.beats.filter((b) => !b.locked).map((b) => ({ ...b, locked: false })),
     lockedBeatCount: pack.beats.filter((b) => b.locked).length,
     sessionToken: encodeSession(session),
   };
+}
+
+function packRow(pack: ScriptPack, key: string): string {
+  const hit = pack.filming.find((f) => f.k.toLowerCase() === key.toLowerCase());
+  return hit?.v?.trim() || "";
 }
 
 function packToCoachFields(pack: ScriptPack) {
@@ -239,6 +298,7 @@ function packToCoachFields(pack: ScriptPack) {
   const engagement = pack.beats[1]?.spoken ?? "";
   const insight = pack.beats[2]?.spoken ?? "";
   const takeaway = pack.beats[3]?.spoken ?? "";
+  const hookNote = pack.beats[0]?.note?.trim() || "";
 
   const sections = {
     explain: engagement,
@@ -247,10 +307,41 @@ function packToCoachFields(pack: ScriptPack) {
     cta: takeaway,
   };
 
+  const setup =
+    packRow(pack, "Setup") ||
+    pack.filming.map((f) => `${f.k}: ${f.v}`).join("\n") ||
+    "Chest-up talking head, soft front light, clean background.";
+  const delivery = packRow(pack, "Delivery");
+  const brollRaw = packRow(pack, "B-roll") || packRow(pack, "Broll");
+  const cutPoints = packRow(pack, "Cut points");
+  const music =
+    pack.music.map((m) => `${m.k}: ${m.v}`).filter(Boolean).join(" · ") ||
+    "Confident mid-tempo beat under the open.";
+
   const productionCoach: Record<string, unknown> = {
-    filmingNotes: pack.filming.map((f) => `${f.k}: ${f.v}`).join("\n"),
+    setup,
+    voiceTone: delivery || undefined,
+    pacingNotes: cutPoints || undefined,
+    music,
+    musicMix: pack.music.find((m) => /tempo|drop|avoid/i.test(m.k))?.v || undefined,
     caption: pack.caption,
-    musicDirection: pack.music.map((m) => `${m.k}: ${m.v}`).join("\n"),
+    hashtags: pack.hashtags,
+    textOverlay: hookNote.slice(0, 80) || undefined,
+    hookOnScreenText: hookNote.replace(/^on-screen:\s*/i, "").slice(0, 30) || undefined,
+    frame0OnScreenText: hookNote.replace(/^on-screen:\s*/i, "").slice(0, 30) || undefined,
+    bRoll: brollRaw
+      ? brollRaw
+          .split(/[,;]|\band\b/i)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+          .map((shot) => ({ shot, canUseStock: true }))
+      : pack.beats
+          .slice(1)
+          .map((b) => b.note.trim())
+          .filter(Boolean)
+          .slice(0, 4)
+          .map((shot) => ({ shot, canUseStock: true })),
     beatNotes: pack.beats.map((b) => `${b.tag}: ${b.note}`).join("\n"),
   };
 
@@ -303,6 +394,7 @@ export async function claimScriptGeneratorToStudio(args: {
     contentFormat: "talking-head",
     formatLabel: session.platform.slice(0, 128),
     productionNotes: fields.productionNotes,
+    productionNotesStatus: "completed",
   });
 
   const scriptId = insertResult[0]?.insertId;
@@ -314,6 +406,40 @@ export async function claimScriptGeneratorToStudio(args: {
   if (!row) {
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to load script" });
   }
+
+  const sections = {
+    explain: fields.sections.explain,
+    illustrate: fields.sections.illustrate,
+    teach: fields.sections.teach,
+    cta: fields.sections.cta,
+  };
+  const content = flattenViralScriptForCopy({
+    title,
+    hook: fields.hook,
+    sections,
+  });
+  const hashtagsClean = session.pack.hashtags
+    .map((h) => h.replace(/^#/, "").trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  const captionTrimmed = session.pack.caption.trim();
+
+  await ensureDefaultTags(args.workspaceId, args.userId);
+  const savedId = await createSavedScript({
+    userId: args.userId,
+    workspaceId: args.workspaceId,
+    title,
+    content,
+    originalContent: content,
+    wordCount: countWords(content),
+    status: "draft",
+    notes: "Saved from AI script generator",
+    coachScriptId: scriptId,
+    generatedCaption: captionTrimmed || null,
+    generatedHashtags: hashtagsClean.length > 0 ? JSON.stringify(hashtagsClean) : null,
+    captionStyle: "educational",
+  });
+  await assignScriptingTag(savedId, args.workspaceId, args.userId);
 
   return mapCoachScriptRow(row);
 }
