@@ -67,7 +67,15 @@ function parseArgs() {
   const dryRun = args.includes("--dry-run");
   const limitArg = args.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : Infinity;
-  return { retryFailed, dryRun, limit };
+  const accountIdsArg = args.find((a) => a.startsWith("--account-ids="));
+  const accountIds = accountIdsArg
+    ? accountIdsArg
+        .slice("--account-ids=".length)
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  return { retryFailed, dryRun, limit, accountIds };
 }
 
 async function connect(): Promise<mysql.Connection> {
@@ -88,15 +96,20 @@ async function connect(): Promise<mysql.Connection> {
 
 async function fetchPending(
   conn: mysql.Connection,
-  retryFailed: boolean
+  retryFailed: boolean,
+  accountIds: number[] = []
 ): Promise<PendingRow[]> {
   const statuses = retryFailed ? ["pending", "failed"] : ["pending"];
+  const accountClause =
+    accountIds.length > 0
+      ? ` AND featuredAccountId IN (${accountIds.map(() => "?").join(",")})`
+      : "";
   const [rows] = await conn.query(
     `SELECT id, reelShortcode, videoUrl, featuredAccountId
        FROM featured_reels
-      WHERE transcriptionStatus IN (${statuses.map(() => "?").join(",")})
+      WHERE transcriptionStatus IN (${statuses.map(() => "?").join(",")})${accountClause}
       ORDER BY id ASC`,
-    statuses
+    [...statuses, ...accountIds]
   );
   return rows as PendingRow[];
 }
@@ -232,13 +245,13 @@ async function runPool<T>(
 }
 
 async function main(): Promise<void> {
-  const { retryFailed, dryRun, limit } = parseArgs();
+  const { retryFailed, dryRun, limit, accountIds } = parseArgs();
   const conn = await connect();
   console.log(
-    `Backfill featured_reels transcripts — retryFailed=${retryFailed}, dryRun=${dryRun}, limit=${limit}, concurrency=${CONCURRENCY}`
+    `Backfill featured_reels transcripts — retryFailed=${retryFailed}, dryRun=${dryRun}, limit=${limit}, accountIds=${accountIds.length ? accountIds.join(",") : "all"}, concurrency=${CONCURRENCY}`
   );
 
-  const pendingAll = await fetchPending(conn, retryFailed);
+  const pendingAll = await fetchPending(conn, retryFailed, accountIds);
   const pending = Number.isFinite(limit)
     ? pendingAll.slice(0, limit as number)
     : pendingAll;

@@ -37,6 +37,26 @@ const InstagramReelsScriptGeneratorPage = lazyWithRetry(() =>
     default: m.InstagramReelsScriptGeneratorPage,
   }))
 );
+const InstagramTranscriptGeneratorPage = lazyWithRetry(() =>
+  import("@/pages/TranscriptGeneratorLanding").then((m) => ({
+    default: m.InstagramTranscriptGeneratorPage,
+  }))
+);
+const TikTokTranscriptGeneratorPage = lazyWithRetry(() =>
+  import("@/pages/TranscriptGeneratorLanding").then((m) => ({
+    default: m.TikTokTranscriptGeneratorPage,
+  }))
+);
+const YouTubeShortsTranscriptPage = lazyWithRetry(() =>
+  import("@/pages/TranscriptGeneratorLanding").then((m) => ({
+    default: m.YouTubeShortsTranscriptPage,
+  }))
+);
+const YouTubeTranscriptGeneratorPage = lazyWithRetry(() =>
+  import("@/pages/TranscriptGeneratorLanding").then((m) => ({
+    default: m.YouTubeTranscriptGeneratorPage,
+  }))
+);
 const FreeTools = lazyWithRetry(() => import("./pages/FreeTools"));
 const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
@@ -227,6 +247,22 @@ function Router() {
         <Route
           path="/free-tools/instagram-reels-script-generator"
           component={InstagramReelsScriptGeneratorPage}
+        />
+        <Route
+          path="/free-tools/instagram-transcript-generator"
+          component={InstagramTranscriptGeneratorPage}
+        />
+        <Route
+          path="/free-tools/tiktok-transcript-generator"
+          component={TikTokTranscriptGeneratorPage}
+        />
+        <Route
+          path="/free-tools/youtube-shorts-transcript"
+          component={YouTubeShortsTranscriptPage}
+        />
+        <Route
+          path="/free-tools/youtube-transcript-generator"
+          component={YouTubeTranscriptGeneratorPage}
         />
         <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />

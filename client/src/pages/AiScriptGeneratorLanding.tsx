@@ -614,17 +614,18 @@ export default function AiScriptGeneratorLanding({
                   {tab === "music" ? (
                     <div className="relative">
                       <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
-                        {pack.music.map((row) => (
-                          <p key={row.k} className="text-sm text-[#e8e4f5]">
+                        {(pack.instagramAudio ?? []).slice(0, 2).map((pick, i) => (
+                          <p key={`${pick.title}-${i}`} className="text-sm text-[#e8e4f5]">
                             <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
-                              {row.k}
+                              {pick.isTrending ? "Primary" : "Backup"}
                             </strong>
-                            {row.v}
+                            {pick.title}
+                            {pick.artist ? ` · ${pick.artist}` : ""}
                           </p>
                         ))}
                       </div>
                       <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-semibold text-[#d4d0e0]">
-                        Music direction ready. Sign in to open in Studio.
+                        Two audio picks ready. Sign in to open in Studio.
                       </p>
                     </div>
                   ) : null}

@@ -94,7 +94,7 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
   "/free-tools": {
     title: "Free Instagram Reels Tools | SpyReels",
     description:
-      "Free SpyReels tools for creators: viral hook generator, B-roll, TikTok finder, YouTube Shorts finder, and Reel research. Start free.",
+      "Free SpyReels tools for creators: viral finders, hooks, B-roll, AI scripts, and transcript generators for Instagram, TikTok, and YouTube. Start free.",
   },
   "/free-tools/viral-hooks": {
     title: "Free Viral Hook Generator for Reels, TikTok & Shorts | SpyReels",
@@ -120,6 +120,26 @@ export const STATIC_PUBLIC_PAGE_SEO: Record<string, StaticPageSeo> = {
     title: "Free Instagram Reels Script Generator | SpyReels",
     description:
       "Free Instagram Reels script generator with filming notes, caption, and music. Write a Reel script and shoot in SpyReels Studio. Start free.",
+  },
+  "/free-tools/instagram-transcript-generator": {
+    title: "Free Instagram Transcript Generator | Reels to Text",
+    description:
+      "Paste an Instagram Reel URL and get a free transcript. Then remake it in your voice and open the script with the source reel. Start free on SpyReels.",
+  },
+  "/free-tools/tiktok-transcript-generator": {
+    title: "Free TikTok Transcript Generator | Video to Text",
+    description:
+      "Paste a TikTok URL and get an accurate transcript free. Remake the winning structure in your voice and film from Studio. Start free with SpyReels.",
+  },
+  "/free-tools/youtube-shorts-transcript": {
+    title: "Free YouTube Shorts Transcript | Shorts to Text",
+    description:
+      "Convert any YouTube Short to text. Then remake the Short in your voice with SpyReels and open your script next to the source video. Start free.",
+  },
+  "/free-tools/youtube-transcript-generator": {
+    title: "Free YouTube Transcript Generator | Video to Text",
+    description:
+      "Generate a YouTube transcript from any video URL. Copy text, then remake short-form cuts in your voice with SpyReels. Start free.",
   },
   "/features/viral-reel-finder": {
     title: "Viral Reel Finder for Instagram | SpyReels",

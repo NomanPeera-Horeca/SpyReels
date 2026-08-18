@@ -168,12 +168,12 @@ export function buildProductionNotesJson(
       : {};
   return JSON.stringify({
     ...base,
-    contentFormat: extras?.contentFormat,
-    funnelStage: extras?.funnelStage,
-    scriptMode: extras?.scriptMode,
-    hookType: extras?.hookType,
-    sourceDescription: extras?.sourceDescription,
-    coachJudge: extras?.coachJudge,
+    contentFormat: extras?.contentFormat ?? base.contentFormat,
+    funnelStage: extras?.funnelStage ?? base.funnelStage,
+    scriptMode: extras?.scriptMode ?? base.scriptMode,
+    hookType: extras?.hookType ?? base.hookType,
+    sourceDescription: extras?.sourceDescription ?? base.sourceDescription,
+    coachJudge: extras?.coachJudge ?? base.coachJudge,
     sections,
   });
 }

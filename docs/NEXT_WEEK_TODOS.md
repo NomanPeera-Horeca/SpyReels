@@ -58,15 +58,30 @@
     - Signup skips onboarding and lands on `/studio?script={id}` with the full researched script
   - After deploy: GSC request indexing on the three canonicals (+ optionally other free tools for stars refresh)
   - Phase 2 still open: YouTube Shorts script generator page
-- [ ] **Transcript free-tool pages (3)** — Instagram / YouTube / TikTok (acquisition + SEO) — **next after script funnel ships**
-  - Why: SERP for `instagram script` is dominated by **Reel → text / transcript** tools (SpeakApp, GetTheScript, [Tokscript](https://tokscript.com/instagram-transcript-generator)); PASF also shows `script generator from video`. Separate intent from *writing* scripts.
-  - Ship as **three Golden Standard pages** (not one thin hub):
-    - [ ] Instagram Reel transcript generator (Reels to text / paste URL)
-    - [ ] YouTube transcript / Shorts transcript page
-    - [ ] TikTok transcript generator
-  - Product wedge: transcript → spy structure → remake / expand into SpyReels script (not “no login forever” commodity clone)
-  - Work: keyword research per platform → cannibalization check → mockups → routes under `/free-tools/` → Free Tools hub + footer + related tools → GSC
-  - Sequence: after Script Generator research funnel is deployed
+- [ ] **Transcript free-tool pages (4)** — Instagram / TikTok / YouTube Shorts / YouTube long (acquisition + SEO)
+  - Why: SERP for `instagram script` / `* script transcriber` is dominated by **video → text** tools; keep separate from *writing* script generator pages.
+  - **Product split (do not blur):**
+    - Script generator = **idea → script** (blank topic → HEIT pack → Studio)
+    - Transcript = **video URL → text**, then CTA **Remake in your voice** → existing viral onboarding questions → generate remake script in their voice (same path we use today) → land on `/scripts/{id}` with **source reel** on the right and their remade script in the editor
+  - Locked primaries + URLs (React wired locally Aug 18; deploy + GSC still open):
+    - [x] `/free-tools/instagram-transcript-generator` → `instagram transcript generator`
+    - [x] `/free-tools/tiktok-transcript-generator` → `tiktok transcript generator` (secondary: `tiktok script transcriber`)
+    - [x] `/free-tools/youtube-shorts-transcript` → `youtube shorts transcript`
+    - [x] `/free-tools/youtube-transcript-generator` → `youtube transcript generator`
+  - Wedge vs Tokscript/GetTheScript/Transcript365: **full transcript visible without signup** (value first). Conversion CTA is **Remake in your voice** → onboarding → `/scripts/{id}` + source reel. Do not blur/gate the transcript the way script-generator hides Insight/CTA.
+  - [x] SEO package + HTML mockups + React wire (paste-URL public preview, remake via collected chain, Free Tools hub + footer + related tools + sitemap/meta)
+  - Still open: public file-upload → transcript (upload tab currently routes to Collected after signup); deploy; GSC request indexing
+  - Cross-link script generator pages as “writing from an idea” vs these as “steal structure from a video”
+- [ ] **Comparison pages hub (Choppity-style)** — SEO + acquisition
+  - Inspiration: Choppity “Comparisons” list (`Choppity vs OpusClip`, `vs CapCut`, `vs Submagic`, `vs VEED`, …)
+  - Goal: public `/compare` (or `/comparisons`) index + individual **SpyReels vs X** Golden Standard pages that rank for “SpyReels alternative” / “X vs SpyReels” / “best X alternative for Reels”
+  - First wave candidates (pick 4–6 after DataForSEO + intent check):
+    - Transcript / script extract: Tokscript, GetTheScript, Transcript365, SpeakApp, Choppity
+    - Script write: ScrollScript, ChatGPT-only workflows (position carefully)
+    - Clip / caption tools creators confuse with remake: CapCut, Submagic, OpusClip, VEED (only where SpyReels wedge is clear: spy → remake → Studio, not timeline editing)
+    - Finder-class: Viral Video Finder (if fair-use / brand-safe)
+  - Work: keyword + cannibalization check → shared comparison template (table + who-wins + FAQ + CTA) → hub index → footer/internal links → GSC on each canonical
+  - Do **not** invent fake feature claims; honest SpyReels wedge only
 - [ ] **SpyReels inside Claude / ChatGPT (MCP or equivalent)** — acquisition + retention (Tokscript-style)
   - Inspiration: [Tokscript](https://tokscript.com/instagram-transcript-generator) “works inside Claude and ChatGPT” (MCP) — pull transcripts / profile / video analysis in chat
   - Goal: let creators use SpyReels research (transcript, finder remake cues, script expand) from Claude/ChatGPT without leaving the chat

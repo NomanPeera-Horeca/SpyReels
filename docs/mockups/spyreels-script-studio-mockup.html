@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOCKUP · SpyReels Script Studio</title>
+<style>
+:root{
+  --bg:#080a0f;
+  --panel:#0e1118;
+  --panel-2:#121722;
+  --panel-3:#171d29;
+  --line:#242b39;
+  --line-2:#30384a;
+  --text:#f7f8fb;
+  --muted:#9199aa;
+  --muted-2:#6f7787;
+  --accent:#8b5cf6;
+  --accent-2:#6d4bf1;
+  --blue:#3b82f6;
+  --green:#12b981;
+  --orange:#f59e0b;
+  --danger:#f87171;
+  --radius:14px;
+  --shadow:0 18px 60px rgba(0,0,0,.32);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh;overflow:hidden;display:flex;flex-direction:column}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+.mock-banner{
+  flex-shrink:0;
+  z-index:50;
+  background:#1f1638;
+  border-bottom:1px solid #3b2a63;
+  color:#ddd6fe;
+  font-size:12px;
+  padding:10px 16px;
+  text-align:center;
+}
+.mock-banner strong{color:#fff}
+.app{flex:1;min-height:0;height:auto;display:grid;grid-template-columns:248px 296px minmax(560px,1fr) 330px;background:var(--bg)}
+.sidebar,.history,.inspector{border-right:1px solid var(--line);background:#0a0d13}
+.sidebar{padding:18px 14px;display:flex;flex-direction:column;gap:20px;overflow:auto}
+.workspace-switch{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:10px;font-size:13px}
+.brand{display:flex;align-items:center;gap:11px;padding:10px 8px 14px}
+.brand-mark{width:28px;height:28px;border-radius:50%;border:4px solid #3b82f6;position:relative}
+.brand-mark:after{content:"";position:absolute;width:8px;height:8px;border-radius:50%;background:var(--accent);right:-5px;bottom:-2px}
+.brand-name{font-weight:800;font-size:17px}
+.niche{border:1px solid var(--line);background:#0d1017;border-radius:14px;padding:14px}
+.eyebrow{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.niche strong{display:block;margin:3px 0 2px;font-size:14px}
+.niche span{color:var(--muted);font-size:12px}
+.nav-section{display:flex;flex-direction:column;gap:5px}
+.nav-title{padding:0 8px 6px;font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.08em}
+.nav-item{height:42px;border:0;border-radius:10px;background:transparent;color:#d2d6df;display:flex;align-items:center;gap:11px;padding:0 12px;text-align:left}
+.nav-item:hover{background:#111621}
+.nav-item.active{background:linear-gradient(135deg,#6d4bf1,#8b6df7);color:#fff}
+.nav-item .icon{width:18px;text-align:center}
+.badge{margin-left:auto;background:#7c5cff;color:#fff;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800}
+.profile{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 8px}
+.avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#2b244b;color:#b9a8ff;font-weight:800}
+.profile strong{display:block;font-size:13px}.profile span{font-size:11px;color:var(--muted)}
+.history{display:flex;flex-direction:column;min-width:0}
+.history-head{padding:20px 16px 14px;border-bottom:1px solid var(--line)}
+.history-title-row{display:flex;justify-content:space-between;align-items:center}
+.history h3{margin:0;font-size:15px}
+.text-button{border:0;background:transparent;color:#ddd;padding:4px 0}
+.search{margin-top:14px;display:flex;align-items:center;gap:8px;background:#0c1017;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--muted)}
+.search input{width:100%;background:transparent;border:0;outline:0;color:#fff;font-size:13px}
+.history-count{margin-top:8px;color:var(--muted);font-size:11px}
+.script-list{overflow:auto;padding:10px}
+.script-item{padding:12px;border-radius:12px;border:1px solid transparent;margin-bottom:8px;cursor:pointer}
+.script-item:hover{background:#111621}
+.script-item.active{background:#17152a;border-color:#3a315f}
+.script-item-top{display:flex;gap:8px}
+.script-item .doc{font-size:13px;color:#bfc5d1}
+.script-item strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.script-item p{font-size:12px;color:var(--muted);margin:5px 0 8px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.script-meta{display:flex;justify-content:space-between;color:var(--muted-2);font-size:10px}
+.main{min-width:0;overflow:auto;padding:24px 26px 100px;background:#090c12}
+.topbar{position:sticky;top:-24px;z-index:10;background:linear-gradient(#090c12 78%,rgba(9,12,18,0));padding:24px 0 20px;margin-top:-24px}
+.toprow{display:flex;justify-content:space-between;gap:20px;align-items:center}
+.back{color:var(--muted);font-size:13px}
+.actions{display:flex;gap:10px}
+.btn{height:38px;padding:0 15px;border-radius:10px;border:1px solid var(--line-2);background:#111722;color:#f2f4f8;font-weight:700}
+.btn:hover{border-color:#4d5870}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:white}
+.btn.success{background:#0d2a22;border-color:#176448;color:#79f2c2}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.title{font-size:28px;line-height:1.15;margin:16px 0 8px;letter-spacing:-.03em}
+.meta-row{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;flex-wrap:wrap}
+.pill{padding:5px 9px;border-radius:999px;background:#1b2230;color:#cbd2df}
+.progress-shell{margin-top:16px;display:flex;align-items:center;gap:12px}
+.progress{height:5px;background:#1b2130;border-radius:99px;overflow:hidden;flex:1}
+.progress span{display:block;height:100%;width:84%;background:linear-gradient(90deg,var(--accent),#3b82f6);transition:width .35s ease}
+.progress-copy{font-size:11px;color:var(--muted);white-space:nowrap}
+.idea-card{margin-top:14px;border:1px solid rgba(245,158,11,.55);background:#1a1110;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.idea-card strong{font-size:13px;color:#f8cf69}
+.idea-card small{display:block;margin-top:8px;color:#c6c1bf}
+.idea-card.collapsed small{display:none}
+.section-card{margin-top:14px;border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);overflow:hidden;transition:.2s}
+.section-card.active{border-color:#315bc5;box-shadow:0 0 0 1px rgba(59,130,246,.25)}
+.section-head{padding:16px 18px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.section-number{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#293244;color:#dfe6f1;font-size:12px;font-weight:800}
+.section-card.active .section-number{background:var(--blue);color:white}
+.section-info{flex:1}
+.section-info h4{margin:0;font-size:14px}
+.section-info p{margin:3px 0 0;color:var(--muted);font-size:12px}
+.section-score{display:flex;align-items:center;gap:8px;font-size:12px;color:#bfc7d5;font-weight:700}
+.score-dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.score-dot.warn{background:var(--orange)}
+.chev{color:var(--muted)}
+.section-body{padding:0 18px 18px}
+.collapsed .section-body{display:none}
+.content-grid{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:16px}
+.layers{border:1px solid var(--line-2);border-radius:12px;overflow:hidden;background:#121824}
+.layer{padding:14px 16px;border-bottom:1px solid var(--line-2)}
+.layer:last-child{border-bottom:0}
+.layer-label{font-size:10px;font-weight:800;color:#8e97aa;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.layer-text{font-size:14px;line-height:1.5;color:#f5f7fb}
+.layer-text[contenteditable="true"]{outline:0}
+.layer-text[contenteditable="true"]:focus{background:#161e2c;border-radius:6px;box-shadow:0 0 0 6px #161e2c}
+.layer em{color:#9da5b5}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.phone-label{font-size:9px;color:#8a92a4;font-weight:800;letter-spacing:.08em}
+.phone{width:80px;height:142px;border:3px solid #515b6d;border-radius:20px;background:linear-gradient(160deg,#2c1352 0%,#0f1116 45%,#131720 100%);padding:9px 6px;position:relative;overflow:hidden}
+.phone:before{content:"";position:absolute;top:5px;left:25px;width:26px;height:5px;border-radius:99px;background:#050608}
+.phone-time{font-size:7px;background:#090b10;padding:3px 4px;border-radius:4px;position:absolute;top:17px;left:8px}
+.phone-copy{font-size:7px;font-weight:900;line-height:1.25;background:rgba(0,0,0,.76);padding:7px 4px;text-align:center;position:absolute;left:9px;right:9px;top:44px;border-radius:4px}
+.person{width:22px;height:22px;border-radius:50%;background:#868b94;position:absolute;bottom:31px;left:29px}
+.person-label{position:absolute;bottom:8px;left:8px;display:flex;align-items:center;gap:4px;font-size:7px;font-weight:700}
+.person-label i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.section-tools{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px}
+.inline-link{border:0;background:transparent;color:#4ea0ff;font-size:12px;font-weight:700;padding:0}
+.helper{font-size:11px;color:var(--muted)}
+.hook-options{margin-top:12px;border-top:1px solid var(--line);padding-top:14px}
+.hook-options.hidden{display:none}
+.hook-option-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hook-option{background:#111722;border:1px solid var(--line);border-radius:11px;padding:12px;cursor:pointer;position:relative}
+.hook-option:hover{border-color:#55617a}
+.hook-option.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.hook-type{display:inline-flex;padding:4px 7px;border-radius:999px;background:#2a1a4c;color:#c5afff;font-size:9px;font-weight:800}
+.hook-option h5{font-size:12px;line-height:1.4;margin:9px 0 5px}
+.hook-option p{font-size:10px;color:var(--muted);line-height:1.4;margin:0}
+.option-score{position:absolute;top:10px;right:10px;font-size:10px;color:#79f2c2}
+.footer-refine{position:sticky;bottom:-76px;margin-top:18px;background:linear-gradient(180deg,rgba(9,12,18,0),#090c12 24%);padding-top:20px}
+.refine-box{display:flex;gap:10px;background:#121722;border:1px solid var(--line-2);border-radius:12px;padding:10px}
+.refine-box input{flex:1;background:transparent;border:0;color:white;outline:0}
+.refine-box input::placeholder{color:#788194}
+.inspector{border-right:0;border-left:1px solid var(--line);background:#0a0d13;padding:20px 16px;overflow:auto}
+.inspector-tabs{display:grid;grid-template-columns:1fr 1fr;background:#0f131b;border:1px solid var(--line);border-radius:10px;padding:3px;margin-bottom:14px}
+.inspector-tab{border:0;background:transparent;color:var(--muted);padding:8px;border-radius:7px;font-weight:700;font-size:12px}
+.inspector-tab.active{background:#1a2030;color:white}
+.inspector-panel{display:none}
+.inspector-panel.active{display:block}
+.score-card,.production-card,.quick-card,.legend-card{background:#111722;border:1px solid var(--line-2);border-radius:14px;padding:16px;margin-bottom:14px}
+.score-top{display:flex;justify-content:space-between;align-items:center}
+.score-big{font-size:34px;font-weight:900;letter-spacing:-.04em}
+.score-big span{font-size:13px;color:var(--muted);font-weight:600}
+.score-label{font-size:11px;font-weight:800}
+.score-label.strong{color:#79f2c2}
+.score-label.good{color:#93c5fd}
+.score-label.needs{color:#fbbf24}
+.metric{margin-top:13px}
+.metric-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
+.metric-row span:first-child{color:#c9cfda}.metric-row span:last-child{color:#eef1f6}
+.metric-bar{height:5px;background:#242b39;border-radius:99px;overflow:hidden}
+.metric-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));border-radius:99px;transition:width .35s ease}
+.weak-box{margin-top:14px;padding:12px;border-radius:10px;background:#201821;border:1px solid #4a2947}
+.weak-box strong{font-size:11px;color:#ffb4c6}.weak-box p{font-size:12px;margin:5px 0 10px;color:#e9dfe4}
+.weak-box.fixed{background:#0d2a22;border-color:#176448}
+.weak-box.fixed strong{color:#79f2c2}
+.production-card h3,.quick-card h3,.legend-card h3{margin:0 0 14px;font-size:14px}
+.note-block{padding:12px 0;border-top:1px solid var(--line)}
+.note-block:first-of-type{border-top:0;padding-top:0}
+.note-title{display:flex;align-items:center;gap:7px;color:#9da6b7;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.note-block p,.note-block li{font-size:12px;color:#d8dde6;line-height:1.55}
+.note-block ul{padding-left:18px;margin:8px 0 0}
+.music-chip{display:flex;align-items:center;justify-content:space-between;background:#171d29;border:1px solid var(--line);padding:10px;border-radius:9px;margin-top:9px}
+.music-chip strong{font-size:11px}.music-chip span{font-size:10px;color:var(--muted)}
+.quick-action{width:100%;border:0;background:transparent;color:#b881ff;text-align:left;padding:10px 0;border-top:1px solid var(--line);font-weight:700;font-size:12px}
+.quick-action:first-of-type{border-top:0}
+.legend-toggle{
+  width:100%;
+  border:0;
+  background:transparent;
+  color:#c5afff;
+  text-align:left;
+  padding:0;
+  font-weight:800;
+  font-size:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:pointer;
+}
+.legend-body{display:none;margin-top:12px;font-size:11px;line-height:1.55;color:#c9cfda}
+.legend-card.open .legend-body{display:block}
+.legend-body code{font-size:10px;color:#e9d5ff;background:#1a1330;padding:1px 5px;border-radius:4px}
+.legend-body ul{margin:8px 0 0;padding-left:16px}
+.legend-body li{margin:4px 0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:#1a2230;border:1px solid #3a465d;color:white;padding:11px 16px;border-radius:10px;transition:.25s;z-index:99;box-shadow:var(--shadow);font-size:13px}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:1250px){
+  .app{grid-template-columns:220px 260px minmax(520px,1fr)}
+  .inspector{position:fixed;right:0;top:40px;bottom:0;width:330px;transform:translateX(100%);transition:.25s;z-index:30;box-shadow:var(--shadow)}
+  .inspector.open{transform:translateX(0)}
+}
+@media(max-width:900px){
+  body{overflow:auto}.app{display:block;height:auto}
+  .sidebar,.history{display:none}.main{overflow:visible}.inspector{display:none}
+  .hook-option-grid{grid-template-columns:1fr}
+  .content-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="mock-banner">
+  <strong>MOCKUP</strong> · Interactive Script Studio preview. Not wired to <code>/studio</code> yet. Demo restaurant sample + live score recompute.
+</div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="workspace-switch"><span>▥ &nbsp; Personal</span><span>⌄</span></div>
+    <div class="brand"><div class="brand-mark"></div><div class="brand-name">SpyReels</div></div>
+    <div class="niche"><div class="eyebrow">Your niche</div><strong>Restaurants-cafes</strong><span>Instagram Reels viewers</span></div>
+    <div class="nav-section">
+      <div class="nav-title">CREATE</div>
+      <button class="nav-item active" type="button"><span class="icon">✦</span>AI Coach<span class="badge">NEW</span></button>
+      <button class="nav-item" type="button" onclick="toast('Would open 30-Day Plan')"><span class="icon">▦</span>30-Day Plan</button>
+      <button class="nav-item" type="button" onclick="toast('Would open Carousel Library')"><span class="icon">▧</span>Carousel Library<span class="badge">NEW</span></button>
+      <button class="nav-item" type="button" onclick="toast('Would open B-Roll Library')"><span class="icon">▱</span>B-Roll Library<span class="badge">NEW</span></button>
+      <button class="nav-item" type="button" onclick="toast('Would open My Scripts')"><span class="icon">▤</span>My Scripts</button>
+      <button class="nav-item" type="button" onclick="toast('Would open Paste Script')"><span class="icon">⇩</span>Paste Script</button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-title">DISCOVER</div>
+      <button class="nav-item" type="button" onclick="toast('Would open Spy Viral Reels')"><span class="icon">⌕</span>Spy Viral Reels</button>
+      <button class="nav-item" type="button" onclick="toast('Would open Collected Reels')"><span class="icon">▱</span>Collected Reels</button>
+      <button class="nav-item" type="button" onclick="toast('Would open Creator Radar')"><span class="icon">◎</span>Creator Radar</button>
+      <button class="nav-item" type="button" onclick="toast('Would open Saved Reels')"><span class="icon">♧</span>Saved Reels</button>
+    </div>
+    <div class="profile"><div class="avatar">N</div><div><strong>Noman Razzak</strong><span>nomanpeera@gmail.com</span></div></div>
+  </aside>
+
+  <aside class="history">
+    <div class="history-head">
+      <div class="history-title-row"><h3>↶ &nbsp;Recent scripts</h3><button class="text-button" type="button" onclick="toast('Would create a new script')">New</button></div>
+      <div class="search">⌕ <input id="scriptSearch" placeholder="Search title or script..." oninput="filterScripts(this.value)" /></div>
+      <div class="history-count" id="historyCount">6 scripts shown</div>
+    </div>
+    <div class="script-list" id="scriptList">
+      <div class="script-item active" data-title="How To Start A Restaurant With No Experience" data-snippet="You can open a restaurant with zero experience. Here is how.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>How To Start A Restaurant With No Experience</strong></div>
+        <p>You can open a restaurant with zero experience. Here is how.</p>
+        <div class="script-meta"><span>13 minutes ago</span><span>Expand⌄</span></div>
+      </div>
+      <div class="script-item" data-title="How To Start A Restaurant Without Culinary School" data-snippet="You do not need experience to open a restaurant. You need a system.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>How To Start A Restaurant Without Culinary School</strong></div>
+        <p>You do not need experience to open a restaurant. You need a system.</p>
+        <div class="script-meta"><span>25 minutes ago</span><span>Expand⌄</span></div>
+      </div>
+      <div class="script-item" data-title="Plan 30 Days of Restaurant Content" data-snippet="How to plan a month of restaurant content in just five minutes.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>Plan 30 Days of Restaurant Content</strong></div>
+        <p>How to plan a month of restaurant content in just five minutes.</p>
+        <div class="script-meta"><span>3 days ago</span><span>Expand⌄</span></div>
+      </div>
+      <div class="script-item" data-title="STOP! You're About to Buy the Wrong Equipment" data-snippet="The equipment mistake that quietly kills your cash flow.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>⚠ STOP! You're About to Buy the Wrong Equipment</strong></div>
+        <p>The equipment mistake that quietly kills your cash flow.</p>
+        <div class="script-meta"><span>3 days ago</span><span>Expand⌄</span></div>
+      </div>
+      <div class="script-item" data-title="Gordon Ramsay Says This Is Why Restaurants Fail" data-snippet="Most people should not open a restaurant. Here's why.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>Gordon Ramsay Says This Is Why Restaurants Fail</strong></div>
+        <p>Most people should not open a restaurant. Here's why.</p>
+        <div class="script-meta"><span>4 days ago</span><span>Expand⌄</span></div>
+      </div>
+      <div class="script-item" data-title="5 Reasons Coffee Shops Fail" data-snippet="The five mistakes nobody budgets for in year one.">
+        <div class="script-item-top"><span class="doc">▤</span><strong>5 Reasons Coffee Shops Fail</strong></div>
+        <p>The five mistakes nobody budgets for in year one.</p>
+        <div class="script-meta"><span>4 days ago</span><span>Expand⌄</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="toprow">
+        <div class="back">← &nbsp;New script</div>
+        <div class="actions">
+          <button class="btn success" type="button" onclick="toast('Saved to My Scripts')">▣ &nbsp;Saved · My Scripts</button>
+          <button class="btn" type="button" onclick="copyScript()">▣ &nbsp;Copy script</button>
+          <button class="btn" type="button" onclick="toggleInspector()" title="Toggle script health panel">☷</button>
+        </div>
+      </div>
+      <h1 class="title" id="scriptTitle">How To Start A Restaurant With No Experience</h1>
+      <div class="meta-row"><span class="pill">Instagram Reels</span><span>◷ 30 to 45 seconds</span><span>• Direct tone</span></div>
+      <div class="progress-shell">
+        <div class="progress"><span id="readyBar" style="width:84%"></span></div>
+        <div class="progress-copy" id="readyCopy">Script ready · 84%</div>
+      </div>
+    </div>
+
+    <div class="idea-card" id="ideaCard" onclick="toggleIdea()">
+      <div><strong>💡 &nbsp;Original idea</strong><small id="ideaText">How to start a restaurant with no experience</small></div>
+      <span id="ideaChev">⌃</span>
+    </div>
+
+    <section class="section-card active" data-section="hook">
+      <div class="section-head" onclick="toggleSection(this)">
+        <div class="section-number">1</div>
+        <div class="section-info"><h4>Hook</h4><p>Frame 0: visual + spoken + on-screen text.</p></div>
+        <div class="section-score"><span class="score-dot" data-section-dot="hook"></span><span data-section-score="hook">94</span></div><div class="chev">⌃</div>
+      </div>
+      <div class="section-body">
+        <div class="content-grid">
+          <div class="layers">
+            <div class="layer">
+              <div class="layer-label">Visual hook</div>
+              <div class="layer-text" id="visualHook" contenteditable="false"><em>Hands counting a small stack of cash beside a five-item paper menu.</em></div>
+            </div>
+            <div class="layer">
+              <div class="layer-label">Spoken hook</div>
+              <div class="layer-text" id="spokenHook" contenteditable="false">I ran my first restaurant out of a parking lot with $300 and a borrowed griddle.</div>
+            </div>
+            <div class="layer">
+              <div class="layer-label">On-screen text</div>
+              <div class="layer-text" id="onScreenHook" contenteditable="false"><strong>NO LEASE. NO CULINARY SCHOOL. JUST THIS.</strong></div>
+            </div>
+          </div>
+          <div class="phone-wrap"><div class="phone-label">FRAME 0 PREVIEW</div><div class="phone"><div class="phone-time">0:01</div><div class="phone-copy" id="phoneCopy">NO LEASE.<br>NO CULINARY SCHOOL.<br>JUST THIS.</div><div class="person"></div><div class="person-label"><i></i>you</div></div></div>
+        </div>
+        <div class="section-tools">
+          <button class="inline-link" type="button" onclick="event.stopPropagation();toggleHooks()">Compare 3 hook options</button>
+          <div class="helper">On-screen text complements spoken hook.</div>
+        </div>
+        <div class="hook-options hidden" id="hookOptions">
+          <div class="hook-option-grid">
+            <div class="hook-option selected" onclick="event.stopPropagation();selectHook(this,0)"><span class="hook-type">Story</span><span class="option-score">94</span><h5>I ran my first restaurant out of a parking lot...</h5><p>Credibility + curiosity</p></div>
+            <div class="hook-option" onclick="event.stopPropagation();selectHook(this,1)"><span class="hook-type">Contrarian</span><span class="option-score">91</span><h5>Culinary school is the slowest way to open a restaurant.</h5><p>Pattern interruption</p></div>
+            <div class="hook-option" onclick="event.stopPropagation();selectHook(this,2)"><span class="hook-type">Direct</span><span class="option-score">87</span><h5>You can open a restaurant with zero experience. Here is how.</h5><p>Clear promise</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-card collapsed" data-section="problem">
+      <div class="section-head" onclick="toggleSection(this)">
+        <div class="section-number">2</div>
+        <div class="section-info"><h4>Problem setup</h4><p>Name the belief holding them back.</p></div>
+        <div class="section-score"><span class="score-dot" data-section-dot="problem"></span><span data-section-score="problem">88</span></div><div class="chev">⌄</div>
+      </div>
+      <div class="section-body">
+        <div class="layers"><div class="layer"><div class="layer-label">What to say</div><div class="layer-text" contenteditable="false">Most people never start because they think they need culinary school or years in the industry. You do not.</div></div></div>
+      </div>
+    </section>
+
+    <section class="section-card collapsed" data-section="story">
+      <div class="section-head" onclick="toggleSection(this)">
+        <div class="section-number">3</div>
+        <div class="section-info"><h4>Story or example</h4><p>Make the idea concrete and believable.</p></div>
+        <div class="section-score"><span class="score-dot" data-section-dot="story"></span><span data-section-score="story">83</span></div><div class="chev">⌄</div>
+      </div>
+      <div class="section-body">
+        <div class="layers"><div class="layer"><div class="layer-label">What to say</div><div class="layer-text" contenteditable="false">Pick one concept, one menu with five items maximum, and run it as a pop-up for 30 days before signing a lease. You learn the operation, build a customer base and prove demand before spending on a buildout.</div></div></div>
+      </div>
+    </section>
+
+    <section class="section-card collapsed" data-section="takeaway">
+      <div class="section-head" onclick="toggleSection(this)">
+        <div class="section-number">4</div>
+        <div class="section-info"><h4>Key takeaway</h4><p>One clear thing the viewer should remember.</p></div>
+        <div class="section-score"><span class="score-dot" data-section-dot="takeaway"></span><span data-section-score="takeaway">79</span></div><div class="chev">⌄</div>
+      </div>
+      <div class="section-body">
+        <div class="layers"><div class="layer"><div class="layer-label">What to say</div><div class="layer-text" contenteditable="false">Do not wait to feel qualified. Build the smallest version, prove that customers want it, then scale.</div></div></div>
+      </div>
+    </section>
+
+    <section class="section-card collapsed" data-section="cta">
+      <div class="section-head" onclick="toggleSection(this)">
+        <div class="section-number">5</div>
+        <div class="section-info"><h4>Call to action</h4><p>Give the viewer one natural next step.</p></div>
+        <div class="section-score"><span class="score-dot warn" data-section-dot="cta"></span><span data-section-score="cta">68</span></div><div class="chev">⌄</div>
+      </div>
+      <div class="section-body">
+        <div class="layers"><div class="layer"><div class="layer-label">What to say</div><div class="layer-text" id="ctaText" contenteditable="false">Save this if you are serious about opening your own place, and follow for the next step.</div></div></div>
+      </div>
+    </section>
+
+    <div class="footer-refine">
+      <div class="refine-box">
+        <input id="refineInput" placeholder='Ask AI: "Make the hook more contrarian"' />
+        <button class="btn primary" type="button" onclick="applyRefine()">Improve</button>
+      </div>
+    </div>
+  </main>
+
+  <aside class="inspector" id="inspector">
+    <div class="inspector-tabs">
+      <button class="inspector-tab active" type="button" onclick="switchTab('score',this)">Script health</button>
+      <button class="inspector-tab" type="button" onclick="switchTab('production',this)">Production</button>
+    </div>
+    <div class="inspector-panel active" id="scorePanel">
+      <div class="legend-card" id="legendCard">
+        <button class="legend-toggle" type="button" onclick="toggleLegend()">
+          <span>Scoring model (how these numbers work)</span>
+          <span id="legendChev">⌄</span>
+        </button>
+        <div class="legend-body">
+          <p><strong>Industry pillars for short-form:</strong> 3-second hold, message clarity, specificity/proof, spoken pacing, CTA specificity.</p>
+          <p>SpyReels already judges drafts on a <code>1-10</code> scale (gate-only today). UI shows <code>0-100</code>:</p>
+          <ul>
+            <li><code>hookStrength = hookEffectiveness × 10</code></li>
+            <li><code>clarity = viewerSense × 10</code></li>
+            <li><code>credibility = nicheFit × 10</code></li>
+            <li><code>pacing = skipRatePrediction × 10</code></li>
+            <li><code>cta = ctaQuality × 10</code></li>
+          </ul>
+          <p><strong>Overall</strong> = round(0.30×hook + 0.25×clarity + 0.15×credibility + 0.15×pacing + 0.15×cta)</p>
+          <p><strong>Ready %</strong> = clamp(overall − 5, 0, 100)</p>
+          <p><strong>Labels:</strong> Strong ≥85 · Good ≥70 · Needs work &lt;70</p>
+          <p>This restaurant sample starts at the screenshot numbers. <strong>Fix weakest</strong> and <strong>Improve</strong> recompute live in this mockup only.</p>
+        </div>
+      </div>
+      <div class="score-card">
+        <div class="score-top">
+          <div>
+            <div class="eyebrow">Script score</div>
+            <div class="score-big"><span id="overallScore">89</span><span>/100</span></div>
+          </div>
+          <div class="score-label strong" id="scoreLabel">Strong</div>
+        </div>
+        <div class="metric" data-metric="hook">
+          <div class="metric-row"><span>Hook strength</span><span id="metricHook">94</span></div>
+          <div class="metric-bar"><i id="barHook" style="width:94%"></i></div>
+        </div>
+        <div class="metric" data-metric="clarity">
+          <div class="metric-row"><span>Clarity</span><span id="metricClarity">91</span></div>
+          <div class="metric-bar"><i id="barClarity" style="width:91%"></i></div>
+        </div>
+        <div class="metric" data-metric="credibility">
+          <div class="metric-row"><span>Credibility</span><span id="metricCredibility">88</span></div>
+          <div class="metric-bar"><i id="barCredibility" style="width:88%"></i></div>
+        </div>
+        <div class="metric" data-metric="pacing">
+          <div class="metric-row"><span>Pacing</span><span id="metricPacing">84</span></div>
+          <div class="metric-bar"><i id="barPacing" style="width:84%"></i></div>
+        </div>
+        <div class="metric" data-metric="cta">
+          <div class="metric-row"><span>CTA</span><span id="metricCta">68</span></div>
+          <div class="metric-bar"><i id="barCta" style="width:68%"></i></div>
+        </div>
+        <div class="weak-box" id="weakBox">
+          <strong id="weakTitle">Weakest section · CTA</strong>
+          <p id="weakReason">The CTA is clear, but not specific enough to earn a save.</p>
+          <button class="btn" id="fixWeakBtn" style="width:100%" type="button" onclick="fixWeakest()">Fix weakest section</button>
+        </div>
+      </div>
+      <div class="quick-card">
+        <h3>Quick actions</h3>
+        <button class="quick-action" type="button" onclick="setEditable()">✎ &nbsp;Edit manually</button>
+        <button class="quick-action" type="button" onclick="toast('Script shortened to 32 seconds')">↘ &nbsp;Shorten to 30 seconds</button>
+        <button class="quick-action" type="button" onclick="makeMoreViral()">✦ &nbsp;Make more viral</button>
+        <button class="quick-action" type="button" onclick="copyScript()">▣ &nbsp;Copy full script</button>
+        <button class="quick-action" type="button" onclick="resetScores()">↺ &nbsp;Reset demo scores</button>
+      </div>
+    </div>
+    <div class="inspector-panel" id="productionPanel">
+      <div class="production-card">
+        <h3>Production notes</h3>
+        <div class="note-block"><div class="note-title">⌖ Setup</div><p>Film in a kitchen or simple clean background. Keep the camera at eye level with soft light from the front.</p></div>
+        <div class="note-block"><div class="note-title">◷ Duration</div><p>30 to 45 seconds · target 34 seconds</p></div>
+        <div class="note-block"><div class="note-title">◉ Delivery</div><p>Fast, confident and conversational. Pause briefly after the opening line.</p></div>
+        <div class="note-block"><div class="note-title">▣ B-roll checklist</div><ul><li>Five-item paper menu</li><li>Cash counted on a counter</li><li>Pop-up food table</li><li>Busy small event</li></ul></div>
+        <div class="note-block"><div class="note-title">♫ Music</div><div class="music-chip"><div><strong>Confident hustle</strong><span>100 to 120 BPM</span></div><button class="text-button" type="button" onclick="toast('Music reference copied')">Copy</button></div></div>
+        <div class="note-block"><div class="note-title">✂ Edit</div><p>Cut every 1.5 to 2 seconds. Use bold captions and one subtle zoom on the key insight. Avoid flashy transitions.</p></div>
+      </div>
+      <button class="btn primary" style="width:100%;height:44px" type="button" onclick="toast('Filming mode opened')">Start filming</button>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/** Demo health metrics matching the approved mockup screenshots. */
+const INITIAL_HEALTH = {
+  hook: 94,
+  clarity: 91,
+  credibility: 88,
+  pacing: 84,
+  cta: 68,
+};
+const INITIAL_SECTIONS = {
+  hook: 94,
+  problem: 88,
+  story: 83,
+  takeaway: 79,
+  cta: 68,
+};
+const INITIAL_CTA_TEXT = "Save this if you are serious about opening your own place, and follow for the next step.";
+const FIXED_CTA_TEXT = "Save this, then comment MENU if you want my 5-item pop-up checklist.";
+
+const hooks = [
+  {
+    spoken: "I ran my first restaurant out of a parking lot with $300 and a borrowed griddle.",
+    text: "NO LEASE. NO CULINARY SCHOOL. JUST THIS.",
+    visual: "Hands counting a small stack of cash beside a five-item paper menu.",
+    score: 94,
+  },
+  {
+    spoken: "Culinary school is actually the slowest way to open a restaurant.",
+    text: "CULINARY SCHOOL IS NOT STEP ONE.",
+    visual: "Close-up of a culinary school brochure sliding out of frame.",
+    score: 91,
+  },
+  {
+    spoken: "You can open a restaurant with zero experience. Here is how.",
+    text: "ZERO EXPERIENCE? START HERE.",
+    visual: "You stepping into an empty pop-up space and pointing at a simple menu.",
+    score: 87,
+  },
+];
+
+let health = { ...INITIAL_HEALTH };
+let sections = { ...INITIAL_SECTIONS };
+let ctaFixed = false;
+
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function computeOverall(h) {
+  return Math.round(
+    0.3 * h.hook +
+      0.25 * h.clarity +
+      0.15 * h.credibility +
+      0.15 * h.pacing +
+      0.15 * h.cta
+  );
+}
+
+function computeReady(overall) {
+  return clamp(Math.round(overall - 5), 0, 100);
+}
+
+function scoreLabel(overall) {
+  if (overall >= 85) return { text: "Strong", cls: "strong" };
+  if (overall >= 70) return { text: "Good", cls: "good" };
+  return { text: "Needs work", cls: "needs" };
+}
+
+function weakestSection() {
+  const entries = Object.entries(sections);
+  entries.sort((a, b) => a[1] - b[1]);
+  return entries[0];
+}
+
+function renderHealth() {
+  const overall = computeOverall(health);
+  const ready = computeReady(overall);
+  const label = scoreLabel(overall);
+
+  document.getElementById("overallScore").textContent = String(overall);
+  const labelEl = document.getElementById("scoreLabel");
+  labelEl.textContent = label.text;
+  labelEl.className = "score-label " + label.cls;
+
+  const map = [
+    ["Hook", "metricHook", "barHook", health.hook],
+    ["Clarity", "metricClarity", "barClarity", health.clarity],
+    ["Credibility", "metricCredibility", "barCredibility", health.credibility],
+    ["Pacing", "metricPacing", "barPacing", health.pacing],
+    ["CTA", "metricCta", "barCta", health.cta],
+  ];
+  map.forEach(([, mid, bid, val]) => {
+    document.getElementById(mid).textContent = String(val);
+    document.getElementById(bid).style.width = val + "%";
+  });
+
+  document.getElementById("readyBar").style.width = ready + "%";
+  document.getElementById("readyCopy").textContent = "Script ready · " + ready + "%";
+
+  Object.keys(sections).forEach((key) => {
+    const scoreEl = document.querySelector('[data-section-score="' + key + '"]');
+    const dotEl = document.querySelector('[data-section-dot="' + key + '"]');
+    if (scoreEl) scoreEl.textContent = String(sections[key]);
+    if (dotEl) {
+      dotEl.classList.toggle("warn", sections[key] < 75);
+    }
+  });
+
+  const [weakKey, weakScore] = weakestSection();
+  const titles = {
+    hook: "Hook",
+    problem: "Problem setup",
+    story: "Story or example",
+    takeaway: "Key takeaway",
+    cta: "CTA",
+  };
+  const reasons = {
+    hook: "Hook could stop scroll harder with a sharper open loop.",
+    problem: "Problem setup is clear but could name a sharper belief.",
+    story: "Story works; tighten specificity for credibility.",
+    takeaway: "Takeaway is solid; make the memorable line shorter.",
+    cta: "The CTA is clear, but not specific enough to earn a save.",
+  };
+
+  const weakBox = document.getElementById("weakBox");
+  const fixBtn = document.getElementById("fixWeakBtn");
+  if (ctaFixed && weakKey !== "cta") {
+    weakBox.classList.add("fixed");
+    document.getElementById("weakTitle").textContent = "Weakest section · " + titles[weakKey] + " (" + weakScore + ")";
+    document.getElementById("weakReason").textContent =
+      "CTA is fixed. Next opportunity: " + reasons[weakKey];
+    fixBtn.textContent = "Fix weakest section";
+    fixBtn.disabled = false;
+  } else if (ctaFixed) {
+    weakBox.classList.add("fixed");
+    document.getElementById("weakTitle").textContent = "Weakest section · CTA (improved)";
+    document.getElementById("weakReason").textContent =
+      "CTA now asks for a specific, low-friction action (comment MENU).";
+    fixBtn.textContent = "CTA fixed";
+    fixBtn.disabled = true;
+  } else {
+    weakBox.classList.remove("fixed");
+    document.getElementById("weakTitle").textContent =
+      "Weakest section · " + titles[weakKey];
+    document.getElementById("weakReason").textContent = reasons[weakKey];
+    fixBtn.textContent = "Fix weakest section";
+    fixBtn.disabled = false;
+  }
+}
+
+function fixWeakest() {
+  if (ctaFixed) {
+    toast("CTA already fixed in this demo");
+    return;
+  }
+  ctaFixed = true;
+  health.cta = 82;
+  sections.cta = 82;
+  document.getElementById("ctaText").textContent = FIXED_CTA_TEXT;
+  const ctaCard = document.querySelector('[data-section="cta"]');
+  if (ctaCard) {
+    ctaCard.classList.remove("collapsed");
+    ctaCard.querySelector(".chev").textContent = "⌃";
+  }
+  renderHealth();
+  toast("CTA improved · score recalculated");
+}
+
+function makeMoreViral() {
+  health.hook = clamp(health.hook + 2, 0, 100);
+  health.clarity = clamp(health.clarity + 1, 0, 100);
+  health.pacing = clamp(health.pacing + 2, 0, 100);
+  sections.hook = health.hook;
+  renderHealth();
+  toast("Generated a more viral version (demo bump)");
+}
+
+function resetScores() {
+  health = { ...INITIAL_HEALTH };
+  sections = { ...INITIAL_SECTIONS };
+  ctaFixed = false;
+  document.getElementById("ctaText").textContent = INITIAL_CTA_TEXT;
+  selectHook(document.querySelectorAll(".hook-option")[0], 0, true);
+  renderHealth();
+  toast("Demo scores reset to screenshot baseline");
+}
+
+function toggleSection(head) {
+  const card = head.parentElement;
+  card.classList.toggle("collapsed");
+  const open = !card.classList.contains("collapsed");
+  head.querySelector(".chev").textContent = open ? "⌃" : "⌄";
+  document.querySelectorAll(".section-card").forEach((c) => c.classList.remove("active"));
+  if (open) card.classList.add("active");
+}
+
+function toggleIdea() {
+  const card = document.getElementById("ideaCard");
+  card.classList.toggle("collapsed");
+  document.getElementById("ideaChev").textContent = card.classList.contains("collapsed")
+    ? "⌄"
+    : "⌃";
+}
+
+function toggleHooks() {
+  document.getElementById("hookOptions").classList.toggle("hidden");
+}
+
+function selectHook(el, index, silent) {
+  document.querySelectorAll(".hook-option").forEach((x) => x.classList.remove("selected"));
+  if (el) el.classList.add("selected");
+  const h = hooks[index];
+  document.getElementById("visualHook").innerHTML = "<em>" + h.visual + "</em>";
+  document.getElementById("spokenHook").textContent = h.spoken;
+  document.getElementById("onScreenHook").innerHTML = "<strong>" + h.text + "</strong>";
+  document.getElementById("phoneCopy").innerHTML = h.text.replaceAll(".", ".<br>");
+  health.hook = h.score;
+  sections.hook = h.score;
+  renderHealth();
+  if (!silent) toast("Hook " + (index + 1) + " selected · score " + h.score);
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll(".inspector-tab").forEach((x) => x.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll(".inspector-panel").forEach((x) => x.classList.remove("active"));
+  document.getElementById(tab + "Panel").classList.add("active");
+}
+
+function toggleLegend() {
+  const card = document.getElementById("legendCard");
+  card.classList.toggle("open");
+  document.getElementById("legendChev").textContent = card.classList.contains("open")
+    ? "⌃"
+    : "⌄";
+}
+
+function setEditable() {
+  document.querySelectorAll(".layer-text").forEach((x) => (x.contentEditable = "true"));
+  toast("Manual editing enabled");
+}
+
+function applyRefine() {
+  const val = document.getElementById("refineInput").value.trim();
+  if (!val) {
+    toast("Type an instruction first");
+    return;
+  }
+  // Demo: slight CTA/hook bump so health panel feels alive
+  if (/cta|call to action|save/i.test(val)) {
+    health.cta = clamp(health.cta + 6, 0, 100);
+    sections.cta = health.cta;
+  } else if (/hook|contrarian|scroll/i.test(val)) {
+    health.hook = clamp(health.hook + 3, 0, 100);
+    sections.hook = health.hook;
+    selectHook(document.querySelectorAll(".hook-option")[1], 1, true);
+  } else {
+    health.clarity = clamp(health.clarity + 2, 0, 100);
+  }
+  renderHealth();
+  toast("AI improvement applied (demo)");
+  document.getElementById("refineInput").value = "";
+}
+
+function copyScript() {
+  const text = [...document.querySelectorAll(".layer-text")]
+    .map((x) => x.innerText)
+    .join("\n\n");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast("Full script copied"),
+      () => toast("Could not copy. Select text manually.")
+    );
+  } else {
+    toast("Clipboard unavailable in this browser");
+  }
+}
+
+function toggleInspector() {
+  document.getElementById("inspector").classList.toggle("open");
+}
+
+function filterScripts(q) {
+  const query = (q || "").trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll(".script-item").forEach((item) => {
+    const hay = (
+      (item.dataset.title || "") +
+      " " +
+      (item.dataset.snippet || "")
+    ).toLowerCase();
+    const match = !query || hay.includes(query);
+    item.style.display = match ? "" : "none";
+    if (match) shown += 1;
+  });
+  document.getElementById("historyCount").textContent = shown + " scripts shown";
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+document.querySelectorAll(".script-item").forEach((item) => {
+  item.onclick = () => {
+    document.querySelectorAll(".script-item").forEach((x) => x.classList.remove("active"));
+    item.classList.add("active");
+    const title = item.dataset.title || item.querySelector("strong").textContent;
+    document.getElementById("scriptTitle").textContent = title;
+    document.getElementById("ideaText").textContent = item.dataset.snippet || title;
+    toast("Script opened (demo content stays on restaurant sample)");
+  };
+});
+
+document.getElementById("refineInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    applyRefine();
+  }
+});
+
+renderHealth();
+</script>
+</body>
+</html>

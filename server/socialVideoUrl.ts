@@ -63,8 +63,15 @@ function parseTikTok(input: string): ParsedCollectedVideoUrl | null {
 }
 
 function parseYouTube(input: string): ParsedCollectedVideoUrl | null {
+  const shortsId = input.match(YOUTUBE_SHORTS_RE)?.[1];
+  if (shortsId) {
+    return {
+      platform: "youtube",
+      externalId: shortsId,
+      canonicalUrl: `https://www.youtube.com/shorts/${shortsId}`,
+    };
+  }
   const id =
-    input.match(YOUTUBE_SHORTS_RE)?.[1] ||
     input.match(YOUTUBE_WATCH_RE)?.[1] ||
     input.match(YOUTUBE_BE_RE)?.[1] ||
     null;
@@ -72,7 +79,7 @@ function parseYouTube(input: string): ParsedCollectedVideoUrl | null {
   return {
     platform: "youtube",
     externalId: id,
-    canonicalUrl: `https://www.youtube.com/shorts/${id}`,
+    canonicalUrl: `https://www.youtube.com/watch?v=${id}`,
   };
 }
 

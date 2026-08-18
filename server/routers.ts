@@ -136,6 +136,10 @@ import {
   claimScriptGeneratorToStudio,
   previewScriptGeneratorPack,
 } from "./scriptGeneratorPreview";
+import {
+  previewTranscriptGenerator,
+} from "./transcriptGeneratorPreview";
+import { TRANSCRIPT_GENERATOR_VARIANTS } from "@shared/transcriptGeneratorLanding";
 import { toSavedListTranscriptionSummary } from "@shared/savedListTranscription";
 import type { SavedListTranscriptionSummary } from "@shared/savedListTranscription";
 import { getOnboardingGenerationProgress } from "./onboardingGenerationProgress";
@@ -7124,7 +7128,7 @@ Return JSON only:
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "Could not parse that link. Paste an Instagram Reel, TikTok video, or YouTube Shorts URL.",
+              "Could not parse that link. Paste an Instagram Reel, TikTok video, or YouTube URL.",
           });
         }
 
@@ -7377,6 +7381,40 @@ Return JSON only:
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: formatIdeaScriptErrorForUser(error, "script"),
+          });
+        }
+      }),
+  }),
+
+  transcriptGenerator: router({
+    preview: publicProcedure
+      .input(
+        z.object({
+          url: z.string().min(8).max(2000),
+          variant: z.enum([
+            "instagram",
+            "tiktok",
+            "youtubeShorts",
+            "youtube",
+          ]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          if (!(TRANSCRIPT_GENERATOR_VARIANTS as string[]).includes(input.variant)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid variant." });
+          }
+          return await previewTranscriptGenerator({
+            url: input.url,
+            variant: input.variant,
+            clientIp: clientIpFromRequest(ctx.req),
+          });
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Transcript generator] preview failed:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not generate that transcript. Please try again.",
           });
         }
       }),

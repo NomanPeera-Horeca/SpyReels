@@ -57,10 +57,30 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
     summary:
       "Free Instagram Reels script generator with filming notes, caption, and music. Write a Reel script and shoot in Studio.",
   },
+  "/free-tools/instagram-transcript-generator": {
+    h1: "Instagram transcript generator",
+    summary:
+      "Paste an Instagram Reel URL and get a free transcript. Remake it in your voice and open the script with the source reel.",
+  },
+  "/free-tools/tiktok-transcript-generator": {
+    h1: "TikTok transcript generator",
+    summary:
+      "Paste a TikTok URL and get a free transcript. Remake the winning structure in your voice with the source beside your script.",
+  },
+  "/free-tools/youtube-shorts-transcript": {
+    h1: "YouTube Shorts transcript",
+    summary:
+      "Convert any YouTube Short to text, then remake the Short in your voice with SpyReels.",
+  },
+  "/free-tools/youtube-transcript-generator": {
+    h1: "YouTube transcript generator",
+    summary:
+      "Generate a YouTube transcript from any video URL, then remake a short cut in your voice.",
+  },
   "/free-tools": {
     h1: "SpyReels Free Tools",
     summary:
-      "Free creator tools to find viral videos by username, generate hooks, match B-roll, and write scripts. Start free.",
+      "Free creator tools to find viral videos by username, generate hooks, match B-roll, write scripts, and get transcripts. Start free.",
   },
   "/about": {
     h1: "About SpyReels and Noah Perry",

@@ -11,6 +11,7 @@ import { formatCoachHookTypeLabel } from "@shared/hookTypes";
 import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
   ArrowLeft,
+  Clapperboard,
   Clock,
   Copy,
   MapPin,
@@ -24,8 +25,10 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
 import { cn } from "@/lib/utils";
+import { stashBrollScriptForAfterAuth } from "@/lib/brollPendingScript";
 import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
 import {
   CoachScriptSchedulePanel,
@@ -33,6 +36,12 @@ import {
 } from "@/components/CoachScriptSchedulePanel";
 import Tooltip from "@/components/Tooltip";
 import { InstagramAudioPreviewList } from "@/components/InstagramAudioPreviewList";
+import { AiCoachScriptHealthPanel } from "@/components/AiCoachScriptHealthPanel";
+import {
+  deriveSectionScores,
+  findWeakestSection,
+  mapCoachJudgeToHealth,
+} from "@shared/coachScriptHealth";
 import {
   Sheet,
   SheetContent,
@@ -148,6 +157,10 @@ type HeitSectionProps = {
   editMode: boolean;
   onChange: (value: string) => void;
   mediumBody?: boolean;
+  score?: number | null;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  active?: boolean;
 };
 
 function HeitSection({
@@ -162,35 +175,72 @@ function HeitSection({
   editMode,
   onChange,
   mediumBody,
+  score,
+  collapsed,
+  onToggleCollapse,
+  active,
 }: HeitSectionProps) {
+  const scoreWarn = typeof score === "number" && score < 75;
   return (
-    <section className={`rounded-2xl p-5 border ${cardClass}`}>
-      <div className="flex gap-2.5 items-start mb-3">
+    <section
+      className={cn(
+        `rounded-2xl border overflow-hidden ${cardClass}`,
+        active && "ring-1 ring-blue-400/40 border-blue-400/50"
+      )}
+    >
+      <button
+        type="button"
+        className="flex w-full items-start gap-2.5 px-5 py-4 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+        onClick={onToggleCollapse}
+        aria-expanded={!collapsed}
+      >
         <div
           className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${badgeClass}`}
         >
           {badge}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className={`text-sm font-semibold ${labelClass ?? "text-gray-900 dark:text-gray-100"}`}>
             {label}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</p>
         </div>
-      </div>
-      {editMode ? (
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="min-h-[80px] resize-none bg-white dark:bg-gray-900 text-sm"
-        />
-      ) : (
-        <div
-          className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed whitespace-pre-line ${bodyClass ?? ""} ${mediumBody ? "font-medium" : ""} ${!value.trim() ? "text-muted-foreground italic" : ""}`}
-        >
-          {value.trim() ? value : "Missing. Use Refine with AI below to fill this section."}
+        {typeof score === "number" ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0 pt-1">
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                scoreWarn ? "bg-amber-400" : "bg-emerald-400"
+              )}
+            />
+            {score}
+          </span>
+        ) : null}
+        {onToggleCollapse ? (
+          collapsed ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+          )
+        ) : null}
+      </button>
+      {!collapsed ? (
+        <div className="px-5 pb-5">
+          {editMode ? (
+            <Textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="min-h-[80px] resize-none bg-white dark:bg-gray-900 text-sm"
+            />
+          ) : (
+            <div
+              className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed whitespace-pre-line ${bodyClass ?? ""} ${mediumBody ? "font-medium" : ""} ${!value.trim() ? "text-muted-foreground italic" : ""}`}
+            >
+              {value.trim() ? value : "Missing. Use Refine with AI below to fill this section."}
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -236,6 +286,10 @@ type AiCoachResultViewProps = {
   filmNowPending?: boolean;
   /** Read-only embed (onboarding aha): hides edit, refine, hook tools, and top actions. */
   previewMode?: boolean;
+  /** Fix weakest section via targeted refine. */
+  onFixWeakest?: () => void;
+  /** Run refine with an explicit instruction (quick actions). */
+  onRefineWithInstruction?: (instruction: string) => void;
 };
 
 export function AiCoachResultView({
@@ -265,12 +319,26 @@ export function AiCoachResultView({
   onFilmNow,
   filmNowPending,
   previewMode = false,
+  onFixWeakest,
+  onRefineWithInstruction,
 }: AiCoachResultViewProps) {
+  const [, setLocation] = useLocation();
   const refineInputRef = useRef<HTMLInputElement>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [originalIdeaOpen, setOriginalIdeaOpen] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState<"health" | "production">("health");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    hook: true,
+    problem: false,
+    story: false,
+    takeaway: false,
+    cta: false,
+  });
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
+  const health = mapCoachJudgeToHealth(production?.coachJudge);
+  const sectionScores = health ? deriveSectionScores(health) : null;
+  const weakest = sectionScores ? findWeakestSection(sectionScores) : null;
   const isGeneratingProduction =
     result.productionNotesStatus === "processing" ||
     result.productionNotesStatus === "pending";
@@ -286,6 +354,9 @@ export function AiCoachResultView({
     ? formatCoachHookTypeLabel(production.hookType)
     : "";
 
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
   useEffect(() => {
     if (saveToMyScriptsPending) {
       wasSavingRef.current = true;
@@ -329,6 +400,19 @@ export function AiCoachResultView({
     } catch {
       toast.error("Could not copy script");
     }
+  };
+
+  const goGenerateBroll = () => {
+    const text = flattenCoachScriptForCopy({
+      title: result.title,
+      hook: result.hook,
+      sections,
+      userFriendly: true,
+      hookVisualBeat,
+      hookOnScreenText,
+    });
+    stashBrollScriptForAfterAuth(text, true);
+    setLocation("/broll-library");
   };
 
   return (
@@ -419,6 +503,19 @@ export function AiCoachResultView({
                   </span>
                 )}
               </div>
+              {health ? (
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-[width]"
+                      style={{ width: `${health.readyPercent}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    Script ready · {health.readyPercent}%
+                  </span>
+                </div>
+              ) : null}
             </header>
 
             {originalIdea ? (
@@ -450,21 +547,49 @@ export function AiCoachResultView({
             ) : null}
 
             <div className="space-y-4">
-              <section className="rounded-2xl p-5 border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500">
-                <div className="flex gap-2.5 items-start mb-4">
+              <section
+                className={cn(
+                  "rounded-2xl border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500 overflow-hidden",
+                  openSections.hook && "ring-1 ring-blue-400/30"
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-start gap-2.5 px-5 py-4 text-left"
+                  onClick={() => toggleSection("hook")}
+                  aria-expanded={openSections.hook}
+                >
                   <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
                     1
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">
                       {VIRAL_SCRIPT_SECTION_LABELS.hook}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      All 3 layers in frame 0. Visual + spoken + on-screen text.
+                      Frame 0: visual + spoken + on-screen text.
                     </p>
                   </div>
-                </div>
+                  {sectionScores ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0 pt-1">
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          sectionScores.hook < 75 ? "bg-amber-400" : "bg-emerald-400"
+                        )}
+                      />
+                      {sectionScores.hook}
+                    </span>
+                  ) : null}
+                  {openSections.hook ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                  )}
+                </button>
 
+                {openSections.hook ? (
+                <div className="px-5 pb-5">
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px] gap-4 items-start">
                   <div className="min-w-0">
                     <div className="rounded-[14px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
@@ -560,8 +685,8 @@ export function AiCoachResultView({
                           {hookVariationsPending
                             ? "Generating..."
                             : hookVariations && hookVariations.length > 0
-                              ? "Hide hook ideas"
-                              : "Try 3 new hook ideas"}
+                              ? "Hide hook options"
+                              : "Compare 3 hook options"}
                         </button>
                       ) : null}
                       <p className="text-[11px] text-muted-foreground min-w-0 flex-1">
@@ -573,7 +698,7 @@ export function AiCoachResultView({
                       <div className="mt-3 space-y-2">
                         <div className="flex items-center justify-between gap-3 px-1">
                           <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            Choose a hook ({hookVariations.length} ideas)
+                            Compare hook options
                           </p>
                           <button
                             type="button"
@@ -584,13 +709,15 @@ export function AiCoachResultView({
                             Collapse
                           </button>
                         </div>
-                        {hookVariations.map((variation, index) => (
-                          <HookVariationCard
-                            key={`${variation.hookType}-${index}`}
-                            variation={variation}
-                            onSelect={() => onApplyHookVariation(variation)}
-                          />
-                        ))}
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          {hookVariations.map((variation, index) => (
+                            <HookVariationCard
+                              key={`${variation.hookType}-${index}`}
+                              variation={variation}
+                              onSelect={() => onApplyHookVariation(variation)}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -598,60 +725,80 @@ export function AiCoachResultView({
                   {hookOnScreenText ? (
                     <div className="flex flex-col items-center gap-1.5 sm:pt-1">
                       <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Preview
+                        Frame 0 preview
                       </p>
                       <ReelPreviewPhone onScreenText={hookOnScreenText} compact />
                     </div>
                   ) : null}
                 </div>
+                </div>
+                ) : null}
               </section>
 
               <HeitSection
                 badge="2"
                 badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                 label={VIRAL_SCRIPT_SECTION_LABELS.problem}
-                subtitle="Name the problem. Show it is bigger than they think. Build tension."
+                subtitle="Name the belief holding them back."
                 cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
                 value={editMode ? editDraft.explain : result.explain}
                 editMode={editMode}
                 onChange={(explain) => onEditDraftChange({ ...editDraft, explain })}
+                score={sectionScores?.problem ?? null}
+                collapsed={!openSections.problem}
+                onToggleCollapse={() => toggleSection("problem")}
+                active={openSections.problem}
               />
 
               <HeitSection
                 badge="3"
                 badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                 label={VIRAL_SCRIPT_SECTION_LABELS.story}
-                subtitle="One specific story or example. Concrete details so they see themselves in it."
+                subtitle="Make the idea concrete and believable."
                 cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
                 value={editMode ? editDraft.illustrate : result.illustrate}
                 editMode={editMode}
                 onChange={(illustrate) => onEditDraftChange({ ...editDraft, illustrate })}
+                score={sectionScores?.story ?? null}
+                collapsed={!openSections.story}
+                onToggleCollapse={() => toggleSection("story")}
+                active={openSections.story}
               />
 
-              <HeitSection
-                badge="4"
-                badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
-                subtitle="ONE clear takeaway. Not a list. One thing they should do differently."
-                cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
-                value={editMode ? editDraft.teach : result.teach}
-                editMode={editMode}
-                onChange={(teach) => onEditDraftChange({ ...editDraft, teach })}
-                mediumBody
-              />
+              {editMode || result.teach.trim() ? (
+                <HeitSection
+                  badge="4"
+                  badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
+                  subtitle="One clear thing the viewer should remember."
+                  cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
+                  value={editMode ? editDraft.teach : result.teach}
+                  editMode={editMode}
+                  onChange={(teach) => onEditDraftChange({ ...editDraft, teach })}
+                  mediumBody
+                  score={sectionScores?.takeaway ?? null}
+                  collapsed={!openSections.takeaway}
+                  onToggleCollapse={() => toggleSection("takeaway")}
+                  active={openSections.takeaway}
+                />
+              ) : null}
 
               {editMode || result.cta.trim() ? (
                 <HeitSection
                   badge="5"
                   badgeClass="bg-orange-500 text-white"
                   label={VIRAL_SCRIPT_SECTION_LABELS.cta}
-                  subtitle="Optional. Only when a natural next step helps a cold viewer."
+                  subtitle="Give the viewer one natural next step."
                   cardClass="border-orange-200 bg-orange-50 border-l-[3px] border-l-orange-500 dark:bg-orange-950/30 dark:border-orange-800"
                   labelClass="text-orange-700 dark:text-orange-300"
                   value={editMode ? editDraft.cta : result.cta}
                   editMode={editMode}
                   onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
                   mediumBody
+                  score={sectionScores?.cta ?? null}
+                  collapsed={!openSections.cta}
+                  onToggleCollapse={() => toggleSection("cta")}
+                  active={openSections.cta}
                 />
               ) : null}
             </div>
@@ -723,7 +870,7 @@ export function AiCoachResultView({
                     disabled={refinePending || !refineInput.trim()}
                     className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
                   >
-                    {refinePending ? "Refining..." : "Apply"}
+                    {refinePending ? "Improving..." : "Improve"}
                   </button>
                 </div>
               )}
@@ -735,8 +882,82 @@ export function AiCoachResultView({
           </main>
 
           <aside className="space-y-4 lg:sticky lg:top-6">
+            <div className="grid grid-cols-2 gap-1 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-gray-100/80 dark:bg-gray-900 p-1">
+              <button
+                type="button"
+                onClick={() => setInspectorTab("health")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-xs font-bold",
+                  inspectorTab === "health"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
+                    : "text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
+                )}
+              >
+                Script health
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectorTab("production")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-xs font-bold",
+                  inspectorTab === "production"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
+                    : "text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
+                )}
+              >
+                Production
+              </button>
+            </div>
+
+            {inspectorTab === "health" ? (
+              <AiCoachScriptHealthPanel
+                health={health}
+                weakest={weakest}
+                onFixWeakest={
+                  onFixWeakest
+                    ? () => {
+                        if (weakest) {
+                          const key =
+                            weakest.key === "problem"
+                              ? "problem"
+                              : weakest.key === "story"
+                                ? "story"
+                                : weakest.key === "takeaway"
+                                  ? "takeaway"
+                                  : weakest.key === "hook"
+                                    ? "hook"
+                                    : "cta";
+                          setOpenSections((prev) => ({ ...prev, [key]: true }));
+                          setInspectorTab("health");
+                        }
+                        onFixWeakest();
+                      }
+                    : undefined
+                }
+                fixPending={refinePending}
+                onEditManually={previewMode ? undefined : onToggleEdit}
+                onShorten={
+                  previewMode || !onRefineWithInstruction
+                    ? undefined
+                    : () =>
+                        onRefineWithInstruction(
+                          "Shorten the full script to about 30 seconds of spoken words. Keep HEIT structure. Cut filler only."
+                        )
+                }
+                onMakeViral={
+                  previewMode || !onRefineWithInstruction
+                    ? undefined
+                    : () =>
+                        onRefineWithInstruction(
+                          "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea and HEIT structure."
+                        )
+                }
+                onCopy={copyScript}
+                previewMode={previewMode}
+              />
+            ) : (
             <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
-              <h2 className="text-sm font-bold mb-4">Production Notes</h2>
+              <h2 className="text-sm font-bold mb-4">Production notes</h2>
               {isGeneratingProduction ? (
                 <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
@@ -765,28 +986,34 @@ export function AiCoachResultView({
               {production?.voiceTone && (
                 <div className="mb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                    Voice tone
+                    Delivery
                   </p>
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                     {truncateWords(production.voiceTone, 20)}
                   </p>
                 </div>
               )}
-              {production?.bRoll && production.bRoll.length > 0 && (
+              {!previewMode ? (
                 <div className="mb-4 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-3">
                   <span className="text-[10px] font-bold uppercase tracking-wide bg-violet-600 text-white px-2 py-0.5 rounded-full">
-                    Film these
+                    Next step
                   </span>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
-                    B-roll shots
+                    Generate B-roll
                   </p>
-                  <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc pl-4 space-y-1">
-                    {production.bRoll.map((shot, i) => (
-                      <li key={i}>{shot.shot ?? shot.example ?? "B-roll shot"}</li>
-                    ))}
-                  </ul>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">
+                    Match stock clips to each beat so you can finish filming this Reel in SpyReels.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={goGenerateBroll}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+                  >
+                    <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
+                    Generate B-roll
+                  </button>
                 </div>
-              )}
+              ) : null}
               {production?.instagramAudio && production.instagramAudio.length > 0 ? (
                 <div className="mb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
@@ -794,17 +1021,9 @@ export function AiCoachResultView({
                     Instagram audio
                   </p>
                   <p className="text-[10px] text-muted-foreground mb-2">
-                    Play a 30s preview when Apple Music has a match. Always confirm the exact sound in Instagram Reels.
+                    Two picks. Play a 30s preview when Apple Music has a match. Confirm the exact sound in Instagram Reels.
                   </p>
-                  <InstagramAudioPreviewList picks={production.instagramAudio} />
-                </div>
-              ) : production?.music ? (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Music2 className="h-3.5 w-3.5" />
-                    Instagram audio
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{production.music}</p>
+                  <InstagramAudioPreviewList picks={production.instagramAudio.slice(0, 2)} />
                 </div>
               ) : null}
               {production?.funnelStage && (
@@ -819,36 +1038,26 @@ export function AiCoachResultView({
               )}
               {!production?.setup &&
                 !production?.voiceTone &&
-                !production?.music &&
-                !production?.instagramAudio?.length &&
-                !production?.bRoll?.length && (
+                !production?.instagramAudio?.length && (
                 <p className="text-sm text-muted-foreground">
                   Production directions will appear here after generation.
                 </p>
               )}
                 </>
               )}
+              {!previewMode && onFilmNow ? (
+                <button
+                  type="button"
+                  onClick={onFilmNow}
+                  disabled={filmNowPending}
+                  className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                >
+                  <Video className="h-4 w-4" />
+                  {filmNowPending ? "Opening teleprompter..." : "Start filming"}
+                </button>
+              ) : null}
             </div>
-
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
-              <h2 className="text-sm font-bold mb-3">Quick Actions</h2>
-              <button
-                type="button"
-                onClick={copyScript}
-                className="flex items-center gap-2 w-full text-left text-sm font-medium text-violet-600 hover:text-violet-700 hover:underline py-2"
-              >
-                <Copy className="h-4 w-4 shrink-0" />
-                Copy full script
-              </button>
-              <button
-                type="button"
-                onClick={onReset}
-                className="flex items-center gap-2 w-full text-left text-sm font-medium text-violet-600 hover:text-violet-700 hover:underline py-2"
-              >
-                <ArrowLeft className="h-4 w-4 shrink-0" />
-                New script
-              </button>
-            </div>
+            )}
           </aside>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { SPYREELS_SITE_URL } from "./publicPageMeta";
 import { SPYREELS_AGGREGATE_RATING } from "./softwareApplicationSchema";
 import { SCRIPT_GENERATOR_COPY } from "./scriptGeneratorLanding";
+import { TRANSCRIPT_GENERATOR_COPY } from "./transcriptGeneratorLanding";
 
 export const SPYREELS_LOGO_URL =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
@@ -952,6 +953,54 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
         },
         {
           id: `script-gen-${variant}-faq`,
+          data: faqSchema(copy.faq),
+        },
+      ];
+    }
+
+    case "/free-tools/instagram-transcript-generator":
+    case "/free-tools/tiktok-transcript-generator":
+    case "/free-tools/youtube-shorts-transcript":
+    case "/free-tools/youtube-transcript-generator": {
+      const variant =
+        pathname === "/free-tools/tiktok-transcript-generator"
+          ? "tiktok"
+          : pathname === "/free-tools/youtube-shorts-transcript"
+            ? "youtubeShorts"
+            : pathname === "/free-tools/youtube-transcript-generator"
+              ? "youtube"
+              : "instagram";
+      const copy = TRANSCRIPT_GENERATOR_COPY[variant];
+      const canonical = `${SPYREELS_SITE_URL}${copy.path}`;
+      return [
+        {
+          id: `tx-gen-${variant}-breadcrumb`,
+          data: breadcrumbSchema([
+            { name: "Home", item: `${SPYREELS_SITE_URL}/` },
+            { name: "Free Tools", item: `${SPYREELS_SITE_URL}/free-tools` },
+            { name: copy.breadcrumbLabel, item: canonical },
+          ]),
+        },
+        {
+          id: `tx-gen-${variant}-software`,
+          data: {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: copy.schemaName,
+            url: canonical,
+            applicationCategory: "MultimediaApplication",
+            operatingSystem: "Web Browser",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            aggregateRating: SPYREELS_AGGREGATE_RATING,
+            description: copy.metaDescription,
+          },
+        },
+        {
+          id: `tx-gen-${variant}-faq`,
           data: faqSchema(copy.faq),
         },
       ];

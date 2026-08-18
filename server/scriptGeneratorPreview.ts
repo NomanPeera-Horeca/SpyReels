@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import {
   type ScriptPack,
+  type ScriptPackAudioPick,
   type ScriptPackBeat,
 } from "@shared/scriptGeneratorLanding";
 import { coachScripts } from "../drizzle/schema";
@@ -112,16 +113,8 @@ function normalizePack(raw: Record<string, unknown>, meta: string[]): ScriptPack
     };
   });
 
-  const musicRaw = Array.isArray(raw.music) ? raw.music : [];
-  const music = musicRaw.slice(0, 6).map((row) => {
-    const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
-    return {
-      k: String(r.k ?? r.key ?? "").trim() || "Note",
-      v: String(r.v ?? r.value ?? "").trim(),
-    };
-  });
-
   const hashtags = normalizeHashtags(raw.hashtags, meta);
+  const instagramAudio = normalizeInstagramAudio(raw.instagramAudio);
 
   return {
     meta,
@@ -132,15 +125,50 @@ function normalizePack(raw: Record<string, unknown>, meta: string[]): ScriptPack
         : [{ k: "Setup", v: "Chest-up talking head, soft front light, clean background." }],
     caption: stripTrailingHashtags(String(raw.caption ?? "").trim()) || "Save this and film your next short this week.",
     hashtags,
-    music:
-      music.filter((m) => m.v).length > 0
-        ? music.filter((m) => m.v)
-        : [{ k: "Mood", v: "Confident, modern, slight urgency." }],
+    instagramAudio,
   };
 }
 
 function stripTrailingHashtags(caption: string): string {
   return caption.replace(/(?:\s*#[\w]+)+\s*$/g, "").trim();
+}
+
+function normalizeInstagramAudio(raw: unknown): ScriptPackAudioPick[] {
+  const rows = Array.isArray(raw) ? raw : [];
+  const picks: ScriptPackAudioPick[] = [];
+  for (const row of rows.slice(0, 2)) {
+    const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+    const title = String(r.title ?? "").trim();
+    if (!title) continue;
+    picks.push({
+      title,
+      artist: String(r.artist ?? "").trim() || "Unknown",
+      searchHint: String(r.searchHint ?? r.search ?? title).trim() || title,
+      matchReason: String(r.matchReason ?? r.reason ?? "").trim() || "Fits the script energy.",
+      isTrending: picks.length === 0 ? true : Boolean(r.isTrending),
+    });
+  }
+  if (picks.length >= 2) {
+    picks[0]!.isTrending = true;
+    picks[1]!.isTrending = false;
+    return picks;
+  }
+  return [
+    {
+      title: "Confident Upbeat",
+      artist: "Reels Audio",
+      searchHint: "confident upbeat reel no lyrics",
+      matchReason: "Primary: mid-tempo under talking head without fighting the hook.",
+      isTrending: true,
+    },
+    {
+      title: "Soft Motivation",
+      artist: "Creator Beats",
+      searchHint: "soft motivation beat reels",
+      matchReason: "Backup if the primary is missing in Reels search.",
+      isTrending: false,
+    },
+  ];
 }
 
 function normalizeHashtags(raw: unknown, meta: string[]): string[] {
@@ -219,7 +247,7 @@ RULES:
 - Each beat needs a short filming note (on-screen text, cutaway, or delivery cue).
 - Caption: one post caption with a soft CTA (no more than 280 chars). Do not put hashtags inside the caption string.
 - Hashtags: 5 to 8 relevant hashtags as an array of strings WITHOUT the # symbol.
-- Music: mood, tempo, avoid, and drop cues.
+- Instagram audio: exactly 2 real Reels-searchable tracks (primary trending + backup). Title + artist only. No mood/tempo essays.
 
 Return JSON with this exact shape:
 {
@@ -237,11 +265,21 @@ Return JSON with this exact shape:
   ],
   "caption": "...",
   "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "music": [
-    { "k": "Mood", "v": "..." },
-    { "k": "Tempo", "v": "..." },
-    { "k": "Avoid", "v": "..." },
-    { "k": "Drop", "v": "..." }
+  "instagramAudio": [
+    {
+      "title": "Exact track name",
+      "artist": "Artist name",
+      "searchHint": "Phrase to paste in Instagram Reels audio search",
+      "matchReason": "Why this fits the script",
+      "isTrending": true
+    },
+    {
+      "title": "Backup track name",
+      "artist": "Artist name",
+      "searchHint": "Backup search phrase",
+      "matchReason": "When to use this instead",
+      "isTrending": false
+    }
   ]
 }`,
       },
@@ -303,8 +341,8 @@ function packToCoachFields(pack: ScriptPack) {
   const sections = {
     explain: engagement,
     illustrate: insight,
-    teach: "",
-    cta: takeaway,
+    teach: takeaway,
+    cta: "",
   };
 
   const setup =
@@ -314,16 +352,24 @@ function packToCoachFields(pack: ScriptPack) {
   const delivery = packRow(pack, "Delivery");
   const brollRaw = packRow(pack, "B-roll") || packRow(pack, "Broll");
   const cutPoints = packRow(pack, "Cut points");
-  const music =
-    pack.music.map((m) => `${m.k}: ${m.v}`).filter(Boolean).join(" · ") ||
-    "Confident mid-tempo beat under the open.";
+  const primaryAudio = pack.instagramAudio[0];
+  const music = primaryAudio
+    ? `${primaryAudio.title}${primaryAudio.artist ? ` · ${primaryAudio.artist}` : ""}`
+    : undefined;
 
   const productionCoach: Record<string, unknown> = {
     setup,
     voiceTone: delivery || undefined,
     pacingNotes: cutPoints || undefined,
     music,
-    musicMix: pack.music.find((m) => /tempo|drop|avoid/i.test(m.k))?.v || undefined,
+    musicMix: "Keep audio low under voice (about 8 to 12%). Duck during the spoken hook.",
+    instagramAudio: pack.instagramAudio.slice(0, 2).map((pick) => ({
+      title: pick.title,
+      artist: pick.artist,
+      searchHint: pick.searchHint,
+      matchReason: pick.matchReason,
+      isTrending: pick.isTrending,
+    })),
     caption: pack.caption,
     hashtags: pack.hashtags,
     textOverlay: hookNote.slice(0, 80) || undefined,

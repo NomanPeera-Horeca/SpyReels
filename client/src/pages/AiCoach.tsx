@@ -29,6 +29,13 @@ import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
 import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
 import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
 import { combineBodyFromSections, flattenCoachScriptForCopy, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
+import {
+  deriveSectionScores,
+  findWeakestSection,
+  FIX_CTA_REFINE_INSTRUCTION,
+  fixWeakestRefineInstruction,
+  mapCoachJudgeToHealth,
+} from "@shared/coachScriptHealth";
 import { scriptFilmPath } from "@shared/scriptFilm";
 import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import {
@@ -74,6 +81,12 @@ type AnalysisResult = {
 
 type Phase = "idle" | "analyzing" | "clarifying" | "generating" | "result";
 
+function readStudioScriptParam(): number | null {
+  if (typeof window === "undefined") return null;
+  const id = Number(new URLSearchParams(window.location.search).get("script"));
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 type PlanCardOption = {
   id: number;
   day: number;
@@ -117,6 +130,10 @@ export default function AiCoach() {
   const [isRouting, setIsRouting] = useState(false);
   const [activeCapability, setActiveCapability] = useState<CoachCapabilityId | null>(null);
   const [pendingScriptId, setPendingScriptId] = useState<number | null>(null);
+  /** Avoid flashing the empty Studio shell while /studio?script=id loads. */
+  const [openingScriptFromUrl, setOpeningScriptFromUrl] = useState(
+    () => readStudioScriptParam() != null
+  );
 
   const { data: historyData, isLoading: historyLoading } = trpc.studio.list.useQuery(
     { limit: 50 },
@@ -488,6 +505,7 @@ export default function AiCoach() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
       launchQueryHandledRef.current = true;
+      setOpeningScriptFromUrl(false);
       reset();
       window.history.replaceState(null, "", "/studio");
       return;
@@ -495,8 +513,12 @@ export default function AiCoach() {
     const scriptIdRaw = params.get("script");
     if (!scriptIdRaw) return;
     const id = Number(scriptIdRaw);
-    if (!Number.isFinite(id) || id <= 0) return;
+    if (!Number.isFinite(id) || id <= 0) {
+      setOpeningScriptFromUrl(false);
+      return;
+    }
     launchQueryHandledRef.current = true;
+    setOpeningScriptFromUrl(true);
     void utils.studio.get
       .fetch({ id })
       .then((data) => {
@@ -505,6 +527,9 @@ export default function AiCoach() {
       })
       .catch(() => {
         toast.error("Could not load that script");
+      })
+      .finally(() => {
+        setOpeningScriptFromUrl(false);
       });
     window.history.replaceState(null, "", "/studio");
   }, [posthog, utils.studio.get]);
@@ -794,6 +819,15 @@ export default function AiCoach() {
     </div>
   );
 
+  if (openingScriptFromUrl && !result) {
+    return shellLayout(
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
+        <p className="text-sm font-medium text-muted-foreground">Opening your script…</p>
+      </div>
+    );
+  }
+
   if (phase === "idle") {
     return shellLayout(
       <AiCoachCommandShell
@@ -947,6 +981,21 @@ export default function AiCoach() {
           if (refineInput.trim()) {
             refineMutation.mutate({ id: result.id, instruction: refineInput });
           }
+        }}
+        onRefineWithInstruction={(instruction) => {
+          setRefineInput(instruction);
+          refineMutation.mutate({ id: result.id, instruction });
+        }}
+        onFixWeakest={() => {
+          const production = parseProductionNotes(result.productionNotes);
+          const health = mapCoachJudgeToHealth(production?.coachJudge);
+          const sectionScores = health ? deriveSectionScores(health) : null;
+          const weakest = sectionScores ? findWeakestSection(sectionScores) : null;
+          const instruction = weakest
+            ? fixWeakestRefineInstruction(weakest)
+            : FIX_CTA_REFINE_INSTRUCTION;
+          setRefineInput(instruction);
+          refineMutation.mutate({ id: result.id, instruction });
         }}
         onReset={reset}
         onToggleEdit={() => setEditMode(true)}

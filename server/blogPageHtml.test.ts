@@ -226,6 +226,10 @@ describe("enrichSpaHtmlForPublicPath", () => {
     "/free-tools/ai-script-generator",
     "/free-tools/tiktok-script-generator",
     "/free-tools/instagram-reels-script-generator",
+    "/free-tools/instagram-transcript-generator",
+    "/free-tools/tiktok-transcript-generator",
+    "/free-tools/youtube-shorts-transcript",
+    "/free-tools/youtube-transcript-generator",
   ])("returns HTTP 200 with SEO meta for %s", async (pathname) => {
     const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, pathname, async () => undefined);
     expect(out.status).toBe(200);

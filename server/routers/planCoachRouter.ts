@@ -38,6 +38,8 @@ import {
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
 import { importRemakeScriptToStudioForWorkspace } from "../importRemakeToStudio";
+import { invokeCoachScriptJudge } from "../coachScriptJudge";
+import type { CoachScriptJudgeMeta } from "@shared/coachScriptSections";
 import {
   assignScriptingTag,
   enrichIdeaSavedScriptInBackground,
@@ -907,16 +909,54 @@ export const studioRouter = router({
       });
 
       const notes = parseProductionNotes(script.productionNotes);
-      const productionNotes = buildProductionNotesJson(
-        notes ?? {},
-        sections,
-        { contentFormat: script.contentFormat ?? undefined }
-      );
+      const hook = String(refinedPayload.hook ?? script.hook);
+
+      let coachJudge: CoachScriptJudgeMeta | undefined = notes?.coachJudge;
+      try {
+        const profile = await getCreatorCoachProfile(ctx.user.id);
+        const judged = await invokeCoachScriptJudge(
+          {
+            description: notes?.sourceDescription?.trim() || script.title || "Script refine",
+            niche: profile.niche || "General",
+            targetAudience: profile.targetAudience || "Short-form viewers",
+            brandDescription: profile.brandDescription,
+          },
+          {
+            title: script.title,
+            hook,
+            explain: sections.explain,
+            illustrate: sections.illustrate,
+            teach: sections.teach,
+            cta: sections.cta,
+          }
+        );
+        coachJudge = {
+          overallScore: judged.overallScore,
+          hookEffectiveness: judged.hookEffectiveness,
+          viewerSense: judged.viewerSense,
+          nicheFit: judged.nicheFit,
+          skipRatePrediction: judged.skipRatePrediction,
+          ctaQuality: judged.ctaQuality,
+          verdictPass: judged.verdictPass,
+          regenCount: notes?.coachJudge?.regenCount,
+        };
+      } catch (err) {
+        console.warn("[studio.refine] re-judge failed; keeping prior coachJudge", err);
+      }
+
+      const productionNotes = buildProductionNotesJson(notes ?? {}, sections, {
+        contentFormat: script.contentFormat ?? notes?.contentFormat ?? undefined,
+        funnelStage: notes?.funnelStage,
+        scriptMode: notes?.scriptMode,
+        hookType: notes?.hookType,
+        sourceDescription: notes?.sourceDescription,
+        coachJudge,
+      });
 
       await db
         .update(coachScripts)
         .set({
-          hook: String(refinedPayload.hook ?? script.hook),
+          hook,
           body: combineBodyFromSections(sections),
           callToAction: sections.cta || sections.teach,
           productionNotes,

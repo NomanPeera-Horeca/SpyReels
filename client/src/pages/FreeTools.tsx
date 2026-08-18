@@ -41,10 +41,10 @@ import {
 const PAGE_PATH = "/free-tools";
 const PAGE_TITLE = "Free Instagram Reels Tools | SpyReels";
 const PAGE_DESCRIPTION =
-  "Free SpyReels tools for creators: viral hook generator, B-roll, TikTok finder, YouTube Shorts finder, and Reel research. Start free.";
+  "Free SpyReels tools for creators: viral finders, hooks, B-roll, AI scripts, and transcript generators for Instagram, TikTok, and YouTube. Start free.";
 const PAGE_CANONICAL = `${SPYREELS_SITE_URL}${PAGE_PATH}`;
 
-type ToolCategory = "all" | "finders" | "hooks" | "broll" | "scripts";
+type ToolCategory = "all" | "finders" | "hooks" | "broll" | "scripts" | "transcripts";
 
 type HubTool = {
   title: string;
@@ -119,16 +119,48 @@ const HUB_TOOLS: HubTool[] = [
     imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
     category: "scripts",
   },
+  {
+    title: "Instagram Transcript Generator",
+    description:
+      "Paste a Reel URL. Get the full transcript free, then remake it in your voice.",
+    href: "/free-tools/instagram-transcript-generator",
+    imageUrl: RELATED_TOOL_THUMB_VIRAL_FINDER,
+    category: "transcripts",
+  },
+  {
+    title: "TikTok Transcript Generator",
+    description:
+      "Paste a TikTok URL. Get text free, then remake the structure in your voice.",
+    href: "/free-tools/tiktok-transcript-generator",
+    imageUrl: RELATED_TOOL_THUMB_TIKTOK_FINDER,
+    category: "transcripts",
+  },
+  {
+    title: "YouTube Shorts Transcript",
+    description:
+      "Convert any Short to text, then remake it in your voice with the source beside your script.",
+    href: "/free-tools/youtube-shorts-transcript",
+    imageUrl: RELATED_TOOL_THUMB_YOUTUBE_FINDER,
+    category: "transcripts",
+  },
+  {
+    title: "YouTube Transcript Generator",
+    description:
+      "Transcribe any YouTube video, then remake a short cut in your voice.",
+    href: "/free-tools/youtube-transcript-generator",
+    imageUrl: RELATED_TOOL_THUMB_YOUTUBE_FINDER,
+    category: "transcripts",
+  },
 ];
 
 const FAQ_ITEMS = [
   {
     q: "What free tools does SpyReels offer?",
-    a: "SpyReels Free Tools includes a viral hook generator, AI B-roll generator, TikTok viral video finder, YouTube Shorts viral finder, Instagram viral Reel finder, and an AI script generator. Start free and move from research to a remake in one place.",
+    a: "SpyReels Free Tools includes a viral hook generator, AI B-roll generator, TikTok and YouTube Shorts finders, Instagram viral Reel finder, AI script generators, and transcript generators for Instagram, TikTok, YouTube Shorts, and long YouTube. Start free and move from research to a remake in one place.",
   },
   {
     q: "Do I need a SpyReels account to try these tools?",
-    a: "Most tools let you preview free without a paid plan. Some flows ask you to sign up to unlock the full result or save your work. You can start free.",
+    a: "Most tools let you preview free without a paid plan. Transcript pages show the full text with no signup. Some flows ask you to sign up to remake in your voice or save your work. You can start free.",
   },
   {
     q: "Are these tools only for Instagram?",
@@ -140,7 +172,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I go viral without guessing?",
-    a: "Find what already works on peer accounts, remake the structure in your voice, and post consistently. SpyReels connects research, hooks, B-roll, and scripts so you spend less time scrolling and more time filming.",
+    a: "Find what already works on peer accounts, remake the structure in your voice, and post consistently. SpyReels connects research, hooks, B-roll, transcripts, and scripts so you spend less time scrolling and more time filming.",
   },
 ];
 
@@ -150,6 +182,7 @@ const FILTERS: { id: ToolCategory; label: string; icon: typeof LayoutGrid }[] = 
   { id: "hooks", label: "Hooks", icon: Sparkles },
   { id: "broll", label: "B-roll", icon: PlaySquare },
   { id: "scripts", label: "Scripts", icon: FileText },
+  { id: "transcripts", label: "Transcripts", icon: FileText },
 ];
 
 export default function FreeTools() {

@@ -166,6 +166,14 @@ export type ScriptPackBeat = {
   locked: boolean;
 };
 
+export type ScriptPackAudioPick = {
+  title: string;
+  artist: string;
+  searchHint: string;
+  matchReason: string;
+  isTrending: boolean;
+};
+
 export type ScriptPack = {
   meta: string[];
   beats: ScriptPackBeat[];
@@ -173,7 +181,8 @@ export type ScriptPack = {
   caption: string;
   /** Hashtags without leading #; UI can display with #. */
   hashtags: string[];
-  music: Array<{ k: string; v: string }>;
+  /** Exactly 2 Instagram Reels audio picks (primary + backup). */
+  instagramAudio: ScriptPackAudioPick[];
 };
 
 /** sessionStorage key: pending free-tool script pack to claim into Studio after auth. */
@@ -268,11 +277,21 @@ export function buildDemoScriptPack(
     hashtags: isTikTok
       ? ["tiktok", "fyp", "contentcreator", "script", "viral"]
       : ["reels", "instagramreels", "contentcreator", "script", "viral"],
-    music: [
-      { k: "Mood", v: "Confident, modern, slight urgency." },
-      { k: "Tempo", v: "Mid-tempo beat that hits on cuts." },
-      { k: "Avoid", v: "Soft lo-fi under a punchy hook (energy mismatch)." },
-      { k: "Drop", v: "Let the first beat land under your opening claim." },
+    instagramAudio: [
+      {
+        title: "Original Audio",
+        artist: "Creator Sounds",
+        searchHint: "upbeat confident reel beat",
+        matchReason: "Primary: clean mid-tempo under talking head without fighting the hook.",
+        isTrending: true,
+      },
+      {
+        title: "Motivational Montage",
+        artist: "Stock Beats",
+        searchHint: "motivational montage no lyrics",
+        matchReason: "Backup if the primary is missing in Reels search.",
+        isTrending: false,
+      },
     ],
   };
 }
