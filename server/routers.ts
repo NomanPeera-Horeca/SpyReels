@@ -132,6 +132,10 @@ import { generateSeoInstagramCaption } from "./generateSeoCaption";
 import { runOnboardingStartCreating } from "./onboardingStartCreating";
 import { expandHookToScript } from "./hookGeneratorExpandScript";
 import { buildHookTeaserPartial } from "@shared/hookGenerator";
+import {
+  claimScriptGeneratorToStudio,
+  previewScriptGeneratorPack,
+} from "./scriptGeneratorPreview";
 import { toSavedListTranscriptionSummary } from "@shared/savedListTranscription";
 import type { SavedListTranscriptionSummary } from "@shared/savedListTranscription";
 import { getOnboardingGenerationProgress } from "./onboardingGenerationProgress";
@@ -7329,6 +7333,54 @@ Return JSON only:
   }),
 
   hookGenerator: hookGeneratorRouter,
+
+  scriptGenerator: router({
+    preview: publicProcedure
+      .input(
+        z.object({
+          topic: z.string().min(10).max(800),
+          platform: z.string().min(2).max(64),
+          length: z.string().min(2).max(64),
+          tone: z.string().min(2).max(64),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          return await previewScriptGeneratorPack({
+            topic: input.topic,
+            platform: input.platform,
+            length: input.length,
+            tone: input.tone,
+          });
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Script generator] preview failed:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: formatIdeaScriptErrorForUser(error, "script"),
+          });
+        }
+      }),
+
+    claimToStudio: protectedProcedure
+      .input(z.object({ sessionToken: z.string().min(20).max(20000) }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await claimScriptGeneratorToStudio({
+            userId: ctx.user.id,
+            workspaceId: ctx.workspaceId,
+            sessionToken: input.sessionToken,
+          });
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Script generator] claimToStudio failed:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: formatIdeaScriptErrorForUser(error, "script"),
+          });
+        }
+      }),
+  }),
 
   // ── Script Ideas (Idea to Script Factory) ──
   ideas: router({

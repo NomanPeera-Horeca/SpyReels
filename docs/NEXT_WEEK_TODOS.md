@@ -52,17 +52,26 @@
 - [x] **Script Generator marketing pages** (acquisition + SEO) — hub + TikTok + Instagram wired Aug 17
   - Live routes: `/free-tools/ai-script-generator`, `/free-tools/tiktok-script-generator`, `/free-tools/instagram-reels-script-generator`
   - Schema: SoftwareApplication + **aggregateRating 4.5 / 12000** + Free offer (ElevenLabs-style SERP) also backfilled on Hooks, B-roll, finders, homepage, Brand Coach, 30-day plan
+  - [x] **Real research teaser funnel (all 3 pages)** — Aug 18: shared `AiScriptGeneratorLanding` + `scriptGenerator.preview` / `claimToStudio`
+    - Generate runs real LLM research (Restream-style loading steps)
+    - Teaser shows Hook + Engagement only; Insight/CTA locked
+    - Signup skips onboarding and lands on `/studio?script={id}` with the full researched script
   - After deploy: GSC request indexing on the three canonicals (+ optionally other free tools for stars refresh)
   - Phase 2 still open: YouTube Shorts script generator page
-- [ ] **Transcript free-tool pages (3)** — Instagram / YouTube / TikTok (acquisition + SEO)
-  - Why: SERP for `instagram script` is dominated by **Reel → text / transcript** tools (SpeakApp, GetTheScript, Tokscript); PASF also shows `script generator from video`. Separate intent from *writing* scripts.
+- [ ] **Transcript free-tool pages (3)** — Instagram / YouTube / TikTok (acquisition + SEO) — **next after script funnel ships**
+  - Why: SERP for `instagram script` is dominated by **Reel → text / transcript** tools (SpeakApp, GetTheScript, [Tokscript](https://tokscript.com/instagram-transcript-generator)); PASF also shows `script generator from video`. Separate intent from *writing* scripts.
   - Ship as **three Golden Standard pages** (not one thin hub):
     - [ ] Instagram Reel transcript generator (Reels to text / paste URL)
     - [ ] YouTube transcript / Shorts transcript page
     - [ ] TikTok transcript generator
   - Product wedge: transcript → spy structure → remake / expand into SpyReels script (not “no login forever” commodity clone)
   - Work: keyword research per platform → cannibalization check → mockups → routes under `/free-tools/` → Free Tools hub + footer + related tools → GSC
-  - Sequence: after Script Generator page ships (or parallel once Script Generator is approved)
+  - Sequence: after Script Generator research funnel is deployed
+- [ ] **SpyReels inside Claude / ChatGPT (MCP or equivalent)** — acquisition + retention (Tokscript-style)
+  - Inspiration: [Tokscript](https://tokscript.com/instagram-transcript-generator) “works inside Claude and ChatGPT” (MCP) — pull transcripts / profile / video analysis in chat
+  - Goal: let creators use SpyReels research (transcript, finder remake cues, script expand) from Claude/ChatGPT without leaving the chat
+  - Work: scope MCP vs custom GPT vs Claude connector → auth model → which tools to expose first (transcript URL, viral finder by handle, script from idea) → docs + marketing callout on transcript/script pages
+  - Do **not** copy Tokscript branding; keep SpyReels wedge (research → remake → Studio)
 - [ ] **30-Day Content Plan marketing landing page** (acquisition + SEO)
   - Product lives in-app at `/plan` (goal + platforms → Generate My 30-Day Plan)
   - Public route already exists at `/features/30-day-content-plan` (`ThirtyDayContentPlanFeature.tsx`) — audit vs Golden Standard; rebuild/improve if thin or not converting

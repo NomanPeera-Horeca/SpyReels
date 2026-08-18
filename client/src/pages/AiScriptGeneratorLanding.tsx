@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import {
   applyStandardPageMeta,
   cleanupSchemaScripts,
@@ -11,11 +12,14 @@ import {
 import { softwareApplicationSchema } from "@shared/softwareApplicationSchema";
 import {
   SCRIPT_GENERATOR_COPY,
+  SCRIPT_GENERATOR_PENDING_KEY,
+  SCRIPT_GENERATOR_RESEARCH_STEPS,
   SCRIPT_LENGTHS,
   SCRIPT_TONES,
-  buildDemoScriptPack,
+  type ScriptGeneratorPending,
   type ScriptGeneratorVariant,
   type ScriptPack,
+  type ScriptPackBeat,
 } from "@shared/scriptGeneratorLanding";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
@@ -47,6 +51,51 @@ import face6 from "@/assets/hook-generator/face-6.png";
 import studioPng from "@/assets/related-tools/ai-script-coach.png";
 
 const PROOF_FACES = [face1, face2, face3, face4, face5, face6];
+
+const LOCKED_PLACEHOLDER_BEATS: ScriptPackBeat[] = [
+  {
+    tag: "Insight",
+    spoken: "Your researched insight beat unlocks after you create a free account.",
+    note: "Filming note unlocks in Studio.",
+    locked: true,
+  },
+  {
+    tag: "Takeaway + CTA",
+    spoken: "Your researched takeaway and CTA unlock after you create a free account.",
+    note: "End card unlocks in Studio.",
+    locked: true,
+  },
+];
+
+function readPendingScript(): ScriptGeneratorPending | null {
+  try {
+    const raw = sessionStorage.getItem(SCRIPT_GENERATOR_PENDING_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ScriptGeneratorPending;
+    if (!parsed?.sessionToken || !parsed?.path) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function stashPendingScript(pending: ScriptGeneratorPending) {
+  sessionStorage.setItem(SCRIPT_GENERATOR_PENDING_KEY, JSON.stringify(pending));
+}
+
+function clearPendingScript() {
+  sessionStorage.removeItem(SCRIPT_GENERATOR_PENDING_KEY);
+}
+
+function teaserPackFromPreview(meta: string[], freeBeats: ScriptPackBeat[]): ScriptPack {
+  return {
+    meta,
+    beats: [...freeBeats.map((b) => ({ ...b, locked: false })), ...LOCKED_PLACEHOLDER_BEATS],
+    filming: [{ k: "Setup", v: "Full filming notes unlock in Studio after signup." }],
+    caption: "Full caption unlocks in Studio after signup.",
+    music: [{ k: "Mood", v: "Full music direction unlocks in Studio after signup." }],
+  };
+}
 
 type PackTab = "script" | "filming" | "caption" | "music";
 
@@ -114,17 +163,93 @@ export default function AiScriptGeneratorLanding({
 }) {
   const copy = SCRIPT_GENERATOR_COPY[variant];
   const canonical = `${SPYREELS_SITE_URL}${copy.path}`;
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   useCanonical(copy.path);
 
   const [topic, setTopic] = useState("");
   const [platform, setPlatform] = useState(copy.defaultPlatform);
   const [length, setLength] = useState<string>(SCRIPT_LENGTHS[1]);
   const [tone, setTone] = useState<string>(SCRIPT_TONES[0]);
-  const [generating, setGenerating] = useState(false);
   const [pack, setPack] = useState<ScriptPack | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [tab, setTab] = useState<PackTab>("script");
   const [authOpen, setAuthOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [researchStep, setResearchStep] = useState(0);
+  const [researchElapsed, setResearchElapsed] = useState(0);
+  const [claiming, setClaiming] = useState(false);
+  const resumedRef = useRef(false);
+
+  const previewMutation = trpc.scriptGenerator.preview.useMutation({
+    onSuccess: (data) => {
+      setSessionToken(data.sessionToken);
+      setPack(teaserPackFromPreview(data.meta, data.freeBeats));
+      setTab("script");
+      setError("");
+    },
+    onError: (err) => {
+      setError(err.message);
+      setPack(null);
+      setSessionToken(null);
+    },
+  });
+
+  const claimMutation = trpc.scriptGenerator.claimToStudio.useMutation({
+    onSuccess: (script) => {
+      clearPendingScript();
+      setClaiming(false);
+      window.location.href = `/studio?script=${script.id}`;
+    },
+    onError: (err) => {
+      setClaiming(false);
+      setError(err.message);
+    },
+  });
+
+  const researching = previewMutation.isPending;
+  const generating = researching || claiming || claimMutation.isPending;
+
+  useEffect(() => {
+    if (!researching) {
+      setResearchStep(0);
+      setResearchElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const secs = (Date.now() - started) / 1000;
+      setResearchElapsed(secs);
+      const idx = Math.min(
+        SCRIPT_GENERATOR_RESEARCH_STEPS.length - 1,
+        Math.floor(secs / 5)
+      );
+      setResearchStep(idx);
+    }, 200);
+    return () => window.clearInterval(tick);
+  }, [researching]);
+
+  const runClaim = useCallback(
+    (token: string) => {
+      setClaiming(true);
+      setError("");
+      claimMutation.mutate({ sessionToken: token });
+    },
+    [claimMutation]
+  );
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || resumedRef.current) return;
+    const pending = readPendingScript();
+    if (!pending) return;
+    if (pending.path !== copy.path) return;
+    resumedRef.current = true;
+    setTopic(pending.topic);
+    setPlatform(pending.platform);
+    setLength(pending.length);
+    setTone(pending.tone);
+    setSessionToken(pending.sessionToken);
+    runClaim(pending.sessionToken);
+  }, [authLoading, isAuthenticated, copy.path, runClaim]);
 
   useEffect(() => {
     applyStandardPageMeta({
@@ -177,29 +302,39 @@ export default function AiScriptGeneratorLanding({
   }, [canonical, copy, variant]);
 
   function openSignup() {
-    if (authLoading) return;
+    if (authLoading || !sessionToken) return;
     if (user) {
-      window.location.href = "/studio";
+      runClaim(sessionToken);
       return;
     }
+    stashPendingScript({
+      sessionToken,
+      topic: topic.trim(),
+      platform,
+      length,
+      tone,
+      path: copy.path,
+    });
     setAuthOpen(true);
   }
 
   function onGenerate(e: React.FormEvent) {
     e.preventDefault();
     if (topic.trim().length < 10) return;
-    setGenerating(true);
+    setError("");
     setPack(null);
-    window.setTimeout(() => {
-      setPack(buildDemoScriptPack(topic, platform, length, tone));
-      setTab("script");
-      setGenerating(false);
-    }, 700);
+    setSessionToken(null);
+    previewMutation.mutate({
+      topic: topic.trim(),
+      platform,
+      length,
+      tone,
+    });
   }
 
   return (
     <div className="min-h-screen bg-[#0c0b12] text-[#f4f2f8]">
-      <PublicHeader authReturnTo="/studio" />
+      <PublicHeader authReturnTo={copy.path} />
       <main className="mx-auto max-w-[920px] px-5 pb-20 pt-2">
         <section className="pb-2 pt-7 text-center">
           <PublicBreadcrumb
@@ -338,10 +473,15 @@ export default function AiScriptGeneratorLanding({
               disabled={generating}
               className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#7c3aed] to-[#8b5cf6] text-base font-extrabold text-white hover:opacity-95"
             >
-              {generating ? (
+              {researching ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating…
+                  Researching…
+                </>
+              ) : claiming || claimMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Opening your script…
                 </>
               ) : (
                 <>✦ {copy.ctaLabel}</>
@@ -349,7 +489,44 @@ export default function AiScriptGeneratorLanding({
             </Button>
           </form>
 
-          {pack ? (
+          {error ? (
+            <p className="mt-3 text-sm text-red-400" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {researching ? (
+            <div
+              className="mt-5 rounded-2xl border border-[#2c2740] bg-[#12101a] px-5 py-10 text-center"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="mx-auto mb-4 flex h-10 items-end justify-center gap-1.5" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <span
+                    key={i}
+                    className="w-2 animate-pulse rounded-full bg-[#8b5cf6]"
+                    style={{
+                      height: `${18 + ((i * 7) % 16)}px`,
+                      animationDelay: `${i * 120}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="text-lg font-extrabold text-white">
+                {SCRIPT_GENERATOR_RESEARCH_STEPS[researchStep]}
+              </p>
+              <p className="mt-2 text-sm text-[#9b96ad]">
+                {researchElapsed.toFixed(1)}s · building your real hook and engagement
+              </p>
+              <p className="mx-auto mt-5 max-w-sm text-xs leading-relaxed text-[#6f6a82]">
+                SpyReels researches your angle first, then shows a teaser. Sign in to open the full
+                script in Studio.
+              </p>
+            </div>
+          ) : null}
+
+          {pack && !researching ? (
             <div className="mt-5 space-y-3" aria-live="polite">
               <div className="overflow-hidden rounded-2xl border border-[#2c2740] bg-[#12101a]">
                 <div className="flex flex-wrap gap-2 border-b border-[#2c2740] bg-[rgba(139,92,246,0.08)] px-3.5 py-3">
@@ -407,7 +584,7 @@ export default function AiScriptGeneratorLanding({
                     </div>
                   ) : null}
                   {tab === "filming" ? (
-                    <div className="space-y-2">
+                    <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
                       {pack.filming.map((row) => (
                         <p key={row.k} className="text-sm text-[#e8e4f5]">
                           <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
@@ -419,10 +596,12 @@ export default function AiScriptGeneratorLanding({
                     </div>
                   ) : null}
                   {tab === "caption" ? (
-                    <p className="text-sm leading-relaxed text-[#e8e4f5]">{pack.caption}</p>
+                    <p className="select-none text-sm leading-relaxed text-[#e8e4f5] opacity-55 blur-[3px]" aria-hidden>
+                      {pack.caption}
+                    </p>
                   ) : null}
                   {tab === "music" ? (
-                    <div className="space-y-2">
+                    <div className="select-none space-y-2 opacity-55 blur-[3px]" aria-hidden>
                       {pack.music.map((row) => (
                         <p key={row.k} className="text-sm text-[#e8e4f5]">
                           <strong className="mr-2 inline-block min-w-[5.5rem] font-extrabold text-[#a78bfa]">
@@ -441,15 +620,26 @@ export default function AiScriptGeneratorLanding({
                   script in Studio
                 </h3>
                 <p className="mb-3 text-[13px] text-[#9b96ad]">
-                  Preview shows Hook + Engagement on the script tab. Create a free account to reveal Insight +
-                  CTA, full filming notes, caption, music direction, and teleprompter.
+                  This preview is from real research on your topic. Hook + Engagement are unlocked. Create a
+                  free account to open Insight + CTA, filming notes, caption, music, and teleprompter on your
+                  script page.
                 </p>
                 <Button
                   type="button"
                   onClick={openSignup}
+                  disabled={claiming || claimMutation.isPending || !sessionToken}
                   className="h-11 w-full rounded-[10px] bg-white font-extrabold text-[#4c1d95] hover:bg-white/95"
                 >
-                  ✦ {copy.ctaLabel}
+                  {claiming || claimMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Opening your script…
+                    </>
+                  ) : user ? (
+                    <>✦ Open full script in Studio</>
+                  ) : (
+                    <>✦ {copy.ctaLabel}</>
+                  )}
                 </Button>
               </div>
             </div>
@@ -672,8 +862,8 @@ export default function AiScriptGeneratorLanding({
         open={authOpen}
         onOpenChange={setAuthOpen}
         defaultMode="signup"
-        headline={`Create a free account to unlock your ${copy.ctaLabel.toLowerCase()} in Studio`}
-        returnTo="/studio"
+        headline={`Create a free account to open your full researched script in Studio`}
+        returnTo={copy.path}
       />
     </div>
   );

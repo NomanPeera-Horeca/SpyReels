@@ -30,7 +30,7 @@ const SHARED_FAQ_TAIL: Array<{ q: string; a: string }> = [
   },
   {
     q: "Is this free to try?",
-    a: "Yes. You can generate a preview free. Create a free account to unlock the full script pack and film in Studio.",
+    a: "Yes. SpyReels researches your topic and shows Hook plus Engagement free. Create a free account to open the full script pack in Studio.",
   },
   {
     q: "How is this different from ChatGPT?",
@@ -173,6 +173,26 @@ export type ScriptPack = {
   caption: string;
   music: Array<{ k: string; v: string }>;
 };
+
+/** sessionStorage key: pending free-tool script pack to claim into Studio after auth. */
+export const SCRIPT_GENERATOR_PENDING_KEY = "spyreels_script_gen_pending_v1";
+
+export type ScriptGeneratorPending = {
+  sessionToken: string;
+  topic: string;
+  platform: string;
+  length: string;
+  tone: string;
+  path: string;
+};
+
+export const SCRIPT_GENERATOR_RESEARCH_STEPS = [
+  "Researching your topic",
+  "Identifying key talking points",
+  "Brainstorming engaging angles",
+  "Structuring for maximum impact",
+  "Developing the main content",
+] as const;
 
 export function buildDemoScriptPack(
   topic: string,
