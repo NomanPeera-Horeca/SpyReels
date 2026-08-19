@@ -354,8 +354,9 @@ export function AiCoachResultView({
     takeaway: false,
     cta: false,
   });
-  const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState(0);
+  const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState<number | null>(null);
   const [hookOptionsOpen, setHookOptionsOpen] = useState(false);
+  const lastAutoAppliedHookKeyRef = useRef<string | null>(null);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
@@ -381,11 +382,23 @@ export function AiCoachResultView({
   };
   useEffect(() => {
     if (hookVariations && hookVariations.length > 0) {
-      setSelectedHookOptionIndex(0);
       setHookOptionsOpen(true);
+      const key = hookVariations
+        .map((v) => `${v.hookType}:${v.spokenHook}:${v.onScreenText}`)
+        .join("|");
+      // Auto-apply first option so Frame 0 / spoken / on-screen match the highlighted card.
+      if (lastAutoAppliedHookKeyRef.current !== key) {
+        lastAutoAppliedHookKeyRef.current = key;
+        setSelectedHookOptionIndex(0);
+        onApplyHookVariation(hookVariations[0]);
+      }
     } else {
       setHookOptionsOpen(false);
+      setSelectedHookOptionIndex(null);
+      lastAutoAppliedHookKeyRef.current = null;
     }
+    // onApplyHookVariation is stable enough for Studio; omit from deps to avoid loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hookVariations]);
 
   useEffect(() => {
@@ -747,14 +760,23 @@ export function AiCoachResultView({
                     ) : null}
                   </div>
 
-                  {hookOnScreenText ? (
-                    <div className="flex flex-col items-center gap-1.5 sm:pt-1">
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Frame 0 preview
-                      </p>
-                      <ReelPreviewPhone onScreenText={hookOnScreenText} compact />
-                    </div>
-                  ) : null}
+                  {(() => {
+                    const frame0Text =
+                      hookOnScreenText.trim() ||
+                      truncateWords(editMode ? editDraft.hook : result.hook, 8).toUpperCase();
+                    return (
+                      <div className="flex flex-col items-center gap-1.5 sm:pt-1">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Frame 0 preview
+                        </p>
+                        <ReelPreviewPhone
+                          key={frame0Text}
+                          onScreenText={frame0Text}
+                          compact
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
                 </div>
                 ) : null}

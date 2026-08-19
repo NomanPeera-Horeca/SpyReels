@@ -119,6 +119,8 @@ export default function AiCoach() {
   });
   const [refineInput, setRefineInput] = useState("");
   const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
+  /** Keeps the chosen compare-option through production-notes polls / saves. */
+  const appliedHookVariationRef = useRef<CoachHookVariation | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
   const [postDate, setPostDate] = useState<Date | undefined>(() => pickDefaultPostSchedule().postDate);
@@ -198,6 +200,7 @@ export default function AiCoach() {
       setResult(null);
       setEditMode(false);
       setHookVariations(null);
+      appliedHookVariationRef.current = null;
       setAnalysis(null);
       setClarifications([]);
       // Prefill the composer; keep the suggestion list closed until the user
@@ -216,14 +219,37 @@ export default function AiCoach() {
     options?: { clearHookVariations?: boolean }
   ) => {
     const switchingScript = !result || result.id !== data.id;
-    setResult(data);
-    const production = parseProductionNotes(data.productionNotes) ?? {};
+    if (options?.clearHookVariations || switchingScript) {
+      setHookVariations(null);
+      appliedHookVariationRef.current = null;
+    }
+
+    let next = data;
+    const applied = appliedHookVariationRef.current;
+    if (applied && !options?.clearHookVariations && !switchingScript) {
+      const production = parseProductionNotes(data.productionNotes) ?? {};
+      next = {
+        ...data,
+        hook: applied.spokenHook,
+        productionNotes: JSON.stringify({
+          ...production,
+          hookVisualBeat: applied.visualHook,
+          hookOnScreenText: applied.onScreenText,
+          frame0OnScreenText: applied.onScreenText,
+          textOverlay: applied.onScreenText,
+          hookType: applied.hookType,
+        }),
+      };
+    }
+
+    setResult(next);
+    const production = parseProductionNotes(next.productionNotes) ?? {};
     setEditDraft({
-      hook: data.hook,
-      explain: data.explain,
-      illustrate: data.illustrate,
-      teach: data.teach,
-      cta: data.cta,
+      hook: next.hook,
+      explain: next.explain,
+      illustrate: next.illustrate,
+      teach: next.teach,
+      cta: next.cta,
       hookVisualBeat: production.hookVisualBeat?.trim() ?? "",
       hookOnScreenText:
         production.hookOnScreenText?.trim() ||
@@ -232,11 +258,6 @@ export default function AiCoach() {
     });
     setPhase("result");
     setEditMode(false);
-    // Keep generated hook options across production-notes polls / saves on the same script.
-    // Clear when switching scripts or when refine rewrites content.
-    if (options?.clearHookVariations || switchingScript) {
-      setHookVariations(null);
-    }
   };
 
   // Same 2s interval as remake/transcription polling while production notes generate.
@@ -465,6 +486,7 @@ export default function AiCoach() {
 
   const applyHookVariation = (variation: CoachHookVariation) => {
     if (!result) return;
+    appliedHookVariationRef.current = variation;
     const production = parseProductionNotes(result.productionNotes) ?? {};
     const updatedNotes = JSON.stringify({
       ...production,
@@ -496,6 +518,7 @@ export default function AiCoach() {
     setResult(null);
     setEditMode(false);
     setHookVariations(null);
+    appliedHookVariationRef.current = null;
     setAttachedContext(null);
     setAgentMessage(null);
     setIsRouting(false);
