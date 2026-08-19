@@ -219,6 +219,30 @@
     animation: shake 0.3s ease;
   }
 
+  /* AuthDialog social-proof masonry (matches signup-split-layout mockup) */
+  @keyframes auth-testimonial-drift {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  .auth-testimonial-masonry {
+    animation: auth-testimonial-drift 48s linear infinite;
+  }
+
+  .auth-testimonial-masonry:hover {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-testimonial-masonry {
+      animation: none;
+    }
+  }
+
   /* Workspace UI (Dark Pro preview) */
   .workspace-reel-card {
     border-radius: calc(var(--radius) + 2px);

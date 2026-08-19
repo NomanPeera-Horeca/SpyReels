@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type AuthMode = "login" | "signup" | "forgot";
 
-/** Placeholder social proof (swap for real quotes later). */
+/** Placeholder social proof (swap for real quotes later). Matches signup mockup. */
 const AUTH_TESTIMONIALS = [
   {
     quote:
@@ -55,13 +55,48 @@ const AUTH_TESTIMONIALS = [
   },
   {
     quote:
+      "I used to save random videos and forget why they worked. Now every example comes with a reason I can apply on camera.",
+    highlight: "",
+    name: "Sofia Lane",
+    meta: "@sofiamoves",
+    color: "#4f46e5",
+  },
+  {
+    quote:
+      "I stopped copying trends blindly and started adapting them on purpose. Calmer posting because I know the angle before I film.",
+    highlight: "",
+    name: "Kiara Moon",
+    meta: "@kiarablends",
+    color: "#0891b2",
+  },
+  {
+    quote:
       "SpyReels replaced my old swipe folders and half-finished brainstorm docs. Everything I need to remake lives in one place.",
     highlight: "",
     name: "Cam Brooks",
     meta: "Strategy Lead, Current",
-    color: "#4f46e5",
+    color: "#7c3aed",
+  },
+  {
+    quote:
+      "Every time a student says they have no ideas, I open SpyReels. Ten minutes later they have formats and a script direction.",
+    highlight: "",
+    name: "Dev Patel",
+    meta: "@devteaches",
+    color: "#16a34a",
+  },
+  {
+    quote:
+      "We use it to sanity-check creative angles before spending on production. Saves us from expensive bad bets.",
+    highlight: "",
+    name: "Omar Haddad",
+    meta: "Performance Lead, Lantern",
+    color: "#9333ea",
   },
 ] as const;
+
+/** Duplicate for seamless infinite vertical loop (translateY -50%). */
+const AUTH_TESTIMONIALS_LOOP = [...AUTH_TESTIMONIALS, ...AUTH_TESTIMONIALS];
 
 function renderQuote(quote: string, highlight: string) {
   if (!highlight || !quote.includes(highlight)) return quote;
@@ -213,7 +248,7 @@ export function AuthDialog({
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
-        <div className="grid min-h-0 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+        <div className="grid min-h-0 md:h-[min(720px,calc(100vh-1.5rem))] md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           {/* Form */}
           <div className="flex min-h-0 flex-col justify-center overflow-y-auto bg-white px-5 py-7 sm:px-10 sm:py-9">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-violet-600">
@@ -402,16 +437,18 @@ export function AuthDialog({
             </p>
           </div>
 
-          {/* Social proof */}
+          {/* Social proof: infinite vertical drift (same as signup mockup) */}
           <aside className="relative hidden min-h-0 flex-col overflow-hidden border-l border-zinc-200 bg-gradient-to-b from-violet-50 via-zinc-100 to-slate-100 p-5 md:flex md:p-6">
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-extrabold tracking-tight text-zinc-900">
+            <h3 className="mb-3 flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-zinc-900">
               Loved by our users <span aria-hidden="true">💜</span>
             </h3>
-            <div className="min-h-0 flex-1 overflow-y-auto [mask-image:linear-gradient(180deg,transparent,black_8%,black_92%,transparent)]">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {AUTH_TESTIMONIALS.map((t) => (
+            <div
+              className="relative min-h-0 flex-1 overflow-hidden [mask-image:linear-gradient(180deg,transparent,black_6%,black_92%,transparent)] [-webkit-mask-image:linear-gradient(180deg,transparent,black_6%,black_92%,transparent)]"
+            >
+              <div className="auth-testimonial-masonry grid grid-cols-2 content-start gap-3">
+                {AUTH_TESTIMONIALS_LOOP.map((t, index) => (
                   <article
-                    key={t.name + t.meta}
+                    key={`${t.name}-${t.meta}-${index}`}
                     className="rounded-2xl border border-zinc-200/90 bg-white p-3.5 shadow-sm"
                   >
                     <div
