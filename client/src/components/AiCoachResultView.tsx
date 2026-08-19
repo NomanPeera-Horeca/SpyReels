@@ -95,53 +95,75 @@ function VisualHookLabel() {
   );
 }
 
-function HookVariationCard({
+function hookOptionReason(type: string): string {
+  switch (type) {
+    case "story":
+      return "Credibility + curiosity";
+    case "contrarian":
+      return "Pattern interruption";
+    case "specific_outcome":
+      return "Clear promise";
+    case "pain_point":
+      return "Pain + tension";
+    case "curiosity_gap":
+      return "Open loop";
+    case "question":
+      return "Viewer engagement";
+    case "shock_data":
+      return "Proof + surprise";
+    case "pov":
+      return "Immersion";
+    case "show_end_first":
+      return "Result first";
+    default:
+      return "Strong angle";
+  }
+}
+
+/** Compact 3-up picker from Script Studio mockup. Selecting updates hook above. */
+function HookOptionCard({
   variation,
+  score,
+  selected,
   onSelect,
 }: {
   variation: CoachHookVariation;
+  score: number;
+  selected: boolean;
   onSelect: () => void;
 }) {
   const typeLabel = formatCoachHookTypeLabel(variation.hookType);
+  const preview =
+    variation.spokenHook.trim().length > 72
+      ? `${variation.spokenHook.trim().slice(0, 69)}...`
+      : variation.spokenHook.trim();
+
   return (
-    <div className="group w-full rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-900 p-3 transition-colors hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-sm">
-      <div className="flex gap-3 items-start">
-        <div className="flex-1 min-w-0 space-y-2">
-          <span className="inline-block text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2 py-0.5 rounded-full">
-            Hook: {typeLabel}
-          </span>
-          <div>
-            <VisualHookLabel />
-            <p className="text-sm italic text-gray-700 dark:text-gray-300 mt-1">{variation.visualHook}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Spoken hook</p>
-            <p className="text-sm font-medium mt-1">{variation.spokenHook}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">On-screen text</p>
-            <p className="text-sm font-semibold mt-1">{variation.onScreenText}</p>
-          </div>
-        </div>
-
-        {variation.onScreenText.trim() ? (
-          <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
-            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Preview</p>
-            <ReelPreviewPhone onScreenText={variation.onScreenText} compact />
-          </div>
-        ) : null}
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "relative w-full min-w-0 rounded-[11px] border bg-white p-3 text-left transition dark:bg-gray-900",
+        selected
+          ? "border-violet-500 shadow-[0_0_0_1px_rgba(124,58,237,0.9)]"
+          : "border-gray-200 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-500"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-extrabold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
+          {typeLabel}
+        </span>
+        <span className="shrink-0 text-[11px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+          {score}
+        </span>
       </div>
-
-      <div className="mt-3 flex justify-end border-t border-blue-100 dark:border-blue-900/60 pt-3">
-        <button
-          type="button"
-          onClick={onSelect}
-          className="inline-flex items-center justify-center min-h-9 px-4 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          Use this hook
-        </button>
-      </div>
-    </div>
+      <h5 className="mt-2 text-xs font-semibold leading-snug text-gray-900 dark:text-gray-100">
+        {preview || "Untitled hook"}
+      </h5>
+      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+        {hookOptionReason(variation.hookType)}
+      </p>
+    </button>
   );
 }
 
@@ -334,6 +356,7 @@ export function AiCoachResultView({
     takeaway: false,
     cta: false,
   });
+  const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState(0);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
@@ -357,6 +380,12 @@ export function AiCoachResultView({
   const toggleSection = (key: string) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+  useEffect(() => {
+    if (hookVariations && hookVariations.length > 0) {
+      setSelectedHookOptionIndex(0);
+    }
+  }, [hookVariations]);
+
   useEffect(() => {
     if (saveToMyScriptsPending) {
       wasSavingRef.current = true;
@@ -690,35 +719,24 @@ export function AiCoachResultView({
                         </button>
                       ) : null}
                       <p className="text-[11px] text-muted-foreground min-w-0 flex-1">
-                        On-screen complements spoken (different words, same idea). Works muted.
+                        On-screen text complements spoken hook.
                       </p>
                     </div>
 
                     {hookVariations && hookVariations.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between gap-3 px-1">
-                          <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            Compare hook options
-                          </p>
-                          <button
-                            type="button"
-                            onClick={onDismissHookVariations}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                          >
-                            <ChevronUp className="h-3.5 w-3.5" />
-                            Collapse
-                          </button>
-                        </div>
-                        {/* Stack vertically: Studio main column is too narrow for 3-up. */}
-                        <div className="space-y-2">
-                          {hookVariations.map((variation, index) => (
-                            <HookVariationCard
-                              key={`${variation.hookType}-${index}`}
-                              variation={variation}
-                              onSelect={() => onApplyHookVariation(variation)}
-                            />
-                          ))}
-                        </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2.5">
+                        {hookVariations.map((variation, index) => (
+                          <HookOptionCard
+                            key={`${variation.hookType}-${index}`}
+                            variation={variation}
+                            score={94 - index * 3}
+                            selected={selectedHookOptionIndex === index}
+                            onSelect={() => {
+                              setSelectedHookOptionIndex(index);
+                              onApplyHookVariation(variation);
+                            }}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>

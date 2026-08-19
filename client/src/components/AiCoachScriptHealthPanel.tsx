@@ -102,7 +102,7 @@ export function AiCoachScriptHealthPanel({
               Weakest section · {weakest.label}
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-gray-300">{weakest.reason}</p>
-            {!previewMode && onFixWeakest ? (
+            {!previewMode && onFixWeakest && weakest.score < 75 ? (
               <button
                 type="button"
                 onClick={onFixWeakest}

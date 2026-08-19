@@ -338,6 +338,7 @@ export default function AiCoach() {
       setRefineInput("");
       void utils.studio.list.invalidate();
       posthog?.capture("ai_coach_script_refined", { script_id: data.id });
+      toast.success("Script updated");
     },
     onError: (err) => {
       toast.error(formatIdeaScriptErrorForUser(err, "script"));
@@ -476,7 +477,7 @@ export default function AiCoach() {
       hookVisualBeat: variation.visualHook,
       hookOnScreenText: variation.onScreenText,
     }));
-    setHookVariations(null);
+    // Keep compare grid open so selection updates the hook above (mockup behavior).
   };
 
   const reset = () => {

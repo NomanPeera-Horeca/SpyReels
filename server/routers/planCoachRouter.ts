@@ -39,6 +39,7 @@ import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { generateCoachScriptWithProgress, convertRoughScriptWithProgress, getCoachGenerationProgress } from "../coachGenerateWithProgress";
 import { importRemakeScriptToStudioForWorkspace } from "../importRemakeToStudio";
 import { invokeCoachScriptJudge } from "../coachScriptJudge";
+import { FIX_CTA_REFINE_INSTRUCTION, isVagueCoachCta } from "@shared/coachScriptHealth";
 import type { CoachScriptJudgeMeta } from "@shared/coachScriptSections";
 import {
   assignScriptingTag,
@@ -896,10 +897,10 @@ export const studioRouter = router({
       });
 
       const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const refinedPayload = normalizeCoachScriptPayload(
+      let refinedPayload = normalizeCoachScriptPayload(
         parseJsonFromLlm<Record<string, unknown>>(raw, {})
       );
-      const sections = sectionsFromGenerated({
+      let sections = sectionsFromGenerated({
         ...refinedPayload,
         explain: refinedPayload.explain ?? existingSections.explain,
         illustrate: refinedPayload.illustrate ?? existingSections.illustrate,
@@ -907,6 +908,44 @@ export const studioRouter = router({
         cta: refinedPayload.cta ?? refinedPayload.callToAction ?? existingSections.cta,
         hook: refinedPayload.hook ?? script.hook,
       });
+
+      // Fix-weakest CTA path: if the model left a vague CTA, force one specific rewrite.
+      const wantsCtaFix =
+        /call to action|\bcta\b/i.test(input.instruction) &&
+        /rewrite only|specific|comment/i.test(input.instruction);
+      if (wantsCtaFix && isVagueCoachCta(sections.cta)) {
+        const ctaPass = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: withAiFormattingRules(
+                "You write specific short-form CTAs. Return ONLY valid JSON with a cta field."
+              ),
+            },
+            {
+              role: "user",
+              content: `${FIX_CTA_REFINE_INSTRUCTION}
+
+Current hook: ${String(refinedPayload.hook ?? script.hook)}
+Current takeaway: ${sections.teach}
+Current weak CTA: ${sections.cta || "(empty)"}
+
+Return: {"cta":"..."}`,
+            },
+          ],
+          maxTokens: 256,
+          response_format: { type: "json_object" },
+        });
+        const ctaRaw = String(ctaPass.choices[0]?.message?.content ?? "{}");
+        const ctaPayload = normalizeCoachScriptPayload(
+          parseJsonFromLlm<Record<string, unknown>>(ctaRaw, {})
+        );
+        const nextCta = String(ctaPayload.cta ?? ctaPayload.callToAction ?? "").trim();
+        if (nextCta && !isVagueCoachCta(nextCta)) {
+          sections = { ...sections, cta: nextCta };
+          refinedPayload = { ...refinedPayload, cta: nextCta };
+        }
+      }
 
       const notes = parseProductionNotes(script.productionNotes);
       const hook = String(refinedPayload.hook ?? script.hook);

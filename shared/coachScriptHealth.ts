@@ -129,8 +129,25 @@ const WEAK_REASONS: Record<keyof CoachScriptSectionScores, string> = {
   problem: "Problem setup is clear but could name a sharper belief.",
   story: "Story works; tighten specificity for credibility.",
   takeaway: "Takeaway is solid; make the memorable line shorter.",
-  cta: "The CTA is clear, but not specific enough to earn a save.",
+  cta: "The CTA needs a specific next step (save + comment keyword, or follow for X), not a vague save line.",
 };
+
+/** True when a CTA is present but too vague to earn a save/comment. */
+export function isVagueCoachCta(cta: string): boolean {
+  const t = cta.trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  if (t.length < 24) return true;
+  if (/^save this[.!]?$/i.test(t)) return true;
+  if (/^save this before\b/i.test(lower) && !/\bcomment\b/.test(lower)) return true;
+  if (/^(follow|like|share)\b/i.test(lower) && !/\b(for|if|and)\b/.test(lower)) return true;
+  const hasSpecificAsk =
+    /\bcomment\b/i.test(lower) ||
+    /\bsave this\b.*\b(then|and|if)\b/i.test(lower) ||
+    /\bfollow\b.*\bfor\b/i.test(lower) ||
+    /\b(dm|share with|send this)\b/i.test(lower);
+  return !hasSpecificAsk;
+}
 
 export function findWeakestSection(
   sections: CoachScriptSectionScores
@@ -151,7 +168,7 @@ export function findWeakestSection(
 
 /** Instruction used by Fix weakest when CTA is the lowest score. */
 export const FIX_CTA_REFINE_INSTRUCTION =
-  "Rewrite ONLY the Call to Action (cta). Keep hook, problem setup, story, and takeaway unchanged. Make the CTA specific and low-friction so a cold viewer will save or comment (e.g. a concrete keyword to comment, or a clear next step). No insider names. Max 2 short sentences.";
+  'Rewrite ONLY the Call to Action (cta). Keep hook, problem setup, story, and takeaway unchanged. Replace vague "Save this…" lines with a specific A+B CTA: one clear action + why. Prefer: "Save this, then comment KEYWORD if you want [concrete deliverable]." Use a niche-relevant keyword. Max 2 short sentences. No insider names.';
 
 export function fixWeakestRefineInstruction(weakest: CoachScriptWeakest): string {
   if (weakest.isCta) return FIX_CTA_REFINE_INSTRUCTION;

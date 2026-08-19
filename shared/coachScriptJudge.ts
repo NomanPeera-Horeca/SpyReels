@@ -47,9 +47,12 @@ Score each dimension 1-10:
 - Penalize warm-ups, topic restatements, and soft guru openers.
 
 5) CTA quality
-- CTA is OPTIONAL.
-- Empty CTA can score high when ending on teach is better.
-- Fail (low score) only when a CTA is present and bad: insider names ("Comment ADAM"), team nicknames, unclear asks, or bolted-on comment spam.
+- CTA is OPTIONAL. Empty CTA can score high when ending on teach is better.
+- When a CTA is present it must be specific and low-friction for a cold viewer:
+  good: "Save this, then comment MENU if you want the 5-item checklist."
+  bad: vague "Save this before you sign anything." / insider names ("Comment ADAM") / unclear asks.
+- Score 8+ only for specific next steps (save + comment keyword, follow-for-X, or one clear action).
+- Score 6 or below for generic save/follow with no concrete ask.
 
 Pass rules:
 - overallScore >= ${COACH_SCRIPT_JUDGE_PASS_SCORE}

@@ -13,6 +13,7 @@ import SeoHubPage, { type SeoHubSub } from "./pages/seo/SeoHubPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import UsersPage from "./pages/UsersPage";
 import AdminOutreach from "@/pages/AdminOutreach";
+import CarouselLabPage from "./carouselLab/CarouselLabPage";
 
 const SEO_SUBS: SeoHubSub[] = ["health", "gsc", "bing", "ai-mentions", "bots", "sitemap"];
 
@@ -28,6 +29,7 @@ function parseSeoSub(loc: string): "redirect" | "invalid" | SeoHubSub {
 function adminTabFromPath(loc: string): string | null {
   if (loc.startsWith("/admin/traffic")) return "traffic";
   if (loc.startsWith("/admin/script-quality")) return "script-quality";
+  if (loc.startsWith("/admin/carousel-lab")) return "carousel-lab";
   if (loc.startsWith("/admin/blogs")) return "blogs";
   if (loc.startsWith("/admin/creators")) return "creators";
   if (loc.startsWith("/admin/emails")) return "emails";
@@ -81,6 +83,11 @@ export default function AdminEntry() {
   const tab = adminTabFromPath(loc);
   if (!tab) {
     return <NotFound />;
+  }
+
+  // Full-bleed prototype: do not wrap in AdminLayout card.
+  if (tab === "carousel-lab") {
+    return <CarouselLabPage />;
   }
 
   const userDetailMatch = loc.match(/^\/admin\/users\/(\d+)$/);

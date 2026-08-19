@@ -95,7 +95,7 @@ export function OnboardingAhaView({
       hook: variation.spokenHook,
       productionNotes: updatedNotes,
     });
-    setHookVariations(null);
+    // Keep compare grid open; selection updates the hook above.
   };
 
   const saveToLibraryMutation = trpc.studio.saveToLibrary.useMutation({
