@@ -1,0 +1,560 @@
+[
+  {
+    "keyword": "meedro",
+    "ads_volume": 170,
+    "labs_volume": 170,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 1.12,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "meedro ai",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 2.35,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "meedro viral finder",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "navigational",
+    "cpc": null,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "transitional hooks",
+    "ads_volume": 590,
+    "labs_volume": 590,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 4.83,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "free viral",
+    "ads_volume": 2900,
+    "labs_volume": 2900,
+    "kd": 3,
+    "intent": "informational",
+    "cpc": 4.42,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral library",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 6.62,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral finder com",
+    "ads_volume": 110,
+    "labs_volume": 110,
+    "kd": 0,
+    "intent": "navigational",
+    "cpc": 15.33,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "transitional hooks.com",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "navigational",
+    "cpc": 7.38,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "transition hooks.com",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 1,
+    "intent": "navigational",
+    "cpc": 7.38,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hooks.com",
+    "ads_volume": 140,
+    "labs_volume": 140,
+    "kd": 13,
+    "intent": "navigational",
+    "cpc": 8.22,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral finder free",
+    "ads_volume": 170,
+    "labs_volume": 170,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 5.52,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral finder instagram",
+    "ads_volume": 50,
+    "labs_volume": 70,
+    "kd": 0,
+    "intent": "navigational",
+    "cpc": 4.84,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral hooks",
+    "ads_volume": 320,
+    "labs_volume": 320,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 11.77,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook video",
+    "ads_volume": 210,
+    "labs_volume": 210,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 4.59,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "transitional hooks com",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 1,
+    "intent": "navigational",
+    "cpc": 7.38,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral video hooks for reels",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 2,
+    "intent": "informational",
+    "cpc": 9.21,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "transitional hooks for social media",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 1,
+    "intent": "navigational",
+    "cpc": 3.66,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "transitional hook com",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 4,
+    "intent": "navigational",
+    "cpc": 7.38,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "instagram reel finder",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "search viral",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 1,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viralfindr app",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 0,
+    "intent": "transactional",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "outlier hooks",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral video hooks",
+    "ads_volume": 40,
+    "labs_volume": 40,
+    "kd": 3,
+    "intent": "informational",
+    "cpc": 33.39,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "reels finder",
+    "ads_volume": 110,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook website",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 49,
+    "intent": "navigational",
+    "cpc": 7.56,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viralfindr reviews",
+    "ads_volume": 110,
+    "labs_volume": 110,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral hooks for reels",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 5,
+    "intent": "commercial",
+    "cpc": 5.65,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral video finder",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 2,
+    "intent": "informational",
+    "cpc": 7.34,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viralfindr free alternative",
+    "ads_volume": 40,
+    "labs_volume": 40,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 6.65,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "search instagram video",
+    "ads_volume": 210,
+    "labs_volume": 210,
+    "kd": 5,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "search instagram videos",
+    "ads_volume": 210,
+    "labs_volume": 210,
+    "kd": 4,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "indian hooks",
+    "ads_volume": 590,
+    "labs_volume": 720,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 1,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral video website",
+    "ads_volume": 260,
+    "labs_volume": 260,
+    "kd": 42,
+    "intent": "informational",
+    "cpc": 3.95,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral video link website free",
+    "ads_volume": 30,
+    "labs_volume": 40,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": null
+  },
+  {
+    "keyword": "viral video websites",
+    "ads_volume": 260,
+    "labs_volume": 260,
+    "kd": 18,
+    "intent": "informational",
+    "cpc": 3.95,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "how to search for reels on instagram",
+    "ads_volume": 110,
+    "labs_volume": 110,
+    "kd": 11,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook clips",
+    "ads_volume": 1300,
+    "labs_volume": 1300,
+    "kd": 0,
+    "intent": "transactional",
+    "cpc": 0.62,
+    "competition": "HIGH"
+  },
+  {
+    "keyword": "viral project",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 6,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viralreel",
+    "ads_volume": 320,
+    "labs_volume": 320,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 30.33,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "reel finder",
+    "ads_volume": 110,
+    "labs_volume": 110,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "how to search reels on instagram",
+    "ads_volume": 170,
+    "labs_volume": 170,
+    "kd": 10,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral videos website",
+    "ads_volume": 260,
+    "labs_volume": 260,
+    "kd": 24,
+    "intent": "informational",
+    "cpc": 3.95,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook template",
+    "ads_volume": 110,
+    "labs_volume": 110,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 6.87,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "how to search instagram reels",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 17,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "midreal ai",
+    "ads_volume": 70,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": 41.27,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook videos",
+    "ads_volume": 210,
+    "labs_volume": 260,
+    "kd": 4,
+    "intent": "informational",
+    "cpc": 4.59,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hook meme",
+    "ads_volume": 170,
+    "labs_volume": 170,
+    "kd": 1,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "how to search for videos on instagram",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 7,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral finder tiktok",
+    "ads_volume": 40,
+    "labs_volume": 40,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "free hook",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 1,
+    "intent": "informational",
+    "cpc": 6.14,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "medio cool",
+    "ads_volume": 70,
+    "labs_volume": 70,
+    "kd": 3,
+    "intent": "informational",
+    "cpc": 7.34,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "viral website",
+    "ads_volume": 50,
+    "labs_volume": 1900,
+    "kd": 32,
+    "intent": "informational",
+    "cpc": 4.98,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "meiro",
+    "ads_volume": 390,
+    "labs_volume": 390,
+    "kd": 35,
+    "intent": "informational",
+    "cpc": 2.83,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "how to search reels on ig",
+    "ads_volume": 170,
+    "labs_volume": 170,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "search reels",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 3,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "medida ai",
+    "ads_volume": 90,
+    "labs_volume": 90,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "instagram video finder",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "instagram video search",
+    "ads_volume": 210,
+    "labs_volume": 210,
+    "kd": 10,
+    "intent": "navigational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "hooks model",
+    "ads_volume": 210,
+    "labs_volume": 210,
+    "kd": 0,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "creator hooks",
+    "ads_volume": 210,
+    "labs_volume": 260,
+    "kd": 0,
+    "intent": "navigational",
+    "cpc": null,
+    "competition": "LOW"
+  },
+  {
+    "keyword": "medo ai",
+    "ads_volume": 140,
+    "labs_volume": 140,
+    "kd": 1,
+    "intent": "informational",
+    "cpc": 6.26,
+    "competition": "MEDIUM"
+  },
+  {
+    "keyword": "how to search videos on instagram",
+    "ads_volume": 50,
+    "labs_volume": 50,
+    "kd": 4,
+    "intent": "informational",
+    "cpc": null,
+    "competition": "LOW"
+  }
+]

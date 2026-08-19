@@ -4,6 +4,7 @@ import { BLOG_RELATED_SLUGS } from "./blogRedirects";
 export const BLOG_POST_TITLES: Record<string, string> = {
   "guide-spy-on-competitor-instagram-reels": "How to spy on competitor Instagram Reels",
   "guide-find-viral-reels-your-niche": "How to find viral Reels in your niche",
+  "guide-how-to-search-reels-on-instagram": "How to search Reels on Instagram",
   "guide-instagram-reels-script-generator": "Instagram Reels script generator guide",
   "guide-instagram-reels-hook-examples": "Instagram Reels hook examples",
   "guide-instagram-reels-script-template": "Instagram Reels script template",

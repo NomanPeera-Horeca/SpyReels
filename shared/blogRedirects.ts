@@ -16,14 +16,22 @@ export function getBlogRedirectTarget(slug: string): string | undefined {
 /** Curated internal links per canonical post (SEO hub + spoke). */
 export const BLOG_RELATED_SLUGS: Record<string, string[]> = {
   "guide-spy-on-competitor-instagram-reels": [
+    "guide-how-to-search-reels-on-instagram",
     "guide-find-viral-reels-your-niche",
     "guide-reverse-engineer-viral-reels",
     "best-instagram-reels-tools-2026",
   ],
   "guide-find-viral-reels-your-niche": [
+    "guide-how-to-search-reels-on-instagram",
     "guide-spy-on-competitor-instagram-reels",
     "guide-how-many-views-viral-instagram",
     "guide-reverse-engineer-viral-reels",
+    "best-instagram-reels-tools-2026",
+  ],
+  "guide-how-to-search-reels-on-instagram": [
+    "guide-find-viral-reels-your-niche",
+    "guide-spy-on-competitor-instagram-reels",
+    "guide-how-many-views-viral-instagram",
     "best-instagram-reels-tools-2026",
   ],
   "guide-instagram-reels-script-generator": [

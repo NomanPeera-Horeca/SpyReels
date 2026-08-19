@@ -29,6 +29,27 @@
 
 ## P1 — conversion / growth
 
+### Distribution / Facebook marketing (P1 — do not skip)
+
+These three channels are **critical** for SpyReels distribution and Facebook ads creative + organic reach. Treat as standing weekly work, not backlog filler.
+
+- [ ] **1. Reddit article + posting**
+  - [ ] Write one value-first **long Reddit-style article / guide post** (problem → method → proof; soft SpyReels mention only where on-topic)
+  - [ ] Target 2–3 subs (creator / Reels / TikTok / indie SaaS); no spam, no link-dump first comments
+  - [ ] Ship at least **1 Reddit post this week**; save thread URLs in a simple tracker so we do not go dark again (last organic Reddit was 2+ months ago)
+  - [ ] Optional: turn the same article into a blog canonical later if it is not already covered (cannibalization check first)
+- [ ] **2. Posts + backlinks (outreach)**
+  - [ ] Run outreach from `docs/spyreels-backlink-outreach-drafts.md` + `docs/spyreels-backlink-outreach-list.csv` (P0/P1 rows first)
+  - [ ] Directory submissions from `docs/spyreels-directory-submissions.csv` (Product Hunt, TAAFT, Futurepedia, Toolify, AlternativeTo, SaaSHub, …)
+  - [ ] Goal this week: **send / publish at least 5 outreach touches** (guest mention asks, listicle adds, alternative pages) and log replies
+  - [ ] Prefer links to live conversion URLs (Viral Reel Finder, viral hooks, transcript tools, key guides) not bare homepage only
+- [ ] **3. Social media videos (esp. Facebook / Meta)**
+  - [ ] Script and ship short **demo / proof videos** for Facebook + Instagram + (optional) TikTok/YouTube Shorts
+  - [ ] Formats: product walkthrough (finder → remake → script), before/after hook, “how creators research Reels,” UGC-style face-to-camera
+  - [ ] Export cuts sized for **Facebook Feed + Reels/Stories**; keep a reusable creative folder for ads and organic
+  - [ ] Goal this week: **at least 2 finished videos** ready to post and/or use as Meta ad creative
+  - [ ] Tie each video to one landing URL + UTM so we can see which creative drives signups
+
 - [x] **Viral Hook Generator rebuild** (`/free-tools/viral-hooks`) — mockup approved and wired to React (keep generate/unlock/expand API)
   - [x] Confirm primary keyword + DataForSEO volumes (US)
   - [x] SEO body + meta + StoryCut-style layout shipped in `HookGenerator.tsx` (title/description, FAQ + FAQ schema, SoftwareApplication schema, RelatedToolsGrid, product bridge CTAs)
@@ -99,18 +120,16 @@
   - [ ] **Marketing landing page** for Carousel Library (SEO + acquisition channel)
     - Keyword research (DataForSEO) → Golden Standard page → route + footer/related tools → CTA into signup / app Carousel Library
     - GSC request indexing on canonical after ship
-- [ ] Directory submissions from `docs/spyreels-directory-submissions.csv` (Product Hunt, TAAFT, Futurepedia, Toolify, AlternativeTo, SaaSHub, …)
-- [ ] Backlink outreach from `docs/spyreels-backlink-outreach-drafts.md` + list CSV
+- [ ] Directory submissions — see **Distribution / Facebook marketing** §2 above (same CSV)
+- [ ] Backlink outreach — see **Distribution / Facebook marketing** §2 above (same drafts + list)
 - [ ] Decide which finder hero mockups in `docs/mockups/` to ship vs kill (handle preview, typewriter, remake CTA, Perplexity-style, first-visit toast)
 - [ ] **Blog publishing sprint** — no new posts for a long stretch; ship a small batch this week
   - [ ] Pick 2–4 keywords that do not cannibalize existing slugs (DataForSEO + GSC)
   - [ ] Draft/publish following `docs/BLOG_PUBLISH_CHECKLIST.md` + Golden Standard (H1, FAQs, internal links, meta, `sourceKeyword`)
   - [ ] Wire hubs if needed (`BLOG_RELATED_SLUGS`, homepage `POPULAR_GUIDES`, redirects)
   - [ ] After deploy: sitemap check + GSC **Request indexing** on canonical URLs only
-- [ ] **Reddit posting** — last post was 2+ months ago; restart a light, non-spam cadence
-  - [ ] Pick 2–3 relevant subs (creator / Reels / TikTok / indie SaaS) where SpyReels is genuinely useful
-  - [ ] Draft value-first posts or comments (problem → what you tried → tool only if asked or clearly on-topic)
-  - [ ] Ship at least 1 post this week; track links/threads so we do not go dark again
+  - [x] How-to search Reels guide (`guide-how-to-search-reels-on-instagram`) — inserted DB id=87 Aug 19; **after deploy: sitemap check + GSC Request indexing**
+- [ ] Reddit — see **Distribution / Facebook marketing** §1 above (article + weekly cadence)
 
 ## P2 — product polish / bugs
 
