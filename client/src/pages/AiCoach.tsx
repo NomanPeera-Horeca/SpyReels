@@ -121,6 +121,12 @@ export default function AiCoach() {
   const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
   /** Keeps the chosen compare-option through production-notes polls / saves. */
   const appliedHookVariationRef = useRef<CoachHookVariation | null>(null);
+  /** Only apply when *server* production payload changes, not local hook-option edits. */
+  const lastServerProductionRef = useRef<{
+    id: number;
+    notes: string | null;
+    status: string | null;
+  } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
   const [postDate, setPostDate] = useState<Date | undefined>(() => pickDefaultPostSchedule().postDate);
@@ -218,10 +224,13 @@ export default function AiCoach() {
     data: CoachResultScript,
     options?: { clearHookVariations?: boolean }
   ) => {
-    const switchingScript = !result || result.id !== data.id;
+    const dataId = Number(data.id);
+    const currentId = result?.id != null ? Number(result.id) : null;
+    const switchingScript = currentId == null || currentId !== dataId;
     if (options?.clearHookVariations || switchingScript) {
       setHookVariations(null);
       appliedHookVariationRef.current = null;
+      lastServerProductionRef.current = null;
     }
 
     let next = data;
@@ -277,22 +286,31 @@ export default function AiCoach() {
     }
   );
 
+  /** Only apply when *server* production payload changes, not when local hook-option edits diverge. */
   useEffect(() => {
     const data = productionPollQuery.data;
-    if (!data || !result || data.id !== result.id) return;
-    if (
-      data.productionNotesStatus === result.productionNotesStatus &&
-      data.productionNotes === result.productionNotes
-    ) {
-      return;
-    }
+    if (!data?.id) return;
+    const scriptId = Number(data.id);
+    if (!Number.isFinite(scriptId) || scriptId <= 0) return;
+
+    const prev = lastServerProductionRef.current;
+    const serverChanged =
+      !prev ||
+      prev.id !== scriptId ||
+      prev.notes !== (data.productionNotes ?? null) ||
+      prev.status !== (data.productionNotesStatus ?? null);
+
+    if (!serverChanged) return;
+
+    lastServerProductionRef.current = {
+      id: scriptId,
+      notes: data.productionNotes ?? null,
+      status: data.productionNotesStatus ?? null,
+    };
     applyScriptResult(data);
-  }, [
-    productionPollQuery.data,
-    result?.id,
-    result?.productionNotes,
-    result?.productionNotesStatus,
-  ]);
+    // Intentionally omit result.productionNotes: local hook applies must not re-enter this sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productionPollQuery.data]);
 
   const resolveIntentMutation = trpc.studio.resolveIntent.useMutation();
 

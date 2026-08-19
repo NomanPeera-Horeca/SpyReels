@@ -141,7 +141,11 @@ function HookOptionCard({
   return (
     <button
       type="button"
-      onClick={onSelect}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onSelect();
+      }}
       className={cn(
         "relative w-full min-w-0 rounded-[11px] border bg-white p-3 text-left transition dark:bg-gray-900",
         selected
@@ -381,23 +385,21 @@ export function AiCoachResultView({
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
   useEffect(() => {
-    if (hookVariations && hookVariations.length > 0) {
-      setHookOptionsOpen(true);
-      const key = hookVariations
-        .map((v) => `${v.hookType}:${v.spokenHook}:${v.onScreenText}`)
-        .join("|");
-      // Auto-apply first option so Frame 0 / spoken / on-screen match the highlighted card.
-      if (lastAutoAppliedHookKeyRef.current !== key) {
-        lastAutoAppliedHookKeyRef.current = key;
-        setSelectedHookOptionIndex(0);
-        onApplyHookVariation(hookVariations[0]);
-      }
-    } else {
+    if (!hookVariations || hookVariations.length === 0) {
       setHookOptionsOpen(false);
       setSelectedHookOptionIndex(null);
       lastAutoAppliedHookKeyRef.current = null;
+      return;
     }
-    // onApplyHookVariation is stable enough for Studio; omit from deps to avoid loops.
+    setHookOptionsOpen(true);
+    const key = hookVariations
+      .map((v) => `${v.hookType}:${v.spokenHook}:${v.onScreenText}`)
+      .join("|");
+    // Auto-apply first option once per generated set so Frame 0 matches the highlight.
+    if (lastAutoAppliedHookKeyRef.current === key) return;
+    lastAutoAppliedHookKeyRef.current = key;
+    setSelectedHookOptionIndex(0);
+    onApplyHookVariation(hookVariations[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hookVariations]);
 
