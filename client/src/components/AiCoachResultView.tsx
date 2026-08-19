@@ -709,7 +709,8 @@ export function AiCoachResultView({
                             Collapse
                           </button>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-3">
+                        {/* Stack vertically: Studio main column is too narrow for 3-up. */}
+                        <div className="space-y-2">
                           {hookVariations.map((variation, index) => (
                             <HookVariationCard
                               key={`${variation.hookType}-${index}`}
