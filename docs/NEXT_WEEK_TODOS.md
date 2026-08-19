@@ -7,6 +7,12 @@
 
 ## P0 — ship / unblock (do first)
 
+- [ ] **Tomorrow (Thu Aug 20): Transitional hooks / hook clips SEO + product wedge**
+  - Meedro greenfield: `hook clips` (~1300 US/mo) + `transitional hooks` (~590); SpyReels has zero coverage today
+  - [ ] Decide page type: Golden Standard blog vs free-tool gallery (prefer one canonical URL)
+  - [ ] Draft/ship page covering transitional hooks + hook clips (no MP4 library clone required for v1)
+  - [ ] Internal links from viral hooks tool + relevant blogs; GSC request indexing after deploy
+  - [ ] Optional later: product pack / Carousel Lab tie-in if we want Meedro-style assets
 - [x] Run prod migration `drizzle/0084_collected_reels_platform.sql` (Collected Reels platform column) — verified on maglev Aug 17: column + index present; IG/TikTok/YouTube rows live
 - [x] **Backfill / refresh viral video data for big creators** (Gary Vee–tier public demos) — done Aug 17 on maglev
   - [x] Identify stale high-profile handles (Gary Vee class + other hero demo accounts)

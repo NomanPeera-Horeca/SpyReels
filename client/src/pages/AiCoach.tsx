@@ -211,7 +211,11 @@ export default function AiCoach() {
 
   const launchQueryHandledRef = useRef(false);
 
-  const applyScriptResult = (data: CoachResultScript) => {
+  const applyScriptResult = (
+    data: CoachResultScript,
+    options?: { clearHookVariations?: boolean }
+  ) => {
+    const switchingScript = !result || result.id !== data.id;
     setResult(data);
     const production = parseProductionNotes(data.productionNotes) ?? {};
     setEditDraft({
@@ -228,7 +232,11 @@ export default function AiCoach() {
     });
     setPhase("result");
     setEditMode(false);
-    setHookVariations(null);
+    // Keep generated hook options across production-notes polls / saves on the same script.
+    // Clear when switching scripts or when refine rewrites content.
+    if (options?.clearHookVariations || switchingScript) {
+      setHookVariations(null);
+    }
   };
 
   // Same 2s interval as remake/transcription polling while production notes generate.
@@ -334,7 +342,7 @@ export default function AiCoach() {
 
   const refineMutation = trpc.studio.refine.useMutation({
     onSuccess: (data) => {
-      applyScriptResult(data);
+      applyScriptResult(data, { clearHookVariations: true });
       setRefineInput("");
       void utils.studio.list.invalidate();
       posthog?.capture("ai_coach_script_refined", { script_id: data.id });
@@ -1028,12 +1036,15 @@ export default function AiCoach() {
           });
           setEditMode(false);
         }}
-        hookVariations={hookVariations}
-        onRequestHookVariations={() => hookVariationsMutation.mutate({ id: result.id })}
-        hookVariationsPending={hookVariationsMutation.isPending}
-        onApplyHookVariation={applyHookVariation}
-        onDismissHookVariations={() => setHookVariations(null)}
-        refinePending={refineMutation.isPending}
+          hookVariations={hookVariations}
+          onRequestHookVariations={() => {
+            if (hookVariations && hookVariations.length > 0) return;
+            if (hookVariationsMutation.isPending) return;
+            hookVariationsMutation.mutate({ id: result.id });
+          }}
+          hookVariationsPending={hookVariationsMutation.isPending}
+          onApplyHookVariation={applyHookVariation}
+          refinePending={refineMutation.isPending}
         savePending={updateMutation.isPending}
         scheduleSave={{
           coachScriptId: result.id,

@@ -296,7 +296,6 @@ type AiCoachResultViewProps = {
   onRequestHookVariations: () => void;
   hookVariationsPending: boolean;
   onApplyHookVariation: (variation: CoachHookVariation) => void;
-  onDismissHookVariations: () => void;
   refinePending: boolean;
   savePending?: boolean;
   scheduleSave?: Omit<CoachScriptSchedulePanelProps, "className">;
@@ -330,7 +329,6 @@ export function AiCoachResultView({
   onRequestHookVariations,
   hookVariationsPending,
   onApplyHookVariation,
-  onDismissHookVariations,
   refinePending,
   savePending,
   scheduleSave,
@@ -357,6 +355,7 @@ export function AiCoachResultView({
     cta: false,
   });
   const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState(0);
+  const [hookOptionsOpen, setHookOptionsOpen] = useState(false);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
@@ -383,6 +382,9 @@ export function AiCoachResultView({
   useEffect(() => {
     if (hookVariations && hookVariations.length > 0) {
       setSelectedHookOptionIndex(0);
+      setHookOptionsOpen(true);
+    } else {
+      setHookOptionsOpen(false);
     }
   }, [hookVariations]);
 
@@ -704,17 +706,21 @@ export function AiCoachResultView({
                         <button
                           type="button"
                           className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                          onClick={
-                            hookVariations && hookVariations.length > 0
-                              ? onDismissHookVariations
-                              : onRequestHookVariations
-                          }
+                          onClick={() => {
+                            if (hookVariations && hookVariations.length > 0) {
+                              setHookOptionsOpen((open) => !open);
+                              return;
+                            }
+                            onRequestHookVariations();
+                          }}
                           disabled={hookVariationsPending}
                         >
                           {hookVariationsPending
                             ? "Generating..."
                             : hookVariations && hookVariations.length > 0
-                              ? "Hide hook options"
+                              ? hookOptionsOpen
+                                ? "Hide hook options"
+                                : "View hook options"
                               : "Compare 3 hook options"}
                         </button>
                       ) : null}
@@ -723,7 +729,7 @@ export function AiCoachResultView({
                       </p>
                     </div>
 
-                    {hookVariations && hookVariations.length > 0 && (
+                    {hookVariations && hookVariations.length > 0 && hookOptionsOpen ? (
                       <div className="mt-3 grid grid-cols-3 gap-2.5">
                         {hookVariations.map((variation, index) => (
                           <HookOptionCard
@@ -738,7 +744,7 @@ export function AiCoachResultView({
                           />
                         ))}
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   {hookOnScreenText ? (

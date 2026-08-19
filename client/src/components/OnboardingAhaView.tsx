@@ -214,7 +214,6 @@ export function OnboardingAhaView({
           onRequestHookVariations={() => hookVariationsMutation.mutate({ id: displayScript.id })}
           hookVariationsPending={hookVariationsMutation.isPending}
           onApplyHookVariation={applyHookVariation}
-          onDismissHookVariations={() => setHookVariations(null)}
           refinePending={false}
         />
       </div>
