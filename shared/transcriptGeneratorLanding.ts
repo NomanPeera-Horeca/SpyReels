@@ -182,7 +182,7 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
     shortsOnly: false,
     metaTitle: "Free TikTok Transcript Generator | Video to Text",
     metaDescription:
-      "Paste a TikTok URL and get an accurate transcript free. Remake the winning structure in your voice and film from Studio. Start free with SpyReels.",
+      "Free TikTok transcript generator: paste a link for video to text, copy the transcript, then remake the structure in your voice on SpyReels. Start free.",
     schemaName: "SpyReels TikTok Transcript Generator",
     primaryKeyword: "tiktok transcript generator",
     howTitle: "How to transcribe a TikTok video to text",
@@ -194,7 +194,7 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
       },
       {
         title: "Get TikTok to text",
-        body: "SpyReels converts speech to a clean TikTok transcript you can read and copy.",
+        body: "SpyReels converts speech to a clean TikTok transcript you can read and copy. Works as a TikTok to text converter and link to transcript tool.",
       },
       {
         title: "Remake in your voice",
@@ -235,20 +235,36 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
         a: "Paste the public TikTok URL into SpyReels, click Get TikTok transcript, then read or copy the text. From there remake in your voice.",
       },
       {
-        q: "Is there a free TikTok transcript generator?",
-        a: "Yes. The full transcript is free with no signup. Create an account only when you want to remake and save the script.",
+        q: "Is there a free TikTok transcript generator online?",
+        a: "Yes. This free TikTok transcript generator shows the full transcript with no signup. Create an account only when you want to remake and save the script.",
       },
       {
-        q: "Do I need to log in to get text from a TikTok?",
-        a: "No signup to get the full transcript. Sign in only when you hit Remake in your voice.",
+        q: "Can I convert a TikTok video to text?",
+        a: "Yes. Paste the TikTok link for TikTok to text. SpyReels is a TikTok to text converter that returns speech as searchable transcript text you can copy.",
+      },
+      {
+        q: "How do I get a transcript from a TikTok link?",
+        a: "Use this page as a TikTok link to transcript tool: paste the URL, generate, then copy. No desktop app required.",
+      },
+      {
+        q: "Can I download a TikTok transcript?",
+        a: "You can copy the full transcript from the results and paste it into a doc. SpyReels focuses on readable text and remake, not ripping the video file.",
+      },
+      {
+        q: "Is this TikTok speech to text?",
+        a: "Yes. TikTok speech to text is the same job as a TikTok transcript generator: convert spoken audio into text, then optionally remake the structure in your voice.",
+      },
+      {
+        q: "TikTok converter vs TikTok transcript generator?",
+        a: "People searching TikTok converter often want video to text. Use this TikTok transcript generator for that. For writing a new script from an idea, use the TikTok script generator instead.",
       },
       {
         q: "Can I use this as a TikTok script extractor?",
-        a: "Yes. A TikTok script extractor pulls spoken lines from a video URL. SpyReels then remakes that structure in your voice.",
+        a: "Yes. A TikTok script extractor pulls spoken lines from a video URL. SpyReels then remakes that structure in your voice so you do not stop at a text dump.",
       },
       {
-        q: "What about TikTok script transcriber searches?",
-        a: "TikTok script transcriber searches map to transcript tools. SpyReels ranks for that intent with a TikTok transcript generator, then remakes the video in your voice.",
+        q: "What about TikTok script generator vs transcript?",
+        a: "Transcript = URL to text from an existing TikTok. Script generator = idea to a new spoken script. Use both: steal structure from a transcript, then write your version.",
       },
       {
         q: "Can I upload a TikTok file?",
@@ -384,7 +400,7 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
     shortsOnly: false,
     metaTitle: "Free YouTube Transcript Generator | Video to Text",
     metaDescription:
-      "Generate a YouTube transcript from any video URL. Copy text, then remake short-form cuts in your voice with SpyReels. Start free.",
+      "Free YouTube transcript generator online: paste a link, get video to text, copy the transcript, then remake a short cut in your voice with SpyReels.",
     schemaName: "SpyReels YouTube Transcript Generator",
     primaryKeyword: "youtube transcript generator",
     howTitle: "How to transcribe a YouTube video",
@@ -396,7 +412,7 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
       },
       {
         title: "Get video to text",
-        body: "SpyReels converts speech to a clean YouTube transcript you can read, copy, or scroll.",
+        body: "SpyReels converts speech to a clean YouTube transcript you can read, copy, or scroll. Use it as a YouTube to transcript converter from any public link.",
       },
       {
         title: "Remake a short cut in your voice",
@@ -433,16 +449,28 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
     platformsLead: "Same remake workflow for Instagram, TikTok, and YouTube Shorts.",
     faq: [
       {
-        q: "How can I transcript a video from YouTube?",
+        q: "How can I get a transcript from a YouTube video?",
         a: "Paste the public YouTube URL into SpyReels, click Get YouTube transcript, then read or copy the text. Remake a short cut in your voice when you are ready.",
       },
       {
-        q: "Are YouTube transcripts free?",
-        a: "YouTube often has built-in captions, and SpyReels shows the full paste-URL transcript with no signup. Sign in only to remake a short cut and save the script.",
+        q: "Is there a free YouTube transcript generator online?",
+        a: "Yes. This free YouTube transcript generator shows the full paste-URL transcript with no signup. Sign in only to remake a short cut and save the script.",
       },
       {
-        q: "Does this work on long-form videos?",
-        a: "Yes. This page supports any public YouTube video, including long-form. YouTube Shorts also have a dedicated page.",
+        q: "Can I convert a YouTube link to a transcript?",
+        a: "Yes. Paste any public YouTube link for a YouTube to transcript converter workflow: URL in, searchable text out, then optional short-form remake.",
+      },
+      {
+        q: "What is the best free transcript generator for YouTube?",
+        a: "If you need YouTube video to text plus a remake path, use SpyReels. Transcript-only sites stop at copy text. SpyReels continues to a short script in your voice.",
+      },
+      {
+        q: "How do I extract a transcript from a YouTube video?",
+        a: "Use this page as a YouTube transcript extractor: paste the URL, generate, then copy. For Shorts-only links, the dedicated Shorts transcript page also works.",
+      },
+      {
+        q: "Does this work on long-form videos and Shorts?",
+        a: "Yes. This page supports any public YouTube video, including long-form. YouTube Shorts also have a dedicated page at /free-tools/youtube-shorts-transcript.",
       },
       {
         q: "Do you auto-edit the long video into a short MP4?",
@@ -451,6 +479,10 @@ export const TRANSCRIPT_GENERATOR_COPY: Record<
       {
         q: "Is it legal to transcribe YouTube videos?",
         a: "Only process videos you own, that are publicly accessible for personal analysis, or that you are authorized to analyze. Do not redistribute someone else's content.",
+      },
+      {
+        q: "YouTube transcript converter vs captions on YouTube?",
+        a: "YouTube captions help when they exist. SpyReels is a YouTube transcript converter for paste-URL workflows, copy-friendly text, and remaking a short cut in your voice.",
       },
       {
         q: "What is a youtube script transcriber?",
