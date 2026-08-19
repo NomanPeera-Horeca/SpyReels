@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: spyreels-ai-studio-composer
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ai-studio-composer
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: AI_STUDIO_CALLBACK_BASE_URL
+        sync: false
+      - key: AI_STUDIO_WORKER_SECRET
+        sync: false
+      - key: CLOUDFLARE_R2_ENDPOINT
+        sync: false
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET
+        sync: false
+      - key: CLOUDFLARE_R2_PUBLIC_URL
+        sync: false

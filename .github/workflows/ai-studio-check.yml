@@ -1,0 +1,36 @@
+name: AI Studio Check
+
+on:
+  pull_request:
+    paths:
+      - "client/src/pages/AiStudio.tsx"
+      - "client/src/lib/aiStudioApi.ts"
+      - "server/aiStudio/**"
+      - "scripts/ai-studio-composer.ts"
+      - "drizzle/0041_ai_studio.sql"
+      - "server/_core/index.ts"
+      - "Dockerfile.ai-studio-composer"
+      - ".github/workflows/ai-studio-check.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
+
+  composer-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f Dockerfile.ai-studio-composer -t spyreels-ai-studio-composer:test .
