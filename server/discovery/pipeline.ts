@@ -160,6 +160,7 @@ export interface DiscoveryResult {
   totalCandidatesBeforeFilter: number;
   totalCandidatesAfterFilter: number;
   costEstimateUsd: number;
+  scCallCount: number;
 }
 
 export type DiscoveryProgressUpdate = {
@@ -971,6 +972,7 @@ function buildDiscoveryResultFromReels(params: {
     totalCandidatesBeforeFilter: params.combinedReels.length,
     totalCandidatesAfterFilter: scored.length,
     costEstimateUsd: params.scCallCount * params.usdPerCredit,
+    scCallCount: params.scCallCount,
   };
 }
 
@@ -1049,11 +1051,30 @@ function mergeReelsFromSearch(
   }
 }
 
+export type RunDiscoveryPipelineOptions = {
+  /** Skip R2 thumbnail/video/profile mirroring (use provider CDN URLs). */
+  skipMediaMirroring?: boolean;
+  /** Hard ScrapeCreators call ceiling for this run (default 300). */
+  maxScCalls?: number;
+  /** Skip expensive creator profile drilling (hashtag search only). */
+  skipProfileDrilling?: boolean;
+  /**
+   * Stop profile drilling once this many unique scored candidates exist
+   * after hashtag + drilled reels (best-effort early stop).
+   */
+  earlyStopCandidateCount?: number;
+};
+
 export async function runDiscoveryPipeline(
   businessDescription: string,
-  onProgress?: (update: DiscoveryProgressUpdate) => void | Promise<void>
+  onProgress?: (update: DiscoveryProgressUpdate) => void | Promise<void>,
+  options?: RunDiscoveryPipelineOptions
 ): Promise<DiscoveryResult> {
-  const tracker = createDiscoveryScCallTracker(DISCOVERY_MAX_SC_CALLS);
+  const maxScCalls = Math.max(
+    1,
+    Math.min(options?.maxScCalls ?? DISCOVERY_MAX_SC_CALLS, DISCOVERY_MAX_SC_CALLS)
+  );
+  const tracker = createDiscoveryScCallTracker(maxScCalls);
 
   return runWithDiscoveryScCallTracker(tracker, async () => {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -1146,6 +1167,7 @@ export async function runDiscoveryPipeline(
     console.log("  skipping ScrapeCreators searches (no hashtags)");
   }
 
+  const earlyStopAt = options?.earlyStopCandidateCount ?? null;
   for (const hashtag of hashtags) {
     if (tracker.count >= tracker.maxCalls) break;
 
@@ -1163,6 +1185,18 @@ export async function runDiscoveryPipeline(
       } else {
         console.log(`[discovery] hashtag #${hashtag} FAILED: ${result.error}`);
         hashtagFailures.push(hashtag);
+      }
+
+      if (earlyStopAt != null) {
+        const scoredSoFar = selectTopScoredReels([
+          ...byCreatorHashtag.values(),
+        ]).scored;
+        if (scoredSoFar.length >= earlyStopAt) {
+          console.log(
+            `[discovery] hashtag early stop: scored=${scoredSoFar.length} >= ${earlyStopAt} (scCalls=${tracker.count})`
+          );
+          break;
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1194,31 +1228,47 @@ export async function runDiscoveryPipeline(
   });
 
   console.log(
-    `Step 3: Profile drilling ${creators.length} creators (6mo reels, concurrency 5)...`
+    `Step 3: Profile drilling ${creators.length} creators (6mo reels, concurrency 5, maxSc=${tracker.maxCalls})...`
   );
-  const drilledReels = await drillCreatorsBounded(
-    creators,
-    tracker,
-    async ({ creatorsDrilled, drilledReels: drilledSoFar }) => {
-      const combined = [...hashtagReels, ...drilledSoFar];
-      const { topReels } = selectTopScoredReels(combined);
-      await safeProgress(onProgress, {
-        phase: "drilling",
-        creatorsTotal: creators.length,
-        creatorsDrilled,
-        reelsFound: topReels.length,
-        partial: buildDiscoveryResultFromReels({
-          businessDescription,
-          routedNiche,
-          hashtagsUsed: hashtags,
-          hashtagFailures,
-          combinedReels: combined,
-          scCallCount: tracker.count,
-          usdPerCredit,
-        }),
-      });
-    }
-  );
+  let drilledReels: ParsedReel[] = [];
+  if (options?.skipProfileDrilling) {
+    console.log("  skipProfileDrilling=true — using hashtag reels only");
+  } else {
+    drilledReels = await drillCreatorsBounded(
+      creators,
+      tracker,
+      async ({ creatorsDrilled, drilledReels: drilledSoFar }) => {
+        const combined = [...hashtagReels, ...drilledSoFar];
+        const { topReels, scored } = selectTopScoredReels(combined);
+        if (
+          earlyStopAt != null &&
+          scored.length >= earlyStopAt &&
+          tracker.count < tracker.maxCalls
+        ) {
+          // Exhaust remaining budget intentionally by marking fuse.
+          tracker.count = tracker.maxCalls;
+          console.log(
+            `[discovery] early stop: scored=${scored.length} >= ${earlyStopAt} (scCalls=${tracker.count})`
+          );
+        }
+        await safeProgress(onProgress, {
+          phase: "drilling",
+          creatorsTotal: creators.length,
+          creatorsDrilled,
+          reelsFound: topReels.length,
+          partial: buildDiscoveryResultFromReels({
+            businessDescription,
+            routedNiche,
+            hashtagsUsed: hashtags,
+            hashtagFailures,
+            combinedReels: combined,
+            scCallCount: tracker.count,
+            usdPerCredit,
+          }),
+        });
+      }
+    );
+  }
   console.log(
     `  drilled ${drilledReels.length} reels from profile passes (scCalls=${tracker.count})`
   );
@@ -1246,36 +1296,42 @@ export async function runDiscoveryPipeline(
   );
 
   // Mirror thumbnails to R2 for the displayed reels only (max TOP_N). Deliberate cost tradeoff: we mirror at search time for UI consistency with the scrape grid; revisit to lazy-mirror-on-click if R2 writes become significant.
-  const stableThumbs = await mirrorReelThumbnailsBounded(
-    topReels.map((reel) => ({
-      shortcode: reel.shortcode,
-      thumbnailUrl: reel.thumbnailUrl,
-    }))
-  );
+  let stableThumbs = new Map<string, string>();
+  let stableVideos = new Map<string, string>();
+  let stableProfilePics = new Map<string, string>();
 
-  const stableVideos = await mirrorReelVideosBounded(
-    topReels
-      .filter((reel) => (reel.videoUrl ?? "").trim().length > 0)
-      .map((reel) => ({
+  if (!options?.skipMediaMirroring) {
+    stableThumbs = await mirrorReelThumbnailsBounded(
+      topReels.map((reel) => ({
         shortcode: reel.shortcode,
-        videoUrl: reel.videoUrl,
+        thumbnailUrl: reel.thumbnailUrl,
       }))
-  );
+    );
 
-  // Mirror profile pics to R2 for unique owners in the result set only.
-  const ownersByUsername = new Map<string, ParsedReel["owner"]>();
-  for (const reel of topReels) {
-    const key = reel.owner.username.toLowerCase();
-    if (!ownersByUsername.has(key)) {
-      ownersByUsername.set(key, reel.owner);
+    stableVideos = await mirrorReelVideosBounded(
+      topReels
+        .filter((reel) => (reel.videoUrl ?? "").trim().length > 0)
+        .map((reel) => ({
+          shortcode: reel.shortcode,
+          videoUrl: reel.videoUrl,
+        }))
+    );
+
+    // Mirror profile pics to R2 for unique owners in the result set only.
+    const ownersByUsername = new Map<string, ParsedReel["owner"]>();
+    for (const reel of topReels) {
+      const key = reel.owner.username.toLowerCase();
+      if (!ownersByUsername.has(key)) {
+        ownersByUsername.set(key, reel.owner);
+      }
     }
+    stableProfilePics = await mirrorProfilePicsBounded(
+      [...ownersByUsername.values()].map((owner) => ({
+        username: owner.username,
+        profilePicUrl: owner.profilePicUrl,
+      }))
+    );
   }
-  const stableProfilePics = await mirrorProfilePicsBounded(
-    [...ownersByUsername.values()].map((owner) => ({
-      username: owner.username,
-      profilePicUrl: owner.profilePicUrl,
-    }))
-  );
 
   return buildDiscoveryResultFromReels({
     businessDescription,

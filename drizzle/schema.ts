@@ -2156,3 +2156,309 @@ export const watermarkJobs = mysqlTable(
 
 export type WatermarkJob = typeof watermarkJobs.$inferSelect;
 export type InsertWatermarkJob = typeof watermarkJobs.$inferInsert;
+
+/** Viral Posts Phase 3A: normalized Instagram candidates from discovery. */
+export const viralPostCandidates = mysqlTable(
+  "viral_post_candidates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    platform: varchar("platform", { length: 16 }).default("instagram").notNull(),
+    sourceId: varchar("sourceId", { length: 128 }).notNull(),
+    sourceUrl: varchar("sourceUrl", { length: 512 }).notNull(),
+    creatorId: varchar("creatorId", { length: 128 }),
+    creatorName: varchar("creatorName", { length: 255 }).notNull(),
+    creatorHandle: varchar("creatorHandle", { length: 128 }),
+    creatorAvatarUrl: text("creatorAvatarUrl"),
+    creatorFollowers: int("creatorFollowers"),
+    thumbnailUrl: text("thumbnailUrl"),
+    sourceThumbnailUrl: text("sourceThumbnailUrl"),
+    thumbnailMediaStatus: varchar("thumbnailMediaStatus", { length: 32 })
+      .default("pending")
+      .notNull(),
+    videoUrl: text("videoUrl"),
+    caption: text("caption"),
+    transcript: text("transcript"),
+    hashtags: json("hashtags").$type<string[]>(),
+    publishedAt: timestamp("publishedAt"),
+    views: int("views"),
+    likes: int("likes"),
+    comments: int("comments"),
+    shares: int("shares"),
+    saves: int("saves"),
+    reachMultiplier: decimal("reachMultiplier", { precision: 12, scale: 4 }),
+    engagementRate: decimal("engagementRate", { precision: 12, scale: 6 }),
+    viewsPerHour: decimal("viewsPerHour", { precision: 14, scale: 4 }),
+    trendStatus: varchar("trendStatus", { length: 32 }).default("unknown").notNull(),
+    rawProviderPayload: json("rawProviderPayload"),
+    discoveredAt: timestamp("discoveredAt").defaultNow().notNull(),
+    refreshedAt: timestamp("refreshedAt").defaultNow().onUpdateNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    platformSourceUq: uniqueIndex("uq_viral_post_candidates_platform_source").on(
+      table.platform,
+      table.sourceId
+    ),
+    discoveredIdx: index("idx_viral_post_candidates_discovered").on(
+      table.discoveredAt
+    ),
+  })
+);
+
+export type ViralPostCandidate = typeof viralPostCandidates.$inferSelect;
+export type InsertViralPostCandidate = typeof viralPostCandidates.$inferInsert;
+
+export const viralPostDailyFeeds = mysqlTable(
+  "viral_post_daily_feeds",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    localDate: varchar("localDate", { length: 10 }).notNull(),
+    timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+    generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+    status: varchar("status", { length: 20 }).default("ready").notNull(),
+    generationReason: varchar("generationReason", { length: 64 }),
+    errorMessage: text("errorMessage"),
+    scCallCount: int("scCallCount").default(0).notNull(),
+    costEstimateUsd: decimal("costEstimateUsd", { precision: 10, scale: 4 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    userDateUq: uniqueIndex("uq_viral_post_daily_feeds_user_date").on(
+      table.userId,
+      table.localDate
+    ),
+    userCreatedIdx: index("idx_viral_post_daily_feeds_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type ViralPostDailyFeed = typeof viralPostDailyFeeds.$inferSelect;
+export type InsertViralPostDailyFeed = typeof viralPostDailyFeeds.$inferInsert;
+
+export const viralPostDailyFeedItems = mysqlTable(
+  "viral_post_daily_feed_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    feedId: int("feedId")
+      .notNull()
+      .references(() => viralPostDailyFeeds.id, { onDelete: "cascade" }),
+    candidateId: int("candidateId")
+      .notNull()
+      .references(() => viralPostCandidates.id, { onDelete: "cascade" }),
+    rank: int("rank").notNull(),
+    contentPillar: varchar("contentPillar", { length: 128 }),
+    relevanceScore: decimal("relevanceScore", { precision: 8, scale: 4 }),
+    relevanceLabel: varchar("relevanceLabel", { length: 255 }).notNull(),
+    relevanceReason: text("relevanceReason").notNull(),
+    adaptabilityScore: decimal("adaptabilityScore", { precision: 8, scale: 4 }),
+    finalScore: decimal("finalScore", { precision: 10, scale: 4 })
+      .default("0")
+      .notNull(),
+    shownAt: timestamp("shownAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    feedCandidateUq: uniqueIndex(
+      "uq_viral_post_daily_feed_items_feed_candidate"
+    ).on(table.feedId, table.candidateId),
+    feedRankIdx: index("idx_viral_post_daily_feed_items_feed_rank").on(
+      table.feedId,
+      table.rank
+    ),
+  })
+);
+
+export type ViralPostDailyFeedItem = typeof viralPostDailyFeedItems.$inferSelect;
+export type InsertViralPostDailyFeedItem =
+  typeof viralPostDailyFeedItems.$inferInsert;
+
+export const viralPostSaves = mysqlTable(
+  "viral_post_saves",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    candidateId: int("candidateId")
+      .notNull()
+      .references(() => viralPostCandidates.id, { onDelete: "cascade" }),
+    savedAt: timestamp("savedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userCandidateUq: uniqueIndex("uq_viral_post_saves_user_candidate").on(
+      table.userId,
+      table.candidateId
+    ),
+    userSavedIdx: index("idx_viral_post_saves_user").on(
+      table.userId,
+      table.savedAt
+    ),
+  })
+);
+
+export type ViralPostSave = typeof viralPostSaves.$inferSelect;
+export type InsertViralPostSave = typeof viralPostSaves.$inferInsert;
+
+export const viralPostFeedback = mysqlTable(
+  "viral_post_feedback",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    candidateId: int("candidateId")
+      .notNull()
+      .references(() => viralPostCandidates.id, { onDelete: "cascade" }),
+    feedbackType: varchar("feedbackType", { length: 32 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("idx_viral_post_feedback_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+    userTypeIdx: index("idx_viral_post_feedback_user_type").on(
+      table.userId,
+      table.feedbackType
+    ),
+  })
+);
+
+export type ViralPostFeedbackRow = typeof viralPostFeedback.$inferSelect;
+export type InsertViralPostFeedback = typeof viralPostFeedback.$inferInsert;
+
+export const viralPostHiddenCreators = mysqlTable(
+  "viral_post_hidden_creators",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    platform: varchar("platform", { length: 16 }).default("instagram").notNull(),
+    creatorKey: varchar("creatorKey", { length: 128 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userPlatformKeyUq: uniqueIndex(
+      "uq_viral_post_hidden_creators_user_platform_key"
+    ).on(table.userId, table.platform, table.creatorKey),
+  })
+);
+
+export type ViralPostHiddenCreator = typeof viralPostHiddenCreators.$inferSelect;
+export type InsertViralPostHiddenCreator =
+  typeof viralPostHiddenCreators.$inferInsert;
+
+/** Shared niche/pillar pools for Viral Posts Phase 3A.1. */
+export const viralPostPools = mysqlTable(
+  "viral_post_pools",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    poolKey: varchar("poolKey", { length: 191 }).notNull(),
+    platform: varchar("platform", { length: 16 }).default("instagram").notNull(),
+    niche: varchar("niche", { length: 128 }).notNull(),
+    pillar: varchar("pillar", { length: 128 }).notNull(),
+    language: varchar("language", { length: 16 }).default("en").notNull(),
+    region: varchar("region", { length: 32 }),
+    priority: int("priority").default(100).notNull(),
+    minFreshCandidates: int("minFreshCandidates").default(40).notNull(),
+    dailyCallBudget: int("dailyCallBudget").default(60).notNull(),
+    lastRefreshedAt: timestamp("lastRefreshedAt"),
+    lastRefreshStatus: varchar("lastRefreshStatus", { length: 32 }),
+    lastRefreshScCalls: int("lastRefreshScCalls").default(0).notNull(),
+    lastRefreshCandidateCount: int("lastRefreshCandidateCount")
+      .default(0)
+      .notNull(),
+    /** Worker identity holding the refresh lease (multi-instance safe). */
+    refreshLeaseOwner: varchar("refreshLeaseOwner", { length: 128 }),
+    /** Lease expiry; stale leases are stealable after crash. */
+    refreshLeaseUntil: timestamp("refreshLeaseUntil"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    poolKeyUq: uniqueIndex("uq_viral_post_pools_key").on(table.poolKey),
+    nichePillarIdx: index("idx_viral_post_pools_niche_pillar").on(
+      table.niche,
+      table.pillar
+    ),
+    lastRefreshedIdx: index("idx_viral_post_pools_last_refreshed").on(
+      table.lastRefreshedAt
+    ),
+    leaseUntilIdx: index("idx_viral_post_pools_lease_until").on(
+      table.refreshLeaseUntil
+    ),
+  })
+);
+
+export type ViralPostPool = typeof viralPostPools.$inferSelect;
+export type InsertViralPostPool = typeof viralPostPools.$inferInsert;
+
+export const viralPostPoolCandidates = mysqlTable(
+  "viral_post_pool_candidates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    poolId: int("poolId")
+      .notNull()
+      .references(() => viralPostPools.id, { onDelete: "cascade" }),
+    candidateId: int("candidateId")
+      .notNull()
+      .references(() => viralPostCandidates.id, { onDelete: "cascade" }),
+    primaryPillar: varchar("primaryPillar", { length: 128 }).notNull(),
+    secondaryPillar: varchar("secondaryPillar", { length: 128 }),
+    pillarConfidence: decimal("pillarConfidence", { precision: 6, scale: 4 })
+      .default("0.5000")
+      .notNull(),
+    pillarReason: text("pillarReason"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    poolCandidateUq: uniqueIndex("uq_viral_post_pool_candidates").on(
+      table.poolId,
+      table.candidateId
+    ),
+    candidateIdx: index("idx_viral_post_pool_candidates_candidate").on(
+      table.candidateId
+    ),
+    poolCreatedIdx: index("idx_viral_post_pool_candidates_pool_created").on(
+      table.poolId,
+      table.createdAt
+    ),
+  })
+);
+
+export type ViralPostPoolCandidate = typeof viralPostPoolCandidates.$inferSelect;
+export type InsertViralPostPoolCandidate =
+  typeof viralPostPoolCandidates.$inferInsert;
+
+export const viralPostPoolBudgetDays = mysqlTable(
+  "viral_post_pool_budget_days",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    poolId: int("poolId")
+      .notNull()
+      .references(() => viralPostPools.id, { onDelete: "cascade" }),
+    budgetDate: varchar("budgetDate", { length: 10 }).notNull(),
+    scCallsUsed: int("scCallsUsed").default(0).notNull(),
+    refreshRuns: int("refreshRuns").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    poolDateUq: uniqueIndex("uq_viral_post_pool_budget_day").on(
+      table.poolId,
+      table.budgetDate
+    ),
+  })
+);
+
+export type ViralPostPoolBudgetDay = typeof viralPostPoolBudgetDays.$inferSelect;
+export type InsertViralPostPoolBudgetDay =
+  typeof viralPostPoolBudgetDays.$inferInsert;

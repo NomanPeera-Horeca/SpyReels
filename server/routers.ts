@@ -8,6 +8,7 @@ import { carouselRemakeRouter } from "./routers/carouselRemakeRouter";
 import { videoBrollRouter } from "./routers/videoBrollRouter";
 import { brollLandingRouter } from "./routers/brollLandingRouter";
 import { watermarkJobsRouter } from "./routers/watermarkJobsRouter";
+import { viralPostsRouter } from "./viralPosts/router";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -1072,6 +1073,8 @@ export const appRouter = router({
   watermarkJobs: watermarkJobsRouter,
 
   brollLanding: brollLandingRouter,
+
+  viralPosts: viralPostsRouter,
 
   activity: router({
     recordHeartbeat: protectedProcedure

@@ -1,56 +1,16 @@
-export type ViralPlatform = "instagram" | "tiktok";
-
-export type ViralTrendStatus =
-  | "rising-fast"
-  | "breaking-out"
-  | "proven-format"
-  | "saturated";
-
-export type ViralRemakeAngle = "best" | "story" | "contrarian";
-
-export type ViralPostWhyItWorks = {
-  hookMechanism?: string;
-  structure?: string[];
-  emotionalTrigger?: string;
-  visualPattern?: string;
-  ctaStrategy?: string;
-  timingNote?: string;
-};
-
-export type ViralPost = {
-  id: string;
-  platform: ViralPlatform;
-  creatorName: string;
-  creatorAvatar?: string;
-  creatorFollowers?: number;
-  creatorId?: string;
-  postUrl?: string;
-  thumbnailUrl?: string;
-  videoUrl?: string;
-  postedAt: string;
-  hook: string;
-  hookHighlight?: string;
-  transcript?: string;
-  views: number;
-  likes?: number;
-  comments: number;
-  shares: number;
-  trendStatus: ViralTrendStatus;
-  relevanceLabel: string;
-  relevanceReason: string;
-  contentPillar?: string;
-  videoStyle?: string;
-  whyItWorks?: ViralPostWhyItWorks;
-  saved: boolean;
-  remade: boolean;
-  posterTone?: "poster-1" | "poster-2" | "poster-3" | "poster-4" | "poster-5" | "poster-6" | "poster-7";
-  humanTone?: "chef" | "light" | "woman";
-};
+/** Client re-exports of shared Viral Posts types (Phase 3A). */
+export type {
+  ViralDailyFeedResponse,
+  ViralFeedbackType,
+  ViralMediaStatus,
+  ViralPost,
+  ViralPostPlatform,
+  ViralSearchResponse,
+  ViralTrendStatus,
+} from "@shared/viralPosts";
 
 export type ViralPostsTab = "for-you" | "explore" | "saved";
-
 export type SavedPostsFilter = "all" | "unused" | "remade";
-
 export type ExploreQuickFilter = "all" | "rising" | "proven";
 
 export type ExploreAdvancedFilters = {
@@ -69,10 +29,7 @@ export type ExploreAdvancedFilters = {
   postedWithin: "24h" | "7d" | "30d";
 };
 
-export type RecommendationFeedbackAction =
-  | "more-like-this"
-  | "not-relevant"
-  | "hide-creator";
+export type ViralRemakeAngle = "best" | "story" | "contrarian";
 
 export type ViralRemakePreview = {
   angle: ViralRemakeAngle;
@@ -84,7 +41,7 @@ export type ViralRemakePreview = {
 };
 
 export const DEFAULT_EXPLORE_FILTERS: ExploreAdvancedFilters = {
-  platforms: { instagram: true, tiktok: true },
+  platforms: { instagram: true, tiktok: false },
   momentum: {
     breakingOut: true,
     risingFast: true,

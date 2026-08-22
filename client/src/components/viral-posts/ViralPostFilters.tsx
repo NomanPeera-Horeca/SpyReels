@@ -99,14 +99,10 @@ export function ViralPostFilters({
                 }
               />
               <CheckRow
-                label="TikTok"
-                checked={draft.platforms.tiktok}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    platforms: { ...d.platforms, tiktok: checked },
-                  }))
-                }
+                label="TikTok (coming soon)"
+                checked={false}
+                disabled
+                onChange={() => undefined}
               />
             </FilterGroup>
 
@@ -264,17 +260,25 @@ function CheckRow({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[#a9a4b8]">
+    <label
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[#a9a4b8]",
+        disabled && "cursor-not-allowed opacity-55"
+      )}
+    >
       <span>{label}</span>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="accent-[#7c3aed]"
       />

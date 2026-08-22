@@ -13,6 +13,7 @@ import { handleTelegramUpdate, setupTelegramWebhook } from "../telegramBot";
 import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
+import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
@@ -278,6 +279,7 @@ async function startServer() {
     startTranscriptionZombieSweeper();
     startCollectedReelIngestSweeper();
     startScrapeJobZombieSweeper();
+    startViralPostsPoolRefresher();
 
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {

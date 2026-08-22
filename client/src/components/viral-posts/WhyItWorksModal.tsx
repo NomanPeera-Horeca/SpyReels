@@ -32,6 +32,11 @@ export function WhyItWorksModal({
   loading = false,
   onRemake,
 }: WhyItWorksModalProps) {
+  const views = post ? formatCompactCount(post.views) : null;
+  const age = post
+    ? formatPostedAge(post.publishedAt, post.ageHours)?.replace(" ago", "")
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] w-[min(920px,calc(100vw-1.5rem))] overflow-y-auto border-[#2b2739] bg-[#111019] text-[#f6f4fb] sm:max-w-[920px]">
@@ -61,13 +66,10 @@ export function WhyItWorksModal({
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Metric value={post.relevanceLabel} label="relevance signal" />
                 <Metric
-                  value={post.relevanceLabel}
-                  label="relevance signal"
-                />
-                <Metric
-                  value={formatCompactCount(post.views)}
-                  label={`views in ${formatPostedAge(post.postedAt).replace(" ago", "")}`}
+                  value={views || "Unavailable"}
+                  label={age ? `views in ${age}` : "views"}
                 />
                 <Metric
                   value={trendStatusLabel(post.trendStatus)}
@@ -75,67 +77,48 @@ export function WhyItWorksModal({
                 />
               </div>
 
-              <AnalysisCard title="What is driving the performance">
-                <div className="space-y-2">
-                  {(post.whyItWorks?.structure?.slice(0, 4) || []).map((item) => (
-                    <div
-                      key={item}
-                      className="rounded-lg border border-[#2b2739] bg-[#171522] px-3 py-2 text-xs text-[#a9a4b8]"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </AnalysisCard>
-
               <AnalysisCard title="Why it fits your profile">
                 <p className="m-0 text-xs leading-relaxed text-[#a9a4b8]">
                   {post.relevanceReason}
                 </p>
               </AnalysisCard>
 
-              <AnalysisCard title="Pattern breakdown">
+              <AnalysisCard title="Available metrics">
                 <ul className="m-0 space-y-1.5 p-0 text-xs leading-relaxed text-[#a9a4b8]">
-                  {post.whyItWorks?.hookMechanism ? (
+                  {post.reachMultiplier != null ? (
                     <li>
-                      <span className="font-bold text-white">Hook: </span>
-                      {post.whyItWorks.hookMechanism}
+                      <span className="font-bold text-white">Reach multiplier: </span>
+                      {post.reachMultiplier.toFixed(1)}x
                     </li>
                   ) : null}
-                  {post.whyItWorks?.emotionalTrigger ? (
+                  {post.engagementRate != null ? (
                     <li>
-                      <span className="font-bold text-white">Emotional trigger: </span>
-                      {post.whyItWorks.emotionalTrigger}
+                      <span className="font-bold text-white">Engagement rate: </span>
+                      {(post.engagementRate * 100).toFixed(2)}%
                     </li>
                   ) : null}
-                  {post.whyItWorks?.visualPattern ? (
+                  {post.viewsPerHour != null ? (
                     <li>
-                      <span className="font-bold text-white">Visual pattern: </span>
-                      {post.whyItWorks.visualPattern}
+                      <span className="font-bold text-white">Views per hour: </span>
+                      {Math.round(post.viewsPerHour).toLocaleString()}
                     </li>
                   ) : null}
-                  {post.whyItWorks?.ctaStrategy ? (
+                  {post.format ? (
                     <li>
-                      <span className="font-bold text-white">CTA: </span>
-                      {post.whyItWorks.ctaStrategy}
+                      <span className="font-bold text-white">Format: </span>
+                      {post.format}
                     </li>
                   ) : null}
-                  {post.whyItWorks?.timingNote ? (
-                    <li>
-                      <span className="font-bold text-white">Timing: </span>
-                      {post.whyItWorks.timingNote}
-                    </li>
+                  {!post.shares && !post.saves ? (
+                    <li>Shares and saves were not provided by the source.</li>
                   ) : null}
                 </ul>
               </AnalysisCard>
 
               <AnalysisCard title="What SpyReels would preserve">
                 <p className="m-0 text-xs leading-relaxed text-[#a9a4b8]">
-                  <strong className="text-white">
-                    {post.whyItWorks?.hookMechanism || "The proven structure"}
-                  </strong>
-                  . The creator's exact wording, examples, and claims would not
-                  be copied.
+                  The proven structure and hook pattern. The creator's exact
+                  wording, examples, and claims would not be copied.
                 </p>
               </AnalysisCard>
             </div>

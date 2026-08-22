@@ -106,7 +106,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
     "Match Pexels stock video B-roll to your Reel scripts by beat",
   "/saved": "Reels you bookmarked for later",
   "/viral-posts":
-    "Fresh Instagram Reels and TikToks selected for your niche",
+    "Fresh Instagram Reels selected for your niche",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
 };

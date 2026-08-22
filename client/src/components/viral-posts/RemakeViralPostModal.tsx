@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { generateViralPostRemake } from "@/lib/viralPosts/viralPostsService";
+import { generateViralPostRemakeMock } from "@/lib/viralPosts/viralPostsService";
 import type {
   ViralPost,
   ViralRemakeAngle,
@@ -53,9 +53,9 @@ export function RemakeViralPostModal({
     setBusy(true);
     setPhase("generating");
     try {
-      const result = await generateViralPostRemake({
-        postId: post.id,
+      const result = await generateViralPostRemakeMock({
         angle,
+        hook: post.hook || post.caption,
       });
       setPreview(result);
       setPhase("ready");
@@ -84,7 +84,9 @@ export function RemakeViralPostModal({
               <p className="text-[11px] font-bold uppercase tracking-wide text-[#7e788d]">
                 Original post
               </p>
-              <p className="mt-2 text-sm font-semibold text-white">{post.hook}</p>
+              <p className="mt-2 text-sm font-semibold text-white">
+                {post.hook || post.caption || "Original Instagram Reel"}
+              </p>
               <p className="mt-3 text-[11px] text-[#7e788d]">
                 SpyReels will preserve the successful structure, not copy the
                 creator's wording.
@@ -167,7 +169,7 @@ export function RemakeViralPostModal({
                   </div>
                 ))}
                 <div className="rounded-lg border border-[#2b2739] bg-[#111019] px-3 py-2 text-xs text-[#a9a4b8]">
-                  Caption available for Instagram and TikTok
+                  Caption available for Instagram (TikTok remake in Phase 3B)
                 </div>
                 <div className="rounded-lg border border-[#2b2739] bg-[#111019] px-3 py-2 text-xs text-[#a9a4b8]">
                   B-roll: {preview.brollSuggestions.slice(0, 2).join(" · ")}
