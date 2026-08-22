@@ -265,8 +265,18 @@ export default function SavedReels() {
     [utils]
   );
 
-  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
-    useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
+  const {
+    libraryRemakeKey,
+    getRemakeState,
+    startRemake,
+    retryRemake,
+    startInspirationSave,
+    openRemakeWorkspace,
+    RemakeDialogs,
+  } = useLibraryRemakeChain({
+    onStageChange: libraryRemakeOnStageChange,
+    onOpenTeleprompter: triggerOpenMyScript,
+  });
 
   const invalidateTranscriptionFollowUp = useCallback(
     (variables: { reelId?: number; featuredReelId?: number } | undefined) => {
@@ -602,7 +612,7 @@ export default function SavedReels() {
 
   return (
     <div className="mx-auto max-w-7xl px-2 sm:px-0">
-      {VoiceGateDialog}
+      {RemakeDialogs}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">
@@ -803,7 +813,7 @@ export default function SavedReels() {
                             startRemake,
                             retryRemake,
                             startInspirationSave,
-                            triggerOpenMyScript,
+                            openRemakeWorkspace,
                           })
                         : undefined;
 
@@ -1045,7 +1055,7 @@ export default function SavedReels() {
                             startRemake,
                             retryRemake,
                             startInspirationSave,
-                            triggerOpenMyScript,
+                            openRemakeWorkspace,
                           })
                         : undefined;
 

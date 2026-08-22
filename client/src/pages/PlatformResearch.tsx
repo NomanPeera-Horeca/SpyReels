@@ -638,25 +638,12 @@ export default function PlatformResearch({
 
       if (stage === "ready" && prevStage !== "ready") {
         void utils.recreate.checkBatch.invalidate();
-        toast.success("Your remake is ready", {
-          action: {
-            label: "Open",
-            onClick: () => {
-              const st = getRemakeStateRef.current(libraryRemakeKey(source));
-              if (st.scriptId != null) {
-                triggerOpenMyScript(videoId, st.scriptId);
-              } else {
-                setGridModalVideoId(videoId);
-              }
-            },
-          },
-        });
+        toast.success("Your remake is ready in the workspace");
       }
     },
     [
       applyTxStatus,
       transcribeStatusInputForVideo,
-      triggerOpenMyScript,
       utils.recreate.checkBatch,
       utils.transcribe.status,
     ]
@@ -667,8 +654,12 @@ export default function PlatformResearch({
     startRemake,
     retryRemake,
     startInspirationSave,
-    VoiceGateDialog,
-  } = useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
+    openRemakeWorkspace,
+    RemakeDialogs,
+  } = useLibraryRemakeChain({
+    onStageChange: libraryRemakeOnStageChange,
+    onOpenTeleprompter: triggerOpenMyScript,
+  });
 
   getRemakeStateRef.current = getRemakeState;
 
@@ -711,7 +702,7 @@ export default function PlatformResearch({
       startRemake,
       retryRemake,
       startInspirationSave,
-      triggerOpenMyScript,
+      openRemakeWorkspace,
     });
   };
 
@@ -1212,7 +1203,7 @@ export default function PlatformResearch({
           )
         ) : null}
       </GridReelWorkflowDialog>
-      {VoiceGateDialog}
+      {RemakeDialogs}
     </div>
   );
 }

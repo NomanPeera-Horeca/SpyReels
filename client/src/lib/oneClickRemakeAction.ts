@@ -13,6 +13,12 @@ type RecreateBatchEntry = { latestScriptId: number; status: string };
 
 type RecreateStripState = "none" | "generating" | "ready" | "failed";
 
+export type OpenRemakeWorkspaceArgs = {
+  scriptId: number | null;
+  openScriptReelId: number;
+  source: LibraryRemakeSource;
+};
+
 export function reelClassificationFromRow(reel: {
   classifiedAt?: Date | string | null;
   suggestedAction?: string | null;
@@ -30,7 +36,7 @@ export function reelClassificationFromRow(reel: {
 }
 
 export function buildLibraryOneClickRemake(args: {
-  /** Row reel id for triggerOpenMyScript (user reelId or featuredReelId). */
+  /** Row reel id for teleprompter / workspace (user reelId or featuredReelId). */
   openScriptReelId: number;
   jobId?: number;
   isNoSpeech: boolean;
@@ -48,7 +54,7 @@ export function buildLibraryOneClickRemake(args: {
     source: LibraryRemakeSource,
     opts?: Pick<StartRemakeOptions, "jobId">
   ) => void;
-  triggerOpenMyScript: (reelId: number, scriptId: number) => void;
+  openRemakeWorkspace: (args: OpenRemakeWorkspaceArgs) => void;
 }): OneClickRemakeAction {
   const startOpts: StartRemakeOptions = {
     alreadyTranscribed: args.alreadyTranscribed,
@@ -66,9 +72,14 @@ export function buildLibraryOneClickRemake(args: {
   if (hookState.stage === "transcribing" || hookState.stage === "generating") {
     return {
       label: libraryRemakeButtonLabel(hookState),
-      disabled: true,
       loading: true,
-      onClick: () => {},
+      tooltip: "Open remake workspace to watch progress",
+      onClick: () =>
+        args.openRemakeWorkspace({
+          scriptId: hookState.scriptId ?? null,
+          openScriptReelId: args.openScriptReelId,
+          source: librarySource,
+        }),
     };
   }
   if (hookState.stage === "inspiration") {
@@ -87,8 +98,13 @@ export function buildLibraryOneClickRemake(args: {
     return {
       label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
-      tooltip: "Open your script and record in the teleprompter",
-      onClick: () => args.triggerOpenMyScript(args.openScriptReelId, hookState.scriptId!),
+      tooltip: "Open remake workspace to improve script, caption, and B-roll",
+      onClick: () =>
+        args.openRemakeWorkspace({
+          scriptId: hookState.scriptId!,
+          openScriptReelId: args.openScriptReelId,
+          source: librarySource,
+        }),
     };
   }
   if (hookState.stage === "error") {
@@ -100,15 +116,29 @@ export function buildLibraryOneClickRemake(args: {
   }
 
   if (args.batchRecreateSt === "generating") {
-    return { label: "Generating...", disabled: true, loading: true, onClick: () => {} };
+    return {
+      label: "Generating...",
+      loading: true,
+      tooltip: "Open remake workspace to watch progress",
+      onClick: () =>
+        args.openRemakeWorkspace({
+          scriptId: args.batchEntry?.latestScriptId ?? null,
+          openScriptReelId: args.openScriptReelId,
+          source: librarySource,
+        }),
+    };
   }
   if (args.batchRecreateSt === "ready" && args.batchEntry?.latestScriptId) {
     return {
       label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
-      tooltip: "Open your script and record in the teleprompter",
+      tooltip: "Open remake workspace to improve script, caption, and B-roll",
       onClick: () =>
-        args.triggerOpenMyScript(args.openScriptReelId, args.batchEntry!.latestScriptId),
+        args.openRemakeWorkspace({
+          scriptId: args.batchEntry!.latestScriptId,
+          openScriptReelId: args.openScriptReelId,
+          source: librarySource,
+        }),
     };
   }
   if (args.isNoSpeech) {

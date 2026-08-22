@@ -931,8 +931,18 @@ export default function Dashboard() {
     [utils, featuredAccountId]
   );
 
-  const { libraryRemakeKey, getRemakeState, startRemake, retryRemake, startInspirationSave, VoiceGateDialog } =
-    useLibraryRemakeChain({ onStageChange: libraryRemakeOnStageChange });
+  const {
+    libraryRemakeKey,
+    getRemakeState,
+    startRemake,
+    retryRemake,
+    startInspirationSave,
+    openRemakeWorkspace,
+    RemakeDialogs,
+  } = useLibraryRemakeChain({
+    onStageChange: libraryRemakeOnStageChange,
+    onOpenTeleprompter: triggerOpenMyScript,
+  });
 
   const invalidateTranscriptionFollowUp = useCallback(
     (variables: { reelId?: number; featuredReelId?: number } | undefined) => {
@@ -1948,7 +1958,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
-      {VoiceGateDialog}
+      {RemakeDialogs}
       <FirstResultsCelebration
         handle={displayScrapeHandle || job?.handle}
         enabled={
@@ -2513,7 +2523,7 @@ export default function Dashboard() {
                         startRemake,
                         retryRemake,
                         startInspirationSave,
-                        triggerOpenMyScript,
+                        openRemakeWorkspace,
                       })
                     : undefined;
 
@@ -2761,7 +2771,7 @@ export default function Dashboard() {
                           startRemake,
                           retryRemake,
                           startInspirationSave,
-                          triggerOpenMyScript,
+                          openRemakeWorkspace,
                         })
                       : undefined;
 

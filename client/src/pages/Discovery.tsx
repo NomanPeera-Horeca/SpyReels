@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Lightbulb,
   Loader2,
-  Play,
   Wand2,
   X,
 } from "lucide-react";
@@ -34,7 +33,12 @@ import {
   remakeButtonLabel,
   useDiscoverRemakeChain,
 } from "@/hooks/useDiscoverRemakeChain";
+import {
+  RemakeWorkspaceDialog,
+  type RemakeWorkspaceTarget,
+} from "@/components/RemakeWorkspaceDialog";
 import { DISCOVERY_REELS_PER_PAGE } from "@shared/const";
+import type { LibraryRemakeState } from "@/lib/libraryRemakeChainCore";
 
 type DiscoveryResultPayload =
   inferRouterOutputs<AppRouter>["discovery"]["getSearch"];
@@ -149,10 +153,13 @@ function DiscoverRemakeButton({
   const isInspiration = stage === "inspiration";
   const isError = stage === "error";
   const fillWidth = isReady ? 100 : isError ? 0 : progressPercent;
-  const label = isReady ? "Ready to Film" : remakeButtonLabel(remakeState);
+  const label = isReady ? "Open remake" : remakeButtonLabel(remakeState);
 
   const handleClick = () => {
-    if (isBusy) return;
+    if (isBusy) {
+      onOpenScript();
+      return;
+    }
     if (isReady) {
       onOpenScript();
       return;
@@ -185,7 +192,7 @@ function DiscoverRemakeButton({
         "relative min-w-0 w-full overflow-hidden font-semibold shadow-sm",
         isInspiration && "border-primary/30 text-primary hover:bg-primary/10"
       )}
-      disabled={isBusy}
+      disabled={false}
       onClick={handleClick}
     >
       {!isReady ? (
@@ -202,7 +209,7 @@ function DiscoverRemakeButton({
         {isBusy ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
         ) : isReady ? (
-          <Play className="h-3.5 w-3.5 shrink-0 fill-current" />
+          <Wand2 className="h-3.5 w-3.5 shrink-0" />
         ) : isInspiration ? (
           <Bookmark className="h-3.5 w-3.5 shrink-0" />
         ) : (
@@ -699,11 +706,69 @@ export default function Discovery() {
     nonce: number;
     openScriptId?: number;
   } | null>(null);
+  const [remakeWorkspaceOpen, setRemakeWorkspaceOpen] = useState(false);
+  const [remakeWorkspaceTarget, setRemakeWorkspaceTarget] =
+    useState<RemakeWorkspaceTarget | null>(null);
+  const [remakeWorkspaceShortcode, setRemakeWorkspaceShortcode] = useState<
+    string | null
+  >(null);
 
   const { getRemakeState, getSaveState, startRemake, retryRemake, startSave } =
     useDiscoverRemakeChain();
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
+
+  const openDiscoverRemakeWorkspace = useCallback(
+    (reel: ViralReel) => {
+      const state = getRemakeState(reel.shortcode);
+      setRemakeWorkspaceShortcode(reel.shortcode);
+      setRemakeWorkspaceTarget({
+        remakeKey: `discover:${reel.shortcode}`,
+        scriptId: state.scriptId ?? null,
+        reelId: state.reelId ?? null,
+      });
+      setRemakeWorkspaceOpen(true);
+    },
+    [getRemakeState]
+  );
+
+  useEffect(() => {
+    if (!remakeWorkspaceOpen || !remakeWorkspaceShortcode) return;
+    const state = getRemakeState(remakeWorkspaceShortcode);
+    setRemakeWorkspaceTarget((prev) => {
+      if (!prev) return prev;
+      const nextScript = state.scriptId ?? prev.scriptId;
+      const nextReel = state.reelId ?? prev.reelId;
+      if (nextScript === prev.scriptId && nextReel === prev.reelId) return prev;
+      return { ...prev, scriptId: nextScript, reelId: nextReel };
+    });
+  }, [getRemakeState, remakeWorkspaceOpen, remakeWorkspaceShortcode]);
+
+  const discoverWorkspaceRemakeState: LibraryRemakeState | null = useMemo(() => {
+    if (!remakeWorkspaceShortcode) return null;
+    const state = getRemakeState(remakeWorkspaceShortcode);
+    const stage =
+      state.stage === "ingesting"
+        ? "transcribing"
+        : state.stage === "inspiration"
+          ? "inspiration"
+          : state.stage === "ready"
+            ? "ready"
+            : state.stage === "error"
+              ? "error"
+              : state.stage === "generating"
+                ? "generating"
+                : state.stage === "transcribing"
+                  ? "transcribing"
+                  : "idle";
+    return {
+      stage,
+      progressPercent: state.progressPercent,
+      scriptId: state.scriptId,
+      reelId: state.reelId,
+      errorMessage: state.errorMessage,
+    };
+  }, [getRemakeState, remakeWorkspaceShortcode]);
 
   const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
   const jobStatusQuery = trpc.discovery.jobStatus.useQuery(
@@ -943,17 +1008,25 @@ export default function Discovery() {
 
   const handleRemakeOpenScript = useCallback(
     (reel: ViralReel) => {
-      const state = getRemakeState(reel.shortcode);
-      if (
-        state.stage !== "ready" ||
-        state.reelId == null ||
-        state.scriptId == null
-      ) {
-        return;
-      }
-      triggerOpenDiscoverScript(reel, state.reelId, state.scriptId);
+      openDiscoverRemakeWorkspace(reel);
     },
-    [getRemakeState, triggerOpenDiscoverScript]
+    [openDiscoverRemakeWorkspace]
+  );
+
+  const handleRemakeStart = useCallback(
+    (reel: ViralReel) => {
+      openDiscoverRemakeWorkspace(reel);
+      startRemake(reel);
+    },
+    [openDiscoverRemakeWorkspace, startRemake]
+  );
+
+  const handleRemakeRetry = useCallback(
+    (reel: ViralReel) => {
+      openDiscoverRemakeWorkspace(reel);
+      retryRemake(reel);
+    },
+    [openDiscoverRemakeWorkspace, retryRemake]
   );
 
   const modalReelPreview = useMemo(() => {
@@ -1109,9 +1182,9 @@ export default function Discovery() {
                     rankForReel={rankForReel}
                     getRemakeState={getRemakeState}
                     getSaveState={getSaveState}
-                    onRemakeStart={startRemake}
+                    onRemakeStart={handleRemakeStart}
                     onRemakeOpenScript={handleRemakeOpenScript}
-                    onRemakeRetry={retryRemake}
+                    onRemakeRetry={handleRemakeRetry}
                     onSave={startSave}
                   />
                 ) : null}
@@ -1131,9 +1204,9 @@ export default function Discovery() {
                       rankForReel={rankForReel}
                       getRemakeState={getRemakeState}
                       getSaveState={getSaveState}
-                      onRemakeStart={startRemake}
+                      onRemakeStart={handleRemakeStart}
                       onRemakeOpenScript={handleRemakeOpenScript}
-                      onRemakeRetry={retryRemake}
+                      onRemakeRetry={handleRemakeRetry}
                       onSave={startSave}
                     />
                   </div>
@@ -1207,6 +1280,24 @@ export default function Discovery() {
           />
         ) : null}
       </GridReelWorkflowDialog>
+
+      <RemakeWorkspaceDialog
+        open={remakeWorkspaceOpen}
+        onOpenChange={setRemakeWorkspaceOpen}
+        target={remakeWorkspaceTarget}
+        remakeState={discoverWorkspaceRemakeState}
+        onOpenTeleprompter={(reelId, scriptId) => {
+          const shortcode = remakeWorkspaceShortcode;
+          const reel =
+            shortcode == null
+              ? null
+              : result?.viralReels.find((r) => r.shortcode === shortcode) ?? null;
+          if (reel) {
+            triggerOpenDiscoverScript(reel, reelId, scriptId);
+          }
+          setRemakeWorkspaceOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -98,6 +98,10 @@ const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"))
 
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
+/** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
+const DevRemakeWorkspacePreview = lazyWithRetry(
+  () => import("./pages/DevRemakeWorkspacePreview")
+);
 
 /** THROWAWAY: video B-roll upload + transcription Phase 2 test. */
 const VideoBrollUploadTest = lazyWithRetry(
@@ -269,6 +273,8 @@ function Router() {
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
+        {/* THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */}
+        <Route path="/dev/remake-workspace" component={DevRemakeWorkspacePreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />

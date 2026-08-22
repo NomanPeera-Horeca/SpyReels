@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, createElement } from "react";
+import { useCallback, useEffect, useRef, useState, createElement, Fragment } from "react";
 import { toast } from "sonner";
 import type { ReelClassificationLike } from "@/lib/remakeability";
 import {
@@ -20,6 +20,11 @@ import {
 import { trpc } from "@/lib/trpc";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { OnboardingVoiceGateDialog } from "@/components/OnboardingVoiceGateDialog";
+import {
+  RemakeWorkspaceDialog,
+  type RemakeWorkspaceTarget,
+} from "@/components/RemakeWorkspaceDialog";
+import type { OpenRemakeWorkspaceArgs } from "@/lib/oneClickRemakeAction";
 
 export type LibrarySaveState = "idle" | "saved" | "error";
 
@@ -45,6 +50,19 @@ function hasVoiceProfile(state: {
   );
 }
 
+function resolveOpenReelId(
+  source: LibraryRemakeSource,
+  state: LibraryRemakeState | undefined,
+  fallbackReelId?: number | null
+): number | null {
+  if (fallbackReelId != null) return fallbackReelId;
+  if (state?.reelId != null) return state.reelId;
+  if (source.source === "user") return source.reelId;
+  if (source.source === "featured") return source.featuredReelId;
+  if (source.source === "collected") return source.transcriptionReelId ?? null;
+  return null;
+}
+
 export type UseLibraryRemakeChainOptions = {
   /**
    * Fired when a reel's remake stage changes. Parents use this for
@@ -56,12 +74,16 @@ export type UseLibraryRemakeChainOptions = {
     stage: LibraryRemakeStage,
     prevStage: LibraryRemakeStage | undefined
   ) => void;
+  /** Optional teleprompter open from Remake workspace (secondary path). */
+  onOpenTeleprompter?: (reelId: number, scriptId: number) => void;
 };
 
 export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}) {
   const trpcUtils = trpc.useUtils();
   const onStageChangeRef = useRef(options.onStageChange);
   onStageChangeRef.current = options.onStageChange;
+  const onOpenTeleprompterRef = useRef(options.onOpenTeleprompter);
+  onOpenTeleprompterRef.current = options.onOpenTeleprompter;
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -74,6 +96,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const [stateByKey, setStateByKey] = useState<Record<string, LibraryRemakeState>>({});
   const [saveStateByKey, setSaveStateByKey] = useState<Record<string, LibrarySaveState>>({});
   const [voiceGateOpen, setVoiceGateOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceTarget, setWorkspaceTarget] = useState<RemakeWorkspaceTarget | null>(
+    null
+  );
   const pendingRemakeRef = useRef<{
     source: LibraryRemakeSource;
     opts?: StartRemakeOptions;
@@ -82,6 +108,53 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const runningRef = useRef<Set<string>>(new Set());
   const saveRunningRef = useRef<Set<string>>(new Set());
   const cancelledRef = useRef<Set<string>>(new Set());
+  const workspaceKeyRef = useRef<string | null>(null);
+  const stateByKeyRef = useRef(stateByKey);
+  stateByKeyRef.current = stateByKey;
+
+  const openWorkspaceForSource = useCallback(
+    (
+      source: LibraryRemakeSource,
+      opts?: { scriptId?: number | null; reelId?: number | null }
+    ) => {
+      const key = libraryRemakeKey(source);
+      const state = stateByKeyRef.current[key];
+      const scriptId = opts?.scriptId ?? state?.scriptId ?? null;
+      const reelId = resolveOpenReelId(source, state, opts?.reelId);
+      workspaceKeyRef.current = key;
+      setWorkspaceTarget({
+        remakeKey: key,
+        scriptId,
+        reelId,
+      });
+      setWorkspaceOpen(true);
+    },
+    []
+  );
+
+  const openRemakeWorkspace = useCallback(
+    (args: OpenRemakeWorkspaceArgs) => {
+      openWorkspaceForSource(args.source, {
+        scriptId: args.scriptId,
+        reelId: args.openScriptReelId,
+      });
+    },
+    [openWorkspaceForSource]
+  );
+
+  useEffect(() => {
+    if (!workspaceOpen || !workspaceKeyRef.current) return;
+    const key = workspaceKeyRef.current;
+    const state = stateByKey[key];
+    if (!state) return;
+    setWorkspaceTarget((prev) => {
+      if (!prev || prev.remakeKey !== key) return prev;
+      const nextScript = state.scriptId ?? prev.scriptId;
+      const nextReel = state.reelId ?? prev.reelId;
+      if (nextScript === prev.scriptId && nextReel === prev.reelId) return prev;
+      return { ...prev, scriptId: nextScript, reelId: nextReel };
+    });
+  }, [stateByKey, workspaceOpen]);
 
   const patchState = useCallback(
     (
@@ -132,6 +205,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
       runningRef.current.add(key);
       cancelledRef.current.delete(key);
+
+      openWorkspaceForSource(source);
 
       const classification = opts.classification;
       let reelId: number | undefined =
@@ -392,6 +467,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       failRemake,
       fetchTranscribeStatus,
       generateMutation,
+      openWorkspaceForSource,
       patchState,
       transcribeStartMutation,
       trpcUtils,
@@ -445,6 +521,26 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     },
     onSaved: onVoiceGateSaved,
   });
+
+  const workspaceRemakeState =
+    workspaceTarget != null
+      ? stateByKey[workspaceTarget.remakeKey] ?? null
+      : null;
+
+  const RemakeDialogs = createElement(
+    Fragment,
+    null,
+    VoiceGateDialog,
+    createElement(RemakeWorkspaceDialog, {
+      open: workspaceOpen,
+      onOpenChange: setWorkspaceOpen,
+      target: workspaceTarget,
+      remakeState: workspaceRemakeState,
+      onOpenTeleprompter: (reelId: number, scriptId: number) => {
+        onOpenTeleprompterRef.current?.(reelId, scriptId);
+      },
+    })
+  );
 
   const startInspirationSave = useCallback(
     async (source: LibraryRemakeSource, opts?: Pick<StartRemakeOptions, "jobId">) => {
@@ -549,7 +645,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     startRemake,
     retryRemake,
     startInspirationSave,
+    openRemakeWorkspace,
     VoiceGateDialog,
+    RemakeDialogs,
   };
 }
 

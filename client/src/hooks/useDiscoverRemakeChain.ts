@@ -442,7 +442,7 @@ export function remakeButtonLabel(state: DiscoverRemakeState): string {
     case "inspiration":
       return "Save for inspiration";
     case "ready":
-      return "Ready to Film";
+      return "Open remake";
     case "error":
       return "Retry";
     default:

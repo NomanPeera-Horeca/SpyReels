@@ -180,7 +180,7 @@ export default function TranscriptGeneratorLanding({
 
   const addByUrlMutation = trpc.collected.addByUrl.useMutation();
 
-  const { startRemake, getRemakeState, VoiceGateDialog } = useLibraryRemakeChain({
+  const { startRemake, getRemakeState, RemakeDialogs } = useLibraryRemakeChain({
     onStageChange: (source, stage) => {
       if (source.source !== "collected") return;
       const key = libraryRemakeKey(source);
@@ -207,7 +207,6 @@ export default function TranscriptGeneratorLanding({
     if (st.stage === "ready" && st.scriptId != null) {
       clearPending();
       setRemaking(false);
-      window.location.href = `/scripts/${st.scriptId}`;
     }
     if (st.stage === "error") {
       setRemaking(false);
@@ -683,7 +682,7 @@ export default function TranscriptGeneratorLanding({
       </main>
       <PublicFooter />
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} returnTo={copy.path} />
-      {VoiceGateDialog}
+      {RemakeDialogs}
     </div>
   );
 }
