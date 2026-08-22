@@ -59,6 +59,7 @@ const YouTubeTranscriptGeneratorPage = lazyWithRetry(() =>
 );
 const FreeTools = lazyWithRetry(() => import("./pages/FreeTools"));
 const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
+const ViralPosts = lazyWithRetry(() => import("./pages/ViralPosts"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
 const ScriptEditor = lazyWithRetry(() => import("./pages/ScriptEditor"));
 const Settings = lazyWithRetry(() => import("./pages/Settings"));
@@ -101,6 +102,10 @@ const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPrevie
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
 const DevRemakeWorkspacePreview = lazyWithRetry(
   () => import("./pages/DevRemakeWorkspacePreview")
+);
+/** THROWAWAY: Viral Posts visual proof. Remove with DevViralPostsPreview. */
+const DevViralPostsPreview = lazyWithRetry(
+  () => import("./pages/DevViralPostsPreview")
 );
 
 /** THROWAWAY: video B-roll upload + transcription Phase 2 test. */
@@ -175,6 +180,7 @@ function DesktopDashboardRouter() {
           <Route path="/my-virality-report">
             <ViralityDiagnostic />
           </Route>
+          <Route path="/viral-posts" component={ViralPosts} />
           <Route path="/saved" component={SavedReels} />
           <Route path="/scripts" component={MyScripts} />
           <Route path="/scripts/:id" component={ScriptEditor} />
@@ -275,6 +281,8 @@ function Router() {
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
         {/* THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */}
         <Route path="/dev/remake-workspace" component={DevRemakeWorkspacePreview} />
+        {/* THROWAWAY: Viral Posts visual proof. Remove with DevViralPostsPreview. */}
+        <Route path="/dev/viral-posts" component={DevViralPostsPreview} />
         <Route path="/features/viral-reel-finder" component={ViralReelFinder} />
         <Route path="/features/30-day-content-plan" component={ThirtyDayContentPlanFeature} />
         <Route path="/features/ai-personal-brand-coach" component={AiPersonalBrandCoachFeature} />

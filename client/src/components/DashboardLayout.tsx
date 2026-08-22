@@ -57,6 +57,7 @@ import {
   TrendingUp,
   Images,
   Clapperboard,
+  Flame,
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
@@ -104,6 +105,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/broll-library":
     "Match Pexels stock video B-roll to your Reel scripts by beat",
   "/saved": "Reels you bookmarked for later",
+  "/viral-posts":
+    "Fresh Instagram Reels and TikToks selected for your niche",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
 };
@@ -157,6 +160,12 @@ function buildNavSections(): SidebarNavSection[] {
             ]
           : []),
         { icon: Search, label: "Spy Viral Reels", path: "/research" },
+        {
+          icon: Flame,
+          label: "Viral Posts",
+          path: "/viral-posts",
+          badge: "new",
+        },
         { icon: Inbox, label: "Collected Reels", path: "/collected" },
         { icon: Radar, label: "Creator Radar", path: "/history" },
         { icon: Bookmark, label: "Saved Reels", path: "/saved" },

@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpyReels — Viral Posts Mockup</title>
+  <style>
+    :root {
+      --bg: #08070d;
+      --panel: #111019;
+      --panel-2: #171522;
+      --panel-3: #1d1a2a;
+      --line: #2b2739;
+      --line-soft: rgba(255,255,255,.08);
+      --text: #f6f4fb;
+      --muted: #a9a4b8;
+      --muted-2: #7e788d;
+      --purple: #7c3aed;
+      --purple-2: #9b6cff;
+      --purple-soft: rgba(124,58,237,.15);
+      --green: #38d39f;
+      --yellow: #f4c75d;
+      --orange: #ff8a4c;
+      --red: #ff6b7a;
+      --shadow: 0 24px 80px rgba(0,0,0,.45);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 70% -10%, rgba(124,58,237,.12), transparent 33%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line-soft);
+      background: rgba(9,8,14,.96);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 24px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      font-size: 20px;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--purple), var(--purple-2));
+      display: grid;
+      place-items: center;
+      box-shadow: 0 8px 28px rgba(124,58,237,.35);
+    }
+
+    .brand-mark svg { width: 19px; height: 19px; }
+
+    .primary-create {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--purple), #6f40f4);
+      color: white;
+      padding: 12px 14px;
+      font-weight: 750;
+      box-shadow: 0 12px 30px rgba(124,58,237,.28);
+      margin-bottom: 18px;
+    }
+
+    .nav-section { display: grid; gap: 5px; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 12px;
+      color: var(--muted);
+      text-decoration: none;
+      border-radius: 11px;
+      font-size: 14px;
+      border: 1px solid transparent;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.04); color: white; }
+    .nav-item.active {
+      background: var(--purple-soft);
+      color: white;
+      border-color: rgba(155,108,255,.28);
+    }
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      color: currentColor;
+      opacity: .92;
+    }
+    .nav-item.active .nav-icon { color: var(--purple-2); }
+    .nav-spacer { flex: 1; }
+    .sidebar-footer {
+      display: grid;
+      gap: 10px;
+      border-top: 1px solid var(--line-soft);
+      padding-top: 14px;
+    }
+    .profile-mini {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f1b585, #4b2638 50%, #111 80%);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.08);
+    }
+    .profile-mini strong { display:block; font-size: 13px; }
+    .profile-mini span { color: var(--muted-2); font-size: 11px; }
+
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      height: 70px;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      z-index: 15;
+      backdrop-filter: blur(16px);
+      background: rgba(8,7,13,.84);
+    }
+    .topbar-title h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -.02em;
+    }
+    .topbar-title p {
+      margin: 3px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .top-actions { display: flex; gap: 10px; align-items: center; }
+    .ghost-btn, .soft-btn, .icon-btn {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-weight: 650;
+      font-size: 13px;
+    }
+    .ghost-btn:hover, .soft-btn:hover, .icon-btn:hover { border-color: rgba(155,108,255,.45); }
+    .soft-btn { background: var(--purple-soft); border-color: rgba(155,108,255,.22); color: #d9c9ff; }
+
+    .page {
+      padding: 22px 28px 44px;
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .page-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 20px;
+    }
+    .page-tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 12px;
+      border-radius: 9px;
+      font-weight: 700;
+    }
+    .page-tab.active { background: rgba(255,255,255,.06); color: white; }
+
+    .view { display:none; }
+    .view.active { display:block; }
+
+    .hero-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+    .hero-row h2 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -.03em;
+    }
+    .hero-row p { margin: 7px 0 0; color: var(--muted); font-size: 14px; }
+    .daily-summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .summary-pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+    .summary-pill strong { color: white; }
+
+    .status-banner {
+      border: 1px solid rgba(56,211,159,.32);
+      background: rgba(56,211,159,.08);
+      color: #c8fae8;
+      border-radius: 14px;
+      padding: 13px 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    .status-left { display:flex; align-items:center; gap:10px; }
+    .status-dot { width: 9px; height:9px; border-radius:50%; background: var(--green); box-shadow: 0 0 0 5px rgba(56,211,159,.1); }
+    .close-x { border: 0; background: none; color: currentColor; font-size: 18px; opacity: .7; }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .reel-card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015)), var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,.16);
+      transition: transform .2s ease, border-color .2s ease;
+    }
+    .reel-card:hover { transform: translateY(-3px); border-color: rgba(155,108,255,.35); }
+
+    .video-shell {
+      position: relative;
+      aspect-ratio: 9 / 12;
+      overflow: hidden;
+      background: #181522;
+    }
+    .video-shell::after {
+      content:"";
+      position:absolute;
+      inset:auto 0 0;
+      height: 38%;
+      background: linear-gradient(transparent, rgba(0,0,0,.72));
+      pointer-events:none;
+    }
+    .poster {
+      position:absolute;
+      inset:0;
+      background-size:cover;
+      background-position:center;
+    }
+    .poster-1 { background:
+      linear-gradient(180deg, rgba(15,12,22,.1), rgba(5,5,8,.2)),
+      radial-gradient(circle at 67% 24%, rgba(255,180,99,.45), transparent 24%),
+      linear-gradient(135deg, #211b20 0 34%, #604329 35% 55%, #1a1514 56% 100%); }
+    .poster-2 { background:
+      radial-gradient(circle at 44% 32%, rgba(255,203,133,.85), transparent 12%),
+      linear-gradient(145deg, #0f1f18 0 30%, #516d56 31% 52%, #16120e 53% 100%); }
+    .poster-3 { background:
+      linear-gradient(120deg, rgba(0,0,0,.12), rgba(0,0,0,.55)),
+      linear-gradient(135deg, #291c19 0 26%, #6d5132 27% 56%, #111317 57% 100%); }
+    .poster-4 { background:
+      radial-gradient(circle at 52% 22%, rgba(122,171,255,.7), transparent 18%),
+      linear-gradient(145deg, #0a1421 0 30%, #274466 31% 58%, #0a0e15 59% 100%); }
+    .poster-5 { background:
+      linear-gradient(135deg, rgba(255,255,255,.02), rgba(0,0,0,.45)),
+      linear-gradient(145deg, #1c1714 0 32%, #62423b 33% 57%, #121115 58% 100%); }
+    .poster-6 { background:
+      radial-gradient(circle at 35% 34%, rgba(255,197,115,.55), transparent 18%),
+      linear-gradient(145deg, #182418 0 30%, #6b6d3b 31% 55%, #10130d 56% 100%); }
+    .poster-7 { background:
+      linear-gradient(145deg, #111 0 24%, #5b202a 25% 52%, #0f0d12 53% 100%); }
+
+    .human {
+      position:absolute;
+      left:50%;
+      bottom:-10%;
+      transform:translateX(-50%);
+      width:48%;
+      height:72%;
+      border-radius: 42% 42% 18% 18% / 30% 30% 12% 12%;
+      background: linear-gradient(180deg, #b98363 0 22%, #20232b 23% 100%);
+      box-shadow: 0 0 0 10px rgba(255,255,255,.02);
+      opacity:.9;
+    }
+    .human::before {
+      content:"";
+      position:absolute;
+      width:46%;
+      aspect-ratio:1;
+      border-radius:50%;
+      background: #c28c6c;
+      top:-19%;
+      left:27%;
+      box-shadow: inset 0 -8px 0 rgba(70,38,28,.25);
+    }
+    .human.chef { background: linear-gradient(180deg, #a87458 0 22%, #f3f3f3 23% 64%, #2c2c33 65%); }
+    .human.woman::before { background:#b97e5f; box-shadow: 0 -12px 0 8px #2a171a; }
+    .human.light { background: linear-gradient(180deg, #b17b59 0 22%, #d4d7da 23% 100%); }
+
+    .platform-badge {
+      position:absolute;
+      top:12px;
+      left:12px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 9px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:800;
+      background:rgba(8,8,12,.74);
+      backdrop-filter: blur(8px);
+      z-index:2;
+    }
+    .platform-badge.tiktok { color:#e5f9ff; }
+    .platform-badge.instagram { color:#ffd7f6; }
+
+    .trend-badge {
+      position:absolute;
+      top:12px;
+      right:12px;
+      padding:6px 8px;
+      border-radius:8px;
+      font-size:10px;
+      font-weight:800;
+      z-index:2;
+      background:rgba(8,8,12,.78);
+      backdrop-filter: blur(8px);
+    }
+    .trend-badge.rising { color:#b9ffe3; }
+    .trend-badge.breaking { color:#ffe3a3; }
+    .trend-badge.proven { color:#d9c9ff; }
+    .trend-badge.saturated { color:#ffc2cb; }
+
+    .hook-overlay {
+      position:absolute;
+      left:14px;
+      right:14px;
+      bottom:16px;
+      z-index:2;
+      font-size:19px;
+      line-height:1.05;
+      font-weight:900;
+      letter-spacing:-.03em;
+      text-shadow: 0 2px 14px rgba(0,0,0,.7);
+    }
+    .hook-overlay span { color: var(--yellow); }
+    .play-circle {
+      position:absolute;
+      left:50%; top:48%;
+      transform:translate(-50%,-50%);
+      width:52px; height:52px;
+      border-radius:50%;
+      display:grid; place-items:center;
+      background:rgba(0,0,0,.5);
+      border:1px solid rgba(255,255,255,.22);
+      z-index:2;
+      transition:.2s ease;
+    }
+    .video-shell:hover .play-circle { transform:translate(-50%,-50%) scale(1.08); background:rgba(124,58,237,.72); }
+
+    .card-body { padding: 14px; }
+    .creator-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .creator { display:flex; align-items:center; gap:8px; min-width:0; }
+    .creator-avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#bd7b53,#1c1525); flex:none; }
+    .creator-text { min-width:0; }
+    .creator-text strong { display:block; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .creator-text span { display:block; color:var(--muted-2); font-size:10px; margin-top:2px; }
+    .match-score { color:#d9c9ff; background:var(--purple-soft); border:1px solid rgba(155,108,255,.25); border-radius:999px; font-size:10px; font-weight:800; padding:5px 7px; flex:none; }
+
+    .stats { display:flex; gap:10px; color:var(--muted); font-size:11px; margin-bottom:12px; }
+    .stats strong { color:white; }
+    .why-line {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      min-height: 52px;
+      margin-bottom: 12px;
+    }
+    .why-line b { color:white; }
+
+    .card-actions { display:grid; grid-template-columns: 1fr auto; gap:8px; }
+    .remake-btn {
+      border:0;
+      background:linear-gradient(135deg,var(--purple),#6f40f4);
+      color:white;
+      border-radius:10px;
+      padding:10px 12px;
+      font-weight:800;
+    }
+    .save-btn {
+      width:42px;
+      border:1px solid var(--line);
+      background:var(--panel-2);
+      color:white;
+      border-radius:10px;
+    }
+    .save-btn.saved { color:var(--yellow); border-color:rgba(244,199,93,.45); background:rgba(244,199,93,.08); }
+    .why-btn {
+      border:0;
+      background:transparent;
+      color:#cbb8ff;
+      padding:10px 0 0;
+      font-size:11px;
+      font-weight:700;
+      text-align:left;
+    }
+
+    .end-cap {
+      margin-top: 24px;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      text-align:center;
+      background:rgba(255,255,255,.02);
+    }
+    .end-cap h3 { margin:0 0 6px; }
+    .end-cap p { margin:0 0 14px; color:var(--muted); font-size:13px; }
+    .center-btn {
+      border:1px solid rgba(155,108,255,.35);
+      background:var(--purple-soft);
+      color:#e5dbff;
+      padding:10px 14px;
+      border-radius:10px;
+      font-weight:750;
+    }
+
+    .search-hero {
+      text-align:center;
+      padding: 18px 0 24px;
+    }
+    .search-hero h2 { margin:0; font-size:25px; }
+    .search-hero p { color:var(--muted); margin:8px auto 18px; max-width:620px; font-size:13px; }
+    .search-bar-wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      display:flex;
+      gap:10px;
+    }
+    .search-input {
+      flex:1;
+      background:var(--panel);
+      border:1px solid var(--line);
+      color:white;
+      border-radius:12px;
+      padding:13px 14px;
+      outline:none;
+    }
+    .search-input:focus { border-color:rgba(155,108,255,.55); box-shadow:0 0 0 4px rgba(124,58,237,.1); }
+    .search-btn { border:0; background:linear-gradient(135deg,var(--purple),#6f40f4); color:white; padding:0 18px; border-radius:12px; font-weight:800; }
+
+    .topic-row {
+      display:flex;
+      gap:9px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin-top:14px;
+    }
+    .topic-chip {
+      border:1px solid var(--line);
+      background:var(--panel);
+      color:var(--muted);
+      border-radius:999px;
+      padding:8px 10px;
+      font-size:12px;
+    }
+    .topic-chip:hover { color:white; border-color:rgba(155,108,255,.4); }
+
+    .explore-toolbar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin:18px 0 14px;
+    }
+    .explore-toolbar h3 { margin:0; }
+    .filters { display:flex; gap:8px; }
+    .filter-btn {
+      border:1px solid var(--line);
+      background:var(--panel);
+      color:var(--muted);
+      border-radius:10px;
+      padding:9px 11px;
+      font-size:12px;
+    }
+    .filter-btn.active { color:white; background:var(--purple-soft); border-color:rgba(155,108,255,.35); }
+
+    .saved-toolbar {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      margin-bottom:16px;
+    }
+    .saved-left { display:flex; gap:10px; align-items:center; }
+    .select {
+      background:var(--panel);
+      color:white;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:9px 11px;
+    }
+    .saved-empty {
+      border:1px dashed var(--line);
+      border-radius:16px;
+      padding:50px 20px;
+      text-align:center;
+      color:var(--muted);
+    }
+
+    .modal-backdrop {
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.68);
+      backdrop-filter: blur(8px);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:100;
+      padding:20px;
+    }
+    .modal-backdrop.open { display:flex; }
+    .modal {
+      width:min(760px, 100%);
+      max-height:88vh;
+      background:var(--panel-2);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .modal.wide { width:min(920px, 100%); }
+    .modal-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      padding:17px 18px;
+      border-bottom:1px solid var(--line-soft);
+    }
+    .modal-header h3 { margin:0; font-size:18px; }
+    .modal-header p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+    .modal-close { border:0; background:transparent; color:var(--muted); font-size:22px; }
+    .modal-body { padding:18px; overflow:auto; max-height:calc(88vh - 130px); }
+    .modal-footer { padding:14px 18px; border-top:1px solid var(--line-soft); display:flex; justify-content:flex-end; gap:10px; }
+
+    .analysis-grid { display:grid; grid-template-columns: .95fr 1.05fr; gap:18px; }
+    .mini-video { aspect-ratio:9/12; border-radius:14px; overflow:hidden; position:relative; background:#222; }
+    .mini-video .poster { inset:0; }
+    .mini-video .hook-overlay { font-size:22px; }
+    .analysis-panel { display:grid; gap:12px; }
+    .analysis-card { background:var(--panel); border:1px solid var(--line-soft); border-radius:13px; padding:14px; }
+    .analysis-card h4 { margin:0 0 8px; font-size:13px; }
+    .analysis-list { display:grid; gap:8px; }
+    .analysis-item { display:flex; gap:9px; color:var(--muted); font-size:12px; line-height:1.4; }
+    .analysis-item::before { content:"✓"; color:var(--green); font-weight:900; }
+    .metric-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .metric { background:var(--panel); border:1px solid var(--line-soft); border-radius:12px; padding:12px; }
+    .metric strong { display:block; font-size:18px; }
+    .metric span { color:var(--muted-2); font-size:10px; }
+
+    .remake-flow { display:grid; grid-template-columns: 180px 1fr; min-height:520px; }
+    .flow-steps { border-right:1px solid var(--line-soft); padding:16px 12px; background:rgba(255,255,255,.015); }
+    .flow-step { display:flex; align-items:center; gap:9px; padding:10px; border-radius:10px; color:var(--muted); font-size:12px; }
+    .flow-step.active { background:var(--purple-soft); color:white; }
+    .flow-num { width:22px; height:22px; border-radius:50%; display:grid; place-items:center; background:rgba(255,255,255,.07); font-size:10px; font-weight:800; }
+    .flow-step.active .flow-num { background:var(--purple); }
+    .flow-content { padding:20px; }
+    .flow-content h3 { margin-top:0; }
+    .structure-card { border:1px solid var(--line); background:var(--panel); border-radius:13px; padding:14px; margin-bottom:12px; }
+    .structure-card label { color:var(--muted-2); font-size:10px; display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:.08em; }
+    .structure-card p { margin:0; line-height:1.5; }
+    .option-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .option-card { border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:12px; color:var(--muted); }
+    .option-card.active { border-color:rgba(155,108,255,.55); background:var(--purple-soft); color:white; }
+    .option-card strong { display:block; margin-bottom:5px; }
+
+    .toast {
+      position:fixed;
+      right:24px;
+      bottom:24px;
+      z-index:200;
+      background:#1a1723;
+      border:1px solid var(--line);
+      color:white;
+      border-radius:12px;
+      padding:12px 14px;
+      box-shadow:var(--shadow);
+      display:none;
+      align-items:center;
+      gap:9px;
+      font-size:13px;
+    }
+    .toast.show { display:flex; animation:toastIn .22s ease; }
+    @keyframes toastIn { from { transform:translateY(8px); opacity:0; } to { transform:none; opacity:1; } }
+
+    .filter-drawer {
+      position:fixed;
+      top:0; right:-360px;
+      width:340px;
+      height:100vh;
+      background:var(--panel-2);
+      border-left:1px solid var(--line);
+      z-index:120;
+      box-shadow:-20px 0 60px rgba(0,0,0,.35);
+      transition:right .24s ease;
+      padding:18px;
+    }
+    .filter-drawer.open { right:0; }
+    .drawer-head { display:flex; justify-content:space-between; align-items:center; }
+    .drawer-head h3 { margin:0; }
+    .filter-group { margin-top:22px; }
+    .filter-group h4 { margin:0 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .check-row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; color:var(--muted); font-size:13px; }
+    .check-row input { accent-color:var(--purple); }
+    .drawer-footer { position:absolute; left:18px; right:18px; bottom:18px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+    @media (max-width: 1260px) {
+      .cards-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 84px minmax(0,1fr); }
+      .sidebar { padding:18px 12px; }
+      .brand span, .nav-item span, .profile-mini .profile-copy, .primary-create span { display:none; }
+      .brand { justify-content:center; padding-left:0; padding-right:0; }
+      .primary-create { padding:12px; }
+      .nav-item { justify-content:center; }
+      .profile-mini { justify-content:center; }
+      .cards-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 720px) {
+      .app { display:block; }
+      .sidebar { display:none; }
+      .topbar { padding:0 16px; }
+      .topbar-title p { display:none; }
+      .page { padding:18px 14px 32px; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .hero-row, .explore-toolbar, .saved-toolbar { flex-direction:column; align-items:stretch; }
+      .analysis-grid { grid-template-columns:1fr; }
+      .remake-flow { grid-template-columns:1fr; }
+      .flow-steps { border-right:0; border-bottom:1px solid var(--line-soft); display:flex; overflow:auto; }
+      .flow-step { min-width:max-content; }
+      .search-bar-wrap { flex-direction:column; }
+      .search-btn { padding:12px; }
+    }
+  </style>
+
+  <style id="viral-posts-revision">
+    /* Approved comparison revision: simplify discovery, keep intelligence underneath */
+    .topbar-title p { max-width: 640px; }
+    .reel-card { position: relative; }
+    .video-shell { aspect-ratio: 9 / 11.2; cursor: pointer; }
+    .hook-overlay { font-size: 18px; max-width: 92%; }
+    .card-body { padding: 13px 14px 14px; }
+    .creator-line { margin-bottom: 9px; }
+    .creator-text strong { font-size: 12.5px; }
+    .fit-label {
+      display: inline-flex;
+      align-items: center;
+      max-width: 150px;
+      color: #ddceff;
+      background: rgba(124,58,237,.12);
+      border: 1px solid rgba(155,108,255,.22);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 5px 7px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .stats {
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+      padding: 9px 0;
+      margin: 0 0 10px;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .why-line {
+      min-height: 38px;
+      margin-bottom: 11px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .why-line::before { content: "Why it fits: "; color: #fff; font-weight: 800; }
+    .card-actions { grid-template-columns: 1fr auto; }
+    .remake-btn { min-height: 39px; }
+    .save-btn { width: auto; min-width: 72px; padding: 0 11px; font-size: 12px; font-weight: 750; }
+    .secondary-row {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-top:9px;
+    }
+    .why-btn { padding: 3px 0; font-size: 11.5px; }
+    .kebab-btn {
+      width: 31px;
+      height: 29px;
+      display:grid;
+      place-items:center;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+    .kebab-btn:hover { border-color: var(--line); background: var(--panel-2); color: white; }
+    .card-menu {
+      display:none;
+      position:absolute;
+      right:12px;
+      bottom:47px;
+      z-index:12;
+      min-width:164px;
+      padding:6px;
+      border-radius:11px;
+      border:1px solid var(--line);
+      background:#171522;
+      box-shadow:0 18px 50px rgba(0,0,0,.45);
+    }
+    .card-menu.open { display:grid; }
+    .card-menu button {
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      color:var(--muted);
+      text-align:left;
+      padding:9px 10px;
+      font-size:12px;
+    }
+    .card-menu button:hover { background:rgba(255,255,255,.06); color:white; }
+    .card-menu button.danger:hover { color:#ffb4bd; background:rgba(255,107,122,.08); }
+    .updated-inline {
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      color:#bff8e4;
+      font-size:12px;
+      font-weight:750;
+      padding:6px 0;
+    }
+    .status-banner.compact {
+      padding: 10px 13px;
+      margin-bottom: 18px;
+      border-radius: 11px;
+    }
+    .hero-row.compact { align-items:center; margin-bottom:12px; }
+    .hero-row.compact h2 { font-size:22px; }
+    .explore-toolbar { margin-top: 6px; }
+    .filter-btn.active { border-color: rgba(155,108,255,.48); background: var(--purple-soft); color:white; }
+    .saved-segments {
+      display:flex;
+      gap:6px;
+      padding:4px;
+      width:max-content;
+      border:1px solid var(--line);
+      background:var(--panel);
+      border-radius:11px;
+      margin-bottom:18px;
+    }
+    .saved-segment {
+      border:0;
+      background:transparent;
+      color:var(--muted);
+      padding:8px 12px;
+      border-radius:8px;
+      font-weight:750;
+      font-size:12px;
+    }
+    .saved-segment.active { background:rgba(255,255,255,.07); color:white; }
+    .angle-grid {
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+      margin-top:14px;
+    }
+    .angle-card {
+      border:1px solid var(--line);
+      background:var(--panel-2);
+      color:var(--text);
+      padding:16px;
+      border-radius:13px;
+      text-align:left;
+      min-height:116px;
+    }
+    .angle-card:hover { border-color:rgba(155,108,255,.42); }
+    .angle-card.active { border-color:var(--purple-2); box-shadow:0 0 0 3px rgba(124,58,237,.11); background:var(--purple-soft); }
+    .angle-card strong { display:block; margin-bottom:7px; font-size:14px; }
+    .angle-card span { color:var(--muted); font-size:12px; line-height:1.45; }
+    .recommended-tag {
+      display:inline-flex;
+      font-size:9px;
+      font-weight:850;
+      color:#e5d9ff;
+      background:rgba(124,58,237,.24);
+      border-radius:999px;
+      padding:4px 7px;
+      margin-bottom:9px;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+    }
+    .source-note {
+      color:var(--muted-2);
+      font-size:11px;
+      margin-top:12px;
+    }
+    .native-meta {
+      position:absolute;
+      left:12px;
+      top:47px;
+      z-index:3;
+      display:flex;
+      align-items:center;
+      gap:7px;
+      font-size:10px;
+      color:#fff;
+      text-shadow:0 2px 8px #000;
+    }
+    .native-dot { width:6px;height:6px;border-radius:50%;background:#fff; }
+    @media (max-width: 980px) {
+      .angle-grid { grid-template-columns:1fr; }
+      .fit-label { display:none; }
+    }
+  </style>
+
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/>
+            <path d="m9.5 8.5 6 3.5-6 3.5z" fill="white" stroke="none"/>
+          </svg>
+        </div>
+        <span>SpyReels</span>
+      </div>
+
+      <button class="primary-create" onclick="openCreateToast()">
+        <span>＋ Create a Reel</span>
+      </button>
+
+      <nav class="nav-section">
+        <a class="nav-item" href="#"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
+        <a class="nav-item active" href="#"><span class="nav-icon">◉</span><span>Viral Posts</span></a>
+        <a class="nav-item" href="#"><span class="nav-icon">✦</span><span>Ideas</span></a>
+        <a class="nav-item" href="#"><span class="nav-icon">✎</span><span>Scripts</span></a>
+        <a class="nav-item" href="#"><span class="nav-icon">▣</span><span>Media & B-roll</span></a>
+        <a class="nav-item" href="#"><span class="nav-icon">◫</span><span>Schedule</span></a>
+        <a class="nav-item" href="#"><span class="nav-icon">↗</span><span>Analytics</span></a>
+      </nav>
+
+      <div class="nav-spacer"></div>
+      <div class="sidebar-footer">
+        <a class="nav-item" href="#"><span class="nav-icon">?</span><span>Help Center</span></a>
+        <div class="profile-mini">
+          <div class="avatar"></div>
+          <div class="profile-copy">
+            <strong>Noman Peera</strong>
+            <span>Creator plan</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1>Viral Posts</h1>
+          <p>Fresh Instagram Reels and TikToks selected for your niche.</p>
+        </div>
+        <div class="top-actions">
+          <button class="soft-btn" onclick="openAdjustRecommendations()">⚡ Adjust recommendations</button>
+        </div>
+      </header>
+
+
+      <section class="page">
+        <div class="page-tabs" role="tablist">
+          <button class="page-tab active" data-view="for-you">For You</button>
+          <button class="page-tab" data-view="explore">Explore</button>
+          <button class="page-tab" data-view="saved">Saved</button>
+        </div>
+
+        <section class="view active" id="for-you">
+          <div class="hero-row compact">
+            <div>
+              <h2>6 fresh posts for you today</h2>
+              <p>Based on your audience, content pillars, and previous activity.</p>
+            </div>
+            <span class="updated-inline">✓ Updated today</span>
+          </div>
+
+          <div class="status-banner compact" id="refresh-banner">
+            <div class="status-left">
+              <span class="status-dot"></span>
+              <span><strong>6 new matches</strong> added today.</span>
+            </div>
+            <button class="close-x" onclick="document.getElementById('refresh-banner').style.display='none'">×</button>
+          </div>
+
+          <div class="cards-grid" id="daily-grid"></div>
+
+          <div class="end-cap">
+            <h3>You’ve seen today’s best matches</h3>
+            <p>Explore more viral posts when you want more options.</p>
+            <button class="center-btn" onclick="switchView('explore')">Explore more posts</button>
+          </div>
+        </section>
+
+        <section class="view" id="explore">
+          <div class="search-hero">
+            <h2>Explore viral posts</h2>
+            <p>Search a topic, creator, or competitor across Instagram Reels and TikTok.</p>
+            <div class="search-bar-wrap">
+              <input id="explore-search" class="search-input" placeholder="Search a topic, creator, or competitor" />
+              <button class="search-btn" onclick="runExploreSearch()">Search</button>
+            </div>
+            <div class="topic-row">
+              <button class="topic-chip" onclick="quickSearch('menu engineering mistakes')">Menu engineering</button>
+              <button class="topic-chip" onclick="quickSearch('restaurant labor cost')">Labor cost</button>
+              <button class="topic-chip" onclick="quickSearch('kitchen buildout mistakes')">Kitchen buildouts</button>
+              <button class="topic-chip" onclick="quickSearch('restaurant marketing')">Restaurant marketing</button>
+              <button class="topic-chip" onclick="quickSearch('hospitality leadership')">Leadership</button>
+            </div>
+          </div>
+
+          <div class="explore-toolbar">
+            <h3 id="explore-heading">Trending across your niche</h3>
+            <div class="filters">
+              <button class="filter-btn" onclick="setQuickFilter(this,'rising')">Rising</button>
+              <button class="filter-btn" onclick="setQuickFilter(this,'proven')">Proven</button>
+              <button class="filter-btn" onclick="toggleFilterDrawer()">☰ Filters</button>
+            </div>
+          </div>
+
+          <div class="cards-grid" id="explore-grid"></div>
+        </section>
+
+        <section class="view" id="saved">
+          <div class="hero-row compact">
+            <div>
+              <h2>Saved posts</h2>
+              <p>Keep promising ideas until you are ready to remake them.</p>
+            </div>
+          </div>
+
+          <div class="saved-segments">
+            <button class="saved-segment active" data-filter="all" onclick="setSavedFilter(this,'all')">All</button>
+            <button class="saved-segment" data-filter="unused" onclick="setSavedFilter(this,'unused')">Not remade</button>
+            <button class="saved-segment" data-filter="remade" onclick="setSavedFilter(this,'remade')">Remade</button>
+          </div>
+
+          <div class="cards-grid" id="saved-grid"></div>
+          <div class="saved-empty" id="saved-empty" style="display:none;">
+            <h3>No saved posts yet</h3>
+            <p>Save a post from For You or Explore and it will appear here.</p>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="why-modal">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <h3>Why this post is working</h3>
+          <p>See the pattern, momentum, and why it is relevant to you.</p>
+        </div>
+        <button class="modal-close" onclick="closeModal('why-modal')">×</button>
+      </div>
+      <div class="modal-body" id="why-modal-body"></div>
+      <div class="modal-footer">
+        <button class="ghost-btn" onclick="closeModal('why-modal')">Close</button>
+        <button class="remake-btn" id="why-remake-btn">Remake</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="remake-modal">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <h3>Remake this post</h3>
+          <p>Choose how SpyReels should adapt the proven structure to your voice.</p>
+        </div>
+        <button class="modal-close" onclick="closeModal('remake-modal')">×</button>
+      </div>
+      <div class="modal-body" id="remake-modal-body"></div>
+      <div class="modal-footer">
+        <button class="ghost-btn" onclick="closeModal('remake-modal')">Cancel</button>
+        <button class="remake-btn" id="generate-remake-btn" onclick="generateRemake()">Generate my version</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="simple-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h3 id="simple-title">Modal</h3>
+          <p id="simple-subtitle"></p>
+        </div>
+        <button class="modal-close" onclick="closeModal('simple-modal')">×</button>
+      </div>
+      <div class="modal-body" id="simple-body"></div>
+      <div class="modal-footer">
+        <button class="ghost-btn" onclick="closeModal('simple-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="filter-drawer" id="filter-drawer">
+    <div class="drawer-head">
+      <h3>Explore filters</h3>
+      <button class="modal-close" onclick="toggleFilterDrawer(false)">×</button>
+    </div>
+    <div class="filter-group">
+      <h4>Platform</h4>
+      <label class="check-row">Instagram Reels <input type="checkbox" checked></label>
+      <label class="check-row">TikTok <input type="checkbox" checked></label>
+    </div>
+    <div class="filter-group">
+      <h4>Momentum</h4>
+      <label class="check-row">Breaking out <input type="checkbox" checked></label>
+      <label class="check-row">Rising fast <input type="checkbox" checked></label>
+      <label class="check-row">Proven format <input type="checkbox"></label>
+    </div>
+    <div class="filter-group">
+      <h4>Format</h4>
+      <label class="check-row">Talking head <input type="checkbox"></label>
+      <label class="check-row">Storytelling <input type="checkbox"></label>
+      <label class="check-row">Educational <input type="checkbox"></label>
+      <label class="check-row">Faceless / B-roll <input type="checkbox"></label>
+    </div>
+    <div class="filter-group">
+      <h4>Age</h4>
+      <label class="check-row">Last 24 hours <input type="radio" name="age"></label>
+      <label class="check-row">Last 7 days <input type="radio" name="age" checked></label>
+      <label class="check-row">Last 30 days <input type="radio" name="age"></label>
+    </div>
+    <div class="drawer-footer">
+      <button class="ghost-btn" onclick="showToast('Filters cleared')">Reset</button>
+      <button class="remake-btn" onclick="toggleFilterDrawer(false); showToast('Filters applied')">Apply filters</button>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast"><span>✓</span><span id="toast-text">Done</span></div>
+
+  <script>
+    const reels = [
+      {
+        id: 1,
+        platform: 'Instagram',
+        age: '9h',
+        creator: '@restaurantprofitlab',
+        followers: '18.4K followers',
+        trend: 'rising',
+        trendLabel: 'Rising fast',
+        hook: 'The menu mistake quietly costing restaurants <span>$4,000 a month</span>',
+        plainHook: 'The menu mistake quietly costing restaurants $4,000 a month',
+        views: '184K', likes: '12.8K', comments: '624', shares: '3.1K',
+        match: 96,
+        why: 'Matches your <b>menu engineering</b> pillar and uses a clear money-loss warning.',
+        poster: 'poster-1', human: 'chef',
+        format: 'Talking head + screenshots',
+        mechanism: 'Specific financial loss + hidden mistake + quick fix',
+        angle: 'Menu engineering',
+        structure: ['Specific warning hook', 'Show the hidden mistake', 'Explain the financial impact', 'Give one practical fix', 'Ask viewers to save the Reel'],
+        remade: false
+      },
+      {
+        id: 2,
+        platform: 'TikTok',
+        age: '14h',
+        creator: '@kitchenbuildoutpro',
+        followers: '7.8K followers',
+        trend: 'breaking',
+        trendLabel: 'Breaking out',
+        hook: 'Before you sign a lease, check these <span>3 kitchen problems</span>',
+        plainHook: 'Before you sign a lease, check these 3 kitchen problems',
+        views: '92K', likes: '8.6K', comments: '481', shares: '2.4K',
+        match: 94,
+        why: 'Your audience worries about <b>expensive buildout mistakes</b>; this format is still early.',
+        poster: 'poster-2', human: 'light',
+        format: 'On-site walkthrough',
+        mechanism: 'Pre-purchase checklist + fear of expensive mistakes',
+        angle: 'Kitchen buildouts',
+        structure: ['Call out the decision moment', 'Promise a short checklist', 'Show three examples', 'Explain the cost of ignoring them', 'Invite viewers to comment for the full checklist'],
+        remade: false
+      },
+      {
+        id: 3,
+        platform: 'Instagram',
+        age: '1d',
+        creator: '@owneroperatornotes',
+        followers: '42K followers',
+        trend: 'proven',
+        trendLabel: 'Proven format',
+        hook: 'I stopped blaming my staff after I found this <span>one broken system</span>',
+        plainHook: 'I stopped blaming my staff after I found this one broken system',
+        views: '611K', likes: '39.2K', comments: '1.4K', shares: '8.8K',
+        match: 91,
+        why: 'Strong fit for your <b>restaurant operations</b> pillar and leadership audience.',
+        poster: 'poster-3', human: 'woman',
+        format: 'Personal story',
+        mechanism: 'Confession + leadership shift + operational lesson',
+        angle: 'Operations and leadership',
+        structure: ['Start with a personal admission', 'Reveal the false assumption', 'Name the system failure', 'Explain the change', 'End with a leadership takeaway'],
+        remade: false
+      },
+      {
+        id: 4,
+        platform: 'TikTok',
+        age: '7h',
+        creator: '@hospitalitynumbers',
+        followers: '3.2K followers',
+        trend: 'breaking',
+        trendLabel: 'Breaking out',
+        hook: 'This restaurant has fewer customers—but makes <span>more profit</span>',
+        plainHook: 'This restaurant has fewer customers—but makes more profit',
+        views: '78K', likes: '6.4K', comments: '302', shares: '1.8K',
+        match: 89,
+        why: 'A high-performing small account makes this a strong <b>early signal</b>, not a vanity hit.',
+        poster: 'poster-4', human: 'light',
+        format: 'Case study',
+        mechanism: 'Counterintuitive result + numbers + simple explanation',
+        angle: 'Profitability',
+        structure: ['Open with the contradiction', 'Show the numbers', 'Explain the operational choice', 'Give the takeaway', 'Ask the viewer which model they would choose'],
+        remade: false
+      },
+      {
+        id: 5,
+        platform: 'Instagram',
+        age: '2d',
+        creator: '@menupsychology',
+        followers: '96K followers',
+        trend: 'proven',
+        trendLabel: 'Proven format',
+        hook: 'Why the most profitable menu item is usually <span>not the bestseller</span>',
+        plainHook: 'Why the most profitable menu item is usually not the bestseller',
+        views: '1.2M', likes: '68K', comments: '2.2K', shares: '14K',
+        match: 88,
+        why: 'A durable educational format that works well with your <b>practical expert</b> voice.',
+        poster: 'poster-5', human: 'chef',
+        format: 'Whiteboard explainer',
+        mechanism: 'Myth reversal + useful distinction + visual explanation',
+        angle: 'Menu profitability',
+        structure: ['State the common assumption', 'Challenge it', 'Show the difference between popularity and contribution margin', 'Give one example', 'Prompt viewers to audit their menu'],
+        remade: true
+      },
+      {
+        id: 6,
+        platform: 'TikTok',
+        age: '3d',
+        creator: '@restaurantgrowthcoach',
+        followers: '214K followers',
+        trend: 'saturated',
+        trendLabel: 'Getting saturated',
+        hook: 'Three things I would never do again after opening my <span>first restaurant</span>',
+        plainHook: 'Three things I would never do again after opening my first restaurant',
+        views: '2.4M', likes: '132K', comments: '4.9K', shares: '22K',
+        match: 82,
+        why: 'The structure fits you, but the exact format is becoming crowded. Use a sharper niche angle.',
+        poster: 'poster-6', human: 'woman',
+        format: 'Listicle confession',
+        mechanism: 'Regret + authority + list structure',
+        angle: 'Founder lessons',
+        structure: ['Personal regret hook', 'Three specific mistakes', 'Brief consequence for each', 'One closing principle', 'Invite viewers to share their biggest mistake'],
+        remade: false
+      },
+      {
+        id: 7,
+        platform: 'Instagram',
+        age: '11h',
+        creator: '@serviceflowfix',
+        followers: '11.1K followers',
+        trend: 'rising',
+        trendLabel: 'Rising fast',
+        hook: 'Your servers are not slow. Your <span>service flow</span> is broken.',
+        plainHook: 'Your servers are not slow. Your service flow is broken.',
+        views: '141K', likes: '9.1K', comments: '704', shares: '2.9K',
+        match: 93,
+        why: 'Fits your direct voice and turns a staffing complaint into an operations lesson.',
+        poster: 'poster-7', human: 'chef',
+        format: 'Direct-to-camera',
+        mechanism: 'Blunt reframing + operational diagnosis',
+        angle: 'Service flow',
+        structure: ['Reject the common blame', 'Name the real system problem', 'Show one example', 'Offer one fix', 'Ask users to save for their next team meeting'],
+        remade: false
+      }
+    ];
+
+    const dailyIds = [1,2,3,4,5,6];
+    let savedIds = new Set([5]);
+    let currentReel = null;
+    let quickFilter = 'all';
+    let savedFilter = 'all';
+    let selectedAngle = 'best';
+    let hiddenIds = new Set();
+
+    const dailyGrid = document.getElementById('daily-grid');
+    const exploreGrid = document.getElementById('explore-grid');
+    const savedGrid = document.getElementById('saved-grid');
+
+    function getFitLabel(reel) {
+      const labels = {
+        1: 'Matches Menu Engineering',
+        2: 'Matches Kitchen Buildouts',
+        3: 'Relevant to your audience',
+        4: 'Early signal for Profitability',
+        5: 'Matches your expert style',
+        6: 'Use a sharper niche angle',
+        7: 'Matches Restaurant Operations'
+      };
+      return labels[reel.id] || `Matches ${reel.angle}`;
+    }
+
+    function getFitSentence(reel) {
+      const plain = reel.why.replace(/<[^>]*>/g, '');
+      return plain.replace(/^Matches your /i, '').replace(/^Your audience /i, 'Your audience ');
+    }
+
+    function cardHTML(reel) {
+      const saved = savedIds.has(reel.id);
+      return `
+        <article class="reel-card" data-id="${reel.id}" data-trend="${reel.trend}">
+          <div class="video-shell" onclick="openWhy(${reel.id})">
+            <div class="poster ${reel.poster}"></div>
+            <div class="human ${reel.human || ''}"></div>
+            <div class="platform-badge ${reel.platform.toLowerCase()}">${reel.platform === 'TikTok' ? '♪' : '◎'} ${reel.platform}</div>
+            <div class="trend-badge ${reel.trend}">${reel.trendLabel}</div>
+            <div class="native-meta"><span class="native-dot"></span>${reel.age} ago</div>
+            <div class="play-circle">▶</div>
+            <div class="hook-overlay">${reel.hook}</div>
+          </div>
+          <div class="card-body">
+            <div class="creator-line">
+              <div class="creator">
+                <div class="creator-avatar"></div>
+                <div class="creator-text">
+                  <strong>${reel.creator}</strong>
+                  <span>${reel.followers}</span>
+                </div>
+              </div>
+              <span class="fit-label">${getFitLabel(reel)}</span>
+            </div>
+            <div class="stats">
+              <span><strong>${reel.views}</strong> views</span>
+              <span>${reel.comments} comments</span>
+              <span>${reel.shares} shares</span>
+            </div>
+            <div class="why-line">${getFitSentence(reel)}</div>
+            <div class="card-actions">
+              <button class="remake-btn" onclick="openRemake(${reel.id})">✦ Remake</button>
+              <button class="save-btn ${saved ? 'saved' : ''}" onclick="toggleSave(${reel.id}, this)">${saved ? '★ Saved' : '☆ Save'}</button>
+            </div>
+            <div class="secondary-row">
+              <button class="why-btn" onclick="openWhy(${reel.id})">Why it works →</button>
+              <button class="kebab-btn" aria-label="More options" onclick="event.stopPropagation(); toggleCardMenu(${reel.id})">•••</button>
+            </div>
+          </div>
+          <div class="card-menu" id="card-menu-${reel.id}">
+            <button onclick="feedbackAction(${reel.id},'more')">Show me more like this</button>
+            <button onclick="feedbackAction(${reel.id},'not-relevant')">Not relevant to me</button>
+            <button class="danger" onclick="feedbackAction(${reel.id},'hide')">Hide this creator</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderAll() {
+      dailyGrid.innerHTML = dailyIds.filter(id => !hiddenIds.has(id)).map(id => cardHTML(reels.find(r=>r.id===id))).join('');
+      renderExplore();
+      renderSaved();
+    }
+
+    function renderExplore(query='') {
+      let list = reels.filter(r => !hiddenIds.has(r.id));
+      if (quickFilter !== 'all') list = list.filter(r => r.trend === quickFilter);
+      if (query) {
+        const q = query.toLowerCase();
+        list = list.filter(r => `${r.plainHook} ${r.angle} ${r.mechanism} ${r.why}`.toLowerCase().includes(q.split(' ')[0]));
+      }
+      exploreGrid.innerHTML = list.map(cardHTML).join('');
+      if (!list.length) {
+        exploreGrid.innerHTML = `<div class="saved-empty" style="grid-column:1/-1"><h3>No exact matches yet</h3><p>Try a broader topic or remove a filter.</p></div>`;
+      }
+    }
+
+    function renderSaved() {
+      let list = reels.filter(r => savedIds.has(r.id) && !hiddenIds.has(r.id));
+      if (savedFilter === 'remade') list = list.filter(r => r.remade);
+      if (savedFilter === 'unused') list = list.filter(r => !r.remade);
+      savedGrid.innerHTML = list.map(cardHTML).join('');
+      document.getElementById('saved-empty').style.display = list.length ? 'none' : 'block';
+    }
+
+    function setSavedFilter(btn, filter) {
+      savedFilter = filter;
+      document.querySelectorAll('.saved-segment').forEach(x => x.classList.toggle('active', x === btn));
+      renderSaved();
+    }
+
+    function switchView(viewId) {
+      document.querySelectorAll('.page-tab').forEach(t => t.classList.toggle('active', t.dataset.view === viewId));
+      document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    document.querySelectorAll('.page-tab').forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
+
+    function toggleSave(id, btn) {
+      if (savedIds.has(id)) {
+        savedIds.delete(id);
+        showToast('Removed from saved');
+      } else {
+        savedIds.add(id);
+        showToast('Saved to your idea library');
+      }
+      renderAll();
+    }
+
+    function openWhy(id) {
+      currentReel = reels.find(r=>r.id===id);
+      document.getElementById('why-modal-body').innerHTML = `
+        <div class="analysis-grid">
+          <div class="mini-video">
+            <div class="poster ${currentReel.poster}"></div>
+            <div class="human ${currentReel.human || ''}"></div>
+            <div class="platform-badge ${currentReel.platform.toLowerCase()}">${currentReel.platform === 'TikTok' ? '♪' : '◎'} ${currentReel.platform}</div>
+            <div class="trend-badge ${currentReel.trend}">${currentReel.trendLabel}</div>
+            <div class="hook-overlay">${currentReel.hook}</div>
+          </div>
+          <div class="analysis-panel">
+            <div class="metric-row">
+              <div class="metric"><strong>${getFitLabel(currentReel)}</strong><span>relevance signal</span></div>
+              <div class="metric"><strong>${currentReel.views}</strong><span>views in ${currentReel.age}</span></div>
+              <div class="metric"><strong>${currentReel.trendLabel}</strong><span>momentum signal</span></div>
+            </div>
+            <div class="analysis-card">
+              <h4>What is driving the performance</h4>
+              <div class="analysis-list">
+                ${currentReel.structure.slice(0,4).map(x=>`<div class="analysis-item">${x}</div>`).join('')}
+              </div>
+            </div>
+            <div class="analysis-card">
+              <h4>Why it fits your profile</h4>
+              <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.55">${currentReel.why}</p>
+            </div>
+            <div class="analysis-card">
+              <h4>What SpyReels would preserve</h4>
+              <p style="margin:0;color:var(--muted);font-size:12px;line-height:1.55"><b style="color:white">${currentReel.mechanism}</b>. The creator’s exact wording, examples, and claims would not be copied.</p>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('why-remake-btn').onclick = () => { closeModal('why-modal'); openRemake(id); };
+      openModal('why-modal');
+    }
+
+    function openRemake(id) {
+      currentReel = reels.find(r => r.id === id);
+      selectedAngle = 'best';
+      document.getElementById('generate-remake-btn').textContent = 'Generate my version';
+      document.getElementById('generate-remake-btn').onclick = generateRemake;
+      document.getElementById('remake-modal-body').innerHTML = `
+        <div class="structure-card">
+          <label>Original post</label>
+          <p>${currentReel.plainHook}</p>
+          <div class="source-note">SpyReels will preserve the successful structure—not copy the creator’s wording.</div>
+        </div>
+        <h3 style="margin:22px 0 5px">How should SpyReels adapt it?</h3>
+        <p style="color:var(--muted);margin:0">Choose one direction. You can edit everything in the Remake workspace.</p>
+        <div class="angle-grid">
+          <button class="angle-card active" data-angle="best" onclick="selectAngle(this,'best')">
+            <span class="recommended-tag">Recommended</span>
+            <strong>Best angle for me</strong>
+            <span>Use your audience, content pillars, and direct speaking style.</span>
+          </button>
+          <button class="angle-card" data-angle="story" onclick="selectAngle(this,'story')">
+            <strong>Personal story</strong>
+            <span>Turn the idea into a real lesson from your experience.</span>
+          </button>
+          <button class="angle-card" data-angle="contrarian" onclick="selectAngle(this,'contrarian')">
+            <strong>Contrarian take</strong>
+            <span>Challenge the common advice and explain a better approach.</span>
+          </button>
+        </div>
+      `;
+      openModal('remake-modal');
+    }
+
+    function selectAngle(el, angle) {
+      selectedAngle = angle;
+      document.querySelectorAll('.angle-card').forEach(x => x.classList.toggle('active', x === el));
+    }
+
+    function generateRemake() {
+      const button = document.getElementById('generate-remake-btn');
+      button.disabled = true;
+      button.textContent = 'Generating…';
+      document.getElementById('remake-modal-body').innerHTML = `
+        <div class="analysis-card">
+          <h4>Creating your original version</h4>
+          <p style="color:var(--muted);margin:0">Using your voice, restaurant audience, and the post’s proven structure.</p>
+        </div>
+      `;
+      setTimeout(() => {
+        const angleText = selectedAngle === 'story'
+          ? 'I learned this after watching restaurant owners spend on finishes before fixing the kitchen flow.'
+          : selectedAngle === 'contrarian'
+            ? 'Your menu is not the first thing you should design. Your kitchen flow is.'
+            : 'Stop designing your menu before you understand what your kitchen can actually produce.';
+        document.getElementById('remake-modal-body').innerHTML = `
+          <div class="structure-card"><label>Your new hook</label><p>${angleText}</p></div>
+          <div class="structure-card">
+            <label>Script preview</label>
+            <p>Most owners perfect the menu first. But the expensive mistakes usually begin with equipment placement, movement, and production capacity. Map the kitchen path before you spend on finishes. Then build a menu the operation can deliver profitably.</p>
+          </div>
+          <div class="analysis-card">
+            <h4>Ready in the Remake workspace</h4>
+            <div class="analysis-list">
+              <div class="analysis-item">Original script in your voice</div>
+              <div class="analysis-item">Instagram and TikTok captions</div>
+              <div class="analysis-item">Shot guidance and B-roll suggestions</div>
+            </div>
+          </div>
+        `;
+        button.disabled = false;
+        button.textContent = 'Open Remake workspace';
+        button.onclick = finishRemake;
+      }, 700);
+    }
+
+    function finishRemake() {
+      currentReel.remade = true;
+      savedIds.add(currentReel.id);
+      closeModal('remake-modal');
+      renderAll();
+      showToast('Opened in Remake workspace');
+    }
+    function quickSearch(q) { document.getElementById('explore-search').value = q; runExploreSearch(); }
+    function setQuickFilter(btn, filter) {
+      const wasActive = btn.classList.contains('active');
+      document.querySelectorAll('.filter-btn').forEach(x => {
+        if (!x.textContent.includes('Filters')) x.classList.remove('active');
+      });
+      quickFilter = wasActive ? 'all' : filter;
+      if (!wasActive) btn.classList.add('active');
+      runExploreSearch();
+    }
+
+
+    function toggleCardMenu(id) {
+      document.querySelectorAll('.card-menu').forEach(menu => {
+        if (menu.id !== `card-menu-${id}`) menu.classList.remove('open');
+      });
+      document.getElementById(`card-menu-${id}`)?.classList.toggle('open');
+    }
+
+    function feedbackAction(id, action) {
+      document.querySelectorAll('.card-menu').forEach(menu => menu.classList.remove('open'));
+      if (action === 'more') showToast('We’ll show more posts like this');
+      if (action === 'not-relevant') showToast('Recommendation feedback saved');
+      if (action === 'hide') {
+        hiddenIds.add(id);
+        renderAll();
+        showToast('Creator hidden from recommendations');
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.kebab-btn') && !event.target.closest('.card-menu')) {
+        document.querySelectorAll('.card-menu').forEach(menu => menu.classList.remove('open'));
+      }
+    });
+
+    function openCreateToast() { showToast('Create Reel flow opened'); }
+
+    function openHowItWorks() {
+      document.getElementById('simple-title').textContent = 'How Viral Posts works';
+      document.getElementById('simple-subtitle').textContent = 'SpyReels ranks opportunities by momentum, relevance, and originality potential.';
+      document.getElementById('simple-body').innerHTML = `
+        <div class="analysis-list">
+          <div class="analysis-item">Finds Reels gaining unusual momentum relative to the creator’s audience size.</div>
+          <div class="analysis-item">Matches each trend to your audience, content pillars, voice, and preferred format.</div>
+          <div class="analysis-item">Explains the successful mechanism before you remake anything.</div>
+          <div class="analysis-item">Creates an original Reel using your expertise instead of copying the original creator.</div>
+        </div>
+      `;
+      openModal('simple-modal');
+    }
+
+    function openAdjustRecommendations() {
+      document.getElementById('simple-title').textContent = 'Adjust recommendations';
+      document.getElementById('simple-subtitle').textContent = 'Fine-tune what appears in your daily Viral Posts feed.';
+      document.getElementById('simple-body').innerHTML = `
+        <div class="analysis-card">
+          <h4>Currently prioritizing</h4>
+          <div class="topic-row" style="justify-content:flex-start;margin:0">
+            <span class="topic-chip">Restaurant profitability</span>
+            <span class="topic-chip">Menu engineering</span>
+            <span class="topic-chip">Kitchen buildouts</span>
+            <span class="topic-chip">Hospitality leadership</span>
+          </div>
+        </div>
+        <div class="analysis-card" style="margin-top:12px">
+          <h4>Daily mix</h4>
+          <label class="check-row">Early trends with lower views <input type="checkbox" checked></label>
+          <label class="check-row">Proven high-performing formats <input type="checkbox" checked></label>
+          <label class="check-row">Competitor and adjacent-niche ideas <input type="checkbox"></label>
+          <label class="check-row">Show saturated trends as warnings <input type="checkbox" checked></label>
+        </div>
+      `;
+      openModal('simple-modal');
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.classList.remove('open'); }));
+
+    function showToast(text) {
+      document.getElementById('toast-text').textContent = text;
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(()=>toast.classList.remove('show'), 2200);
+    }
+
+    function toggleFilterDrawer(force) {
+      const drawer = document.getElementById('filter-drawer');
+      const open = typeof force === 'boolean' ? force : !drawer.classList.contains('open');
+      drawer.classList.toggle('open', open);
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
