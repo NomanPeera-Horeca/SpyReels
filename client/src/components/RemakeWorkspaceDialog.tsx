@@ -97,7 +97,16 @@ export function RemakeWorkspaceDialog({
   const [caption, setCaption] = useState("");
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [lastUserPrompt, setLastUserPrompt] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    userPrompt: string;
+    scriptBefore: string;
+    captionBefore: string;
+    scriptDraft: string | null;
+    captionDraft: string | null;
+    applied: boolean;
+    note: string;
+  } | null>(null);
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [status, setStatus] = useState("All changes saved");
@@ -107,12 +116,10 @@ export function RemakeWorkspaceDialog({
   const [glowField, setGlowField] = useState<EditorTab | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [diffOpen, setDiffOpen] = useState(false);
-  const [diffBefore, setDiffBefore] = useState("");
-  const [diffAfter, setDiffAfter] = useState("");
   const [undoTarget, setUndoTarget] = useState<{
-    field: EditorTab;
-    value: string;
+    field: EditorTab | "both";
+    script: string;
+    caption: string;
   } | null>(null);
   const [schedMenuOpen, setSchedMenuOpen] = useState(false);
   const [mediaMode, setMediaMode] = useState<"home" | "results" | "search" | "generate" | "upload">(
@@ -189,7 +196,9 @@ export function RemakeWorkspaceDialog({
     setLeftTab("ai");
     setEditorTab("script");
     setViewMode("edit");
-    setAiResult(null);
+    setLastUserPrompt(null);
+    setAiSuggestion(null);
+    setUndoTarget(null);
     setClarifyOpen(false);
     setMediaMode("home");
     setBrollMatched(false);
@@ -253,72 +262,73 @@ export function RemakeWorkspaceDialog({
       setAiBusy(true);
       setStatusBusy(true);
       setStatus("SpyReels is rewriting…");
-      setAiResult(null);
+      setLastUserPrompt(prompt);
       try {
-        const targets: EditorTab[] =
-          field === "both" ? ["script", "caption"] : [field];
+        const iterating =
+          aiSuggestion != null && !aiSuggestion.applied ? aiSuggestion : null;
+        const scriptBefore = iterating?.scriptBefore ?? script;
+        const captionBefore = iterating?.captionBefore ?? caption;
+        let scriptDraft = iterating?.scriptDraft ?? null;
+        let captionDraft = iterating?.captionDraft ?? null;
 
-        for (const t of targets) {
-          const before = t === "script" ? script : caption;
-          let after = before;
-
-          if (t === "caption") {
-            if (
-              /hashtag/i.test(prompt) ||
-              /rewrite the caption/i.test(prompt) ||
-              /call to action|cta/i.test(prompt) ||
-              !before.trim()
-            ) {
-              const gen = await captionMutation.mutateAsync({
+        if (field === "script" || field === "both") {
+          const before = iterating?.scriptDraft ?? script;
+          const useGrammar = /grammar|spelling|typo/i.test(prompt);
+          const rewritten = useGrammar
+            ? await grammarMutation.mutateAsync({ scriptId, content: before })
+            : await aiRewriteMutation.mutateAsync({
                 scriptId,
-                content: script || before || "Reel script",
-                style: "educational",
-                captionLength: "medium",
-                targetAudience: onboardingQuery.data?.targetAudience ?? undefined,
+                content: before,
+                instruction: prompt,
               });
-              after = gen.caption;
-              if (/hashtag/i.test(prompt) && gen.hashtags?.length) {
-                after = `${gen.caption}\n\n${gen.hashtags.map((h: string) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`;
-              }
-            } else {
-              const rewritten = await aiRewriteMutation.mutateAsync({
-                scriptId,
-                content: before || script,
-                instruction: `Rewrite this Instagram Reel caption only. ${prompt}. Return only the caption text.`,
-              });
-              after = rewritten.content;
-            }
-            setDiffBefore(before);
-            setDiffAfter(after);
-            setUndoTarget({ field: "caption", value: before });
-            setCaption(after);
-            flashUpdated("caption");
-            setEditorTab("caption");
-            await updateMutation.mutateAsync({
-              id: scriptId,
-              generatedCaption: after,
-            });
-          } else {
-            const useGrammar = /grammar|spelling|typo/i.test(prompt);
-            const rewritten = useGrammar
-              ? await grammarMutation.mutateAsync({ scriptId, content: before })
-              : await aiRewriteMutation.mutateAsync({
-                  scriptId,
-                  content: before,
-                  instruction: prompt,
-                });
-            after = rewritten.content;
-            setDiffBefore(before);
-            setDiffAfter(after);
-            setUndoTarget({ field: "script", value: before });
-            setScript(after);
-            flashUpdated("script");
-            setEditorTab("script");
-          }
+          scriptDraft = rewritten.content;
         }
 
-        setAiResult("Done. Review the update on the right, or undo if you prefer the previous version.");
-        setDiffOpen(true);
+        if (field === "caption" || field === "both") {
+          const before = iterating?.captionDraft ?? caption;
+          let after = before;
+          if (
+            /hashtag/i.test(prompt) ||
+            /rewrite the caption/i.test(prompt) ||
+            /call to action|cta/i.test(prompt) ||
+            !before.trim()
+          ) {
+            const gen = await captionMutation.mutateAsync({
+              scriptId,
+              content: (iterating?.scriptDraft ?? script) || before || "Reel script",
+              style: "educational",
+              captionLength: "medium",
+              targetAudience: onboardingQuery.data?.targetAudience ?? undefined,
+            });
+            after = gen.caption;
+            if (/hashtag/i.test(prompt) && gen.hashtags?.length) {
+              after = `${gen.caption}\n\n${gen.hashtags
+                .map((h: string) => (h.startsWith("#") ? h : `#${h}`))
+                .join(" ")}`;
+            }
+          } else {
+            const rewritten = await aiRewriteMutation.mutateAsync({
+              scriptId,
+              content: before || script,
+              instruction: `Rewrite this Instagram Reel caption only. ${prompt}. Return only the caption text.`,
+            });
+            after = rewritten.content;
+          }
+          captionDraft = after;
+        }
+
+        setAiSuggestion({
+          userPrompt: prompt,
+          scriptBefore,
+          captionBefore,
+          scriptDraft: field === "caption" ? iterating?.scriptDraft ?? null : scriptDraft,
+          captionDraft: field === "script" ? iterating?.captionDraft ?? null : captionDraft,
+          applied: false,
+          note:
+            "Here is an improved version. Apply it to your draft when you like it, or ask for another tweak.",
+        });
+        if (field === "caption") setEditorTab("caption");
+        else setEditorTab("script");
         setStatus("All changes saved");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "AI update failed");
@@ -330,17 +340,73 @@ export function RemakeWorkspaceDialog({
     },
     [
       aiRewriteMutation,
+      aiSuggestion,
       caption,
       captionMutation,
-      flashUpdated,
       grammarMutation,
       onboardingQuery.data?.targetAudience,
       script,
       scriptId,
-      updateMutation,
       isPreview,
     ]
   );
+
+  const applySuggestionToEditor = useCallback(async () => {
+    if (!aiSuggestion || aiSuggestion.applied) return;
+    const nextScript = aiSuggestion.scriptDraft;
+    const nextCaption = aiSuggestion.captionDraft;
+    setUndoTarget({
+      field:
+        nextScript != null && nextCaption != null
+          ? "both"
+          : nextCaption != null
+            ? "caption"
+            : "script",
+      script: aiSuggestion.scriptBefore,
+      caption: aiSuggestion.captionBefore,
+    });
+    if (nextScript != null) {
+      setScript(nextScript);
+      flashUpdated("script");
+      setEditorTab("script");
+    }
+    if (nextCaption != null) {
+      setCaption(nextCaption);
+      flashUpdated("caption");
+      if (nextScript == null) setEditorTab("caption");
+      if (scriptId != null) {
+        try {
+          await updateMutation.mutateAsync({
+            id: scriptId,
+            generatedCaption: nextCaption,
+          });
+        } catch {
+          /* mutation toasts */
+        }
+      }
+    }
+    setAiSuggestion({ ...aiSuggestion, applied: true });
+    toast.success("Applied to your draft");
+  }, [aiSuggestion, flashUpdated, scriptId, updateMutation]);
+
+  const undoLastAiApply = useCallback(() => {
+    if (!undoTarget) return;
+    setScript(undoTarget.script);
+    setCaption(undoTarget.caption);
+    setUndoTarget(null);
+    if (aiSuggestion) {
+      setAiSuggestion({ ...aiSuggestion, applied: false });
+    }
+    toast.message("Reverted last AI apply");
+  }, [aiSuggestion, undoTarget]);
+
+  const resetAiConversation = useCallback(() => {
+    setLastUserPrompt(null);
+    setAiSuggestion(null);
+    setUndoTarget(null);
+    setClarifyOpen(false);
+    setPendingPrompt(null);
+  }, []);
 
   const runAiPrompt = useCallback(
     (raw: string, force?: EditorTab) => {
@@ -481,25 +547,67 @@ export function RemakeWorkspaceDialog({
               {leftTab === "ai" ? (
                 <div className="rw-pane on">
                   <div className="rw-scroll">
-                    <div className="rw-h3">What should we improve?</div>
-                    <div className="rw-actions">
-                      {[
-                        ["Make the hook stronger", "Stronger hook"],
-                        ["Make it easier to say", "Easier to say"],
-                        ["Make it more casual", "More casual"],
-                        ["Fix the grammar", "Fix grammar"],
-                      ].map(([prompt, label]) => (
+                    <div className="rw-assist-top">
+                      <div>
+                        <div className="rw-h3">AI Assist</div>
+                        <p className="rw-muted" style={{ margin: "2px 0 0" }}>
+                          Rewrite in your voice. Apply when you like it.
+                        </p>
+                      </div>
+                      {(lastUserPrompt || aiSuggestion) && !aiBusy ? (
                         <button
-                          key={label}
                           type="button"
-                          className="rw-chip"
-                          disabled={aiBusy || isGenerating}
-                          onClick={() => runAiPrompt(prompt)}
+                          className="rw-refresh"
+                          title="Start a new conversation"
+                          onClick={resetAiConversation}
                         >
-                          {label}
+                          ↻
                         </button>
-                      ))}
+                      ) : null}
                     </div>
+
+                    {!lastUserPrompt && !aiSuggestion && !aiBusy ? (
+                      <>
+                        <p className="rw-welcome">
+                          Your AI agent for tightening hooks and rewriting this Reel in your voice.
+                        </p>
+                        <div className="rw-cmd-list">
+                          {(
+                            [
+                              ["Make the hook stronger", "Stronger hook"],
+                              ["Make it easier to say out loud", "Easier to say"],
+                              ["Make it more casual", "More casual"],
+                              ["Fix the grammar", "Fix grammar"],
+                            ] as const
+                          ).map(([prompt, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className="rw-cmd"
+                              disabled={aiBusy || isGenerating || !script.trim()}
+                              onClick={() => runAiPrompt(prompt, "script")}
+                            >
+                              <span>{label}</span>
+                              <span className="rw-cmd-go">→</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="rw-muted" style={{ marginTop: 10, fontSize: 12 }}>
+                          Use a command above, or ask anything below.
+                        </p>
+                      </>
+                    ) : null}
+
+                    {lastUserPrompt ? (
+                      <div className="rw-chat-user">
+                        <span className="rw-chat-label">You</span>
+                        <p>
+                          {lastUserPrompt}
+                          <span className="rw-var"> [script]</span>
+                        </p>
+                      </div>
+                    ) : null}
+
                     {aiBusy ? (
                       <div className="rw-loading">
                         <span className="rw-dots">
@@ -510,32 +618,71 @@ export function RemakeWorkspaceDialog({
                         SpyReels is rewriting…
                       </div>
                     ) : null}
-                    {aiResult ? (
-                      <div className="rw-result">
-                        <p>{aiResult}</p>
-                        <div className="rw-links">
-                          <button
-                            type="button"
-                            className="rw-link"
-                            onClick={() => setDiffOpen(true)}
-                          >
-                            What changed
-                          </button>
+
+                    {aiSuggestion && !aiBusy ? (
+                      <div className="rw-suggest">
+                        <p className="rw-suggest-note">{aiSuggestion.note}</p>
+                        {aiSuggestion.scriptDraft != null ? (
+                          <div className="rw-suggest-card">
+                            <div className="rw-suggest-kicker">Script suggestion</div>
+                            <pre className="rw-suggest-body">{aiSuggestion.scriptDraft}</pre>
+                          </div>
+                        ) : null}
+                        {aiSuggestion.captionDraft != null ? (
+                          <div className="rw-suggest-card">
+                            <div className="rw-suggest-kicker">Caption suggestion</div>
+                            <pre className="rw-suggest-body">{aiSuggestion.captionDraft}</pre>
+                          </div>
+                        ) : null}
+                        <div className="rw-suggest-actions">
+                          {!aiSuggestion.applied ? (
+                            <button
+                              type="button"
+                              className="rw-btn rw-btn-primary rw-btn-sm"
+                              onClick={() => void applySuggestionToEditor()}
+                            >
+                              Apply to draft
+                            </button>
+                          ) : (
+                            <span className="rw-applied">Applied to draft</span>
+                          )}
                           {undoTarget ? (
                             <button
                               type="button"
                               className="rw-link"
-                              onClick={() => {
-                                if (undoTarget.field === "script") setScript(undoTarget.value);
-                                else setCaption(undoTarget.value);
-                                setUndoTarget(null);
-                                setAiResult(null);
-                                toast.message("Reverted last AI change");
-                              }}
+                              onClick={undoLastAiApply}
                             >
                               Undo
                             </button>
                           ) : null}
+                        </div>
+                        <div className="rw-make-it">
+                          <span className="rw-make-label">Make it</span>
+                          {(
+                            [
+                              ["Make it shorter", "Shorter"],
+                              ["Make it longer", "Longer"],
+                              ["Make it bolder", "Bolder"],
+                              ["Make it more casual", "More casual"],
+                              ["Make it more formal", "More formal"],
+                            ] as const
+                          ).map(([prompt, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className="rw-link"
+                              disabled={aiBusy}
+                              onClick={() => {
+                                const field: EditorTab =
+                                  aiSuggestion.scriptDraft != null
+                                    ? "script"
+                                    : "caption";
+                                void applyAiToField(prompt, field);
+                              }}
+                            >
+                              {label}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     ) : null}
@@ -562,7 +709,7 @@ export function RemakeWorkspaceDialog({
                       <textarea
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
-                        placeholder="Tell SpyReels what you want changed…"
+                        placeholder="Ask anything, or improve the script on the right…"
                         disabled={aiBusy}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -966,26 +1113,28 @@ export function RemakeWorkspaceDialog({
                           <button
                             type="button"
                             className="rw-btn rw-btn-soft rw-btn-sm"
-                            disabled={aiBusy || !script.trim()}
-                            onClick={() => runAiPrompt("Make the hook stronger", "script")}
+                            disabled={aiBusy || !script.trim() || isGenerating}
+                            onClick={() =>
+                              runAiPrompt("Improve this Reel script in my voice", "script")
+                            }
                           >
-                            Stronger hook
+                            Improve script
                           </button>
                           <button
                             type="button"
                             className="rw-btn rw-btn-ghost rw-btn-sm"
-                            disabled={aiBusy || !script.trim()}
-                            onClick={() => runAiPrompt("Make it shorter", "script")}
-                          >
-                            Make shorter
-                          </button>
-                          <button
-                            type="button"
-                            className="rw-btn rw-btn-ghost rw-btn-sm"
-                            disabled={aiBusy || !script.trim()}
+                            disabled={aiBusy || !script.trim() || isGenerating}
                             onClick={() => runAiPrompt("Fix the grammar", "script")}
                           >
                             Fix grammar
+                          </button>
+                          <button
+                            type="button"
+                            className="rw-btn rw-btn-ghost rw-btn-sm"
+                            disabled={aiBusy || !script.trim() || isGenerating}
+                            onClick={() => runAiPrompt("Make it shorter", "script")}
+                          >
+                            Make shorter
                           </button>
                         </div>
                       </div>
@@ -1145,47 +1294,6 @@ export function RemakeWorkspaceDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
-        <DialogContent className="max-w-lg border-[#2a2640] bg-[#211e2b] text-[#f3f0fa]">
-          <DialogHeader>
-            <DialogTitle>What changed</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div>
-              <div className="mb-1 text-xs font-semibold text-[#a39db8]">Before</div>
-              <pre className="rw-diff-box whitespace-pre-wrap">{diffBefore || "(empty)"}</pre>
-            </div>
-            <div>
-              <div className="mb-1 text-xs font-semibold text-[#a39db8]">After</div>
-              <pre className="rw-diff-box after whitespace-pre-wrap">{diffAfter || "(empty)"}</pre>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rw-btn rw-btn-ghost"
-              onClick={() => setDiffOpen(false)}
-            >
-              Close
-            </button>
-            {undoTarget ? (
-              <button
-                type="button"
-                className="rw-btn rw-btn-soft"
-                onClick={() => {
-                  if (undoTarget.field === "script") setScript(undoTarget.value);
-                  else setCaption(undoTarget.value);
-                  setUndoTarget(null);
-                  setDiffOpen(false);
-                }}
-              >
-                Undo
-              </button>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
         <DialogContent className="max-w-md border-[#2a2640] bg-[#1a1724] text-[#f3f0fa]">
           <DialogHeader>
@@ -1255,6 +1363,28 @@ const REMAKE_WS_CSS = `
 .remake-ws .rw-compose { border-top:1px solid var(--rw-border); padding:12px; flex-shrink:0; background:rgba(0,0,0,0.18); }
 .remake-ws .rw-h3 { font-size:17px; font-weight:800; margin-bottom:4px; }
 .remake-ws .rw-muted { color:var(--rw-muted); }
+.remake-ws .rw-assist-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.remake-ws .rw-refresh { border:1px solid var(--rw-border); background:rgba(255,255,255,0.04); color:#c4b5fd; width:32px; height:32px; border-radius:999px; cursor:pointer; font-size:16px; line-height:1; flex-shrink:0; }
+.remake-ws .rw-refresh:hover { border-color:rgba(124,58,237,0.45); }
+.remake-ws .rw-welcome { font-size:13px; color:var(--rw-muted); margin:0 0 12px; line-height:1.45; }
+.remake-ws .rw-cmd-list { display:flex; flex-direction:column; gap:8px; }
+.remake-ws .rw-cmd { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; border:1px solid var(--rw-border); background:rgba(124,58,237,0.12); color:#ede9fe; border-radius:12px; padding:11px 12px; font-weight:700; font-size:13px; cursor:pointer; }
+.remake-ws .rw-cmd:hover { border-color:rgba(124,58,237,0.5); background:rgba(124,58,237,0.18); }
+.remake-ws .rw-cmd:disabled { opacity:0.5; cursor:not-allowed; }
+.remake-ws .rw-cmd-go { color:#c4b5fd; font-weight:800; }
+.remake-ws .rw-chat-user { margin:10px 0 8px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--rw-border); }
+.remake-ws .rw-chat-label { display:block; font-size:11px; font-weight:800; color:var(--rw-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.04em; }
+.remake-ws .rw-chat-user p { margin:0; font-size:13px; line-height:1.45; color:#f3f0fa; }
+.remake-ws .rw-var { color:#c4b5fd; font-weight:700; }
+.remake-ws .rw-suggest { margin-top:8px; }
+.remake-ws .rw-suggest-note { font-size:13px; color:var(--rw-muted); margin:0 0 10px; line-height:1.45; }
+.remake-ws .rw-suggest-card { background:rgba(0,0,0,0.28); border:1px solid var(--rw-border); border-radius:12px; padding:12px; margin-bottom:10px; }
+.remake-ws .rw-suggest-kicker { font-size:11px; font-weight:800; color:#c4b5fd; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; }
+.remake-ws .rw-suggest-body { margin:0; white-space:pre-wrap; font-family:inherit; font-size:14px; line-height:1.5; color:#f3f0fa; max-height:220px; overflow:auto; }
+.remake-ws .rw-suggest-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.remake-ws .rw-applied { font-size:13px; font-weight:700; color:var(--rw-ok); }
+.remake-ws .rw-make-it { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding-top:4px; }
+.remake-ws .rw-make-label { font-size:12px; font-weight:750; color:var(--rw-muted); }
 .remake-ws .rw-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .remake-ws .rw-chip { border:1px solid var(--rw-border); background:rgba(255,255,255,0.03); color:#ddd6fe; border-radius:999px; padding:8px 12px; font-weight:650; cursor:pointer; font-size:13px; }
 .remake-ws .rw-chip:hover { border-color:rgba(124,58,237,0.45); }
@@ -1262,6 +1392,7 @@ const REMAKE_WS_CSS = `
 .remake-ws .rw-result { background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-top:8px; }
 .remake-ws .rw-links { display:flex; gap:14px; margin-top:8px; }
 .remake-ws .rw-link { border:0; background:none; color:#c4b5fd; font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; padding:0; font-size:13px; }
+.remake-ws .rw-link:disabled { opacity:0.5; cursor:not-allowed; }
 .remake-ws .rw-ask { display:flex; gap:8px; align-items:flex-end; }
 .remake-ws .rw-ask textarea { flex:1; min-height:64px; resize:none; border-radius:12px; border:1px solid var(--rw-border); background:rgba(0,0,0,0.28); color:#f3f0fa; padding:10px 12px; outline:none; }
 .remake-ws .rw-ask textarea:focus { border-color:rgba(124,58,237,0.5); }
@@ -1340,6 +1471,4 @@ const REMAKE_WS_CSS = `
 .remake-ws .rw-sched-menu button { display:block; width:100%; text-align:left; border:0; background:transparent; color:#f3f0fa; padding:11px 13px; font-weight:650; cursor:pointer; }
 .remake-ws .rw-sched-menu button:hover { background:var(--rw-soft); }
 .remake-ws .rw-gen-banner { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:10px 12px; border-radius:10px; background:var(--rw-soft); font-size:13px; font-weight:650; }
-.rw-diff-box { margin:0; padding:12px; border-radius:10px; background:rgba(0,0,0,0.25); white-space:pre-wrap; font-size:14px; line-height:1.5; color:#f3f0fa; }
-.rw-diff-box.after { outline:1px solid rgba(124,58,237,0.4); }
 `;
