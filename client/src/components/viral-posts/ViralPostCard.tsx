@@ -54,7 +54,7 @@ export function ViralPostCard({
 
   return (
     <article className="relative overflow-hidden rounded-[16px] border border-[#2b2739] bg-[#111019] shadow-[0_18px_50px_rgba(0,0,0,.28)]">
-      <ViralPostPreview post={post} onClick={() => onWhyItWorks(post)} />
+      <ViralPostPreview post={post} />
 
       <div className="px-3.5 pb-3.5 pt-3">
         <div className="mb-2.5 flex items-start justify-between gap-2">
@@ -108,7 +108,11 @@ export function ViralPostCard({
             rel="noreferrer"
             className="mb-2.5 inline-block text-[11px] font-semibold text-[#9b6cff] hover:underline"
           >
-            Open on Instagram
+            {post.platform === "tiktok"
+              ? "Open on TikTok"
+              : post.platform === "youtube"
+                ? "Open on YouTube"
+                : "Open on Instagram"}
           </a>
         ) : null}
 

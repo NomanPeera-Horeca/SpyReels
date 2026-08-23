@@ -430,7 +430,7 @@ export async function hideCreator(args: {
 
 export async function getHiddenCreatorKeys(
   userId: number,
-  platform = "instagram"
+  platform?: string
 ): Promise<Set<string>> {
   const db = await getDb();
   if (!db) return new Set();
@@ -438,10 +438,12 @@ export async function getHiddenCreatorKeys(
     .select({ creatorKey: viralPostHiddenCreators.creatorKey })
     .from(viralPostHiddenCreators)
     .where(
-      and(
-        eq(viralPostHiddenCreators.userId, userId),
-        eq(viralPostHiddenCreators.platform, platform)
-      )
+      platform
+        ? and(
+            eq(viralPostHiddenCreators.userId, userId),
+            eq(viralPostHiddenCreators.platform, platform)
+          )
+        : eq(viralPostHiddenCreators.userId, userId)
     );
   return new Set(rows.map((r) => r.creatorKey.toLowerCase()));
 }

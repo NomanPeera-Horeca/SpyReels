@@ -2,6 +2,7 @@ import type {
   ViralDailyFeedResponse,
   ViralMediaStatus,
   ViralPost,
+  ViralPostPlatform,
   ViralSearchResponse,
 } from "@shared/viralPosts";
 import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN } from "@shared/viralPosts";
@@ -17,11 +18,15 @@ import {
 import {
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
+  VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
 import { selectDiverseFeed } from "./diversity";
 import {
+  isAnyViralPostsPlatformEnabled,
   isViralPostsInstagramEnabled,
   isViralPostsLive,
+  isViralPostsTiktokEnabled,
+  isViralPostsYoutubeEnabled,
 } from "./featureFlag";
 import { resolveThumbnailFallback, scheduleThumbnailMirroring } from "./mediaMirror";
 import {
@@ -89,7 +94,7 @@ function candidateToViralPost(
   return {
     id: String(candidate.id),
     sourceId: candidate.sourceId,
-    platform: "instagram",
+    platform: (candidate.platform as ViralPostPlatform) || "instagram",
     creatorId: candidate.creatorId,
     creatorName: candidate.creatorName,
     creatorHandle: candidate.creatorHandle,
@@ -214,6 +219,7 @@ function scoreAndSelect(
           recentlyDismissed: opts.dismissed.has(row.id),
           recentlyShown: opts.recentlyShown.has(row.id),
           hashtagKey: a.hashtagKey,
+          platform: a.platform,
         },
       };
     })
@@ -237,7 +243,7 @@ export async function getOrCreateDailyFeed(args: {
   timezone: string;
 }): Promise<ViralDailyFeedResponse> {
   const requestStarted = Date.now();
-  if (!isViralPostsLive || !isViralPostsInstagramEnabled) {
+  if (!isViralPostsLive || !isAnyViralPostsPlatformEnabled) {
     return {
       feedId: 0,
       localDate: args.localDate,
@@ -249,7 +255,7 @@ export async function getOrCreateDailyFeed(args: {
       items: [],
       errorMessage: !isViralPostsLive
         ? "Viral Posts is not enabled"
-        : "Instagram Viral Posts is not available right now",
+        : "Viral Posts is not available right now",
       serverDurationMs: Date.now() - requestStarted,
     };
   }
@@ -328,9 +334,7 @@ export async function getOrCreateDailyFeed(args: {
     const niche = inferNiche(profile.businessDescription);
     const pillars = inferActivePillars(profile.businessDescription, niche);
     const [pools, hidden, dismissed, recentlyShown] = await Promise.all([
-      poolRepo.ensurePools(
-        pillars.slice(0, 6).map((pillar) => ({ niche, pillar }))
-      ),
+      ensureUserViralPools({ niche, pillars }),
       repo.getHiddenCreatorKeys(args.userId),
       repo.getRecentlyDismissedCandidateIds(args.userId),
       repo.getRecentlyShownCandidateIds(args.userId),
@@ -372,11 +376,18 @@ export async function getOrCreateDailyFeed(args: {
 
     const enough = picked.length >= VIRAL_DAILY_FEED_MIN;
     let poolRefreshStarted = false;
-    if (!enough && pools[0]) {
-      schedulePoolRefresh(pools[0].id, true);
-      poolRefreshStarted = true;
-      for (const p of pools.slice(1, 3)) {
-        schedulePoolRefresh(p.id, false);
+    if (!enough) {
+      const seedPools = pools.filter(
+        (p) => p.platform === "tiktok" || p.platform === "youtube"
+      );
+      const igPools = pools.filter((p) => p.platform === "instagram");
+      const toRefresh = [...igPools.slice(0, 2), ...seedPools].slice(0, 4);
+      if (toRefresh[0]) {
+        schedulePoolRefresh(toRefresh[0].id, true);
+        poolRefreshStarted = true;
+        for (const p of toRefresh.slice(1)) {
+          schedulePoolRefresh(p.id, false);
+        }
       }
     }
 
@@ -587,9 +598,7 @@ async function tryUpgradeRefreshingFeed(args: {
   const profile = await loadUserProfile(args.userId);
   const niche = inferNiche(profile.businessDescription);
   const pillars = inferActivePillars(profile.businessDescription, niche);
-  const pools = await poolRepo.ensurePools(
-    pillars.slice(0, 6).map((pillar) => ({ niche, pillar }))
-  );
+  const pools = await ensureUserViralPools({ niche, pillars });
   const poolRows = await poolRepo.loadPoolCandidatesForAssembly({
     poolIds: pools.map((p) => p.id),
     limit: VIRAL_POOL_DEFAULTS.assemblyCandidateLimit,
@@ -695,6 +704,44 @@ function inferActivePillars(
   return [niche, `${niche} marketing`, `${niche} operations`].slice(0, 4);
 }
 
+async function ensureUserViralPools(args: {
+  niche: string;
+  pillars: string[];
+}) {
+  const specs: Array<{
+    niche: string;
+    pillar: string;
+    platform?: string;
+  }> = [];
+  if (isViralPostsInstagramEnabled) {
+    for (const pillar of args.pillars.slice(0, 6)) {
+      specs.push({ niche: args.niche, pillar, platform: "instagram" });
+    }
+  }
+  if (isViralPostsTiktokEnabled) {
+    specs.push({
+      niche: args.niche,
+      pillar: VIRAL_SEED_POOL_PILLAR,
+      platform: "tiktok",
+    });
+  }
+  if (isViralPostsYoutubeEnabled) {
+    specs.push({
+      niche: args.niche,
+      pillar: VIRAL_SEED_POOL_PILLAR,
+      platform: "youtube",
+    });
+  }
+  if (specs.length === 0 && isViralPostsInstagramEnabled) {
+    specs.push({
+      niche: args.niche,
+      pillar: args.pillars[0] || args.niche,
+      platform: "instagram",
+    });
+  }
+  return poolRepo.ensurePools(specs);
+}
+
 function candidateRowToAdapted(
   candidate: ViralPostCandidate,
   extras: {
@@ -709,8 +756,12 @@ function candidateRowToAdapted(
     activePillars: [extras.contentPillar],
     fallbackNiche: extras.contentPillar,
   });
+  const platform =
+    candidate.platform === "tiktok" || candidate.platform === "youtube"
+      ? candidate.platform
+      : "instagram";
   return {
-    platform: "instagram",
+    platform,
     sourceId: candidate.sourceId,
     sourceUrl: candidate.sourceUrl,
     creatorId: candidate.creatorId,

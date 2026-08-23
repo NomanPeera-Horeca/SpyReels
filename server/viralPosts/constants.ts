@@ -22,7 +22,20 @@ export const VIRAL_POOL_DEFAULTS = {
   exploreCacheMs: 10 * 60 * 1000,
   /** How long a pool refresh lease lasts before it can be stolen (ms). */
   refreshLeaseTtlMs: 10 * 60 * 1000,
+  /** TT/YT seed refresh: max handles scraped per pool run. */
+  seedMaxHandlesPerRefresh: 4,
+  /** TT/YT seed refresh: max videos kept per handle. */
+  seedMaxVideosPerHandle: 8,
+  /** TT/YT seed pools: lower fresh floor (handle scrape, not hashtag). */
+  seedMinFreshCandidates: 12,
+  /** TT/YT seed pools: tighter daily budget. */
+  seedDailyCallBudget: 30,
+  /** Approximate SC calls charged per seed handle scrape. */
+  seedScCallsPerHandle: 3,
 } as const;
+
+/** Pillar key for platform seed pools (one pool per niche+platform). */
+export const VIRAL_SEED_POOL_PILLAR = "seed-mix";
 
 export const DEFAULT_CONTENT_PILLARS = [
   "restaurant profitability",

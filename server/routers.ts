@@ -8771,8 +8771,37 @@ Return JSON only:
 
     /** Fresh TikTok play URL for modal preview; mirror to R2 in the background. */
     refreshVideoUrl: protectedProcedure
-      .input(z.object({ videoId: z.number() }))
+      .input(
+        z.object({
+          videoId: z.number().optional(),
+          videoPageUrl: z.string().url().optional(),
+        }).refine(
+          (v) => v.videoId != null || Boolean(v.videoPageUrl?.trim()),
+          { message: "videoId or videoPageUrl required" }
+        )
+      )
       .mutation(async ({ ctx, input }) => {
+        const pageOnly = (input.videoPageUrl ?? "").trim();
+        if (input.videoId == null) {
+          if (!pageOnly) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "videoPageUrl required",
+            });
+          }
+          const fresh = await fetchTikTokVideoInfo(pageOnly, {
+            mode: "interactive",
+          });
+          const videoUrl = fresh?.videoUrl?.trim() || "";
+          if (!videoUrl) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Could not retrieve a fresh video URL for this TikTok.",
+            });
+          }
+          return { videoUrl };
+        }
+
         const db = await getDb();
         if (!db) {
           throw new TRPCError({
@@ -8812,6 +8841,7 @@ Return JSON only:
         }
 
         const pageCandidates = [
+          pageOnly,
           (video.videoPageUrl ?? "").trim(),
           video.ownerUsername && video.awemeId
             ? `https://www.tiktok.com/@${video.ownerUsername.replace(/^@/, "")}/video/${video.awemeId}`

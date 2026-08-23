@@ -1,16 +1,24 @@
 import { hostname } from "os";
+import type { ViralPostPool } from "../../drizzle/schema";
 import { runDiscoveryPipeline } from "../discovery/pipeline";
-import { adaptDiscoveryResult } from "./candidateAdapter";
-import { VIRAL_POOL_DEFAULTS } from "./constants";
+import { scrapeTikTokVideos } from "../tiktok";
+import { scrapeYouTubeShorts } from "../youtube";
+import { adaptDiscoveryResult, type AdaptedCandidate } from "./candidateAdapter";
+import { VIRAL_POOL_DEFAULTS, VIRAL_SEED_POOL_PILLAR } from "./constants";
 import {
   isViralPostsLive,
   isViralPostsPoolRefresherEnabled,
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
 import { classifyCandidatePillars } from "./pillarClassify";
+import {
+  adaptTikTokVideos,
+  adaptYouTubeShorts,
+} from "./platformAdapters";
 import * as poolRepo from "./poolRepository";
 import * as repo from "./repository";
 import { scheduleThumbnailMirroring } from "./mediaMirror";
+import { listActiveSeedCreators } from "./seedRepository";
 
 export type PoolRefreshResult = {
   poolId: number;
@@ -31,6 +39,193 @@ function workerOwnerId(): string {
   const configured = process.env.VIRAL_POSTS_WORKER_ID?.trim();
   if (configured) return configured.slice(0, 120);
   return `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function persistAdaptedToPool(args: {
+  pool: ViralPostPool;
+  adapted: AdaptedCandidate[];
+  scCalls: number;
+  costEstimateUsd?: number;
+}): Promise<number> {
+  const { pool, adapted, scCalls, costEstimateUsd } = args;
+  if (adapted.length === 0) {
+    await poolRepo.addBudgetUsage(pool.id, scCalls);
+    await poolRepo.markPoolRefreshed({
+      poolId: pool.id,
+      status: "refreshed",
+      scCalls,
+      candidateCount: 0,
+    });
+    return 0;
+  }
+
+  const upserted = await repo.upsertCandidates(adapted);
+  const bySource = new Map(upserted.map((c) => [c.sourceId, c]));
+  const assignPillar =
+    pool.pillar === VIRAL_SEED_POOL_PILLAR ? pool.niche : pool.pillar;
+
+  const links = adapted
+    .map((a) => {
+      const row = bySource.get(a.sourceId);
+      if (!row) return null;
+      const classification = classifyCandidatePillars({
+        caption: a.caption,
+        hook: a.hook,
+        hashtags: a.hashtags,
+        activePillars: [assignPillar],
+        fallbackNiche: pool.niche,
+      });
+      if (classification.confidence < 0.5) {
+        classification.primaryPillar = assignPillar;
+        classification.reason = `Assigned to pool ${pool.platform}/${assignPillar}`;
+        classification.confidence = 0.55;
+      }
+      return { candidateId: row.id, classification };
+    })
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+
+  await poolRepo.linkCandidatesToPool({ poolId: pool.id, links });
+  await poolRepo.addBudgetUsage(pool.id, scCalls);
+  await poolRepo.markPoolRefreshed({
+    poolId: pool.id,
+    status: "refreshed",
+    scCalls,
+    candidateCount: links.length,
+  });
+
+  scheduleThumbnailMirroring(
+    upserted.map((c) => ({
+      sourceId: c.sourceId,
+      sourceThumbnailUrl: c.sourceThumbnailUrl ?? c.thumbnailUrl,
+    })),
+    async (results) => {
+      for (const r of results) {
+        try {
+          await repo.updateCandidateMedia({
+            sourceId: r.sourceId,
+            thumbnailUrl: r.thumbnailUrl,
+            mediaStatus: r.mediaStatus,
+          });
+        } catch {
+          // best-effort
+        }
+      }
+    }
+  );
+
+  void costEstimateUsd;
+  return links.length;
+}
+
+async function refreshInstagramPool(
+  pool: ViralPostPool,
+  maxScCalls: number
+): Promise<{ scCalls: number; candidateCount: number; costEstimateUsd?: number }> {
+  const description = `Find Instagram Reels about ${pool.pillar} for creators in the ${pool.niche} niche. Prefer practical, remakeable talking-head and educational formats.`;
+  const result = await runDiscoveryPipeline(description, undefined, {
+    skipMediaMirroring: true,
+    maxScCalls,
+    skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
+    skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
+    earlyStopCandidateCount: VIRAL_POOL_DEFAULTS.refreshEarlyStopCandidates,
+  });
+  const adapted = adaptDiscoveryResult(result);
+  const candidateCount = await persistAdaptedToPool({
+    pool,
+    adapted,
+    scCalls: result.scCallCount || 0,
+    costEstimateUsd: result.costEstimateUsd,
+  });
+  return {
+    scCalls: result.scCallCount || 0,
+    candidateCount,
+    costEstimateUsd: result.costEstimateUsd,
+  };
+}
+
+async function refreshSeedPlatformPool(
+  pool: ViralPostPool,
+  platform: "tiktok" | "youtube",
+  remainingBudget: number
+): Promise<{ scCalls: number; candidateCount: number }> {
+  const maxHandles = Math.min(
+    VIRAL_POOL_DEFAULTS.seedMaxHandlesPerRefresh,
+    Math.max(
+      1,
+      Math.floor(remainingBudget / VIRAL_POOL_DEFAULTS.seedScCallsPerHandle)
+    )
+  );
+  const seeds = await listActiveSeedCreators({
+    platform,
+    niche: pool.niche,
+    limit: maxHandles,
+  });
+  if (seeds.length === 0) {
+    await persistAdaptedToPool({ pool, adapted: [], scCalls: 0 });
+    return { scCalls: 0, candidateCount: 0 };
+  }
+
+  const adapted: AdaptedCandidate[] = [];
+  let scCalls = 0;
+  const maxVideos = VIRAL_POOL_DEFAULTS.seedMaxVideosPerHandle;
+
+  for (const seed of seeds) {
+    if (scCalls + VIRAL_POOL_DEFAULTS.seedScCallsPerHandle > remainingBudget) {
+      break;
+    }
+    try {
+      if (platform === "tiktok") {
+        const result = await scrapeTikTokVideos(
+          seed.handle,
+          undefined,
+          {
+            maxVideos,
+            timeoutMs: 90_000,
+          }
+        );
+        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
+        adapted.push(
+          ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
+            niche: pool.niche,
+            creatorFollowers: result.followerCount,
+            creatorAvatarUrl: result.profilePicUrl,
+          })
+        );
+      } else {
+        const result = await scrapeYouTubeShorts(
+          seed.handle,
+          undefined,
+          {
+            maxVideos,
+            timeoutMs: 90_000,
+          }
+        );
+        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
+        adapted.push(
+          ...adaptYouTubeShorts(result.videos.slice(0, maxVideos), {
+            niche: pool.niche,
+            creatorFollowers: result.subscriberCount,
+            creatorAvatarUrl: result.profilePicUrl,
+          })
+        );
+      }
+    } catch (err) {
+      scCalls += 1;
+      console.warn("[viralPosts.pool] seed_handle_failed", {
+        poolId: pool.id,
+        platform,
+        handle: seed.handle,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const candidateCount = await persistAdaptedToPool({
+    pool,
+    adapted,
+    scCalls,
+  });
+  return { scCalls, candidateCount };
 }
 
 /**
@@ -89,7 +284,9 @@ export async function refreshPoolById(
 
   const used = await poolRepo.getBudgetUsed(pool.id);
   const remaining = Math.max(0, pool.dailyCallBudget - used);
-  if (remaining < 5) {
+  const minBudget =
+    pool.platform === "tiktok" || pool.platform === "youtube" ? 3 : 5;
+  if (remaining < minBudget) {
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
       reason: "budget",
@@ -136,81 +333,40 @@ export async function refreshPoolById(
     console.info("[viralPosts.pool] refresh_start", {
       poolId: pool.id,
       poolKey: pool.poolKey,
+      platform: pool.platform,
       owner,
       maxScCalls,
       freshBefore: fresh,
     });
 
-    const description = `Find Instagram Reels about ${pool.pillar} for creators in the ${pool.niche} niche. Prefer practical, remakeable talking-head and educational formats.`;
-    const result = await runDiscoveryPipeline(description, undefined, {
-      skipMediaMirroring: true,
-      maxScCalls,
-      skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-      skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-      earlyStopCandidateCount: VIRAL_POOL_DEFAULTS.refreshEarlyStopCandidates,
-    });
+    let scCalls = 0;
+    let candidateCount = 0;
+    let costEstimateUsd: number | undefined;
 
-    const adapted = adaptDiscoveryResult(result);
-    const upserted = await repo.upsertCandidates(adapted);
-    const bySource = new Map(upserted.map((c) => [c.sourceId, c]));
-
-    const links = adapted
-      .map((a) => {
-        const row = bySource.get(a.sourceId);
-        if (!row) return null;
-        const classification = classifyCandidatePillars({
-          caption: a.caption,
-          hook: a.hook,
-          hashtags: a.hashtags,
-          activePillars: [pool.pillar],
-          fallbackNiche: pool.niche,
-        });
-        if (classification.confidence < 0.5) {
-          classification.primaryPillar = pool.pillar;
-          classification.reason = `Assigned to pool pillar ${pool.pillar}`;
-          classification.confidence = 0.55;
-        }
-        return { candidateId: row.id, classification };
-      })
-      .filter((x): x is NonNullable<typeof x> => Boolean(x));
-
-    await poolRepo.linkCandidatesToPool({ poolId: pool.id, links });
-    await poolRepo.addBudgetUsage(pool.id, result.scCallCount || 0);
-    await poolRepo.markPoolRefreshed({
-      poolId: pool.id,
-      status: "refreshed",
-      scCalls: result.scCallCount || 0,
-      candidateCount: links.length,
-    });
-
-    scheduleThumbnailMirroring(
-      upserted.map((c) => ({
-        sourceId: c.sourceId,
-        sourceThumbnailUrl: c.sourceThumbnailUrl ?? c.thumbnailUrl,
-      })),
-      async (results) => {
-        for (const r of results) {
-          try {
-            await repo.updateCandidateMedia({
-              sourceId: r.sourceId,
-              thumbnailUrl: r.thumbnailUrl,
-              mediaStatus: r.mediaStatus,
-            });
-          } catch {
-            // best-effort
-          }
-        }
-      }
-    );
+    if (pool.platform === "tiktok") {
+      const result = await refreshSeedPlatformPool(pool, "tiktok", remaining);
+      scCalls = result.scCalls;
+      candidateCount = result.candidateCount;
+    } else if (pool.platform === "youtube") {
+      const result = await refreshSeedPlatformPool(pool, "youtube", remaining);
+      scCalls = result.scCalls;
+      candidateCount = result.candidateCount;
+    } else {
+      const result = await refreshInstagramPool(pool, maxScCalls);
+      scCalls = result.scCalls;
+      candidateCount = result.candidateCount;
+      costEstimateUsd = result.costEstimateUsd;
+    }
 
     console.info("[viralPosts.pool] refresh_done", {
       poolId: pool.id,
       poolKey: pool.poolKey,
+      platform: pool.platform,
       owner,
-      scCalls: result.scCallCount,
-      costEstimateUsd: result.costEstimateUsd,
-      candidates: links.length,
-      acceptedCandidates: links.length,
+      scCalls,
+      costEstimateUsd,
+      candidates: candidateCount,
+      acceptedCandidates: candidateCount,
       durationMs: Date.now() - started,
     });
 
@@ -218,9 +374,9 @@ export async function refreshPoolById(
       poolId: pool.id,
       poolKey: pool.poolKey,
       status: "refreshed",
-      scCalls: result.scCallCount || 0,
-      candidateCount: links.length,
-      costEstimateUsd: result.costEstimateUsd,
+      scCalls,
+      candidateCount,
+      costEstimateUsd,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

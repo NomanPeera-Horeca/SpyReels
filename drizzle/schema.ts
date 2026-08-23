@@ -2462,3 +2462,33 @@ export const viralPostPoolBudgetDays = mysqlTable(
 export type ViralPostPoolBudgetDay = typeof viralPostPoolBudgetDays.$inferSelect;
 export type InsertViralPostPoolBudgetDay =
   typeof viralPostPoolBudgetDays.$inferInsert;
+
+/**
+ * Curated TikTok / YouTube handles used to seed Viral Posts pools per niche.
+ * Instagram discovery still uses hashtag search; TT/YT use handle scrapes.
+ */
+export const viralPostSeedCreators = mysqlTable(
+  "viral_post_seed_creators",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    platform: varchar("platform", { length: 16 }).notNull(),
+    niche: varchar("niche", { length: 128 }).notNull(),
+    handle: varchar("handle", { length: 128 }).notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    platformNicheHandleUq: uniqueIndex(
+      "uq_viral_post_seed_creators_platform_niche_handle"
+    ).on(table.platform, table.niche, table.handle),
+    nichePlatformIdx: index("idx_viral_post_seed_creators_niche_platform").on(
+      table.niche,
+      table.platform
+    ),
+  })
+);
+
+export type ViralPostSeedCreator = typeof viralPostSeedCreators.$inferSelect;
+export type InsertViralPostSeedCreator =
+  typeof viralPostSeedCreators.$inferInsert;

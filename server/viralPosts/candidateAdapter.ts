@@ -9,7 +9,7 @@ import {
 } from "./scoring";
 
 export type AdaptedCandidate = {
-  platform: "instagram";
+  platform: "instagram" | "tiktok" | "youtube";
   sourceId: string;
   sourceUrl: string;
   creatorId: string | null;

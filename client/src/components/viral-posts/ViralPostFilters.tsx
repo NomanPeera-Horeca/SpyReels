@@ -99,10 +99,24 @@ export function ViralPostFilters({
                 }
               />
               <CheckRow
-                label="TikTok (coming soon)"
-                checked={false}
-                disabled
-                onChange={() => undefined}
+                label="TikTok"
+                checked={draft.platforms.tiktok}
+                onChange={(checked) =>
+                  setDraft((d) => ({
+                    ...d,
+                    platforms: { ...d.platforms, tiktok: checked },
+                  }))
+                }
+              />
+              <CheckRow
+                label="YouTube Shorts"
+                checked={draft.platforms.youtube}
+                onChange={(checked) =>
+                  setDraft((d) => ({
+                    ...d,
+                    platforms: { ...d.platforms, youtube: checked },
+                  }))
+                }
               />
             </FilterGroup>
 

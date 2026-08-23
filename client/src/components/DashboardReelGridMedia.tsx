@@ -21,6 +21,7 @@ export function DashboardReelGridMedia({
   shortcode,
   reelId,
   platform = "instagram",
+  videoPageUrl,
   className,
   size = "default",
   playing: playingControlled,
@@ -36,6 +37,8 @@ export function DashboardReelGridMedia({
   reelId?: number;
   /** Instagram (default) or TikTok. YouTube has no downloadable MP4. */
   platform?: "instagram" | "tiktok";
+  /** TikTok video page URL for refresh without tiktok_videos.id. */
+  videoPageUrl?: string | null;
   className?: string;
   size?: Size;
   playing?: boolean;
@@ -61,11 +64,15 @@ export function DashboardReelGridMedia({
   const fallbackId = useId();
   const playerId = useMemo(() => {
     if (platform === "tiktok" && reelId != null) return `tiktok-${reelId}`;
+    if (platform === "tiktok") {
+      const page = (videoPageUrl ?? "").trim();
+      if (page) return `tiktok-page-${page.slice(-48)}`;
+    }
     if (reelId != null) return `reel-${reelId}`;
     const code = (shortcode ?? "").trim();
     if (code) return `shortcode-${code}`;
     return fallbackId;
-  }, [platform, reelId, shortcode, fallbackId]);
+  }, [platform, reelId, shortcode, videoPageUrl, fallbackId]);
   const igRefreshMutation = trpc.reels.refreshVideoUrl.useMutation();
   const ttRefreshMutation = trpc.tiktokScrape.refreshVideoUrl.useMutation();
   const igMutateAsync = igRefreshMutation.mutateAsync;
@@ -124,7 +131,7 @@ export function DashboardReelGridMedia({
     resolvedSrc.length > 0 ||
     Boolean((videoUrl ?? "").trim()) ||
     (platform === "tiktok"
-      ? reelId != null
+      ? reelId != null || Boolean((videoPageUrl ?? "").trim())
       : Boolean(shortcode?.trim()));
 
   // Do not overwrite the active preview URL while the inline player is open.
@@ -172,8 +179,9 @@ export function DashboardReelGridMedia({
   const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
     const current = resolvedSrc || (videoUrl ?? "").trim();
     const code = (shortcode ?? "").trim();
+    const pageUrl = (videoPageUrl ?? "").trim();
     if (platform === "tiktok") {
-      if (reelId == null && !current) return null;
+      if (reelId == null && !current && !pageUrl) return null;
     } else if (!code && !current) {
       return null;
     }
@@ -181,8 +189,11 @@ export function DashboardReelGridMedia({
 
     try {
       if (platform === "tiktok") {
-        if (reelId == null) return current || null;
-        const result = await ttMutateAsync({ videoId: reelId });
+        const result = await ttMutateAsync(
+          reelId != null
+            ? { videoId: reelId }
+            : { videoPageUrl: pageUrl || current }
+        );
         const next = result.videoUrl.trim();
         if (!next) return null;
         setResolvedSrc(next);
@@ -213,6 +224,7 @@ export function DashboardReelGridMedia({
     shortcode,
     reelId,
     platform,
+    videoPageUrl,
     igMutateAsync,
     ttMutateAsync,
     onVideoUrlResolved,

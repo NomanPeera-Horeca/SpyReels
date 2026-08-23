@@ -15,6 +15,7 @@ export type DiversityCandidate = {
   recentlyDismissed: boolean;
   recentlyShown: boolean;
   hashtagKey: string | null;
+  platform?: string | null;
 };
 
 function normalizeText(s: string): string {
@@ -56,6 +57,7 @@ export function selectDiverseFeed(
   const creatorCounts = new Map<string, number>();
   const pillars = new Set<string>();
   const hashtags = new Set<string>();
+  const platforms = new Set<string>();
 
   for (const c of sorted) {
     if (selected.length >= max) break;
@@ -78,11 +80,31 @@ export function selectDiverseFeed(
     // Soft penalty: skip recently shown unless we need fill
     if (c.recentlyShown && selected.length >= min) continue;
 
+    // Soft platform diversity: once we have min items, prefer adding a new platform
+    // when the feed is still single-platform and alternatives exist later in the list.
+    if (
+      selected.length >= min &&
+      platforms.size === 1 &&
+      c.platform &&
+      platforms.has(c.platform)
+    ) {
+      const hasAltPlatform = sorted.some(
+        (alt) =>
+          alt.platform &&
+          !platforms.has(alt.platform) &&
+          !usedSources.has(alt.sourceId) &&
+          !alt.hidden &&
+          !alt.recentlyDismissed
+      );
+      if (hasAltPlatform) continue;
+    }
+
     selected.push(c);
     usedSources.add(c.sourceId);
     creatorCounts.set(c.creatorKey, creatorCount + 1);
     if (c.contentPillar) pillars.add(c.contentPillar);
     if (c.hashtagKey) hashtags.add(c.hashtagKey);
+    if (c.platform) platforms.add(c.platform);
   }
 
   // Second pass: fill to min with relaxed creator/recent rules (still no dups/hidden)

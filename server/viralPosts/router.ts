@@ -1,12 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
-  VIRAL_POSTS_INSTAGRAM_DISABLED_MESSAGE,
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
 } from "@shared/viralPosts";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
-  isViralPostsInstagramEnabled,
+  isAnyViralPostsPlatformEnabled,
   isViralPostsLive,
 } from "./featureFlag";
 import * as repo from "./repository";
@@ -23,10 +22,10 @@ const viralPostsProcedure = protectedProcedure.use(({ next }) => {
       message: VIRAL_POSTS_NOT_ENABLED_MESSAGE,
     });
   }
-  if (!isViralPostsInstagramEnabled) {
+  if (!isAnyViralPostsPlatformEnabled) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: VIRAL_POSTS_INSTAGRAM_DISABLED_MESSAGE,
+      message: "Viral Posts is not available right now",
     });
   }
   return next();

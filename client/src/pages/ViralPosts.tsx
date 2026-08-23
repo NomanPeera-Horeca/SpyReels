@@ -521,8 +521,8 @@ export default function ViralPosts() {
               Explore viral posts
             </h2>
             <p className="mt-1 text-sm text-[#a9a4b8]">
-              Search Instagram Reels by topic. TikTok search is coming in a later
-              phase.
+              Search Instagram Reels by topic. TikTok and YouTube appear in For
+              You from niche seed creators.
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <Input

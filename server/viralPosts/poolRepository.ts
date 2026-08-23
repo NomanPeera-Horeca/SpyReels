@@ -8,7 +8,11 @@ import {
   type ViralPostPool,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "./constants";
+import {
+  buildPoolKey,
+  VIRAL_POOL_DEFAULTS,
+  VIRAL_SEED_POOL_PILLAR,
+} from "./constants";
 import type { PillarClassification } from "./pillarClassify";
 
 function utcDateString(d = new Date()): string {
@@ -18,6 +22,7 @@ function utcDateString(d = new Date()): string {
 export async function ensurePool(args: {
   niche: string;
   pillar: string;
+  platform?: string;
   language?: string;
   region?: string | null;
   priority?: number;
@@ -30,6 +35,7 @@ export async function ensurePools(
   specs: Array<{
     niche: string;
     pillar: string;
+    platform?: string;
     language?: string;
     region?: string | null;
     priority?: number;
@@ -41,6 +47,7 @@ export async function ensurePools(
 
   const keys = specs.map((s) =>
     buildPoolKey({
+      platform: s.platform,
       niche: s.niche,
       pillar: s.pillar,
       language: s.language,
@@ -53,28 +60,38 @@ export async function ensurePools(
     .from(viralPostPools)
     .where(inArray(viralPostPools.poolKey, keys));
   const byKey = new Map(existing.map((p) => [p.poolKey, p]));
-  const missing = specs.filter(
-    (s, i) => !byKey.has(keys[i]!)
-  );
+  const missing = specs.filter((s, i) => !byKey.has(keys[i]!));
 
   if (missing.length > 0) {
     await db.insert(viralPostPools).values(
-      missing.map((args) => ({
-        poolKey: buildPoolKey({
+      missing.map((args) => {
+        const platform = args.platform || "instagram";
+        const isSeed =
+          platform === "tiktok" ||
+          platform === "youtube" ||
+          args.pillar === VIRAL_SEED_POOL_PILLAR;
+        return {
+          poolKey: buildPoolKey({
+            platform,
+            niche: args.niche,
+            pillar: args.pillar,
+            language: args.language,
+            region: args.region,
+          }),
+          platform,
           niche: args.niche,
           pillar: args.pillar,
-          language: args.language,
-          region: args.region,
-        }),
-        platform: "instagram",
-        niche: args.niche,
-        pillar: args.pillar,
-        language: args.language || "en",
-        region: args.region ?? null,
-        priority: args.priority ?? 100,
-        minFreshCandidates: VIRAL_POOL_DEFAULTS.minFreshCandidates,
-        dailyCallBudget: VIRAL_POOL_DEFAULTS.dailyCallBudget,
-      }))
+          language: args.language || "en",
+          region: args.region ?? null,
+          priority: args.priority ?? (isSeed ? 80 : 100),
+          minFreshCandidates: isSeed
+            ? VIRAL_POOL_DEFAULTS.seedMinFreshCandidates
+            : VIRAL_POOL_DEFAULTS.minFreshCandidates,
+          dailyCallBudget: isSeed
+            ? VIRAL_POOL_DEFAULTS.seedDailyCallBudget
+            : VIRAL_POOL_DEFAULTS.dailyCallBudget,
+        };
+      })
     );
     const refreshed = await db
       .select()

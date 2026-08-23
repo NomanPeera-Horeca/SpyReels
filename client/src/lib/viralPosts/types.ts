@@ -14,7 +14,7 @@ export type SavedPostsFilter = "all" | "unused" | "remade";
 export type ExploreQuickFilter = "all" | "rising" | "proven";
 
 export type ExploreAdvancedFilters = {
-  platforms: { instagram: boolean; tiktok: boolean };
+  platforms: { instagram: boolean; tiktok: boolean; youtube: boolean };
   momentum: {
     breakingOut: boolean;
     risingFast: boolean;
@@ -41,7 +41,7 @@ export type ViralRemakePreview = {
 };
 
 export const DEFAULT_EXPLORE_FILTERS: ExploreAdvancedFilters = {
-  platforms: { instagram: true, tiktok: false },
+  platforms: { instagram: true, tiktok: true, youtube: true },
   momentum: {
     breakingOut: true,
     risingFast: true,

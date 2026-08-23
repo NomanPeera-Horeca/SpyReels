@@ -3,6 +3,8 @@ import {
   parseViralPostsLive,
   parseViralPostsPoolRefreshMs,
   parseViralPostsPoolRefresher,
+  parseViralPostsTiktokEnabled,
+  parseViralPostsYoutubeEnabled,
 } from "@shared/viralPosts";
 
 export const isViralPostsLive = parseViralPostsLive(
@@ -14,6 +16,21 @@ export const isViralPostsInstagramEnabled = parseViralPostsInstagramEnabled(
   process.env.VIRAL_POSTS_INSTAGRAM_ENABLED,
   isViralPostsLive
 );
+
+export const isViralPostsTiktokEnabled = parseViralPostsTiktokEnabled(
+  process.env.VIRAL_POSTS_TIKTOK_ENABLED,
+  isViralPostsLive
+);
+
+export const isViralPostsYoutubeEnabled = parseViralPostsYoutubeEnabled(
+  process.env.VIRAL_POSTS_YOUTUBE_ENABLED,
+  isViralPostsLive
+);
+
+export const isAnyViralPostsPlatformEnabled =
+  isViralPostsInstagramEnabled ||
+  isViralPostsTiktokEnabled ||
+  isViralPostsYoutubeEnabled;
 
 /** Process-local refresher opt-in. Production web must be false. */
 export const isViralPostsPoolRefresherEnabled = parseViralPostsPoolRefresher(

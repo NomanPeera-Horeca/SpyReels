@@ -1,4 +1,4 @@
-/** Shared Viral Posts types (backend + frontend). Phase 3A: Instagram only. */
+/** Shared Viral Posts types (backend + frontend). */
 
 export type ViralTrendStatus =
   | "breaking-out"
@@ -7,7 +7,7 @@ export type ViralTrendStatus =
   | "saturated"
   | "unknown";
 
-export type ViralPostPlatform = "instagram";
+export type ViralPostPlatform = "instagram" | "tiktok" | "youtube";
 
 export type ViralFeedbackType =
   | "more_like_this"
@@ -110,6 +110,26 @@ export function parseViralPostsLive(
 
 /** Parsed from VIRAL_POSTS_INSTAGRAM_ENABLED (default: follows VIRAL_POSTS_LIVE). Prefer explicit true/false. */
 export function parseViralPostsInstagramEnabled(
+  raw: string | undefined,
+  viralPostsLive: boolean
+): boolean {
+  const parsed = parseExplicitBoolean(raw);
+  if (parsed !== null) return parsed;
+  return viralPostsLive;
+}
+
+/** Parsed from VIRAL_POSTS_TIKTOK_ENABLED (default: follows VIRAL_POSTS_LIVE). */
+export function parseViralPostsTiktokEnabled(
+  raw: string | undefined,
+  viralPostsLive: boolean
+): boolean {
+  const parsed = parseExplicitBoolean(raw);
+  if (parsed !== null) return parsed;
+  return viralPostsLive;
+}
+
+/** Parsed from VIRAL_POSTS_YOUTUBE_ENABLED (default: follows VIRAL_POSTS_LIVE). */
+export function parseViralPostsYoutubeEnabled(
   raw: string | undefined,
   viralPostsLive: boolean
 ): boolean {

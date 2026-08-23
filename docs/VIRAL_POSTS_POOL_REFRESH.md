@@ -67,9 +67,23 @@ Even when enabled locally, DB leases still prevent duplicate refreshes if two pr
 |---|---|---|---|---|
 | `VIRAL_POSTS_LIVE` | `true` | `true` | `true` | `true` |
 | `VIRAL_POSTS_INSTAGRAM_ENABLED` | `true` | `true` | `true` | `true` |
+| `VIRAL_POSTS_TIKTOK_ENABLED` | `true` | `true` | `true` | `true` |
+| `VIRAL_POSTS_YOUTUBE_ENABLED` | `true` | `true` | `true` | `true` |
 | `VIRAL_POSTS_POOL_REFRESHER` | `true` | `false` | `false` | `false` |
 | `VIRAL_POSTS_POOL_REFRESH_MS` | `10800000` | unused | unused | unused |
 | `VIRAL_POSTS_DB_DEBUG` | `false` | `false` | `false` | `false` |
 | `VIRAL_POSTS_WORKER_ID` | optional | optional | unused | set unique id |
 
 Unset `VIRAL_POSTS_LIVE` in production is treated as **false** (with a warning). Prefer explicit `true`/`false` everywhere.
+
+## Multi-platform seed pools (TikTok / YouTube)
+
+Instagram pools still use hashtag discovery. TikTok and YouTube pools use curated handles in `viral_post_seed_creators` (migration `0089_viral_post_seed_creators.sql`).
+
+- Pool key shape: `tiktok:{niche}:seed-mix:en` / `youtube:{niche}:seed-mix:en`
+- Per refresh: up to **4** handles × ~**3** SC calls, **8** videos per handle
+- Seed pool daily budget: **30** calls; min fresh: **12**
+- YouTube candidates have no MP4; UI opens on YouTube
+- TikTok play uses CDN URL + `tiktokScrape.refreshVideoUrl` with `videoPageUrl`
+
+Feed assembly loads Instagram pillar pools plus enabled TT/YT seed pools for the user niche, then applies soft platform diversity.

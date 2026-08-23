@@ -5,6 +5,8 @@ import {
   parseViralPostsLive,
   parseViralPostsPoolRefreshMs,
   parseViralPostsPoolRefresher,
+  parseViralPostsTiktokEnabled,
+  parseViralPostsYoutubeEnabled,
 } from "@shared/viralPosts";
 
 describe("viralPosts feature flags", () => {
@@ -29,6 +31,13 @@ describe("viralPosts feature flags", () => {
     expect(parseViralPostsInstagramEnabled(undefined, true)).toBe(true);
     expect(parseViralPostsInstagramEnabled(undefined, false)).toBe(false);
     expect(parseViralPostsInstagramEnabled("false", true)).toBe(false);
+  });
+
+  it("tiktok and youtube flags default to live flag", () => {
+    expect(parseViralPostsTiktokEnabled(undefined, true)).toBe(true);
+    expect(parseViralPostsTiktokEnabled("false", true)).toBe(false);
+    expect(parseViralPostsYoutubeEnabled(undefined, true)).toBe(true);
+    expect(parseViralPostsYoutubeEnabled("false", true)).toBe(false);
   });
 
   it("pool refresher is opt-in only", () => {
