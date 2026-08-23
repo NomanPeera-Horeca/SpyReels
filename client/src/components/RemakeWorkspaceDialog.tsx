@@ -183,6 +183,9 @@ export function RemakeWorkspaceDialog({
       hydratedIdRef.current = null;
       return;
     }
+    hydratedIdRef.current = null;
+    setScript("");
+    setCaption("");
     setLeftTab("ai");
     setEditorTab("script");
     setViewMode("edit");
@@ -192,6 +195,14 @@ export function RemakeWorkspaceDialog({
     setBrollMatched(false);
     setSchedMenuOpen(false);
   }, [open, target?.remakeKey]);
+
+  useEffect(() => {
+    if (!open || scriptId == null) return;
+    if (remakeState?.stage !== "ready") return;
+    // Generation just finished: drop any empty hydrate lock and refetch content.
+    hydratedIdRef.current = null;
+    void utils.scripts.get.invalidate({ id: scriptId });
+  }, [open, remakeState?.stage, scriptId, utils.scripts.get]);
 
   useEffect(() => {
     if (!open) {
@@ -204,9 +215,15 @@ export function RemakeWorkspaceDialog({
       return;
     }
     if (scriptId == null || !scriptQuery.data) return;
+
+    const content = scriptQuery.data.content ?? "";
+    // Never lock hydration on an empty draft. recreate.generate creates the row
+    // before content is written; locking here leaves the editor blank forever.
+    if (!content.trim()) return;
+
     if (hydratedIdRef.current === scriptId) return;
     hydratedIdRef.current = scriptId;
-    setScript(scriptQuery.data.content ?? "");
+    setScript(content);
     const cap = (scriptQuery.data as { generatedCaption?: string | null }).generatedCaption;
     setCaption(cap?.trim() || "");
   }, [open, scriptId, scriptQuery.data, previewSeed]);

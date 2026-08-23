@@ -2082,6 +2082,28 @@ export async function workspaceHasScriptForRecreated(
   return Boolean(row);
 }
 
+/** Saved My Scripts row linked to a remake (recreated_scripts.id), if any. */
+export async function getSavedScriptIdForRecreated(
+  workspaceId: string,
+  userId: number,
+  recreatedScriptId: number
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .select({ id: savedScripts.id })
+    .from(savedScripts)
+    .where(
+      and(
+        eq(savedScripts.workspaceId, workspaceId),
+        eq(savedScripts.userId, userId),
+        eq(savedScripts.recreatedScriptId, recreatedScriptId)
+      )
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
 export async function getScriptsByTag(
   workspaceId: string,
   tagId: number

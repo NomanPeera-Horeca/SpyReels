@@ -91,6 +91,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const transcribeStartMutation = trpc.transcribe.start.useMutation();
   const collectedTranscribeMutation = trpc.collected.transcribe.useMutation();
   const generateMutation = trpc.recreate.generate.useMutation();
+  const ensureFromRecreateMutation = trpc.scripts.ensureFromRecreate.useMutation();
   const toggleSaveMutation = trpc.saved.toggle.useMutation();
 
   const [stateByKey, setStateByKey] = useState<Record<string, LibraryRemakeState>>({});
@@ -132,14 +133,51 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     []
   );
 
+  const resolveSavedScriptId = useCallback(
+    async (maybeRecreateOrSavedId: number): Promise<number> => {
+      const result = await ensureFromRecreateMutation.mutateAsync({
+        recreatedScriptId: maybeRecreateOrSavedId,
+      });
+      return result.id;
+    },
+    [ensureFromRecreateMutation]
+  );
+
   const openRemakeWorkspace = useCallback(
     (args: OpenRemakeWorkspaceArgs) => {
-      openWorkspaceForSource(args.source, {
-        scriptId: args.scriptId,
-        reelId: args.openScriptReelId,
-      });
+      const openWith = (scriptId: number | null) => {
+        openWorkspaceForSource(args.source, {
+          scriptId,
+          reelId: args.openScriptReelId,
+        });
+      };
+
+      if (args.scriptId == null) {
+        openWith(null);
+        return;
+      }
+
+      void resolveSavedScriptId(args.scriptId)
+        .then((savedId) => {
+          const key = libraryRemakeKey(args.source);
+          setStateByKey((prev) => ({
+            ...prev,
+            [key]: {
+              ...(prev[key] ?? { stage: "ready" as LibraryRemakeStage, progressPercent: 100 }),
+              stage: "ready",
+              progressPercent: 100,
+              scriptId: savedId,
+            },
+          }));
+          openWith(savedId);
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Could not open remake script."
+          );
+        });
     },
-    [openWorkspaceForSource]
+    [openWorkspaceForSource, resolveSavedScriptId]
   );
 
   useEffect(() => {
@@ -149,7 +187,12 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     if (!state) return;
     setWorkspaceTarget((prev) => {
       if (!prev || prev.remakeKey !== key) return prev;
-      const nextScript = state.scriptId ?? prev.scriptId;
+      // Do not attach scriptId while generate is still writing. The scripts row
+      // exists early with empty content; hydrating then locks an empty editor.
+      const nextScript =
+        state.stage === "transcribing" || state.stage === "generating"
+          ? null
+          : (state.scriptId ?? prev.scriptId);
       const nextReel = state.reelId ?? prev.reelId;
       if (nextScript === prev.scriptId && nextReel === prev.reelId) return prev;
       return { ...prev, scriptId: nextScript, reelId: nextReel };
@@ -423,20 +466,24 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         const generateResult = await generateMutation.mutateAsync(generateInput);
         if (cancelledRef.current.has(key)) return;
 
-        const scriptId = generateResult.scriptId;
+        const recreatedScriptId = generateResult.scriptId;
         let scriptDone = false;
+        let generatedScript = "";
 
         for (let attempt = 1; !scriptDone && attempt <= LIBRARY_GENERATE_MAX; attempt++) {
           if (cancelledRef.current.has(key)) return;
           patchState(source, {
             stage: "generating",
             progressPercent: libraryEasedPercent("generating", attempt, LIBRARY_GENERATE_MAX),
-            scriptId,
+            // Keep recreate id off the workspace until we promote to saved_scripts.
             ...resolveLibraryIds(source, reelId),
           });
 
-          const scriptStatus = await trpcUtils.recreate.status.fetch({ scriptId });
+          const scriptStatus = await trpcUtils.recreate.status.fetch({
+            scriptId: recreatedScriptId,
+          });
           if (scriptStatus?.status === "completed") {
+            generatedScript = String(scriptStatus.generatedScript ?? "").trim();
             scriptDone = true;
             break;
           }
@@ -454,12 +501,20 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         if (!scriptDone) {
           throw new Error("Script generation timed out. Try again.");
         }
+        if (!generatedScript) {
+          throw new Error("Remake finished with empty script content. Try again.");
+        }
+
+        const promoted = await ensureFromRecreateMutation.mutateAsync({
+          recreatedScriptId,
+        });
+        if (cancelledRef.current.has(key)) return;
 
         runningRef.current.delete(key);
         patchState(source, {
           stage: "ready",
           progressPercent: 100,
-          scriptId,
+          scriptId: promoted.id,
           ...resolveLibraryIds(source, reelId),
         });
       } catch (err) {
@@ -469,6 +524,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     },
     [
       collectedTranscribeMutation,
+      ensureFromRecreateMutation,
       failRemake,
       fetchTranscribeStatus,
       generateMutation,
@@ -485,16 +541,17 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       const current = stateByKey[key];
       if (current?.stage === "transcribing" || current?.stage === "generating") {
         openWorkspaceForSource(source, {
-          scriptId: current.scriptId ?? null,
+          scriptId: null,
           reelId: current.reelId ?? null,
         });
         return;
       }
       if (current?.stage === "inspiration") return;
       if (current?.stage === "ready" && current.scriptId != null) {
-        openWorkspaceForSource(source, {
+        openRemakeWorkspace({
+          source,
           scriptId: current.scriptId,
-          reelId: current.reelId ?? null,
+          openScriptReelId: current.reelId ?? null,
         });
         return;
       }
@@ -506,7 +563,13 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       }
       void runChain(source, opts);
     },
-    [onboardingStateQuery.data, openWorkspaceForSource, runChain, stateByKey]
+    [
+      onboardingStateQuery.data,
+      openRemakeWorkspace,
+      openWorkspaceForSource,
+      runChain,
+      stateByKey,
+    ]
   );
 
   const retryRemake = useCallback(

@@ -185,6 +185,7 @@ import {
   ensureDefaultTags,
   createSavedScript,
   getSavedScriptsByWorkspace,
+  getSavedScriptIdForRecreated,
   updateSavedScript,
   deleteSavedScript,
   assignTagToScript,
@@ -5239,6 +5240,99 @@ Return JSON only:
           }
         }
         return { id: scriptId };
+      }),
+
+    /**
+     * Remake workspace needs a saved_scripts row (scripts.get / update / AI).
+     * recreate.generate returns recreated_scripts.id. Promote completed remake
+     * content into My Scripts once (idempotent). Also accepts an already-saved
+     * script id and returns it unchanged.
+     */
+    ensureFromRecreate: protectedProcedure
+      .input(
+        z.object({
+          /** recreated_scripts.id from recreate.generate / checkBatch */
+          recreatedScriptId: z.number().optional(),
+          /** saved_scripts.id if caller already has a library script */
+          savedScriptId: z.number().optional(),
+        }).refine(
+          (d) =>
+            (d.recreatedScriptId != null ? 1 : 0) + (d.savedScriptId != null ? 1 : 0) === 1,
+          { message: "Provide exactly one of recreatedScriptId or savedScriptId" }
+        )
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (input.savedScriptId != null) {
+          await assertScriptInWorkspace(input.savedScriptId, ctx);
+          return { id: input.savedScriptId, created: false as const };
+        }
+
+        const recreatedScriptId = input.recreatedScriptId!;
+        const existingId = await getSavedScriptIdForRecreated(
+          ctx.workspaceId,
+          ctx.user.id,
+          recreatedScriptId
+        );
+        if (existingId != null) {
+          return { id: existingId, created: false as const };
+        }
+
+        let recreated: Awaited<ReturnType<typeof assertRecreatedScriptInWorkspace>>;
+        try {
+          recreated = await assertRecreatedScriptInWorkspace(
+            recreatedScriptId,
+            ctx
+          );
+        } catch {
+          // Caller may already hold a saved_scripts id (post-promote reopen).
+          await assertScriptInWorkspace(recreatedScriptId, ctx);
+          return { id: recreatedScriptId, created: false as const };
+        }
+        if (recreated.status !== "completed") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Remake script is not ready yet. Wait for generation to finish.",
+          });
+        }
+        const content = String(recreated.generatedScript ?? "").trim();
+        if (!content) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Remake finished with empty script content. Retry remake.",
+          });
+        }
+
+        await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
+        const topic = String(recreated.topic ?? "").trim();
+        const titleBase =
+          topic && topic !== "SAME_TOPIC" && topic !== "Personalized"
+            ? `Remake: ${topic.slice(0, 60)}`
+            : "Remake script";
+        const wordCount = content.split(/\s+/).filter(Boolean).length;
+        const scriptId = await createSavedScript({
+          userId: ctx.user.id,
+          workspaceId: ctx.workspaceId,
+          reelId: recreated.reelId ?? null,
+          recreatedScriptId,
+          title: titleBase,
+          content,
+          originalContent: content,
+          sourceHandle: null,
+          gradeLevel: recreated.gradeLevel ?? null,
+          wordCount,
+          postDate: null,
+          postTime: null,
+          notes: null,
+          status: "draft",
+        });
+        await createScriptVersion({
+          scriptId,
+          content,
+          versionNumber: 1,
+          changeType: "initial",
+          changeDescription: "Initial remake script",
+        });
+        return { id: scriptId, created: true as const };
       }),
 
     /** Get a single script with tags and versions */
