@@ -77,6 +77,11 @@ function needsClarify(prompt: string): boolean {
   return /\b(improve|better|fix|rewrite|update|change|polish)\b/.test(p);
 }
 
+function scriptsNearlyIdentical(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  return norm(a) === norm(b);
+}
+
 export function RemakeWorkspaceDialog({
   open,
   onOpenChange,
@@ -275,13 +280,28 @@ export function RemakeWorkspaceDialog({
           const before = iterating?.scriptDraft ?? script;
           const useGrammar = /grammar|spelling|typo/i.test(prompt);
           const rewritten = useGrammar
-            ? await grammarMutation.mutateAsync({ scriptId, content: before })
+            ? await grammarMutation.mutateAsync({
+                scriptId,
+                content: before,
+                persist: false,
+              })
             : await aiRewriteMutation.mutateAsync({
                 scriptId,
                 content: before,
                 instruction: prompt,
+                persist: false,
               });
           scriptDraft = rewritten.content;
+          if (!useGrammar && scriptsNearlyIdentical(before, scriptDraft)) {
+            toast.message("Rewrite looked unchanged. Trying a stronger pass…");
+            const stronger = await aiRewriteMutation.mutateAsync({
+              scriptId,
+              content: before,
+              instruction: `${prompt}. Rewrite more aggressively: new openings, simpler spoken lines, keep the same points.`,
+              persist: false,
+            });
+            scriptDraft = stronger.content;
+          }
         }
 
         if (field === "caption" || field === "both") {
@@ -311,10 +331,22 @@ export function RemakeWorkspaceDialog({
               scriptId,
               content: before || script,
               instruction: `Rewrite this Instagram Reel caption only. ${prompt}. Return only the caption text.`,
+              persist: false,
             });
             after = rewritten.content;
           }
           captionDraft = after;
+        }
+
+        if (
+          (scriptDraft != null && scriptsNearlyIdentical(script, scriptDraft)) ||
+          (captionDraft != null &&
+            caption.trim() &&
+            scriptsNearlyIdentical(caption, captionDraft))
+        ) {
+          toast.message(
+            "AI returned a very similar draft. Try Make it Shorter or a more specific ask."
+          );
         }
 
         setAiSuggestion({
@@ -374,15 +406,18 @@ export function RemakeWorkspaceDialog({
       setCaption(nextCaption);
       flashUpdated("caption");
       if (nextScript == null) setEditorTab("caption");
-      if (scriptId != null) {
-        try {
-          await updateMutation.mutateAsync({
-            id: scriptId,
-            generatedCaption: nextCaption,
-          });
-        } catch {
-          /* mutation toasts */
-        }
+    }
+    if (scriptId != null && (nextScript != null || nextCaption != null)) {
+      try {
+        await updateMutation.mutateAsync({
+          id: scriptId,
+          ...(nextScript != null ? { content: nextScript } : {}),
+          ...(nextCaption != null ? { generatedCaption: nextCaption } : {}),
+          changeType: "ai_rewrite",
+          changeDescription: aiSuggestion.userPrompt.slice(0, 120),
+        });
+      } catch {
+        /* mutation toasts */
       }
     }
     setAiSuggestion({ ...aiSuggestion, applied: true });
@@ -574,9 +609,18 @@ export function RemakeWorkspaceDialog({
                         <div className="rw-cmd-list">
                           {(
                             [
-                              ["Make the hook stronger", "Stronger hook"],
-                              ["Make it easier to say out loud", "Easier to say"],
-                              ["Make it more casual", "More casual"],
+                              [
+                                "Rewrite with a sharper opening hook in the first two lines. Keep the same points but change the wording.",
+                                "Stronger hook",
+                              ],
+                              [
+                                "Rewrite so it is easier to say out loud: shorter sentences, simpler words, natural spoken rhythm. Keep the same points but change the wording.",
+                                "Easier to say",
+                              ],
+                              [
+                                "Rewrite in a more casual spoken tone, like talking to a friend on camera. Keep the same points but change the wording.",
+                                "More casual",
+                              ],
                               ["Fix the grammar", "Fix grammar"],
                             ] as const
                           ).map(([prompt, label]) => (

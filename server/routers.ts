@@ -5482,7 +5482,14 @@ Return JSON only:
 
     /** AI Grammar Check - fix spelling, grammar, sentence structure */
     grammarCheck: protectedProcedure
-      .input(z.object({ scriptId: z.number(), content: z.string() }))
+      .input(
+        z.object({
+          scriptId: z.number(),
+          content: z.string(),
+          /** When false, return corrected text without writing My Scripts (Remake Apply flow). */
+          persist: z.boolean().optional().default(true),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         await assertScriptInWorkspace(input.scriptId, ctx);
         const response = await invokeLLM({
@@ -5493,56 +5500,98 @@ Return JSON only:
                 "You are a professional editor and grammar checker. Fix spelling mistakes, grammar errors, and improve sentence structure while keeping the original meaning, tone, and style intact. Do NOT change the content or add new ideas. Return ONLY the corrected text, nothing else."
               ),
             },
-            { role: "user", content: input.content }
+            { role: "user", content: input.content },
           ],
         });
-        const corrected = (response.choices[0]?.message?.content as string) || input.content;
-        // Save the corrected version
-        const wordCount = corrected.trim().split(/\s+/).length;
-        const versionNum = await getLatestVersionNumber(input.scriptId);
-        await createScriptVersion({
-          scriptId: input.scriptId,
-          content: corrected,
-          versionNumber: versionNum + 1,
-          changeType: "grammar_fix",
-          changeDescription: "AI grammar and spelling correction",
-        });
-        await updateSavedScript(input.scriptId, { content: corrected, wordCount });
+        const corrected =
+          (response.choices[0]?.message?.content as string) || input.content;
+        if (input.persist) {
+          const wordCount = corrected.trim().split(/\s+/).length;
+          const versionNum = await getLatestVersionNumber(input.scriptId);
+          await createScriptVersion({
+            scriptId: input.scriptId,
+            content: corrected,
+            versionNumber: versionNum + 1,
+            changeType: "grammar_fix",
+            changeDescription: "AI grammar and spelling correction",
+          });
+          await updateSavedScript(input.scriptId, { content: corrected, wordCount });
+        }
         return { content: corrected };
       }),
 
     /** AI Rewrite - rewrite the script with AI while keeping the same structure */
     aiRewrite: protectedProcedure
-      .input(z.object({
-        scriptId: z.number(),
-        content: z.string(),
-        instruction: z.string().optional(), // optional custom instruction
-      }))
+      .input(
+        z.object({
+          scriptId: z.number(),
+          content: z.string(),
+          instruction: z.string().optional(), // optional custom instruction
+          /** When false, return rewrite without writing My Scripts (Remake Apply flow). */
+          persist: z.boolean().optional().default(true),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         await assertScriptInWorkspace(input.scriptId, ctx);
-        const instruction = input.instruction || "Rewrite this script to sound more natural and engaging while keeping the exact same structure, topic, and key points. Make it sound like a confident creator speaking to camera.";
+        const userInstruction =
+          input.instruction?.trim() ||
+          "Rewrite this script to sound more natural and engaging while keeping the same topic and key points. Make it sound like a confident creator speaking to camera.";
         const response = await invokeLLM({
           messages: [
             {
               role: "system",
               content: withAiFormattingRules(
-                `You are a professional script rewriter for short-form video content. ${instruction} Return ONLY the rewritten script text, nothing else.`
+                `You rewrite short-form spoken video scripts (Instagram Reels, TikTok, YouTube Shorts).
+
+Rules:
+- Follow the rewrite request exactly
+- Keep the same topic and core points
+- Change wording, sentence openings, and rhythm so the result is clearly different from the input
+- Never return the original script unchanged or with only tiny edits
+- Return ONLY the rewritten script text, no quotes, labels, or preamble`
               ),
             },
-            { role: "user", content: input.content }
+            {
+              role: "user",
+              content: `Rewrite request:\n${userInstruction}\n\nCurrent script:\n${input.content}`,
+            },
           ],
         });
-        const rewritten = (response.choices[0]?.message?.content as string) || input.content;
-        const wordCount = rewritten.trim().split(/\s+/).length;
-        const versionNum = await getLatestVersionNumber(input.scriptId);
-        await createScriptVersion({
-          scriptId: input.scriptId,
-          content: rewritten,
-          versionNumber: versionNum + 1,
-          changeType: "ai_rewrite",
-          changeDescription: input.instruction || "AI rewrite for natural delivery",
-        });
-        await updateSavedScript(input.scriptId, { content: rewritten, wordCount });
+        let rewritten =
+          (response.choices[0]?.message?.content as string) || input.content;
+        rewritten = String(rewritten).trim();
+        const originalNorm = input.content.replace(/\s+/g, " ").trim().toLowerCase();
+        const rewrittenNorm = rewritten.replace(/\s+/g, " ").trim().toLowerCase();
+        if (!rewritten || rewrittenNorm === originalNorm) {
+          const retry = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: withAiFormattingRules(
+                  `You rewrite spoken short-form video scripts. The previous attempt copied the input. This time you MUST produce a clearly different rewrite that still covers the same points. Change at least half of the sentence openings. Return ONLY the new script text.`
+                ),
+              },
+              {
+                role: "user",
+                content: `Rewrite request:\n${userInstruction}\n\nCurrent script (do not copy):\n${input.content}`,
+              },
+            ],
+          });
+          const retried = String(retry.choices[0]?.message?.content ?? "").trim();
+          if (retried) rewritten = retried;
+        }
+        if (input.persist) {
+          const wordCount = rewritten.trim().split(/\s+/).length;
+          const versionNum = await getLatestVersionNumber(input.scriptId);
+          await createScriptVersion({
+            scriptId: input.scriptId,
+            content: rewritten,
+            versionNumber: versionNum + 1,
+            changeType: "ai_rewrite",
+            changeDescription: input.instruction || "AI rewrite for natural delivery",
+          });
+          await updateSavedScript(input.scriptId, { content: rewritten, wordCount });
+        }
         return { content: rewritten };
       }),
 
