@@ -1,5 +1,7 @@
 -- Viral Posts Phase B: curated TikTok / YouTube seed handles per niche
+-- Railway Data tab: run Statement 1, then Statement 2 separately (one statement per run).
 
+-- Statement 1
 CREATE TABLE IF NOT EXISTS `viral_post_seed_creators` (
   `id` int AUTO_INCREMENT NOT NULL,
   `platform` varchar(16) NOT NULL,
@@ -13,8 +15,7 @@ CREATE TABLE IF NOT EXISTS `viral_post_seed_creators` (
   KEY `idx_viral_post_seed_creators_niche_platform` (`niche`, `platform`)
 );
 
--- Restaurant / food niche seeds (matches inferNiche → Business & Entrepreneurship for restaurant users,
--- plus a restaurant-specific slug used when pools are keyed by that niche label).
+-- Statement 2 (run alone after Statement 1 succeeds)
 INSERT INTO `viral_post_seed_creators` (`platform`, `niche`, `handle`, `isActive`)
 VALUES
   ('tiktok', 'Business & Entrepreneurship', 'restaurantdotcom', 1),
@@ -29,4 +30,4 @@ VALUES
   ('tiktok', 'Restaurants-cafes', 'therestaurantboss', 1),
   ('youtube', 'Restaurants-cafes', 'RestaurantOwnerTV', 1),
   ('youtube', 'Restaurants-cafes', 'DavidScottPeters', 1)
-ON DUPLICATE KEY UPDATE `isActive` = VALUES(`isActive`);
+ON DUPLICATE KEY UPDATE `isActive` = 1;

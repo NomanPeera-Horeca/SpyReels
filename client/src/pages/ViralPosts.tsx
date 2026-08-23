@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
-import { Flame, Zap } from "lucide-react";
+import { Flame, Loader2, Zap } from "lucide-react";
 import { RemakeHowSpyReelsWritesDialog } from "@/components/RemakeHowSpyReelsWritesDialog";
 import { RemakeWorkspaceDialog } from "@/components/RemakeWorkspaceDialog";
+import { ExploreSearchLoading } from "@/components/viral-posts/ExploreSearchLoading";
 import { RemakeViralPostModal } from "@/components/viral-posts/RemakeViralPostModal";
 import { SavedPostFilters } from "@/components/viral-posts/SavedPostFilters";
 import { ViralPostFilters } from "@/components/viral-posts/ViralPostFilters";
@@ -171,13 +172,33 @@ export default function ViralPosts() {
 
   const explorePosts = useMemo(() => {
     const items = searchQuery.data?.items ?? [];
+    const platformEnabled =
+      exploreFilters.platforms.instagram ||
+      exploreFilters.platforms.tiktok ||
+      exploreFilters.platforms.youtube;
     return items.filter((p) => {
       const key = (p.creatorId || p.creatorHandle || "")
         .toLowerCase()
         .replace(/^@/, "");
-      return !key || !hiddenCreatorKeys.has(key);
+      if (key && hiddenCreatorKeys.has(key)) return false;
+      if (!platformEnabled) return true;
+      if (p.platform === "tiktok") return exploreFilters.platforms.tiktok;
+      if (p.platform === "youtube") return exploreFilters.platforms.youtube;
+      return exploreFilters.platforms.instagram;
     });
-  }, [searchQuery.data?.items, hiddenCreatorKeys]);
+  }, [
+    searchQuery.data?.items,
+    hiddenCreatorKeys,
+    exploreFilters.platforms.instagram,
+    exploreFilters.platforms.tiktok,
+    exploreFilters.platforms.youtube,
+  ]);
+
+  const exploreSearching =
+    tab === "explore" &&
+    exploreSubmitted.trim().length >= 3 &&
+    searchQuery.isFetching &&
+    explorePosts.length === 0;
 
   const savedPosts = useMemo(() => {
     let items = savedQuery.data?.items ?? [];
@@ -532,14 +553,23 @@ export default function ViralPosts() {
                   if (e.key === "Enter") runExploreSearch();
                 }}
                 placeholder="Search a topic, creator, or competitor"
+                disabled={exploreSearching}
                 className="h-11 border-[#2b2739] bg-[#171522] text-[#f6f4fb]"
               />
               <Button
                 type="button"
                 className="h-11 shrink-0 bg-[#7c3aed] px-5 text-white hover:bg-[#6d28d9]"
                 onClick={() => runExploreSearch()}
+                disabled={exploreSearching || exploreQuery.trim().length < 3}
               >
-                Search
+                {exploreSearching ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Searching
+                  </>
+                ) : (
+                  "Search"
+                )}
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -603,25 +633,22 @@ export default function ViralPosts() {
                 Try again
               </Button>
             </div>
-          ) : searchQuery.isFetching && explorePosts.length === 0 ? (
-            <div className="mb-4">
-              <p className="mb-3 text-sm text-[#a9a4b8]">
-                Searching Instagram Reels. This can take up to a minute.
-              </p>
-              <ViralPostGrid
-                posts={[]}
-                loading
-                emptyTitle="Searching"
-                emptyDescription="Looking for Instagram Reels"
-                {...cardHandlers}
-              />
-            </div>
+          ) : exploreSearching ? (
+            <ExploreSearchLoading query={exploreSubmitted} />
           ) : (
             <ViralPostGrid
               posts={explorePosts}
               loading={false}
-              emptyTitle="No exact matches yet"
-              emptyDescription="Try a broader topic or remove a filter."
+              emptyTitle={
+                (searchQuery.data?.items.length ?? 0) > 0
+                  ? "No posts match these filters"
+                  : "No exact matches yet"
+              }
+              emptyDescription={
+                (searchQuery.data?.items.length ?? 0) > 0
+                  ? "Turn on Instagram in Filters, or clear Rising / Proven."
+                  : "Try a broader topic, or use one of the suggested searches above."
+              }
               {...cardHandlers}
             />
           )}
