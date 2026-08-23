@@ -381,6 +381,11 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
             classificationReason: gate.classificationReason,
             ...resolveLibraryIds(source, reelId),
           });
+          setWorkspaceOpen(false);
+          toast.message(
+            gate.classificationReason?.trim() ||
+              "This video looks inspiration-only. Save it, or pick one with clear talking to remake."
+          );
           return;
         }
 
@@ -479,10 +484,20 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       const key = libraryRemakeKey(source);
       const current = stateByKey[key];
       if (current?.stage === "transcribing" || current?.stage === "generating") {
+        openWorkspaceForSource(source, {
+          scriptId: current.scriptId ?? null,
+          reelId: current.reelId ?? null,
+        });
         return;
       }
       if (current?.stage === "inspiration") return;
-      if (current?.stage === "ready" && current.scriptId != null) return;
+      if (current?.stage === "ready" && current.scriptId != null) {
+        openWorkspaceForSource(source, {
+          scriptId: current.scriptId,
+          reelId: current.reelId ?? null,
+        });
+        return;
+      }
 
       if (!hasVoiceProfile(onboardingStateQuery.data)) {
         pendingRemakeRef.current = { source, opts, mode: "start" };
@@ -491,7 +506,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       }
       void runChain(source, opts);
     },
-    [onboardingStateQuery.data, runChain, stateByKey]
+    [onboardingStateQuery.data, openWorkspaceForSource, runChain, stateByKey]
   );
 
   const retryRemake = useCallback(

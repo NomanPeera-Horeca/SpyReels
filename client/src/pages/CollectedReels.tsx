@@ -784,8 +784,7 @@ export default function CollectedReels() {
     const alreadyTranscribed = mappedReelId != null && hasTranscription && !isNoSpeech;
     const resolvedOpenReelId = mappedReelId ?? hookState.reelId ?? null;
     const oneClickRemake = buildLibraryOneClickRemake({
-      // TS requires number; open-script uses resolvedOpenReelId via wrapper only.
-      openScriptReelId: resolvedOpenReelId ?? 1,
+      openScriptReelId: resolvedOpenReelId,
       isNoSpeech,
       alreadyTranscribed,
       idleNotRemakeable,

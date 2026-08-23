@@ -890,6 +890,18 @@ export function RemakeWorkspaceDialog({
                       </div>
                     ) : null}
 
+                    {!isGenerating && scriptId == null && !previewSeed ? (
+                      <div className="rw-gen-banner">
+                        {remakeState?.stage === "error"
+                          ? remakeState.errorMessage?.trim() ||
+                            "Remake failed. Close and tap Remake to try again."
+                          : remakeState?.stage === "inspiration"
+                            ? remakeState.classificationReason?.trim() ||
+                              "This video looks inspiration-only. Pick one with clear talking to remake."
+                            : "Preparing your remake. If this stays empty, close and tap Remake again."}
+                      </div>
+                    ) : null}
+
                     <div className="rw-editor-tabs">
                       <button
                         type="button"

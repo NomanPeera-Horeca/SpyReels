@@ -34,11 +34,12 @@ import {
   useDiscoverRemakeChain,
 } from "@/hooks/useDiscoverRemakeChain";
 import {
-  RemakeWorkspaceDialog,
-  type RemakeWorkspaceTarget,
-} from "@/components/RemakeWorkspaceDialog";
+  libraryRemakeKey,
+  type LibraryRemakeSource,
+} from "@/lib/libraryRemakeChainCore";
+import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
+import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import { DISCOVERY_REELS_PER_PAGE } from "@shared/const";
-import type { LibraryRemakeState } from "@/lib/libraryRemakeChainCore";
 
 type DiscoveryResultPayload =
   inferRouterOutputs<AppRouter>["discovery"]["getSearch"];
@@ -706,69 +707,67 @@ export default function Discovery() {
     nonce: number;
     openScriptId?: number;
   } | null>(null);
-  const [remakeWorkspaceOpen, setRemakeWorkspaceOpen] = useState(false);
-  const [remakeWorkspaceTarget, setRemakeWorkspaceTarget] =
-    useState<RemakeWorkspaceTarget | null>(null);
   const [remakeWorkspaceShortcode, setRemakeWorkspaceShortcode] = useState<
     string | null
   >(null);
+  const shortcodeToCollectedIdRef = useRef<Record<string, number>>({});
+  const [ingestingByShortcode, setIngestingByShortcode] = useState<
+    Record<string, boolean>
+  >({});
+  const remakeTeleprompterRef = useRef<
+    (reelId: number, scriptId: number) => void
+  >(() => undefined);
 
-  const { getRemakeState, getSaveState, startRemake, retryRemake, startSave } =
-    useDiscoverRemakeChain();
+  const { getSaveState, startSave } = useDiscoverRemakeChain();
+  const {
+    startRemake,
+    retryRemake,
+    getRemakeState: getLibraryRemakeState,
+    openRemakeWorkspace,
+    RemakeDialogs,
+  } = useLibraryRemakeChain({
+    onOpenTeleprompter: (reelId, scriptId) => {
+      remakeTeleprompterRef.current(reelId, scriptId);
+    },
+  });
   const prefsQuery = trpc.preferences.get.useQuery();
   const userTimezone = prefsQuery.data?.timezone || "America/Chicago";
+  const addByUrlMutation = trpc.collected.addByUrl.useMutation();
 
-  const openDiscoverRemakeWorkspace = useCallback(
-    (reel: ViralReel) => {
-      const state = getRemakeState(reel.shortcode);
-      setRemakeWorkspaceShortcode(reel.shortcode);
-      setRemakeWorkspaceTarget({
-        remakeKey: `discover:${reel.shortcode}`,
-        scriptId: state.scriptId ?? null,
-        reelId: state.reelId ?? null,
-      });
-      setRemakeWorkspaceOpen(true);
+  const getRemakeState = useCallback(
+    (shortcode: string): DiscoverRemakeState => {
+      if (ingestingByShortcode[shortcode]) {
+        return { stage: "ingesting", progressPercent: 15 };
+      }
+      const collectedId = shortcodeToCollectedIdRef.current[shortcode];
+      if (collectedId == null) {
+        return { stage: "idle", progressPercent: 0 };
+      }
+      const lib = getLibraryRemakeState(
+        libraryRemakeKey({
+          source: "collected",
+          collectedReelId: collectedId,
+        })
+      );
+      return {
+        stage: lib.stage,
+        progressPercent: lib.progressPercent,
+        scriptId: lib.scriptId,
+        reelId: lib.reelId,
+        errorMessage: lib.errorMessage,
+      };
     },
-    [getRemakeState]
+    [getLibraryRemakeState, ingestingByShortcode]
   );
 
-  useEffect(() => {
-    if (!remakeWorkspaceOpen || !remakeWorkspaceShortcode) return;
-    const state = getRemakeState(remakeWorkspaceShortcode);
-    setRemakeWorkspaceTarget((prev) => {
-      if (!prev) return prev;
-      const nextScript = state.scriptId ?? prev.scriptId;
-      const nextReel = state.reelId ?? prev.reelId;
-      if (nextScript === prev.scriptId && nextReel === prev.reelId) return prev;
-      return { ...prev, scriptId: nextScript, reelId: nextReel };
-    });
-  }, [getRemakeState, remakeWorkspaceOpen, remakeWorkspaceShortcode]);
-
-  const discoverWorkspaceRemakeState: LibraryRemakeState | null = useMemo(() => {
-    if (!remakeWorkspaceShortcode) return null;
-    const state = getRemakeState(remakeWorkspaceShortcode);
-    const stage =
-      state.stage === "ingesting"
-        ? "transcribing"
-        : state.stage === "inspiration"
-          ? "inspiration"
-          : state.stage === "ready"
-            ? "ready"
-            : state.stage === "error"
-              ? "error"
-              : state.stage === "generating"
-                ? "generating"
-                : state.stage === "transcribing"
-                  ? "transcribing"
-                  : "idle";
-    return {
-      stage,
-      progressPercent: state.progressPercent,
-      scriptId: state.scriptId,
-      reelId: state.reelId,
-      errorMessage: state.errorMessage,
-    };
-  }, [getRemakeState, remakeWorkspaceShortcode]);
+  const collectedSourceFor = useCallback(
+    (shortcode: string): LibraryRemakeSource | null => {
+      const collectedId = shortcodeToCollectedIdRef.current[shortcode];
+      if (collectedId == null) return null;
+      return { source: "collected", collectedReelId: collectedId };
+    },
+    []
+  );
 
   const recentSearchesQuery = trpc.discovery.recentSearches.useQuery();
   const jobStatusQuery = trpc.discovery.jobStatus.useQuery(
@@ -1006,27 +1005,77 @@ export default function Discovery() {
     []
   );
 
+  remakeTeleprompterRef.current = (reelId, scriptId) => {
+    const shortcode = remakeWorkspaceShortcode;
+    const reel =
+      shortcode == null
+        ? null
+        : result?.viralReels.find((r) => r.shortcode === shortcode) ?? null;
+    if (reel) {
+      triggerOpenDiscoverScript(reel, reelId, scriptId);
+    }
+  };
+
   const handleRemakeOpenScript = useCallback(
     (reel: ViralReel) => {
-      openDiscoverRemakeWorkspace(reel);
+      const source = collectedSourceFor(reel.shortcode);
+      if (!source) {
+        toast.message("Start remake first to open the workspace.");
+        return;
+      }
+      setRemakeWorkspaceShortcode(reel.shortcode);
+      const st = getLibraryRemakeState(libraryRemakeKey(source));
+      openRemakeWorkspace({
+        source,
+        scriptId: st.scriptId ?? null,
+        openScriptReelId: st.reelId ?? null,
+      });
     },
-    [openDiscoverRemakeWorkspace]
+    [collectedSourceFor, getLibraryRemakeState, openRemakeWorkspace]
   );
 
   const handleRemakeStart = useCallback(
-    (reel: ViralReel) => {
-      openDiscoverRemakeWorkspace(reel);
-      startRemake(reel);
+    async (reel: ViralReel) => {
+      if (!reel.reelUrl?.trim()) {
+        toast.error("This reel has no URL to remake.");
+        return;
+      }
+      setRemakeWorkspaceShortcode(reel.shortcode);
+      setIngestingByShortcode((prev) => ({ ...prev, [reel.shortcode]: true }));
+      try {
+        const { collectedReelId } = await ingestUrlAndStartLibraryRemake(
+          reel.reelUrl,
+          {
+            addByUrl: (url) => addByUrlMutation.mutateAsync({ url }),
+            fetchCollectedList: () => trpcUtils.collected.list.fetch(),
+            startRemake,
+          }
+        );
+        shortcodeToCollectedIdRef.current[reel.shortcode] = collectedReelId;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Remake failed. Try again.");
+      } finally {
+        setIngestingByShortcode((prev) => {
+          const next = { ...prev };
+          delete next[reel.shortcode];
+          return next;
+        });
+      }
     },
-    [openDiscoverRemakeWorkspace, startRemake]
+    [addByUrlMutation, startRemake, trpcUtils.collected.list]
   );
 
   const handleRemakeRetry = useCallback(
     (reel: ViralReel) => {
-      openDiscoverRemakeWorkspace(reel);
-      retryRemake(reel);
+      const source = collectedSourceFor(reel.shortcode);
+      if (!source) {
+        void handleRemakeStart(reel);
+        return;
+      }
+      setRemakeWorkspaceShortcode(reel.shortcode);
+      retryRemake(source);
     },
-    [openDiscoverRemakeWorkspace, retryRemake]
+    [collectedSourceFor, handleRemakeStart, retryRemake]
   );
 
   const modalReelPreview = useMemo(() => {
@@ -1281,23 +1330,7 @@ export default function Discovery() {
         ) : null}
       </GridReelWorkflowDialog>
 
-      <RemakeWorkspaceDialog
-        open={remakeWorkspaceOpen}
-        onOpenChange={setRemakeWorkspaceOpen}
-        target={remakeWorkspaceTarget}
-        remakeState={discoverWorkspaceRemakeState}
-        onOpenTeleprompter={(reelId, scriptId) => {
-          const shortcode = remakeWorkspaceShortcode;
-          const reel =
-            shortcode == null
-              ? null
-              : result?.viralReels.find((r) => r.shortcode === shortcode) ?? null;
-          if (reel) {
-            triggerOpenDiscoverScript(reel, reelId, scriptId);
-          }
-          setRemakeWorkspaceOpen(false);
-        }}
-      />
+      {RemakeDialogs}
     </div>
   );
 }

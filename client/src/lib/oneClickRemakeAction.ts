@@ -15,7 +15,7 @@ type RecreateStripState = "none" | "generating" | "ready" | "failed";
 
 export type OpenRemakeWorkspaceArgs = {
   scriptId: number | null;
-  openScriptReelId: number;
+  openScriptReelId: number | null;
   source: LibraryRemakeSource;
 };
 
@@ -37,7 +37,7 @@ export function reelClassificationFromRow(reel: {
 
 export function buildLibraryOneClickRemake(args: {
   /** Row reel id for teleprompter / workspace (user reelId or featuredReelId). */
-  openScriptReelId: number;
+  openScriptReelId: number | null;
   jobId?: number;
   isNoSpeech: boolean;
   alreadyTranscribed: boolean;

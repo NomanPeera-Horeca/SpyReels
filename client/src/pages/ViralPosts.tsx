@@ -3,9 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { Flame, Loader2, Zap } from "lucide-react";
 import { RemakeHowSpyReelsWritesDialog } from "@/components/RemakeHowSpyReelsWritesDialog";
-import { RemakeWorkspaceDialog } from "@/components/RemakeWorkspaceDialog";
 import { ExploreSearchLoading } from "@/components/viral-posts/ExploreSearchLoading";
-import { RemakeViralPostModal } from "@/components/viral-posts/RemakeViralPostModal";
 import { SavedPostFilters } from "@/components/viral-posts/SavedPostFilters";
 import { ViralPostFilters } from "@/components/viral-posts/ViralPostFilters";
 import { ViralPostGrid } from "@/components/viral-posts/ViralPostGrid";
@@ -14,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
+import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import {
   EXPLORE_SUGGESTED_SEARCHES,
 } from "@/lib/viralPosts/viralPostsService";
@@ -24,7 +24,6 @@ import type {
   SavedPostsFilter,
   ViralPost,
   ViralPostsTab,
-  ViralRemakePreview,
 } from "@/lib/viralPosts/types";
 import { DEFAULT_EXPLORE_FILTERS } from "@/lib/viralPosts/types";
 
@@ -54,20 +53,15 @@ export default function ViralPosts() {
 
   const [whyPost, setWhyPost] = useState<ViralPost | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
-  const [remakePost, setRemakePost] = useState<ViralPost | null>(null);
-  const [remakeOpen, setRemakeOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [workspaceSeed, setWorkspaceSeed] = useState<{
-    script: string;
-    caption: string;
-  } | null>(null);
-  const [workspaceKey, setWorkspaceKey] = useState("viral-post:none");
+  const [remakeBusy, setRemakeBusy] = useState(false);
   const [hiddenCreatorKeys, setHiddenCreatorKeys] = useState<Set<string>>(
     () => new Set()
   );
 
   const utils = trpc.useUtils();
+  const addByUrlMutation = trpc.collected.addByUrl.useMutation();
+  const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
 
   const [feed, setFeed] = useState<{
     items: ViralPost[];
@@ -311,32 +305,41 @@ export default function ViralPosts() {
     [hideMutation, hiddenCreatorKeys, utils]
   );
 
-  const openRemake = useCallback((post: ViralPost) => {
-    setRemakePost(post);
-    setRemakeOpen(true);
-  }, []);
+  const openRemake = useCallback(
+    async (post: ViralPost) => {
+      const url = (post.sourceUrl || "").trim();
+      if (!url) {
+        toast.error("This post has no source URL to remake.");
+        return;
+      }
+      if (remakeBusy) return;
+      setRemakeBusy(true);
+      const toastId = toast.loading("Adding to Collected Reels, then starting remake…");
+      try {
+        await ingestUrlAndStartLibraryRemake(url, {
+          addByUrl: (pasteUrl) => addByUrlMutation.mutateAsync({ url: pasteUrl }),
+          fetchCollectedList: () => utils.collected.list.fetch(),
+          startRemake,
+        });
+        toast.success("Remake started", { id: toastId });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Remake failed. Try again.", {
+          id: toastId,
+        });
+      } finally {
+        setRemakeBusy(false);
+      }
+    },
+    [addByUrlMutation, remakeBusy, startRemake, utils.collected.list]
+  );
 
   const openWhy = useCallback((post: ViralPost) => {
     setWhyPost(post);
     setWhyOpen(true);
   }, []);
 
-  const openWorkspace = useCallback(
-    (args: { post: ViralPost; preview: ViralRemakePreview }) => {
-      setRemakeOpen(false);
-      setWorkspaceKey(`viral-post:${args.post.id}`);
-      setWorkspaceSeed({
-        script: args.preview.script,
-        caption: args.preview.caption,
-      });
-      setWorkspaceOpen(true);
-      toast.message("Opened Remake workspace (preview). Live remake ships in Phase 3B.");
-    },
-    []
-  );
-
   const cardHandlers = {
-    onRemake: openRemake,
+    onRemake: (post: ViralPost) => void openRemake(post),
     onToggleSave: (post: ViralPost) => void handleToggleSave(post),
     onWhyItWorks: openWhy,
     onMoreLikeThis: (post: ViralPost) => void handleMoreLikeThis(post),
@@ -690,29 +693,13 @@ export default function ViralPosts() {
         open={whyOpen}
         onOpenChange={setWhyOpen}
         post={whyPost}
-        onRemake={openRemake}
-      />
-      <RemakeViralPostModal
-        open={remakeOpen}
-        onOpenChange={setRemakeOpen}
-        post={remakePost}
-        onOpenWorkspace={openWorkspace}
+        onRemake={(post) => void openRemake(post)}
       />
       <RemakeHowSpyReelsWritesDialog
         open={adjustOpen}
         onOpenChange={setAdjustOpen}
       />
-      <RemakeWorkspaceDialog
-        open={workspaceOpen}
-        onOpenChange={setWorkspaceOpen}
-        target={{
-          scriptId: null,
-          reelId: null,
-          remakeKey: workspaceKey,
-        }}
-        remakeState={{ stage: "ready", progressPercent: 100 }}
-        previewSeed={workspaceSeed ?? undefined}
-      />
+      {RemakeDialogs}
     </div>
   );
 }
