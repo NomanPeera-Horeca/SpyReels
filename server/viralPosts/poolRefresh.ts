@@ -146,6 +146,7 @@ export async function refreshPoolById(
       skipMediaMirroring: true,
       maxScCalls,
       skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
+      skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
       earlyStopCandidateCount: VIRAL_POOL_DEFAULTS.refreshEarlyStopCandidates,
     });
 

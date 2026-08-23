@@ -1066,6 +1066,11 @@ export type RunDiscoveryPipelineOptions = {
   /** Skip expensive creator profile drilling (hashtag search only). */
   skipProfileDrilling?: boolean;
   /**
+   * Skip Haiku relevance filtering (hashtag-only Explore / pool refresh).
+   * Relevance often over-rejects when captions are thin and followers are unknown.
+   */
+  skipRelevanceFilter?: boolean;
+  /**
    * Stop profile drilling once this many unique scored candidates exist
    * after hashtag + drilled reels (best-effort early stop).
    */
@@ -1088,6 +1093,8 @@ export async function runDiscoveryPipeline(
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_USD_PER_CREDIT;
   const relaxedScoring = options?.skipProfileDrilling === true;
+  const skipRelevance =
+    options?.skipRelevanceFilter === true || relaxedScoring;
 
   let routedNiche = "";
   let narrowHashtags: string[] = [];
@@ -1302,14 +1309,23 @@ export async function runDiscoveryPipeline(
     );
   }
 
-  const { topReels, haikuCalls: relevanceHaikuCalls } =
-    await applyRelevanceFilter(
-      anthropic,
-      businessDescription,
-      routedNiche,
-      candidates,
-      onProgress
+  const { topReels, haikuCalls: relevanceHaikuCalls } = skipRelevance
+    ? {
+        topReels: candidates.slice(0, TOP_N),
+        haikuCalls: 0,
+      }
+    : await applyRelevanceFilter(
+        anthropic,
+        businessDescription,
+        routedNiche,
+        candidates,
+        onProgress
+      );
+  if (skipRelevance) {
+    console.log(
+      `[discovery] relevance filter skipped (hashtag-only/explore): keeping ${topReels.length} scored candidates`
     );
+  }
 
   const tier1Reels = scored.filter((reel) => reel.tier === 1);
   const tier2Reels = scored.filter((reel) => reel.tier === 2);

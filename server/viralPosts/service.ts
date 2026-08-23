@@ -38,6 +38,9 @@ const searchCache = new Map<
   { at: number; items: ViralPost[]; fromCache: boolean }
 >();
 const SEARCH_CACHE_MS = VIRAL_POOL_DEFAULTS.exploreCacheMs;
+const EXPLORE_RESULT_LIMIT = 24;
+/** Bump when Explore ranking rules change so stale empty caches cannot stick. */
+const EXPLORE_CACHE_VERSION = "v2";
 
 function creatorKeyOf(c: {
   creatorId?: string | null;
@@ -809,20 +812,47 @@ export async function searchViralPosts(args: {
       skipMediaMirroring: true,
       maxScCalls: VIRAL_POOL_DEFAULTS.exploreMaxScCalls,
       skipProfileDrilling: true,
+      skipRelevanceFilter: true,
       earlyStopCandidateCount: 30,
     });
     const adapted = adaptDiscoveryResult(result);
     const upserted = await repo.upsertCandidates(adapted);
     const hidden = await repo.getHiddenCreatorKeys(args.userId);
     const dismissed = await repo.getRecentlyDismissedCandidateIds(args.userId);
-    const recentlyShown = new Set<number>();
-    const picked = scoreAndSelect(adapted, upserted, {
-      hidden,
-      dismissed,
-      recentlyShown,
-    });
+    const bySource = new Map(upserted.map((r) => [r.sourceId, r]));
+    const poolInputs = adapted.map((a) => ({
+      views: a.views,
+      likes: a.likes,
+      comments: a.comments,
+      shares: a.shares,
+      saves: a.saves,
+      creatorFollowers: a.creatorFollowers,
+      publishedAt: a.publishedAt,
+      relevanceScore: a.relevanceHint,
+      adaptabilityScore: adaptabilityScoreForCandidate(a),
+    }));
+
+    const ranked = adapted
+      .map((a, idx) => {
+        const row = bySource.get(a.sourceId);
+        if (!row) return null;
+        if (dismissed.has(row.id)) return null;
+        const key = creatorKeyOf(a);
+        if (key !== "unknown" && hidden.has(key)) return null;
+        const scored = scoreCandidate(poolInputs[idx], poolInputs);
+        return { adapted: a, row, scored };
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x))
+      .sort((a, b) => {
+        if (b.scored.finalScore !== a.scored.finalScore) {
+          return b.scored.finalScore - a.scored.finalScore;
+        }
+        return (b.adapted.views ?? 0) - (a.adapted.views ?? 0);
+      })
+      .slice(0, EXPLORE_RESULT_LIMIT);
+
     const saved = await repo.getSavedCandidateIds(args.userId);
-    const items = picked.map((p) =>
+    const items = ranked.map((p) =>
       candidateToViralPost(p.row, {
         relevanceLabel: p.adapted.relevanceLabel,
         relevanceReason: p.adapted.relevanceReason,
@@ -833,12 +863,17 @@ export async function searchViralPosts(args: {
       })
     );
 
-    searchCache.set(cacheKey, { at: Date.now(), items, fromCache: false });
+    // Never cache empty Explore results; they poison retries after fixes/deploys.
+    if (items.length > 0) {
+      searchCache.set(cacheKey, { at: Date.now(), items, fromCache: false });
+    }
     const durationMs = Date.now() - requestStarted;
     console.info("[viralPosts] search_done", {
       userId: args.userId,
       queryLen: q.length,
       results: items.length,
+      adapted: adapted.length,
+      pipelineViral: result.viralReels?.length ?? 0,
       scCalls: result.scCallCount,
       fromCache: false,
       costEstimateUsd: result.costEstimateUsd,
@@ -873,7 +908,7 @@ export function normalizeSearchCacheKey(userId: number, query: string): string {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return `${userId}:${normalized}`;
+  return `${EXPLORE_CACHE_VERSION}:${userId}:${normalized}`;
 }
 
 export async function getSavedViralPosts(userId: number): Promise<ViralPost[]> {

@@ -7,7 +7,7 @@ describe("explore search cache", () => {
     expect(normalizeSearchCacheKey(9, "Menu Engineering!!!")).toBe(
       normalizeSearchCacheKey(9, "menu engineering")
     );
-    expect(normalizeSearchCacheKey(9, "  FOO   bar  ")).toBe("9:foo bar");
+    expect(normalizeSearchCacheKey(9, "  FOO   bar  ")).toBe("v2:9:foo bar");
   });
 
   it("documents explore provider budget defaults", () => {
