@@ -31,6 +31,7 @@ import {
   computeViralScore,
   passesPrivacyAndFollowers,
   scoreReel,
+  scoreReelRelaxed,
 } from "./scoring";
 
 export type { ViralTier } from "./scoring";
@@ -554,7 +555,10 @@ function dedupeReelsByShortcode(reels: ParsedReel[]): ParsedReel[] {
   return [...byShortcode.values()];
 }
 
-function selectTopScoredReels(reels: ParsedReel[]): {
+function selectTopScoredReels(
+  reels: ParsedReel[],
+  opts?: { relaxed?: boolean }
+): {
   uniqueReels: ParsedReel[];
   scored: ScoredReel[];
   tier1Reels: ScoredReel[];
@@ -563,8 +567,9 @@ function selectTopScoredReels(reels: ParsedReel[]): {
   topReels: ScoredReel[];
 } {
   const uniqueReels = dedupeReelsByShortcode(reels);
+  const scoreFn = opts?.relaxed ? scoreReelRelaxed : scoreReel;
   const scored = uniqueReels
-    .map(scoreReel)
+    .map(scoreFn)
     .filter((r): r is ScoredReel => r !== null);
   const tier1Reels = scored
     .filter((reel) => reel.tier === 1)
@@ -953,9 +958,11 @@ function buildDiscoveryResultFromReels(params: {
   stableProfilePics?: Map<string, string>;
   stableVideos?: Map<string, string>;
   topReelsOverride?: ScoredReel[];
+  relaxed?: boolean;
 }): DiscoveryResult {
   const { uniqueReels, scored, topReels: defaultTop } = selectTopScoredReels(
-    params.combinedReels
+    params.combinedReels,
+    { relaxed: params.relaxed === true }
   );
   const topReels = params.topReelsOverride ?? defaultTop;
   return {
@@ -1080,6 +1087,7 @@ export async function runDiscoveryPipeline(
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_USD_PER_CREDIT;
+  const relaxedScoring = options?.skipProfileDrilling === true;
 
   let routedNiche = "";
   let narrowHashtags: string[] = [];
@@ -1103,6 +1111,7 @@ export async function runDiscoveryPipeline(
       combinedReels,
       scCallCount: tracker.count,
       usdPerCredit,
+      relaxed: relaxedScoring,
     });
     await safeProgress(onProgress, {
       phase,
@@ -1188,9 +1197,10 @@ export async function runDiscoveryPipeline(
       }
 
       if (earlyStopAt != null) {
-        const scoredSoFar = selectTopScoredReels([
-          ...byCreatorHashtag.values(),
-        ]).scored;
+        const scoredSoFar = selectTopScoredReels(
+          [...byCreatorHashtag.values()],
+          { relaxed: relaxedScoring }
+        ).scored;
         if (scoredSoFar.length >= earlyStopAt) {
           console.log(
             `[discovery] hashtag early stop: scored=${scoredSoFar.length} >= ${earlyStopAt} (scCalls=${tracker.count})`
@@ -1215,7 +1225,9 @@ export async function runDiscoveryPipeline(
     phase: "drilling",
     creatorsTotal: creators.length,
     creatorsDrilled: 0,
-    reelsFound: selectTopScoredReels(hashtagReels).topReels.length,
+    reelsFound: selectTopScoredReels(hashtagReels, {
+      relaxed: relaxedScoring,
+    }).topReels.length,
     partial: buildDiscoveryResultFromReels({
       businessDescription,
       routedNiche,
@@ -1224,6 +1236,7 @@ export async function runDiscoveryPipeline(
       combinedReels: hashtagReels,
       scCallCount: tracker.count,
       usdPerCredit,
+      relaxed: relaxedScoring,
     }),
   });
 
@@ -1239,7 +1252,9 @@ export async function runDiscoveryPipeline(
       tracker,
       async ({ creatorsDrilled, drilledReels: drilledSoFar }) => {
         const combined = [...hashtagReels, ...drilledSoFar];
-        const { topReels, scored } = selectTopScoredReels(combined);
+        const { topReels, scored } = selectTopScoredReels(combined, {
+          relaxed: relaxedScoring,
+        });
         if (
           earlyStopAt != null &&
           scored.length >= earlyStopAt &&
@@ -1264,6 +1279,7 @@ export async function runDiscoveryPipeline(
             combinedReels: combined,
             scCallCount: tracker.count,
             usdPerCredit,
+            relaxed: relaxedScoring,
           }),
         });
       }
@@ -1275,9 +1291,16 @@ export async function runDiscoveryPipeline(
 
   const allReels = [...hashtagReels, ...drilledReels];
 
-  const { uniqueReels, scored, candidates } = selectTopScoredReels(allReels);
+  const { uniqueReels, scored, candidates } = selectTopScoredReels(allReels, {
+    relaxed: relaxedScoring,
+  });
 
   logFilterBreakdown(totalRaw, allReels);
+  if (relaxedScoring) {
+    console.log(
+      `  relaxed scoring (hashtag-only): scored=${scored.length} candidates=${candidates.length}`
+    );
+  }
 
   const { topReels, haikuCalls: relevanceHaikuCalls } =
     await applyRelevanceFilter(
@@ -1345,6 +1368,7 @@ export async function runDiscoveryPipeline(
     stableProfilePics,
     stableVideos,
     topReelsOverride: topReels,
+    relaxed: relaxedScoring,
   });
   });
 }

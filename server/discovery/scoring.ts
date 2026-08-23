@@ -92,3 +92,33 @@ export function scoreReel(reel: ParsedReel): ScoredReel | null {
     reelUrl: `https://www.instagram.com/reel/${reel.shortcode}/`,
   };
 }
+
+/**
+ * Hashtag-only searches often omit follower counts. Without this path,
+ * every reel fails privacy/follower gating and Explore/pool refresh return empty.
+ * Prefer strict scoreReel when followers are known.
+ */
+export function scoreReelRelaxed(reel: ParsedReel): ScoredReel | null {
+  if (reel.owner.isPrivate) return null;
+  if (reel.owner.followers > 0) {
+    return scoreReel(reel);
+  }
+  if (!Number.isFinite(reel.views) || reel.views < TIER2_MIN_VIEWS) {
+    return null;
+  }
+  const engagementRate =
+    reel.views > 0 ? (reel.likes + reel.comments) / reel.views : 0;
+  const viralScore = Math.max(
+    1,
+    (reel.views / 1_000) * Math.max(engagementRate, 0.01) * 10
+  );
+  return {
+    ...reel,
+    tier: reel.views >= MIN_VIEWS ? 1 : 2,
+    reachMultiplier: 0,
+    engagementRate,
+    viralScore,
+    viralTier: viralTierForScore(viralScore),
+    reelUrl: `https://www.instagram.com/reel/${reel.shortcode}/`,
+  };
+}

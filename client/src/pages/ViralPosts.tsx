@@ -603,10 +603,23 @@ export default function ViralPosts() {
                 Try again
               </Button>
             </div>
+          ) : searchQuery.isFetching && explorePosts.length === 0 ? (
+            <div className="mb-4">
+              <p className="mb-3 text-sm text-[#a9a4b8]">
+                Searching Instagram Reels. This can take up to a minute.
+              </p>
+              <ViralPostGrid
+                posts={[]}
+                loading
+                emptyTitle="Searching"
+                emptyDescription="Looking for Instagram Reels"
+                {...cardHandlers}
+              />
+            </div>
           ) : (
             <ViralPostGrid
               posts={explorePosts}
-              loading={searchQuery.isFetching}
+              loading={false}
               emptyTitle="No exact matches yet"
               emptyDescription="Try a broader topic or remove a filter."
               {...cardHandlers}
