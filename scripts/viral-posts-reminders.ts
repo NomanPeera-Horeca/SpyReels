@@ -2,6 +2,8 @@
  * Viral Posts email reminders (paid weekly + unpaid drip).
  * Run: pnpm exec tsx scripts/viral-posts-reminders.ts
  * Dry-run: pnpm exec tsx scripts/viral-posts-reminders.ts --dry-run
+ *
+ * Dry-run must never import or call feed generation / email send / reminder writes.
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";
@@ -9,16 +11,12 @@ import { users, viralPostReminderState } from "../drizzle/schema";
 import { getDb } from "../server/db";
 import { getUserSubscription } from "../server/stripe/stripe-service";
 import { isPaidPlan } from "../server/userActivity";
-import {
-  sendViralPostsPaidReminderEmail,
-  sendViralPostsUnpaidReminderEmail,
-} from "../server/utils/email";
-import { getOrCreateDailyFeed } from "../server/viralPosts/service";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const UNPAID_SCHEDULE_DAYS = [1, 2, 7, 14, 30] as const;
 const PAID_FEED_MAX_AGE_DAYS = 7;
 
+/** True when `--dry-run` appears anywhere in argv (after the script path). */
 const dryRun = process.argv.includes("--dry-run");
 
 type WouldProcessReason = `paid-7day` | `unpaid-stage-${number}`;
@@ -29,6 +27,53 @@ type WouldHaveProcessed = {
   plan: string;
   reason: WouldProcessReason;
 };
+
+type DueVerdict =
+  | { due: true; reason: WouldProcessReason; nextReminderStage: number }
+  | { due: false };
+
+/**
+ * Pure due-check: reads reminder state + activity + plan only.
+ * Must never call getOrCreateDailyFeed or any ScrapeCreators / pool path.
+ */
+function evaluateReminderDue(args: {
+  paid: boolean;
+  stage: number;
+  lastFeedGeneratedAt: Date | null;
+  lastReminderSentAt: Date | null;
+  lastActiveAt: Date;
+  createdAt: Date;
+  now: Date;
+}): DueVerdict {
+  if (args.paid) {
+    const needsRefresh =
+      !args.lastFeedGeneratedAt ||
+      daysSince(args.lastFeedGeneratedAt, args.now) >= PAID_FEED_MAX_AGE_DAYS;
+    if (!needsRefresh) return { due: false };
+    return {
+      due: true,
+      reason: "paid-7day",
+      nextReminderStage: args.stage,
+    };
+  }
+
+  const thresholdDays =
+    args.stage < UNPAID_SCHEDULE_DAYS.length
+      ? UNPAID_SCHEDULE_DAYS[args.stage]!
+      : 30;
+  const referenceTime =
+    args.lastReminderSentAt ?? args.lastActiveAt ?? args.createdAt;
+  const due = daysSince(referenceTime, args.now) >= thresholdDays;
+  const inactiveLongEnough =
+    daysSince(args.lastActiveAt, args.now) >= thresholdDays;
+  if (!due || !inactiveLongEnough) return { due: false };
+
+  return {
+    due: true,
+    reason: `unpaid-stage-${args.stage}`,
+    nextReminderStage: Math.min(args.stage + 1, 5),
+  };
+}
 
 function localDateString(d = new Date(), timeZone = "UTC"): string {
   try {
@@ -80,6 +125,14 @@ async function upsertReminderAfterSend(args: {
 }
 
 async function main() {
+  console.log(
+    JSON.stringify({
+      event: "viral_posts_reminders_start",
+      dryRun,
+      argv: process.argv.slice(2),
+    })
+  );
+
   const db = await getDb();
   if (!db) {
     console.log(
@@ -114,6 +167,15 @@ async function main() {
   const wouldHaveProcessed: WouldHaveProcessed[] = [];
   const errors: Array<{ userId: number; error: string }> = [];
 
+  // Live path only: load feed + email modules after due-check confirms work.
+  // Dry-run never imports these (avoids pulling discovery / pool refresh code).
+  let getOrCreateDailyFeed: typeof import("../server/viralPosts/service").getOrCreateDailyFeed | null =
+    null;
+  let sendViralPostsPaidReminderEmail: typeof import("../server/utils/email").sendViralPostsPaidReminderEmail | null =
+    null;
+  let sendViralPostsUnpaidReminderEmail: typeof import("../server/utils/email").sendViralPostsUnpaidReminderEmail | null =
+    null;
+
   // No email opt-out / unsubscribe column on users (schema checked).
   for (const row of rows) {
     const user = row.user;
@@ -129,64 +191,44 @@ async function main() {
       const stage = row.reminder?.reminderStage ?? 0;
       const lastFeedGeneratedAt = row.reminder?.lastFeedGeneratedAt ?? null;
       const lastReminderSentAt = row.reminder?.lastReminderSentAt ?? null;
-      const timezone = (user.timezone ?? "").trim() || "UTC";
-      const localDate = localDateString(now, timezone);
-      const displayName = (user.name ?? "").trim() || "there";
 
-      if (paid) {
-        const needsRefresh =
-          !lastFeedGeneratedAt ||
-          daysSince(lastFeedGeneratedAt, now) >= PAID_FEED_MAX_AGE_DAYS;
-        if (!needsRefresh) continue;
-
-        if (dryRun) {
-          wouldHaveProcessed.push({
-            id: user.id,
-            email,
-            plan: sub.plan,
-            reason: "paid-7day",
-          });
-          paidRegenerated += 1;
-          continue;
-        }
-
-        await getOrCreateDailyFeed({
-          userId: user.id,
-          localDate,
-          timezone,
-          force: true,
-        });
-        await sendViralPostsPaidReminderEmail(email, displayName);
-        await upsertReminderAfterSend({
-          userId: user.id,
-          now,
-          reminderStage: stage,
-        });
-        paidRegenerated += 1;
-        continue;
-      }
-
-      const thresholdDays =
-        stage < UNPAID_SCHEDULE_DAYS.length
-          ? UNPAID_SCHEDULE_DAYS[stage]!
-          : 30;
-      const referenceTime =
-        lastReminderSentAt ?? user.lastActiveAt ?? user.createdAt;
-      const due = daysSince(referenceTime, now) >= thresholdDays;
-      const inactiveLongEnough =
-        daysSince(user.lastActiveAt, now) >= thresholdDays;
-      if (!due || !inactiveLongEnough) continue;
+      const verdict = evaluateReminderDue({
+        paid,
+        stage,
+        lastFeedGeneratedAt,
+        lastReminderSentAt,
+        lastActiveAt: user.lastActiveAt,
+        createdAt: user.createdAt,
+        now,
+      });
+      if (!verdict.due) continue;
 
       if (dryRun) {
         wouldHaveProcessed.push({
           id: user.id,
           email,
           plan: sub.plan,
-          reason: `unpaid-stage-${stage}`,
+          reason: verdict.reason,
         });
-        unpaidRegenerated += 1;
+        if (verdict.reason === "paid-7day") paidRegenerated += 1;
+        else unpaidRegenerated += 1;
         continue;
       }
+
+      // --- live path only below ---
+      if (!getOrCreateDailyFeed) {
+        const service = await import("../server/viralPosts/service");
+        const emailMod = await import("../server/utils/email");
+        getOrCreateDailyFeed = service.getOrCreateDailyFeed;
+        sendViralPostsPaidReminderEmail =
+          emailMod.sendViralPostsPaidReminderEmail;
+        sendViralPostsUnpaidReminderEmail =
+          emailMod.sendViralPostsUnpaidReminderEmail;
+      }
+
+      const timezone = (user.timezone ?? "").trim() || "UTC";
+      const localDate = localDateString(now, timezone);
+      const displayName = (user.name ?? "").trim() || "there";
 
       await getOrCreateDailyFeed({
         userId: user.id,
@@ -194,13 +236,20 @@ async function main() {
         timezone,
         force: true,
       });
-      await sendViralPostsUnpaidReminderEmail(email, displayName);
+
+      if (verdict.reason === "paid-7day") {
+        await sendViralPostsPaidReminderEmail!(email, displayName);
+        paidRegenerated += 1;
+      } else {
+        await sendViralPostsUnpaidReminderEmail!(email, displayName);
+        unpaidRegenerated += 1;
+      }
+
       await upsertReminderAfterSend({
         userId: user.id,
         now,
-        reminderStage: Math.min(stage + 1, 5),
+        reminderStage: verdict.nextReminderStage,
       });
-      unpaidRegenerated += 1;
     } catch (err) {
       errors.push({
         userId: user.id,
