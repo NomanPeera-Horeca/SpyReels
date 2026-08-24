@@ -15,8 +15,14 @@ import { isPaidPlan } from "../server/userActivity";
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const UNPAID_SCHEDULE_DAYS = [1, 2, 7, 14, 30] as const;
 const PAID_FEED_MAX_AGE_DAYS = 7;
-/** Hard cap per live user: feed + email + reminder upsert. */
-const PER_USER_TIMEOUT_MS = 60_000;
+/**
+ * Hard cap per live user: feed + email + reminder upsert.
+ * Increased from 60s after observing real pool refresh durations up to ~120s per
+ * pool in production logs (Aug 2026). Revisit if ScrapeCreators costs grow
+ * significantly - consider switching to cached-pool-only mode for reminders
+ * instead of forced fresh discovery.
+ */
+const PER_USER_TIMEOUT_MS = 240_000;
 
 /** True when `--dry-run` appears anywhere in argv (after the script path). */
 const dryRun = process.argv.includes("--dry-run");
