@@ -90,3 +90,41 @@ export async function sendWatermarkDownloadReadyEmail(
     `,
   });
 }
+
+const VIRAL_POSTS_CTA_URL = "https://spyreels.ai/viral-posts";
+
+/** Paid weekly: fresh Viral Posts feed is ready to remake. */
+export async function sendViralPostsPaidReminderEmail(toEmail, name) {
+  const safeName = (name || "").trim() || "there";
+  const safeUrl = escapeHtmlAttr(VIRAL_POSTS_CTA_URL);
+  const safeUrlText = escapeHtmlText(VIRAL_POSTS_CTA_URL);
+
+  await getResend().emails.send({
+    from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    reply_to: "nomanpeera@gmail.com",
+    to: toEmail,
+    subject: "Your fresh viral posts are ready to remake",
+    tags: [{ name: "template", value: "viral_posts_paid_reminder" }],
+    html: `
+      <div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;border-radius:12px;overflow:hidden;"><div style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);padding:40px 32px;text-align:center;"><div style="font-size:28px;font-weight:700;color:#fff;letter-spacing:-0.5px;">SpyReels</div><div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px;letter-spacing:2px;text-transform:uppercase;">Spy. Learn. Go Viral.</div></div><div style="background:#111;padding:40px 32px;"><p style="color:#e5e7eb;font-size:22px;font-weight:600;margin:0 0 8px;line-height:1.3;">Fresh viral posts are ready</p><p style="color:#9ca3af;font-size:15px;line-height:1.7;margin:20px 0;">Hey ${escapeHtmlText(safeName)},</p><p style="color:#9ca3af;font-size:15px;line-height:1.7;margin:0 0 24px;">Your Viral Posts feed just refreshed with new high-performing posts tailored to your niche. Pick one and remake it while the trend is still hot.</p><div style="text-align:center;margin:32px 0;"><a href="${safeUrl}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;">Open Viral Posts</a></div><p style="color:#4b5563;font-size:13px;line-height:1.6;margin:24px 0 0;">If the button doesn't work, copy and paste this link into your browser:<br><span style="color:#7c3aed;word-break:break-all;">${safeUrlText}</span></p><p style="color:#6b7280;font-size:14px;line-height:1.7;margin:32px 0 0;">Questions? Just reply to this email.<br><br>Noah Perry<br><span style="color:#7c3aed;">Founder, SpyReels</span></p></div><div style="background:#0d0d0d;padding:20px 32px;text-align:center;border-top:1px solid #1f1f1f;"><p style="color:#4b5563;font-size:12px;margin:0;">SpyReels · <a href="https://spyreels.ai" style="color:#6b7280;">spyreels.ai</a> · <a href="https://spyreels.ai/unsubscribe" style="color:#6b7280;">Unsubscribe</a></p></div></div>
+    `,
+  });
+}
+
+/** Unpaid drip: FOMO around trending posts + soft upgrade mention. */
+export async function sendViralPostsUnpaidReminderEmail(toEmail, name) {
+  const safeName = (name || "").trim() || "there";
+  const safeUrl = escapeHtmlAttr(VIRAL_POSTS_CTA_URL);
+  const safeUrlText = escapeHtmlText(VIRAL_POSTS_CTA_URL);
+
+  await getResend().emails.send({
+    from: "Noah Perry <noah.perry@mail.spyreels.ai>",
+    reply_to: "nomanpeera@gmail.com",
+    to: toEmail,
+    subject: "See what's going viral in your niche right now",
+    tags: [{ name: "template", value: "viral_posts_unpaid_reminder" }],
+    html: `
+      <div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;border-radius:12px;overflow:hidden;"><div style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);padding:40px 32px;text-align:center;"><div style="font-size:28px;font-weight:700;color:#fff;letter-spacing:-0.5px;">SpyReels</div><div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px;letter-spacing:2px;text-transform:uppercase;">Spy. Learn. Go Viral.</div></div><div style="background:#111;padding:40px 32px;"><p style="color:#e5e7eb;font-size:22px;font-weight:600;margin:0 0 8px;line-height:1.3;">Your niche is moving fast</p><p style="color:#9ca3af;font-size:15px;line-height:1.7;margin:20px 0;">Hey ${escapeHtmlText(safeName)},</p><p style="color:#9ca3af;font-size:15px;line-height:1.7;margin:0 0 16px;">Creators in your niche are already remaking what's working this week. Every day you wait, those formats cool off and someone else ships first.</p><p style="color:#9ca3af;font-size:15px;line-height:1.7;margin:0 0 24px;">We pulled a fresh set of viral posts for you. Open Viral Posts, steal the structure, and remake one today. Upgrading unlocks uninterrupted access so you never miss the next wave.</p><div style="text-align:center;margin:32px 0;"><a href="${safeUrl}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;">See what's going viral</a></div><p style="color:#4b5563;font-size:13px;line-height:1.6;margin:24px 0 0;">If the button doesn't work, copy and paste this link into your browser:<br><span style="color:#7c3aed;word-break:break-all;">${safeUrlText}</span></p><p style="color:#6b7280;font-size:14px;line-height:1.7;margin:32px 0 0;">Questions? Just reply to this email.<br><br>Noah Perry<br><span style="color:#7c3aed;">Founder, SpyReels</span></p></div><div style="background:#0d0d0d;padding:20px 32px;text-align:center;border-top:1px solid #1f1f1f;"><p style="color:#4b5563;font-size:12px;margin:0;">SpyReels · <a href="https://spyreels.ai" style="color:#6b7280;">spyreels.ai</a> · <a href="https://spyreels.ai/unsubscribe" style="color:#6b7280;">Unsubscribe</a></p></div></div>
+    `,
+  });
+}

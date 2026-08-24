@@ -184,6 +184,26 @@ export async function sendWatermarkDownloadReadyEmail(
   return sendEmail(toEmail, firstName, downloadUrl);
 }
 
+export async function sendViralPostsPaidReminderEmail(
+  toEmail: string,
+  name: string
+): Promise<void> {
+  const { sendViralPostsPaidReminderEmail: sendEmail } = await import(
+    "./email.js"
+  );
+  return sendEmail(toEmail, name);
+}
+
+export async function sendViralPostsUnpaidReminderEmail(
+  toEmail: string,
+  name: string
+): Promise<void> {
+  const { sendViralPostsUnpaidReminderEmail: sendEmail } = await import(
+    "./email.js"
+  );
+  return sendEmail(toEmail, name);
+}
+
 /** Founder outreach (admin panel). Plain text only. */
 export async function sendOutreachPlainTextEmail(
   toEmail: string,
