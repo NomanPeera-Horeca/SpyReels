@@ -1,9 +1,12 @@
 import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
 } from "@shared/viralPosts";
+import { users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
 import {
   isAnyViralPostsPlatformEnabled,
   isViralPostsLive,
@@ -50,6 +53,16 @@ export const viralPostsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (db) {
+        const stored = ctx.user.timezone ?? null;
+        if (stored !== input.timezone) {
+          await db
+            .update(users)
+            .set({ timezone: input.timezone })
+            .where(eq(users.id, ctx.user.id));
+        }
+      }
       return getOrCreateDailyFeed({
         userId: ctx.user.id,
         localDate: input.localDate,

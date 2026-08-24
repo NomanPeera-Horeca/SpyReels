@@ -1,5 +1,9 @@
 import { eq, sql } from "drizzle-orm";
-import { userActivityDaily, users } from "../drizzle/schema";
+import {
+  userActivityDaily,
+  users,
+  viralPostReminderState,
+} from "../drizzle/schema";
 import { getDb, getUserByOpenId } from "./db";
 
 const PAID_PLANS = ["starter", "pro", "business", "agency"] as const;
@@ -86,6 +90,23 @@ export async function recordUserActivity(openId: string): Promise<void> {
         : {}),
     })
     .where(eq(users.openId, openId));
+
+  // Restart unpaid Viral Posts drip from day 1 on any return visit.
+  await db
+    .insert(viralPostReminderState)
+    .values({
+      userId: user.id,
+      reminderStage: 0,
+      lastReminderSentAt: null,
+      updatedAt: now,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        reminderStage: 0,
+        lastReminderSentAt: null,
+        updatedAt: now,
+      },
+    });
 
   await bumpDailyActivity(user.id, { countVisit: true });
 }

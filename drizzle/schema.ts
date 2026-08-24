@@ -32,6 +32,8 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   /** Last authenticated request or client heartbeat. */
   lastActiveAt: timestamp("lastActiveAt").defaultNow().notNull(),
+  /** IANA timezone from Viral Posts client (e.g. America/Chicago). */
+  timezone: varchar("timezone", { length: 64 }),
   /** Distinct calendar days (UTC) with at least one authenticated visit. */
   visitCount: int("visitCount").default(0).notNull(),
   /** YYYY-MM-DD (UTC) of the last day that incremented visitCount. */
@@ -2241,6 +2243,24 @@ export const viralPostDailyFeeds = mysqlTable(
 
 export type ViralPostDailyFeed = typeof viralPostDailyFeeds.$inferSelect;
 export type InsertViralPostDailyFeed = typeof viralPostDailyFeeds.$inferInsert;
+
+/**
+ * Viral Posts email drip state (paid weekly + unpaid staged reminders).
+ * Columns match Railway console (snake_case) from bug #63.
+ */
+export const viralPostReminderState = mysqlTable("viral_post_reminder_state", {
+  userId: int("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  reminderStage: int("reminder_stage").default(0).notNull(),
+  lastReminderSentAt: datetime("last_reminder_sent_at", { mode: "date" }),
+  lastFeedGeneratedAt: datetime("last_feed_generated_at", { mode: "date" }),
+  updatedAt: datetime("updated_at", { mode: "date" }),
+});
+
+export type ViralPostReminderState = typeof viralPostReminderState.$inferSelect;
+export type InsertViralPostReminderState =
+  typeof viralPostReminderState.$inferInsert;
 
 export const viralPostDailyFeedItems = mysqlTable(
   "viral_post_daily_feed_items",

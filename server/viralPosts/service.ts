@@ -241,6 +241,8 @@ export async function getOrCreateDailyFeed(args: {
   userId: number;
   localDate: string;
   timezone: string;
+  /** When true, delete any existing feed for this day and assemble fresh. */
+  force?: boolean;
 }): Promise<ViralDailyFeedResponse> {
   const requestStarted = Date.now();
   if (!isViralPostsLive || !isAnyViralPostsPlatformEnabled) {
@@ -260,10 +262,13 @@ export async function getOrCreateDailyFeed(args: {
     };
   }
 
-  const existing = await repo.getDailyFeedByUserDate(
-    args.userId,
-    args.localDate
-  );
+  if (args.force) {
+    await repo.deleteDailyFeedByUserDate(args.userId, args.localDate);
+  }
+
+  const existing = args.force
+    ? null
+    : await repo.getDailyFeedByUserDate(args.userId, args.localDate);
   if (existing) {
     if (existing.status === "assembling") {
       const waited = await waitForFeedReady(

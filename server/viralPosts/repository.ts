@@ -180,6 +180,27 @@ export async function getDailyFeedByUserDate(
   return row ?? null;
 }
 
+/** Delete a day's feed (and items) so cron can force-regenerate. */
+export async function deleteDailyFeedByUserDate(
+  userId: number,
+  localDate: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await getDailyFeedByUserDate(userId, localDate);
+  if (!existing) return;
+  await withDbLog(`deleteDailyFeed.items.feedId=${existing.id}`, () =>
+    db
+      .delete(viralPostDailyFeedItems)
+      .where(eq(viralPostDailyFeedItems.feedId, existing.id))
+  );
+  await withDbLog(`deleteDailyFeed.feedId=${existing.id}`, () =>
+    db
+      .delete(viralPostDailyFeeds)
+      .where(eq(viralPostDailyFeeds.id, existing.id))
+  );
+}
+
 export async function createDailyFeed(args: {
   userId: number;
   localDate: string;
