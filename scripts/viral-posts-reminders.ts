@@ -1,6 +1,7 @@
 /**
  * Viral Posts email reminders (paid weekly + unpaid drip).
  * Run: pnpm exec tsx scripts/viral-posts-reminders.ts
+ * Dry-run: pnpm exec tsx scripts/viral-posts-reminders.ts --dry-run
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";
@@ -17,6 +18,17 @@ import { getOrCreateDailyFeed } from "../server/viralPosts/service";
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const UNPAID_SCHEDULE_DAYS = [1, 2, 7, 14, 30] as const;
 const PAID_FEED_MAX_AGE_DAYS = 7;
+
+const dryRun = process.argv.includes("--dry-run");
+
+type WouldProcessReason = `paid-7day` | `unpaid-stage-${number}`;
+
+type WouldHaveProcessed = {
+  id: number;
+  email: string;
+  plan: string;
+  reason: WouldProcessReason;
+};
 
 function localDateString(d = new Date(), timeZone = "UTC"): string {
   try {
@@ -73,9 +85,11 @@ async function main() {
     console.log(
       JSON.stringify({
         error: "Database not available",
+        dryRun,
         paidRegenerated: 0,
         unpaidRegenerated: 0,
         skippedNoEmail: 0,
+        wouldHaveProcessed: [],
         errors: [],
       })
     );
@@ -97,6 +111,7 @@ async function main() {
   let paidRegenerated = 0;
   let unpaidRegenerated = 0;
   let skippedNoEmail = 0;
+  const wouldHaveProcessed: WouldHaveProcessed[] = [];
   const errors: Array<{ userId: number; error: string }> = [];
 
   // No email opt-out / unsubscribe column on users (schema checked).
@@ -123,6 +138,17 @@ async function main() {
           !lastFeedGeneratedAt ||
           daysSince(lastFeedGeneratedAt, now) >= PAID_FEED_MAX_AGE_DAYS;
         if (!needsRefresh) continue;
+
+        if (dryRun) {
+          wouldHaveProcessed.push({
+            id: user.id,
+            email,
+            plan: sub.plan,
+            reason: "paid-7day",
+          });
+          paidRegenerated += 1;
+          continue;
+        }
 
         await getOrCreateDailyFeed({
           userId: user.id,
@@ -151,6 +177,17 @@ async function main() {
         daysSince(user.lastActiveAt, now) >= thresholdDays;
       if (!due || !inactiveLongEnough) continue;
 
+      if (dryRun) {
+        wouldHaveProcessed.push({
+          id: user.id,
+          email,
+          plan: sub.plan,
+          reason: `unpaid-stage-${stage}`,
+        });
+        unpaidRegenerated += 1;
+        continue;
+      }
+
       await getOrCreateDailyFeed({
         userId: user.id,
         localDate,
@@ -175,9 +212,11 @@ async function main() {
   console.log(
     JSON.stringify(
       {
+        dryRun,
         paidRegenerated,
         unpaidRegenerated,
         skippedNoEmail,
+        wouldHaveProcessed,
         errors,
         scanned: rows.length,
       },
