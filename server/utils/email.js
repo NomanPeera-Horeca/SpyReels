@@ -69,6 +69,28 @@ function escapeHtmlText(text) {
     .replace(/"/g, "&quot;");
 }
 
+const RESEND_SEND_TIMEOUT_MS = 15_000;
+
+/** Resend emails.send with AbortController; throws if fetch exceeds 15s. */
+async function sendResendEmailWithTimeout(payload) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), RESEND_SEND_TIMEOUT_MS);
+  try {
+    // Second arg is forwarded into fetch options (includes signal).
+    await getResend().emails.send(payload, { signal: controller.signal });
+  } catch (err) {
+    if (
+      controller.signal.aborted ||
+      (err && typeof err === "object" && err.name === "AbortError")
+    ) {
+      throw new Error("Resend send timed out after 15s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /** Free-tier B-roll clip ready after background render. Direct download link. */
 export async function sendWatermarkDownloadReadyEmail(
   toEmail,
@@ -79,7 +101,7 @@ export async function sendWatermarkDownloadReadyEmail(
   const safeUrl = escapeHtmlAttr(downloadUrl);
   const safeUrlText = escapeHtmlText(downloadUrl);
 
-  await getResend().emails.send({
+  await sendResendEmailWithTimeout({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     reply_to: "nomanpeera@gmail.com",
     to: toEmail,
@@ -99,7 +121,7 @@ export async function sendViralPostsPaidReminderEmail(toEmail, name) {
   const safeUrl = escapeHtmlAttr(VIRAL_POSTS_CTA_URL);
   const safeUrlText = escapeHtmlText(VIRAL_POSTS_CTA_URL);
 
-  await getResend().emails.send({
+  await sendResendEmailWithTimeout({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     reply_to: "nomanpeera@gmail.com",
     to: toEmail,
@@ -117,7 +139,7 @@ export async function sendViralPostsUnpaidReminderEmail(toEmail, name) {
   const safeUrl = escapeHtmlAttr(VIRAL_POSTS_CTA_URL);
   const safeUrlText = escapeHtmlText(VIRAL_POSTS_CTA_URL);
 
-  await getResend().emails.send({
+  await sendResendEmailWithTimeout({
     from: "Noah Perry <noah.perry@mail.spyreels.ai>",
     reply_to: "nomanpeera@gmail.com",
     to: toEmail,

@@ -15,6 +15,8 @@ import { isPaidPlan } from "../server/userActivity";
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const UNPAID_SCHEDULE_DAYS = [1, 2, 7, 14, 30] as const;
 const PAID_FEED_MAX_AGE_DAYS = 7;
+/** Hard cap per live user: feed + email + reminder upsert. */
+const PER_USER_TIMEOUT_MS = 60_000;
 
 /** True when `--dry-run` appears anywhere in argv (after the script path). */
 const dryRun = process.argv.includes("--dry-run");
@@ -95,6 +97,22 @@ function localDateString(d = new Date(), timeZone = "UTC"): string {
 
 function daysSince(from: Date, now: Date): number {
   return (now.getTime() - from.getTime()) / MS_PER_DAY;
+}
+
+async function raceWithTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId);
+  }
 }
 
 async function upsertReminderAfterSend(args: {
@@ -216,40 +234,49 @@ async function main() {
       }
 
       // --- live path only below ---
-      if (!getOrCreateDailyFeed) {
-        const service = await import("../server/viralPosts/service");
-        const emailMod = await import("../server/utils/email");
-        getOrCreateDailyFeed = service.getOrCreateDailyFeed;
-        sendViralPostsPaidReminderEmail =
-          emailMod.sendViralPostsPaidReminderEmail;
-        sendViralPostsUnpaidReminderEmail =
-          emailMod.sendViralPostsUnpaidReminderEmail;
-      }
+      // Sequential: feed → email → upsert. If this races times out mid-way,
+      // upsertReminderAfterSend is never reached, so the user is retried next run.
+      await raceWithTimeout(
+        (async () => {
+          if (!getOrCreateDailyFeed) {
+            const service = await import("../server/viralPosts/service");
+            const emailMod = await import("../server/utils/email");
+            getOrCreateDailyFeed = service.getOrCreateDailyFeed;
+            sendViralPostsPaidReminderEmail =
+              emailMod.sendViralPostsPaidReminderEmail;
+            sendViralPostsUnpaidReminderEmail =
+              emailMod.sendViralPostsUnpaidReminderEmail;
+          }
 
-      const timezone = (user.timezone ?? "").trim() || "UTC";
-      const localDate = localDateString(now, timezone);
-      const displayName = (user.name ?? "").trim() || "there";
+          const timezone = (user.timezone ?? "").trim() || "UTC";
+          const localDate = localDateString(now, timezone);
+          const displayName = (user.name ?? "").trim() || "there";
 
-      await getOrCreateDailyFeed({
-        userId: user.id,
-        localDate,
-        timezone,
-        force: true,
-      });
+          await getOrCreateDailyFeed({
+            userId: user.id,
+            localDate,
+            timezone,
+            force: true,
+          });
 
-      if (verdict.reason === "paid-7day") {
-        await sendViralPostsPaidReminderEmail!(email, displayName);
-        paidRegenerated += 1;
-      } else {
-        await sendViralPostsUnpaidReminderEmail!(email, displayName);
-        unpaidRegenerated += 1;
-      }
+          if (verdict.reason === "paid-7day") {
+            await sendViralPostsPaidReminderEmail!(email, displayName);
+          } else {
+            await sendViralPostsUnpaidReminderEmail!(email, displayName);
+          }
 
-      await upsertReminderAfterSend({
-        userId: user.id,
-        now,
-        reminderStage: verdict.nextReminderStage,
-      });
+          await upsertReminderAfterSend({
+            userId: user.id,
+            now,
+            reminderStage: verdict.nextReminderStage,
+          });
+
+          if (verdict.reason === "paid-7day") paidRegenerated += 1;
+          else unpaidRegenerated += 1;
+        })(),
+        PER_USER_TIMEOUT_MS,
+        `User reminder processing timed out after ${PER_USER_TIMEOUT_MS / 1000}s`
+      );
     } catch (err) {
       errors.push({
         userId: user.id,
