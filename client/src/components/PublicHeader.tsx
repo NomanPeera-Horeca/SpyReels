@@ -5,7 +5,7 @@ import { useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
-import { SPYREELS_LOGO_URL } from "@/lib/brandAssets";
+import { SPYREELS_LOGO_PATH } from "@/lib/brandAssets";
 import {
   Sheet,
   SheetClose,
@@ -101,7 +101,7 @@ export function PublicHeader({
                   <SheetHeader className="border-b pb-4 text-left">
                     <SheetTitle className="flex items-center gap-2">
                       <img
-                        src={SPYREELS_LOGO_URL}
+                        src={SPYREELS_LOGO_PATH}
                         alt="SpyReels"
                         width={32}
                         height={32}
@@ -172,7 +172,7 @@ export function PublicHeader({
               </Sheet>
               <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <img
-                  src={SPYREELS_LOGO_URL}
+                  src={SPYREELS_LOGO_PATH}
                   alt="SpyReels logo, Instagram Reels spy tool"
                   width={36}
                   height={36}

@@ -14,13 +14,13 @@ import {
   SPYREELS_SITE_URL,
 } from "@/lib/publicSeo";
 import { PublicFooter } from "@/components/PublicFooter";
+import { SPYREELS_LOGO_PATH } from "@/lib/brandAssets";
 
 const EXTENSION_TITLE = "Chrome Extension for Instagram Reels | Sort, Transcribe, and Save";
 const EXTENSION_DESCRIPTION =
   "Sort any creator's Instagram Reels by views and engagement, transcribe hooks in one click, and save winners to your SpyReels dashboard while you browse.";
 const EXTENSION_CANONICAL = `${SPYREELS_SITE_URL}/extension`;
 
-const SPYREELS_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
 const EXTENSION_ZIP = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/reels-dashboard-extension_3c447ef3.zip";
 
 const FEATURES = [
@@ -125,7 +125,7 @@ export default function Extension() {
       <nav className="sticky top-0 z-50 overflow-x-hidden border-b border-border/40 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl min-w-0 items-center justify-between gap-2 px-4">
           <Link href="/" className="flex min-w-0 items-center gap-2 hover:opacity-80 transition-opacity">
-            <img src={SPYREELS_LOGO} alt="SpyReels" className="h-8 w-8 shrink-0" />
+            <img src={SPYREELS_LOGO_PATH} alt="SpyReels" className="h-8 w-8 shrink-0" />
             <span className="truncate font-semibold text-lg text-foreground">SpyReels</span>
           </Link>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
@@ -222,7 +222,7 @@ export default function Extension() {
             </div>
             <div className="flex items-center gap-2">
               <div className="hidden items-center gap-1 rounded-md bg-gradient-to-r from-purple-600 to-blue-600 px-2 py-0.5 sm:flex">
-                <img src={SPYREELS_LOGO} alt="" className="h-4 w-4" />
+                <img src={SPYREELS_LOGO_PATH} alt="" className="h-4 w-4" />
                 <span className="text-xs text-white font-medium">SpyReels</span>
               </div>
             </div>

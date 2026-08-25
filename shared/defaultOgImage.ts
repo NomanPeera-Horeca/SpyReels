@@ -1,10 +1,10 @@
-/** Default Open Graph / Twitter card image (1200px wide marketing asset on CDN). */
-export const DEFAULT_OG_IMAGE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
+import { SPYREELS_SITE_URL } from "./publicPageMeta";
 
-/** Legacy logo URL (small transparent PNG). Prefer DEFAULT_OG_IMAGE for social previews. */
-export const SPYREELS_LOGO_OG_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+/** Default Open Graph / Twitter card image (first-party). */
+export const DEFAULT_OG_IMAGE = `${SPYREELS_SITE_URL}/brand/og-default.jpg`;
+
+/** Organization logo for JSON-LD / OG when a small mark is needed. */
+export const SPYREELS_LOGO_OG_URL = `${SPYREELS_SITE_URL}/brand/spyreels-logo.png`;
 
 /** Top blog slugs that should use cover art for OG when available (server falls back per post). */
 export const PRIORITY_BLOG_OG_SLUGS = [

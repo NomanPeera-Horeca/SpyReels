@@ -57,7 +57,7 @@ const POPULAR_GUIDES = [
 ] as const;
 
 const HERO_VIDEO_URL = "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
-const WORKFLOW_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/hero-workflow-3tnbssSHX3vSoQBktt96Lq.webp";
+const WORKFLOW_IMG = `${SPYREELS_SITE_URL}/brand/og-default.jpg`;
 
 // ─── Features ──────────────────────────────────────────────────
 const FEATURES = [

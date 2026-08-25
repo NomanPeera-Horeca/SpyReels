@@ -10,10 +10,8 @@ import sharp from "sharp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 
-const FAVICON_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/favicon-192_c34305af.png";
-const LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+const FAVICON_PATH = path.join(ROOT, "client/public/favicon-192.png");
+const LOGO_PATH = path.join(ROOT, "client/public/brand/spyreels-logo.png");
 const BRAND_BG = { r: 18, g: 18, b: 24, alpha: 1 };
 
 const ANDROID_LAUNCHER_SIZES: Record<string, number> = {
@@ -39,14 +37,6 @@ const ANDROID_SPLASH_PORT: Record<string, [number, number]> = {
   xxhdpi: [960, 1600],
   xxxhdpi: [1280, 1920],
 };
-
-async function download(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to download ${url}: ${res.status}`);
-  }
-  return Buffer.from(await res.arrayBuffer());
-}
 
 async function writeSquareIcon(
   source: Buffer,
@@ -113,8 +103,8 @@ async function writeSplash(
 
 async function main(): Promise<void> {
   const [iconSource, logoSource] = await Promise.all([
-    download(FAVICON_URL),
-    download(LOGO_URL),
+    fs.readFile(FAVICON_PATH),
+    fs.readFile(LOGO_PATH),
   ]);
 
   const pwaDir = path.join(ROOT, "client/public/pwa");

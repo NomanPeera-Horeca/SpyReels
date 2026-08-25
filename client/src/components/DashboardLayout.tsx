@@ -65,6 +65,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import Tooltip from "@/components/Tooltip";
 import { SpyReelsWordmark } from "@/components/SpyReelsWordmark";
+import { SPYREELS_LOGO_PATH } from "@/lib/brandAssets";
 import { CreateWorkspaceModal } from "@/components/CreateWorkspaceModal";
 import { SendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
 import { ShareLinkModal } from "@/components/ShareLinkModal";
@@ -457,7 +458,7 @@ function DashboardLayoutContent({
               >
                 {isCollapsed ? (
                   <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+                    src={SPYREELS_LOGO_PATH}
                     alt="SpyReels"
                     className="h-6 w-6"
                   />

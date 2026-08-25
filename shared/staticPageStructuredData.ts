@@ -3,8 +3,7 @@ import { SPYREELS_AGGREGATE_RATING } from "./softwareApplicationSchema";
 import { SCRIPT_GENERATOR_COPY } from "./scriptGeneratorLanding";
 import { TRANSCRIPT_GENERATOR_COPY } from "./transcriptGeneratorLanding";
 
-export const SPYREELS_LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+export const SPYREELS_LOGO_URL = `${SPYREELS_SITE_URL}/brand/spyreels-logo.png`;
 
 type FaqItem = { q: string; a: string };
 

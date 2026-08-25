@@ -1,7 +1,5 @@
 import { Link } from "wouter";
-
-const SPYREELS_LOGO =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { SPYREELS_LOGO_PATH } from "@/lib/brandAssets";
 
 type FooterLink = {
   label: string;
@@ -94,7 +92,7 @@ export function PublicFooter() {
           <div className="lg:col-span-3">
             <Link href="/" className="inline-flex items-center gap-2">
               <img
-                src={SPYREELS_LOGO}
+                src={SPYREELS_LOGO_PATH}
                 alt="SpyReels logo, Instagram Reels spy tool"
                 className="h-7 w-7"
               />

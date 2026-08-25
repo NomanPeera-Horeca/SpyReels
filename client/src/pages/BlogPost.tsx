@@ -21,9 +21,7 @@ import {
   StickySignupBar,
 } from "@/components/BlogConversion";
 import { PublicFooter } from "@/components/PublicFooter";
-
-const SPYREELS_LOGO =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { SPYREELS_LOGO_PATH, SPYREELS_LOGO_URL } from "@/lib/brandAssets";
 
 const SLUG_CTA_MAP: Record<
   string,
@@ -478,7 +476,7 @@ function BlogPostView({ slug }: { slug: string }) {
         "name": "SpyReels",
         "logo": {
           "@type": "ImageObject",
-          "url": "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png"
+          "url": SPYREELS_LOGO_URL
         }
       },
       "mainEntityOfPage": {
@@ -609,7 +607,7 @@ function BlogPostView({ slug }: { slug: string }) {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <img src={SPYREELS_LOGO} alt="SpyReels" className="h-9 w-9" />
+              <img src={SPYREELS_LOGO_PATH} alt="SpyReels" className="h-9 w-9" />
               <span className="font-semibold text-lg tracking-tight">SpyReels</span>
             </Link>
             <div className="flex items-center gap-4">

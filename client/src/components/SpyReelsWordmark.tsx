@@ -1,7 +1,5 @@
 import { cn } from "@/lib/utils";
-
-const LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+import { SPYREELS_LOGO_PATH } from "@/lib/brandAssets";
 
 type SpyReelsWordmarkProps = {
   /** "default" matches the app sidebar. "header" matches PublicHeader (pricing, landing). */
@@ -16,7 +14,7 @@ export function SpyReelsWordmark({ size = "default", className }: SpyReelsWordma
   return (
     <div className={cn("flex min-w-0 items-center gap-2", className)}>
       <img
-        src={LOGO_URL}
+        src={SPYREELS_LOGO_PATH}
         alt="SpyReels"
         className={cn("shrink-0", size === "header" ? "h-9 w-9" : "h-7 w-7")}
       />

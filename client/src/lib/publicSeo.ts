@@ -1,9 +1,10 @@
 import { DEFAULT_OG_IMAGE } from "../../../shared/defaultOgImage";
+import { SPYREELS_SITE_URL } from "../../../shared/publicPageMeta";
 
-export const SPYREELS_SITE_URL = "https://spyreels.ai";
+export { SPYREELS_SITE_URL };
 
-export const SPYREELS_LOGO_URL =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663403284701/dX6p9AmjDXRxHekGRTFonS/spyreels-logo-2-transparent_d64117e8.png";
+/** Absolute logo URL (first-party host). Prefer relative path for <img> when possible. */
+export const SPYREELS_LOGO_URL = `${SPYREELS_SITE_URL}/brand/spyreels-logo.png`;
 
 export function setMeta(prop: string, val: string, attr: "property" | "name" = "property") {
   if (typeof document === "undefined") return;
