@@ -99,10 +99,14 @@ async function persistAdaptedToPool(args: {
       sourceThumbnailUrl: c.sourceThumbnailUrl ?? c.thumbnailUrl,
     })),
     async (results) => {
+      const platformBySource = new Map(
+        upserted.map((c) => [c.sourceId, c.platform || "instagram"])
+      );
       for (const r of results) {
         try {
           await repo.updateCandidateMedia({
             sourceId: r.sourceId,
+            platform: platformBySource.get(r.sourceId),
             thumbnailUrl: r.thumbnailUrl,
             mediaStatus: r.mediaStatus,
           });

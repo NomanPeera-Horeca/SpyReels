@@ -529,9 +529,17 @@ export async function updateCandidateMedia(args: {
   sourceId: string;
   thumbnailUrl: string | null;
   mediaStatus: string;
+  /** When set, scopes the update to that platform. Omit to match any platform by sourceId. */
+  platform?: string;
 }): Promise<void> {
   const db = await getDb();
   if (!db) return;
+  const whereClause = args.platform
+    ? and(
+        eq(viralPostCandidates.platform, args.platform),
+        eq(viralPostCandidates.sourceId, args.sourceId)
+      )
+    : eq(viralPostCandidates.sourceId, args.sourceId);
   await withDbLog(`updateCandidateMedia.sourceId=${args.sourceId}`, () =>
     db
       .update(viralPostCandidates)
@@ -540,12 +548,7 @@ export async function updateCandidateMedia(args: {
         thumbnailMediaStatus: args.mediaStatus,
         refreshedAt: new Date(),
       })
-      .where(
-        and(
-          eq(viralPostCandidates.platform, "instagram"),
-          eq(viralPostCandidates.sourceId, args.sourceId)
-        )
-      )
+      .where(whereClause)
   );
 }
 

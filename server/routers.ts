@@ -350,6 +350,7 @@ import {
 import { storagePut } from "./storage";
 import { ensureProfilePicOnR2 } from "./profilePicR2";
 import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
+import { mirrorReelThumbnailsBounded } from "./discovery/mediaMirror";
 import {
   clientIpFromRequest,
   isPublicIpRateLimited,
@@ -6070,9 +6071,10 @@ Rules:
           // Use Instagram's actual tag sections API to search reels by keyword
           // This matches what Instagram's explore page shows for the same keyword
           const reels = await searchReelsByKeyword(input.keyword, input.maxResults);
+          const withStableThumbs = await withSearchReelThumbnailMirroring(reels);
 
           return {
-            reels,
+            reels: withStableThumbs,
             searchType: "keyword" as const,
             query: input.keyword,
           };
@@ -6100,7 +6102,13 @@ Rules:
         await incrementUsage(ctx.user.id, "searchCount");
         try {
           const { reels, profile } = await searchReelsByHandle(input.handle, input.maxResults);
-          return { reels, searchType: "handle" as const, query: input.handle, profile };
+          const withStableThumbs = await withSearchReelThumbnailMirroring(reels);
+          return {
+            reels: withStableThumbs,
+            searchType: "handle" as const,
+            query: input.handle,
+            profile,
+          };
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Search failed";
           throw new TRPCError({ code: "BAD_REQUEST", message });
@@ -6332,7 +6340,7 @@ Rules:
         }
 
         return {
-          reels: results,
+          reels: await withSearchReelThumbnailMirroring(results),
           errors,
           searchType: "url" as const,
           totalRequested: input.urls.length,
@@ -9395,6 +9403,51 @@ async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
       error
     );
   }
+}
+
+/**
+ * Mirror Search Reels thumbnails to R2 (same shortcode keyspace as Discovery/scrape).
+ * First SEARCH_THUMB_MIRROR_SYNC results await so the visible grid gets durable URLs;
+ * the rest mirror in the background so repeat searches hit R2 head cache.
+ * Never throws: on mirror failure, original CDN URLs are kept.
+ */
+const SEARCH_THUMB_MIRROR_SYNC = 20;
+
+async function withSearchReelThumbnailMirroring<
+  T extends { shortcode: string; thumbnailUrl: string },
+>(reels: T[]): Promise<T[]> {
+  if (reels.length === 0) return reels;
+
+  const syncItems = reels.slice(0, SEARCH_THUMB_MIRROR_SYNC);
+  const restItems = reels.slice(SEARCH_THUMB_MIRROR_SYNC);
+
+  let stable = new Map<string, string>();
+  try {
+    stable = await mirrorReelThumbnailsBounded(
+      syncItems.map((r) => ({
+        shortcode: r.shortcode,
+        thumbnailUrl: r.thumbnailUrl,
+      }))
+    );
+  } catch (err) {
+    console.error("[search] thumbnail mirror failed; serving CDN URLs", err);
+  }
+
+  if (restItems.length > 0) {
+    void mirrorReelThumbnailsBounded(
+      restItems.map((r) => ({
+        shortcode: r.shortcode,
+        thumbnailUrl: r.thumbnailUrl,
+      }))
+    ).catch((err) => {
+      console.error("[search] background thumbnail mirror failed", err);
+    });
+  }
+
+  return reels.map((r) => ({
+    ...r,
+    thumbnailUrl: stable.get(r.shortcode) ?? r.thumbnailUrl,
+  }));
 }
 
 /**

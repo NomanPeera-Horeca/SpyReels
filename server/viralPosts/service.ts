@@ -444,10 +444,14 @@ export async function getOrCreateDailyFeed(args: {
           p.row.sourceThumbnailUrl ?? p.row.thumbnailUrl,
       })),
       async (results) => {
+        const platformBySource = new Map(
+          picked.map((p) => [p.row.sourceId, p.row.platform || "instagram"])
+        );
         for (const result of results) {
           try {
             await repo.updateCandidateMedia({
               sourceId: result.sourceId,
+              platform: platformBySource.get(result.sourceId),
               thumbnailUrl: result.thumbnailUrl,
               mediaStatus: result.mediaStatus,
             });
