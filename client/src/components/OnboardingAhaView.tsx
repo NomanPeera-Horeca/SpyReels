@@ -29,6 +29,8 @@ type OnboardingAhaViewProps = {
   selectedNicheSlugs: string[];
   subtitle?: string;
   proofDetail?: string;
+  /** PostHog / analytics: which aha CTA was clicked. */
+  onCtaClick?: (cta: string) => void;
 };
 
 function shortLabel(text: string, max: number): string {
@@ -53,6 +55,7 @@ export function OnboardingAhaView({
   selectedNicheSlugs,
   subtitle,
   proofDetail,
+  onCtaClick,
 }: OnboardingAhaViewProps) {
   const [, setLocation] = useLocation();
   const mobileCreate = isMobileCreateApp();
@@ -60,6 +63,10 @@ export function OnboardingAhaView({
   const [savedLibraryScriptId, setSavedLibraryScriptId] = useState<number | null>(null);
   const [displayScript, setDisplayScript] = useState(script);
   const [hookVariations, setHookVariations] = useState<CoachHookVariation[] | null>(null);
+
+  const trackCta = (cta: string) => {
+    onCtaClick?.(cta);
+  };
 
   const hookVariationsMutation = trpc.studio.hookVariations.useMutation({
     onSuccess: (data) => {
@@ -124,12 +131,14 @@ export function OnboardingAhaView({
     return "Story hooks are performing in your niche";
   }, [niche]);
 
-  const goStudio = (query: string) => {
+  const goStudio = (query: string, cta: string) => {
+    trackCta(cta);
     sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
     setLocation(`/studio${query}`);
   };
 
   const handleFilmNow = () => {
+    trackCta("film_now");
     if (savedLibraryScriptId) {
       sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
       setLocation(scriptFilmPath(savedLibraryScriptId));
@@ -143,17 +152,20 @@ export function OnboardingAhaView({
   };
 
   const handleSteerPlan = () => {
+    trackCta("plan");
     sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
     sessionStorage.setItem(ONBOARDING_PLAN_AUTOSTART_KEY, "1");
     setLocation("/plan");
   };
 
   const handleSteerReels = () => {
+    trackCta("research");
     sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
     setLocation("/research");
   };
 
   const handleSteerCreators = () => {
+    trackCta("discover_creators");
     sessionStorage.removeItem(ONBOARDING_AHA_SCRIPT_KEY);
     const prefill = buildDiscoveryPrefill(niche, audience);
     sessionStorage.setItem(DISCOVERY_PREFILL_KEY, prefill);
@@ -206,7 +218,7 @@ export function OnboardingAhaView({
           refineInput=""
           onRefineInputChange={() => {}}
           onRefine={() => {}}
-          onReset={() => goStudio("?new=1")}
+          onReset={() => goStudio("?new=1", "write_another")}
           onToggleEdit={() => {}}
           onSaveEdits={() => {}}
           onCancelEdit={() => {}}
@@ -219,7 +231,11 @@ export function OnboardingAhaView({
       </div>
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button type="button" className="w-full sm:w-auto" onClick={() => goStudio(`?script=${displayScript.id}`)}>
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => goStudio(`?script=${displayScript.id}`, "see_full_script")}
+        >
           See full script
         </Button>
         {mobileCreate ? (
@@ -234,7 +250,12 @@ export function OnboardingAhaView({
             {filmNowPending ? "Opening teleprompter..." : "Film now"}
           </Button>
         ) : null}
-        <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => goStudio("?new=1")}>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={() => goStudio("?new=1", "write_another")}
+        >
           Write another idea
         </Button>
       </div>

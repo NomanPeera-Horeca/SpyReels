@@ -128,6 +128,9 @@ export default function OnboardingPage() {
     buildOnboardingProgressSteps("save_profile")
   );
   const pollTimerRef = useRef<number | null>(null);
+  const nicheChipUsedRef = useRef(false);
+  const audienceChipUsedRef = useRef(false);
+  const loadingAbandonedFiredRef = useRef(false);
 
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
 
@@ -160,6 +163,61 @@ export default function OnboardingPage() {
     if (!state) return false;
     return Boolean(state.onboardingCompletedAt || state.onboardingSkippedAt);
   }, [user, onboardingStateQuery.data]);
+
+  useEffect(() => {
+    if (loading || onboardingStateQuery.isLoading || !user) return;
+    // Bypass users briefly sit on phase step1 while restoring aha; do not count that as a view.
+    if (shouldBypassOnboarding && phase === "step1") return;
+
+    if (phase === "step1") {
+      posthog?.capture("onboarding_step1_viewed");
+    } else if (phase === "step2") {
+      posthog?.capture("onboarding_step2_viewed");
+    } else if (phase === "loading") {
+      posthog?.capture("onboarding_loading_started");
+    } else if (phase === "aha") {
+      posthog?.capture("onboarding_aha_viewed");
+    }
+  }, [
+    phase,
+    posthog,
+    loading,
+    onboardingStateQuery.isLoading,
+    user,
+    shouldBypassOnboarding,
+  ]);
+
+  useEffect(() => {
+    if (phase !== "loading") {
+      loadingAbandonedFiredRef.current = false;
+      return;
+    }
+
+    const fireAbandoned = () => {
+      if (loadingAbandonedFiredRef.current) return;
+      loadingAbandonedFiredRef.current = true;
+      posthog?.capture("onboarding_loading_abandoned");
+    };
+
+    const onBeforeUnload = () => {
+      fireAbandoned();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") fireAbandoned();
+    };
+    const onPageHide = () => {
+      fireAbandoned();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [phase, posthog]);
 
   useEffect(() => {
     if (!shouldBypassOnboarding || phase === "aha" || phase === "loading" || phase === "step2") return;
@@ -207,6 +265,8 @@ export default function OnboardingPage() {
   ]);
 
   const onSkip = async () => {
+    const skipStep = phase === "step2" ? "step2" : "step1";
+    posthog?.capture("onboarding_skip_clicked", { step: skipStep });
     try {
       const result = await skipMutation.mutateAsync();
       if (!result.alreadyDone) {
@@ -224,6 +284,16 @@ export default function OnboardingPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not skip setup");
     }
+  };
+
+  const completeStep1 = () => {
+    const value = niche.trim();
+    if (value.length < 3) return;
+    posthog?.capture("onboarding_step1_completed", {
+      char_count: value.length,
+      chip_used: nicheChipUsedRef.current,
+    });
+    setPhase("step2");
   };
 
   const stopProgressPoll = () => {
@@ -265,6 +335,11 @@ export default function OnboardingPage() {
     const businessDescription = niche.trim();
     const targetAudience = audience.trim();
     if (businessDescription.length < 3 || targetAudience.length < 3) return;
+
+    posthog?.capture("onboarding_step2_completed", {
+      char_count: targetAudience.length,
+      chip_used: audienceChipUsedRef.current,
+    });
 
     setSubmitError(null);
     setPhase("loading");
@@ -353,6 +428,9 @@ export default function OnboardingPage() {
           niche={niche.trim() || "Your niche"}
           audience={audience.trim() || "Your audience"}
           selectedNicheSlugs={selectedNicheSlugs}
+          onCtaClick={(cta) => {
+            posthog?.capture("onboarding_aha_cta_clicked", { cta });
+          }}
         />
       </OnboardingShell>
     );
@@ -375,11 +453,12 @@ export default function OnboardingPage() {
               type="text"
               value={niche}
               onChange={(e) => {
+                nicheChipUsedRef.current = false;
                 setNiche(e.target.value);
                 setSubmitError(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && niche.trim().length >= 3) setPhase("step2");
+                if (e.key === "Enter" && niche.trim().length >= 3) completeStep1();
               }}
               placeholder="e.g. Fitness, Personal Finance, AI Tools..."
               maxLength={200}
@@ -395,7 +474,10 @@ export default function OnboardingPage() {
                 <button
                   key={chip}
                   type="button"
-                  onClick={() => setNiche(chip)}
+                  onClick={() => {
+                    nicheChipUsedRef.current = true;
+                    setNiche(chip);
+                  }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     niche === chip
                       ? "border-primary bg-primary/10 text-primary"
@@ -410,7 +492,7 @@ export default function OnboardingPage() {
               <Button
                 type="button"
                 disabled={niche.trim().length < 3}
-                onClick={() => setPhase("step2")}
+                onClick={completeStep1}
               >
                 Continue
               </Button>
@@ -426,6 +508,7 @@ export default function OnboardingPage() {
               type="text"
               value={audience}
               onChange={(e) => {
+                audienceChipUsedRef.current = false;
                 setAudience(e.target.value);
                 setSubmitError(null);
               }}
@@ -446,7 +529,10 @@ export default function OnboardingPage() {
                 <button
                   key={chip}
                   type="button"
-                  onClick={() => setAudience(chip)}
+                  onClick={() => {
+                    audienceChipUsedRef.current = true;
+                    setAudience(chip);
+                  }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     audience === chip
                       ? "border-primary bg-primary/10 text-primary"
