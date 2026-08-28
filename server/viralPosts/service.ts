@@ -1,5 +1,6 @@
 import type {
   ViralDailyFeedResponse,
+  ViralFeedHistoryResponse,
   ViralMediaStatus,
   ViralPost,
   ViralPostPlatform,
@@ -7,7 +8,11 @@ import type {
 } from "@shared/viralPosts";
 import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
-import { users, type ViralPostCandidate } from "../../drizzle/schema";
+import {
+  users,
+  type ViralPostCandidate,
+  type ViralPostDailyFeed,
+} from "../../drizzle/schema";
 import { getDb } from "../db";
 import { runDiscoveryPipeline } from "../discovery/pipeline";
 import {
@@ -530,7 +535,7 @@ export async function getOrCreateDailyFeed(args: {
 }
 
 async function loadFeedResponse(
-  existing: NonNullable<Awaited<ReturnType<typeof repo.getDailyFeedByUserDate>>>,
+  existing: ViralPostDailyFeed,
   userId: number,
   fromCache: boolean
 ): Promise<ViralDailyFeedResponse> {
@@ -540,11 +545,35 @@ async function loadFeedResponse(
     repo.getHiddenCreatorKeys(userId),
     repo.getRecentlyDismissedCandidateIds(userId),
   ]);
+  return mapDailyFeedToResponse(existing, rows, {
+    saved,
+    hidden,
+    dismissed,
+    fromCache,
+    userId,
+  });
+}
+
+/**
+ * Shared mapper: feed row + ranked items → ViralDailyFeedResponse.
+ * Used by getDailyFeed (via loadFeedResponse) and getFeedHistory.
+ */
+function mapDailyFeedToResponse(
+  existing: ViralPostDailyFeed,
+  rows: Awaited<ReturnType<typeof repo.getFeedItemsWithCandidates>>,
+  opts: {
+    saved: Set<number>;
+    hidden: Set<string>;
+    dismissed: Set<number>;
+    fromCache: boolean;
+    userId: number;
+  }
+): ViralDailyFeedResponse {
   const items = rows
     .filter(({ candidate }) => {
-      if (dismissed.has(candidate.id)) return false;
+      if (opts.dismissed.has(candidate.id)) return false;
       const key = creatorKeyOf(candidate);
-      if (key !== "unknown" && hidden.has(key)) return false;
+      if (key !== "unknown" && opts.hidden.has(key)) return false;
       return true;
     })
     .map(({ item, candidate }) =>
@@ -552,14 +581,14 @@ async function loadFeedResponse(
         relevanceLabel: item.relevanceLabel,
         relevanceReason: item.relevanceReason,
         contentPillar: item.contentPillar,
-        saved: saved.has(candidate.id),
-        dismissed: dismissed.has(candidate.id),
+        saved: opts.saved.has(candidate.id),
+        dismissed: opts.dismissed.has(candidate.id),
         shownAt: item.shownAt,
       })
     );
-  if (fromCache) {
+  if (opts.fromCache) {
     console.info("[viralPosts] daily_feed_cache_hit", {
-      userId,
+      userId: opts.userId,
       localDate: existing.localDate,
       feedId: existing.id,
       itemCount: items.length,
@@ -572,10 +601,64 @@ async function loadFeedResponse(
     generatedAt: existing.generatedAt.toISOString(),
     status:
       (existing.status as ViralDailyFeedResponse["status"]) || "ready",
-    fromCache,
+    fromCache: opts.fromCache,
     generationReason: existing.generationReason,
     items,
     errorMessage: existing.errorMessage,
+  };
+}
+
+/**
+ * Past daily feeds for the For You history stack (excludes today).
+ * Cursor is exclusive upper bound on localDate (newest-first pages).
+ */
+export async function getFeedHistory(args: {
+  userId: number;
+  /** Exclusive upper bound YYYY-MM-DD; first page should pass today's localDate. */
+  cursor?: string | null;
+  /** Today's localDate so today is never included even if cursor is omitted. */
+  excludeLocalDate: string;
+  limit?: number;
+}): Promise<ViralFeedHistoryResponse> {
+  const limit = Math.min(Math.max(args.limit ?? 5, 1), 14);
+  const beforeLocalDate =
+    args.cursor && args.cursor < args.excludeLocalDate
+      ? args.cursor
+      : args.excludeLocalDate;
+
+  const rows = await repo.listDailyFeedsBeforeDate({
+    userId: args.userId,
+    beforeLocalDate,
+    limit: limit + 1,
+  });
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+
+  const [saved, hidden, dismissed] = await Promise.all([
+    repo.getSavedCandidateIds(args.userId),
+    repo.getHiddenCreatorKeys(args.userId),
+    repo.getRecentlyDismissedCandidateIds(args.userId),
+  ]);
+
+  const feeds: ViralDailyFeedResponse[] = [];
+  for (const feed of page) {
+    const itemRows = await repo.getFeedItemsWithCandidates(feed.id);
+    feeds.push(
+      mapDailyFeedToResponse(feed, itemRows, {
+        saved,
+        hidden,
+        dismissed,
+        fromCache: true,
+        userId: args.userId,
+      })
+    );
+  }
+
+  const oldest = page.length > 0 ? page[page.length - 1]!.localDate : null;
+  return {
+    feeds,
+    nextCursor: hasMore && oldest ? oldest : null,
+    hasMore,
   };
 }
 

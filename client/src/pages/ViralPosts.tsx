@@ -17,7 +17,7 @@ import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRe
 import {
   EXPLORE_SUGGESTED_SEARCHES,
 } from "@/lib/viralPosts/viralPostsService";
-import { browserTimezone, localDateString } from "@/lib/viralPosts/format";
+import { browserTimezone, formatFeedLocalDate, localDateString } from "@/lib/viralPosts/format";
 import type {
   ExploreAdvancedFilters,
   ExploreQuickFilter,
@@ -26,10 +26,23 @@ import type {
   ViralPostsTab,
 } from "@/lib/viralPosts/types";
 import { DEFAULT_EXPLORE_FILTERS } from "@/lib/viralPosts/types";
+import type { ViralDailyFeedResponse } from "@shared/viralPosts";
 
 function parseTab(raw: string | null): ViralPostsTab {
   if (raw === "explore" || raw === "saved" || raw === "for-you") return raw;
   return "for-you";
+}
+
+function filterVisiblePosts(
+  items: ViralPost[],
+  hiddenCreatorKeys: Set<string>
+): ViralPost[] {
+  return items.filter((p) => {
+    const key = (p.creatorId || p.creatorHandle || "")
+      .toLowerCase()
+      .replace(/^@/, "");
+    return !key || !hiddenCreatorKeys.has(key);
+  });
 }
 
 export default function ViralPosts() {
@@ -93,6 +106,22 @@ export default function ViralPosts() {
     },
   });
 
+  const historyQuery = trpc.viralPosts.getFeedHistory.useInfiniteQuery(
+    {
+      excludeLocalDate: localDate,
+      limit: 5,
+    },
+    {
+      enabled: tab === "for-you",
+      getNextPageParam: (last) => last.nextCursor ?? undefined,
+      staleTime: 60_000,
+    }
+  );
+
+  const historyFeeds = useMemo((): ViralDailyFeedResponse[] => {
+    return historyQuery.data?.pages.flatMap((p) => p.feeds) ?? [];
+  }, [historyQuery.data]);
+
   const loadFeed = useCallback(() => {
     setFeedLoading(true);
     setFeedError(null);
@@ -154,15 +183,10 @@ export default function ViralPosts() {
     [setLocation]
   );
 
-  const dailyPosts = useMemo(() => {
-    const items = feed?.items ?? [];
-    return items.filter((p) => {
-      const key = (p.creatorId || p.creatorHandle || "")
-        .toLowerCase()
-        .replace(/^@/, "");
-      return !key || !hiddenCreatorKeys.has(key);
-    });
-  }, [feed?.items, hiddenCreatorKeys]);
+  const dailyPosts = useMemo(
+    () => filterVisiblePosts(feed?.items ?? [], hiddenCreatorKeys),
+    [feed?.items, hiddenCreatorKeys]
+  );
 
   const explorePosts = useMemo(() => {
     const items = searchQuery.data?.items ?? [];
@@ -207,26 +231,58 @@ export default function ViralPosts() {
     return items;
   }, [savedQuery.data?.items, savedFilter, hiddenCreatorKeys]);
 
-  const patchFeedSaved = useCallback((postId: string, saved: boolean) => {
-    setFeed((prev) =>
-      prev
-        ? {
-            ...prev,
-            items: prev.items.map((p) =>
-              p.id === postId ? { ...p, saved } : p
-            ),
-          }
-        : prev
-    );
-  }, []);
+  const patchHistoryItems = useCallback(
+    (updater: (items: ViralPost[]) => ViralPost[]) => {
+      utils.viralPosts.getFeedHistory.setInfiniteData(
+        { excludeLocalDate: localDate, limit: 5 },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              feeds: page.feeds.map((day) => ({
+                ...day,
+                items: updater(day.items),
+              })),
+            })),
+          };
+        }
+      );
+    },
+    [utils.viralPosts.getFeedHistory, localDate]
+  );
 
-  const removeFromFeed = useCallback((postId: string) => {
-    setFeed((prev) =>
-      prev
-        ? { ...prev, items: prev.items.filter((p) => p.id !== postId) }
-        : prev
-    );
-  }, []);
+  const patchFeedSaved = useCallback(
+    (postId: string, saved: boolean) => {
+      setFeed((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((p) =>
+                p.id === postId ? { ...p, saved } : p
+              ),
+            }
+          : prev
+      );
+      patchHistoryItems((items) =>
+        items.map((p) => (p.id === postId ? { ...p, saved } : p))
+      );
+    },
+    [patchHistoryItems]
+  );
+
+  const removeFromFeed = useCallback(
+    (postId: string) => {
+      setFeed((prev) =>
+        prev
+          ? { ...prev, items: prev.items.filter((p) => p.id !== postId) }
+          : prev
+      );
+      patchHistoryItems((items) => items.filter((p) => p.id !== postId));
+    },
+    [patchHistoryItems]
+  );
 
   const handleToggleSave = useCallback(
     async (post: ViralPost) => {
@@ -297,6 +353,7 @@ export default function ViralPosts() {
         toast.success("Creator hidden from recommendations");
         await utils.viralPosts.search.invalidate();
         await utils.viralPosts.getSaved.invalidate();
+        await utils.viralPosts.getFeedHistory.invalidate();
       } catch (err) {
         setHiddenCreatorKeys(prevHidden);
         toast.error(err instanceof Error ? err.message : "Could not hide creator");
@@ -509,14 +566,67 @@ export default function ViralPosts() {
               </div>
             </div>
           ) : (
-            <ViralPostGrid
-              posts={dailyPosts}
-              loading={feedLoading}
-              emptyTitle="We couldn't find enough strong matches yet."
-              emptyDescription="Try adjusting recommendations or explore Instagram posts."
-              {...cardHandlers}
-            />
+            <div>
+              <h3 className="mb-3 text-base font-bold text-[#f6f4fb]">
+                Generated on {formatFeedLocalDate(localDate)}
+              </h3>
+              <ViralPostGrid
+                posts={dailyPosts}
+                loading={feedLoading}
+                emptyTitle="We couldn't find enough strong matches yet."
+                emptyDescription="Try adjusting recommendations or explore Instagram posts."
+                {...cardHandlers}
+              />
+            </div>
           )}
+
+          {historyFeeds.map((day) => {
+            const posts = filterVisiblePosts(day.items, hiddenCreatorKeys);
+            if (posts.length === 0 && day.status !== "error") return null;
+            return (
+              <div key={day.feedId} className="mt-10">
+                <h3 className="mb-3 text-base font-bold text-[#f6f4fb]">
+                  Generated on {formatFeedLocalDate(day.localDate)}
+                </h3>
+                <ViralPostGrid
+                  posts={posts}
+                  loading={false}
+                  emptyTitle="No posts from this day."
+                  emptyDescription="Earlier recommendations for this date are empty."
+                  {...cardHandlers}
+                />
+              </div>
+            );
+          })}
+
+          {historyQuery.isFetchingNextPage ||
+          (historyQuery.isLoading && historyFeeds.length === 0) ? (
+            <div className="mt-6 flex justify-center py-4 text-sm text-[#a9a4b8]">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading earlier feeds
+            </div>
+          ) : null}
+
+          {historyQuery.hasNextPage ? (
+            <div className="mt-6 flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-[#2b2739] bg-[#171522] text-[#f6f4fb] hover:bg-[#1d1a2a]"
+                disabled={historyQuery.isFetchingNextPage}
+                onClick={() => void historyQuery.fetchNextPage()}
+              >
+                {historyQuery.isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading
+                  </>
+                ) : (
+                  "Load earlier feeds"
+                )}
+              </Button>
+            </div>
+          ) : null}
 
           {!feedLoading && dailyPosts.length > 0 ? (
             <div className="mt-8 rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-10 text-center">

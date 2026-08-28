@@ -93,6 +93,22 @@ export function localDateString(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Human label for a YYYY-MM-DD feed day, e.g. "March 28, 2026". */
+export function formatFeedLocalDate(localDate: string): string {
+  const parts = localDate.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (!y || !m || !d) return localDate;
+  const date = new Date(y, m - 1, d);
+  if (!Number.isFinite(date.getTime())) return localDate;
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function browserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";

@@ -13,6 +13,7 @@ import {
 } from "./featureFlag";
 import * as repo from "./repository";
 import {
+  getFeedHistory,
   getOrCreateDailyFeed,
   getSavedViralPosts,
   searchViralPosts,
@@ -67,6 +68,30 @@ export const viralPostsRouter = router({
         userId: ctx.user.id,
         localDate: input.localDate,
         timezone: input.timezone,
+      });
+    }),
+
+  getFeedHistory: viralPostsProcedure
+    .input(
+      z.object({
+        /** Today's localDate (YYYY-MM-DD); past feeds only. */
+        excludeLocalDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "excludeLocalDate must be YYYY-MM-DD"),
+        /** Exclusive upper bound; omit on first page (uses excludeLocalDate). */
+        cursor: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "cursor must be YYYY-MM-DD")
+          .optional(),
+        limit: z.number().int().min(1).max(14).default(5),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return getFeedHistory({
+        userId: ctx.user.id,
+        excludeLocalDate: input.excludeLocalDate,
+        cursor: input.cursor,
+        limit: input.limit,
       });
     }),
 

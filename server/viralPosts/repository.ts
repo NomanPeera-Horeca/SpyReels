@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   viralPostCandidates,
   viralPostDailyFeedItems,
@@ -178,6 +178,30 @@ export async function getDailyFeedByUserDate(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Past daily feeds for a user with localDate strictly before `beforeLocalDate`,
+ * newest first. Used by getFeedHistory pagination (cursor = beforeLocalDate).
+ */
+export async function listDailyFeedsBeforeDate(args: {
+  userId: number;
+  beforeLocalDate: string;
+  limit: number;
+}): Promise<ViralPostDailyFeed[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(viralPostDailyFeeds)
+    .where(
+      and(
+        eq(viralPostDailyFeeds.userId, args.userId),
+        lt(viralPostDailyFeeds.localDate, args.beforeLocalDate)
+      )
+    )
+    .orderBy(desc(viralPostDailyFeeds.localDate))
+    .limit(args.limit);
 }
 
 /** Delete a day's feed (and items) so cron can force-regenerate. */

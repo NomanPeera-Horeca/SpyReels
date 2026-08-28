@@ -88,6 +88,14 @@ export type ViralDailyFeedResponse = {
   serverDurationMs?: number;
 };
 
+/** Paginated past daily feeds (excludes today; see getFeedHistory). */
+export type ViralFeedHistoryResponse = {
+  feeds: ViralDailyFeedResponse[];
+  /** Oldest localDate in this page when hasMore; pass as cursor for the next page. */
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 export type ViralSearchResponse = {
   items: ViralPost[];
   query: string;
