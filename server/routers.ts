@@ -1559,9 +1559,18 @@ export const appRouter = router({
           if (!reel) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Reel not found" });
           }
-          const job = await getScrapeJob(reel.jobId);
-          if (!job || job.workspaceId !== ctx.workspaceId) {
-            throw new TRPCError({ code: "FORBIDDEN" });
+          // jobId 0 = collected / viral-post mirrors (no scrape_jobs row).
+          if (reel.jobId !== 0) {
+            const job = await getScrapeJob(reel.jobId);
+            if (!job || job.workspaceId !== ctx.workspaceId) {
+              throw new TRPCError({ code: "FORBIDDEN" });
+            }
+          } else if (reel.workspaceId !== ctx.workspaceId) {
+            const { isViralMirroredReelId } = await import("./viralPosts/ensureMirrorReel");
+            const viralOk = await isViralMirroredReelId(input.reelId);
+            if (!viralOk) {
+              throw new TRPCError({ code: "FORBIDDEN" });
+            }
           }
           const existing = (reel.videoUrl ?? "").trim();
           if (publicBase && existing.startsWith(publicBase)) {

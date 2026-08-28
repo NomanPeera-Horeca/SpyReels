@@ -87,6 +87,16 @@ export function ViralPostPreview({
           thumbnailUrl={post.thumbnailUrl}
           videoUrl={post.videoUrl}
           shortcode={post.platform === "instagram" ? post.sourceId : null}
+          /**
+           * Instagram: reelId enables durable R2 refresh via reels.refreshVideoUrl.
+           * TikTok: do not pass reels.id as videoId (tiktokScrape.refreshVideoUrl
+           * expects tiktok_videos.id); use page URL + durable videoUrl instead.
+           */
+          reelId={
+            post.platform === "instagram" && post.reelId != null
+              ? post.reelId
+              : undefined
+          }
           videoPageUrl={post.platform === "tiktok" ? post.sourceUrl : null}
           platform={mediaPlatform}
           size={compact ? "compact" : "default"}

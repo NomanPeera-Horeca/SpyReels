@@ -63,6 +63,8 @@ export function selectDiverseFeed(
     if (selected.length >= max) break;
     if (c.hidden) continue;
     if (c.recentlyDismissed) continue;
+    // Hard exclude recently shown when the pool still has fresh alternatives.
+    if (c.recentlyShown) continue;
     if (usedSources.has(c.sourceId)) continue;
 
     const creatorCount = creatorCounts.get(c.creatorKey) ?? 0;
@@ -76,9 +78,6 @@ export function selectDiverseFeed(
         nearDuplicate(s.hook, c.hook)
     );
     if (dup) continue;
-
-    // Soft penalty: skip recently shown unless we need fill
-    if (c.recentlyShown && selected.length >= min) continue;
 
     // Soft platform diversity: once we have min items, prefer adding a new platform
     // when the feed is still single-platform and alternatives exist later in the list.
@@ -94,7 +93,8 @@ export function selectDiverseFeed(
           !platforms.has(alt.platform) &&
           !usedSources.has(alt.sourceId) &&
           !alt.hidden &&
-          !alt.recentlyDismissed
+          !alt.recentlyDismissed &&
+          !alt.recentlyShown
       );
       if (hasAltPlatform) continue;
     }
@@ -107,8 +107,28 @@ export function selectDiverseFeed(
     if (c.platform) platforms.add(c.platform);
   }
 
-  // Second pass: fill to min with relaxed creator/recent rules (still no dups/hidden)
+  // Second pass: fill to min with relaxed creator rules. Still prefer fresh only.
   if (selected.length < min) {
+    for (const c of sorted) {
+      if (selected.length >= min) break;
+      if (c.hidden || c.recentlyDismissed || c.recentlyShown) continue;
+      if (usedSources.has(c.sourceId)) continue;
+      const creatorCount = creatorCounts.get(c.creatorKey) ?? 0;
+      if (creatorCount >= 2) continue;
+      const dup = selected.some((s) =>
+        nearDuplicate(s.caption || s.hook, c.caption || c.hook)
+      );
+      if (dup) continue;
+      selected.push(c);
+      usedSources.add(c.sourceId);
+      creatorCounts.set(c.creatorKey, creatorCount + 1);
+    }
+  }
+
+  // Last resort: allow recently shown only when the pool cannot fill with fresh
+  // candidates at all. Prefer a shorter fresh feed over padding with yesterday's
+  // top picks, so this pass only runs when we still have zero selections.
+  if (selected.length === 0) {
     for (const c of sorted) {
       if (selected.length >= min) break;
       if (c.hidden || c.recentlyDismissed) continue;

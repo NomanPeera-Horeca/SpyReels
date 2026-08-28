@@ -34,6 +34,11 @@ export type ViralPost = {
   sourceUrl: string;
   thumbnailUrl?: string | null;
   videoUrl?: string | null;
+  /**
+   * Durable `reels.id` for IG/TikTok inline playback (R2 refresh path).
+   * Null for YouTube (link-out only) and when not yet mirrored.
+   */
+  reelId?: number | null;
   /** How the thumbnail was resolved for this candidate. */
   mediaStatus?: ViralMediaStatus | null;
 

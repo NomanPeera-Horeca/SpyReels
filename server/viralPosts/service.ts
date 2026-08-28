@@ -13,7 +13,7 @@ import {
   type ViralPostCandidate,
   type ViralPostDailyFeed,
 } from "../../drizzle/schema";
-import { getDb } from "../db";
+import { getDb, getReelById } from "../db";
 import { runDiscoveryPipeline } from "../discovery/pipeline";
 import {
   adaptabilityScoreForCandidate,
@@ -33,6 +33,9 @@ import {
   isViralPostsTiktokEnabled,
   isViralPostsYoutubeEnabled,
 } from "./featureFlag";
+import { getPersonalWorkspaceId } from "../personalWorkspace";
+import { isDurableReelVideoUrl } from "../reelVideoR2";
+import { ensureViralMirrorReelsForFeed } from "./ensureMirrorReel";
 import { resolveThumbnailFallback, scheduleThumbnailMirroring } from "./mediaMirror";
 import {
   classifyCandidatePillars,
@@ -78,6 +81,8 @@ function candidateToViralPost(
     shownAt?: Date | null;
     hook?: string | null;
     format?: string | null;
+    /** Prefer durable video URL from the mirrored reels row when available. */
+    mirroredVideoUrl?: string | null;
   }
 ): ViralPost {
   const ageHours =
@@ -96,10 +101,27 @@ function candidateToViralPost(
             candidate.sourceThumbnailUrl ?? candidate.thumbnailUrl,
         });
 
+  const platform = (candidate.platform as ViralPostPlatform) || "instagram";
+  const isYouTube = platform === "youtube";
+  const reelId =
+    !isYouTube &&
+    candidate.mirroredReelId != null &&
+    candidate.mirroredReelId > 0
+      ? candidate.mirroredReelId
+      : null;
+
+  const mirrored = (extras.mirroredVideoUrl ?? "").trim();
+  const candidateVideo = (candidate.videoUrl ?? "").trim();
+  const videoUrl = isYouTube
+    ? null
+    : mirrored && isDurableReelVideoUrl(mirrored)
+      ? mirrored
+      : candidateVideo || null;
+
   return {
     id: String(candidate.id),
     sourceId: candidate.sourceId,
-    platform: (candidate.platform as ViralPostPlatform) || "instagram",
+    platform,
     creatorId: candidate.creatorId,
     creatorName: candidate.creatorName,
     creatorHandle: candidate.creatorHandle,
@@ -107,7 +129,8 @@ function candidateToViralPost(
     creatorFollowers: candidate.creatorFollowers,
     sourceUrl: candidate.sourceUrl,
     thumbnailUrl: media.thumbnailUrl,
-    videoUrl: candidate.videoUrl,
+    videoUrl,
+    reelId,
     mediaStatus: media.mediaStatus,
     caption: candidate.caption,
     transcript: candidate.transcript,
@@ -135,6 +158,31 @@ function candidateToViralPost(
     remade: false,
     shownAt: extras.shownAt?.toISOString() ?? null,
   };
+}
+
+async function resolveMirroredVideoUrls(
+  candidates: ViralPostCandidate[]
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  const ids = [
+    ...new Set(
+      candidates
+        .map((c) => c.mirroredReelId)
+        .filter((id): id is number => id != null && id > 0)
+    ),
+  ];
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const reel = await getReelById(id);
+        const url = (reel?.videoUrl ?? "").trim();
+        if (url) out.set(id, url);
+      } catch {
+        // best-effort
+      }
+    })
+  );
+  return out;
 }
 
 function deriveHook(caption: string | null): string | null {
@@ -415,6 +463,12 @@ export async function getOrCreateDailyFeed(args: {
       }))
     );
 
+    const workspaceId = await getPersonalWorkspaceId(args.userId);
+    await ensureViralMirrorReelsForFeed({
+      candidates: picked.map((p) => p.row),
+      workspaceId,
+    });
+
     const status = !enough
       ? picked.length === 0
         ? "refreshing"
@@ -424,7 +478,7 @@ export async function getOrCreateDailyFeed(args: {
       ? "pool_assembly"
       : "cold_start_pool_refresh";
 
-    const [, saved] = await Promise.all([
+    const [, saved, mirroredVideos] = await Promise.all([
       repo.updateDailyFeedStatus({
         feedId: feed.id,
         status:
@@ -440,6 +494,7 @@ export async function getOrCreateDailyFeed(args: {
         costEstimateUsd: 0,
       }),
       repo.getSavedCandidateIds(args.userId),
+      resolveMirroredVideoUrls(picked.map((p) => p.row)),
     ]);
 
     scheduleThumbnailMirroring(
@@ -476,6 +531,10 @@ export async function getOrCreateDailyFeed(args: {
         shownAt: new Date(),
         hook: p.adapted.hook,
         format: p.adapted.format,
+        mirroredVideoUrl:
+          p.row.mirroredReelId != null
+            ? mirroredVideos.get(p.row.mirroredReelId) ?? null
+            : null,
       })
     );
 
@@ -545,12 +604,34 @@ async function loadFeedResponse(
     repo.getHiddenCreatorKeys(userId),
     repo.getRecentlyDismissedCandidateIds(userId),
   ]);
+
+  const candidates = rows.map((r) => r.candidate);
+  const needsMirror = candidates.some(
+    (c) =>
+      (c.platform || "instagram") !== "youtube" &&
+      (c.mirroredReelId == null || c.mirroredReelId <= 0)
+  );
+  if (needsMirror) {
+    try {
+      const workspaceId = await getPersonalWorkspaceId(userId);
+      await ensureViralMirrorReelsForFeed({ candidates, workspaceId });
+    } catch (err) {
+      console.error("[viralPosts.mirror] load_ensure_failed", {
+        feedId: existing.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const mirroredVideos = await resolveMirroredVideoUrls(candidates);
+
   return mapDailyFeedToResponse(existing, rows, {
     saved,
     hidden,
     dismissed,
     fromCache,
     userId,
+    mirroredVideos,
   });
 }
 
@@ -567,8 +648,10 @@ function mapDailyFeedToResponse(
     dismissed: Set<number>;
     fromCache: boolean;
     userId: number;
+    mirroredVideos?: Map<number, string>;
   }
 ): ViralDailyFeedResponse {
+  const mirroredVideos = opts.mirroredVideos ?? new Map<number, string>();
   const items = rows
     .filter(({ candidate }) => {
       if (opts.dismissed.has(candidate.id)) return false;
@@ -584,6 +667,10 @@ function mapDailyFeedToResponse(
         saved: opts.saved.has(candidate.id),
         dismissed: opts.dismissed.has(candidate.id),
         shownAt: item.shownAt,
+        mirroredVideoUrl:
+          candidate.mirroredReelId != null
+            ? mirroredVideos.get(candidate.mirroredReelId) ?? null
+            : null,
       })
     );
   if (opts.fromCache) {
@@ -643,6 +730,21 @@ export async function getFeedHistory(args: {
   const feeds: ViralDailyFeedResponse[] = [];
   for (const feed of page) {
     const itemRows = await repo.getFeedItemsWithCandidates(feed.id);
+    const candidates = itemRows.map((r) => r.candidate);
+    const needsMirror = candidates.some(
+      (c) =>
+        (c.platform || "instagram") !== "youtube" &&
+        (c.mirroredReelId == null || c.mirroredReelId <= 0)
+    );
+    if (needsMirror) {
+      try {
+        const workspaceId = await getPersonalWorkspaceId(args.userId);
+        await ensureViralMirrorReelsForFeed({ candidates, workspaceId });
+      } catch {
+        // best-effort; history still returns without reelId
+      }
+    }
+    const mirroredVideos = await resolveMirroredVideoUrls(candidates);
     feeds.push(
       mapDailyFeedToResponse(feed, itemRows, {
         saved,
@@ -650,6 +752,7 @@ export async function getFeedHistory(args: {
         dismissed,
         fromCache: true,
         userId: args.userId,
+        mirroredVideos,
       })
     );
   }
@@ -742,6 +845,20 @@ async function tryUpgradeRefreshingFeed(args: {
       finalScore: p.scored.finalScore,
     }))
   );
+
+  try {
+    const workspaceId = await getPersonalWorkspaceId(args.userId);
+    await ensureViralMirrorReelsForFeed({
+      candidates: picked.map((p) => p.row),
+      workspaceId,
+    });
+  } catch (err) {
+    console.error("[viralPosts.mirror] upgrade_ensure_failed", {
+      feedId: args.feed.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   await repo.updateDailyFeedStatus({
     feedId: args.feed.id,
     status: "ready",

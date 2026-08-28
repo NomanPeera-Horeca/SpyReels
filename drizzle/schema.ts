@@ -1981,6 +1981,8 @@ export const carouselRemakes = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     templateId: varchar("templateId", { length: 128 }).notNull(),
     niche: text("niche").notNull(),
+    /** Source Instagram URL when remake was generated from a carousel post. */
+    sourceUrl: varchar("sourceUrl", { length: 1024 }),
     status: mysqlEnum("status", ["pending", "processing", "completed", "failed"])
       .default("pending")
       .notNull(),
@@ -2178,6 +2180,11 @@ export const viralPostCandidates = mysqlTable(
       .default("pending")
       .notNull(),
     videoUrl: text("videoUrl"),
+    /**
+     * Durable `reels.id` mirror for IG/TikTok playback refresh + R2 video.
+     * Null for YouTube (link-out only) and until first daily-feed selection.
+     */
+    mirroredReelId: int("mirroredReelId"),
     caption: text("caption"),
     transcript: text("transcript"),
     hashtags: json("hashtags").$type<string[]>(),
@@ -2204,6 +2211,9 @@ export const viralPostCandidates = mysqlTable(
     ),
     discoveredIdx: index("idx_viral_post_candidates_discovered").on(
       table.discoveredAt
+    ),
+    mirroredReelIdx: index("idx_viral_post_candidates_mirrored_reel").on(
+      table.mirroredReelId
     ),
   })
 );

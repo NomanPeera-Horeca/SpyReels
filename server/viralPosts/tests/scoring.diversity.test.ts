@@ -215,4 +215,99 @@ describe("viralPosts diversity", () => {
     const selected = selectDiverseFeed(input, { min: 5, max: 7 });
     expect(selected.find((s) => s.sourceId === "a")).toBeUndefined();
   });
+
+  it("excludes recently shown from all slots when fresh alternatives exist", () => {
+    const input = [
+      make({
+        candidateId: 1,
+        sourceId: "old-a",
+        creatorKey: "c1",
+        finalScore: 0.99,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 2,
+        sourceId: "old-b",
+        creatorKey: "c2",
+        finalScore: 0.98,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 3,
+        sourceId: "old-c",
+        creatorKey: "c3",
+        finalScore: 0.97,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 4,
+        sourceId: "old-d",
+        creatorKey: "c4",
+        finalScore: 0.96,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 5,
+        sourceId: "old-e",
+        creatorKey: "c5",
+        finalScore: 0.95,
+        recentlyShown: true,
+      }),
+      make({ candidateId: 6, sourceId: "fresh-a", creatorKey: "c6", finalScore: 0.5 }),
+      make({ candidateId: 7, sourceId: "fresh-b", creatorKey: "c7", finalScore: 0.4 }),
+      make({ candidateId: 8, sourceId: "fresh-c", creatorKey: "c8", finalScore: 0.3 }),
+    ];
+    const selected = selectDiverseFeed(input, { min: 5, max: 7 });
+    expect(selected.every((s) => !s.recentlyShown)).toBe(true);
+    expect(selected.map((s) => s.sourceId)).toEqual([
+      "fresh-a",
+      "fresh-b",
+      "fresh-c",
+    ]);
+    // Prefer a shorter fresh feed over padding with yesterday's top picks.
+    expect(selected.length).toBe(3);
+  });
+
+  it("allows recently shown only when the pool has no fresh candidates", () => {
+    const input = [
+      make({
+        candidateId: 1,
+        sourceId: "old-a",
+        creatorKey: "c1",
+        finalScore: 0.9,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 2,
+        sourceId: "old-b",
+        creatorKey: "c2",
+        finalScore: 0.8,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 3,
+        sourceId: "old-c",
+        creatorKey: "c3",
+        finalScore: 0.7,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 4,
+        sourceId: "old-d",
+        creatorKey: "c4",
+        finalScore: 0.6,
+        recentlyShown: true,
+      }),
+      make({
+        candidateId: 5,
+        sourceId: "old-e",
+        creatorKey: "c5",
+        finalScore: 0.5,
+        recentlyShown: true,
+      }),
+    ];
+    const selected = selectDiverseFeed(input, { min: 5, max: 7 });
+    expect(selected.length).toBe(5);
+    expect(selected.every((s) => s.recentlyShown)).toBe(true);
+  });
 });
