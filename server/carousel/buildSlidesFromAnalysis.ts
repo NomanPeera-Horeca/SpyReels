@@ -23,7 +23,7 @@ type LayoutImageDef = {
 
 const LAYOUT_SLOT_DEFS: Record<CarouselLayoutId, readonly LayoutSlotDef[]> = {
   hook_bold_center: [
-    { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, fallback: "CREATORS" },
+    { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 4, max: 22 }, fallback: "CREATORS" },
     { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, fallback: "This is the hook line" },
     { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, fallback: "One clear promise that makes the viewer swipe." },
   ],
@@ -38,7 +38,7 @@ const LAYOUT_SLOT_DEFS: Record<CarouselLayoutId, readonly LayoutSlotDef[]> = {
     { id: "cta_label", role: "cta_label", label: "Button / chip label", budget: { min: 6, max: 22 }, fallback: "Follow for more" },
   ],
   hook_photo_top: [
-    { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 8, max: 22 }, fallback: "REAL RESULT" },
+    { id: "kicker", role: "kicker", label: "Kicker", budget: { min: 4, max: 22 }, fallback: "REAL RESULT" },
     { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 48 }, fallback: "This is what changed" },
     { id: "subhead", role: "subhead", label: "Subhead", budget: { min: 28, max: 90 }, fallback: "A photo plus a specific promise that invites a swipe." },
   ],
@@ -48,7 +48,7 @@ const LAYOUT_SLOT_DEFS: Record<CarouselLayoutId, readonly LayoutSlotDef[]> = {
   notebook_cover: [
     { id: "headline", role: "headline", label: "Headline", budget: { min: 18, max: 64 }, fallback: "How to do this without burning out" },
     { id: "subhead", role: "subhead", label: "Swipe line", budget: { min: 6, max: 18 }, fallback: "Swipe ->" },
-    { id: "kicker", role: "kicker", label: "Arrow label", budget: { min: 8, max: 22 }, fallback: "start here" },
+    { id: "kicker", role: "kicker", label: "Arrow label", budget: { min: 4, max: 22 }, fallback: "start here" },
   ],
   notebook_list_item: [
     { id: "kicker", role: "kicker", label: "Number", budget: { min: 1, max: 3 }, fallback: "1" },

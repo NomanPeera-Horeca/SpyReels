@@ -31,15 +31,65 @@ export type CarouselRendererProps = {
   onSlotChange?: (slideId: string, slotId: string, value: string) => void;
 };
 
+/** Parse remake slotValuesJson (object or JSON string) into a slide-id map. */
+export function normalizeCarouselSlideValues(
+  raw: unknown
+): CarouselSlideValuesById | null {
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as CarouselSlideValuesById;
+}
+
+/** Overlay local edits on server slot values. Overlay wins per slot. */
+export function mergeCarouselSlideValues(
+  base: CarouselSlideValuesById | null | undefined,
+  overlay: CarouselSlideValuesById | null | undefined
+): CarouselSlideValuesById | undefined {
+  if (!base && !overlay) return undefined;
+  const out: CarouselSlideValuesById = { ...(base ?? {}) };
+  if (!overlay) return out;
+  for (const [slideId, slots] of Object.entries(overlay)) {
+    out[slideId] = { ...(out[slideId] ?? {}), ...slots };
+  }
+  return out;
+}
+
+function presentSlotOverride(
+  overrides: CarouselSlotValues | undefined,
+  slotId: string,
+  slotRole: string
+): string | undefined {
+  if (!overrides) return undefined;
+  const byId = overrides[slotId];
+  if (typeof byId === "string" && byId !== "") return byId;
+  if (slotRole !== slotId) {
+    const byRole = overrides[slotRole];
+    if (typeof byRole === "string" && byRole !== "") return byRole;
+  }
+  return undefined;
+}
+
+/**
+ * Prefer stored remake slot values when present.
+ * Fall back to slideStructure / template defaultText only if a slot has no value.
+ */
 export function resolveCarouselSlideValues(
   slide: CarouselSlideSpec,
   overrides?: CarouselSlotValues
 ): CarouselSlotValues {
   const values: CarouselSlotValues = {};
   for (const slot of slide.slots) {
-    const override = overrides?.[slot.id];
-    values[slot.id] =
-      override !== undefined && override !== "" ? override : slot.defaultText;
+    const override = presentSlotOverride(overrides, slot.id, slot.role);
+    values[slot.id] = override ?? slot.defaultText;
   }
   return values;
 }

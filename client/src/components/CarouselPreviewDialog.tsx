@@ -4,7 +4,11 @@ import {
   resolveTemplatePreviewImageUrls,
   assignImagePoolRoundRobin,
 } from "@shared/carouselTemplates";
-import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
+import {
+  mergeCarouselSlideValues,
+  normalizeCarouselSlideValues,
+  type CarouselSlideValuesById,
+} from "@/components/CarouselRenderer";
 import {
   Dialog,
   DialogContent,
@@ -424,10 +428,21 @@ export function CarouselPreviewDialog({
     isReopenMode &&
     activeRemakeId != null &&
     remakeSlideValues == null &&
+    statusQuery.data?.status !== "completed" &&
     statusQuery.data?.status !== "failed" &&
     !statusQuery.isError;
 
-  const hasRemake = remakeSlideValues != null;
+  const serverSlotValues = normalizeCarouselSlideValues(
+    statusQuery.data?.slotValues
+  );
+  const displaySlideValues = mergeCarouselSlideValues(
+    serverSlotValues,
+    remakeSlideValues
+  );
+  const hasRemake =
+    remakeSlideValues != null ||
+    (statusQuery.data?.status === "completed" &&
+      (serverSlotValues != null || statusQuery.data?.slideStructure != null));
   const viewingRemake = hasRemake && !showOriginal;
 
   const effectiveSlides: CarouselSlideSpec[] | undefined =
@@ -688,7 +703,7 @@ export function CarouselPreviewDialog({
             >
               <CarouselRenderer
                 template={template}
-                slideValues={viewingRemake ? remakeSlideValues : undefined}
+                slideValues={viewingRemake ? displaySlideValues : undefined}
                 slides={effectiveSlides}
                 designOverride={effectiveDesignOverride}
                 handle={handleInput.trim() || undefined}

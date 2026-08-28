@@ -701,14 +701,22 @@ export async function generateCarouselRemake(
       );
       validation = validateBudgets(effectiveSlides, values, lockedFacts);
       if (!validation.ok) {
-        await db
-          .update(carouselRemakes)
-          .set({
-            status: "failed",
-            errorMessage: `Slot text outside character budgets after retry: ${validation.issues.slice(0, 5).join("; ")}`,
-          })
-          .where(eq(carouselRemakes.id, remakeId));
-        return;
+        const hardIssues = validation.issues.filter(
+          (issue) => !issue.includes(" length ")
+        );
+        if (hardIssues.length > 0) {
+          await db
+            .update(carouselRemakes)
+            .set({
+              status: "failed",
+              errorMessage: `Slot text missing after retry: ${hardIssues.slice(0, 5).join("; ")}`,
+            })
+            .where(eq(carouselRemakes.id, remakeId));
+          return;
+        }
+        console.warn(
+          `[carouselRemake] ${remakeId}: keeping slot text outside character budgets after retry: ${validation.issues.slice(0, 8).join("; ")}`
+        );
       }
     }
 
