@@ -16,6 +16,7 @@ import {
   CarouselSourceUrlError,
   resolveCarouselSourceFromUrl,
 } from "../carousel/fetchSocialVideoSourceText";
+import { fetchCarouselSlideImages } from "../instagram";
 import { storagePut } from "../storage";
 
 /** Maps content-to-carousel style picker → curated template ids. */
@@ -143,6 +144,28 @@ const SLIDE_COUNT_SCHEMA = z.union([
   z.number().int().min(3).max(20),
 ]);
 
+const CONTENT_STYLE_SCHEMA = z.enum(["photo", "bold", "notebook", "stat"]);
+
+type ContentToCarouselInput = {
+  mode: "paste" | "topic" | "url";
+  content: string;
+  slideCount: number;
+  style: z.infer<typeof CONTENT_STYLE_SCHEMA>;
+  aspectRatioOverride?: z.infer<typeof ASPECT_RATIO_SCHEMA>;
+};
+
+type RemakeProcedureCtx = {
+  user: {
+    id: number;
+    openId: string;
+    email: string | null;
+    role: string | null;
+    businessDescription?: string | null;
+    targetAudience?: string | null;
+  };
+  workspaceId: string;
+};
+
 function firstDayOfNextMonthUtc(): string {
   const now = new Date();
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -183,6 +206,106 @@ async function resolveCarouselNiche(
     message:
       "Add a niche or business description in Settings, or type a niche for this remake.",
   });
+}
+
+async function createContentToCarouselRemake(
+  ctx: RemakeProcedureCtx,
+  input: ContentToCarouselInput,
+  extras?: { sourceUrl?: string | null }
+): Promise<{ remakeId: number; status: "processing"; templateId: string }> {
+  const templateId = CONTENT_STYLE_TO_TEMPLATE[input.style];
+  if (!templateId || !CAROUSEL_TEMPLATES_BY_ID.has(templateId)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Unknown carousel style",
+    });
+  }
+
+  await assertCarouselRemakeQuota({
+    id: ctx.user.id,
+    openId: ctx.user.openId,
+    email: ctx.user.email,
+    role: ctx.user.role,
+  });
+
+  let sourceContent = input.content.trim();
+  if (input.mode === "url") {
+    try {
+      sourceContent = await resolveCarouselSourceFromUrl(sourceContent, {
+        userId: ctx.user.id,
+        openId: ctx.user.openId,
+      });
+    } catch (err) {
+      if (err instanceof CarouselSourceUrlError) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err.message,
+        });
+      }
+      throw err;
+    }
+  } else if (input.mode === "topic") {
+    if (sourceContent.length < 8) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Topic is too short. Add a clearer topic or paste content.",
+      });
+    }
+    sourceContent = `Create an Instagram carousel about: ${sourceContent}`;
+  } else if (sourceContent.length < 40) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Paste more content (aim for at least a short paragraph).",
+    });
+  }
+
+  let nicheLabel = sourceContent.slice(0, 120).replace(/\s+/g, " ").trim();
+  try {
+    nicheLabel = await resolveCarouselNiche(ctx.user.id, nicheLabel, {
+      businessDescription: ctx.user.businessDescription,
+      targetAudience: ctx.user.targetAudience,
+    });
+  } catch {
+    // Content-to-carousel can run without a saved niche profile.
+  }
+
+  const db = await getDb();
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  // slideCount in UI is total slides; generator uses middle-list count.
+  const middleCount = Math.min(Math.max(input.slideCount - 2, 3), 18);
+  const sourceUrl = extras?.sourceUrl?.trim().slice(0, 1024) || null;
+
+  const insertResult = await db.insert(carouselRemakes).values({
+    userId: ctx.user.id,
+    workspaceId: ctx.workspaceId,
+    templateId,
+    niche: nicheLabel.slice(0, 500),
+    sourceUrl,
+    status: "processing",
+    aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
+  });
+  const remakeId = insertResult[0].insertId;
+  if (!remakeId) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to create carousel remake",
+    });
+  }
+
+  generateCarouselRemake(remakeId, templateId, nicheLabel, {
+    slideCountOption: middleCount,
+    sourceContent,
+  }).catch((err: unknown) => {
+    console.error(`Carousel from content ${remakeId} failed:`, err);
+  });
+
+  return { remakeId, status: "processing" as const, templateId };
 }
 
 export const carouselRemakeRouter = router({
@@ -617,11 +740,62 @@ export const carouselRemakeRouter = router({
         mode: z.enum(["paste", "topic", "url"]),
         content: z.string().min(1).max(12000),
         slideCount: z.number().int().min(5).max(10).default(6),
-        style: z.enum(["photo", "bold", "notebook", "stat"]).default("photo"),
+        style: CONTENT_STYLE_SCHEMA.default("photo"),
         aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      return createContentToCarouselRemake(ctx, input);
+    }),
+
+  /**
+   * Remake an Instagram carousel from its slide images (vision + structure).
+   * If the URL is not a multi-image carousel (0-1 slide images), falls back
+   * to generateFromContent so reel/video URLs keep working.
+   */
+  generateFromSourceCarousel: protectedProcedure
+    .input(
+      z.object({
+        sourceUrl: z.string().min(1).max(1024),
+        slideCount: z.number().int().min(5).max(10).default(6),
+        style: CONTENT_STYLE_SCHEMA.default("photo"),
+        aspectRatioOverride: ASPECT_RATIO_SCHEMA.optional(),
+        niche: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const sourceUrl = input.sourceUrl.trim();
+      if (!sourceUrl) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Paste an Instagram carousel URL first.",
+        });
+      }
+
+      let slideImages: string[] | null = null;
+      try {
+        slideImages = await fetchCarouselSlideImages(sourceUrl);
+      } catch (err) {
+        console.warn(
+          "[generateFromSourceCarousel] slide fetch failed, falling back to content path",
+          err instanceof Error ? err.message : err
+        );
+      }
+
+      if (!slideImages || slideImages.length < 2) {
+        return createContentToCarouselRemake(
+          ctx,
+          {
+            mode: "url",
+            content: sourceUrl,
+            slideCount: input.slideCount,
+            style: input.style,
+            aspectRatioOverride: input.aspectRatioOverride,
+          },
+          { sourceUrl }
+        );
+      }
+
       const templateId = CONTENT_STYLE_TO_TEMPLATE[input.style];
       if (!templateId || !CAROUSEL_TEMPLATES_BY_ID.has(templateId)) {
         throw new TRPCError({
@@ -637,46 +811,16 @@ export const carouselRemakeRouter = router({
         role: ctx.user.role,
       });
 
-      let sourceContent = input.content.trim();
-      if (input.mode === "url") {
-        try {
-          sourceContent = await resolveCarouselSourceFromUrl(sourceContent, {
-            userId: ctx.user.id,
-            openId: ctx.user.openId,
-          });
-        } catch (err) {
-          if (err instanceof CarouselSourceUrlError) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: err.message,
-            });
-          }
-          throw err;
-        }
-      } else if (input.mode === "topic") {
-        if (sourceContent.length < 8) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Topic is too short. Add a clearer topic or paste content.",
-          });
-        }
-        sourceContent = `Create an Instagram carousel about: ${sourceContent}`;
-      } else if (sourceContent.length < 40) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Paste more content (aim for at least a short paragraph).",
-        });
-      }
-
-      let nicheLabel = sourceContent.slice(0, 120).replace(/\s+/g, " ").trim();
+      let nicheLabel = input.niche?.trim() ?? "";
       try {
-        nicheLabel = await resolveCarouselNiche(ctx.user.id, nicheLabel, {
+        nicheLabel = await resolveCarouselNiche(ctx.user.id, nicheLabel || undefined, {
           businessDescription: ctx.user.businessDescription,
           targetAudience: ctx.user.targetAudience,
         });
       } catch {
-        // Content-to-carousel can run without a saved niche profile.
+        // Source remakes can run without a saved niche profile.
       }
+      if (!nicheLabel) nicheLabel = "General creators";
 
       const db = await getDb();
       if (!db) {
@@ -686,14 +830,12 @@ export const carouselRemakeRouter = router({
         });
       }
 
-      // slideCount in UI is total slides; generator uses middle-list count.
-      const middleCount = Math.min(Math.max(input.slideCount - 2, 3), 18);
-
       const insertResult = await db.insert(carouselRemakes).values({
         userId: ctx.user.id,
         workspaceId: ctx.workspaceId,
         templateId,
         niche: nicheLabel.slice(0, 500),
+        sourceUrl: sourceUrl.slice(0, 1024),
         status: "processing",
         aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
       });
@@ -706,10 +848,9 @@ export const carouselRemakeRouter = router({
       }
 
       generateCarouselRemake(remakeId, templateId, nicheLabel, {
-        slideCountOption: middleCount,
-        sourceContent,
+        analysisImageUrls: slideImages,
       }).catch((err: unknown) => {
-        console.error(`Carousel from content ${remakeId} failed:`, err);
+        console.error(`Carousel from source ${remakeId} failed:`, err);
       });
 
       return { remakeId, status: "processing" as const, templateId };

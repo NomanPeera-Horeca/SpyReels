@@ -22,6 +22,11 @@ import {
   type PhotoSlotNeed,
 } from "./assignPoolPhotos";
 import type { CarouselImageUrlMap } from "@shared/carouselTemplates";
+import { analyzeSourceCarousel } from "./analyzeSourceCarousel";
+import {
+  buildSlidesFromAnalysis,
+  sourceContentFromAnalysis,
+} from "./buildSlidesFromAnalysis";
 
 export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 
@@ -601,12 +606,16 @@ export async function generateCarouselRemake(
     uploadedImagePool?: string[];
     /** When set, convert this source text into slides instead of niche-only rewrite. */
     sourceContent?: string;
+    /** Source carousel slide images; worker analyzes then remakes from that structure. */
+    analysisImageUrls?: string[];
   }
 ): Promise<void> {
   const slideCountOption = options?.slideCountOption;
   const uploadedImageUrls = options?.uploadedImageUrls;
   const uploadedImagePool = options?.uploadedImagePool;
-  const sourceContent = options?.sourceContent?.trim() || undefined;
+  let sourceContent = options?.sourceContent?.trim() || undefined;
+  const analysisImageUrls = options?.analysisImageUrls?.filter(Boolean) ?? [];
+  const fromAnalysis = analysisImageUrls.length >= 2;
   const db = await getDb();
   if (!db) {
     console.error(`[carouselRemake] ${remakeId}: database unavailable`);
@@ -628,7 +637,18 @@ export async function generateCarouselRemake(
 
     // Resolve the actual slide list to generate against.
     let effectiveSlides: CarouselSlideSpec[] = template.slides;
-    if (slideCountOption !== undefined) {
+    let fromAnalysisSlides = false;
+    if (fromAnalysis) {
+      const analysis = await analyzeSourceCarousel(analysisImageUrls);
+      if (analysis.slides.length === 0) {
+        throw new Error(
+          "Could not analyze this carousel's slides. Please try a different Instagram post."
+        );
+      }
+      effectiveSlides = buildSlidesFromAnalysis(analysis);
+      sourceContent = sourceContentFromAnalysis(analysis);
+      fromAnalysisSlides = true;
+    } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
         slideCountOption === "auto"
@@ -654,9 +674,13 @@ export async function generateCarouselRemake(
       );
     }
 
+    const promptDescription = fromAnalysisSlides
+      ? "A remake of a source Instagram carousel. Keep each slide's layout and slot roles. Rewrite the extracted source text for this creator's niche and voice."
+      : template.description;
+
     let values = await invokeCarouselRemakeOnce(
       template.name,
-      template.description,
+      promptDescription,
       effectiveSlides,
       niche,
       lockedFacts,
@@ -668,7 +692,7 @@ export async function generateCarouselRemake(
     if (!validation.ok) {
       values = await invokeCarouselRemakeOnce(
         template.name,
-        template.description,
+        promptDescription,
         effectiveSlides,
         niche,
         lockedFacts,
@@ -700,7 +724,44 @@ export async function generateCarouselRemake(
         ? uploadedImagePool
         : Object.values(uploadedImageUrls ?? {}).filter(Boolean);
 
-    if (template.imagePoolAssign) {
+    if (fromAnalysisSlides) {
+      for (const slide of effectiveSlides) {
+        if (!slide.imageSlots?.length) continue;
+        const slideVals = values[slide.id] ?? {};
+        if (slide.imageSlots.length === 1) {
+          const imageSlot = slide.imageSlots[0];
+          const resolvedUrl = await resolveSlideImage(
+            imageSlot.searchQueryHint,
+            niche,
+            undefined,
+            textContextForImageSlot(slideVals, imageSlot.id),
+            {
+              usedUrls: usedImageUrls,
+              dedupeDifferentiator: slide.id,
+            }
+          );
+          if (resolvedUrl) imageUrls[slide.id] = resolvedUrl;
+          continue;
+        }
+        const bySlot: Record<string, string> = {};
+        for (const imageSlot of slide.imageSlots) {
+          const resolvedUrl = await resolveSlideImage(
+            imageSlot.searchQueryHint,
+            niche,
+            undefined,
+            textContextForImageSlot(slideVals, imageSlot.id),
+            {
+              usedUrls: usedImageUrls,
+              dedupeDifferentiator: `${slide.id}-${imageSlot.id}`,
+            }
+          );
+          if (resolvedUrl) bySlot[imageSlot.id] = resolvedUrl;
+        }
+        if (Object.keys(bySlot).length > 0) {
+          imageUrls[slide.id] = bySlot;
+        }
+      }
+    } else if (template.imagePoolAssign) {
       const needs: PhotoSlotNeed[] = [];
       for (const slide of effectiveSlides) {
         if (!slide.imageSlots?.length) continue;

@@ -869,19 +869,39 @@ async function resolveInstagramPostUrl(rawUrl: string): Promise<string> {
   }
 }
 
+function looksLikePostMedia(obj: unknown): boolean {
+  if (!obj || typeof obj !== "object") return false;
+  const o = obj as Record<string, unknown>;
+  return Boolean(
+    o.display_url ||
+      o.thumbnail_src ||
+      o.image_versions2 ||
+      o.carousel_media ||
+      o.edge_sidecar_to_children ||
+      o.video_url ||
+      o.video_versions
+  );
+}
+
 function extractPostMediaFromResponse(data: unknown): any | null {
   if (!data || typeof data !== "object") return null;
   const root = data as Record<string, unknown>;
   const inner = root.data;
-  if (!inner || typeof inner !== "object") return null;
-  const d = inner as Record<string, unknown>;
-  return (
-    d.xdt_shortcode_media ??
-    d.shortcode_media ??
-    d.media ??
-    d.item ??
-    null
-  );
+  if (inner && typeof inner === "object") {
+    const d = inner as Record<string, unknown>;
+    const nested =
+      d.xdt_shortcode_media ??
+      d.shortcode_media ??
+      d.media ??
+      d.item ??
+      null;
+    if (nested) return nested;
+    if (looksLikePostMedia(d)) return d;
+  }
+  if (looksLikePostMedia(root.media)) return root.media;
+  if (looksLikePostMedia(root.item)) return root.item;
+  if (looksLikePostMedia(root)) return root;
+  return null;
 }
 
 function mapPostMediaToReelFull(item: any): ReelFullData | null {
@@ -917,6 +937,176 @@ function mapPostMediaToReelFull(item: any): ReelFullData | null {
     ownerProfilePicUrl: owner.profile_pic_url || "",
     ownerFollowerCount: owner.edge_followed_by?.count ?? owner.follower_count ?? 0,
   };
+}
+
+function isHttpImageUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value.trim());
+}
+
+/**
+ * Prefer the highest-resolution candidate when width/height exist.
+ * Falls back to candidates[0] (same cover-image pattern as mapPostMediaToReelFull).
+ */
+function pickBestCandidateUrl(candidates: unknown): string {
+  if (!Array.isArray(candidates) || candidates.length === 0) return "";
+  let bestUrl = "";
+  let bestScore = -1;
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== "object") continue;
+    const c = raw as Record<string, unknown>;
+    const url = typeof c.url === "string" ? c.url : "";
+    if (!isHttpImageUrl(url)) continue;
+    const width = Number(c.width) || 0;
+    const height = Number(c.height) || 0;
+    const score = width * height;
+    if (score > bestScore) {
+      bestScore = score;
+      bestUrl = url.trim();
+    }
+  }
+  if (bestUrl) return bestUrl;
+  const first = candidates[0] as { url?: unknown } | undefined;
+  return isHttpImageUrl(first?.url) ? first.url.trim() : "";
+}
+
+function imageUrlFromMediaNode(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const item = node as Record<string, unknown>;
+  const versions = item.image_versions2;
+  const candidates =
+    versions && typeof versions === "object"
+      ? (versions as { candidates?: unknown }).candidates
+      : undefined;
+  const fromCandidates = pickBestCandidateUrl(candidates);
+  if (fromCandidates) return fromCandidates;
+
+  const displayResources = item.display_resources;
+  if (Array.isArray(displayResources) && displayResources.length > 0) {
+    let bestSrc = "";
+    let bestWidth = -1;
+    for (const raw of displayResources) {
+      if (!raw || typeof raw !== "object") continue;
+      const r = raw as Record<string, unknown>;
+      const src = typeof r.src === "string" ? r.src : "";
+      if (!isHttpImageUrl(src)) continue;
+      const width = Number(r.config_width) || 0;
+      if (width >= bestWidth) {
+        bestWidth = width;
+        bestSrc = src.trim();
+      }
+    }
+    if (bestSrc) return bestSrc;
+  }
+
+  const fallbacks = [
+    item.display_url,
+    item.thumbnail_src,
+    item.thumbnail_url,
+    item.image_url,
+    item.original_image_url,
+    item.downloaded_url,
+    item.media_url,
+  ];
+  for (const value of fallbacks) {
+    if (isHttpImageUrl(value)) return value.trim();
+  }
+  return "";
+}
+
+function unwrapSidecarChild(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  return row.node ?? row.media ?? row.item ?? raw;
+}
+
+/**
+ * Sidecar/carousel child arrays observed or documented across IG GraphQL,
+ * private-API, and ScrapeCreators-shaped payloads. Tried in this order:
+ * edge_sidecar_to_children.edges, carousel_media, carousel_media.items,
+ * resources, sidecar_children, children, carousel_media_items.
+ */
+function collectSidecarChildren(item: unknown): unknown[] {
+  if (!item || typeof item !== "object") return [];
+  const media = item as Record<string, unknown>;
+
+  const sidecar = media.edge_sidecar_to_children;
+  if (sidecar && typeof sidecar === "object") {
+    const edges = (sidecar as { edges?: unknown }).edges;
+    if (Array.isArray(edges) && edges.length > 0) {
+      return edges.map(unwrapSidecarChild).filter(Boolean);
+    }
+  }
+
+  const carousel = media.carousel_media;
+  if (Array.isArray(carousel) && carousel.length > 0) {
+    return carousel.map(unwrapSidecarChild).filter(Boolean);
+  }
+  if (carousel && typeof carousel === "object") {
+    const nestedItems = (carousel as { items?: unknown }).items;
+    if (Array.isArray(nestedItems) && nestedItems.length > 0) {
+      return nestedItems.map(unwrapSidecarChild).filter(Boolean);
+    }
+  }
+
+  for (const key of [
+    "resources",
+    "sidecar_children",
+    "children",
+    "carousel_media_items",
+  ] as const) {
+    const value = media[key];
+    if (Array.isArray(value) && value.length > 0) {
+      return value.map(unwrapSidecarChild).filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function pushUniqueImageUrl(urls: string[], seen: Set<string>, url: string): void {
+  const trimmed = url.trim();
+  if (!trimmed || seen.has(trimmed)) return;
+  seen.add(trimmed);
+  urls.push(trimmed);
+}
+
+/**
+ * Ordered slide image URLs from a post/reel media object.
+ * Carousel/sidecar children first (deduped, original order). Single image or
+ * video posts return a one-item cover array. Empty when no image URL exists.
+ */
+export function extractCarouselSlideImageUrls(
+  media: unknown,
+  rawEnvelope?: unknown
+): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  const children = collectSidecarChildren(media);
+  for (const child of children) {
+    pushUniqueImageUrl(urls, seen, imageUrlFromMediaNode(child));
+  }
+
+  if (urls.length === 0 && rawEnvelope && rawEnvelope !== media) {
+    const envelopeChildren = collectSidecarChildren(rawEnvelope);
+    for (const child of envelopeChildren) {
+      pushUniqueImageUrl(urls, seen, imageUrlFromMediaNode(child));
+    }
+    if (urls.length === 0 && rawEnvelope && typeof rawEnvelope === "object") {
+      const root = rawEnvelope as Record<string, unknown>;
+      if (root.data && root.data !== media) {
+        for (const child of collectSidecarChildren(root.data)) {
+          pushUniqueImageUrl(urls, seen, imageUrlFromMediaNode(child));
+        }
+      }
+    }
+  }
+
+  if (urls.length === 0) {
+    pushUniqueImageUrl(urls, seen, imageUrlFromMediaNode(media));
+  }
+
+  return urls;
 }
 
 export type ReelFetchFailureReason =
@@ -965,22 +1155,24 @@ function regionForReelFetchAttempt(attempt: number): string | undefined {
   return undefined;
 }
 
+type FetchInstagramPostOptions = {
+  preferUrl?: string;
+  downloadMedia?: boolean;
+  mode?: "default" | "interactive";
+};
+
+type FetchInstagramPostPayloadResult =
+  | { ok: true; media: unknown; raw: unknown }
+  | { ok: false; reason: ReelFetchFailureReason };
+
 /**
- * Fetch a single reel/post by shortcode (or full Instagram URL).
- * Retries transient ScrapeCreators failures (same pattern as fetchProfile).
- *
- * Pass `mode: "interactive"` for modal preview refresh: one URL, one attempt,
- * INTERACTIVE_REEL_FETCH_TIMEOUT_MS (8s) worst case. Background callers omit
- * mode and keep the default 6-try / 30s-per-attempt behavior.
+ * Shared ScrapeCreators `/v1/instagram/post` fetch. Used by reel mapping and
+ * carousel slide-image extraction so callers share retry / URL fallbacks.
  */
-export async function fetchReelByShortcodeResult(
+async function fetchInstagramPostPayload(
   shortcode: string,
-  options?: {
-    preferUrl?: string;
-    downloadMedia?: boolean;
-    mode?: "default" | "interactive";
-  }
-): Promise<FetchReelByShortcodeResult> {
+  options?: FetchInstagramPostOptions
+): Promise<FetchInstagramPostPayloadResult> {
   const resolvedPrefer = options?.preferUrl
     ? await resolveInstagramPostUrl(options.preferUrl)
     : undefined;
@@ -1054,8 +1246,7 @@ export async function fetchReelByShortcodeResult(
 
       const media = extractPostMediaFromResponse(data);
       if (media) {
-        const mapped = mapPostMediaToReelFull(media);
-        return mapped ? { ok: true, data: mapped } : { ok: false, reason: "unknown" };
+        return { ok: true, media, raw: data };
       }
 
       const failureKind = classifyVendorEnvelopeFailure(data);
@@ -1114,12 +1305,54 @@ export async function fetchReelByShortcodeResult(
   return { ok: false, reason: lastReason };
 }
 
+/**
+ * Fetch a single reel/post by shortcode (or full Instagram URL).
+ * Retries transient ScrapeCreators failures (same pattern as fetchProfile).
+ *
+ * Pass `mode: "interactive"` for modal preview refresh: one URL, one attempt,
+ * INTERACTIVE_REEL_FETCH_TIMEOUT_MS (8s) worst case. Background callers omit
+ * mode and keep the default 6-try / 30s-per-attempt behavior.
+ */
+export async function fetchReelByShortcodeResult(
+  shortcode: string,
+  options?: {
+    preferUrl?: string;
+    downloadMedia?: boolean;
+    mode?: "default" | "interactive";
+  }
+): Promise<FetchReelByShortcodeResult> {
+  const payload = await fetchInstagramPostPayload(shortcode, options);
+  if (!payload.ok) return payload;
+  const mapped = mapPostMediaToReelFull(payload.media);
+  return mapped ? { ok: true, data: mapped } : { ok: false, reason: "unknown" };
+}
+
 export async function fetchReelByShortcode(
   shortcode: string,
   options?: { preferUrl?: string; mode?: "default" | "interactive" }
 ): Promise<ReelFullData | null> {
   const result = await fetchReelByShortcodeResult(shortcode, options);
   return result.ok ? result.data : null;
+}
+
+/**
+ * Ordered image URLs for every slide in an Instagram carousel post.
+ * Single image/video posts return a one-item array (cover). Returns null
+ * when the post cannot be fetched or no image URL can be parsed.
+ */
+export async function fetchCarouselSlideImages(
+  url: string,
+  options?: { downloadMedia?: boolean }
+): Promise<string[] | null> {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const payload = await fetchInstagramPostPayload(trimmed, {
+    preferUrl: trimmed,
+    downloadMedia: options?.downloadMedia,
+  });
+  if (!payload.ok) return null;
+  const urls = extractCarouselSlideImageUrls(payload.media, payload.raw);
+  return urls.length > 0 ? urls : null;
 }
 
 /* ------------------------------------------------------------------ */

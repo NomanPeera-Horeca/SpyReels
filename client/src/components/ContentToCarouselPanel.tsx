@@ -27,6 +27,11 @@ function countWords(text: string): number {
   return (text.trim().match(/\S+/g) ?? []).length;
 }
 
+/** Instagram feed posts (`/p/`). Reels stay on generateFromContent. */
+function isInstagramCarouselPostUrl(value: string): boolean {
+  return /(?:instagram\.com|instagr\.am)\/(?:[^/?#]+\/)?p\//i.test(value);
+}
+
 export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProps) {
   const [mode, setMode] = useState<ContentCarouselMode>("paste");
   const [paste, setPaste] = useState("");
@@ -35,15 +40,23 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
   const [slideCount, setSlideCount] = useState<(typeof SLIDE_OPTIONS)[number]>(6);
   const [style, setStyle] = useState<ContentCarouselStyle>("photo");
 
-  const generateMutation = trpc.carouselRemake.generateFromContent.useMutation({
-    onSuccess: (data) => {
+  const generateHandlers = {
+    onSuccess: (data: { remakeId: number; templateId: string }) => {
       toast.success("Carousel generation started");
       onStarted({ remakeId: data.remakeId, templateId: data.templateId });
     },
-    onError: (err) => {
+    onError: (err: { message?: string }) => {
       toast.error(err.message || "Failed to generate carousel");
     },
-  });
+  };
+
+  const generateMutation = trpc.carouselRemake.generateFromContent.useMutation(
+    generateHandlers
+  );
+  const sourceCarouselMutation =
+    trpc.carouselRemake.generateFromSourceCarousel.useMutation(generateHandlers);
+  const isGenerating =
+    generateMutation.isPending || sourceCarouselMutation.isPending;
 
   const activeText =
     mode === "paste" ? paste : mode === "topic" ? topic : url;
@@ -84,6 +97,15 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
             ? "Add a topic first"
             : "Paste your content first"
       );
+      return;
+    }
+    if (mode === "url" && isInstagramCarouselPostUrl(content)) {
+      sourceCarouselMutation.mutate({
+        sourceUrl: content,
+        slideCount,
+        style,
+        aspectRatioOverride: "4:5",
+      });
       return;
     }
     generateMutation.mutate({
@@ -133,7 +155,7 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
               rows={10}
               placeholder="Paste a post, newsletter, thread, or outline…"
               className="min-h-[180px] resize-y bg-background"
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
             />
           </div>
         ) : null}
@@ -148,7 +170,7 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g. 4-step system for restaurant owners to stop guessing Reels"
               className="bg-background"
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
             />
           </div>
         ) : null}
@@ -164,7 +186,7 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://… Instagram Reel, TikTok, YouTube Short, or blog"
               className="bg-background"
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
             />
             <p className="text-xs text-muted-foreground">
               Social links use caption + transcript when available. Blog pages use
@@ -203,7 +225,7 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
               onChange={(e) =>
                 setSlideCount(Number(e.target.value) as (typeof SLIDE_OPTIONS)[number])
               }
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
               className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
             >
               {SLIDE_OPTIONS.map((n) => (
@@ -220,7 +242,7 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
             <select
               value={style}
               onChange={(e) => setStyle(e.target.value as ContentCarouselStyle)}
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
               className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
             >
               {STYLE_OPTIONS.map((opt) => (
@@ -241,15 +263,15 @@ export function ContentToCarouselPanel({ onStarted }: ContentToCarouselPanelProp
         <Button
           type="button"
           className="w-full gap-2"
-          disabled={generateMutation.isPending}
+          disabled={isGenerating}
           onClick={handleGenerate}
         >
-          {generateMutation.isPending ? (
+          {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          {generateMutation.isPending
+          {isGenerating
             ? mode === "url"
               ? "Fetching source…"
               : "Generating…"
