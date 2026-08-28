@@ -97,6 +97,8 @@ export async function upsertCandidates(
       viewsPerHour: c.viewsPerHour != null ? String(c.viewsPerHour) : null,
       trendStatus: c.trendStatus,
       rawProviderPayload: c.rawProviderPayload,
+      // Freshness for the 72h assembly window. Bumped on re-confirm below.
+      discoveredAt: new Date(),
       refreshedAt: new Date(),
     };
 
@@ -135,6 +137,8 @@ export async function upsertCandidates(
               viewsPerHour: row.viewsPerHour,
               trendStatus: row.trendStatus,
               rawProviderPayload: row.rawProviderPayload,
+              // Re-confirm keeps candidates inside the 72h assembly window.
+              discoveredAt: new Date(),
               refreshedAt: new Date(),
             },
           })
