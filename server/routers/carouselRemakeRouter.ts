@@ -229,12 +229,17 @@ async function createContentToCarouselRemake(
   });
 
   let sourceContent = input.content.trim();
+  let sourceImage: string | null = null;
+  let sourceReelId: string | null = null;
   if (input.mode === "url") {
     try {
-      sourceContent = await resolveCarouselSourceFromUrl(sourceContent, {
+      const resolved = await resolveCarouselSourceFromUrl(sourceContent, {
         userId: ctx.user.id,
         openId: ctx.user.openId,
       });
+      sourceContent = resolved.text;
+      sourceImage = resolved.thumbnailUrl?.trim() || null;
+      sourceReelId = resolved.reelId?.trim() || null;
     } catch (err) {
       if (err instanceof CarouselSourceUrlError) {
         throw new TRPCError({
@@ -301,6 +306,8 @@ async function createContentToCarouselRemake(
   generateCarouselRemake(remakeId, templateId, nicheLabel, {
     slideCountOption: middleCount,
     sourceContent,
+    sourceImage,
+    sourceReelId,
   }).catch((err: unknown) => {
     console.error(`Carousel from content ${remakeId} failed:`, err);
   });

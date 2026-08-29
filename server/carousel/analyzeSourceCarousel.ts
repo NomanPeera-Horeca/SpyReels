@@ -15,6 +15,11 @@ export type SourceCarouselSlideAnalysis = {
 
 export type SourceCarouselAnalysis = {
   slides: SourceCarouselSlideAnalysis[];
+  /**
+   * Resolved stills in swipe order (prefer base64 data URLs after download).
+   * Reuse for vision-grounded image gen so we do not re-fetch CDN URLs.
+   */
+  resolvedImageUrls: string[];
 };
 
 const MAX_SLIDES = 20;
@@ -346,7 +351,7 @@ Return one slides[] entry per image, in the same order.`,
     const slides = urls.map((_, index) =>
       normalizeSlide(incoming[index], index, urls.length)
     );
-    return { slides };
+    return { slides, resolvedImageUrls: resolvedUrls };
   } catch (err) {
     if (
       err instanceof Error &&

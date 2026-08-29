@@ -1,70 +1,108 @@
+import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
-
-const PEXELS_API_URL = "https://api.pexels.com/v1/search";
+import { withAiFormattingRules } from "../utils/aiFormattingRules";
 
 /**
- * Prefer a single short line for search (excuse / first segment), not a
- * joined multi-slot block that dilutes the query.
+ * Prefer a single short line from slot text for text-only image prompts
+ * (excuse / first segment), not a joined multi-slot block.
  */
-export function extractPhotoSearchSubject(textContext: string | undefined): string {
+function extractSlideSubject(textContext: string | undefined): string {
   if (!textContext?.trim()) return "";
   const firstSegment = textContext.split(" / ")[0]?.trim() ?? textContext.trim();
-  // Drop trailing punctuation noise; keep enough for a visual subject.
   return firstSegment.replace(/\s+/g, " ").slice(0, 90);
 }
 
-function buildCarouselImageQuery(
+/** Text-only gpt-image prompt when no source visual is available (Path C). */
+export function buildTextOnlyImagePrompt(
   niche: string,
   searchQueryHint: string,
   textContext?: string
 ): string {
-  const subject = extractPhotoSearchSubject(textContext);
+  const subject = extractSlideSubject(textContext);
   const nichePart = niche.trim();
   const stylePart = searchQueryHint.trim();
-
-  if (subject && nichePart) {
-    return `${nichePart}: ${subject}. Style: ${stylePart}`.trim();
-  }
-  if (nichePart) {
-    return `${nichePart}. Style: ${stylePart}`.trim();
-  }
-  if (subject) {
-    return `${subject}. Style: ${stylePart}`.trim();
-  }
-  return stylePart;
+  const parts: string[] = [];
+  if (nichePart) parts.push(`Niche: ${nichePart}`);
+  if (subject) parts.push(`Slide message: ${subject}`);
+  if (stylePart) parts.push(`Visual mood: ${stylePart}`);
+  const context = parts.join(". ");
+  return `A high-quality, realistic photo for a social media carousel slide. ${context}. No text, no logos, no watermarks, no borders.`;
 }
 
-async function searchPexelsPhoto(
-  query: string,
-  page = 1
-): Promise<string | null> {
-  const apiKey = process.env.PEXELS_API_KEY;
-  if (!apiKey) {
-    return null;
+/**
+ * When a source still exists, ask Claude (vision) for a descriptive
+ * gpt-image-1.5 prompt that visually rhymes with the slide message.
+ * Falls back to text-only construction when sourceImage is null/empty
+ * or the vision call fails.
+ */
+export async function buildVisionGroundedImagePrompt(
+  sourceImage: string | null,
+  slideText: string,
+  niche: string,
+  searchQueryHint = ""
+): Promise<string> {
+  const trimmedSource = sourceImage?.trim() || null;
+  if (!trimmedSource) {
+    return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText);
   }
+
+  const slideLine = extractSlideSubject(slideText) || slideText.trim().slice(0, 120);
+  const nichePart = niche.trim() || "General creators";
+  const stylePart = searchQueryHint.trim();
+
   try {
-    const url = `${PEXELS_API_URL}?query=${encodeURIComponent(query)}&per_page=1&orientation=portrait&page=${Math.max(1, page)}`;
-    const response = await fetch(url, {
-      headers: { Authorization: apiKey },
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: withAiFormattingRules(
+            "You write image-generation prompts for Instagram carousel slide backgrounds. Given a source photo and the remade slide text, describe a NEW photo that visually rhymes with the source (subject type, mood, composition, color palette, lighting) while fitting the slide message. Do not literally illustrate the caption as text-on-image. Do not copy logos, watermarks, or identifiable faces. Reply with ONLY the image prompt as plain text, one paragraph, no quotes or labels."
+          ),
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Niche / audience: ${nichePart}
+Slide headline / text: ${slideLine || "(no text)"}
+${stylePart ? `Style hint: ${stylePart}\n` : ""}
+Write a gpt-image-1.5 prompt for a high-quality realistic photo (portrait orientation). No text, logos, watermarks, or borders in the image.`,
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: trimmedSource,
+                detail: "low",
+              },
+            },
+          ],
+        },
+      ],
+      maxTokens: 400,
+      temperature: 0.4,
     });
-    if (!response.ok) {
-      return null;
+
+    const raw = String(response.choices[0]?.message?.content ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (raw.length >= 24) {
+      return raw;
     }
-    const data = (await response.json()) as {
-      photos?: Array<{ src?: { large?: string; original?: string } }>;
-    };
-    const photo = data.photos?.[0];
-    return photo?.src?.large ?? photo?.src?.original ?? null;
   } catch (err) {
-    console.warn("[resolveSlideImage] Pexels search failed", err);
-    return null;
+    console.warn(
+      "[resolveSlideImage] vision-grounded prompt failed, using text-only",
+      err instanceof Error ? err.message : err
+    );
   }
+
+  return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText);
 }
 
-async function generateAiFallbackImage(query: string): Promise<string | null> {
+async function generateAiImage(prompt: string): Promise<string | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.warn("[resolveSlideImage] OPENAI_API_KEY not set, skipping AI fallback");
+    console.warn("[resolveSlideImage] OPENAI_API_KEY not set, skipping AI image");
     return null;
   }
 
@@ -77,7 +115,7 @@ async function generateAiFallbackImage(query: string): Promise<string | null> {
       },
       body: JSON.stringify({
         model: "gpt-image-1.5",
-        prompt: `A high-quality, realistic photo for a social media carousel slide: ${query}. No text, no logos, no watermarks, no borders.`,
+        prompt,
         n: 1,
         size: "1024x1536",
       }),
@@ -125,20 +163,17 @@ async function generateAiFallbackImage(query: string): Promise<string | null> {
 export type ResolveSlideImageOptions = {
   /** In-job set of already-used image URLs (not persisted). */
   usedUrls?: Set<string>;
-  /** Appended on one Pexels retry when the first hit is a duplicate. */
-  dedupeDifferentiator?: string;
+  /**
+   * Source still for vision grounding: base64 data URL or http(s) URL.
+   * Path A: matching carousel still. Path B: reel thumbnail. Path C: omit.
+   */
+  sourceImage?: string | null;
 };
 
 /**
  * Resolve the final image URL for one image slot.
- * Priority: uploaded photo (if provided) > stock photo search (Pexels,
- * skipped gracefully if PEXELS_API_KEY is not set) > AI-generated fallback.
- *
- * Query order: niche + specific slot text lead; template mood hint trails
- * as Style: so stock/AI do not ignore the niche for generic lifestyle hits.
- *
- * When `usedUrls` is provided, a duplicate Pexels hit triggers one retry
- * (modified query + page 2) before AI fallback.
+ * Priority: uploaded photo (if provided) > vision-grounded or text-only
+ * prompt > gpt-image-1.5 > R2 public URL.
  */
 export async function resolveSlideImage(
   searchQueryHint: string,
@@ -152,27 +187,18 @@ export async function resolveSlideImage(
     return uploadedUrl;
   }
 
-  const query = buildCarouselImageQuery(niche, searchQueryHint, textContext);
-  console.log("[carousel-image-query]", query);
+  const prompt = await buildVisionGroundedImagePrompt(
+    options?.sourceImage ?? null,
+    textContext ?? "",
+    niche,
+    searchQueryHint
+  );
+  console.log(
+    "[carousel-image-prompt]",
+    prompt.slice(0, 200) + (prompt.length > 200 ? "..." : "")
+  );
 
-  let stockUrl = await searchPexelsPhoto(query);
-  if (stockUrl && options?.usedUrls?.has(stockUrl)) {
-    const diff = options.dedupeDifferentiator?.trim() || "alternate framing";
-    const retryQuery = `${query} ${diff}`.trim();
-    console.warn(
-      `[resolveSlideImage] duplicate URL, one Pexels retry: ${stockUrl}`
-    );
-    console.log("[carousel-image-query-dedupe-retry]", retryQuery);
-    const retried = await searchPexelsPhoto(retryQuery, 2);
-    stockUrl = retried && !options.usedUrls.has(retried) ? retried : null;
-  }
-
-  if (stockUrl) {
-    options?.usedUrls?.add(stockUrl);
-    return stockUrl;
-  }
-
-  const aiUrl = await generateAiFallbackImage(query);
+  const aiUrl = await generateAiImage(prompt);
   if (aiUrl) {
     options?.usedUrls?.add(aiUrl);
   }

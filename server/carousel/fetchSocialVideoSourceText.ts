@@ -82,6 +82,14 @@ async function fetchSpokenTranscript(opts: {
   return result.transcript.trim();
 }
 
+export type CarouselSourceFromUrl = {
+  text: string;
+  /** Reel/video cover when resolved from a social video URL (Path B). */
+  thumbnailUrl?: string | null;
+  /** Platform external id (IG shortcode / awemeId / YouTube id) for R2 thumb mirroring. */
+  reelId?: string | null;
+};
+
 /**
  * Build carousel source text from a parsed social video URL.
  * Prefers caption + spoken transcript; caption alone is OK when long enough.
@@ -89,7 +97,7 @@ async function fetchSpokenTranscript(opts: {
 export async function fetchSocialVideoSourceText(
   parsed: ParsedCollectedVideoUrl,
   opts: { userId: number; openId: string }
-): Promise<string> {
+): Promise<CarouselSourceFromUrl> {
   const meta = await fetchCollectedReelMetadataForPlatform(
     parsed.platform,
     parsed.externalId,
@@ -130,7 +138,11 @@ export async function fetchSocialVideoSourceText(
     );
   }
 
-  return combined.slice(0, 12000);
+  return {
+    text: combined.slice(0, 12000),
+    thumbnailUrl: (meta.data.thumbnailUrl || "").trim() || null,
+    reelId: parsed.externalId || null,
+  };
 }
 
 /**
@@ -139,7 +151,7 @@ export async function fetchSocialVideoSourceText(
 export async function resolveCarouselSourceFromUrl(
   rawUrl: string,
   opts: { userId: number; openId: string }
-): Promise<string> {
+): Promise<CarouselSourceFromUrl> {
   const social = await parseCollectedVideoUrl(rawUrl);
   if (social) {
     return fetchSocialVideoSourceText(social, opts);
@@ -151,5 +163,5 @@ export async function resolveCarouselSourceFromUrl(
       "Could not read enough text from that URL. Paste an Instagram / TikTok / YouTube link, a blog URL, or paste the content instead."
     );
   }
-  return fetched;
+  return { text: fetched, thumbnailUrl: null, reelId: null };
 }

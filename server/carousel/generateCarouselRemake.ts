@@ -27,6 +27,22 @@ import {
   buildSlidesFromAnalysis,
   sourceContentFromAnalysis,
 } from "./buildSlidesFromAnalysis";
+import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
+
+/**
+ * Map remake slide index -> source still for vision grounding.
+ * 1:1 when counts match; clamp to last still when remake has more slides;
+ * if only one still, share it for every slide (Path B reel thumb).
+ */
+function sourceImageForSlideIndex(
+  stills: string[],
+  slideIndex: number
+): string | null {
+  if (stills.length === 0) return null;
+  if (stills.length === 1) return stills[0] ?? null;
+  const clamped = Math.min(Math.max(slideIndex, 0), stills.length - 1);
+  return stills[clamped] ?? null;
+}
 
 export type CarouselSlideValuesMap = Record<string, Record<string, string>>;
 
@@ -522,7 +538,7 @@ function countMiddleSlides(template: CarouselTemplate): number {
  * repeating pattern for layout/slots/budgets, renumbering ids and "kicker"
  * number text.
  */
-/** Rotate Style hints on cloned middle slides so Pexels queries do not collide. */
+/** Rotate Style hints on cloned middle slides so prompts do not collide. */
 function rotateClonedStyleHint(
   baseHint: string,
   slotId: string,
@@ -608,6 +624,13 @@ export async function generateCarouselRemake(
     sourceContent?: string;
     /** Source carousel slide images; worker analyzes then remakes from that structure. */
     analysisImageUrls?: string[];
+    /**
+     * Path B: single source reel/video thumbnail for vision grounding on all slides.
+     * Prefer a stable R2 URL when sourceReelId is also provided.
+     */
+    sourceImage?: string | null;
+    /** Platform external id for ensureReelThumbnailOnR2 (Bug #62 CDN expiry). */
+    sourceReelId?: string | null;
   }
 ): Promise<void> {
   const slideCountOption = options?.slideCountOption;
@@ -616,6 +639,8 @@ export async function generateCarouselRemake(
   let sourceContent = options?.sourceContent?.trim() || undefined;
   const analysisImageUrls = options?.analysisImageUrls?.filter(Boolean) ?? [];
   const fromAnalysis = analysisImageUrls.length >= 2;
+  /** Vision-grounding stills in slide order (Path A) or a single shared thumb (Path B). */
+  let visionSourceStills: string[] = [];
   const db = await getDb();
   if (!db) {
     console.error(`[carouselRemake] ${remakeId}: database unavailable`);
@@ -635,6 +660,31 @@ export async function generateCarouselRemake(
       return;
     }
 
+    // Path B: stabilize IG CDN thumbs on R2 when we have a reel id.
+    let pathBSourceImage = options?.sourceImage?.trim() || null;
+    const pathBReelId = options?.sourceReelId?.trim() || null;
+    if (pathBSourceImage && pathBReelId) {
+      try {
+        pathBSourceImage = await ensureReelThumbnailOnR2(
+          pathBReelId,
+          pathBSourceImage
+        );
+      } catch (err) {
+        console.warn(
+          `[carouselRemake] ${remakeId}: ensureReelThumbnailOnR2 failed, using raw URL`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    } else if (pathBSourceImage && !pathBReelId) {
+      // URL-only thumb may expire if it is an IG CDN signed URL; no reelId to mirror.
+      console.warn(
+        `[carouselRemake] ${remakeId}: sourceImage without sourceReelId; CDN URLs may expire`
+      );
+    }
+    if (pathBSourceImage) {
+      visionSourceStills = [pathBSourceImage];
+    }
+
     // Resolve the actual slide list to generate against.
     let effectiveSlides: CarouselSlideSpec[] = template.slides;
     let fromAnalysisSlides = false;
@@ -648,6 +698,11 @@ export async function generateCarouselRemake(
       effectiveSlides = buildSlidesFromAnalysis(analysis);
       sourceContent = sourceContentFromAnalysis(analysis);
       fromAnalysisSlides = true;
+      // Reuse base64/data URLs from analysis download (no second CDN fetch).
+      visionSourceStills =
+        analysis.resolvedImageUrls.filter(Boolean).length > 0
+          ? analysis.resolvedImageUrls.filter(Boolean)
+          : analysisImageUrls;
     } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
@@ -733,9 +788,11 @@ export async function generateCarouselRemake(
         : Object.values(uploadedImageUrls ?? {}).filter(Boolean);
 
     if (fromAnalysisSlides) {
-      for (const slide of effectiveSlides) {
+      for (let slideIndex = 0; slideIndex < effectiveSlides.length; slideIndex++) {
+        const slide = effectiveSlides[slideIndex]!;
         if (!slide.imageSlots?.length) continue;
         const slideVals = values[slide.id] ?? {};
+        const sourceImage = sourceImageForSlideIndex(visionSourceStills, slideIndex);
         if (slide.imageSlots.length === 1) {
           const imageSlot = slide.imageSlots[0];
           const resolvedUrl = await resolveSlideImage(
@@ -745,7 +802,7 @@ export async function generateCarouselRemake(
             textContextForImageSlot(slideVals, imageSlot.id),
             {
               usedUrls: usedImageUrls,
-              dedupeDifferentiator: slide.id,
+              sourceImage,
             }
           );
           if (resolvedUrl) imageUrls[slide.id] = resolvedUrl;
@@ -760,7 +817,7 @@ export async function generateCarouselRemake(
             textContextForImageSlot(slideVals, imageSlot.id),
             {
               usedUrls: usedImageUrls,
-              dedupeDifferentiator: `${slide.id}-${imageSlot.id}`,
+              sourceImage,
             }
           );
           if (resolvedUrl) bySlot[imageSlot.id] = resolvedUrl;
@@ -816,7 +873,11 @@ export async function generateCarouselRemake(
           }
         }
       } else {
+        const slideIndexById = new Map(
+          effectiveSlides.map((s, i) => [s.id, i] as const)
+        );
         for (const need of needs) {
+          const slideIndex = slideIndexById.get(need.slideId) ?? 0;
           const resolvedUrl = await resolveSlideImage(
             need.searchQueryHint,
             niche,
@@ -824,7 +885,7 @@ export async function generateCarouselRemake(
             need.textContext,
             {
               usedUrls: usedImageUrls,
-              dedupeDifferentiator: `${need.slideId}-${need.slotId}`,
+              sourceImage: sourceImageForSlideIndex(visionSourceStills, slideIndex),
             }
           );
           if (!resolvedUrl) continue;
@@ -837,7 +898,8 @@ export async function generateCarouselRemake(
         }
       }
     } else {
-      for (const slide of effectiveSlides) {
+      for (let slideIndex = 0; slideIndex < effectiveSlides.length; slideIndex++) {
+        const slide = effectiveSlides[slideIndex]!;
         if (slide.imageSlots && slide.imageSlots.length > 0) {
           // MVP: resolve only the first image slot per slide (legacy templates).
           const imageSlot = slide.imageSlots[0];
@@ -846,10 +908,10 @@ export async function generateCarouselRemake(
             imageSlot.searchQueryHint,
             niche,
             uploaded,
-            undefined,
+            textContextForImageSlot(values[slide.id] ?? {}, imageSlot.id),
             {
               usedUrls: usedImageUrls,
-              dedupeDifferentiator: slide.id,
+              sourceImage: sourceImageForSlideIndex(visionSourceStills, slideIndex),
             }
           );
           if (resolvedUrl) {
