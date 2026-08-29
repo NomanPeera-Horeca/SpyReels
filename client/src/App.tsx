@@ -191,7 +191,6 @@ function DesktopDashboardRouter() {
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
           <Route path="/carousel-library" component={CarouselLibrary} />
-          <Route path="/carousel-studio" component={CarouselStudio} />
           <Route path="/broll-library" component={BrollLibrary} />
           <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
           <Route path="/paste" component={PasteScript} />
@@ -312,6 +311,12 @@ function Router() {
             }
             return null;
           }}
+        </Route>
+        {/* Admin-only Carousel Studio: full-bleed, no DashboardLayout. URL-only, no sidebar link. */}
+        <Route path="/carousel-studio">
+          <OnboardingGate>
+            <CarouselStudio />
+          </OnboardingGate>
         </Route>
         {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
         <Route>

@@ -305,7 +305,7 @@ export function CarouselStudioApp() {
     "spyreels-carousel";
 
   return (
-    <div className="cs -mx-4 -my-4 md:-mx-6 md:-my-6" style={{ height: "calc(100dvh - 0px)" }}>
+    <div className="cs">
       <div className="app">
         <aside className="sidebar">
           <div className="brand">
