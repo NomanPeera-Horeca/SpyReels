@@ -27,9 +27,75 @@ import { PostDateTimePicker } from "@/components/PostDateTimePicker";
 import { trpc } from "@/lib/trpc";
 import { Calendar, ImageIcon, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import { toBlob } from "html-to-image";
+import { getFontEmbedCSS, toBlob } from "html-to-image";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+
+/** Per-slide html-to-image can hang on remote CSS backgrounds / font embed. */
+const SLIDE_EXPORT_TIMEOUT_MS = 25_000;
+const FONT_EMBED_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/**
+ * Fetch remote CSS background-image URLs as data URLs so html-to-image does not
+ * hang on CORS/cacheBust fetches. Restores inline styles afterward.
+ */
+async function inlineRemoteBackgroundImages(root: HTMLElement): Promise<() => void> {
+  const restores: Array<() => void> = [];
+  const elements: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+
+  for (const el of elements) {
+    const bg = el.style.backgroundImage;
+    if (!bg || bg === "none" || !bg.includes("url(")) continue;
+    const match = /url\(\s*['"]?(https?:\/\/[^'")\s]+)['"]?\s*\)/i.exec(bg);
+    if (!match) continue;
+    const url = match[1];
+    try {
+      const dataUrl = await withTimeout(
+        (async () => {
+          const res = await fetch(url, { mode: "cors", credentials: "omit" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result ?? ""));
+            reader.onerror = () => reject(new Error("read failed"));
+            reader.readAsDataURL(blob);
+          });
+        })(),
+        10_000,
+        "Image fetch timed out"
+      );
+      if (!dataUrl.startsWith("data:")) continue;
+      const prev = el.style.backgroundImage;
+      el.style.backgroundImage = `url("${dataUrl}")`;
+      restores.push(() => {
+        el.style.backgroundImage = prev;
+      });
+    } catch {
+      // Leave remote URL; capture may still succeed or use placeholder.
+    }
+  }
+
+  return () => {
+    for (const restore of restores) restore();
+  };
+}
 
 export type CarouselPreviewDialogProps = {
   open: boolean;
@@ -115,7 +181,10 @@ function slugifyCarouselName(name: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
-async function captureSlideAsPngBlob(node: HTMLElement): Promise<Blob> {
+async function captureSlideAsPngBlob(
+  node: HTMLElement,
+  options?: { fontEmbedCSS?: string }
+): Promise<Blob> {
   // Exit any in-progress contentEditable so capture uses committed text in the DOM.
   const active = document.activeElement;
   if (active instanceof HTMLElement && active.isContentEditable) {
@@ -133,18 +202,32 @@ async function captureSlideAsPngBlob(node: HTMLElement): Promise<Blob> {
   void target.offsetWidth;
   void target.offsetHeight;
 
-  const blob = await toBlob(target, {
-    pixelRatio: 3,
-    cacheBust: true,
-    filter: (domNode) => {
-      if (!(domNode instanceof HTMLElement)) return true;
-      return domNode.getAttribute("aria-label") !== "Download this slide as PNG";
-    },
-  });
-  if (!blob) {
-    throw new Error("Failed to capture slide as image");
+  const restoreBackgrounds = await inlineRemoteBackgroundImages(target);
+  try {
+    const blob = await withTimeout(
+      toBlob(target, {
+        pixelRatio: 3,
+        // Backgrounds are inlined as data URLs when CORS allows; avoid cacheBust
+        // re-fetch hanging on R2 / stock CDNs that lack CORS.
+        cacheBust: false,
+        ...(options?.fontEmbedCSS != null
+          ? { fontEmbedCSS: options.fontEmbedCSS }
+          : {}),
+        filter: (domNode) => {
+          if (!(domNode instanceof HTMLElement)) return true;
+          return domNode.getAttribute("aria-label") !== "Download this slide as PNG";
+        },
+      }),
+      SLIDE_EXPORT_TIMEOUT_MS,
+      "Slide export timed out"
+    );
+    if (!blob) {
+      throw new Error("Failed to capture slide as image");
+    }
+    return blob;
+  } finally {
+    restoreBackgrounds();
   }
-  return blob;
 }
 
 function toDesignOverride(
@@ -215,6 +298,8 @@ export function CarouselPreviewDialog({
     initialRemakeId != null &&
     (activeRemakeId == null || activeRemakeId === initialRemakeId);
   const carouselContainerRef = useRef<HTMLDivElement>(null);
+  /** Bumps on close / remake change so a stuck export cannot leave Preparing forever. */
+  const exportGenerationRef = useRef(0);
 
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery(undefined, {
     enabled: open && !isReopenMode,
@@ -275,6 +360,8 @@ export function CarouselPreviewDialog({
 
   useEffect(() => {
     if (!open) {
+      exportGenerationRef.current += 1;
+      setIsExporting(false);
       setActiveRemakeId(null);
       setRemakeSlideValues(null);
       setShowOriginal(false);
@@ -303,6 +390,12 @@ export function CarouselPreviewDialog({
       setShowOriginal(false);
     }
   }, [open, initialRemakeId]);
+
+  // New remake identity: cancel any in-flight export UI state.
+  useEffect(() => {
+    exportGenerationRef.current += 1;
+    setIsExporting(false);
+  }, [activeRemakeId]);
 
   useEffect(() => {
     if (open && defaultHandleQuery.data?.handle && !handleInput) {
@@ -527,9 +620,11 @@ export function CarouselPreviewDialog({
       `[data-carousel-slide-id="${slideId}"]`
     );
     if (!node || !template) return;
+    const generation = ++exportGenerationRef.current;
     setIsExporting(true);
     try {
       const blob = await captureSlideAsPngBlob(node);
+      if (exportGenerationRef.current !== generation) return;
       const slides = effectiveSlides ?? template.slides;
       const index = slides.findIndex((s) => s.id === slideId);
       const filename = `${slugifyCarouselName(template.name)}-slide-${String(
@@ -538,31 +633,63 @@ export function CarouselPreviewDialog({
       saveAs(blob, filename);
     } catch (err) {
       console.error("Slide download failed", err);
+      if (exportGenerationRef.current === generation) {
+        toast.error("Couldn't export slides. Try again.");
+      }
     } finally {
-      setIsExporting(false);
+      if (exportGenerationRef.current === generation) {
+        setIsExporting(false);
+      }
     }
   }
 
   async function handleDownloadAllSlides() {
     const container = carouselContainerRef.current;
     if (!container || !template) return;
+    const generation = ++exportGenerationRef.current;
     setIsExporting(true);
     try {
       const nodes = Array.from(
         container.querySelectorAll<HTMLElement>("[data-carousel-slide-id]")
       );
+      if (nodes.length === 0) {
+        throw new Error("No slides to export");
+      }
+
+      // Embed fonts once for the zip; empty string skips fonts if embed times out.
+      let fontEmbedCSS = "";
+      try {
+        const target =
+          (nodes[0].firstElementChild as HTMLElement | null) ?? nodes[0];
+        fontEmbedCSS = await withTimeout(
+          getFontEmbedCSS(target, { cacheBust: false }),
+          FONT_EMBED_TIMEOUT_MS,
+          "Font embed timed out"
+        );
+      } catch (fontErr) {
+        console.warn("Carousel font embed skipped", fontErr);
+        fontEmbedCSS = "";
+      }
+
       const zip = new JSZip();
       for (let i = 0; i < nodes.length; i++) {
-        const blob = await captureSlideAsPngBlob(nodes[i]);
+        if (exportGenerationRef.current !== generation) return;
+        const blob = await captureSlideAsPngBlob(nodes[i], { fontEmbedCSS });
         const filename = `slide-${String(i + 1).padStart(2, "0")}.png`;
         zip.file(filename, blob);
       }
       const zipBlob = await zip.generateAsync({ type: "blob" });
+      if (exportGenerationRef.current !== generation) return;
       saveAs(zipBlob, `${slugifyCarouselName(template.name)}.zip`);
     } catch (err) {
       console.error("Carousel export failed", err);
+      if (exportGenerationRef.current === generation) {
+        toast.error("Couldn't export slides. Try again.");
+      }
     } finally {
-      setIsExporting(false);
+      if (exportGenerationRef.current === generation) {
+        setIsExporting(false);
+      }
     }
   }
 
