@@ -15,6 +15,7 @@ import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
+import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -250,6 +251,7 @@ async function startServer() {
   });
 
   registerPublicScriptShareRoutes(app);
+  registerCarouselExportImageProxy(app);
 
   // tRPC API
   app.use(
