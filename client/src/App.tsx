@@ -89,6 +89,8 @@ const ViralityDiagnostic = lazyWithRetry(() => import("./pages/ViralityDiagnosti
 const ThirtyDayPlan = lazyWithRetry(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazyWithRetry(() => import("./pages/AiCoach"));
 const CarouselLibrary = lazyWithRetry(() => import("./pages/CarouselLibrary"));
+/** Admin-only UI prototype. No sidebar link. Gate via isAdminPanelClient. */
+const CarouselStudio = lazyWithRetry(() => import("./pages/CarouselStudio"));
 const BrollLibrary = lazyWithRetry(() => import("./pages/BrollLibrary"));
 const PasteScript = lazyWithRetry(() => import("./pages/PasteScript"));
 const Interests = lazyWithRetry(() => import("./pages/Interests"));
@@ -189,6 +191,7 @@ function DesktopDashboardRouter() {
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
           <Route path="/carousel-library" component={CarouselLibrary} />
+          <Route path="/carousel-studio" component={CarouselStudio} />
           <Route path="/broll-library" component={BrollLibrary} />
           <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
           <Route path="/paste" component={PasteScript} />
