@@ -31,8 +31,6 @@ export function buildCarouselAnglesJsonSchema(): {
         angles: {
           type: "array",
           description: `Exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} distinct strategic directions for a carousel.`,
-          minItems: CAROUSEL_STUDIO_ANGLE_COUNT,
-          maxItems: CAROUSEL_STUDIO_ANGLE_COUNT,
           items: {
             type: "object",
             properties: {
