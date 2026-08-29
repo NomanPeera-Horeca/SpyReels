@@ -1,8 +1,15 @@
 /**
- * Carousel Studio UI prototype (mock data only).
+ * Carousel Studio: idea / web / YouTube generate real angles + remake slides.
+ * Remix stays mocked/disabled until a later source-analysis phase.
  * Visual port of docs/mockups/spyreels_carousel_studio_minimal_homepage_final.html
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  mapRemakeToStudioSlides,
+  type CarouselAngleOption,
+  type CarouselStudioSourceType,
+} from "@shared/carouselStudio";
+import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
 import {
   SOURCE_CONFIG,
@@ -10,18 +17,33 @@ import {
   PROGRESS_STEPS,
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
-  cloneSlides,
   slugifyFilename,
   getPackageCaption,
   getPackageHashtags,
   type SourceKey,
   type Slide,
+  type StrategyCard,
   type NavPage,
   type CreateStep,
   type DesignTemplate,
   type Platform,
   type AiQuickAction,
 } from "./mockData";
+
+function anglesToStrategyCards(angles: CarouselAngleOption[]): StrategyCard[] {
+  return angles.map((angle) => ({
+    kicker: angle.kicker,
+    title: angle.title,
+    body: angle.description,
+    best: "Saves",
+    slides: String(angle.estimatedSlideCount),
+    width: "90%",
+  }));
+}
+
+function isStudioSourceType(source: SourceKey): source is CarouselStudioSourceType {
+  return source === "prompt" || source === "web" || source === "youtube";
+}
 
 function useToast() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -76,17 +98,27 @@ export function CarouselStudioApp() {
     )
   );
 
-  // MOCK form fields
-  const [promptInput, setPromptInput] = useState(MOCK_DEFAULTS.promptInput);
-  const [webInput, setWebInput] = useState(MOCK_DEFAULTS.webInput);
-  const [youtubeInput, setYoutubeInput] = useState(MOCK_DEFAULTS.youtubeInput);
-  const [remixInput, setRemixInput] = useState(MOCK_DEFAULTS.remixInput);
-  const [audience, setAudience] = useState(MOCK_DEFAULTS.audience);
+  const [promptInput, setPromptInput] = useState("");
+  const [webInput, setWebInput] = useState("");
+  const [youtubeInput, setYoutubeInput] = useState("");
+  const [remixInput, setRemixInput] = useState("");
+  const [audience, setAudience] = useState("");
   const [goal, setGoal] = useState(MOCK_DEFAULTS.goal);
   const [pillar, setPillar] = useState(MOCK_DEFAULTS.pillar);
   const [voice, setVoice] = useState(MOCK_DEFAULTS.voice);
 
-  const [slides, setSlides] = useState<Slide[]>(() => cloneSlides("prompt"));
+  const [remakeId, setRemakeId] = useState<number | null>(null);
+  const [liveAngles, setLiveAngles] = useState<CarouselAngleOption[] | null>(
+    null
+  );
+  const [resolvedSource, setResolvedSource] = useState<{
+    sourceContent: string;
+    sourceImage: string | null;
+    sourceReelId: string | null;
+  } | null>(null);
+  const [isPollingRemake, setIsPollingRemake] = useState(false);
+
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [history, setHistory] = useState<string[]>([]);
   const [hasGeneratedCarousel, setHasGeneratedCarousel] = useState(false);
@@ -110,6 +142,20 @@ export function CarouselStudioApp() {
 
   const progressTimerRef = useRef<number | null>(null);
   const packageTimerRef = useRef<number | null>(null);
+  const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
+  const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
+  const generateCarouselMutation =
+    trpc.carouselStudio.generateCarousel.useMutation();
+  const remakeStatusQuery = trpc.carouselRemake.status.useQuery(
+    { remakeId: remakeId ?? 0 },
+    {
+      enabled: remakeId != null && isPollingRemake,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        return status === "processing" || status === "pending" ? 2000 : false;
+      },
+    }
+  );
 
   useEffect(() => {
     return () => {
@@ -117,6 +163,12 @@ export function CarouselStudioApp() {
       if (packageTimerRef.current) window.clearTimeout(packageTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const niche = defaultNicheQuery.data?.niche?.trim();
+    if (!niche) return;
+    setAudience((prev) => (prev.trim() ? prev : niche));
+  }, [defaultNicheQuery.data?.niche]);
 
   const editorVisible = createStep === "editor" && navPage === "create";
   const canDownload =
@@ -136,8 +188,13 @@ export function CarouselStudioApp() {
     });
   }, [slides]);
 
-  const strategies = STRATEGY_SETS[currentSource];
+  const strategies =
+    liveAngles && liveAngles.length > 0
+      ? anglesToStrategyCards(liveAngles)
+      : STRATEGY_SETS[currentSource];
   const progressLabels = PROGRESS_STEPS[currentSource];
+  const isFindingAngles = generateAnglesMutation.isPending;
+  const isStartingCarousel = generateCarouselMutation.isPending;
 
   const strategyCopy =
     currentSource === "remix"
@@ -168,15 +225,9 @@ export function CarouselStudioApp() {
               showInsight: false,
             };
 
-  const startGenerate = () => {
-    setHasGeneratedCarousel(false);
-    const nextSlides = cloneSlides(currentSource);
-    setSlides(nextSlides);
-    setCurrentSlide(0);
+  const startProgressTicker = () => {
     setProgressIndex(0);
     setProgressDoneFlags(progressLabels.map(() => false));
-    showCreateStep("progress");
-
     if (progressTimerRef.current) window.clearInterval(progressTimerRef.current);
     let i = 0;
     progressTimerRef.current = window.setInterval(() => {
@@ -188,19 +239,144 @@ export function CarouselStudioApp() {
       i += 1;
       if (i < progressLabels.length) {
         setProgressIndex(i);
-      } else {
-        if (progressTimerRef.current) {
-          window.clearInterval(progressTimerRef.current);
-          progressTimerRef.current = null;
-        }
-        window.setTimeout(() => {
-          const valid = hasValidGeneratedSlides(nextSlides);
-          setHasGeneratedCarousel(valid);
-          showCreateStep("editor");
-        }, 450);
+      } else if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
       }
     }, 620);
   };
+
+  const buildNiche = () => {
+    const a = audience.trim();
+    const p = pillar.trim();
+    if (a && p) return `${a} · ${p}`;
+    if (a) return a;
+    if (p) return p;
+    return undefined;
+  };
+
+  const currentSourceText = () => {
+    if (currentSource === "prompt") return promptInput.trim();
+    if (currentSource === "web") return webInput.trim();
+    if (currentSource === "youtube") return youtubeInput.trim();
+    return remixInput.trim();
+  };
+
+  const findAngles = async () => {
+    if (!isStudioSourceType(currentSource)) {
+      toast("Remix from a source carousel is not available yet.");
+      return;
+    }
+    const content = currentSourceText();
+    if (!content) {
+      toast(
+        currentSource === "prompt"
+          ? "Describe the idea first."
+          : "Paste a URL first."
+      );
+      return;
+    }
+    setHasGeneratedCarousel(false);
+    setSelectedStrategy(0);
+    try {
+      const brandVoice =
+        voice.trim() && voice !== "Use saved brand voice" ? voice.trim() : undefined;
+      const data = await generateAnglesMutation.mutateAsync({
+        sourceType: currentSource,
+        content,
+        niche: buildNiche(),
+        brandVoice,
+      });
+      setRemakeId(data.remakeId);
+      setLiveAngles(data.angles);
+      setResolvedSource({
+        sourceContent: data.sourceContent,
+        sourceImage: data.sourceImage,
+        sourceReelId: data.sourceReelId,
+      });
+      showCreateStep("strategy");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not generate angles.";
+      toast(message);
+    }
+  };
+
+  const startGenerate = async () => {
+    if (!remakeId || !liveAngles || liveAngles.length === 0) {
+      toast("Generate angles first.");
+      return;
+    }
+    setHasGeneratedCarousel(false);
+    setSlides([]);
+    setCurrentSlide(0);
+    setIsPollingRemake(true);
+    showCreateStep("progress");
+    startProgressTicker();
+    try {
+      await generateCarouselMutation.mutateAsync({
+        remakeId,
+        selectedAngleIndex: selectedStrategy,
+        sourceContent: resolvedSource?.sourceContent,
+        sourceImage: resolvedSource?.sourceImage ?? undefined,
+        sourceReelId: resolvedSource?.sourceReelId ?? undefined,
+      });
+    } catch (err) {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      setIsPollingRemake(false);
+      const message =
+        err instanceof Error ? err.message : "Could not start carousel generation.";
+      toast(message);
+      showCreateStep("strategy");
+    }
+  };
+
+  useEffect(() => {
+    if (!isPollingRemake) return;
+    const data = remakeStatusQuery.data;
+    if (!data) return;
+    if (data.status === "completed") {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      const next = mapRemakeToStudioSlides({
+        slotValues: data.slotValues,
+        slideStructure: data.slideStructure,
+        imageUrls: data.imageUrls,
+      });
+      setIsPollingRemake(false);
+      if (!hasValidGeneratedSlides(next)) {
+        toast("Carousel generated but slides were empty. Try another angle.");
+        showCreateStep("strategy");
+        return;
+      }
+      setSlides(next);
+      setCurrentSlide(0);
+      setHasGeneratedCarousel(true);
+      setProgressDoneFlags(progressLabels.map(() => true));
+      showCreateStep("editor");
+      return;
+    }
+    if (data.status === "failed") {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      setIsPollingRemake(false);
+      toast(data.errorMessage || "Carousel generation failed.");
+      showCreateStep("strategy");
+    }
+  }, [
+    isPollingRemake,
+    remakeStatusQuery.data,
+    progressLabels,
+    showCreateStep,
+    toast,
+  ]);
 
   const applyAi = (type: AiQuickAction) => {
     saveHistory();
@@ -479,13 +655,19 @@ export function CarouselStudioApp() {
                             )}
                             {currentSource === "remix" && (
                               <div id="remixSource">
+                                {/* Remix source analysis is out of scope for Phase 2. Do not call analyzeSourceCarousel. */}
                                 <input
                                   className="text-input"
                                   aria-label="Instagram or LinkedIn carousel URL"
                                   placeholder="Paste an Instagram or LinkedIn carousel URL"
                                   value={remixInput}
                                   onChange={(e) => setRemixInput(e.target.value)}
+                                  disabled
                                 />
+                                <p className="sub" style={{ marginTop: 10 }}>
+                                  Remix from a source carousel is not available
+                                  yet. Use an idea, article, or YouTube URL.
+                                </p>
                               </div>
                             )}
 
@@ -577,17 +759,24 @@ export function CarouselStudioApp() {
                               <button
                                 type="button"
                                 className="btn primary composer-primary"
+                                disabled={
+                                  isFindingAngles || currentSource === "remix"
+                                }
+                                aria-disabled={
+                                  isFindingAngles || currentSource === "remix"
+                                }
+                                title={
+                                  currentSource === "remix"
+                                    ? "Remix from a source carousel is not available yet"
+                                    : undefined
+                                }
                                 onClick={() => {
-                                  setHasGeneratedCarousel(false);
-                                  setSelectedStrategy(0);
-                                  if (currentSource === "remix") {
-                                    showCreateStep("sourceAnalysis");
-                                  } else {
-                                    showCreateStep("strategy");
-                                  }
+                                  void findAngles();
                                 }}
                               >
-                                {SOURCE_CONFIG[currentSource].button}
+                                {isFindingAngles
+                                  ? "Finding angles..."
+                                  : SOURCE_CONFIG[currentSource].button}
                               </button>
                             </div>
                           </div>
@@ -754,16 +943,26 @@ export function CarouselStudioApp() {
                       <button
                         type="button"
                         className="btn ghost"
-                        onClick={() => toast("Three fresh angles generated.")}
+                        disabled={isFindingAngles || currentSource === "remix"}
+                        onClick={() => {
+                          void findAngles();
+                        }}
                       >
-                        Generate 3 more
+                        {isFindingAngles
+                          ? "Finding angles..."
+                          : "Generate 3 more"}
                       </button>
                       <button
                         type="button"
                         className="btn primary"
-                        onClick={startGenerate}
+                        disabled={isStartingCarousel || !liveAngles}
+                        onClick={() => {
+                          void startGenerate();
+                        }}
                       >
-                        Create carousel →
+                        {isStartingCarousel
+                          ? "Starting..."
+                          : "Create carousel →"}
                       </button>
                     </div>
                   </div>
@@ -840,7 +1039,20 @@ export function CarouselStudioApp() {
                               onClick={() => setCurrentSlide(i)}
                             >
                               <div className="thumb-num">{i + 1}</div>
-                              <div className="thumb-mini">{s.title}</div>
+                              <div
+                                className="thumb-mini"
+                                style={
+                                  s.imageUrl
+                                    ? {
+                                        backgroundImage: `url(${s.imageUrl})`,
+                                        backgroundSize: "cover",
+                                        backgroundPosition: "center",
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {s.title}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -916,7 +1128,16 @@ export function CarouselStudioApp() {
                           </div>
                         </div>
                         <div className="canvas-area">
-                          <div className={slideCanvasClass}>
+                          <div
+                            className={`${slideCanvasClass}${slides[currentSlide]?.imageUrl ? " has-photo" : ""}`}
+                          >
+                            {slides[currentSlide]?.imageUrl ? (
+                              <img
+                                className="slide-photo"
+                                src={slides[currentSlide].imageUrl ?? ""}
+                                alt=""
+                              />
+                            ) : null}
                             <div className="slide-handle">@noman_peera</div>
                             <div
                               key={`title-${currentSlide}-${editEpoch}`}

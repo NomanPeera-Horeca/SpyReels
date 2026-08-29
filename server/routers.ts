@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminPanelProcedure, router } from "./_core/trpc";
 import { workspacesRouter } from "./routers/workspacesRouter";
 import { carouselRemakeRouter } from "./routers/carouselRemakeRouter";
+import { carouselStudioRouter } from "./routers/carouselStudioRouter";
 import { videoBrollRouter } from "./routers/videoBrollRouter";
 import { brollLandingRouter } from "./routers/brollLandingRouter";
 import { watermarkJobsRouter } from "./routers/watermarkJobsRouter";
@@ -1069,6 +1070,8 @@ export const appRouter = router({
   workspaces: workspacesRouter,
 
   carouselRemake: carouselRemakeRouter,
+
+  carouselStudio: carouselStudioRouter,
 
   videoBroll: videoBrollRouter,
 

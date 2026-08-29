@@ -644,6 +644,11 @@ export async function generateCarouselRemake(
     uploadedImagePool?: string[];
     /** When set, convert this source text into slides instead of niche-only rewrite. */
     sourceContent?: string;
+    /**
+     * Carousel Studio: selected angle title + description.
+     * Prepended onto sourceContent as the content direction (does not replace the worker).
+     */
+    angleDirection?: string;
     /** Source carousel slide images; worker analyzes then remakes from that structure. */
     analysisImageUrls?: string[];
     /**
@@ -659,6 +664,12 @@ export async function generateCarouselRemake(
   const uploadedImageUrls = options?.uploadedImageUrls;
   const uploadedImagePool = options?.uploadedImagePool;
   let sourceContent = options?.sourceContent?.trim() || undefined;
+  const angleDirection = options?.angleDirection?.trim();
+  if (angleDirection) {
+    sourceContent = sourceContent
+      ? `Chosen carousel angle (follow this direction):\n${angleDirection}\n\nSource material:\n${sourceContent}`
+      : `Chosen carousel angle (follow this direction):\n${angleDirection}`;
+  }
   const analysisImageUrls = options?.analysisImageUrls?.filter(Boolean) ?? [];
   const fromAnalysis = analysisImageUrls.length >= 2;
   /** Vision-grounding stills in slide order (Path A) or a single shared thumb (Path B). */

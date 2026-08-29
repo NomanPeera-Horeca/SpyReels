@@ -1,6 +1,6 @@
 /**
  * Shared Carousel Studio types (backend + frontend).
- * Phase 1: angle options only. Slide remake reuse comes in Phase 2+.
+ * Phase 2: angles persist on carousel_remakes, then the existing remake worker writes slides.
  */
 
 /** One strategic direction proposed before full slide generation. */
@@ -22,3 +22,82 @@ export const CAROUSEL_STUDIO_ANGLE_COUNT = 3;
 
 export const CAROUSEL_STUDIO_MIN_SLIDES = 5;
 export const CAROUSEL_STUDIO_MAX_SLIDES = 12;
+
+/** Same photo-led template as content-to-carousel "photo" style. */
+export const CAROUSEL_STUDIO_TEMPLATE_ID = "photo_story_test";
+
+export type CarouselStudioSourceType = "prompt" | "web" | "youtube";
+
+/** Studio editor slide (headline/body + optional photo from the remake image chain). */
+export type CarouselStudioSlide = {
+  title: string;
+  body: string;
+  imageUrl?: string | null;
+};
+
+function firstUrlFromSlideEntry(
+  value: string | Record<string, string> | undefined | null
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string" && value.length > 0) return value;
+  if (typeof value === "object") {
+    for (const slotUrl of Object.values(value)) {
+      if (typeof slotUrl === "string" && slotUrl.length > 0) return slotUrl;
+    }
+  }
+  return null;
+}
+
+function pickSlideTitle(slots: Record<string, string>): string {
+  const headline = slots.headline?.trim() || "";
+  if (headline) return headline;
+  const title = slots.title?.trim() || "";
+  if (title) return title;
+  return slots.kicker?.trim() || "";
+}
+
+function pickSlideBody(slots: Record<string, string>, title: string): string {
+  const parts = [slots.body, slots.subhead, slots.cta_label]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0 && value !== title);
+  return parts.join("\n\n");
+}
+
+/** Map remake slotValues + slideStructure + imageUrls into studio title/body slides. */
+export function mapRemakeToStudioSlides(args: {
+  slotValues: Record<string, Record<string, string>> | null | undefined;
+  slideStructure: unknown;
+  imageUrls: unknown;
+}): CarouselStudioSlide[] {
+  const slotValues = args.slotValues ?? {};
+  const imageMap =
+    args.imageUrls && typeof args.imageUrls === "object"
+      ? (args.imageUrls as Record<string, string | Record<string, string>>)
+      : {};
+
+  const ids: string[] = [];
+  if (Array.isArray(args.slideStructure)) {
+    for (const slide of args.slideStructure) {
+      if (!slide || typeof slide !== "object") continue;
+      const id = (slide as { id?: unknown }).id;
+      if (typeof id === "string" && id) ids.push(id);
+    }
+  }
+  if (ids.length === 0) {
+    ids.push(...Object.keys(slotValues));
+  }
+
+  const slides: CarouselStudioSlide[] = [];
+  for (const id of ids) {
+    const slots = slotValues[id] ?? {};
+    const title = pickSlideTitle(slots);
+    const body = pickSlideBody(slots, title);
+    if (!title && !body) continue;
+    slides.push({
+      title: title || "Untitled slide",
+      body,
+      imageUrl: firstUrlFromSlideEntry(imageMap[id]),
+    });
+  }
+  return slides;
+}

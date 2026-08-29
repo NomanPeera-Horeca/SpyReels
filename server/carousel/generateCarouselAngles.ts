@@ -1,6 +1,6 @@
 /**
- * Carousel Studio Phase 1: propose 3 distinct strategic angles from source content.
- * Does not generate full slide copy; Phase 2 remake will reuse the selected angle.
+ * Carousel Studio: propose 3 distinct strategic angles from source content.
+ * Does not generate full slide copy. Selected angle is passed into generateCarouselRemake.
  */
 
 import {
@@ -121,8 +121,49 @@ function normalizeAngles(payload: AnglesLlmPayload): CarouselAngleOption[] {
   return out;
 }
 
+async function invokeCarouselAnglesOnce(args: {
+  sourceContent: string;
+  niche: string;
+  brandVoice?: string | null;
+  repairNote?: string;
+}): Promise<CarouselAngleOption[]> {
+  const schema = buildCarouselAnglesJsonSchema();
+  const basePrompt = buildAnglesUserPrompt({
+    sourceContent: args.sourceContent,
+    niche: args.niche,
+    brandVoice: args.brandVoice,
+  });
+  const userPrompt = args.repairNote
+    ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${args.repairNote}`
+    : basePrompt;
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: withAiFormattingRules(
+          "You are a SpyReels carousel strategist. Propose distinct save-worthy angles only. Return structured tool output only."
+        ),
+      },
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: schema,
+    },
+  });
+
+  const raw = String(response.choices[0]?.message?.content ?? "");
+  const parsed = parseLlmJson<AnglesLlmPayload>(raw, { angles: [] });
+  return normalizeAngles(parsed);
+}
+
 /**
  * One Sonnet call: return exactly 3 distinct carousel angles (no slide bodies).
+ * Retries once with a repair note if the first payload is not exactly 3 valid angles.
  */
 export async function generateCarouselAngles(args: {
   sourceContent: string;
@@ -138,33 +179,20 @@ export async function generateCarouselAngles(args: {
     throw new Error("niche is required to generate carousel angles.");
   }
 
-  const schema = buildCarouselAnglesJsonSchema();
-  const response = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: withAiFormattingRules(
-          "You are a SpyReels carousel strategist. Propose distinct save-worthy angles only. Return structured tool output only."
-        ),
-      },
-      {
-        role: "user",
-        content: buildAnglesUserPrompt({
-          sourceContent,
-          niche,
-          brandVoice: args.brandVoice,
-        }),
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: schema,
-    },
+  let angles = await invokeCarouselAnglesOnce({
+    sourceContent,
+    niche,
+    brandVoice: args.brandVoice,
   });
 
-  const raw = String(response.choices[0]?.message?.content ?? "");
-  const parsed = parseLlmJson<AnglesLlmPayload>(raw, { angles: [] });
-  const angles = normalizeAngles(parsed);
+  if (angles.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
+    angles = await invokeCarouselAnglesOnce({
+      sourceContent,
+      niche,
+      brandVoice: args.brandVoice,
+      repairNote: `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid angles, each with kicker, title, description, and estimatedSlideCount. Got ${angles.length}.`,
+    });
+  }
 
   if (angles.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
     throw new Error(

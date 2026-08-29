@@ -1,6 +1,6 @@
 /**
- * Admin-only Carousel Studio UI prototype (mock data, no backend).
- * Access by URL only. Non-admins see NotFound (same gate as AdminEntry).
+ * Admin-only Carousel Studio. Access by URL only.
+ * Non-admins see NotFound (same gate as AdminEntry).
  * Full-bleed page: mounted outside DashboardLayout in App.tsx.
  */
 import { useAuth } from "@/_core/hooks/useAuth";

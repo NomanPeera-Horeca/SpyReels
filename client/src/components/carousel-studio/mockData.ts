@@ -1,6 +1,7 @@
 /**
- * MOCK / placeholder data for Carousel Studio UI prototype.
- * Not wired to backend, AI, carousel_remakes, or tRPC.
+ * MOCK / placeholder data for Carousel Studio.
+ * Live create flow uses tRPC. Keep this file as local-dev reference and for
+ * Remix UI chrome that is still mocked in Phase 2.
  */
 
 export type SourceKey = "prompt" | "web" | "youtube" | "remix";
@@ -17,6 +18,7 @@ export type StrategyCard = {
 export type Slide = {
   title: string;
   body: string;
+  imageUrl?: string | null;
 };
 
 export const SOURCE_CONFIG: Record<

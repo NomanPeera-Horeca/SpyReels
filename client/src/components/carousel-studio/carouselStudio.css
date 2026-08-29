@@ -157,6 +157,8 @@
   .cs .slide-canvas.linkedin{aspect-ratio:1/1}
   .cs .slide-canvas.template-green{background:radial-gradient(circle at 70% 20%,rgba(255,255,255,.1),transparent 28%),linear-gradient(145deg,#0f766e,#123a36 55%,#0d1414)}
   .cs .slide-canvas.template-orange{background:radial-gradient(circle at 72% 14%,rgba(255,255,255,.13),transparent 28%),linear-gradient(145deg,#d0521d,#5e2818 55%,#16100e)}
+  .cs .slide-photo{width:100%;height:38%;object-fit:cover;border-radius:14px;margin-bottom:14px;flex-shrink:0;background:#0d0d12}
+  .cs .slide-canvas.has-photo .slide-title{margin-top:12px;font-size:32px}
   .cs .slide-handle{font-size:12px;opacity:.8}
   .cs .slide-title{margin-top:auto;font-size:44px;line-height:1.02;letter-spacing:-.045em;font-weight:900;outline:none}
   .cs .slide-body{font-size:15px;line-height:1.5;margin-top:14px;max-width:90%;opacity:.9;outline:none}

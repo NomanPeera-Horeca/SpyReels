@@ -27,7 +27,7 @@ const CONTENT_STYLE_TO_TEMPLATE: Record<string, string> = {
   stat: "average_vs_not",
 };
 
-async function assertCarouselRemakeQuota(user: {
+export async function assertCarouselRemakeQuota(user: {
   id: number;
   openId: string;
   email: string | null;
@@ -172,7 +172,7 @@ function firstDayOfNextMonthUtc(): string {
   return next.toISOString().slice(0, 10);
 }
 
-async function resolveCarouselNiche(
+export async function resolveCarouselNiche(
   userId: number,
   provided: string | undefined,
   userFields: {
@@ -433,6 +433,8 @@ export const carouselRemakeRouter = router({
         designOverride: row.designOverrideJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
+        angleOptions: row.angleOptionsJson ?? null,
+        selectedAngleIndex: row.selectedAngleIndex ?? null,
         postDate: row.postDate,
         postTime: row.postTime,
         errorMessage: row.errorMessage,
