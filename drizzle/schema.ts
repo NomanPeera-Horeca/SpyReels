@@ -1989,6 +1989,8 @@ export const carouselRemakes = mysqlTable(
     status: mysqlEnum("status", ["pending", "processing", "completed", "failed"])
       .default("pending")
       .notNull(),
+    /** Worker-reported remake stage: writing_copy | generating_images | saving. */
+    progressStage: varchar("progressStage", { length: 32 }),
     slotValuesJson: json("slotValuesJson").$type<Record<string, Record<string, string>>>(),
     /** Carousel Studio: 3 proposed angles before the user picks one. */
     angleOptionsJson: json("angleOptionsJson").$type<CarouselAngleOption[]>(),

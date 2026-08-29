@@ -687,6 +687,7 @@ export async function generateCarouselRemake(
         .update(carouselRemakes)
         .set({
           status: "failed",
+          progressStage: null,
           errorMessage: `Unknown carousel template: ${templateId}`,
         })
         .where(eq(carouselRemakes.id, remakeId));
@@ -766,6 +767,11 @@ export async function generateCarouselRemake(
       ? "A remake of a source Instagram carousel. Keep each slide's layout and slot roles. Rewrite the extracted source text for this creator's niche and voice."
       : template.description;
 
+    await db
+      .update(carouselRemakes)
+      .set({ progressStage: "writing_copy" })
+      .where(eq(carouselRemakes.id, remakeId));
+
     let values = await invokeCarouselRemakeOnce(
       template.name,
       promptDescription,
@@ -797,6 +803,7 @@ export async function generateCarouselRemake(
             .update(carouselRemakes)
             .set({
               status: "failed",
+              progressStage: null,
               errorMessage: `Slot text missing after retry: ${hardIssues.slice(0, 5).join("; ")}`,
             })
             .where(eq(carouselRemakes.id, remakeId));
@@ -810,6 +817,11 @@ export async function generateCarouselRemake(
 
     // Soft visibility only: do not fail or retry on weak not_line echo.
     warnAverageNotLineConsistency(effectiveSlides, values);
+
+    await db
+      .update(carouselRemakes)
+      .set({ progressStage: "generating_images" })
+      .where(eq(carouselRemakes.id, remakeId));
 
     const imageUrls: CarouselImageUrlMap = {};
     // Per-generation-job dedupe only (not persisted across remakes).
@@ -976,8 +988,14 @@ export async function generateCarouselRemake(
 
     await db
       .update(carouselRemakes)
+      .set({ progressStage: "saving" })
+      .where(eq(carouselRemakes.id, remakeId));
+
+    await db
+      .update(carouselRemakes)
       .set({
         status: "completed",
+        progressStage: null,
         slotValuesJson: values,
         slideStructureJson: effectiveSlides,
         imageUrlsJson: Object.keys(imageUrls).length > 0 ? imageUrls : null,
@@ -991,6 +1009,7 @@ export async function generateCarouselRemake(
         .update(carouselRemakes)
         .set({
           status: "failed",
+          progressStage: null,
           errorMessage: message,
         })
         .where(eq(carouselRemakes.id, remakeId));

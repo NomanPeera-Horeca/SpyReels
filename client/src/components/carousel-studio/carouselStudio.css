@@ -347,6 +347,49 @@
     box-shadow:none;
     outline:none;
   }
+  .cs .link-status{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:12px;
+    color:var(--muted);
+    padding:0 6px 10px;
+    line-height:1.4;
+  }
+  .cs .link-status.error{color:var(--red)}
+  .cs .link-spinner{
+    width:14px;
+    height:14px;
+    border:2px solid var(--border);
+    border-top-color:var(--purple);
+    border-radius:50%;
+    animation:cs-spin .7s linear infinite;
+    flex:0 0 auto;
+  }
+  @keyframes cs-spin{to{transform:rotate(360deg)}}
+  .cs .source-thumb-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin:0 6px 10px;
+    padding:4px 10px 4px 4px;
+    border:1px solid var(--border);
+    border-radius:999px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .cs .source-thumb-chip img{
+    width:28px;
+    height:28px;
+    object-fit:cover;
+    border-radius:50%;
+    background:#0d0d12;
+  }
+  .cs .aspect-row{
+    display:flex;
+    gap:8px;
+    padding:0 6px 12px;
+  }
   .cs .composer-footer{
     display:flex;
     align-items:flex-end;
@@ -456,12 +499,6 @@
     .cs #inputStep h1{
       font-size:34px;
       margin-bottom:24px;
-    }
-    .cs #inputStep .tabs{
-      grid-template-columns:repeat(2,1fr);
-    }
-    .cs #inputStep .tab span{
-      white-space:normal;
     }
     .cs .composer-footer{
       align-items:stretch;

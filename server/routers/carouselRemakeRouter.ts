@@ -428,6 +428,7 @@ export const carouselRemakeRouter = router({
         templateId: row.templateId,
         niche: row.niche,
         status: row.status,
+        progressStage: row.progressStage ?? null,
         slotValues: row.slotValuesJson ?? null,
         slideStructure: row.slideStructureJson ?? null,
         designOverride: row.designOverrideJson ?? null,

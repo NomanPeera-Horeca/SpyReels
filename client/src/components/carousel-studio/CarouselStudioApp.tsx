@@ -5,8 +5,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  looksLikeCarouselSourceUrl,
+  normalizeCarouselSourceUrl,
   type CarouselAngleOption,
-  type CarouselStudioSourceType,
+  type CarouselRemakeProgressStage,
 } from "@shared/carouselStudio";
 import {
   CAROUSEL_TEMPLATES_BY_ID,
@@ -28,9 +30,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
 import {
-  SOURCE_CONFIG,
   STRATEGY_SETS,
-  PROGRESS_STEPS,
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
   slugifyFilename,
@@ -99,8 +99,31 @@ function anglesToStrategyCards(angles: CarouselAngleOption[]): StrategyCard[] {
   }));
 }
 
-function isStudioSourceType(source: SourceKey): source is CarouselStudioSourceType {
-  return source === "prompt" || source === "web" || source === "youtube";
+const INPUT_ASPECT_OPTIONS: Array<{
+  value: CarouselDesignTokens["aspectRatio"];
+  label: string;
+}> = [
+  { value: "1:1", label: "1:1" },
+  { value: "4:5", label: "4:5" },
+  { value: "9:16", label: "9:16" },
+];
+
+const PROGRESS_STAGE_ROWS: Array<{
+  id: CarouselRemakeProgressStage;
+  label: string;
+}> = [
+  { id: "writing_copy", label: "Writing slide copy" },
+  { id: "generating_images", label: "Generating images" },
+  { id: "saving", label: "Saving your carousel" },
+];
+
+function progressStageIndex(
+  stage: string | null | undefined
+): number {
+  if (stage === "writing_copy") return 0;
+  if (stage === "generating_images") return 1;
+  if (stage === "saving") return 2;
+  return -1;
 }
 
 function useToast() {
@@ -135,10 +158,14 @@ export function CarouselStudioApp() {
     )
   );
 
-  const [promptInput, setPromptInput] = useState("");
-  const [webInput, setWebInput] = useState("");
-  const [youtubeInput, setYoutubeInput] = useState("");
-  const [remixInput, setRemixInput] = useState("");
+  const [composerInput, setComposerInput] = useState("");
+  const [inputAspectRatio, setInputAspectRatio] = useState<
+    CarouselDesignTokens["aspectRatio"]
+  >("4:5");
+  const [linkStatus, setLinkStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [audience, setAudience] = useState("");
   const [goal, setGoal] = useState(MOCK_DEFAULTS.goal);
   const [pillar, setPillar] = useState(MOCK_DEFAULTS.pillar);
@@ -150,6 +177,7 @@ export function CarouselStudioApp() {
   );
   const [resolvedSource, setResolvedSource] = useState<{
     sourceContent: string;
+    sourceUrl: string | null;
     sourceImage: string | null;
     sourceReelId: string | null;
   } | null>(null);
@@ -173,8 +201,6 @@ export function CarouselStudioApp() {
   const [history, setHistory] = useState<string[]>([]);
   const [hasGeneratedCarousel, setHasGeneratedCarousel] = useState(false);
   const [platform, setPlatform] = useState<Platform>("instagram");
-  const [progressIndex, setProgressIndex] = useState(0);
-  const [progressDoneFlags, setProgressDoneFlags] = useState<boolean[]>([]);
 
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [packageLoading, setPackageLoading] = useState(false);
@@ -186,12 +212,19 @@ export function CarouselStudioApp() {
   const [packageSuccessText, setPackageSuccessText] = useState("");
   const [downloadAgainLabel, setDownloadAgainLabel] = useState("Download again");
 
-  const progressTimerRef = useRef<number | null>(null);
   const exportStageRef = useRef<HTMLDivElement | null>(null);
+  const lastResolvedUrlRef = useRef<string | null>(null);
+  const resolveInFlightRef = useRef<Promise<{
+    sourceContent: string;
+    sourceUrl: string | null;
+    sourceImage: string | null;
+    sourceReelId: string | null;
+  }> | null>(null);
   const exportGenerationRef = useRef(0);
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
+  const resolveSourceMutation = trpc.carouselStudio.resolveSource.useMutation();
   const generateCarouselMutation =
     trpc.carouselStudio.generateCarousel.useMutation();
   const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
@@ -219,12 +252,6 @@ export function CarouselStudioApp() {
       },
     }
   );
-
-  useEffect(() => {
-    return () => {
-      if (progressTimerRef.current) window.clearInterval(progressTimerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     const niche = defaultNicheQuery.data?.niche?.trim();
@@ -277,7 +304,6 @@ export function CarouselStudioApp() {
     liveAngles && liveAngles.length > 0
       ? anglesToStrategyCards(liveAngles)
       : STRATEGY_SETS[currentSource];
-  const progressLabels = PROGRESS_STEPS[currentSource];
   const isFindingAngles = generateAnglesMutation.isPending;
   const isStartingCarousel = generateCarouselMutation.isPending;
 
@@ -310,27 +336,6 @@ export function CarouselStudioApp() {
               showInsight: false,
             };
 
-  const startProgressTicker = () => {
-    setProgressIndex(0);
-    setProgressDoneFlags(progressLabels.map(() => false));
-    if (progressTimerRef.current) window.clearInterval(progressTimerRef.current);
-    let i = 0;
-    progressTimerRef.current = window.setInterval(() => {
-      setProgressDoneFlags((flags) => {
-        const copy = [...flags];
-        copy[i] = true;
-        return copy;
-      });
-      i += 1;
-      if (i < progressLabels.length) {
-        setProgressIndex(i);
-      } else if (progressTimerRef.current) {
-        window.clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
-    }, 620);
-  };
-
   const buildNiche = () => {
     const a = audience.trim();
     const p = pillar.trim();
@@ -340,25 +345,78 @@ export function CarouselStudioApp() {
     return undefined;
   };
 
-  const currentSourceText = () => {
-    if (currentSource === "prompt") return promptInput.trim();
-    if (currentSource === "web") return webInput.trim();
-    if (currentSource === "youtube") return youtubeInput.trim();
-    return remixInput.trim();
+  const applyResolvedSource = (data: {
+    sourceContent: string;
+    sourceUrl: string | null;
+    sourceImage: string | null;
+    sourceReelId: string | null;
+  }) => {
+    setResolvedSource(data);
+    setComposerInput(data.sourceContent);
+    setLinkError(null);
+    if (data.sourceUrl) {
+      setLinkStatus("ready");
+      setCurrentSource("web");
+      lastResolvedUrlRef.current = data.sourceUrl;
+    } else {
+      setLinkStatus("idle");
+      setCurrentSource("prompt");
+      lastResolvedUrlRef.current = null;
+    }
+  };
+
+  const resolvePastedLink = async (raw: string) => {
+    if (!looksLikeCarouselSourceUrl(raw)) return null;
+    const url = normalizeCarouselSourceUrl(raw);
+    if (
+      lastResolvedUrlRef.current === url &&
+      resolvedSource?.sourceUrl === url &&
+      resolvedSource.sourceContent
+    ) {
+      return resolvedSource;
+    }
+    setLinkStatus("loading");
+    setLinkError(null);
+    const pending = resolveSourceMutation.mutateAsync({ content: url });
+    resolveInFlightRef.current = pending;
+    try {
+      const data = await pending;
+      applyResolvedSource(data);
+      return data;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not read that link.";
+      setLinkStatus("error");
+      setLinkError(message);
+      lastResolvedUrlRef.current = null;
+      return null;
+    } finally {
+      if (resolveInFlightRef.current === pending) {
+        resolveInFlightRef.current = null;
+      }
+    }
   };
 
   const findAngles = async () => {
-    if (!isStudioSourceType(currentSource)) {
-      toast("Remix from a source carousel is not available yet.");
+    let content = composerInput.trim();
+    if (!content) {
+      toast("Enter a topic or paste a link first.");
       return;
     }
-    const content = currentSourceText();
+    let resolvedForRequest = resolvedSource;
+    if (looksLikeCarouselSourceUrl(content)) {
+      const resolved =
+        resolveInFlightRef.current
+          ? await resolveInFlightRef.current.catch(() => null)
+          : await resolvePastedLink(content);
+      if (!resolved?.sourceContent) {
+        return;
+      }
+      resolvedForRequest = resolved;
+      content = resolved.sourceContent.trim();
+    }
     if (!content) {
-      toast(
-        currentSource === "prompt"
-          ? "Describe the idea first."
-          : "Paste a URL first."
-      );
+      toast("Enter a topic or paste a link first.");
       return;
     }
     setHasGeneratedCarousel(false);
@@ -366,19 +424,30 @@ export function CarouselStudioApp() {
     try {
       const brandVoice =
         voice.trim() && voice !== "Use saved brand voice" ? voice.trim() : undefined;
+      const alreadyResolved = Boolean(resolvedForRequest?.sourceContent);
       const data = await generateAnglesMutation.mutateAsync({
-        sourceType: currentSource,
         content,
         niche: buildNiche(),
         brandVoice,
+        aspectRatioOverride: inputAspectRatio,
+        ...(alreadyResolved
+          ? {
+              sourceContent: content,
+              sourceUrl: resolvedForRequest?.sourceUrl ?? undefined,
+              sourceImage: resolvedForRequest?.sourceImage ?? undefined,
+              sourceReelId: resolvedForRequest?.sourceReelId ?? undefined,
+            }
+          : {}),
       });
       setRemakeId(data.remakeId);
       setLiveAngles(data.angles);
       setResolvedSource({
         sourceContent: data.sourceContent,
+        sourceUrl: data.sourceUrl,
         sourceImage: data.sourceImage,
         sourceReelId: data.sourceReelId,
       });
+      if (data.sourceUrl) setCurrentSource("web");
       showCreateStep("strategy");
     } catch (err) {
       const message =
@@ -400,7 +469,6 @@ export function CarouselStudioApp() {
     setCurrentSlide(0);
     setIsPollingRemake(true);
     showCreateStep("progress");
-    startProgressTicker();
     try {
       await generateCarouselMutation.mutateAsync({
         remakeId,
@@ -410,10 +478,6 @@ export function CarouselStudioApp() {
         sourceReelId: resolvedSource?.sourceReelId ?? undefined,
       });
     } catch (err) {
-      if (progressTimerRef.current) {
-        window.clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
       setIsPollingRemake(false);
       const message =
         err instanceof Error ? err.message : "Could not start carousel generation.";
@@ -422,14 +486,38 @@ export function CarouselStudioApp() {
     }
   };
 
+  const startNewCarousel = () => {
+    resolveInFlightRef.current = null;
+    lastResolvedUrlRef.current = null;
+    setNavPage("create");
+    setCreateStep("input");
+    setCurrentSource("prompt");
+    setSelectedStrategy(0);
+    setComposerInput("");
+    setInputAspectRatio("4:5");
+    setLinkStatus("idle");
+    setLinkError(null);
+    setRemakeId(null);
+    setLiveAngles(null);
+    setResolvedSource(null);
+    setIsPollingRemake(false);
+    setRemakeTemplateId(null);
+    setRemakeSlotValues(null);
+    setRemakeSlideStructure(null);
+    setRemakeImageUrls(null);
+    setRemakeDesignOverride(null);
+    setRemakeAspectRatio("4:5");
+    setCurrentSlide(0);
+    setHistory([]);
+    setHasGeneratedCarousel(false);
+    setPlatform("instagram");
+    setDownloadModalOpen(false);
+  };
+
   useEffect(() => {
     const data = remakeStatusQuery.data;
     if (!data) return;
     if (data.status === "completed") {
-      if (progressTimerRef.current) {
-        window.clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
       const structure = Array.isArray(data.slideStructure)
         ? (data.slideStructure as CarouselSlideSpec[])
         : [];
@@ -464,17 +552,12 @@ export function CarouselStudioApp() {
         setCurrentSlide(0);
         setHistory([]);
         setHasGeneratedCarousel(true);
-        setProgressDoneFlags(progressLabels.map(() => true));
         showCreateStep("editor");
       }
       setIsPollingRemake(false);
       return;
     }
     if (data.status === "failed") {
-      if (progressTimerRef.current) {
-        window.clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
       setIsPollingRemake(false);
       toast(data.errorMessage || "Carousel generation failed.");
       showCreateStep("strategy");
@@ -483,7 +566,6 @@ export function CarouselStudioApp() {
     remakeStatusQuery.data,
     isPollingRemake,
     hasGeneratedCarousel,
-    progressLabels,
     showCreateStep,
     toast,
   ]);
@@ -668,6 +750,13 @@ export function CarouselStudioApp() {
               <span>{pageCrumb}</span>
             </div>
             <div className="top-actions">
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={startNewCarousel}
+              >
+                New Carousel
+              </button>
               <span
                 className={`badge${currentSource === "remix" ? " safe" : ""}`}
               >
@@ -708,101 +797,70 @@ export function CarouselStudioApp() {
                     <section className="hero">
                       <h1>What do you want to turn into a carousel?</h1>
                       <div className="source-card">
-                        <div
-                          className="tabs"
-                          role="tablist"
-                          aria-label="Carousel source"
-                        >
-                          {(
-                            [
-                              [
-                                "prompt",
-                                "Start with an idea",
-                                "Describe what you want to teach",
-                              ],
-                              [
-                                "web",
-                                "Web link",
-                                "Turn an article into slides",
-                              ],
-                              [
-                                "youtube",
-                                "YouTube video",
-                                "Use a transcript and key points",
-                              ],
-                              [
-                                "remix",
-                                "Remix carousel",
-                                "Adapt a proven IG/LinkedIn post",
-                              ],
-                            ] as const
-                          ).map(([key, title, sub]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              role="tab"
-                              className={`tab${currentSource === key ? " active" : ""}`}
-                              aria-selected={currentSource === key}
-                              onClick={() => setCurrentSource(key)}
-                            >
-                              <strong>{title}</strong>
-                              <span>{sub}</span>
-                            </button>
-                          ))}
-                        </div>
-
                         <div className="source-body">
                           <div className="minimal-composer">
-                            {currentSource === "prompt" && (
-                              <div id="promptSource">
-                                <textarea
-                                  className="source-input"
-                                  aria-label="Carousel idea"
-                                  placeholder="Describe the idea you want to turn into a carousel..."
-                                  value={promptInput}
-                                  onChange={(e) => setPromptInput(e.target.value)}
-                                />
+                            <textarea
+                              className="source-input"
+                              aria-label="Carousel topic or link"
+                              placeholder="Enter a topic or idea, or paste a blog, news, or YouTube link."
+                              value={composerInput}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setComposerInput(next);
+                                if (!next.trim()) {
+                                  setResolvedSource(null);
+                                  setLinkStatus("idle");
+                                  setLinkError(null);
+                                  lastResolvedUrlRef.current = null;
+                                  setCurrentSource("prompt");
+                                }
+                              }}
+                              onPaste={(e) => {
+                                const pasted = e.clipboardData.getData("text");
+                                if (looksLikeCarouselSourceUrl(pasted)) {
+                                  window.setTimeout(() => {
+                                    void resolvePastedLink(pasted);
+                                  }, 0);
+                                }
+                              }}
+                              onBlur={() => {
+                                void resolvePastedLink(composerInput);
+                              }}
+                            />
+                            {linkStatus === "loading" && (
+                              <div className="link-status" role="status">
+                                <span className="link-spinner" aria-hidden />
+                                Reading the link and pulling in its content...
                               </div>
                             )}
-                            {currentSource === "web" && (
-                              <div id="webSource">
-                                <input
-                                  className="text-input"
-                                  aria-label="Web article URL"
-                                  placeholder="Paste an article or website URL"
-                                  value={webInput}
-                                  onChange={(e) => setWebInput(e.target.value)}
-                                />
+                            {linkStatus === "error" && linkError && (
+                              <div className="link-status error" role="alert">
+                                {linkError}
                               </div>
                             )}
-                            {currentSource === "youtube" && (
-                              <div id="youtubeSource">
-                                <input
-                                  className="text-input"
-                                  aria-label="YouTube URL"
-                                  placeholder="Paste a YouTube video URL"
-                                  value={youtubeInput}
-                                  onChange={(e) => setYoutubeInput(e.target.value)}
-                                />
-                              </div>
-                            )}
-                            {currentSource === "remix" && (
-                              <div id="remixSource">
-                                {/* Remix source analysis is out of scope for Phase 2. Do not call analyzeSourceCarousel. */}
-                                <input
-                                  className="text-input"
-                                  aria-label="Instagram or LinkedIn carousel URL"
-                                  placeholder="Paste an Instagram or LinkedIn carousel URL"
-                                  value={remixInput}
-                                  onChange={(e) => setRemixInput(e.target.value)}
-                                  disabled
-                                />
-                                <p className="sub" style={{ marginTop: 10 }}>
-                                  Remix from a source carousel is not available
-                                  yet. Use an idea, article, or YouTube URL.
-                                </p>
-                              </div>
-                            )}
+                            {linkStatus === "ready" &&
+                              resolvedSource?.sourceImage && (
+                                <div className="source-thumb-chip">
+                                  <img
+                                    src={resolvedSource.sourceImage}
+                                    alt=""
+                                  />
+                                  <span>Source preview</span>
+                                </div>
+                              )}
+
+                            <div className="aspect-row" role="group" aria-label="Aspect ratio">
+                              {INPUT_ASPECT_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  className={`chip${inputAspectRatio === opt.value ? " active" : ""}`}
+                                  onClick={() => setInputAspectRatio(opt.value)}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
 
                             <div className="composer-footer">
                               <details className="customize-details">
@@ -892,24 +950,15 @@ export function CarouselStudioApp() {
                               <button
                                 type="button"
                                 className="btn primary composer-primary"
-                                disabled={
-                                  isFindingAngles || currentSource === "remix"
-                                }
-                                aria-disabled={
-                                  isFindingAngles || currentSource === "remix"
-                                }
-                                title={
-                                  currentSource === "remix"
-                                    ? "Remix from a source carousel is not available yet"
-                                    : undefined
-                                }
+                                disabled={isFindingAngles || linkStatus === "loading"}
+                                aria-disabled={isFindingAngles || linkStatus === "loading"}
                                 onClick={() => {
                                   void findAngles();
                                 }}
                               >
                                 {isFindingAngles
                                   ? "Finding angles..."
-                                  : SOURCE_CONFIG[currentSource].button}
+                                  : "Find the strongest angle →"}
                               </button>
                             </div>
                           </div>
@@ -1016,13 +1065,7 @@ export function CarouselStudioApp() {
                       <button
                         type="button"
                         className="btn ghost"
-                        onClick={() =>
-                          showCreateStep(
-                            currentSource === "remix"
-                              ? "sourceAnalysis"
-                              : "input"
-                          )
-                        }
+                        onClick={() => showCreateStep("input")}
                       >
                         ← Back
                       </button>
@@ -1076,7 +1119,7 @@ export function CarouselStudioApp() {
                       <button
                         type="button"
                         className="btn ghost"
-                        disabled={isFindingAngles || currentSource === "remix"}
+                        disabled={isFindingAngles}
                         onClick={() => {
                           void findAngles();
                         }}
@@ -1104,34 +1147,38 @@ export function CarouselStudioApp() {
                 {createStep === "progress" && (
                   <div id="progressStep">
                     <div className="progress-box">
-                      <div className="eyebrow">
-                        {currentSource === "remix"
-                          ? "Analyzing and rebuilding the source carousel"
-                          : "Spyreels AI is working"}
-                      </div>
-                      <h2>
-                        {currentSource === "remix"
-                          ? "Generating your remix carousel"
-                          : "Building your carousel"}
-                      </h2>
+                      <div className="eyebrow">Spyreels AI is working</div>
+                      <h2>Building your carousel</h2>
                       <p className="sub">
-                        {currentSource === "remix"
-                          ? "Spyreels is preserving the mechanism, not copying the content."
-                          : "You will see the first slides as soon as they are ready."}
+                        {progressStageIndex(
+                          remakeStatusQuery.data?.progressStage
+                        ) < 0
+                          ? "Starting generation..."
+                          : PROGRESS_STAGE_ROWS[
+                              Math.max(
+                                0,
+                                progressStageIndex(
+                                  remakeStatusQuery.data?.progressStage
+                                )
+                              )
+                            ]?.label}
                       </p>
                       <div className="progress-list">
-                        {progressLabels.map((text, i) => {
-                          const done = progressDoneFlags[i];
-                          const active = !done && progressIndex === i;
+                        {PROGRESS_STAGE_ROWS.map((row, i) => {
+                          const current = progressStageIndex(
+                            remakeStatusQuery.data?.progressStage
+                          );
+                          const done = current > i;
+                          const active = current === i;
                           return (
                             <div
-                              key={text}
+                              key={row.id}
                               className={`progress-row${done ? " done" : ""}${active ? " active" : ""}`}
                             >
                               <span className="status">
                                 {done ? "✓" : i + 1}
                               </span>
-                              <span>{text}</span>
+                              <span>{row.label}</span>
                             </div>
                           );
                         })}

@@ -28,6 +28,35 @@ export const CAROUSEL_STUDIO_TEMPLATE_ID = "photo_story_test";
 
 export type CarouselStudioSourceType = "prompt" | "web" | "youtube";
 
+export const CAROUSEL_REMAKE_PROGRESS_STAGES = [
+  "writing_copy",
+  "generating_images",
+  "saving",
+] as const;
+
+export type CarouselRemakeProgressStage =
+  (typeof CAROUSEL_REMAKE_PROGRESS_STAGES)[number];
+
+/** True when the trimmed input should be resolved as a URL, not a freeform idea. */
+export function looksLikeCarouselSourceUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^www\./i.test(trimmed)) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeCarouselSourceUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
 /** Studio editor slide (headline/body + optional photo from the remake image chain). */
 export type CarouselStudioSlide = {
   title: string;

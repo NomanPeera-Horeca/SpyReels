@@ -9,6 +9,8 @@ import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import {
   CAROUSEL_STUDIO_ANGLE_COUNT,
   CAROUSEL_STUDIO_TEMPLATE_ID,
+  looksLikeCarouselSourceUrl,
+  normalizeCarouselSourceUrl,
   type CarouselAngleOption,
 } from "@shared/carouselStudio";
 import { carouselRemakes } from "../../drizzle/schema";
@@ -35,13 +37,21 @@ function requireWorkspaceId(workspaceId: string | null): string {
   return workspaceId;
 }
 
-const STUDIO_SOURCE_TYPE = z.enum(["prompt", "web", "youtube"]);
+const STUDIO_ASPECT_RATIO = z.enum(["4:5", "1:1", "9:16"]);
+
+const STUDIO_RESOLVED_SOURCE_FIELDS = {
+  sourceContent: z.string().max(12000).optional(),
+  sourceUrl: z.string().max(1024).optional(),
+  sourceImage: z.string().max(2048).optional(),
+  sourceReelId: z.string().max(128).optional(),
+};
 
 const STUDIO_GENERATE_ANGLES_INPUT = z.object({
-  sourceType: STUDIO_SOURCE_TYPE,
   content: z.string().min(1).max(12000),
   niche: z.string().max(500).optional(),
   brandVoice: z.string().max(500).optional(),
+  aspectRatioOverride: STUDIO_ASPECT_RATIO.optional(),
+  ...STUDIO_RESOLVED_SOURCE_FIELDS,
 });
 
 function angleDirectionFromOption(angle: CarouselAngleOption): string {
@@ -53,7 +63,6 @@ function middleCountFromEstimatedSlides(estimated: number): number {
 }
 
 async function resolveStudioSourceText(args: {
-  sourceType: z.infer<typeof STUDIO_SOURCE_TYPE>;
   content: string;
   userId: number;
   openId: string;
@@ -64,7 +73,7 @@ async function resolveStudioSourceText(args: {
   sourceReelId: string | null;
 }> {
   const trimmed = args.content.trim();
-  if (args.sourceType === "prompt") {
+  if (!looksLikeCarouselSourceUrl(trimmed)) {
     if (trimmed.length < 8) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -79,14 +88,15 @@ async function resolveStudioSourceText(args: {
     };
   }
 
+  const url = normalizeCarouselSourceUrl(trimmed);
   try {
-    const resolved = await resolveCarouselSourceFromUrl(trimmed, {
+    const resolved = await resolveCarouselSourceFromUrl(url, {
       userId: args.userId,
       openId: args.openId,
     });
     return {
       sourceContent: resolved.text,
-      sourceUrl: trimmed.slice(0, 1024),
+      sourceUrl: url.slice(0, 1024),
       sourceImage: resolved.thumbnailUrl?.trim() || null,
       sourceReelId: resolved.reelId?.trim() || null,
     };
@@ -102,6 +112,16 @@ async function resolveStudioSourceText(args: {
 }
 
 export const carouselStudioRouter = router({
+  resolveSource: adminPanelProcedure
+    .input(z.object({ content: z.string().min(1).max(2048) }))
+    .mutation(async ({ ctx, input }) => {
+      return resolveStudioSourceText({
+        content: input.content,
+        userId: ctx.user.id,
+        openId: ctx.user.openId,
+      });
+    }),
+
   generateAngles: adminPanelProcedure
     .input(STUDIO_GENERATE_ANGLES_INPUT)
     .mutation(async ({ ctx, input }) => {
@@ -119,12 +139,19 @@ export const carouselStudioRouter = router({
         role: ctx.user.role,
       });
 
-      const resolved = await resolveStudioSourceText({
-        sourceType: input.sourceType,
-        content: input.content,
-        userId: ctx.user.id,
-        openId: ctx.user.openId,
-      });
+      const prefetched = input.sourceContent?.trim() || "";
+      const resolved = prefetched
+        ? {
+            sourceContent: prefetched,
+            sourceUrl: input.sourceUrl?.trim().slice(0, 1024) || null,
+            sourceImage: input.sourceImage?.trim() || null,
+            sourceReelId: input.sourceReelId?.trim() || null,
+          }
+        : await resolveStudioSourceText({
+            content: input.content,
+            userId: ctx.user.id,
+            openId: ctx.user.openId,
+          });
 
       const niche = await resolveCarouselNiche(ctx.user.id, input.niche, {
         businessDescription: ctx.user.businessDescription,
@@ -166,7 +193,7 @@ export const carouselStudioRouter = router({
         status: "pending",
         angleOptionsJson: angles,
         selectedAngleIndex: null,
-        aspectRatioOverride: "4:5",
+        aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
       });
       const remakeId = insertResult[0].insertId;
       if (!remakeId) {
@@ -181,6 +208,7 @@ export const carouselStudioRouter = router({
         status: "pending" as const,
         angles,
         sourceContent: resolved.sourceContent,
+        sourceUrl: resolved.sourceUrl,
         sourceImage: resolved.sourceImage,
         sourceReelId: resolved.sourceReelId,
       };
