@@ -3818,29 +3818,25 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
         {
           id: "photo_tl",
           label: "Excuse photo top left",
-          searchQueryHint:
-            "candid lifestyle photo of a person looking unsure or hesitant, natural light",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
         },
         {
           id: "photo_tr",
           label: "Excuse photo top right",
-          searchQueryHint:
-            "person checking phone while looking overwhelmed, everyday setting",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.phoneFocus,
         },
         {
           id: "photo_bl",
           label: "Excuse photo bottom left",
-          searchQueryHint:
-            "person at a desk looking tired late at night, soft lamp light",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
         },
         {
           id: "photo_br",
           label: "Excuse photo bottom right",
-          searchQueryHint:
-            "person sitting in a car or cafe looking thoughtful, lifestyle portrait",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.carLifestyle,
         },
       ],
@@ -3871,15 +3867,13 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
         {
           id: "photo_before",
           label: "Excuse photo (before)",
-          searchQueryHint:
-            "person looking uncertain before starting, muted everyday moment",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
         },
         {
           id: "photo_after",
           label: "Reframe photo (after / win)",
-          searchQueryHint:
-            "confident person mid-action building something, bright energy",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.successPose,
         },
       ],
@@ -3909,14 +3903,13 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
         {
           id: "photo_before",
           label: "Excuse photo (before)",
-          searchQueryHint: "stressed person rubbing temples at work, candid",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
         },
         {
           id: "photo_after",
           label: "Reframe photo (after / win)",
-          searchQueryHint:
-            "focused creator smiling while shipping work, warm daylight",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebration,
         },
       ],
@@ -3946,14 +3939,13 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
         {
           id: "photo_before",
           label: "Excuse photo (before)",
-          searchQueryHint: "person delaying work on a laptop, lazy evening vibe",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
         },
         {
           id: "photo_after",
           label: "Reframe photo (after / win)",
-          searchQueryHint:
-            "person finishing strong late at night with determination",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.finishStrong,
         },
       ],
@@ -3984,14 +3976,13 @@ export const CAROUSEL_TEMPLATE_EXCUSE_REWRITE: CarouselTemplate = {
         {
           id: "photo_before",
           label: "Excuse photo (before)",
-          searchQueryHint: "hesitant person pausing before a big step, quiet mood",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
         },
         {
           id: "photo_after",
           label: "Reframe photo (after / win)",
-          searchQueryHint:
-            "person taking action with calm confidence, lifestyle success energy",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
         },
       ],
@@ -4050,15 +4041,13 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Success outcome photo (win)",
-          searchQueryHint:
-            "confident successful person in front of luxury lifestyle, warm golden hour",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.successPose,
         },
         {
           id: "photo_bottom",
           label: "Early grind photo (before)",
-          searchQueryHint:
-            "younger person grinding on phone and laptop at night, focused stress",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.phoneFocus,
         },
       ],
@@ -4088,15 +4077,13 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Success outcome photo (win)",
-          searchQueryHint:
-            "leader at the head of a boardroom table, authority and sunset city view",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
         },
         {
           id: "photo_bottom",
           label: "Early grind photo (before)",
-          searchQueryHint:
-            "stressed person holding head at desk with laptop late at night",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
         },
       ],
@@ -4126,15 +4113,13 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Success outcome photo (win)",
-          searchQueryHint:
-            "person looking out over a city skyline from a high window, reflective mastery",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.homeStretch,
         },
         {
           id: "photo_bottom",
           label: "Early grind photo (before)",
-          searchQueryHint:
-            "person studying a book at a desk lamp at night, deep learning focus",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.booksStack,
         },
       ],
@@ -4164,15 +4149,13 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Success outcome photo (win)",
-          searchQueryHint:
-            "relaxed entrepreneur leaning back after growth, chart rising on monitor",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebration,
         },
         {
           id: "photo_bottom",
           label: "Early grind photo (before)",
-          searchQueryHint:
-            "focused person typing hard on a laptop in a dim office at night",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
         },
       ],
@@ -4204,8 +4187,7 @@ export const CAROUSEL_TEMPLATE_AVERAGE_VS_NOT: CarouselTemplate = {
         {
           id: "photo",
           label: "Closer photo (win / reflection)",
-          searchQueryHint:
-            "person looking out over mountains at sunrise, calm long-game energy",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.beach,
         },
       ],
@@ -4264,15 +4246,13 @@ export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Excuse / comfort photo (before)",
-          searchQueryHint:
-            "person lounging on a couch eating junk food and scrolling phone at night",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.lateNight,
         },
         {
           id: "photo_bottom",
           label: "Discipline photo (win)",
-          searchQueryHint:
-            "focused person working on a laptop while eating a healthy meal, productive desk",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.deskPro,
         },
       ],
@@ -4303,15 +4283,13 @@ export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Excuse / comfort photo (before)",
-          searchQueryHint:
-            "stressed person eating sweets in a dim kitchen at night, defeated mood",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.stressedWork,
         },
         {
           id: "photo_bottom",
           label: "Discipline photo (win)",
-          searchQueryHint:
-            "intense gym workout deadlift focus, disciplined response to stress",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.athletic,
         },
       ],
@@ -4342,15 +4320,13 @@ export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Excuse / comfort photo (before)",
-          searchQueryHint:
-            "exhausted person on the couch with chips and remote after a long day",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopFrustrated,
         },
         {
           id: "photo_bottom",
           label: "Discipline photo (win)",
-          searchQueryHint:
-            "determined person tying sneakers on the floor, ready to train after work",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.finishStrong,
         },
       ],
@@ -4381,15 +4357,13 @@ export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
         {
           id: "photo_top",
           label: "Excuse / comfort photo (before)",
-          searchQueryHint:
-            "dejected person at a messy desk after zero sales, junk food and soda around",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.laptopGrind,
         },
         {
           id: "photo_bottom",
           label: "Discipline photo (win)",
-          searchQueryHint:
-            "focused person planning next moves with notebook and phone at a clean desk",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
         },
       ],
@@ -4420,8 +4394,7 @@ export const CAROUSEL_TEMPLATE_SAME_SITUATION: CarouselTemplate = {
         {
           id: "photo",
           label: "Closer photo (win / resolve)",
-          searchQueryHint:
-            "confident person arms crossed in warm indoor light, calm resolve",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.warmPortrait,
         },
       ],
