@@ -2801,7 +2801,7 @@ export const CAROUSEL_TEMPLATE_PHOTO_STORY_TEST: CarouselTemplate = {
         {
           id: "photo",
           label: "Photo",
-          searchQueryHint: "a person celebrating a personal achievement or success moment",
+          searchQueryHint: "",
           defaultImageUrl: CAROUSEL_STOCK_PREVIEW.celebrate,
         },
       ],

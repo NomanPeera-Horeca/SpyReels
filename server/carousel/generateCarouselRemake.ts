@@ -126,6 +126,7 @@ export function applyLockedAverageFacts(
  * Cover grid: photo_tl -> excuse_tl (etc).
  * Average vs Not: photo_top -> average, photo_bottom -> not_line.
  * Excuse split: photo_before / default -> excuse.
+ * Generic photo slots: prefer headline/title/message over kicker (do not rely on Object.values order).
  */
 function textContextForImageSlot(
   slideVals: Record<string, string>,
@@ -156,6 +157,27 @@ function textContextForImageSlot(
 
   if (typeof slideVals.excuse === "string" && slideVals.excuse.trim()) {
     return slideVals.excuse.trim();
+  }
+
+  // Prefer slide message text over kicker / labels (property order is not reliable).
+  const preferredKeys = [
+    "headline",
+    "title",
+    "message",
+    "body",
+    "subhead",
+    "caption",
+    "quote",
+  ];
+  for (const key of preferredKeys) {
+    const v = slideVals[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+
+  const skipKeys = new Set(["kicker", "cta_label", "number"]);
+  for (const [key, v] of Object.entries(slideVals)) {
+    if (skipKeys.has(key)) continue;
+    if (typeof v === "string" && v.trim()) return v.trim();
   }
 
   const first = Object.values(slideVals).find(
