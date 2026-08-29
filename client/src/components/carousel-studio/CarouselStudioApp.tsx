@@ -5,10 +5,26 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  mapRemakeToStudioSlides,
   type CarouselAngleOption,
   type CarouselStudioSourceType,
 } from "@shared/carouselStudio";
+import {
+  CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselDesignTokens,
+  type CarouselImageUrlMap,
+  type CarouselSlideSpec,
+} from "@shared/carouselTemplates";
+import {
+  CarouselRenderer,
+  mergeCarouselSlideValues,
+  normalizeCarouselSlideValues,
+  type CarouselSlideValuesById,
+} from "@/components/CarouselRenderer";
+import {
+  exportCarouselSlidesZip,
+  exportErrorMessage,
+  slugifyCarouselName,
+} from "@/lib/carouselExport";
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
 import {
@@ -21,14 +37,56 @@ import {
   getPackageCaption,
   getPackageHashtags,
   type SourceKey,
-  type Slide,
   type StrategyCard,
   type NavPage,
   type CreateStep,
-  type DesignTemplate,
   type Platform,
-  type AiQuickAction,
 } from "./mockData";
+
+type StoredDesignOverride = {
+  background: string;
+  foreground: string;
+  accent: string;
+  muted: string;
+  fontDisplay?: string;
+  fontBody?: string;
+};
+
+function toStudioDesignOverride(
+  stored: StoredDesignOverride | null | undefined,
+  aspectRatioOverride: string | null | undefined
+): Partial<CarouselDesignTokens> | undefined {
+  if (!stored && !aspectRatioOverride) return undefined;
+  const override: Partial<CarouselDesignTokens> = {};
+  if (stored) {
+    override.colors = {
+      background: stored.background,
+      foreground: stored.foreground,
+      accent: stored.accent,
+      muted: stored.muted,
+    };
+    if (stored.fontDisplay || stored.fontBody) {
+      override.fontFamily = {
+        display: stored.fontDisplay ?? "",
+        body: stored.fontBody ?? "",
+      };
+    }
+  }
+  if (aspectRatioOverride === "4:5" || aspectRatioOverride === "1:1" || aspectRatioOverride === "9:16") {
+    override.aspectRatio = aspectRatioOverride;
+  }
+  return override;
+}
+
+/** Same as Library: Instagram Post and LinkedIn both persist 4:5. */
+function aspectFromPlatform(_platform: Platform): CarouselDesignTokens["aspectRatio"] {
+  return "4:5";
+}
+
+function pickStudioSlideTitle(slots: Record<string, string> | undefined): string {
+  if (!slots) return "Untitled slide";
+  return slots.headline?.trim() || slots.title?.trim() || slots.kicker?.trim() || "Untitled slide";
+}
 
 function anglesToStrategyCards(angles: CarouselAngleOption[]): StrategyCard[] {
   return angles.map((angle) => ({
@@ -53,27 +111,6 @@ function useToast() {
     return () => window.clearTimeout(t);
   }, [toastMsg]);
   return { toastMsg, toast: setToastMsg };
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function hasValidGeneratedSlides(slides: Slide[]): boolean {
-  return (
-    slides.length > 0 &&
-    slides.every(
-      (slide) =>
-        slide &&
-        typeof slide.title === "string" &&
-        slide.title.trim().length > 0 &&
-        typeof slide.body === "string"
-    )
-  );
 }
 
 const PAGE_TITLES: Record<NavPage, string> = {
@@ -118,17 +155,26 @@ export function CarouselStudioApp() {
   } | null>(null);
   const [isPollingRemake, setIsPollingRemake] = useState(false);
 
-  const [slides, setSlides] = useState<Slide[]>([]);
+  const [remakeTemplateId, setRemakeTemplateId] = useState<string | null>(null);
+  const [remakeSlotValues, setRemakeSlotValues] =
+    useState<CarouselSlideValuesById | null>(null);
+  const [remakeSlideStructure, setRemakeSlideStructure] = useState<
+    CarouselSlideSpec[] | null
+  >(null);
+  const [remakeImageUrls, setRemakeImageUrls] = useState<CarouselImageUrlMap | null>(
+    null
+  );
+  const [remakeDesignOverride, setRemakeDesignOverride] =
+    useState<StoredDesignOverride | null>(null);
+  const [remakeAspectRatio, setRemakeAspectRatio] = useState<
+    CarouselDesignTokens["aspectRatio"]
+  >("4:5");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [history, setHistory] = useState<string[]>([]);
   const [hasGeneratedCarousel, setHasGeneratedCarousel] = useState(false);
   const [platform, setPlatform] = useState<Platform>("instagram");
-  const [designTemplate, setDesignTemplate] = useState<DesignTemplate>("");
-  const [aiPrompt, setAiPrompt] = useState("");
   const [progressIndex, setProgressIndex] = useState(0);
   const [progressDoneFlags, setProgressDoneFlags] = useState<boolean[]>([]);
-  /** Bumps to remount contentEditable after external slide mutations (AI, undo, etc.). */
-  const [editEpoch, setEditEpoch] = useState(0);
 
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [packageLoading, setPackageLoading] = useState(false);
@@ -141,15 +187,32 @@ export function CarouselStudioApp() {
   const [downloadAgainLabel, setDownloadAgainLabel] = useState("Download again");
 
   const progressTimerRef = useRef<number | null>(null);
-  const packageTimerRef = useRef<number | null>(null);
+  const exportStageRef = useRef<HTMLDivElement | null>(null);
+  const exportGenerationRef = useRef(0);
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
+  const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
   const generateCarouselMutation =
     trpc.carouselStudio.generateCarousel.useMutation();
+  const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
+    onError: (err) => {
+      toast(err.message || "Failed to save text edit");
+    },
+  });
+  const updateAspectRatioMutation = trpc.carouselRemake.updateAspectRatio.useMutation({
+    onSuccess: (data) => {
+      if (data.aspectRatio === "4:5" || data.aspectRatio === "1:1" || data.aspectRatio === "9:16") {
+        setRemakeAspectRatio(data.aspectRatio);
+      }
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save format");
+    },
+  });
   const remakeStatusQuery = trpc.carouselRemake.status.useQuery(
     { remakeId: remakeId ?? 0 },
     {
-      enabled: remakeId != null && isPollingRemake,
+      enabled: remakeId != null,
       refetchInterval: (query) => {
         const status = query.state.data?.status;
         return status === "processing" || status === "pending" ? 2000 : false;
@@ -160,7 +223,6 @@ export function CarouselStudioApp() {
   useEffect(() => {
     return () => {
       if (progressTimerRef.current) window.clearInterval(progressTimerRef.current);
-      if (packageTimerRef.current) window.clearTimeout(packageTimerRef.current);
     };
   }, []);
 
@@ -170,23 +232,46 @@ export function CarouselStudioApp() {
     setAudience((prev) => (prev.trim() ? prev : niche));
   }, [defaultNicheQuery.data?.niche]);
 
+  const studioTemplate = remakeTemplateId
+    ? CAROUSEL_TEMPLATES_BY_ID.get(remakeTemplateId) ?? null
+    : null;
+  const serverSlotValues = normalizeCarouselSlideValues(
+    remakeStatusQuery.data?.slotValues
+  );
+  const displaySlideValues = mergeCarouselSlideValues(
+    serverSlotValues,
+    remakeSlotValues
+  );
+  const effectiveSlides: CarouselSlideSpec[] =
+    remakeSlideStructure && remakeSlideStructure.length > 0
+      ? remakeSlideStructure
+      : studioTemplate?.slides ?? [];
+  const currentSlideSpec = effectiveSlides[currentSlide] ?? effectiveSlides[0];
   const editorVisible = createStep === "editor" && navPage === "create";
   const canDownload =
     hasGeneratedCarousel &&
-    hasValidGeneratedSlides(slides) &&
+    effectiveSlides.length > 0 &&
+    studioTemplate != null &&
+    remakeId != null &&
     editorVisible;
+  const studioDesignOverride = toStudioDesignOverride(
+    remakeDesignOverride,
+    remakeAspectRatio
+  );
+  const studioHandle = defaultHandleQuery.data?.handle?.trim() || undefined;
 
   const showCreateStep = useCallback((step: CreateStep) => {
     setCreateStep(step);
   }, []);
 
   const saveHistory = useCallback(() => {
+    if (!displaySlideValues) return;
     setHistory((prev) => {
-      const next = [...prev, JSON.stringify(slides)];
+      const next = [...prev, JSON.stringify(displaySlideValues)];
       if (next.length > 20) next.shift();
       return next;
     });
-  }, [slides]);
+  }, [displaySlideValues]);
 
   const strategies =
     liveAngles && liveAngles.length > 0
@@ -308,7 +393,10 @@ export function CarouselStudioApp() {
       return;
     }
     setHasGeneratedCarousel(false);
-    setSlides([]);
+    setRemakeSlotValues(null);
+    setRemakeSlideStructure(null);
+    setRemakeImageUrls(null);
+    setRemakeTemplateId(null);
     setCurrentSlide(0);
     setIsPollingRemake(true);
     showCreateStep("progress");
@@ -335,7 +423,6 @@ export function CarouselStudioApp() {
   };
 
   useEffect(() => {
-    if (!isPollingRemake) return;
     const data = remakeStatusQuery.data;
     if (!data) return;
     if (data.status === "completed") {
@@ -343,22 +430,44 @@ export function CarouselStudioApp() {
         window.clearInterval(progressTimerRef.current);
         progressTimerRef.current = null;
       }
-      const next = mapRemakeToStudioSlides({
-        slotValues: data.slotValues,
-        slideStructure: data.slideStructure,
-        imageUrls: data.imageUrls,
-      });
-      setIsPollingRemake(false);
-      if (!hasValidGeneratedSlides(next)) {
-        toast("Carousel generated but slides were empty. Try another angle.");
-        showCreateStep("strategy");
+      const structure = Array.isArray(data.slideStructure)
+        ? (data.slideStructure as CarouselSlideSpec[])
+        : [];
+      const template = CAROUSEL_TEMPLATES_BY_ID.get(data.templateId);
+      if (!template || structure.length === 0) {
+        if (isPollingRemake) {
+          setIsPollingRemake(false);
+          toast("Carousel generated but slides were empty. Try another angle.");
+          showCreateStep("strategy");
+        }
         return;
       }
-      setSlides(next);
-      setCurrentSlide(0);
-      setHasGeneratedCarousel(true);
-      setProgressDoneFlags(progressLabels.map(() => true));
-      showCreateStep("editor");
+      setRemakeTemplateId(data.templateId);
+      setRemakeSlideStructure(structure);
+      setRemakeImageUrls(
+        data.imageUrls && typeof data.imageUrls === "object"
+          ? (data.imageUrls as CarouselImageUrlMap)
+          : null
+      );
+      setRemakeDesignOverride(
+        (data.designOverride as StoredDesignOverride | null) ?? null
+      );
+      if (
+        data.aspectRatioOverride === "4:5" ||
+        data.aspectRatioOverride === "1:1" ||
+        data.aspectRatioOverride === "9:16"
+      ) {
+        setRemakeAspectRatio(data.aspectRatioOverride);
+      }
+      if (isPollingRemake || !hasGeneratedCarousel) {
+        setRemakeSlotValues(normalizeCarouselSlideValues(data.slotValues) ?? {});
+        setCurrentSlide(0);
+        setHistory([]);
+        setHasGeneratedCarousel(true);
+        setProgressDoneFlags(progressLabels.map(() => true));
+        showCreateStep("editor");
+      }
+      setIsPollingRemake(false);
       return;
     }
     if (data.status === "failed") {
@@ -371,39 +480,44 @@ export function CarouselStudioApp() {
       showCreateStep("strategy");
     }
   }, [
-    isPollingRemake,
     remakeStatusQuery.data,
+    isPollingRemake,
+    hasGeneratedCarousel,
     progressLabels,
     showCreateStep,
     toast,
   ]);
 
-  const applyAi = (type: AiQuickAction) => {
+  const handleSlotChange = (slideId: string, slotId: string, value: string) => {
     saveHistory();
-    setSlides((prev) => {
-      const copy = prev.map((s) => ({ ...s }));
-      const s = copy[currentSlide];
-      if (!s) return prev;
-      if (type === "shorter") {
-        const words = s.body.split(" ");
-        s.body =
-          words.slice(0, Math.max(8, Math.floor(words.length * 0.7))).join(" ") +
-          "…";
-      } else if (type === "stronger") {
-        s.title = s.title.replace(/\.$/, "") + " - and most owners miss why.";
-      } else if (type === "clearer") {
-        s.body = "Simple version: " + s.body;
-      } else if (type === "diagram") {
-        s.body = "REVENUE → COSTS → CASH TIMING → REAL PROFIT";
-      } else if (type === "evidence") {
-        s.body += " Add a verified benchmark or business example before downloading.";
-      } else if (type === "voice") {
-        s.body = "Here is what most restaurant owners miss: " + s.body;
-      }
-      return copy;
+    setRemakeSlotValues((prev) => {
+      const base = prev ?? {};
+      return {
+        ...base,
+        [slideId]: {
+          ...(base[slideId] ?? {}),
+          [slotId]: value,
+        },
+      };
     });
-    setEditEpoch((n) => n + 1);
-    toast("Slide updated.");
+    if (remakeId != null) {
+      updateSlotMutation.mutate({
+        remakeId,
+        slideId,
+        slotId,
+        value,
+      });
+    }
+  };
+
+  const applyPlatform = (next: Platform) => {
+    setPlatform(next);
+    const aspect = aspectFromPlatform(next);
+    setRemakeAspectRatio(aspect);
+    if (remakeId != null && hasGeneratedCarousel) {
+      updateAspectRatioMutation.mutate({ remakeId, aspectRatio: aspect });
+    }
+    toast(next === "linkedin" ? "LinkedIn 4:5 format applied." : "Instagram 4:5 format applied.");
   };
 
   const renderPackageSummary = () => {
@@ -423,31 +537,55 @@ export function CarouselStudioApp() {
         : "Everything will be bundled in one package."
     );
     setPackageSuccessText(
-      `${slides.length} images, 1 caption, hashtags included.`
+      `${effectiveSlides.length} images, 1 caption, hashtags included.`
     );
     setDownloadAgainLabel(downloadNow ? "Download again" : "Download everything →");
     if (downloadNow) generatePackage();
   };
 
-  const generatePackage = () => {
+  const generatePackage = async () => {
     if (!canDownload && !downloadModalOpen) return;
-    if (!hasGeneratedCarousel || !hasValidGeneratedSlides(slides)) return;
+    if (!hasGeneratedCarousel || !studioTemplate || effectiveSlides.length === 0) {
+      return;
+    }
+    const container = exportStageRef.current;
+    if (!container) {
+      toast("Export preview is not ready yet. Try again.");
+      return;
+    }
+    const generation = ++exportGenerationRef.current;
     setPackageModalTitle("Download package");
     setPackageLoading(true);
     setPackageSuccess(false);
-    if (packageTimerRef.current) window.clearTimeout(packageTimerRef.current);
-    packageTimerRef.current = window.setTimeout(() => {
+    try {
+      const { fileCount, failedSlides } = await exportCarouselSlidesZip({
+        container,
+        zipName: slugifyCarouselName(studioTemplate.name),
+        isCancelled: () => exportGenerationRef.current !== generation,
+      });
+      if (exportGenerationRef.current !== generation) return;
       setPackageLoading(false);
       setPackageSuccess(true);
       setPackageSuccessTitle("Your carousel is ready");
       setPackageSuccessText(
-        `${slides.length} images, 1 caption, hashtags included.`
+        `${fileCount} images, 1 caption, hashtags included.`
       );
       setDownloadAgainLabel("Download again");
-      toast(
-        `Your carousel is ready - ${slides.length} images, 1 caption, hashtags included.`
-      );
-    }, 850);
+      if (failedSlides.length > 0) {
+        toast(
+          `Downloaded ${fileCount} slides. Failed: ${failedSlides.join(", ")}.`
+        );
+      } else {
+        toast(
+          `Your carousel is ready - ${fileCount} images, 1 caption, hashtags included.`
+        );
+      }
+    } catch (err) {
+      if (exportGenerationRef.current !== generation) return;
+      setPackageLoading(false);
+      setPackageSuccess(false);
+      toast(exportErrorMessage(err));
+    }
   };
 
   const pageCrumb =
@@ -459,26 +597,21 @@ export function CarouselStudioApp() {
 
   const bottomTitle =
     currentSource === "remix" ? "Hidden Profit Remix" : "Current carousel";
-  const bottomMeta = `${slides.length} slides • Instagram + LinkedIn`;
+  const bottomMeta = `${effectiveSlides.length} slides • Instagram + LinkedIn`;
   const densityWarn =
     currentSource === "remix" ? "Low density - good for saves" : "Review slide 4";
   const perfScore = currentSource === "remix" ? "91" : "88";
 
-  const slideCanvasClass = [
-    "slide-canvas",
-    platform === "linkedin" ? "linkedin" : "",
-    designTemplate,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const packageFiles = slides.map((slide, index) => {
+  const packageFiles = effectiveSlides.map((slide, index) => {
     const number = String(index + 1).padStart(2, "0");
-    return `${number}-${slugifyFilename(slide.title)}.png`;
+    const title = pickStudioSlideTitle(displaySlideValues?.[slide.id]);
+    return `${number}-${slugifyFilename(title)}.png`;
   });
   const packageSlug =
-    slugifyFilename(slides[0]?.title ?? "spyreels-carousel", 36) ||
-    "spyreels-carousel";
+    slugifyFilename(
+      pickStudioSlideTitle(displaySlideValues?.[effectiveSlides[0]?.id]),
+      36
+    ) || "spyreels-carousel";
 
   return (
     <div className="cs">
@@ -1013,48 +1146,30 @@ export function CarouselStudioApp() {
                       <aside className="panel">
                         <div className="panel-head">
                           <h3>Slides</h3>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            onClick={() => {
-                              saveHistory();
-                              setSlides((prev) => [
-                                ...prev,
-                                {
-                                  title: "New slide title",
-                                  body: "Add the key idea for this slide.",
-                                },
-                              ]);
-                              setCurrentSlide(slides.length);
-                            }}
-                          >
-                            +
-                          </button>
                         </div>
                         <div className="thumbs">
-                          {slides.map((s, i) => (
-                            <div
-                              key={`${i}-${s.title.slice(0, 12)}`}
-                              className={`thumb${currentSlide === i ? " active" : ""}`}
-                              onClick={() => setCurrentSlide(i)}
-                            >
-                              <div className="thumb-num">{i + 1}</div>
+                          {studioTemplate &&
+                            effectiveSlides.map((slide, i) => (
                               <div
-                                className="thumb-mini"
-                                style={
-                                  s.imageUrl
-                                    ? {
-                                        backgroundImage: `url(${s.imageUrl})`,
-                                        backgroundSize: "cover",
-                                        backgroundPosition: "center",
-                                      }
-                                    : undefined
-                                }
+                                key={slide.id}
+                                className={`thumb${currentSlide === i ? " active" : ""}`}
+                                onClick={() => setCurrentSlide(i)}
                               >
-                                {s.title}
+                                <div className="thumb-num">{i + 1}</div>
+                                <div className="thumb-preview">
+                                  <div className="thumb-preview-scale">
+                                    <CarouselRenderer
+                                      template={studioTemplate}
+                                      slides={[slide]}
+                                      slideValues={displaySlideValues}
+                                      designOverride={studioDesignOverride}
+                                      handle={studioHandle}
+                                      imageUrls={remakeImageUrls ?? undefined}
+                                    />
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       </aside>
 
@@ -1066,10 +1181,7 @@ export function CarouselStudioApp() {
                               className={
                                 platform === "instagram" ? "active" : ""
                               }
-                              onClick={() => {
-                                setPlatform("instagram");
-                                toast("Instagram layout applied.");
-                              }}
+                              onClick={() => applyPlatform("instagram")}
                             >
                               Instagram
                             </button>
@@ -1078,179 +1190,61 @@ export function CarouselStudioApp() {
                               className={
                                 platform === "linkedin" ? "active" : ""
                               }
-                              onClick={() => {
-                                setPlatform("linkedin");
-                                toast("LinkedIn layout applied.");
-                              }}
+                              onClick={() => applyPlatform("linkedin")}
                             >
                               LinkedIn
                             </button>
                           </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                              type="button"
-                              className="btn small ghost"
-                              onClick={() => {
-                                if (!history.length) {
-                                  toast("Nothing to undo yet.");
-                                  return;
-                                }
-                                const old = history[history.length - 1];
-                                setHistory((h) => h.slice(0, -1));
-                                if (!old) return;
-                                const parsed = JSON.parse(old) as Slide[];
-                                setSlides(parsed);
-                                setCurrentSlide((c) =>
-                                  Math.min(c, parsed.length - 1)
-                                );
-                                setEditEpoch((n) => n + 1);
-                              }}
-                            >
-                              Undo
-                            </button>
-                            <button
-                              type="button"
-                              className="btn small ghost"
-                              onClick={() => {
-                                saveHistory();
-                                const cur = slides[currentSlide];
-                                if (!cur) return;
-                                setSlides((prev) => {
-                                  const next = [...prev];
-                                  next.splice(currentSlide + 1, 0, { ...cur });
-                                  return next;
-                                });
-                                setCurrentSlide((c) => c + 1);
-                              }}
-                            >
-                              Duplicate
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            className="btn small ghost"
+                            onClick={() => {
+                              if (!history.length) {
+                                toast("Nothing to undo yet.");
+                                return;
+                              }
+                              const old = history[history.length - 1];
+                              setHistory((h) => h.slice(0, -1));
+                              if (!old) return;
+                              try {
+                                const parsed = JSON.parse(
+                                  old
+                                ) as CarouselSlideValuesById;
+                                setRemakeSlotValues(parsed);
+                              } catch {
+                                toast("Could not undo.");
+                              }
+                            }}
+                          >
+                            Undo
+                          </button>
                         </div>
                         <div className="canvas-area">
-                          <div
-                            className={`${slideCanvasClass}${slides[currentSlide]?.imageUrl ? " has-photo" : ""}`}
-                          >
-                            {slides[currentSlide]?.imageUrl ? (
-                              <img
-                                className="slide-photo"
-                                src={slides[currentSlide].imageUrl ?? ""}
-                                alt=""
+                          {studioTemplate && currentSlideSpec ? (
+                            <div className="studio-slide-stage">
+                              <CarouselRenderer
+                                template={studioTemplate}
+                                slides={[currentSlideSpec]}
+                                slideValues={displaySlideValues}
+                                designOverride={studioDesignOverride}
+                                handle={studioHandle}
+                                imageUrls={remakeImageUrls ?? undefined}
+                                editable
+                                onSlotChange={handleSlotChange}
                               />
-                            ) : null}
-                            <div className="slide-handle">@noman_peera</div>
-                            <div
-                              key={`title-${currentSlide}-${editEpoch}`}
-                              className="slide-title"
-                              contentEditable
-                              suppressContentEditableWarning
-                              dangerouslySetInnerHTML={{
-                                __html: escapeHtml(
-                                  slides[currentSlide]?.title ?? ""
-                                ),
-                              }}
-                              onInput={(e) => {
-                                const text = e.currentTarget.textContent ?? "";
-                                setSlides((prev) =>
-                                  prev.map((s, i) =>
-                                    i === currentSlide
-                                      ? { ...s, title: text }
-                                      : s
-                                  )
-                                );
-                              }}
-                            />
-                            <div
-                              key={`body-${currentSlide}-${editEpoch}`}
-                              className="slide-body"
-                              contentEditable
-                              suppressContentEditableWarning
-                              dangerouslySetInnerHTML={{
-                                __html: escapeHtml(
-                                  slides[currentSlide]?.body ?? ""
-                                ),
-                              }}
-                              onInput={(e) => {
-                                const text = e.currentTarget.textContent ?? "";
-                                setSlides((prev) =>
-                                  prev.map((s, i) =>
-                                    i === currentSlide
-                                      ? { ...s, body: text }
-                                      : s
-                                  )
-                                );
-                              }}
-                            />
-                            <div className="slide-footer">
-                              <span>Swipe →</span>
-                              <span>
-                                {currentSlide + 1} / {slides.length}
-                              </span>
+                              <div className="studio-slide-meta">
+                                {currentSlide + 1} / {effectiveSlides.length}
+                              </div>
                             </div>
-                          </div>
+                          ) : null}
                         </div>
                       </section>
 
                       <aside className="panel ai-panel">
                         <div className="panel-head">
-                          <h3>AI editor</h3>
-                          <span className="badge">Live</span>
+                          <h3>Quality</h3>
                         </div>
                         <div className="ai-content">
-                          <div className="ai-box">
-                            <textarea
-                              placeholder="Tell the AI what to change on this slide..."
-                              value={aiPrompt}
-                              onChange={(e) => setAiPrompt(e.target.value)}
-                            />
-                            <button
-                              type="button"
-                              className="btn primary small"
-                              style={{ width: "100%" }}
-                              onClick={() => {
-                                const text = aiPrompt.trim();
-                                if (!text) {
-                                  toast("Tell the AI what to change.");
-                                  return;
-                                }
-                                saveHistory();
-                                setSlides((prev) =>
-                                  prev.map((s, i) =>
-                                    i === currentSlide
-                                      ? { ...s, body: s.body + " " + text }
-                                      : s
-                                  )
-                                );
-                                setAiPrompt("");
-                                setEditEpoch((n) => n + 1);
-                                toast("Custom AI instruction applied.");
-                              }}
-                            >
-                              Apply change
-                            </button>
-                          </div>
-
-                          <div className="quick-actions">
-                            {(
-                              [
-                                ["shorter", "Cut text by 30%"],
-                                ["stronger", "Make hook stronger"],
-                                ["clearer", "Make this clearer"],
-                                ["diagram", "Turn into diagram"],
-                                ["evidence", "Add evidence"],
-                                ["voice", "Use my voice"],
-                              ] as const
-                            ).map(([key, label]) => (
-                              <button
-                                key={key}
-                                type="button"
-                                onClick={() => applyAi(key)}
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-
                           <div className="quality">
                             <div className="section-title">
                               <h3>Performance score</h3>
@@ -1275,28 +1269,6 @@ export function CarouselStudioApp() {
                             <div className="quality-row">
                               <span>Originality check</span>
                               <strong className="warn">Pending</strong>
-                            </div>
-                          </div>
-
-                          <div className="design-controls">
-                            <div className="section-title">
-                              <h3>Design style</h3>
-                            </div>
-                            <div className="templates">
-                              {(
-                                [
-                                  ["", "swatch-purple"],
-                                  ["template-green", "swatch-green"],
-                                  ["template-orange", "swatch-orange"],
-                                ] as const
-                              ).map(([tmpl, swatch]) => (
-                                <button
-                                  key={swatch}
-                                  type="button"
-                                  className={`template-swatch ${swatch}${designTemplate === tmpl ? " active" : ""}`}
-                                  onClick={() => setDesignTemplate(tmpl)}
-                                />
-                              ))}
                             </div>
                           </div>
 
@@ -1557,6 +1529,7 @@ export function CarouselStudioApp() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="package-section">
+                    {/* Remaining mock: caption and hashtags still come from mockData. */}
                     <h3>Caption</h3>
                     <div className="caption-preview">
                       {getPackageCaption(currentSource)}
@@ -1594,6 +1567,19 @@ export function CarouselStudioApp() {
       )}
 
       {toastMsg && <div className="toast">{toastMsg}</div>}
+
+      {editorVisible && studioTemplate && effectiveSlides.length > 0 ? (
+        <div ref={exportStageRef} className="export-stage" aria-hidden="true">
+          <CarouselRenderer
+            template={studioTemplate}
+            slides={effectiveSlides}
+            slideValues={displaySlideValues}
+            designOverride={studioDesignOverride}
+            handle={studioHandle}
+            imageUrls={remakeImageUrls ?? undefined}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
