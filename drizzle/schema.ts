@@ -1967,9 +1967,12 @@ export const coachScriptFeedback = mysqlTable(
 export type CoachScriptFeedback = typeof coachScriptFeedback.$inferSelect;
 export type InsertCoachScriptFeedback = typeof coachScriptFeedback.$inferInsert;
 
+import type { CarouselAngleOption } from "../shared/carouselStudio";
+
 /**
  * Carousel remake jobs: AI rewrites only slot text for a curated template.
  * Layout/fonts/colors stay fixed; slotValuesJson is { [slideId]: { [slotId]: string } }.
+ * Carousel Studio also stores angleOptionsJson + selectedAngleIndex before slide remake.
  */
 export const carouselRemakes = mysqlTable(
   "carousel_remakes",
@@ -1987,6 +1990,10 @@ export const carouselRemakes = mysqlTable(
       .default("pending")
       .notNull(),
     slotValuesJson: json("slotValuesJson").$type<Record<string, Record<string, string>>>(),
+    /** Carousel Studio: 3 proposed angles before the user picks one. */
+    angleOptionsJson: json("angleOptionsJson").$type<CarouselAngleOption[]>(),
+    /** Index into angleOptionsJson (0-2) for the chosen direction. */
+    selectedAngleIndex: int("selectedAngleIndex"),
     /** Ephemeral slide list when remake used a different middle-section count than the template. */
     slideStructureJson: json("slideStructureJson"),
     /** Optional per-remake color/font override. */
