@@ -23,6 +23,12 @@ export const CAROUSEL_STUDIO_ANGLE_COUNT = 3;
 export const CAROUSEL_STUDIO_MIN_SLIDES = 5;
 export const CAROUSEL_STUDIO_MAX_SLIDES = 12;
 
+/** Total slides the remake worker will generate from an angle estimate (hook + middles + CTA). */
+export function studioPlannedSlideCount(estimatedSlideCount: number): number {
+  const middle = Math.min(Math.max(estimatedSlideCount - 2, 3), 18);
+  return middle + 2;
+}
+
 /** Same photo-led template as content-to-carousel "photo" style. */
 export const CAROUSEL_STUDIO_TEMPLATE_ID = "photo_story_test";
 
