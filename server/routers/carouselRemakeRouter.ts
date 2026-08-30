@@ -18,6 +18,13 @@ import {
 } from "../carousel/fetchSocialVideoSourceText";
 import { fetchCarouselSlideImages } from "../instagram";
 import { storagePut } from "../storage";
+import {
+  createGenerationTelemetryContext,
+  persistInProgressMetrics,
+  runWithGenerationTelemetry,
+  withGenerationStage,
+  type GenerationTelemetryContext,
+} from "../carousel/generationTelemetry";
 
 /** Maps content-to-carousel style picker → curated template ids. */
 const CONTENT_STYLE_TO_TEMPLATE: Record<string, string> = {
@@ -211,8 +218,13 @@ export async function resolveCarouselNiche(
 async function createContentToCarouselRemake(
   ctx: RemakeProcedureCtx,
   input: ContentToCarouselInput,
-  extras?: { sourceUrl?: string | null }
+  extras?: { sourceUrl?: string | null; telemetry?: GenerationTelemetryContext }
 ): Promise<{ remakeId: number; status: "processing"; templateId: string }> {
+  const telemetry =
+    extras?.telemetry ??
+    createGenerationTelemetryContext({
+      entryPoint: "carouselRemake.generateFromContent",
+    });
   const templateId = CONTENT_STYLE_TO_TEMPLATE[input.style];
   if (!templateId || !CAROUSEL_TEMPLATES_BY_ID.has(templateId)) {
     throw new TRPCError({
@@ -233,10 +245,14 @@ async function createContentToCarouselRemake(
   let sourceReelId: string | null = null;
   if (input.mode === "url") {
     try {
-      const resolved = await resolveCarouselSourceFromUrl(sourceContent, {
-        userId: ctx.user.id,
-        openId: ctx.user.openId,
-      });
+      const resolved = await runWithGenerationTelemetry(telemetry, () =>
+        withGenerationStage(telemetry, "source_resolution", () =>
+          resolveCarouselSourceFromUrl(sourceContent, {
+            userId: ctx.user.id,
+            openId: ctx.user.openId,
+          })
+        )
+      );
       sourceContent = resolved.text;
       sourceImage = resolved.thumbnailUrl?.trim() || null;
       sourceReelId = resolved.reelId?.trim() || null;
@@ -303,11 +319,15 @@ async function createContentToCarouselRemake(
     });
   }
 
+  if (telemetry) telemetry.remakeId = remakeId;
+  await persistInProgressMetrics(remakeId, telemetry);
+
   generateCarouselRemake(remakeId, templateId, nicheLabel, {
     slideCountOption: middleCount,
     sourceContent,
     sourceImage,
     sourceReelId,
+    telemetry,
   }).catch((err: unknown) => {
     console.error(`Carousel from content ${remakeId} failed:`, err);
   });
@@ -329,6 +349,10 @@ export const carouselRemakeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const telemetry = createGenerationTelemetryContext({
+        entryPoint: "carouselRemake.start",
+      });
+
       if (!CAROUSEL_TEMPLATES_BY_ID.has(input.templateId)) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -383,11 +407,14 @@ export const carouselRemakeRouter = router({
           message: "Failed to create carousel remake",
         });
       }
+      if (telemetry) telemetry.remakeId = remakeId;
+      await persistInProgressMetrics(remakeId, telemetry);
 
       generateCarouselRemake(remakeId, input.templateId, niche, {
         slideCountOption: input.slideCount,
         uploadedImageUrls: input.uploadedImageUrls,
         uploadedImagePool: input.uploadedImagePool,
+        telemetry,
       }).catch((err: unknown) => {
         console.error(`Carousel remake ${remakeId} failed:`, err);
       });
@@ -774,6 +801,10 @@ export const carouselRemakeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const telemetry = createGenerationTelemetryContext({
+        entryPoint: "carouselRemake.generateFromSourceCarousel",
+      });
+
       const sourceUrl = input.sourceUrl.trim();
       if (!sourceUrl) {
         throw new TRPCError({
@@ -784,7 +815,11 @@ export const carouselRemakeRouter = router({
 
       let slideImages: string[] | null = null;
       try {
-        slideImages = await fetchCarouselSlideImages(sourceUrl);
+        slideImages = await withGenerationStage(
+          telemetry,
+          "source_slide_fetch",
+          () => fetchCarouselSlideImages(sourceUrl)
+        );
       } catch (err) {
         console.warn(
           "[generateFromSourceCarousel] slide fetch failed, falling back to content path",
@@ -802,7 +837,7 @@ export const carouselRemakeRouter = router({
             style: input.style,
             aspectRatioOverride: input.aspectRatioOverride,
           },
-          { sourceUrl }
+          { sourceUrl, telemetry }
         );
       }
 
@@ -857,8 +892,12 @@ export const carouselRemakeRouter = router({
         });
       }
 
+      if (telemetry) telemetry.remakeId = remakeId;
+      await persistInProgressMetrics(remakeId, telemetry);
+
       generateCarouselRemake(remakeId, templateId, nicheLabel, {
         analysisImageUrls: slideImages,
+        telemetry,
       }).catch((err: unknown) => {
         console.error(`Carousel from source ${remakeId} failed:`, err);
       });

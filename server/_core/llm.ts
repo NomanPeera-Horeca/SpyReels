@@ -4,6 +4,11 @@ import {
   formatIdeaScriptErrorForUser,
   isRetryableLlmError,
 } from "@shared/ideaScriptErrors";
+import {
+  categorizeGenerationError,
+  resolveInvokeTelemetry,
+  type GenerationTelemetryContext,
+} from "../carousel/generationTelemetry";
 
 function asUserFacingLlmError(error: unknown): Error {
   const message = formatIdeaScriptErrorForUser(error, "script");
@@ -90,6 +95,12 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  /** Logical operation label for carousel generation telemetry. */
+  operation?: string;
+  /** 0 = first attempt, 1+ = repair / validation retry. */
+  repairIteration?: number;
+  /** Explicit telemetry context. ALS is only a fallback. */
+  telemetry?: GenerationTelemetryContext;
 };
 
 export type ToolCall = {
@@ -398,9 +409,73 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const maxTokensResolved = maxTokensParam ?? max_tokensParam ?? 8192;
   const modelsToTry = model ? [model] : [DEFAULT_LLM_MODEL, FALLBACK_LLM_MODEL];
   const retryDelaysMs = [1500, 3000, 6000];
+  const telemetry = resolveInvokeTelemetry(params.telemetry);
+  const operation = params.operation ?? "llm_invoke";
+  const repairIteration = params.repairIteration ?? 0;
+  const requestedModel = model ?? DEFAULT_LLM_MODEL;
+  const logicalStarted = performance.now();
+  telemetry?.collector.beginLogicalLlmCall();
 
   let response: Awaited<ReturnType<Anthropic["messages"]["create"]>> | null = null;
   let lastError: unknown;
+
+  const recordPhysical = (row: {
+    model: string;
+    attemptNumber: number;
+    durationMs: number;
+    success: boolean;
+    error?: unknown;
+    fallbackOccurred: boolean;
+    inputTokens?: number;
+    outputTokens?: number;
+  }) => {
+    try {
+      telemetry?.collector.recordPhysicalLlmAttempt({
+        model: row.model,
+        attemptNumber: row.attemptNumber,
+        durationMs: Math.max(0, Math.round(row.durationMs)),
+        success: row.success,
+        errorCategory: row.success
+          ? null
+          : categorizeGenerationError(row.error),
+        fallbackOccurred: row.fallbackOccurred,
+        inputTokens: row.inputTokens ?? null,
+        outputTokens: row.outputTokens ?? null,
+        totalTokens:
+          row.inputTokens != null && row.outputTokens != null
+            ? row.inputTokens + row.outputTokens
+            : null,
+      });
+    } catch (err) {
+      console.error("[carouselTelemetry] physical LLM record failed", err);
+    }
+  };
+
+  const recordLogical = (row: {
+    success: boolean;
+    actualModel: string | null;
+    inputTokens?: number;
+    outputTokens?: number;
+  }) => {
+    try {
+      telemetry?.collector.recordLogicalLlmCall({
+        operation,
+        requestedModel,
+        actualModel: row.actualModel,
+        durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
+        success: row.success,
+        inputTokens: row.inputTokens ?? null,
+        outputTokens: row.outputTokens ?? null,
+        totalTokens:
+          row.inputTokens != null && row.outputTokens != null
+            ? row.inputTokens + row.outputTokens
+            : null,
+        repairIteration,
+      });
+    } catch (err) {
+      console.error("[carouselTelemetry] logical LLM record failed", err);
+    }
+  };
 
   modelLoop: for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex++) {
     const currentModel = modelsToTry[modelIndex]!;
@@ -409,6 +484,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      const attemptStarted = performance.now();
       try {
         response = await client.messages.create({
           model: currentModel,
@@ -420,9 +496,26 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
             ? { tools: [forcedSchemaTool], tool_choice: forcedToolChoice }
             : {}),
         });
+        recordPhysical({
+          model: response.model || currentModel,
+          attemptNumber: attempt + 1,
+          durationMs: performance.now() - attemptStarted,
+          success: true,
+          fallbackOccurred: modelIndex > 0,
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+        });
         break modelLoop;
       } catch (err) {
         lastError = err;
+        recordPhysical({
+          model: currentModel,
+          attemptNumber: attempt + 1,
+          durationMs: performance.now() - attemptStarted,
+          success: false,
+          error: err,
+          fallbackOccurred: modelIndex > 0,
+        });
         const status = (err as { status?: number })?.status;
         console.error(
           `[invokeLLM] attempt ${attempt + 1}/3 failed`,
@@ -430,6 +523,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         );
 
         if (!isRetryableLlmError(err)) {
+          recordLogical({ success: false, actualModel: null });
           throw asUserFacingLlmError(err);
         }
 
@@ -442,6 +536,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   if (!response) {
+    recordLogical({ success: false, actualModel: null });
     throw asUserFacingLlmError(
       lastError instanceof Error ? lastError : new Error("LLM request failed")
     );
@@ -460,6 +555,13 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       ? textContent.text
       : "";
   const textValue = sanitizeAiOutput(rawTextValue);
+
+  recordLogical({
+    success: true,
+    actualModel: response.model,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  });
 
   return {
     id: response.id,

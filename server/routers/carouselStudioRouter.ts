@@ -1,5 +1,6 @@
 /**
- * Carousel Studio admin endpoints: generate 3 angles, then fire the existing remake worker.
+ * Carousel Studio admin endpoints: generate 3 angles (server picks index 0 by default),
+ * then fire the existing remake worker. Optional plan-review path returns angles first.
  * Remix/source-carousel analysis is intentionally not implemented in this phase.
  */
 import { TRPCError } from "@trpc/server";
@@ -11,6 +12,7 @@ import {
   CAROUSEL_STUDIO_TEMPLATE_ID,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
+  studioPlannedSlideCount,
   type CarouselAngleOption,
 } from "@shared/carouselStudio";
 import { carouselRemakes } from "../../drizzle/schema";
@@ -26,6 +28,14 @@ import {
   assertCarouselRemakeQuota,
   resolveCarouselNiche,
 } from "./carouselRemakeRouter";
+import {
+  createGenerationTelemetryContext,
+  isGenerationMetrics,
+  persistInProgressMetrics,
+  runWithGenerationTelemetry,
+  withGenerationStage,
+  type GenerationTelemetryContext,
+} from "../carousel/generationTelemetry";
 
 function requireWorkspaceId(workspaceId: string | null): string {
   if (!workspaceId) {
@@ -60,6 +70,84 @@ function angleDirectionFromOption(angle: CarouselAngleOption): string {
 
 function middleCountFromEstimatedSlides(estimated: number): number {
   return Math.min(Math.max(estimated - 2, 3), 18);
+}
+
+function plannedSlideCountFromAngle(angle: CarouselAngleOption): number {
+  return studioPlannedSlideCount(angle.estimatedSlideCount);
+}
+
+type StudioResolvedSource = {
+  sourceContent: string;
+  sourceUrl: string | null;
+  sourceImage: string | null;
+  sourceReelId: string | null;
+};
+
+type StudioGenerateInput = z.infer<typeof STUDIO_GENERATE_ANGLES_INPUT>;
+
+function prefetchOrResolveSource(
+  input: StudioGenerateInput,
+  user: { id: number; openId: string }
+): Promise<StudioResolvedSource> | StudioResolvedSource {
+  const prefetched = input.sourceContent?.trim() || "";
+  if (prefetched) {
+    return {
+      sourceContent: prefetched,
+      sourceUrl: input.sourceUrl?.trim().slice(0, 1024) || null,
+      sourceImage: input.sourceImage?.trim() || null,
+      sourceReelId: input.sourceReelId?.trim() || null,
+    };
+  }
+  return resolveStudioSourceText({
+    content: input.content,
+    userId: user.id,
+    openId: user.openId,
+  });
+}
+
+async function proposeStudioAngles(args: {
+  sourceContent: string;
+  niche: string;
+  brandVoice?: string;
+}): Promise<CarouselAngleOption[]> {
+  try {
+    return await generateCarouselAngles({
+      sourceContent: args.sourceContent,
+      niche: args.niche,
+      brandVoice: args.brandVoice,
+    });
+  } catch (err) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message:
+        err instanceof Error
+          ? err.message
+          : "Could not generate carousel angles.",
+    });
+  }
+}
+
+function fireStudioRemake(args: {
+  remakeId: number;
+  niche: string;
+  selected: CarouselAngleOption;
+  sourceContent: string;
+  sourceImage: string | null;
+  sourceReelId: string | null;
+  telemetry?: GenerationTelemetryContext;
+}): void {
+  generateCarouselRemake(args.remakeId, CAROUSEL_STUDIO_TEMPLATE_ID, args.niche, {
+    slideCountOption: middleCountFromEstimatedSlides(
+      args.selected.estimatedSlideCount
+    ),
+    sourceContent: args.sourceContent || undefined,
+    angleDirection: angleDirectionFromOption(args.selected),
+    sourceImage: args.sourceImage,
+    sourceReelId: args.sourceReelId,
+    telemetry: args.telemetry,
+  }).catch((err: unknown) => {
+    console.error(`Carousel Studio remake ${args.remakeId} failed:`, err);
+  });
 }
 
 async function resolveStudioSourceText(args: {
@@ -125,6 +213,10 @@ export const carouselStudioRouter = router({
   generateAngles: adminPanelProcedure
     .input(STUDIO_GENERATE_ANGLES_INPUT)
     .mutation(async ({ ctx, input }) => {
+      const telemetry = createGenerationTelemetryContext({
+        entryPoint: "carouselStudio.generateAngles",
+      });
+
       if (!CAROUSEL_TEMPLATES_BY_ID.has(CAROUSEL_STUDIO_TEMPLATE_ID)) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -139,39 +231,29 @@ export const carouselStudioRouter = router({
         role: ctx.user.role,
       });
 
-      const prefetched = input.sourceContent?.trim() || "";
-      const resolved = prefetched
-        ? {
-            sourceContent: prefetched,
-            sourceUrl: input.sourceUrl?.trim().slice(0, 1024) || null,
-            sourceImage: input.sourceImage?.trim() || null,
-            sourceReelId: input.sourceReelId?.trim() || null,
-          }
-        : await resolveStudioSourceText({
-            content: input.content,
-            userId: ctx.user.id,
-            openId: ctx.user.openId,
-          });
-
+      const resolved = await runWithGenerationTelemetry(telemetry, () =>
+        withGenerationStage(telemetry, "source_resolution", () =>
+          prefetchOrResolveSource(input, ctx.user)
+        )
+      );
       const niche = await resolveCarouselNiche(ctx.user.id, input.niche, {
         businessDescription: ctx.user.businessDescription,
         targetAudience: ctx.user.targetAudience,
       });
-
-      let angles: CarouselAngleOption[];
-      try {
-        angles = await generateCarouselAngles({
-          sourceContent: resolved.sourceContent,
-          niche,
-          brandVoice: input.brandVoice,
-        });
-      } catch (err) {
+      const angles = await runWithGenerationTelemetry(telemetry, () =>
+        withGenerationStage(telemetry, "angle_generation", () =>
+          proposeStudioAngles({
+            sourceContent: resolved.sourceContent,
+            niche,
+            brandVoice: input.brandVoice,
+          })
+        )
+      );
+      const selected = angles[0];
+      if (!selected) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message:
-            err instanceof Error
-              ? err.message
-              : "Could not generate carousel angles.",
+          message: "Could not generate carousel angles.",
         });
       }
 
@@ -202,6 +284,8 @@ export const carouselStudioRouter = router({
           message: "Failed to save carousel angles",
         });
       }
+      if (telemetry) telemetry.remakeId = remakeId;
+      await persistInProgressMetrics(remakeId, telemetry);
 
       return {
         remakeId,
@@ -211,6 +295,108 @@ export const carouselStudioRouter = router({
         sourceUrl: resolved.sourceUrl,
         sourceImage: resolved.sourceImage,
         sourceReelId: resolved.sourceReelId,
+        estimatedSlideCount: plannedSlideCountFromAngle(selected),
+        selectedAngleIndex: null,
+      };
+    }),
+
+  generateFromInput: adminPanelProcedure
+    .input(STUDIO_GENERATE_ANGLES_INPUT)
+    .mutation(async ({ ctx, input }) => {
+      const telemetry = createGenerationTelemetryContext({
+        entryPoint: "carouselStudio.generateFromInput",
+      });
+
+      if (!CAROUSEL_TEMPLATES_BY_ID.has(CAROUSEL_STUDIO_TEMPLATE_ID)) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Carousel Studio template is not available",
+        });
+      }
+
+      await assertCarouselRemakeQuota({
+        id: ctx.user.id,
+        openId: ctx.user.openId,
+        email: ctx.user.email,
+        role: ctx.user.role,
+      });
+
+      const resolved = await runWithGenerationTelemetry(telemetry, () =>
+        withGenerationStage(telemetry, "source_resolution", () =>
+          prefetchOrResolveSource(input, ctx.user)
+        )
+      );
+      const niche = await resolveCarouselNiche(ctx.user.id, input.niche, {
+        businessDescription: ctx.user.businessDescription,
+        targetAudience: ctx.user.targetAudience,
+      });
+      const angles = await runWithGenerationTelemetry(telemetry, () =>
+        withGenerationStage(telemetry, "angle_generation", () =>
+          proposeStudioAngles({
+            sourceContent: resolved.sourceContent,
+            niche,
+            brandVoice: input.brandVoice,
+          })
+        )
+      );
+      const selected = angles[0];
+      if (!selected) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not generate carousel angles.",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const workspaceId = requireWorkspaceId(ctx.workspaceId);
+      const insertResult = await db.insert(carouselRemakes).values({
+        userId: ctx.user.id,
+        workspaceId,
+        templateId: CAROUSEL_STUDIO_TEMPLATE_ID,
+        niche: niche.slice(0, 500),
+        sourceUrl: resolved.sourceUrl,
+        status: "processing",
+        angleOptionsJson: angles,
+        selectedAngleIndex: 0,
+        aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
+      });
+      const remakeId = insertResult[0].insertId;
+      if (!remakeId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to start carousel generation",
+        });
+      }
+      if (telemetry) telemetry.remakeId = remakeId;
+      await persistInProgressMetrics(remakeId, telemetry);
+
+      fireStudioRemake({
+        remakeId,
+        niche,
+        selected,
+        sourceContent: resolved.sourceContent,
+        sourceImage: resolved.sourceImage,
+        sourceReelId: resolved.sourceReelId,
+        telemetry,
+      });
+
+      return {
+        remakeId,
+        status: "processing" as const,
+        angles,
+        sourceContent: resolved.sourceContent,
+        sourceUrl: resolved.sourceUrl,
+        sourceImage: resolved.sourceImage,
+        sourceReelId: resolved.sourceReelId,
+        estimatedSlideCount: plannedSlideCountFromAngle(selected),
+        selectedAngleIndex: 0,
       };
     }),
 
@@ -276,16 +462,28 @@ export const carouselStudioRouter = router({
         });
       }
 
+      const telemetry = createGenerationTelemetryContext({
+        entryPoint: "carouselStudio.generateCarousel",
+        remakeId: row.id,
+        existing: isGenerationMetrics(row.generationMetricsJson)
+          ? row.generationMetricsJson
+          : null,
+      });
+
       let sourceContent = input.sourceContent?.trim() || "";
       let sourceImage = input.sourceImage?.trim() || null;
       let sourceReelId = input.sourceReelId?.trim() || null;
 
       if (!sourceContent && row.sourceUrl) {
         try {
-          const resolved = await resolveCarouselSourceFromUrl(row.sourceUrl, {
-            userId: ctx.user.id,
-            openId: ctx.user.openId,
-          });
+          const resolved = await runWithGenerationTelemetry(telemetry, () =>
+            withGenerationStage(telemetry, "source_resolution", () =>
+              resolveCarouselSourceFromUrl(row.sourceUrl!, {
+                userId: ctx.user.id,
+                openId: ctx.user.openId,
+              })
+            )
+          );
           sourceContent = resolved.text;
           sourceImage = sourceImage || resolved.thumbnailUrl?.trim() || null;
           sourceReelId = sourceReelId || resolved.reelId?.trim() || null;
@@ -309,16 +507,14 @@ export const carouselStudioRouter = router({
         })
         .where(eq(carouselRemakes.id, row.id));
 
-      generateCarouselRemake(row.id, row.templateId, row.niche, {
-        slideCountOption: middleCountFromEstimatedSlides(
-          selected.estimatedSlideCount
-        ),
-        sourceContent: sourceContent || undefined,
-        angleDirection: angleDirectionFromOption(selected),
+      fireStudioRemake({
+        remakeId: row.id,
+        niche: row.niche,
+        selected,
+        sourceContent,
         sourceImage,
         sourceReelId,
-      }).catch((err: unknown) => {
-        console.error(`Carousel Studio remake ${row.id} failed:`, err);
+        telemetry,
       });
 
       return { remakeId: row.id, status: "processing" as const };

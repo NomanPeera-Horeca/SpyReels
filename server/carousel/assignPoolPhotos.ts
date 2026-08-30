@@ -66,6 +66,7 @@ Rules:
     }
 
     const response = await invokeLLM({
+      operation: "pool_photo_assignment",
       messages: [{ role: "user", content }],
       responseFormat: { type: "json_object" },
       maxTokens: 1024,

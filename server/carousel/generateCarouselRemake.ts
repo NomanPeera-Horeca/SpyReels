@@ -28,6 +28,16 @@ import {
   sourceContentFromAnalysis,
 } from "./buildSlidesFromAnalysis";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
+import {
+  categorizeGenerationError,
+  createGenerationTelemetryContext,
+  finalizeGenerationMetrics,
+  getActiveGenerationTelemetry,
+  persistTerminalRemake,
+  runWithGenerationTelemetry,
+  withGenerationStage,
+  type GenerationTelemetryContext,
+} from "./generationTelemetry";
 
 /**
  * Map remake slide index -> source still for vision grounding.
@@ -463,6 +473,8 @@ async function invokeCarouselRemakeOnce(
     : "You rewrite carousel slide text for SpyReels. Respect character budgets strictly. Return structured tool output only.";
 
   const response = await invokeLLM({
+    operation: "copy_generation",
+    repairIteration: repairNote ? 1 : 0,
     messages: [
       {
         role: "system",
@@ -493,6 +505,7 @@ async function decideSlideCount(
   const defaultCount = countMiddleSlides(template);
   try {
     const response = await invokeLLM({
+      operation: "slide_count_decision",
       model: "claude-haiku-4-5-20251001",
       messages: [
         {
@@ -658,8 +671,25 @@ export async function generateCarouselRemake(
     sourceImage?: string | null;
     /** Platform external id for ensureReelThumbnailOnR2 (Bug #62 CDN expiry). */
     sourceReelId?: string | null;
+    telemetry?: GenerationTelemetryContext;
   }
 ): Promise<void> {
+  const telemetry =
+    options?.telemetry ??
+    createGenerationTelemetryContext({
+      entryPoint: "generateCarouselRemake",
+      remakeId,
+    });
+  if (telemetry) telemetry.remakeId = remakeId;
+  if (telemetry && getActiveGenerationTelemetry()?.runId !== telemetry.runId) {
+    return runWithGenerationTelemetry(telemetry, () =>
+      generateCarouselRemake(remakeId, templateId, niche, {
+        ...options,
+        telemetry,
+      })
+    );
+  }
+
   const slideCountOption = options?.slideCountOption;
   const uploadedImageUrls = options?.uploadedImageUrls;
   const uploadedImagePool = options?.uploadedImagePool;
@@ -683,14 +713,19 @@ export async function generateCarouselRemake(
   try {
     const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId);
     if (!template) {
-      await db
-        .update(carouselRemakes)
-        .set({
+      const errorMessage = `Unknown carousel template: ${templateId}`;
+      await persistTerminalRemake(
+        remakeId,
+        {
           status: "failed",
           progressStage: null,
-          errorMessage: `Unknown carousel template: ${templateId}`,
+          errorMessage,
+        },
+        finalizeGenerationMetrics(telemetry, "failed", remakeId, {
+          failureStage: "unknown_template",
+          errorCategory: "unknown_template",
         })
-        .where(eq(carouselRemakes.id, remakeId));
+      );
       return;
     }
 
@@ -723,7 +758,11 @@ export async function generateCarouselRemake(
     let effectiveSlides: CarouselSlideSpec[] = template.slides;
     let fromAnalysisSlides = false;
     if (fromAnalysis) {
-      const analysis = await analyzeSourceCarousel(analysisImageUrls);
+      const analysis = await withGenerationStage(
+        telemetry,
+        "source_vision_analysis",
+        () => analyzeSourceCarousel(analysisImageUrls)
+      );
       if (analysis.slides.length === 0) {
         throw new Error(
           "Could not analyze this carousel's slides. Please try a different Instagram post."
@@ -741,7 +780,9 @@ export async function generateCarouselRemake(
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
         slideCountOption === "auto"
-          ? await decideSlideCount(template, niche)
+          ? await withGenerationStage(telemetry, "slide_count_decision", () =>
+              decideSlideCount(template, niche)
+            )
           : Math.min(Math.max(slideCountOption, MIN_SLIDE_COUNT), MAX_SLIDE_COUNT);
 
       if (targetMiddleCount !== defaultMiddleCount) {
@@ -772,47 +813,68 @@ export async function generateCarouselRemake(
       .set({ progressStage: "writing_copy" })
       .where(eq(carouselRemakes.id, remakeId));
 
-    let values = await invokeCarouselRemakeOnce(
-      template.name,
-      promptDescription,
-      effectiveSlides,
-      niche,
-      lockedFacts,
-      undefined,
-      sourceContent
+    const { values, validation } = await withGenerationStage(
+      telemetry,
+      "copy_generation",
+      async () => {
+        let nextValues = await invokeCarouselRemakeOnce(
+          template.name,
+          promptDescription,
+          effectiveSlides,
+          niche,
+          lockedFacts,
+          undefined,
+          sourceContent
+        );
+        let nextValidation = validateBudgets(
+          effectiveSlides,
+          nextValues,
+          lockedFacts
+        );
+
+        if (!nextValidation.ok) {
+          nextValues = await invokeCarouselRemakeOnce(
+            template.name,
+            promptDescription,
+            effectiveSlides,
+            niche,
+            lockedFacts,
+            nextValidation.issues.join("\n"),
+            sourceContent
+          );
+          nextValidation = validateBudgets(
+            effectiveSlides,
+            nextValues,
+            lockedFacts
+          );
+        }
+        return { values: nextValues, validation: nextValidation };
+      }
     );
-    let validation = validateBudgets(effectiveSlides, values, lockedFacts);
 
     if (!validation.ok) {
-      values = await invokeCarouselRemakeOnce(
-        template.name,
-        promptDescription,
-        effectiveSlides,
-        niche,
-        lockedFacts,
-        validation.issues.join("\n"),
-        sourceContent
+      const hardIssues = validation.issues.filter(
+        (issue) => !issue.includes(" length ")
       );
-      validation = validateBudgets(effectiveSlides, values, lockedFacts);
-      if (!validation.ok) {
-        const hardIssues = validation.issues.filter(
-          (issue) => !issue.includes(" length ")
+      if (hardIssues.length > 0) {
+        const errorMessage = `Slot text missing after retry: ${hardIssues.slice(0, 5).join("; ")}`;
+        await persistTerminalRemake(
+          remakeId,
+          {
+            status: "failed",
+            progressStage: null,
+            errorMessage,
+          },
+          finalizeGenerationMetrics(telemetry, "failed", remakeId, {
+            failureStage: "copy_generation",
+            errorCategory: "validation",
+          })
         );
-        if (hardIssues.length > 0) {
-          await db
-            .update(carouselRemakes)
-            .set({
-              status: "failed",
-              progressStage: null,
-              errorMessage: `Slot text missing after retry: ${hardIssues.slice(0, 5).join("; ")}`,
-            })
-            .where(eq(carouselRemakes.id, remakeId));
-          return;
-        }
-        console.warn(
-          `[carouselRemake] ${remakeId}: keeping slot text outside character budgets after retry: ${validation.issues.slice(0, 8).join("; ")}`
-        );
+        return;
       }
+      console.warn(
+        `[carouselRemake] ${remakeId}: keeping slot text outside character budgets after retry: ${validation.issues.slice(0, 8).join("; ")}`
+      );
     }
 
     // Soft visibility only: do not fail or retry on weak not_line echo.
@@ -848,6 +910,9 @@ export async function generateCarouselRemake(
             {
               usedUrls: usedImageUrls,
               sourceImage,
+              slideId: slide.id,
+              imageSlotId: imageSlot.id,
+              telemetry,
             }
           );
           if (resolvedUrl) imageUrls[slide.id] = resolvedUrl;
@@ -863,6 +928,9 @@ export async function generateCarouselRemake(
             {
               usedUrls: usedImageUrls,
               sourceImage,
+              slideId: slide.id,
+              imageSlotId: imageSlot.id,
+              telemetry,
             }
           );
           if (resolvedUrl) bySlot[imageSlot.id] = resolvedUrl;
@@ -908,6 +976,26 @@ export async function generateCarouselRemake(
         const assigned = await assignPoolPhotosToSlots(pool, needs, niche);
         for (const need of needs) {
           const url = assigned[need.key];
+          try {
+            telemetry?.collector.recordImageSlot({
+              slideId: need.slideId,
+              imageSlotId: need.slotId,
+              sourcePath: url ? "pool" : "fallback",
+              model: null,
+              requestedSize: null,
+              requestedQuality: null,
+              attemptNumber: 1,
+              durationMs: 0,
+              apiRequestSucceeded: false,
+              imageReturned: Boolean(url),
+              storageSucceeded: Boolean(url),
+              slotResolved: Boolean(url),
+              retryCount: 0,
+              errorCategory: url ? null : "validation",
+            });
+          } catch (err) {
+            console.error("[carouselTelemetry] pool image record failed", err);
+          }
           if (!url) continue;
           usedImageUrls.add(url);
           const existing = imageUrls[need.slideId];
@@ -931,6 +1019,9 @@ export async function generateCarouselRemake(
             {
               usedUrls: usedImageUrls,
               sourceImage: sourceImageForSlideIndex(visionSourceStills, slideIndex),
+              slideId: need.slideId,
+              imageSlotId: need.slotId,
+              telemetry,
             }
           );
           if (!resolvedUrl) continue;
@@ -957,6 +1048,9 @@ export async function generateCarouselRemake(
             {
               usedUrls: usedImageUrls,
               sourceImage: sourceImageForSlideIndex(visionSourceStills, slideIndex),
+              slideId: slide.id,
+              imageSlotId: imageSlot.id,
+              telemetry,
             }
           );
           if (resolvedUrl) {
@@ -991,28 +1085,35 @@ export async function generateCarouselRemake(
       .set({ progressStage: "saving" })
       .where(eq(carouselRemakes.id, remakeId));
 
-    await db
-      .update(carouselRemakes)
-      .set({
-        status: "completed",
-        progressStage: null,
-        slotValuesJson: values,
-        slideStructureJson: effectiveSlides,
-        imageUrlsJson: Object.keys(imageUrls).length > 0 ? imageUrls : null,
-        errorMessage: null,
-      })
-      .where(eq(carouselRemakes.id, remakeId));
+    telemetry?.collector.setSlidesGenerated(effectiveSlides.length);
+    telemetry?.collector.recordStage("final_save", 0, "ok");
+    const completedFields = {
+      status: "completed" as const,
+      progressStage: null,
+      slotValuesJson: values,
+      slideStructureJson: effectiveSlides,
+      imageUrlsJson: Object.keys(imageUrls).length > 0 ? imageUrls : null,
+      errorMessage: null,
+    };
+    await persistTerminalRemake(
+      remakeId,
+      completedFields,
+      finalizeGenerationMetrics(telemetry, "completed", remakeId)
+    );
   } catch (error) {
     const message = formatIdeaScriptErrorForUser(error, "remake");
     try {
-      await db
-        .update(carouselRemakes)
-        .set({
+      await persistTerminalRemake(
+        remakeId,
+        {
           status: "failed",
           progressStage: null,
           errorMessage: message,
+        },
+        finalizeGenerationMetrics(telemetry, "failed", remakeId, {
+          errorCategory: categorizeGenerationError(error),
         })
-        .where(eq(carouselRemakes.id, remakeId));
+      );
     } catch (markErr) {
       console.error(
         `[carouselRemake] failed to mark remake ${remakeId} as failed:`,

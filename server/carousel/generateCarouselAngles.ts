@@ -136,6 +136,8 @@ async function invokeCarouselAnglesOnce(args: {
     : basePrompt;
 
   const response = await invokeLLM({
+    operation: "angle_generation",
+    repairIteration: args.repairNote ? 1 : 0,
     messages: [
       {
         role: "system",

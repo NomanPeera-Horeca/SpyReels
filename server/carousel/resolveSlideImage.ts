@@ -1,6 +1,11 @@
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
+import {
+  getActiveGenerationTelemetry,
+  withGenerationStage,
+  type GenerationTelemetryContext,
+} from "./generationTelemetry";
 
 /**
  * Prefer a single short line from slot text for text-only image prompts
@@ -52,6 +57,7 @@ export async function buildVisionGroundedImagePrompt(
 
   try {
     const response = await invokeLLM({
+      operation: "image_prompt_generation",
       messages: [
         {
           role: "system",
@@ -99,34 +105,59 @@ Write a gpt-image-1.5 prompt for a high-quality realistic photo (portrait orient
   return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText);
 }
 
-async function generateAiImage(prompt: string): Promise<string | null> {
+type GeneratedImageOutcome = {
+  url: string | null;
+  apiRequestSucceeded: boolean;
+  imageReturned: boolean;
+  storageSucceeded: boolean;
+  errorCategory: string | null;
+};
+
+async function generateAiImage(prompt: string): Promise<GeneratedImageOutcome> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.warn("[resolveSlideImage] OPENAI_API_KEY not set, skipping AI image");
-    return null;
+    return {
+      url: null,
+      apiRequestSucceeded: false,
+      imageReturned: false,
+      storageSucceeded: false,
+      errorCategory: "auth",
+    };
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-image-1.5",
-        prompt,
-        n: 1,
-        size: "1024x1536",
-      }),
-    });
+    const response = await withGenerationStage(
+      getActiveGenerationTelemetry(),
+      "image_generation",
+      () =>
+        fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-image-1.5",
+            prompt,
+            n: 1,
+            size: "1024x1536",
+          }),
+        })
+    );
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       console.warn(
         `[resolveSlideImage] OpenAI image generation failed (${response.status})${detail ? `: ${detail}` : ""}`
       );
-      return null;
+      return {
+        url: null,
+        apiRequestSucceeded: false,
+        imageReturned: false,
+        storageSucceeded: false,
+        errorCategory: response.status === 429 ? "rate_limit" : "image_api",
+      };
     }
 
     const result = (await response.json()) as {
@@ -134,29 +165,75 @@ async function generateAiImage(prompt: string): Promise<string | null> {
     };
     const first = result.data?.[0];
     if (!first) {
-      return null;
+      return {
+        url: null,
+        apiRequestSucceeded: true,
+        imageReturned: false,
+        storageSucceeded: false,
+        errorCategory: "image_api",
+      };
     }
 
     // Prefer a direct URL if OpenAI ever returns one; otherwise decode the
     // base64 payload and store it in R2 ourselves (matches existing
     // storagePut pattern used elsewhere in the app).
     if (first.url) {
-      return first.url;
+      return {
+        url: first.url,
+        apiRequestSucceeded: true,
+        imageReturned: true,
+        storageSucceeded: true,
+        errorCategory: null,
+      };
     }
     if (first.b64_json) {
       const buffer = Buffer.from(first.b64_json, "base64");
-      const { url } = await storagePut(
-        `generated/carousel/${Date.now()}.png`,
-        buffer,
-        "image/png"
-      );
-      return url;
+      try {
+        const { url } = await withGenerationStage(
+          getActiveGenerationTelemetry(),
+          "image_storage",
+          () =>
+            storagePut(
+              `generated/carousel/${Date.now()}.png`,
+              buffer,
+              "image/png"
+            )
+        );
+        return {
+          url,
+          apiRequestSucceeded: true,
+          imageReturned: true,
+          storageSucceeded: true,
+          errorCategory: null,
+        };
+      } catch (err) {
+        console.warn("[resolveSlideImage] AI image storage failed", err);
+        return {
+          url: null,
+          apiRequestSucceeded: true,
+          imageReturned: true,
+          storageSucceeded: false,
+          errorCategory: "storage",
+        };
+      }
     }
 
-    return null;
+    return {
+      url: null,
+      apiRequestSucceeded: true,
+      imageReturned: false,
+      storageSucceeded: false,
+      errorCategory: "image_api",
+    };
   } catch (err) {
     console.warn("[resolveSlideImage] AI image generation failed", err);
-    return null;
+    return {
+      url: null,
+      apiRequestSucceeded: false,
+      imageReturned: false,
+      storageSucceeded: false,
+      errorCategory: "image_api",
+    };
   }
 }
 
@@ -168,6 +245,9 @@ export type ResolveSlideImageOptions = {
    * Path A: matching carousel still. Path B: reel thumbnail. Path C: omit.
    */
   sourceImage?: string | null;
+  slideId?: string;
+  imageSlotId?: string;
+  telemetry?: GenerationTelemetryContext;
 };
 
 /**
@@ -182,23 +262,76 @@ export async function resolveSlideImage(
   textContext?: string,
   options?: ResolveSlideImageOptions
 ): Promise<string | null> {
+  const telemetry = options?.telemetry ?? getActiveGenerationTelemetry();
+  const slideId = options?.slideId ?? "unknown_slide";
+  const imageSlotId = options?.imageSlotId ?? "unknown_slot";
+
   if (uploadedUrl) {
     options?.usedUrls?.add(uploadedUrl);
+    try {
+      telemetry?.collector.recordImageSlot({
+        slideId,
+        imageSlotId,
+        sourcePath: "uploaded",
+        model: null,
+        requestedSize: null,
+        requestedQuality: null,
+        attemptNumber: 1,
+        durationMs: 0,
+        apiRequestSucceeded: false,
+        imageReturned: true,
+        storageSucceeded: true,
+        slotResolved: true,
+        retryCount: 0,
+        errorCategory: null,
+      });
+    } catch (err) {
+      console.error("[carouselTelemetry] uploaded image record failed", err);
+    }
     return uploadedUrl;
   }
 
-  const prompt = await buildVisionGroundedImagePrompt(
-    options?.sourceImage ?? null,
-    textContext ?? "",
-    niche,
-    searchQueryHint
+  const prompt = await withGenerationStage(
+    telemetry,
+    "image_prompt_generation",
+    () =>
+      buildVisionGroundedImagePrompt(
+        options?.sourceImage ?? null,
+        textContext ?? "",
+        niche,
+        searchQueryHint
+      )
   );
   console.log(
     "[carousel-image-prompt]",
     prompt.slice(0, 200) + (prompt.length > 200 ? "..." : "")
   );
 
-  const aiUrl = await generateAiImage(prompt);
+  const imageStarted = performance.now();
+  const generated = await generateAiImage(prompt);
+
+  const aiUrl = generated.url;
+  try {
+    telemetry?.collector.recordImageSlot({
+      slideId,
+      imageSlotId,
+      sourcePath: "generated",
+      model: "gpt-image-1.5",
+      requestedSize: "1024x1536",
+      requestedQuality: "default",
+      attemptNumber: 1,
+      durationMs: Math.max(0, Math.round(performance.now() - imageStarted)),
+      apiRequestSucceeded: generated.apiRequestSucceeded,
+      imageReturned: generated.imageReturned,
+      storageSucceeded: generated.storageSucceeded,
+      slotResolved: Boolean(aiUrl),
+      retryCount: 0,
+      errorCategory: generated.errorCategory,
+    });
+  } catch (err) {
+    console.error("[carouselTelemetry] generated image record failed", err);
+  }
+
   if (aiUrl) {
     options?.usedUrls?.add(aiUrl);
   }

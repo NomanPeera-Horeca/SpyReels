@@ -1968,6 +1968,7 @@ export type CoachScriptFeedback = typeof coachScriptFeedback.$inferSelect;
 export type InsertCoachScriptFeedback = typeof coachScriptFeedback.$inferInsert;
 
 import type { CarouselAngleOption } from "../shared/carouselStudio";
+import type { CarouselGenerationMetrics } from "../shared/carouselGenerationMetrics";
 
 /**
  * Carousel remake jobs: AI rewrites only slot text for a curated template.
@@ -2004,6 +2005,8 @@ export const carouselRemakes = mysqlTable(
     aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
     /** Resolved slide photo URLs keyed by slide id. */
     imageUrlsJson: json("imageUrlsJson"),
+    /** Phase 0 generation telemetry. Nullable. Never required for generation. */
+    generationMetricsJson: json("generationMetricsJson").$type<CarouselGenerationMetrics>(),
     /** Planned Instagram post date (user reference only; not auto-post). */
     postDate: timestamp("postDate"),
     /** Preferred posting time HH:MM (user reference only; not auto-post). */

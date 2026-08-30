@@ -306,6 +306,7 @@ export async function analyzeSourceCarousel(
 
   try {
     const response = await invokeLLM({
+      operation: "source_vision_analysis",
       messages: [
         {
           role: "system",
