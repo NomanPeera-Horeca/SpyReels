@@ -5,8 +5,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  buildStudioNicheOverride,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
+  studioPlannedSlideCount,
   type CarouselAngleOption,
   type CarouselRemakeProgressStage,
 } from "@shared/carouselStudio";
@@ -30,14 +32,12 @@ import {
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
 import {
-  STRATEGY_SETS,
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
   slugifyFilename,
   getPackageCaption,
   getPackageHashtags,
   type SourceKey,
-  type StrategyCard,
   type NavPage,
   type CreateStep,
   type Platform,
@@ -86,17 +86,6 @@ function aspectFromPlatform(_platform: Platform): CarouselDesignTokens["aspectRa
 function pickStudioSlideTitle(slots: Record<string, string> | undefined): string {
   if (!slots) return "Untitled slide";
   return slots.headline?.trim() || slots.title?.trim() || slots.kicker?.trim() || "Untitled slide";
-}
-
-function anglesToStrategyCards(angles: CarouselAngleOption[]): StrategyCard[] {
-  return angles.map((angle) => ({
-    kicker: angle.kicker,
-    title: angle.title,
-    body: angle.description,
-    best: "Saves",
-    slides: String(angle.estimatedSlideCount),
-    width: "90%",
-  }));
 }
 
 const INPUT_ASPECT_OPTIONS: Array<{
@@ -151,6 +140,10 @@ export function CarouselStudioApp() {
   const [createStep, setCreateStep] = useState<CreateStep>("input");
   const [currentSource, setCurrentSource] = useState<SourceKey>("prompt");
   const [selectedStrategy, setSelectedStrategy] = useState(0);
+  const [reviewPlanBeforeGenerating, setReviewPlanBeforeGenerating] =
+    useState(false);
+  /** True when the current run opened the real plan-review step (for failure routing). */
+  const [planReviewSession, setPlanReviewSession] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [chips, setChips] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -168,8 +161,11 @@ export function CarouselStudioApp() {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [audience, setAudience] = useState("");
   const [goal, setGoal] = useState(MOCK_DEFAULTS.goal);
-  const [pillar, setPillar] = useState(MOCK_DEFAULTS.pillar);
+  const [pillar, setPillar] = useState("");
   const [voice, setVoice] = useState(MOCK_DEFAULTS.voice);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [audienceEdited, setAudienceEdited] = useState(false);
+  const [pillarEdited, setPillarEdited] = useState(false);
 
   const [remakeId, setRemakeId] = useState<number | null>(null);
   const [liveAngles, setLiveAngles] = useState<CarouselAngleOption[] | null>(
@@ -224,6 +220,8 @@ export function CarouselStudioApp() {
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
+  const generateFromInputMutation =
+    trpc.carouselStudio.generateFromInput.useMutation();
   const resolveSourceMutation = trpc.carouselStudio.resolveSource.useMutation();
   const generateCarouselMutation =
     trpc.carouselStudio.generateCarousel.useMutation();
@@ -253,11 +251,8 @@ export function CarouselStudioApp() {
     }
   );
 
-  useEffect(() => {
-    const niche = defaultNicheQuery.data?.niche?.trim();
-    if (!niche) return;
-    setAudience((prev) => (prev.trim() ? prev : niche));
-  }, [defaultNicheQuery.data?.niche]);
+  const savedNichePlaceholder =
+    defaultNicheQuery.data?.niche?.trim() || "Who this carousel is for";
 
   const studioTemplate = remakeTemplateId
     ? CAROUSEL_TEMPLATES_BY_ID.get(remakeTemplateId) ?? null
@@ -300,12 +295,19 @@ export function CarouselStudioApp() {
     });
   }, [displaySlideValues]);
 
-  const strategies =
-    liveAngles && liveAngles.length > 0
-      ? anglesToStrategyCards(liveAngles)
-      : STRATEGY_SETS[currentSource];
+  const strategies = liveAngles && liveAngles.length > 0 ? liveAngles : null;
+  const selectedAngle =
+    strategies && strategies[selectedStrategy]
+      ? strategies[selectedStrategy]
+      : null;
   const isFindingAngles = generateAnglesMutation.isPending;
+  const isStartingFromInput = generateFromInputMutation.isPending;
   const isStartingCarousel = generateCarouselMutation.isPending;
+  const isBusyGenerating =
+    isFindingAngles ||
+    isStartingFromInput ||
+    isStartingCarousel ||
+    isPollingRemake;
 
   const strategyCopy =
     currentSource === "remix"
@@ -317,33 +319,33 @@ export function CarouselStudioApp() {
         }
       : currentSource === "youtube"
         ? {
-            eyebrow: "Video angles",
-            title: "Three ways to turn this video into a save-worthy carousel.",
-            sub: "Choose the strongest direction and Spyreels will write the slides in your voice.",
+            eyebrow: "Plan review",
+            title: "Pick the angle before we generate slides.",
+            sub: "These three directions came from your video transcript. Choose one, then generate.",
             showInsight: false,
           }
         : currentSource === "web"
           ? {
-              eyebrow: "Article angles",
-              title: "Three ways to convert this article into a carousel.",
-              sub: "Choose the angle that gives the article the strongest social-media shape.",
+              eyebrow: "Plan review",
+              title: "Pick the angle before we generate slides.",
+              sub: "These three directions came from the article we extracted. Choose one, then generate.",
               showInsight: false,
             }
           : {
-              eyebrow: "Strategy directions",
-              title: "Three ways to make this worth saving.",
-              sub: "Choose the strongest angle or combine two. These are intentionally different, not the same idea rewritten three times.",
+              eyebrow: "Plan review",
+              title: "Pick the angle before we generate slides.",
+              sub: "These three directions were generated from your idea. Choose one, then generate.",
               showInsight: false,
             };
 
-  const buildNiche = () => {
-    const a = audience.trim();
-    const p = pillar.trim();
-    if (a && p) return `${a} · ${p}`;
-    if (a) return a;
-    if (p) return p;
-    return undefined;
-  };
+  const buildNiche = () =>
+    buildStudioNicheOverride({
+      customizeOpen,
+      audienceEdited,
+      pillarEdited,
+      audience,
+      pillar,
+    });
 
   const applyResolvedSource = (data: {
     sourceContent: string;
@@ -397,11 +399,19 @@ export function CarouselStudioApp() {
     }
   };
 
-  const findAngles = async () => {
+  const prepareSourceForGenerate = async (): Promise<{
+    content: string;
+    resolvedForRequest: {
+      sourceContent: string;
+      sourceUrl: string | null;
+      sourceImage: string | null;
+      sourceReelId: string | null;
+    } | null;
+  } | null> => {
     let content = composerInput.trim();
     if (!content) {
       toast("Enter a topic or paste a link first.");
-      return;
+      return null;
     }
     let resolvedForRequest = resolvedSource;
     if (looksLikeCarouselSourceUrl(content)) {
@@ -410,55 +420,118 @@ export function CarouselStudioApp() {
           ? await resolveInFlightRef.current.catch(() => null)
           : await resolvePastedLink(content);
       if (!resolved?.sourceContent) {
-        return;
+        return null;
       }
       resolvedForRequest = resolved;
       content = resolved.sourceContent.trim();
     }
     if (!content) {
       toast("Enter a topic or paste a link first.");
-      return;
+      return null;
     }
+    return { content, resolvedForRequest };
+  };
+
+  const buildStudioGenerateInput = (args: {
+    content: string;
+    resolvedForRequest: {
+      sourceContent: string;
+      sourceUrl: string | null;
+      sourceImage: string | null;
+      sourceReelId: string | null;
+    } | null;
+  }) => {
+    const brandVoice =
+      voice.trim() && voice !== "Use saved brand voice" ? voice.trim() : undefined;
+    const alreadyResolved = Boolean(args.resolvedForRequest?.sourceContent);
+    return {
+      content: args.content,
+      niche: buildNiche(),
+      brandVoice,
+      aspectRatioOverride: inputAspectRatio,
+      ...(alreadyResolved
+        ? {
+            sourceContent: args.content,
+            sourceUrl: args.resolvedForRequest?.sourceUrl ?? undefined,
+            sourceImage: args.resolvedForRequest?.sourceImage ?? undefined,
+            sourceReelId: args.resolvedForRequest?.sourceReelId ?? undefined,
+          }
+        : {}),
+    };
+  };
+
+  const requestAngles = async (args: {
+    content: string;
+    resolvedForRequest: {
+      sourceContent: string;
+      sourceUrl: string | null;
+      sourceImage: string | null;
+      sourceReelId: string | null;
+    } | null;
+  }) => {
+    return generateAnglesMutation.mutateAsync(buildStudioGenerateInput(args));
+  };
+
+  const applyAnglesResponse = (data: {
+    remakeId: number;
+    angles: CarouselAngleOption[];
+    sourceContent: string;
+    sourceUrl: string | null;
+    sourceImage: string | null;
+    sourceReelId: string | null;
+  }) => {
+    setRemakeId(data.remakeId);
+    setLiveAngles(data.angles);
+    setResolvedSource({
+      sourceContent: data.sourceContent,
+      sourceUrl: data.sourceUrl,
+      sourceImage: data.sourceImage,
+      sourceReelId: data.sourceReelId,
+    });
+    if (data.sourceUrl) setCurrentSource("web");
+  };
+
+  /** Plan-review path: generate real angles, then stop on the review screen. */
+  const findAnglesForReview = async () => {
+    const prepared = await prepareSourceForGenerate();
+    if (!prepared) return;
     setHasGeneratedCarousel(false);
     setSelectedStrategy(0);
+    setPlanReviewSession(true);
     try {
-      const brandVoice =
-        voice.trim() && voice !== "Use saved brand voice" ? voice.trim() : undefined;
-      const alreadyResolved = Boolean(resolvedForRequest?.sourceContent);
-      const data = await generateAnglesMutation.mutateAsync({
-        content,
-        niche: buildNiche(),
-        brandVoice,
-        aspectRatioOverride: inputAspectRatio,
-        ...(alreadyResolved
-          ? {
-              sourceContent: content,
-              sourceUrl: resolvedForRequest?.sourceUrl ?? undefined,
-              sourceImage: resolvedForRequest?.sourceImage ?? undefined,
-              sourceReelId: resolvedForRequest?.sourceReelId ?? undefined,
-            }
-          : {}),
-      });
-      setRemakeId(data.remakeId);
-      setLiveAngles(data.angles);
-      setResolvedSource({
-        sourceContent: data.sourceContent,
-        sourceUrl: data.sourceUrl,
-        sourceImage: data.sourceImage,
-        sourceReelId: data.sourceReelId,
-      });
-      if (data.sourceUrl) setCurrentSource("web");
+      const data = await requestAngles(prepared);
+      if (!data.angles || data.angles.length === 0) {
+        toast("Angles were not returned. Try again.");
+        setPlanReviewSession(false);
+        return;
+      }
+      if (!data.sourceContent?.trim()) {
+        toast("Source content was not returned. Try again.");
+        setPlanReviewSession(false);
+        return;
+      }
+      applyAnglesResponse(data);
       showCreateStep("strategy");
     } catch (err) {
+      setPlanReviewSession(false);
       const message =
         err instanceof Error ? err.message : "Could not generate angles.";
       toast(message);
     }
   };
 
-  const startGenerate = async () => {
+  const startGenerate = async (angleIndex: number) => {
     if (!remakeId || !liveAngles || liveAngles.length === 0) {
-      toast("Generate angles first.");
+      toast("Plan data is missing. Generate again from the input screen.");
+      showCreateStep("input");
+      return;
+    }
+    if (!liveAngles[angleIndex]) {
+      toast("Selected angle is missing. Pick another direction.");
+      return;
+    }
+    if (!resolvedSource?.sourceContent?.trim()) {
+      toast("Source content is missing. Go back and generate the plan again.");
       return;
     }
     setHasGeneratedCarousel(false);
@@ -467,12 +540,13 @@ export function CarouselStudioApp() {
     setRemakeImageUrls(null);
     setRemakeTemplateId(null);
     setCurrentSlide(0);
+    setSelectedStrategy(angleIndex);
     setIsPollingRemake(true);
     showCreateStep("progress");
     try {
       await generateCarouselMutation.mutateAsync({
         remakeId,
-        selectedAngleIndex: selectedStrategy,
+        selectedAngleIndex: angleIndex,
         sourceContent: resolvedSource?.sourceContent,
         sourceImage: resolvedSource?.sourceImage ?? undefined,
         sourceReelId: resolvedSource?.sourceReelId ?? undefined,
@@ -482,8 +556,51 @@ export function CarouselStudioApp() {
       const message =
         err instanceof Error ? err.message : "Could not start carousel generation.";
       toast(message);
-      showCreateStep("strategy");
+      showCreateStep(planReviewSession ? "strategy" : "input");
     }
+  };
+
+  /** Default Mirr-style path: angles server-side, auto-pick index 0, then remake. */
+  const generateDirect = async () => {
+    const prepared = await prepareSourceForGenerate();
+    if (!prepared) return;
+    setHasGeneratedCarousel(false);
+    setSelectedStrategy(0);
+    setPlanReviewSession(false);
+    setRemakeSlotValues(null);
+    setRemakeSlideStructure(null);
+    setRemakeImageUrls(null);
+    setRemakeTemplateId(null);
+    setCurrentSlide(0);
+    setIsPollingRemake(true);
+    showCreateStep("progress");
+    try {
+      const data = await generateFromInputMutation.mutateAsync(
+        buildStudioGenerateInput(prepared)
+      );
+      if (!data.remakeId) {
+        setIsPollingRemake(false);
+        toast("Generation did not return a remake id. Try again.");
+        showCreateStep("input");
+        return;
+      }
+      applyAnglesResponse(data);
+      setSelectedStrategy(data.selectedAngleIndex ?? 0);
+    } catch (err) {
+      setIsPollingRemake(false);
+      const message =
+        err instanceof Error ? err.message : "Could not generate carousel.";
+      toast(message);
+      showCreateStep("input");
+    }
+  };
+
+  const handlePrimaryGenerate = () => {
+    if (reviewPlanBeforeGenerating) {
+      void findAnglesForReview();
+      return;
+    }
+    void generateDirect();
   };
 
   const startNewCarousel = () => {
@@ -493,6 +610,8 @@ export function CarouselStudioApp() {
     setCreateStep("input");
     setCurrentSource("prompt");
     setSelectedStrategy(0);
+    setPlanReviewSession(false);
+    setReviewPlanBeforeGenerating(false);
     setComposerInput("");
     setInputAspectRatio("4:5");
     setLinkStatus("idle");
@@ -525,8 +644,8 @@ export function CarouselStudioApp() {
       if (!template || structure.length === 0) {
         if (isPollingRemake) {
           setIsPollingRemake(false);
-          toast("Carousel generated but slides were empty. Try another angle.");
-          showCreateStep("strategy");
+          toast("Carousel generated but slides were empty. Try again.");
+          showCreateStep(planReviewSession ? "strategy" : "input");
         }
         return;
       }
@@ -560,12 +679,13 @@ export function CarouselStudioApp() {
     if (data.status === "failed") {
       setIsPollingRemake(false);
       toast(data.errorMessage || "Carousel generation failed.");
-      showCreateStep("strategy");
+      showCreateStep(planReviewSession ? "strategy" : "input");
     }
   }, [
     remakeStatusQuery.data,
     isPollingRemake,
     hasGeneratedCarousel,
+    planReviewSession,
     showCreateStep,
     toast,
   ]);
@@ -863,102 +983,149 @@ export function CarouselStudioApp() {
                             </div>
 
                             <div className="composer-footer">
-                              <details className="customize-details">
-                                <summary>Customize</summary>
-                                <div className="customize-panel">
-                                  <div className="customize-note">
-                                    Saved brand defaults are already applied.
+                              <div className="composer-options">
+                                <details
+                                  className="customize-details"
+                                  onToggle={(event) => {
+                                    setCustomizeOpen(
+                                      (event.currentTarget as HTMLDetailsElement)
+                                        .open
+                                    );
+                                  }}
+                                >
+                                  <summary>Customize</summary>
+                                  <div className="customize-panel">
+                                    <div className="customize-note">
+                                      Saved brand defaults are already applied.
+                                    </div>
+                                    <div className="customize-grid">
+                                      <div className="field">
+                                        <label>Audience</label>
+                                        <input
+                                          className="text-input"
+                                          value={audience}
+                                          placeholder={savedNichePlaceholder}
+                                          onChange={(e) => {
+                                            setAudience(e.target.value);
+                                            setAudienceEdited(true);
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="field">
+                                        <label>Goal</label>
+                                        <select
+                                          className="select"
+                                          value={goal}
+                                          onChange={(e) => setGoal(e.target.value)}
+                                        >
+                                          <option>Saves & shares</option>
+                                          <option>Follower growth</option>
+                                          <option>Authority</option>
+                                          <option>Leads</option>
+                                        </select>
+                                      </div>
+                                      <div className="field">
+                                        <label>Content focus</label>
+                                        <select
+                                          className="select"
+                                          value={pillar}
+                                          onChange={(e) => {
+                                            setPillar(e.target.value);
+                                            setPillarEdited(true);
+                                          }}
+                                        >
+                                          <option value="">
+                                            Infer from idea
+                                          </option>
+                                          <option>
+                                            Restaurant profit & cash flow
+                                          </option>
+                                          <option>Menu psychology</option>
+                                          <option>Operations & labor</option>
+                                          <option>Owner mindset</option>
+                                          <option>Equipment decisions</option>
+                                        </select>
+                                      </div>
+                                      <div className="field">
+                                        <label>Voice</label>
+                                        <select
+                                          className="select"
+                                          value={voice}
+                                          onChange={(e) =>
+                                            setVoice(e.target.value)
+                                          }
+                                        >
+                                          <option>Use saved brand voice</option>
+                                          <option>Direct & practical</option>
+                                          <option>Founder-story</option>
+                                          <option>Analytical</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="options">
+                                      {MOCK_CUSTOMIZE_CHIPS.map((chip) => (
+                                        <button
+                                          key={chip.id}
+                                          type="button"
+                                          className={`chip${chips[chip.id] ? " active" : ""}`}
+                                          onClick={() =>
+                                            setChips((prev) => ({
+                                              ...prev,
+                                              [chip.id]: !prev[chip.id],
+                                            }))
+                                          }
+                                        >
+                                          {chip.label}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="customize-grid">
-                                    <div className="field">
-                                      <label>Audience</label>
+                                </details>
+
+                                <details className="customize-details">
+                                  <summary>Advanced options</summary>
+                                  <div className="customize-panel">
+                                    <label className="plan-toggle">
                                       <input
-                                        className="text-input"
-                                        value={audience}
+                                        type="checkbox"
+                                        checked={reviewPlanBeforeGenerating}
                                         onChange={(e) =>
-                                          setAudience(e.target.value)
+                                          setReviewPlanBeforeGenerating(
+                                            e.target.checked
+                                          )
                                         }
                                       />
-                                    </div>
-                                    <div className="field">
-                                      <label>Goal</label>
-                                      <select
-                                        className="select"
-                                        value={goal}
-                                        onChange={(e) => setGoal(e.target.value)}
-                                      >
-                                        <option>Saves & shares</option>
-                                        <option>Follower growth</option>
-                                        <option>Authority</option>
-                                        <option>Leads</option>
-                                      </select>
-                                    </div>
-                                    <div className="field">
-                                      <label>Content focus</label>
-                                      <select
-                                        className="select"
-                                        value={pillar}
-                                        onChange={(e) =>
-                                          setPillar(e.target.value)
-                                        }
-                                      >
-                                        <option>
-                                          Restaurant profit & cash flow
-                                        </option>
-                                        <option>Menu psychology</option>
-                                        <option>Operations & labor</option>
-                                        <option>Owner mindset</option>
-                                        <option>Equipment decisions</option>
-                                      </select>
-                                    </div>
-                                    <div className="field">
-                                      <label>Voice</label>
-                                      <select
-                                        className="select"
-                                        value={voice}
-                                        onChange={(e) =>
-                                          setVoice(e.target.value)
-                                        }
-                                      >
-                                        <option>Use saved brand voice</option>
-                                        <option>Direct & practical</option>
-                                        <option>Founder-story</option>
-                                        <option>Analytical</option>
-                                      </select>
-                                    </div>
+                                      <span className="plan-toggle-ui" aria-hidden />
+                                      <span className="plan-toggle-copy">
+                                        <strong>Review the plan before generating</strong>
+                                        <small>
+                                          Show the three real angles and source
+                                          content first, then generate.
+                                        </small>
+                                      </span>
+                                    </label>
                                   </div>
-                                  <div className="options">
-                                    {MOCK_CUSTOMIZE_CHIPS.map((chip) => (
-                                      <button
-                                        key={chip.id}
-                                        type="button"
-                                        className={`chip${chips[chip.id] ? " active" : ""}`}
-                                        onClick={() =>
-                                          setChips((prev) => ({
-                                            ...prev,
-                                            [chip.id]: !prev[chip.id],
-                                          }))
-                                        }
-                                      >
-                                        {chip.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              </details>
+                                </details>
+                              </div>
 
                               <button
                                 type="button"
                                 className="btn primary composer-primary"
-                                disabled={isFindingAngles || linkStatus === "loading"}
-                                aria-disabled={isFindingAngles || linkStatus === "loading"}
-                                onClick={() => {
-                                  void findAngles();
-                                }}
+                                disabled={
+                                  isBusyGenerating || linkStatus === "loading"
+                                }
+                                aria-disabled={
+                                  isBusyGenerating || linkStatus === "loading"
+                                }
+                                onClick={handlePrimaryGenerate}
                               >
-                                {isFindingAngles
-                                  ? "Finding angles..."
-                                  : "Find the strongest angle →"}
+                                {reviewPlanBeforeGenerating
+                                  ? isFindingAngles
+                                    ? "Preparing plan..."
+                                    : "Review plan →"
+                                  : isBusyGenerating
+                                    ? "Generating..."
+                                    : "Generate →"}
                               </button>
                             </div>
                           </div>
@@ -1056,91 +1223,121 @@ export function CarouselStudioApp() {
 
                 {createStep === "strategy" && (
                   <div id="strategyStep" className="strategy-wrap">
-                    <div className="strategy-head">
-                      <div>
-                        <div className="eyebrow">{strategyCopy.eyebrow}</div>
-                        <h2>{strategyCopy.title}</h2>
-                        <p className="sub">{strategyCopy.sub}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        onClick={() => showCreateStep("input")}
-                      >
-                        ← Back
-                      </button>
-                    </div>
-
-                    <div className="strategy-grid">
-                      {strategies.map((s, idx) => (
-                        <article
-                          key={s.title}
-                          className={`strategy-card${selectedStrategy === idx ? " selected" : ""}`}
-                          onClick={() => setSelectedStrategy(idx)}
-                        >
-                          <div className="kicker">{s.kicker}</div>
-                          <h3>{s.title}</h3>
-                          <p>{s.body}</p>
-                          <div className="strategy-meta">
-                            <div className="metric">
-                              Best for<strong>{s.best}</strong>
-                            </div>
-                            <div className="metric">
-                              Slides<strong>{s.slides}</strong>
-                            </div>
-                          </div>
-                          <div className="metric">
-                            Predicted strength<strong>{s.kicker}</strong>
-                            <div className="score-line">
-                              <span style={{ width: s.width }} />
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-
-                    {strategyCopy.showInsight && (
-                      <div className="insight-card">
-                        <div>
-                          <h4>Why this remix can work</h4>
-                          <p>
-                            Spyreels detected a strong curiosity hook, visual
-                            contrast, and one-clear-idea-per-slide pacing in the
-                            source carousel. Your version keeps that mechanism,
-                            but replaces the broad motivational message with
-                            niche-specific restaurant insight.
-                          </p>
+                    {!strategies || !resolvedSource?.sourceContent || !selectedAngle ? (
+                      <div className="plan-missing">
+                        <div className="eyebrow">Plan review</div>
+                        <h2>Plan data is not available yet.</h2>
+                        <p className="sub">
+                          Real angles and source content are required for this
+                          screen. Go back and generate the plan again.
+                        </p>
+                        <div className="strategy-actions">
+                          <button
+                            type="button"
+                            className="btn primary"
+                            onClick={() => {
+                              setPlanReviewSession(false);
+                              showCreateStep("input");
+                            }}
+                          >
+                            ← Back to input
+                          </button>
                         </div>
-                        <span className="badge safe">Original output</span>
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        <div className="strategy-head">
+                          <div>
+                            <div className="eyebrow">{strategyCopy.eyebrow}</div>
+                            <h2>{strategyCopy.title}</h2>
+                            <p className="sub">{strategyCopy.sub}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            onClick={() => {
+                              setPlanReviewSession(false);
+                              showCreateStep("input");
+                            }}
+                          >
+                            ← Back
+                          </button>
+                        </div>
 
-                    <div className="strategy-actions">
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        disabled={isFindingAngles}
-                        onClick={() => {
-                          void findAngles();
-                        }}
-                      >
-                        {isFindingAngles
-                          ? "Finding angles..."
-                          : "Generate 3 more"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn primary"
-                        disabled={isStartingCarousel || !liveAngles}
-                        onClick={() => {
-                          void startGenerate();
-                        }}
-                      >
-                        {isStartingCarousel
-                          ? "Starting..."
-                          : "Create carousel →"}
-                      </button>
-                    </div>
+                        <div className="plan-review-meta">
+                          <div className="plan-source-card">
+                            <div className="plan-source-label">
+                              Source content that will be used
+                            </div>
+                            <div className="plan-source-body">
+                              {resolvedSource.sourceContent}
+                            </div>
+                            {resolvedSource.sourceUrl ? (
+                              <div className="plan-source-url">
+                                {resolvedSource.sourceUrl}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="plan-slide-count">
+                            <span>Slides that will be generated</span>
+                            <strong>
+                              {studioPlannedSlideCount(
+                                selectedAngle.estimatedSlideCount
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="strategy-grid">
+                          {strategies.map((angle, idx) => (
+                            <article
+                              key={`${angle.kicker}-${angle.title}-${idx}`}
+                              className={`strategy-card${selectedStrategy === idx ? " selected" : ""}`}
+                              onClick={() => setSelectedStrategy(idx)}
+                            >
+                              <div className="kicker">{angle.kicker}</div>
+                              <h3>{angle.title}</h3>
+                              <p>{angle.description}</p>
+                              <div className="strategy-meta">
+                                <div className="metric">
+                                  Estimated slides
+                                  <strong>{angle.estimatedSlideCount}</strong>
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+
+                        <div className="strategy-actions">
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            onClick={() => {
+                              setPlanReviewSession(false);
+                              showCreateStep("input");
+                            }}
+                          >
+                            ← Back
+                          </button>
+                          <button
+                            type="button"
+                            className="btn primary"
+                            disabled={
+                              isStartingCarousel ||
+                              !strategies ||
+                              !selectedAngle
+                            }
+                            onClick={() => {
+                              void startGenerate(selectedStrategy);
+                            }}
+                          >
+                            {isStartingCarousel
+                              ? "Starting..."
+                              : "Generate →"}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 

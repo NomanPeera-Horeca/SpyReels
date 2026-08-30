@@ -63,6 +63,55 @@ export function normalizeCarouselSourceUrl(raw: string): string {
   return trimmed;
 }
 
+/** Neutral remake-niche placeholder when Studio has no explicit audience/pillar override. */
+export const STUDIO_INFER_FROM_SOURCE_NICHE = "infer from source";
+
+/**
+ * Studio niche override for generateAngles / generateFromInput.
+ * Saved creator niche and untouched Customize fields are never submitted.
+ * Closed Customize always means no override.
+ */
+export function buildStudioNicheOverride(args: {
+  customizeOpen: boolean;
+  audienceEdited: boolean;
+  pillarEdited: boolean;
+  audience: string;
+  pillar: string;
+}): string | undefined {
+  if (!args.customizeOpen) return undefined;
+  const audience = args.audienceEdited ? args.audience.trim() : "";
+  const pillar = args.pillarEdited ? args.pillar.trim() : "";
+  if (audience && pillar) return `${audience} · ${pillar}`;
+  if (audience) return audience;
+  if (pillar) return pillar;
+  return undefined;
+}
+
+/** First line of the typed idea / extracted source, never a saved profile niche. */
+export function inferStudioNicheFromSource(sourceContent: string): string {
+  const firstLine =
+    sourceContent
+      .trim()
+      .split(/\n/)[0]
+      ?.replace(/\s+/g, " ")
+      .trim() ?? "";
+  if (!firstLine) return STUDIO_INFER_FROM_SOURCE_NICHE;
+  return firstLine.slice(0, 200);
+}
+
+/**
+ * Studio-only niche resolution. Does not fall back to the saved creator profile.
+ * Explicit Customize override wins; otherwise infer from source content.
+ */
+export function resolveStudioCarouselNiche(
+  provided: string | undefined,
+  sourceContent: string
+): string {
+  const override = provided?.trim() ?? "";
+  if (override.length > 0) return override;
+  return inferStudioNicheFromSource(sourceContent);
+}
+
 /** Studio editor slide (headline/body + optional photo from the remake image chain). */
 export type CarouselStudioSlide = {
   title: string;

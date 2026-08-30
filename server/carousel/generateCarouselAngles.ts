@@ -65,14 +65,36 @@ export function buildCarouselAnglesJsonSchema(): {
   };
 }
 
-function buildAnglesUserPrompt(args: {
+export function buildCarouselAnglesSystemPrompt(): string {
+  return withAiFormattingRules(
+    [
+      "You are a SpyReels carousel strategist. Propose distinct save-worthy angles only. Return structured tool output only.",
+      "Source content is the primary authority for topic, industry, and audience.",
+      "If the source explicitly mentions an audience or industry, preserve it.",
+      "Never convert the source into the creator's saved niche unless an explicit audience override was provided.",
+      "Audience override affects targeting only; it must not replace unrelated source facts.",
+      "Brand voice may affect tone but never topic, industry, or audience.",
+    ].join(" ")
+  );
+}
+
+export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
-  niche: string;
+  niche?: string | null;
   brandVoice?: string | null;
 }): string {
   const brand = args.brandVoice?.trim();
+  const override = args.niche?.trim() ?? "";
+  const audienceLine = override
+    ? `Audience override (targeting only; do not replace unrelated source facts): ${override}`
+    : "Audience / industry: infer from the source content.";
   const lines = [
-    `Niche / audience: ${args.niche.trim()}`,
+    audienceLine,
+    "",
+    "Source content is the primary authority for topic, industry, and audience.",
+    "If the source explicitly mentions an audience or industry, preserve it.",
+    "Never convert the source into the creator's saved niche unless an explicit audience override was provided.",
+    "Audience override affects targeting only; it must not replace unrelated source facts.",
     "",
     "Source content (use as material; do not copy wording verbatim into titles):",
     args.sourceContent.trim(),
@@ -81,7 +103,7 @@ function buildAnglesUserPrompt(args: {
     "Each angle must be a distinct content approach (e.g. Contrarian vs Framework vs Story), not the same idea rewritten three times.",
     "Do NOT write full slide content. Only kicker, title, one-sentence description, and estimatedSlideCount.",
     `estimatedSlideCount must be an integer from ${CAROUSEL_STUDIO_MIN_SLIDES} to ${CAROUSEL_STUDIO_MAX_SLIDES}.`,
-    "Titles should feel scroll-stopping and niche-specific.",
+    "Titles should feel scroll-stopping and specific to the source topic and audience.",
   ];
   if (brand) {
     lines.push("", `Brand voice guidance (tone only, not a topic override): ${brand}`);
@@ -121,12 +143,12 @@ function normalizeAngles(payload: AnglesLlmPayload): CarouselAngleOption[] {
 
 async function invokeCarouselAnglesOnce(args: {
   sourceContent: string;
-  niche: string;
+  niche?: string | null;
   brandVoice?: string | null;
   repairNote?: string;
 }): Promise<CarouselAngleOption[]> {
   const schema = buildCarouselAnglesJsonSchema();
-  const basePrompt = buildAnglesUserPrompt({
+  const basePrompt = buildCarouselAnglesUserPrompt({
     sourceContent: args.sourceContent,
     niche: args.niche,
     brandVoice: args.brandVoice,
@@ -141,9 +163,7 @@ async function invokeCarouselAnglesOnce(args: {
     messages: [
       {
         role: "system",
-        content: withAiFormattingRules(
-          "You are a SpyReels carousel strategist. Propose distinct save-worthy angles only. Return structured tool output only."
-        ),
+        content: buildCarouselAnglesSystemPrompt(),
       },
       {
         role: "user",
@@ -167,16 +187,13 @@ async function invokeCarouselAnglesOnce(args: {
  */
 export async function generateCarouselAngles(args: {
   sourceContent: string;
-  niche: string;
+  niche?: string | null;
   brandVoice?: string | null;
 }): Promise<CarouselAngleOption[]> {
   const sourceContent = args.sourceContent.trim();
-  const niche = args.niche.trim();
+  const niche = args.niche?.trim() || undefined;
   if (!sourceContent) {
     throw new Error("sourceContent is required to generate carousel angles.");
-  }
-  if (!niche) {
-    throw new Error("niche is required to generate carousel angles.");
   }
 
   let angles = await invokeCarouselAnglesOnce({

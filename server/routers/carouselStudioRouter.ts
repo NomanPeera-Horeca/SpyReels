@@ -12,6 +12,7 @@ import {
   CAROUSEL_STUDIO_TEMPLATE_ID,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
+  resolveStudioCarouselNiche,
   studioPlannedSlideCount,
   type CarouselAngleOption,
 } from "@shared/carouselStudio";
@@ -24,10 +25,7 @@ import {
   CarouselSourceUrlError,
   resolveCarouselSourceFromUrl,
 } from "../carousel/fetchSocialVideoSourceText";
-import {
-  assertCarouselRemakeQuota,
-  resolveCarouselNiche,
-} from "./carouselRemakeRouter";
+import { assertCarouselRemakeQuota } from "./carouselRemakeRouter";
 import {
   createGenerationTelemetryContext,
   isGenerationMetrics,
@@ -107,7 +105,8 @@ function prefetchOrResolveSource(
 
 async function proposeStudioAngles(args: {
   sourceContent: string;
-  niche: string;
+  /** Explicit Customize override only. Empty means infer audience from source. */
+  niche?: string;
   brandVoice?: string;
 }): Promise<CarouselAngleOption[]> {
   try {
@@ -236,15 +235,16 @@ export const carouselStudioRouter = router({
           prefetchOrResolveSource(input, ctx.user)
         )
       );
-      const niche = await resolveCarouselNiche(ctx.user.id, input.niche, {
-        businessDescription: ctx.user.businessDescription,
-        targetAudience: ctx.user.targetAudience,
-      });
+      const nicheOverride = input.niche?.trim() || undefined;
+      const remakeNiche = resolveStudioCarouselNiche(
+        nicheOverride,
+        resolved.sourceContent
+      );
       const angles = await runWithGenerationTelemetry(telemetry, () =>
         withGenerationStage(telemetry, "angle_generation", () =>
           proposeStudioAngles({
             sourceContent: resolved.sourceContent,
-            niche,
+            niche: nicheOverride,
             brandVoice: input.brandVoice,
           })
         )
@@ -270,7 +270,7 @@ export const carouselStudioRouter = router({
         userId: ctx.user.id,
         workspaceId,
         templateId: CAROUSEL_STUDIO_TEMPLATE_ID,
-        niche: niche.slice(0, 500),
+        niche: remakeNiche.slice(0, 500),
         sourceUrl: resolved.sourceUrl,
         status: "pending",
         angleOptionsJson: angles,
@@ -326,15 +326,16 @@ export const carouselStudioRouter = router({
           prefetchOrResolveSource(input, ctx.user)
         )
       );
-      const niche = await resolveCarouselNiche(ctx.user.id, input.niche, {
-        businessDescription: ctx.user.businessDescription,
-        targetAudience: ctx.user.targetAudience,
-      });
+      const nicheOverride = input.niche?.trim() || undefined;
+      const remakeNiche = resolveStudioCarouselNiche(
+        nicheOverride,
+        resolved.sourceContent
+      );
       const angles = await runWithGenerationTelemetry(telemetry, () =>
         withGenerationStage(telemetry, "angle_generation", () =>
           proposeStudioAngles({
             sourceContent: resolved.sourceContent,
-            niche,
+            niche: nicheOverride,
             brandVoice: input.brandVoice,
           })
         )
@@ -360,7 +361,7 @@ export const carouselStudioRouter = router({
         userId: ctx.user.id,
         workspaceId,
         templateId: CAROUSEL_STUDIO_TEMPLATE_ID,
-        niche: niche.slice(0, 500),
+        niche: remakeNiche.slice(0, 500),
         sourceUrl: resolved.sourceUrl,
         status: "processing",
         angleOptionsJson: angles,
@@ -379,7 +380,7 @@ export const carouselStudioRouter = router({
 
       fireStudioRemake({
         remakeId,
-        niche,
+        niche: remakeNiche,
         selected,
         sourceContent: resolved.sourceContent,
         sourceImage: resolved.sourceImage,
