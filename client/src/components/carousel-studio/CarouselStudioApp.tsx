@@ -31,6 +31,7 @@ import {
 } from "@/lib/carouselExport";
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
+import { StudioLibraryPage } from "./StudioLibraryPage";
 import {
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
@@ -42,6 +43,11 @@ import {
   type CreateStep,
   type Platform,
 } from "./mockData";
+import {
+  STUDIO_LIBRARY_LIST_QUERY,
+  STUDIO_NAV_ITEMS,
+  mapStudioLibraryRows,
+} from "./studioLibrary";
 
 type StoredDesignOverride = {
   background: string;
@@ -128,7 +134,6 @@ function useToast() {
 const PAGE_TITLES: Record<NavPage, string> = {
   create: "Create carousel",
   library: "Library",
-  downloads: "Downloads",
   performance: "Performance",
   brand: "Brand intelligence",
 };
@@ -178,6 +183,7 @@ export function CarouselStudioApp() {
     sourceReelId: string | null;
   } | null>(null);
   const [isPollingRemake, setIsPollingRemake] = useState(false);
+  const [isOpeningLibrary, setIsOpeningLibrary] = useState(false);
 
   const [remakeTemplateId, setRemakeTemplateId] = useState<string | null>(null);
   const [remakeSlotValues, setRemakeSlotValues] =
@@ -217,8 +223,13 @@ export function CarouselStudioApp() {
     sourceReelId: string | null;
   }> | null>(null);
   const exportGenerationRef = useRef(0);
+  const utils = trpc.useUtils();
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
+  const libraryQuery = trpc.carouselRemake.list.useQuery(
+    STUDIO_LIBRARY_LIST_QUERY,
+    { enabled: navPage === "library" }
+  );
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
   const generateFromInputMutation =
     trpc.carouselStudio.generateFromInput.useMutation();
@@ -226,6 +237,9 @@ export function CarouselStudioApp() {
   const generateCarouselMutation =
     trpc.carouselStudio.generateCarousel.useMutation();
   const updateSlotMutation = trpc.carouselRemake.updateSlotValues.useMutation({
+    onSuccess: () => {
+      void utils.carouselRemake.list.invalidate();
+    },
     onError: (err) => {
       toast(err.message || "Failed to save text edit");
     },
@@ -235,6 +249,7 @@ export function CarouselStudioApp() {
       if (data.aspectRatio === "4:5" || data.aspectRatio === "1:1" || data.aspectRatio === "9:16") {
         setRemakeAspectRatio(data.aspectRatio);
       }
+      void utils.carouselRemake.list.invalidate();
     },
     onError: (err) => {
       toast(err.message || "Failed to save format");
@@ -620,6 +635,7 @@ export function CarouselStudioApp() {
     setLiveAngles(null);
     setResolvedSource(null);
     setIsPollingRemake(false);
+    setIsOpeningLibrary(false);
     setRemakeTemplateId(null);
     setRemakeSlotValues(null);
     setRemakeSlideStructure(null);
@@ -642,10 +658,17 @@ export function CarouselStudioApp() {
         : [];
       const template = CAROUSEL_TEMPLATES_BY_ID.get(data.templateId);
       if (!template || structure.length === 0) {
-        if (isPollingRemake) {
+        if (isPollingRemake || isOpeningLibrary) {
           setIsPollingRemake(false);
-          toast("Carousel generated but slides were empty. Try again.");
-          showCreateStep(planReviewSession ? "strategy" : "input");
+          setIsOpeningLibrary(false);
+          if (isOpeningLibrary) {
+            toast("This carousel has no slides to open.");
+            setRemakeId(null);
+            setNavPage("library");
+          } else {
+            toast("Carousel generated but slides were empty. Try again.");
+            showCreateStep(planReviewSession ? "strategy" : "input");
+          }
         }
         return;
       }
@@ -666,12 +689,16 @@ export function CarouselStudioApp() {
       ) {
         setRemakeAspectRatio(data.aspectRatioOverride);
       }
-      if (isPollingRemake || !hasGeneratedCarousel) {
+      if (isPollingRemake || isOpeningLibrary || !hasGeneratedCarousel) {
         setRemakeSlotValues(normalizeCarouselSlideValues(data.slotValues) ?? {});
         setCurrentSlide(0);
         setHistory([]);
         setHasGeneratedCarousel(true);
+        setIsOpeningLibrary(false);
         showCreateStep("editor");
+      }
+      if (isPollingRemake) {
+        void utils.carouselRemake.list.invalidate();
       }
       setIsPollingRemake(false);
       return;
@@ -679,16 +706,71 @@ export function CarouselStudioApp() {
     if (data.status === "failed") {
       setIsPollingRemake(false);
       toast(data.errorMessage || "Carousel generation failed.");
+      if (isOpeningLibrary) {
+        setIsOpeningLibrary(false);
+        setRemakeId(null);
+        setNavPage("library");
+        return;
+      }
       showCreateStep(planReviewSession ? "strategy" : "input");
     }
   }, [
     remakeStatusQuery.data,
     isPollingRemake,
+    isOpeningLibrary,
     hasGeneratedCarousel,
     planReviewSession,
     showCreateStep,
     toast,
+    utils,
   ]);
+
+  useEffect(() => {
+    if (navPage !== "library") return;
+    void utils.carouselRemake.list.invalidate();
+  }, [navPage, utils]);
+
+  useEffect(() => {
+    if (!isOpeningLibrary) return;
+    if (!remakeStatusQuery.isError) return;
+    setIsOpeningLibrary(false);
+    setRemakeId(null);
+    setNavPage("library");
+    toast(
+      remakeStatusQuery.error.message || "Could not open that carousel."
+    );
+  }, [
+    isOpeningLibrary,
+    remakeStatusQuery.isError,
+    remakeStatusQuery.error,
+    toast,
+  ]);
+
+  const clearStaleRemakeVisuals = useCallback(() => {
+    setRemakeSlotValues(null);
+    setRemakeSlideStructure(null);
+    setRemakeImageUrls(null);
+    setRemakeTemplateId(null);
+    setRemakeDesignOverride(null);
+    setRemakeAspectRatio("4:5");
+    setCurrentSlide(0);
+    setHistory([]);
+    setHasGeneratedCarousel(false);
+    setIsPollingRemake(false);
+    setPlanReviewSession(false);
+  }, []);
+
+  const openCompletedFromLibrary = useCallback(
+    (nextRemakeId: number) => {
+      clearStaleRemakeVisuals();
+      setIsOpeningLibrary(true);
+      setRemakeId(nextRemakeId);
+      setNavPage("create");
+    },
+    [clearStaleRemakeVisuals]
+  );
+
+  const libraryCards = mapStudioLibraryRows(libraryQuery.data ?? []);
 
   const handleSlotChange = (slideId: string, slotId: string, value: string) => {
     saveHistory();
@@ -829,15 +911,7 @@ export function CarouselStudioApp() {
             Workspace<strong>Horeca Growth Lab</strong>
           </div>
           <nav className="nav">
-            {(
-              [
-                ["create", "Create"],
-                ["library", "Library"],
-                ["downloads", "Downloads"],
-                ["performance", "Performance"],
-                ["brand", "Brand"],
-              ] as const
-            ).map(([id, label]) => (
+            {STUDIO_NAV_ITEMS.map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -910,7 +984,17 @@ export function CarouselStudioApp() {
           </header>
 
           <section className="content">
-            {navPage === "create" && (
+            {navPage === "create" && isOpeningLibrary && !hasGeneratedCarousel && (
+              <div className="page">
+                <div className="progress-box">
+                  <div className="eyebrow">Library</div>
+                  <h2>Opening carousel</h2>
+                  <p className="sub">Loading your saved slides...</p>
+                </div>
+              </div>
+            )}
+
+            {navPage === "create" && !(isOpeningLibrary && !hasGeneratedCarousel) && (
               <div className="page" id="createPage">
                 {createStep === "input" && (
                   <div id="inputStep">
@@ -1551,73 +1635,18 @@ export function CarouselStudioApp() {
             )}
 
             {navPage === "library" && (
-              <div className="page empty-page">
-                <div className="eyebrow">Content library</div>
-                <h2>Everything you have created, in one place.</h2>
-                <p className="sub">
-                  Search, duplicate, remix, and reuse winning carousel structures.
-                </p>
-                <div className="recent-grid" style={{ marginTop: 24 }}>
-                  <div className="recent-card">
-                    <div className="recent-preview">
-                      7 pricing mistakes killing restaurant profit
-                    </div>
-                    <div className="recent-meta">
-                      <strong>Pricing Mistakes</strong>9 slides • Draft
-                    </div>
-                  </div>
-                  <div className="recent-card">
-                    <div className="recent-preview">
-                      The 4 numbers restaurant owners must check weekly
-                    </div>
-                    <div className="recent-meta">
-                      <strong>Weekly Numbers</strong>8 slides • Ready to download
-                    </div>
-                  </div>
-                  <div className="recent-card">
-                    <div className="recent-preview">
-                      Why more sales can make you poorer
-                    </div>
-                    <div className="recent-meta">
-                      <strong>Revenue Trap</strong>9 slides • Downloaded
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {navPage === "downloads" && (
-              <div className="page empty-page">
-                <div className="eyebrow">Download packages</div>
-                <h2>Everything exported from Spyreels.</h2>
-                <p className="sub">
-                  The old Calendar area is now Downloads because this version
-                  creates complete handoff packages instead of scheduling posts.
-                </p>
-                <div className="recent-grid" style={{ marginTop: 24 }}>
-                  <div className="recent-card">
-                    <div className="recent-preview">Hidden Profit Remix</div>
-                    <div className="recent-meta">
-                      <strong>hidden-profit-remix.zip</strong>9 images • caption •
-                      hashtags
-                    </div>
-                  </div>
-                  <div className="recent-card">
-                    <div className="recent-preview">Weekly Restaurant Numbers</div>
-                    <div className="recent-meta">
-                      <strong>weekly-numbers.zip</strong>8 images • caption •
-                      hashtags
-                    </div>
-                  </div>
-                  <div className="recent-card">
-                    <div className="recent-preview">Pricing Mistakes</div>
-                    <div className="recent-meta">
-                      <strong>pricing-mistakes.zip</strong>9 images • caption •
-                      hashtags
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <StudioLibraryPage
+                cards={libraryCards}
+                isLoading={libraryQuery.isLoading}
+                isError={libraryQuery.isError}
+                errorMessage={libraryQuery.error?.message ?? null}
+                onRetry={() => {
+                  void libraryQuery.refetch();
+                }}
+                onOpenCompleted={openCompletedFromLibrary}
+                onTryAgain={startNewCarousel}
+                onCreateNew={startNewCarousel}
+              />
             )}
 
             {navPage === "performance" && (

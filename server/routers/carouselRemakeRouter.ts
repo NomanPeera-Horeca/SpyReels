@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { deriveCarouselLibraryMeta } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -10,6 +11,11 @@ import { getUserSubscription } from "../stripe/stripe-service";
 import { getPlanLimits, type PlanId } from "../stripe/products";
 import { hasUnlimitedUsage } from "../usageBypass";
 import { countCarouselRemakesThisMonth } from "../carousel/db";
+import {
+  carouselRemakeListSqlOrderBy,
+  compareRemakesForList,
+  planCarouselRemakeListQuery,
+} from "../carousel/carouselRemakeListQuery";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import { searchStockPhotos as searchStockPhotosLib } from "../carousel/searchStockPhotos";
 import {
@@ -120,19 +126,6 @@ function orderedSlideImageUrls(
 function parseDateSafe(dateStr: string): Date {
   if (dateStr.includes("T")) return new Date(dateStr);
   return new Date(dateStr + "T12:00:00");
-}
-
-/** Scheduled remakes first (soonest postDate), then newest created. */
-function compareRemakesForList(
-  a: { postDate: Date | null; createdAt: Date },
-  b: { postDate: Date | null; createdAt: Date }
-): number {
-  if (a.postDate && b.postDate) {
-    return a.postDate.getTime() - b.postDate.getTime();
-  }
-  if (a.postDate && !b.postDate) return -1;
-  if (!a.postDate && b.postDate) return 1;
-  return b.createdAt.getTime() - a.createdAt.getTime();
 }
 
 const DESIGN_OVERRIDE_SCHEMA = z.object({
@@ -477,6 +470,7 @@ export const carouselRemakeRouter = router({
         .object({
           templateId: z.string().max(128).optional(),
           limit: z.number().int().min(1).max(50).default(20),
+          sort: z.enum(["scheduled", "newest"]).optional(),
         })
         .optional()
     )
@@ -499,6 +493,11 @@ export const carouselRemakeRouter = router({
         conditions.push(eq(carouselRemakes.templateId, input.templateId));
       }
 
+      const plan = planCarouselRemakeListQuery({
+        sort: input?.sort,
+        limit: input?.limit,
+      });
+
       const rows = await db
         .select({
           id: carouselRemakes.id,
@@ -511,20 +510,29 @@ export const carouselRemakeRouter = router({
           aspectRatioOverride: carouselRemakes.aspectRatioOverride,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
           slideStructureJson: carouselRemakes.slideStructureJson,
+          slotValuesJson: carouselRemakes.slotValuesJson,
+          errorMessage: carouselRemakes.errorMessage,
         })
         .from(carouselRemakes)
         .where(and(...conditions))
-        .orderBy(desc(carouselRemakes.createdAt))
-        .limit(input?.limit ?? 20);
+        .orderBy(carouselRemakeListSqlOrderBy(plan.sort))
+        .limit(plan.limit);
 
-      return rows
-        .map(({ imageUrlsJson, slideStructureJson, ...row }) => {
+      const mapped = rows.map(
+        ({ imageUrlsJson, slideStructureJson, slotValuesJson, ...row }) => {
           const slideImageUrls = orderedSlideImageUrls(
             imageUrlsJson,
             slideStructureJson
           );
+          const { title, slideCount } = deriveCarouselLibraryMeta({
+            slotValues: slotValuesJson,
+            slideStructure: slideStructureJson,
+            niche: row.niche,
+          });
           return {
             ...row,
+            title,
+            slideCount,
             thumbnailUrl: firstThumbnailUrl(imageUrlsJson) ?? slideImageUrls[0] ?? null,
             slideImageUrls,
             imageUrls: (imageUrlsJson ?? null) as Record<
@@ -532,8 +540,13 @@ export const carouselRemakeRouter = router({
               string | Record<string, string>
             > | null,
           };
-        })
-        .sort(compareRemakesForList);
+        }
+      );
+
+      if (plan.applyScheduledFirstSort) {
+        return mapped.sort(compareRemakesForList);
+      }
+      return mapped;
     }),
 
   defaultNiche: protectedProcedure.query(async ({ ctx }) => {

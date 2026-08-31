@@ -140,6 +140,48 @@ function pickSlideTitle(slots: Record<string, string>): string {
   return slots.kicker?.trim() || "";
 }
 
+function slideIdsFromStructure(slideStructure: unknown): string[] {
+  if (!Array.isArray(slideStructure)) return [];
+  const ids: string[] = [];
+  for (const slide of slideStructure) {
+    if (!slide || typeof slide !== "object") continue;
+    const id = (slide as { id?: unknown }).id;
+    if (typeof id === "string" && id) ids.push(id);
+  }
+  return ids;
+}
+
+function slotMapForSlide(
+  slotValues: unknown,
+  slideId: string
+): Record<string, string> | undefined {
+  if (!slotValues || typeof slotValues !== "object" || Array.isArray(slotValues)) {
+    return undefined;
+  }
+  const slide = (slotValues as Record<string, unknown>)[slideId];
+  if (!slide || typeof slide !== "object" || Array.isArray(slide)) return undefined;
+  return slide as Record<string, string>;
+}
+
+/**
+ * Library card title + slide count from persisted remake JSON.
+ * Title prefers first-slide headline, then title, then kicker, then niche.
+ */
+export function deriveCarouselLibraryMeta(args: {
+  slotValues?: unknown;
+  slideStructure: unknown;
+  niche?: string | null;
+}): { title: string; slideCount: number } {
+  const ids = slideIdsFromStructure(args.slideStructure);
+  const firstSlots = ids[0] ? slotMapForSlide(args.slotValues, ids[0]) : undefined;
+  const fromSlots = firstSlots ? pickSlideTitle(firstSlots) : "";
+  const niche = typeof args.niche === "string" ? args.niche.trim() : "";
+  return {
+    title: fromSlots || niche || "Untitled carousel",
+    slideCount: ids.length,
+  };
+}
+
 function pickSlideBody(slots: Record<string, string>, title: string): string {
   const parts = [slots.body, slots.subhead, slots.cta_label]
     .map((value) => (typeof value === "string" ? value.trim() : ""))

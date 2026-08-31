@@ -363,7 +363,7 @@ export const MOCK_CUSTOMIZE_CHIPS = [
   { id: "platforms", label: "Instagram + LinkedIn", defaultActive: true },
 ] as const;
 
-export type NavPage = "create" | "library" | "downloads" | "performance" | "brand";
+export type NavPage = "create" | "library" | "performance" | "brand";
 
 export type CreateStep =
   | "input"
