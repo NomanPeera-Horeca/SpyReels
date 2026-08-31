@@ -3,6 +3,7 @@ import { sanitizeAiOutput } from "../utils/sanitizeAiOutput";
 import {
   formatIdeaScriptErrorForUser,
   isRetryableLlmError,
+  type IdeaScriptErrorContext,
 } from "@shared/ideaScriptErrors";
 import {
   categorizeGenerationError,
@@ -10,8 +11,16 @@ import {
   type GenerationTelemetryContext,
 } from "../carousel/generationTelemetry";
 
-function asUserFacingLlmError(error: unknown): Error {
-  const message = formatIdeaScriptErrorForUser(error, "script");
+function errorContextForOperation(operation?: string): IdeaScriptErrorContext {
+  if (operation === "angle_generation") return "carousel";
+  return "script";
+}
+
+function asUserFacingLlmError(
+  error: unknown,
+  context: IdeaScriptErrorContext = "script"
+): Error {
+  const message = formatIdeaScriptErrorForUser(error, context);
   const next = new Error(message);
   const status = (error as { status?: number })?.status;
   if (typeof status === "number") {
@@ -524,7 +533,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
         if (!isRetryableLlmError(err)) {
           recordLogical({ success: false, actualModel: null });
-          throw asUserFacingLlmError(err);
+          throw asUserFacingLlmError(err, errorContextForOperation(operation));
         }
 
         if (attempt < 2) {
@@ -538,7 +547,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   if (!response) {
     recordLogical({ success: false, actualModel: null });
     throw asUserFacingLlmError(
-      lastError instanceof Error ? lastError : new Error("LLM request failed")
+      lastError instanceof Error ? lastError : new Error("LLM request failed"),
+      errorContextForOperation(operation)
     );
   }
 

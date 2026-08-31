@@ -1,7 +1,12 @@
 import { IDEA_SUBMIT_MAX_LENGTH } from "./ideaScriptLimits";
 import { formatZodIssuesForUser } from "./trpcValidationErrors";
 
-export type IdeaScriptErrorContext = "validation" | "script" | "remake" | "hooks";
+export type IdeaScriptErrorContext =
+  | "validation"
+  | "script"
+  | "remake"
+  | "hooks"
+  | "carousel";
 
 export function ideaSubmitTooLongMessage(max = IDEA_SUBMIT_MAX_LENGTH): string {
   return formatZodIssuesForUser([
@@ -13,6 +18,7 @@ function contextVerb(context: IdeaScriptErrorContext): string {
   if (context === "validation") return "validating your idea";
   if (context === "remake") return "remaking this reel";
   if (context === "hooks") return "generating your hooks";
+  if (context === "carousel") return "creating your carousel plan";
   return "writing your script";
 }
 

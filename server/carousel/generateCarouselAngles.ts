@@ -154,8 +154,6 @@ export function buildCarouselAnglesJsonSchema(): {
       properties: {
         angles: {
           type: "array",
-          minItems: CAROUSEL_STUDIO_ANGLE_COUNT,
-          maxItems: CAROUSEL_STUDIO_ANGLE_COUNT,
           description: `Exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} complete creative briefs. Do not include id, schemaVersion, or overall score.`,
           items: {
             type: "object",
@@ -218,15 +216,11 @@ export function buildCarouselAnglesJsonSchema(): {
               },
               keyPoints: {
                 type: "array",
-                minItems: CAROUSEL_BRIEF_KEY_POINTS_MIN,
-                maxItems: CAROUSEL_BRIEF_KEY_POINTS_MAX,
                 description: `${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} useful, specific points. Plans only.`,
                 items: keyPointSchema,
               },
               slideOutline: {
                 type: "array",
-                minItems: CAROUSEL_STUDIO_MIN_SLIDES,
-                maxItems: CAROUSEL_STUDIO_MAX_SLIDES,
                 description:
                   "One item per planned slide. Length must equal estimatedSlideCount. Distinct objectives. No full slide copy.",
                 items: slideOutlineItemSchema,
@@ -253,13 +247,11 @@ export function buildCarouselAnglesJsonSchema(): {
               ),
               evidenceRequirements: {
                 type: "array",
-                maxItems: CAROUSEL_BRIEF_EVIDENCE_MAX,
                 description: `What would need verification before publishing. Max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. No citations.`,
                 items: { type: "string" },
               },
               prohibitedClaims: {
                 type: "array",
-                maxItems: CAROUSEL_BRIEF_PROHIBITED_MAX,
                 description: `Claims this brief must not make. Max ${CAROUSEL_BRIEF_PROHIBITED_MAX}. Include unsupported absolutes.`,
                 items: { type: "string" },
               },

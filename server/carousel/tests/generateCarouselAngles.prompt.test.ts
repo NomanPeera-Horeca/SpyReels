@@ -117,16 +117,27 @@ describe("generateCarouselAngles JSON schema", () => {
     );
   });
 
-  it("requires exactly three briefs", () => {
-    expect(angles.angles.minItems).toBe(3);
-    expect(angles.angles.maxItems).toBe(3);
-  });
-
-  it("limits keyPoints and slideOutline", () => {
-    expect(angles.angles.items.properties.keyPoints.minItems).toBe(4);
-    expect(angles.angles.items.properties.keyPoints.maxItems).toBe(8);
-    expect(angles.angles.items.properties.slideOutline.minItems).toBe(5);
-    expect(angles.angles.items.properties.slideOutline.maxItems).toBe(12);
+  it("omits Anthropic-unsupported array minItems and maxItems", () => {
+    const unsupported: string[] = [];
+    const walk = (value: unknown, path: string) => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => walk(item, `${path}[${index}]`));
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      if (typeof record.minItems === "number" && record.minItems !== 0 && record.minItems !== 1) {
+        unsupported.push(`${path}.minItems=${record.minItems}`);
+      }
+      if (typeof record.maxItems === "number") {
+        unsupported.push(`${path}.maxItems=${record.maxItems}`);
+      }
+      for (const [key, child] of Object.entries(record)) {
+        walk(child, `${path}.${key}`);
+      }
+    };
+    walk(schema.schema, "schema");
+    expect(unsupported).toEqual([]);
   });
 });
 
