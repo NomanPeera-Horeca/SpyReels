@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCarouselAnglesJsonSchema,
+  buildCarouselAnglesRepairNote,
   buildCarouselAnglesSystemPrompt,
   buildCarouselAnglesUserPrompt,
 } from "../generateCarouselAngles";
@@ -139,6 +140,12 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("claim_verification");
     expect(user).toContain("prohibitedClaims");
     expect(user).toContain("unsupported absolutes");
+  });
+
+  it("repair note requires matching contentFormat and layoutFamily", () => {
+    expect(buildCarouselAnglesRepairNote(2)).toContain(
+      "matching contentFormat and layoutFamily"
+    );
   });
 
   it("can represent a cash-flow request with breakdown or diagnostic planning", () => {

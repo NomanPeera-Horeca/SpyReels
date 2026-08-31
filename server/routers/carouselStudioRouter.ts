@@ -14,7 +14,7 @@ import {
   logCreativeBriefSelectionTelemetry,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
-  normalizeStoredCarouselBriefs,
+  normalizeStoredCarouselBriefEntries,
   resolveStudioCarouselNiche,
   type CarouselCreativeBrief,
   type NormalizedCarouselBrief,
@@ -254,7 +254,7 @@ export const carouselStudioRouter = router({
         )
       );
       const plan = planGenerateAngles(angles);
-      if (!plan.selected) {
+      if (plan.recommendedBriefIndex == null || !plan.selected) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Could not generate carousel angles.",
@@ -354,7 +354,11 @@ export const carouselStudioRouter = router({
         )
       );
       const plan = planGenerateFromInput(angles);
-      if (!plan.selected) {
+      if (
+        plan.recommendedBriefIndex == null ||
+        plan.selectedAngleIndex == null ||
+        !plan.selected
+      ) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Could not generate carousel angles.",
@@ -431,7 +435,10 @@ export const carouselStudioRouter = router({
           .number()
           .int()
           .min(0)
-          .max(CAROUSEL_STUDIO_ANGLE_COUNT - 1),
+          .max(CAROUSEL_STUDIO_ANGLE_COUNT - 1)
+          .describe(
+            "Display index inside the normalized valid-brief array. Server converts to the persisted stored index."
+          ),
         sourceContent: z.string().max(12000).optional(),
         sourceImage: z.string().max(2048).optional(),
         sourceReelId: z.string().max(128).optional(),
@@ -474,12 +481,13 @@ export const carouselStudioRouter = router({
         });
       }
 
-      const angles = normalizeStoredCarouselBriefs(row.angleOptionsJson);
-      const { selected, recommendedBriefIndex } = planGenerateCarousel(
-        angles,
-        input.selectedAngleIndex
-      );
-      if (!selected) {
+      const entries = normalizeStoredCarouselBriefEntries(row.angleOptionsJson);
+      const {
+        selected,
+        recommendedBriefIndex,
+        selectedAngleIndex: storedSelectedIndex,
+      } = planGenerateCarousel(entries, input.selectedAngleIndex);
+      if (!selected || storedSelectedIndex == null) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Selected angle is missing. Generate angles again.",
@@ -525,20 +533,22 @@ export const carouselStudioRouter = router({
       await db
         .update(carouselRemakes)
         .set({
-          selectedAngleIndex: input.selectedAngleIndex,
+          selectedAngleIndex: storedSelectedIndex,
           status: "processing",
           errorMessage: null,
         })
         .where(eq(carouselRemakes.id, row.id));
 
-      logCreativeBriefSelectionTelemetry({
-        remakeId: row.id,
-        ...buildCreativeBriefSelectionTelemetry({
-          briefs: angles,
-          recommendedBriefIndex,
-          selectedAngleIndex: input.selectedAngleIndex,
-        }),
-      });
+      if (recommendedBriefIndex != null) {
+        logCreativeBriefSelectionTelemetry({
+          remakeId: row.id,
+          ...buildCreativeBriefSelectionTelemetry({
+            briefs: entries.map((entry) => entry.brief),
+            recommendedBriefIndex,
+            selectedAngleIndex: input.selectedAngleIndex,
+          }),
+        });
+      }
 
       fireStudioRemake({
         remakeId: row.id,

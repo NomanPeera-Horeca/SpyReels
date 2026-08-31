@@ -7,10 +7,16 @@ import {
   CAROUSEL_CREATIVE_BRIEF_VERSION,
   clampCarouselBriefScore,
   deriveCarouselLibraryMeta,
+  findBriefByOriginalStoredIndex,
   formatApprovedCreativeBriefForCopy,
+  identityCarouselBriefEntries,
   isLegacyCreativeBrief,
   normalizeGeneratedCarouselBrief,
+  normalizeGeneratedCarouselBriefs,
+  normalizeStoredCarouselBriefEntries,
   normalizeStoredCarouselBriefs,
+  normalizedIndexFromOriginalIndex,
+  originalIndexFromNormalizedIndex,
   pendingStudioSelectionViewState,
   researchModeLabel,
   resolveRecommendedStudioBrief,
@@ -327,6 +333,13 @@ describe("selectRecommendedCreativeBrief", () => {
     expect([malformed.id, valid.id]).toEqual(["brief_1", "brief_2"]);
   });
 
+  it("returns null index and null brief for an empty array", () => {
+    expect(selectRecommendedCreativeBrief([])).toEqual({
+      index: null,
+      brief: null,
+    });
+  });
+
   it("keeps original order when overall scores are equal and later tie-breaks decide", () => {
     const base = scoreCarouselCreativeBrief({
       relevance: 70,
@@ -468,6 +481,52 @@ describe("generated brief validation", () => {
         0
       )
     ).not.toBeNull();
+  });
+
+  it("requires contentFormat to match layoutFamily", () => {
+    expect(
+      normalizeGeneratedCarouselBrief(
+        sampleBrief({ contentFormat: "story", layoutFamily: "story" }),
+        0
+      )
+    ).not.toBeNull();
+    expect(
+      normalizeGeneratedCarouselBrief(
+        sampleBrief({ contentFormat: "breakdown", layoutFamily: "breakdown" }),
+        0
+      )
+    ).not.toBeNull();
+    expect(
+      normalizeGeneratedCarouselBrief(
+        sampleBrief({ contentFormat: "story", layoutFamily: "framework" }),
+        0
+      )
+    ).toBeNull();
+  });
+
+  it("drops a format/layout mismatch instead of accepting it among three candidates", () => {
+    const briefs = normalizeGeneratedCarouselBriefs([
+      sampleBrief({
+        title: "Story plan",
+        contentFormat: "story",
+        layoutFamily: "story",
+      }),
+      sampleBrief({
+        title: "Mismatched plan",
+        contentFormat: "story",
+        layoutFamily: "framework",
+      }),
+      sampleBrief({
+        title: "Breakdown plan",
+        contentFormat: "breakdown",
+        layoutFamily: "breakdown",
+      }),
+    ]);
+    expect(briefs).toHaveLength(2);
+    expect(briefs.map((brief) => brief.title)).toEqual([
+      "Story plan",
+      "Breakdown plan",
+    ]);
   });
 
   it("assigns brief ids and schemaVersion server-side and computes overall", () => {
@@ -641,5 +700,160 @@ describe("creative brief telemetry payload", () => {
     expect(payload.selection).toBe("recommended");
     expect(JSON.stringify(payload)).not.toContain("Cash is a system");
     expect(JSON.stringify(payload)).not.toContain("Guaranteed profit");
+  });
+
+  it("does not invent a fake recommended index for an empty candidate list", () => {
+    const payload = buildCreativeBriefSelectionTelemetry({
+      briefs: [],
+      recommendedBriefIndex: null,
+      selectedAngleIndex: null,
+    });
+    expect(payload.recommendedBriefIndex).toBeNull();
+    expect(payload.selectedAngleIndex).toBeNull();
+    expect(payload.selection).toBe("unselected");
+  });
+});
+
+describe("stored vs display brief indexes", () => {
+  const malformed = {
+    kicker: "Diagnostic",
+    title: "Broken modern plan",
+    description: "Has modern fields but is incomplete.",
+    estimatedSlideCount: 6,
+    topic: "small business cash flow",
+    contentGoal: "education",
+  };
+
+  it("maps persisted stored index 2 to display index 1 and brief B", () => {
+    const stored = [
+      sampleBrief({ id: "brief_1", title: "Valid A" }),
+      malformed,
+      sampleBrief({ id: "brief_3", title: "Valid B" }),
+    ];
+    const entries = normalizeStoredCarouselBriefEntries(stored);
+    expect(entries.map((entry) => entry.originalIndex)).toEqual([0, 2]);
+    expect(entries.map((entry) => entry.brief.title)).toEqual([
+      "Valid A",
+      "Valid B",
+    ]);
+    expect(normalizedIndexFromOriginalIndex(entries, 2)).toBe(1);
+    expect(findBriefByOriginalStoredIndex(entries, 2)?.title).toBe("Valid B");
+    const restored = applyStudioSelectionResponse({
+      recommendedBriefIndex: selectRecommendedCreativeBrief(
+        entries.map((entry) => entry.brief)
+      ).index,
+      selectedAngleIndex: normalizedIndexFromOriginalIndex(entries, 2),
+      mode: "restore",
+    });
+    expect(restored.selectedIndex).toBe(1);
+    expect(entries[restored.selectedIndex!]?.brief.title).toBe("Valid B");
+  });
+
+  it("converts a display selection back to the original stored index", () => {
+    const stored = [
+      sampleBrief({ id: "brief_1", title: "Valid A" }),
+      malformed,
+      sampleBrief({ id: "brief_3", title: "Valid B" }),
+    ];
+    const entries = normalizeStoredCarouselBriefEntries(stored);
+    expect(originalIndexFromNormalizedIndex(entries, 1)).toBe(2);
+  });
+
+  it("returns a null selected index when the persisted item was dropped", () => {
+    const stored = [
+      sampleBrief({ id: "brief_1", title: "Valid A" }),
+      malformed,
+      sampleBrief({ id: "brief_3", title: "Valid B" }),
+    ];
+    const entries = normalizeStoredCarouselBriefEntries(stored);
+    expect(normalizedIndexFromOriginalIndex(entries, 1)).toBeNull();
+    expect(findBriefByOriginalStoredIndex(entries, 1)).toBeNull();
+    const restored = applyStudioSelectionResponse({
+      recommendedBriefIndex: selectRecommendedCreativeBrief(
+        entries.map((entry) => entry.brief)
+      ).index,
+      selectedAngleIndex: normalizedIndexFromOriginalIndex(entries, 1),
+      mode: "restore",
+    });
+    expect(restored.selectedIndex).toBeNull();
+    expect(studioGenerateActionEnabled(restored)).toBe(false);
+  });
+
+  it("keeps identity mapping for a fully valid three-brief array", () => {
+    const briefs = [
+      sampleBrief({ id: "brief_1", title: "One" }),
+      sampleBrief({ id: "brief_2", title: "Two" }),
+      sampleBrief({ id: "brief_3", title: "Three" }),
+    ];
+    const entries = identityCarouselBriefEntries(briefs);
+    expect(normalizedIndexFromOriginalIndex(entries, 0)).toBe(0);
+    expect(normalizedIndexFromOriginalIndex(entries, 1)).toBe(1);
+    expect(normalizedIndexFromOriginalIndex(entries, 2)).toBe(2);
+    expect(originalIndexFromNormalizedIndex(entries, 0)).toBe(0);
+    expect(originalIndexFromNormalizedIndex(entries, 1)).toBe(1);
+    expect(originalIndexFromNormalizedIndex(entries, 2)).toBe(2);
+  });
+
+  it("scores only valid normalized briefs and returns the display index", () => {
+    const stored = [
+      sampleBrief({
+        id: "brief_1",
+        title: "Valid A",
+        scores: {
+          relevance: 20,
+          usefulness: 20,
+          specificity: 20,
+          visualPotential: 20,
+          factualSafety: 20,
+          originality: 20,
+        },
+      }),
+      malformed,
+      sampleBrief({
+        id: "brief_3",
+        title: "Valid B",
+        scores: {
+          relevance: 95,
+          usefulness: 95,
+          specificity: 95,
+          visualPotential: 95,
+          factualSafety: 95,
+          originality: 95,
+        },
+      }),
+    ];
+    const entries = normalizeStoredCarouselBriefEntries(stored);
+    const briefs = entries.map((entry) => entry.brief);
+    const recommended = selectRecommendedCreativeBrief(briefs);
+    expect(recommended.index).toBe(1);
+    expect(recommended.brief?.title).toBe("Valid B");
+    expect(entries[recommended.index!]?.originalIndex).toBe(2);
+  });
+});
+
+describe("empty recommendation callers", () => {
+  it("does not start generateFromInput without a valid recommendation", () => {
+    const resolved = resolveRecommendedStudioBrief([]);
+    expect(resolved.recommendedBriefIndex).toBeNull();
+    expect(resolved.selectedAngleIndex).toBeNull();
+    expect(resolved.selected).toBeNull();
+    expect(
+      studioGenerateActionEnabled({
+        recommendedBriefIndex: resolved.recommendedBriefIndex,
+        selectedIndex: resolved.selectedAngleIndex,
+      })
+    ).toBe(false);
+  });
+
+  it("keeps Review Plan generate disabled when no briefs exist", () => {
+    const pending = pendingStudioSelectionViewState();
+    const view = buildReviewPlanViewModel({
+      briefs: [],
+      recommendedBriefIndex: pending.recommendedBriefIndex,
+      selectedIndex: pending.selectedIndex,
+    });
+    expect(view.recommended).toBeNull();
+    expect(view.cards).toEqual([]);
+    expect(studioGenerateActionEnabled(pending)).toBe(false);
   });
 });

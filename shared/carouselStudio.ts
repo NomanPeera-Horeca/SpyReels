@@ -196,7 +196,7 @@ export type CreativeBriefSelectionTelemetry = {
     researchMode: CarouselResearchMode;
     claimRisk: CarouselClaimRisk;
   }>;
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: number | null;
   selection: "recommended" | "manual" | "unselected";
 };
@@ -486,8 +486,8 @@ export function scoreCarouselCreativeBrief(input: {
 
 export function selectRecommendedCreativeBrief(
   briefs: NormalizedCarouselBrief[]
-): { index: number; brief: NormalizedCarouselBrief | null } {
-  if (briefs.length === 0) return { index: 0, brief: null };
+): { index: number | null; brief: NormalizedCarouselBrief | null } {
+  if (briefs.length === 0) return { index: null, brief: null };
   let bestIndex = 0;
   for (let i = 1; i < briefs.length; i++) {
     if (compareCreativeBriefRecommendation(briefs[i]!, briefs[bestIndex]!, i, bestIndex) < 0) {
@@ -763,6 +763,7 @@ export function normalizeGeneratedCarouselBrief(
   if (!includesUnion(CAROUSEL_CONTENT_FORMATS, row.contentFormat)) return null;
   if (!includesUnion(CAROUSEL_ANGLE_TYPES, row.angleType)) return null;
   if (!includesUnion(CAROUSEL_LAYOUT_FAMILIES, row.layoutFamily)) return null;
+  if (row.contentFormat !== row.layoutFamily) return null;
   if (!includesUnion(CAROUSEL_CLAIM_RISKS, row.claimRisk)) return null;
   if (!includesUnion(CAROUSEL_RESEARCH_MODES, row.researchMode)) return null;
 
@@ -860,17 +861,74 @@ export function normalizeStoredCarouselBrief(
   return null;
 }
 
-export function normalizeStoredCarouselBriefs(
+/**
+ * Index contract:
+ * - Stored index = position inside persisted angleOptionsJson.
+ * - Display index = position inside the compacted valid-brief array.
+ * DB selectedAngleIndex is always a stored index.
+ * recommendedBriefIndex returned to the UI is always a display index.
+ * Review Plan selection and generateCarousel input are display indexes.
+ * Do not mix these two meanings under one unqualified helper.
+ */
+export type NormalizedStoredCarouselBriefEntry = {
+  brief: NormalizedCarouselBrief;
+  originalIndex: number;
+};
+
+export function normalizeStoredCarouselBriefEntries(
   raw: unknown
-): NormalizedCarouselBrief[] {
+): NormalizedStoredCarouselBriefEntry[] {
   if (!Array.isArray(raw)) return [];
-  const out: NormalizedCarouselBrief[] = [];
+  const out: NormalizedStoredCarouselBriefEntry[] = [];
   for (let i = 0; i < raw.length; i++) {
     const brief = normalizeStoredCarouselBrief(raw[i], out.length);
     if (!brief) continue;
-    out.push(brief);
+    out.push({ brief, originalIndex: i });
   }
   return out;
+}
+
+export function normalizeStoredCarouselBriefs(
+  raw: unknown
+): NormalizedCarouselBrief[] {
+  return normalizeStoredCarouselBriefEntries(raw).map((entry) => entry.brief);
+}
+
+/** Map a persisted stored index to a Review Plan / UI display index. */
+export function normalizedIndexFromOriginalIndex(
+  entries: NormalizedStoredCarouselBriefEntry[],
+  originalIndex: number
+): number | null {
+  const displayIndex = entries.findIndex(
+    (entry) => entry.originalIndex === originalIndex
+  );
+  return displayIndex === -1 ? null : displayIndex;
+}
+
+/** Map a Review Plan / UI display index back to the persisted stored index. */
+export function originalIndexFromNormalizedIndex(
+  entries: NormalizedStoredCarouselBriefEntry[],
+  normalizedIndex: number
+): number | null {
+  const entry = entries[normalizedIndex];
+  return entry ? entry.originalIndex : null;
+}
+
+export function findBriefByOriginalStoredIndex(
+  entries: NormalizedStoredCarouselBriefEntry[],
+  originalIndex: number
+): NormalizedCarouselBrief | null {
+  return (
+    entries.find((entry) => entry.originalIndex === originalIndex)?.brief ??
+    null
+  );
+}
+
+/** Newly generated valid arrays keep stored index === display index. */
+export function identityCarouselBriefEntries(
+  briefs: NormalizedCarouselBrief[]
+): NormalizedStoredCarouselBriefEntry[] {
+  return briefs.map((brief, originalIndex) => ({ brief, originalIndex }));
 }
 
 export function normalizeGeneratedCarouselBriefs(
@@ -945,7 +1003,9 @@ export function pendingStudioSelectionViewState(): StudioSelectionViewState {
 }
 
 export function applyStudioSelectionResponse(args: {
-  recommendedBriefIndex: number;
+  /** Display index inside the normalized valid-brief array. */
+  recommendedBriefIndex: number | null;
+  /** Display index already mapped from the persisted stored index. */
   selectedAngleIndex: number | null;
   mode: "review" | "generateFromInput" | "restore";
 }): StudioSelectionViewState {
@@ -979,13 +1039,16 @@ export function studioGenerateActionEnabled(
 
 export function buildCreativeBriefSelectionTelemetry(args: {
   briefs: NormalizedCarouselBrief[];
-  recommendedBriefIndex: number;
+  /** Display index inside the normalized valid-brief array. */
+  recommendedBriefIndex: number | null;
+  /** Display index for the current UI selection. */
   selectedAngleIndex: number | null;
 }): CreativeBriefSelectionTelemetry {
   const selection =
     args.selectedAngleIndex == null
       ? "unselected"
-      : args.selectedAngleIndex === args.recommendedBriefIndex
+      : args.recommendedBriefIndex != null &&
+          args.selectedAngleIndex === args.recommendedBriefIndex
         ? "recommended"
         : "manual";
   return {
@@ -1062,8 +1125,8 @@ export function formatApprovedCreativeBriefForCopy(
 }
 
 export function resolveRecommendedStudioBrief(briefs: NormalizedCarouselBrief[]): {
-  recommendedBriefIndex: number;
-  selectedAngleIndex: number;
+  recommendedBriefIndex: number | null;
+  selectedAngleIndex: number | null;
   selected: NormalizedCarouselBrief | null;
 } {
   const { index, brief } = selectRecommendedCreativeBrief(briefs);
@@ -1078,7 +1141,7 @@ export function resolveUserSelectedStudioBrief(
   briefs: NormalizedCarouselBrief[],
   selectedAngleIndex: number
 ): {
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: number;
   selected: NormalizedCarouselBrief | null;
 } {

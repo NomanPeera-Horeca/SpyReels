@@ -1996,12 +1996,16 @@ export const carouselRemakes = mysqlTable(
     /**
      * Carousel Studio stored payload: historic four-field angles and/or modern
      * schemaVersion 2 briefs. Production may also contain invalid rows.
-     * Always normalize with normalizeStoredCarouselBriefs before use.
+     * Always normalize with normalizeStoredCarouselBriefEntries before use
+     * when a stored selectedAngleIndex must be mapped to a display index.
      */
     angleOptionsJson: json("angleOptionsJson").$type<
       CarouselStoredAngleOptionsJson | unknown
     >(),
-    /** Index into angleOptionsJson (0-2) for the chosen direction. */
+    /**
+     * Stored index into persisted angleOptionsJson (original array position).
+     * Not a display index. Compacted valid-brief arrays can shift display indexes.
+     */
     selectedAngleIndex: int("selectedAngleIndex"),
     /** Ephemeral slide list when remake used a different middle-section count than the template. */
     slideStructureJson: json("slideStructureJson"),

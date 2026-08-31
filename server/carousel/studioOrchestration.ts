@@ -4,11 +4,15 @@
  */
 
 import {
+  findBriefByOriginalStoredIndex,
+  identityCarouselBriefEntries,
   isLegacyCreativeBrief,
+  originalIndexFromNormalizedIndex,
   selectRecommendedCreativeBrief,
   studioPlannedSlideCount,
   type CarouselCreativeBrief,
   type NormalizedCarouselBrief,
+  type NormalizedStoredCarouselBriefEntry,
 } from "@shared/carouselStudio";
 
 export type StudioRemakeHandoff = {
@@ -36,7 +40,7 @@ export function buildStudioRemakeHandoff(
 
 export function planGenerateAngles(briefs: NormalizedCarouselBrief[]): {
   angles: NormalizedCarouselBrief[];
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: null;
   selected: NormalizedCarouselBrief | null;
   shouldFireRemake: false;
@@ -53,37 +57,52 @@ export function planGenerateAngles(briefs: NormalizedCarouselBrief[]): {
 
 export function planGenerateFromInput(briefs: NormalizedCarouselBrief[]): {
   angles: NormalizedCarouselBrief[];
-  recommendedBriefIndex: number;
-  selectedAngleIndex: number;
+  recommendedBriefIndex: number | null;
+  selectedAngleIndex: number | null;
   selected: NormalizedCarouselBrief | null;
   remakeHandoff: StudioRemakeHandoff | null;
   shouldFireRemake: true;
 } {
   const { index, brief } = selectRecommendedCreativeBrief(briefs);
+  const entries = identityCarouselBriefEntries(briefs);
+  const storedSelectedIndex =
+    index == null ? null : originalIndexFromNormalizedIndex(entries, index);
   return {
     angles: briefs,
     recommendedBriefIndex: index,
-    selectedAngleIndex: index,
+    selectedAngleIndex: storedSelectedIndex,
     selected: brief,
     remakeHandoff: brief ? buildStudioRemakeHandoff(brief) : null,
     shouldFireRemake: true,
   };
 }
 
+/**
+ * generateCarousel input is a display index from Review Plan.
+ * Persist selectedAngleIndex as the original stored index.
+ */
 export function planGenerateCarousel(
-  briefs: NormalizedCarouselBrief[],
-  selectedAngleIndex: number
+  entries: NormalizedStoredCarouselBriefEntry[],
+  displaySelectedIndex: number
 ): {
-  recommendedBriefIndex: number;
-  selectedAngleIndex: number;
+  recommendedBriefIndex: number | null;
+  selectedAngleIndex: number | null;
   selected: NormalizedCarouselBrief | null;
   remakeHandoff: StudioRemakeHandoff | null;
 } {
+  const briefs = entries.map((entry) => entry.brief);
   const recommendedBriefIndex = selectRecommendedCreativeBrief(briefs).index;
-  const selected = briefs[selectedAngleIndex] ?? null;
+  const storedSelectedIndex = originalIndexFromNormalizedIndex(
+    entries,
+    displaySelectedIndex
+  );
+  const selected =
+    storedSelectedIndex == null
+      ? null
+      : findBriefByOriginalStoredIndex(entries, storedSelectedIndex);
   return {
     recommendedBriefIndex,
-    selectedAngleIndex,
+    selectedAngleIndex: storedSelectedIndex,
     selected,
     remakeHandoff: selected ? buildStudioRemakeHandoff(selected) : null,
   };
@@ -101,11 +120,14 @@ export async function orchestrateStudioGenerateAngles<TId>(deps: {
 }): Promise<{
   remakeId: TId;
   angles: NormalizedCarouselBrief[];
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: null;
 }> {
   const briefs = await deps.proposeAngles();
   const plan = planGenerateAngles(briefs);
+  if (plan.recommendedBriefIndex == null || !plan.selected) {
+    throw new Error("Could not generate carousel angles.");
+  }
   const remakeId = await deps.persistAngles({
     angleOptionsJson: plan.angles,
     selectedAngleIndex: plan.selectedAngleIndex,
@@ -129,12 +151,17 @@ export async function orchestrateStudioGenerateFromInput<TId>(deps: {
 }): Promise<{
   remakeId: TId;
   angles: NormalizedCarouselBrief[];
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: number;
 }> {
   const briefs = await deps.proposeAngles();
   const plan = planGenerateFromInput(briefs);
-  if (!plan.selected || !plan.remakeHandoff) {
+  if (
+    plan.recommendedBriefIndex == null ||
+    plan.selectedAngleIndex == null ||
+    !plan.selected ||
+    !plan.remakeHandoff
+  ) {
     throw new Error("Could not generate carousel angles.");
   }
   const remakeId = await deps.persistAngles({
@@ -165,12 +192,19 @@ export async function orchestrateStudioGenerateCarousel<TId>(deps: {
   }) => void;
 }): Promise<{
   remakeId: TId;
-  recommendedBriefIndex: number;
+  recommendedBriefIndex: number | null;
   selectedAngleIndex: number;
 }> {
   const briefs = await deps.loadAngles();
-  const plan = planGenerateCarousel(briefs, deps.selectedAngleIndex);
-  if (!plan.selected || !plan.remakeHandoff) {
+  const plan = planGenerateCarousel(
+    identityCarouselBriefEntries(briefs),
+    deps.selectedAngleIndex
+  );
+  if (
+    plan.selectedAngleIndex == null ||
+    !plan.selected ||
+    !plan.remakeHandoff
+  ) {
     throw new Error("Selected angle is missing. Generate angles again.");
   }
   const remakeId = await deps.persistSelection(plan.selectedAngleIndex);

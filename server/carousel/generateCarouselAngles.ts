@@ -352,6 +352,10 @@ export function buildCarouselAnglesUserPrompt(args: {
   return lines.join("\n");
 }
 
+export function buildCarouselAnglesRepairNote(validCount: number): string {
+  return `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid creative briefs, each with kicker, title, description, topic, inferredAudience, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), matching contentFormat and layoutFamily, claimRisk, researchMode, ctaDirection, component scores, and confidence. Do not include id, schemaVersion, or overall. Got ${validCount} valid briefs.`;
+}
+
 async function invokeCarouselAnglesOnce(args: {
   sourceContent: string;
   niche?: string | null;
@@ -418,7 +422,7 @@ export async function generateCarouselAngles(args: {
       sourceContent,
       niche,
       brandVoice: args.brandVoice,
-      repairNote: `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid creative briefs, each with kicker, title, description, topic, inferredAudience, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), layoutFamily, claimRisk, researchMode, ctaDirection, component scores, and confidence. Do not include id, schemaVersion, or overall. Got ${briefs.length} valid briefs.`,
+      repairNote: buildCarouselAnglesRepairNote(briefs.length),
     });
   }
 

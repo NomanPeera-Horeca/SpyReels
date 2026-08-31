@@ -521,10 +521,11 @@ export function CarouselStudioApp() {
     },
     mode: "review" | "generateFromInput" | "restore"
   ) => {
+    // recommendedBriefIndex and selectedAngleIndex here are display indexes.
     const briefs = normalizeStoredCarouselBriefs(data.angles);
     const recommended =
       data.recommendedBriefIndex ??
-      (briefs.length > 0 ? selectRecommendedCreativeBrief(briefs).index : 0);
+      selectRecommendedCreativeBrief(briefs).index;
     const next = applyStudioSelectionResponse({
       recommendedBriefIndex: recommended,
       selectedAngleIndex: data.selectedAngleIndex ?? null,
@@ -575,6 +576,7 @@ export function CarouselStudioApp() {
   };
 
   const startGenerate = async (angleIndex: number) => {
+    // angleIndex is the Review Plan display index. Server maps it to the stored index.
     if (!remakeId || !liveAngles || liveAngles.length === 0) {
       toast("Plan data is missing. Generate again from the input screen.");
       showCreateStep("input");

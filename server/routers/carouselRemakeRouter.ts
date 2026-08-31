@@ -3,7 +3,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   deriveCarouselLibraryMeta,
-  normalizeStoredCarouselBriefs,
+  normalizeStoredCarouselBriefEntries,
+  normalizedIndexFromOriginalIndex,
   selectRecommendedCreativeBrief,
 } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
@@ -447,9 +448,15 @@ export const carouselRemakeRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
       }
 
-      const briefs = normalizeStoredCarouselBriefs(row.angleOptionsJson);
+      const entries = normalizeStoredCarouselBriefEntries(row.angleOptionsJson);
+      const briefs = entries.map((entry) => entry.brief);
       const recommendedBriefIndex =
-        briefs.length > 0 ? selectRecommendedCreativeBrief(briefs).index : null;
+        selectRecommendedCreativeBrief(briefs).index;
+      const storedSelectedIndex = row.selectedAngleIndex ?? null;
+      const selectedAngleIndex =
+        storedSelectedIndex == null
+          ? null
+          : normalizedIndexFromOriginalIndex(entries, storedSelectedIndex);
 
       return {
         id: row.id,
@@ -463,7 +470,7 @@ export const carouselRemakeRouter = router({
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
         angleOptions: row.angleOptionsJson == null ? null : briefs,
-        selectedAngleIndex: row.selectedAngleIndex ?? null,
+        selectedAngleIndex,
         recommendedBriefIndex,
         postDate: row.postDate,
         postTime: row.postTime,

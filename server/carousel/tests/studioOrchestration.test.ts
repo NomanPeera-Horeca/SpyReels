@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   isLegacyCreativeBrief,
+  normalizeStoredCarouselBriefEntries,
   normalizeStoredCarouselBriefs,
   scoreCarouselCreativeBrief,
   type CarouselCreativeBrief,
@@ -11,6 +12,7 @@ import {
   orchestrateStudioGenerateAngles,
   orchestrateStudioGenerateCarousel,
   orchestrateStudioGenerateFromInput,
+  planGenerateCarousel,
 } from "../studioOrchestration";
 
 function sampleOutline(count: number) {
@@ -218,6 +220,50 @@ describe("studio orchestration (mocked, no network)", () => {
     expect(remakeArg.selected.title).toBe("Mid score plan");
     expect(remakeArg.remakeHandoff.creativeBrief?.id).toBe("brief_2");
     expect(remakeArg.remakeHandoff.creativeBrief?.id).not.toBe("brief_3");
+  });
+
+  it("generateFromInput does not start without a valid recommendation", async () => {
+    const persistAngles = vi.fn(async () => 44);
+    const fireRemake = vi.fn();
+    await expect(
+      orchestrateStudioGenerateFromInput({
+        proposeAngles: async () => [],
+        persistAngles,
+        fireRemake,
+      })
+    ).rejects.toThrow("Could not generate carousel angles.");
+    expect(persistAngles).not.toHaveBeenCalled();
+    expect(fireRemake).not.toHaveBeenCalled();
+  });
+
+  it("generateAngles does not persist when no valid recommendation exists", async () => {
+    const persistAngles = vi.fn(async () => 55);
+    await expect(
+      orchestrateStudioGenerateAngles({
+        proposeAngles: async () => [],
+        persistAngles,
+      })
+    ).rejects.toThrow("Could not generate carousel angles.");
+    expect(persistAngles).not.toHaveBeenCalled();
+  });
+
+  it("generateCarousel locates the selected brief by original stored index", () => {
+    const entries = normalizeStoredCarouselBriefEntries([
+      sampleBrief({ id: "brief_1", title: "Valid A" }),
+      {
+        kicker: "Diagnostic",
+        title: "Broken modern plan",
+        description: "Has modern fields but is incomplete.",
+        estimatedSlideCount: 6,
+        topic: "small business cash flow",
+        contentGoal: "education",
+      },
+      sampleBrief({ id: "brief_3", title: "Valid B" }),
+    ]);
+    const plan = planGenerateCarousel(entries, 1);
+    expect(plan.selected?.title).toBe("Valid B");
+    expect(plan.selectedAngleIndex).toBe(2);
+    expect(plan.recommendedBriefIndex).toBe(0);
   });
 
   it("legacy four-field uses angleDirection and does not invent a creativeBrief", () => {
