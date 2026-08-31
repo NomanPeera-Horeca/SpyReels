@@ -945,9 +945,10 @@ export function normalizeGeneratedCarouselBriefs(
   return out;
 }
 
-export function researchModeLabel(mode: CarouselResearchMode): string {
-  if (mode === "none") return "No research required";
-  if (mode === "claim_verification") return "Claims should be verified";
+export function researchModeLabel(brief: NormalizedCarouselBrief): string {
+  if (isLegacyCreativeBrief(brief)) return "Not evaluated";
+  if (brief.researchMode === "none") return "No research required";
+  if (brief.researchMode === "claim_verification") return "Claims should be verified";
   return "Research required before publishing";
 }
 
@@ -979,7 +980,7 @@ export function buildReviewPlanViewModel(args: {
       isSelected:
         args.selectedIndex != null && index === args.selectedIndex,
       isLegacy,
-      researchLabel: researchModeLabel(brief.researchMode),
+      researchLabel: researchModeLabel(brief),
       keyPointTitles: brief.keyPoints.map((point) => point.title),
       structureSummary: brief.slideOutline
         .map((slide) => slide.role)

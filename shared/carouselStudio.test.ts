@@ -573,12 +573,63 @@ describe("Review Plan view-model helpers", () => {
     expect(model.cards[2]?.isRecommended).toBe(false);
   });
 
-  it("labels researchMode for the Review Plan", () => {
-    expect(researchModeLabel("none")).toBe("No research required");
-    expect(researchModeLabel("claim_verification")).toBe(
-      "Claims should be verified"
+  it("labels a legacy brief as not evaluated", () => {
+    const [legacy] = normalizeStoredCarouselBriefs([
+      {
+        kicker: "Contrarian",
+        title: "Stop chasing profit first",
+        description: "Show the cash timing trap.",
+        estimatedSlideCount: 7,
+      },
+    ]);
+    expect(isLegacyCreativeBrief(legacy!)).toBe(true);
+    expect(legacy!.schemaVersion).toBe(1);
+    expect(legacy!.researchMode).toBe("none");
+    expect(researchModeLabel(legacy!)).toBe("Not evaluated");
+    const model = buildReviewPlanViewModel({
+      briefs: [legacy!],
+      recommendedBriefIndex: 0,
+      selectedIndex: 0,
+    });
+    expect(model.cards[0]?.researchLabel).toBe("Not evaluated");
+  });
+
+  it("labels a modern none brief as no research required", () => {
+    const brief = sampleBrief({ researchMode: "none" });
+    expect(isLegacyCreativeBrief(brief)).toBe(false);
+    expect(researchModeLabel(brief)).toBe("No research required");
+    const model = buildReviewPlanViewModel({
+      briefs: [brief],
+      recommendedBriefIndex: 0,
+      selectedIndex: 0,
+    });
+    expect(model.cards[0]?.researchLabel).toBe("No research required");
+  });
+
+  it("labels a modern claim_verification brief as claims should be verified", () => {
+    const brief = sampleBrief({ researchMode: "claim_verification" });
+    expect(isLegacyCreativeBrief(brief)).toBe(false);
+    expect(researchModeLabel(brief)).toBe("Claims should be verified");
+    const model = buildReviewPlanViewModel({
+      briefs: [brief],
+      recommendedBriefIndex: 0,
+      selectedIndex: 0,
+    });
+    expect(model.cards[0]?.researchLabel).toBe("Claims should be verified");
+  });
+
+  it("labels a modern research_required brief as research required before publishing", () => {
+    const brief = sampleBrief({ researchMode: "research_required" });
+    expect(isLegacyCreativeBrief(brief)).toBe(false);
+    expect(researchModeLabel(brief)).toBe(
+      "Research required before publishing"
     );
-    expect(researchModeLabel("research_required")).toBe(
+    const model = buildReviewPlanViewModel({
+      briefs: [brief],
+      recommendedBriefIndex: 0,
+      selectedIndex: 0,
+    });
+    expect(model.cards[0]?.researchLabel).toBe(
       "Research required before publishing"
     );
   });
