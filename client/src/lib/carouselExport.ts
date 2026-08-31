@@ -5,6 +5,10 @@
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import {
+  buildSlideCaptureOptions,
+  carouselSlidePngFilename,
+} from "./carouselExportOptions";
 
 const SLIDE_EXPORT_TIMEOUT_MS = 40_000;
 const FONT_EMBED_TIMEOUT_MS = 12_000;
@@ -244,14 +248,13 @@ export async function captureSlideAsPngBlob(
   try {
     const naturalW = Math.max(1, target.offsetWidth || 360);
     const naturalH = Math.max(1, target.offsetHeight || 450);
-    const exportWidth = 1080;
-    const exportHeight = Math.round((naturalH / naturalW) * exportWidth);
+    const capture = buildSlideCaptureOptions(naturalW, naturalH);
 
     const blob = await withTimeout(
       toBlob(target, {
-        width: exportWidth,
-        height: exportHeight,
-        pixelRatio: 1,
+        width: capture.width,
+        height: capture.height,
+        pixelRatio: capture.pixelRatio,
         cacheBust: false,
         fontEmbedCSS: options?.fontEmbedCSS ?? "",
         skipFonts: !options?.fontEmbedCSS,
@@ -324,7 +327,7 @@ export async function exportCarouselSlidesZip(args: {
         imageCache,
         slideIndex: i,
       });
-      zip.file(`slide-${String(i + 1).padStart(2, "0")}.png`, blob);
+      zip.file(carouselSlidePngFilename(i), blob);
     } catch (slideErr) {
       console.error(`Carousel export failed for slide ${i + 1}`, slideErr);
       failedSlides.push(i + 1);
