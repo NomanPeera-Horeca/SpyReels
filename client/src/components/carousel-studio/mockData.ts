@@ -395,33 +395,3 @@ export function slugifyFilename(title: string, max = 38): string {
       .slice(0, max) || "spyreels-carousel"
   );
 }
-
-export function getPackageCaption(source: SourceKey): string {
-  if (source === "remix") {
-    return "A packed dining room can hide a dangerous cash-flow problem.\n\nHere are the numbers every restaurant owner should watch before celebrating a record month.\n\nSave this and review it with your manager this week.";
-  }
-  if (source === "youtube") {
-    return "A busy restaurant can still be a weak business. Here are the most important lessons from the video, distilled into one carousel. Save this for your next operating review.";
-  }
-  if (source === "web") {
-    return "This article explains several quiet ways restaurants lose profit. We turned the strongest points into a practical carousel you can use with your team.";
-  }
-  return "Revenue growth can hide a dangerous cash-flow problem. Here are the numbers every restaurant owner should watch before celebrating a record month. Save this for your next weekly review.";
-}
-
-export function getPackageHashtags(source: SourceKey): string[] {
-  const common = [
-    "#RestaurantBusiness",
-    "#RestaurantOwner",
-    "#RestaurantProfit",
-    "#CashFlow",
-    "#RestaurantManagement",
-    "#HospitalityBusiness",
-    "#SmallBusinessGrowth",
-    "#RestaurantTips",
-  ];
-  if (source === "remix") common.push("#ContentMarketing", "#CarouselPost");
-  if (source === "youtube") common.push("#YouTubeToCarousel", "#BusinessLessons");
-  if (source === "web") common.push("#ArticleToCarousel", "#BusinessEducation");
-  return common;
-}

@@ -36,8 +36,6 @@ import {
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
   slugifyFilename,
-  getPackageCaption,
-  getPackageHashtags,
   type SourceKey,
   type NavPage,
   type CreateStep,
@@ -48,6 +46,7 @@ import {
   STUDIO_NAV_ITEMS,
   mapStudioLibraryRows,
 } from "./studioLibrary";
+import { formatStudioPackageSummary } from "./studioPackage";
 
 type StoredDesignOverride = {
   background: string;
@@ -804,11 +803,6 @@ export function CarouselStudioApp() {
     toast(next === "linkedin" ? "LinkedIn 4:5 format applied." : "Instagram 4:5 format applied.");
   };
 
-  const renderPackageSummary = () => {
-    // derived in render from slides/source
-  };
-  void renderPackageSummary;
-
   const openPackageModal = (downloadNow: boolean) => {
     if (downloadNow && !canDownload) return;
     setDownloadModalOpen(true);
@@ -820,9 +814,7 @@ export function CarouselStudioApp() {
         ? "Preparing your carousel package…"
         : "Everything will be bundled in one package."
     );
-    setPackageSuccessText(
-      `${effectiveSlides.length} images, 1 caption, hashtags included.`
-    );
+    setPackageSuccessText(formatStudioPackageSummary(effectiveSlides.length));
     setDownloadAgainLabel(downloadNow ? "Download again" : "Download everything →");
     if (downloadNow) generatePackage();
   };
@@ -851,9 +843,7 @@ export function CarouselStudioApp() {
       setPackageLoading(false);
       setPackageSuccess(true);
       setPackageSuccessTitle("Your carousel is ready");
-      setPackageSuccessText(
-        `${fileCount} images, 1 caption, hashtags included.`
-      );
+      setPackageSuccessText(formatStudioPackageSummary(fileCount));
       setDownloadAgainLabel("Download again");
       if (failedSlides.length > 0) {
         toast(
@@ -861,7 +851,7 @@ export function CarouselStudioApp() {
         );
       } else {
         toast(
-          `Your carousel is ready - ${fileCount} images, 1 caption, hashtags included.`
+          `Your carousel is ready - ${formatStudioPackageSummary(fileCount)}`
         );
       }
     } catch (err) {
@@ -1775,7 +1765,7 @@ export function CarouselStudioApp() {
                   <div className="spinner" />
                   <strong>Preparing one complete carousel package…</strong>
                   <div className="hint" style={{ marginTop: 6 }}>
-                    Numbering slides, adding the caption, and including hashtags.
+                    Numbering slides and bundling the images.
                   </div>
                 </div>
               )}
@@ -1798,23 +1788,6 @@ export function CarouselStudioApp() {
                   </div>
                   <div className="package-name">
                     Package: {packageSlug}.zip
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div className="package-section">
-                    {/* Remaining mock: caption and hashtags still come from mockData. */}
-                    <h3>Caption</h3>
-                    <div className="caption-preview">
-                      {getPackageCaption(currentSource)}
-                    </div>
-                  </div>
-                  <div className="package-section">
-                    <h3>Hashtags</h3>
-                    <div className="hashtag-preview">
-                      {getPackageHashtags(currentSource).map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
                   </div>
                 </div>
               </div>

@@ -292,7 +292,7 @@
   .cs .package-success{padding:14px;border:1px solid rgba(50,213,131,.28);background:rgba(50,213,131,.07);border-radius:14px;margin-bottom:14px}
   .cs .package-success strong{display:block;font-size:15px;color:#c9ffe0;margin-bottom:5px}
   .cs .package-success span{font-size:12px;color:#9dd7b6}
-  .cs .package-layout{display:grid;grid-template-columns:.95fr 1.05fr;gap:16px}
+  .cs .package-layout{display:grid;grid-template-columns:1fr;gap:16px}
   .cs .package-section{border:1px solid var(--border);background:#0d0d12;border-radius:14px;padding:14px}
   .cs .package-section h3{font-size:13px;margin:0 0 10px}
   .cs .file-list{display:flex;flex-direction:column;gap:7px;max-height:290px;overflow:auto}
