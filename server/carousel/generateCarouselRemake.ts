@@ -16,6 +16,11 @@ import { getDb } from "../db";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import {
+  CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE,
+  formatApprovedCreativeBriefForCopy,
+  type CarouselCreativeBrief,
+} from "@shared/carouselStudio";
 import { resolveSlideImage } from "./resolveSlideImage";
 import {
   assignPoolPhotosToSlots,
@@ -250,13 +255,14 @@ function reframeAngleInstruction(angle: VettedFact["reframeAngle"]): string {
     : 'Apply Rule 8 branch (a) TIMEFRAME/AGE/SCALE (craving negation) for not_line on this slide.';
 }
 
-function buildCarouselRemakePrompt(
+export function buildCarouselRemakePrompt(
   templateName: string,
   templateDescription: string,
   slides: CarouselSlideSpec[],
   niche: string,
   lockedFacts: LockedSlideFacts = new Map(),
-  sourceContent?: string
+  sourceContent?: string,
+  creativeBrief?: CarouselCreativeBrief
 ): string {
   const hasAverageNotPair = slides.some(slideHasAverageNotLinePair);
   const unlockedAverageSlides = slides.filter(
@@ -297,6 +303,44 @@ ${slotLines}`;
       : "";
 
   const trimmedSource = sourceContent?.trim() ?? "";
+  if (trimmedSource.length > 0 && creativeBrief) {
+    const briefBlock = formatApprovedCreativeBriefForCopy(creativeBrief);
+    return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
+
+Creator niche / audience context (optional):
+${niche || "General creators"}
+
+A. ORIGINAL SOURCE MATERIAL
+The user request, article text, transcript or resolved source. This remains the authority for topic and factual material.
+"""
+${trimmedSource.slice(0, 8000)}
+"""
+
+B. APPROVED CREATIVE BRIEF
+${CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE}
+
+${briefBlock}
+
+Template: ${templateName}
+${templateDescription}
+
+Rules:
+1. Use the source content as the only source of facts. Keep the creator's points; tighten for mobile slides.
+2. Follow the approved brief's sequence, order and emphasis. Map each planned objective to the matching slide position.
+3. Preserve the source topic. Do not replace it with a different niche.
+4. Avoid every prohibitedClaims entry.
+5. Use the CTA direction instead of defaulting to "Follow for more".
+6. Prefer short postable lines. Aim for under ~40 words of readable text per slide across its slots combined when budgets allow.
+7. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
+8. Preserve each slide's viral beat described in "Viral why".
+9. For slots with role "kicker":
+   - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
+   - If the slot label is "Number" or "Step number": use "01", "02", etc.
+   - If the slot label is "Stat": use a short striking number from the source when available.
+10. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
+${slideBlocks}`;
+  }
+
   if (trimmedSource.length > 0) {
     return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
 
@@ -453,7 +497,8 @@ async function invokeCarouselRemakeOnce(
   niche: string,
   lockedFacts: LockedSlideFacts = new Map(),
   repairNote?: string,
-  sourceContent?: string
+  sourceContent?: string,
+  creativeBrief?: CarouselCreativeBrief
 ): Promise<CarouselSlideValuesMap> {
   const schema = buildCarouselRemakeJsonSchema(slides);
   const basePrompt = buildCarouselRemakePrompt(
@@ -462,7 +507,8 @@ async function invokeCarouselRemakeOnce(
     slides,
     niche,
     lockedFacts,
-    sourceContent
+    sourceContent,
+    creativeBrief
   );
   const userPrompt = repairNote
     ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${repairNote}`
@@ -659,9 +705,11 @@ export async function generateCarouselRemake(
     sourceContent?: string;
     /**
      * Carousel Studio: selected angle title + description.
-     * Prepended onto sourceContent as the content direction (does not replace the worker).
+     * Legacy only. Prepended onto sourceContent when no creativeBrief is provided.
      */
     angleDirection?: string;
+    /** Carousel Studio: complete selected brief, kept separate from sourceContent. */
+    creativeBrief?: CarouselCreativeBrief;
     /** Source carousel slide images; worker analyzes then remakes from that structure. */
     analysisImageUrls?: string[];
     /**
@@ -694,8 +742,9 @@ export async function generateCarouselRemake(
   const uploadedImageUrls = options?.uploadedImageUrls;
   const uploadedImagePool = options?.uploadedImagePool;
   let sourceContent = options?.sourceContent?.trim() || undefined;
+  const creativeBrief = options?.creativeBrief;
   const angleDirection = options?.angleDirection?.trim();
-  if (angleDirection) {
+  if (!creativeBrief && angleDirection) {
     sourceContent = sourceContent
       ? `Chosen carousel angle (follow this direction):\n${angleDirection}\n\nSource material:\n${sourceContent}`
       : `Chosen carousel angle (follow this direction):\n${angleDirection}`;
@@ -824,7 +873,8 @@ export async function generateCarouselRemake(
           niche,
           lockedFacts,
           undefined,
-          sourceContent
+          sourceContent,
+          creativeBrief
         );
         let nextValidation = validateBudgets(
           effectiveSlides,
@@ -840,7 +890,8 @@ export async function generateCarouselRemake(
             niche,
             lockedFacts,
             nextValidation.issues.join("\n"),
-            sourceContent
+            sourceContent,
+            creativeBrief
           );
           nextValidation = validateBudgets(
             effectiveSlides,

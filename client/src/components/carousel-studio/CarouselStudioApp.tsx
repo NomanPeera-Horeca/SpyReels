@@ -5,12 +5,19 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  applyStudioSelectionResponse,
+  buildReviewPlanViewModel,
   buildStudioNicheOverride,
+  formatCarouselEnumLabel,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
+  normalizeStoredCarouselBriefs,
+  pendingStudioSelectionViewState,
+  selectRecommendedCreativeBrief,
+  studioGenerateActionEnabled,
   studioPlannedSlideCount,
-  type CarouselAngleOption,
   type CarouselRemakeProgressStage,
+  type NormalizedCarouselBrief,
 } from "@shared/carouselStudio";
 import {
   CAROUSEL_TEMPLATES_BY_ID,
@@ -143,7 +150,7 @@ export function CarouselStudioApp() {
   const [navPage, setNavPage] = useState<NavPage>("create");
   const [createStep, setCreateStep] = useState<CreateStep>("input");
   const [currentSource, setCurrentSource] = useState<SourceKey>("prompt");
-  const [selectedStrategy, setSelectedStrategy] = useState(0);
+  const [selectedStrategy, setSelectedStrategy] = useState<number | null>(null);
   const [reviewPlanBeforeGenerating, setReviewPlanBeforeGenerating] =
     useState(false);
   /** True when the current run opened the real plan-review step (for failure routing). */
@@ -172,9 +179,12 @@ export function CarouselStudioApp() {
   const [pillarEdited, setPillarEdited] = useState(false);
 
   const [remakeId, setRemakeId] = useState<number | null>(null);
-  const [liveAngles, setLiveAngles] = useState<CarouselAngleOption[] | null>(
+  const [liveAngles, setLiveAngles] = useState<NormalizedCarouselBrief[] | null>(
     null
   );
+  const [recommendedBriefIndex, setRecommendedBriefIndex] = useState<
+    number | null
+  >(null);
   const [resolvedSource, setResolvedSource] = useState<{
     sourceContent: string;
     sourceUrl: string | null;
@@ -311,9 +321,21 @@ export function CarouselStudioApp() {
 
   const strategies = liveAngles && liveAngles.length > 0 ? liveAngles : null;
   const selectedAngle =
-    strategies && strategies[selectedStrategy]
+    strategies && selectedStrategy != null && strategies[selectedStrategy]
       ? strategies[selectedStrategy]
       : null;
+  const selectionView = {
+    recommendedBriefIndex,
+    selectedIndex: selectedStrategy,
+  };
+  const canConfirmGenerate = studioGenerateActionEnabled(selectionView);
+  const reviewPlan = strategies
+    ? buildReviewPlanViewModel({
+        briefs: strategies,
+        recommendedBriefIndex,
+        selectedIndex: selectedStrategy,
+      })
+    : null;
   const isFindingAngles = generateAnglesMutation.isPending;
   const isStartingFromInput = generateFromInputMutation.isPending;
   const isStartingCarousel = generateCarouselMutation.isPending;
@@ -334,21 +356,21 @@ export function CarouselStudioApp() {
       : currentSource === "youtube"
         ? {
             eyebrow: "Plan review",
-            title: "Pick the angle before we generate slides.",
-            sub: "These three directions came from your video transcript. Choose one, then generate.",
+            title: "Review the recommended plan.",
+            sub: "We scored three complete briefs from your video transcript. The recommended plan is selected. You can pick another before generating.",
             showInsight: false,
           }
         : currentSource === "web"
           ? {
               eyebrow: "Plan review",
-              title: "Pick the angle before we generate slides.",
-              sub: "These three directions came from the article we extracted. Choose one, then generate.",
+              title: "Review the recommended plan.",
+              sub: "We scored three complete briefs from the article we extracted. The recommended plan is selected. You can pick another before generating.",
               showInsight: false,
             }
           : {
               eyebrow: "Plan review",
-              title: "Pick the angle before we generate slides.",
-              sub: "These three directions were generated from your idea. Choose one, then generate.",
+              title: "Review the recommended plan.",
+              sub: "We scored three complete briefs from your idea. The recommended plan is selected. You can pick another before generating.",
               showInsight: false,
             };
 
@@ -486,16 +508,32 @@ export function CarouselStudioApp() {
     return generateAnglesMutation.mutateAsync(buildStudioGenerateInput(args));
   };
 
-  const applyAnglesResponse = (data: {
-    remakeId: number;
-    angles: CarouselAngleOption[];
-    sourceContent: string;
-    sourceUrl: string | null;
-    sourceImage: string | null;
-    sourceReelId: string | null;
-  }) => {
+  const applyAnglesResponse = (
+    data: {
+      remakeId: number;
+      angles: NormalizedCarouselBrief[];
+      sourceContent: string;
+      sourceUrl: string | null;
+      sourceImage: string | null;
+      sourceReelId: string | null;
+      recommendedBriefIndex?: number | null;
+      selectedAngleIndex?: number | null;
+    },
+    mode: "review" | "generateFromInput" | "restore"
+  ) => {
+    const briefs = normalizeStoredCarouselBriefs(data.angles);
+    const recommended =
+      data.recommendedBriefIndex ??
+      (briefs.length > 0 ? selectRecommendedCreativeBrief(briefs).index : 0);
+    const next = applyStudioSelectionResponse({
+      recommendedBriefIndex: recommended,
+      selectedAngleIndex: data.selectedAngleIndex ?? null,
+      mode,
+    });
     setRemakeId(data.remakeId);
-    setLiveAngles(data.angles);
+    setLiveAngles(briefs);
+    setRecommendedBriefIndex(next.recommendedBriefIndex);
+    setSelectedStrategy(next.selectedIndex);
     setResolvedSource({
       sourceContent: data.sourceContent,
       sourceUrl: data.sourceUrl,
@@ -510,8 +548,10 @@ export function CarouselStudioApp() {
     const prepared = await prepareSourceForGenerate();
     if (!prepared) return;
     setHasGeneratedCarousel(false);
-    setSelectedStrategy(0);
     setPlanReviewSession(true);
+    const pending = pendingStudioSelectionViewState();
+    setSelectedStrategy(pending.selectedIndex);
+    setRecommendedBriefIndex(pending.recommendedBriefIndex);
     try {
       const data = await requestAngles(prepared);
       if (!data.angles || data.angles.length === 0) {
@@ -524,7 +564,7 @@ export function CarouselStudioApp() {
         setPlanReviewSession(false);
         return;
       }
-      applyAnglesResponse(data);
+      applyAnglesResponse(data, "review");
       showCreateStep("strategy");
     } catch (err) {
       setPlanReviewSession(false);
@@ -574,12 +614,14 @@ export function CarouselStudioApp() {
     }
   };
 
-  /** Default Mirr-style path: angles server-side, auto-pick index 0, then remake. */
+  /** Default path: briefs server-side, auto-pick the recommended index, then remake. */
   const generateDirect = async () => {
     const prepared = await prepareSourceForGenerate();
     if (!prepared) return;
     setHasGeneratedCarousel(false);
-    setSelectedStrategy(0);
+    const pending = pendingStudioSelectionViewState();
+    setSelectedStrategy(pending.selectedIndex);
+    setRecommendedBriefIndex(pending.recommendedBriefIndex);
     setPlanReviewSession(false);
     setRemakeSlotValues(null);
     setRemakeSlideStructure(null);
@@ -598,8 +640,7 @@ export function CarouselStudioApp() {
         showCreateStep("input");
         return;
       }
-      applyAnglesResponse(data);
-      setSelectedStrategy(data.selectedAngleIndex ?? 0);
+      applyAnglesResponse(data, "generateFromInput");
     } catch (err) {
       setIsPollingRemake(false);
       const message =
@@ -623,7 +664,9 @@ export function CarouselStudioApp() {
     setNavPage("create");
     setCreateStep("input");
     setCurrentSource("prompt");
-    setSelectedStrategy(0);
+    const pending = pendingStudioSelectionViewState();
+    setSelectedStrategy(pending.selectedIndex);
+    setRecommendedBriefIndex(pending.recommendedBriefIndex);
     setPlanReviewSession(false);
     setReviewPlanBeforeGenerating(false);
     setComposerInput("");
@@ -1284,8 +1327,10 @@ export function CarouselStudioApp() {
                       <button
                         type="button"
                         className="btn primary"
+                        disabled={recommendedBriefIndex == null}
                         onClick={() => {
-                          setSelectedStrategy(0);
+                          if (recommendedBriefIndex == null) return;
+                          setSelectedStrategy(recommendedBriefIndex);
                           showCreateStep("strategy");
                         }}
                       >
@@ -1362,25 +1407,133 @@ export function CarouselStudioApp() {
                           </div>
                         </div>
 
-                        <div className="strategy-grid">
-                          {strategies.map((angle, idx) => (
-                            <article
-                              key={`${angle.kicker}-${angle.title}-${idx}`}
-                              className={`strategy-card${selectedStrategy === idx ? " selected" : ""}`}
-                              onClick={() => setSelectedStrategy(idx)}
-                            >
-                              <div className="kicker">{angle.kicker}</div>
-                              <h3>{angle.title}</h3>
-                              <p>{angle.description}</p>
-                              <div className="strategy-meta">
-                                <div className="metric">
-                                  Estimated slides
-                                  <strong>{angle.estimatedSlideCount}</strong>
-                                </div>
+                        {reviewPlan?.recommended ? (
+                          <article
+                            className={`review-recommended${reviewPlan.recommended.isSelected ? " selected" : ""}`}
+                            onClick={() =>
+                              setSelectedStrategy(reviewPlan.recommended!.index)
+                            }
+                          >
+                            <div className="review-recommended-top">
+                              <div className="kicker">
+                                {reviewPlan.recommended.brief.kicker}
                               </div>
-                            </article>
-                          ))}
-                        </div>
+                              <span className="review-badge">Recommended</span>
+                            </div>
+                            <h3>{reviewPlan.recommended.brief.title}</h3>
+                            <p className="review-hook">
+                              {reviewPlan.recommended.brief.hook}
+                            </p>
+                            <div className="review-facts">
+                              <div className="metric">
+                                Inferred audience
+                                <strong>
+                                  {reviewPlan.recommended.isLegacy
+                                    ? "From the original plan"
+                                    : reviewPlan.recommended.brief
+                                        .inferredAudience}
+                                </strong>
+                              </div>
+                              <div className="metric">
+                                Content format
+                                <strong>
+                                  {formatCarouselEnumLabel(
+                                    reviewPlan.recommended.brief.contentFormat
+                                  )}
+                                </strong>
+                              </div>
+                              <div className="metric">
+                                Slides
+                                <strong>
+                                  {reviewPlan.recommended.brief.estimatedSlideCount}
+                                </strong>
+                              </div>
+                              <div className="metric">
+                                Verification
+                                <strong>{reviewPlan.recommended.researchLabel}</strong>
+                              </div>
+                            </div>
+                            <div className="review-promise">
+                              <span>Core promise</span>
+                              <p>{reviewPlan.recommended.brief.corePromise}</p>
+                            </div>
+                            {reviewPlan.recommended.keyPointTitles.length > 0 ? (
+                              <div className="review-points">
+                                <span>Key points</span>
+                                <ol>
+                                  {reviewPlan.recommended.keyPointTitles.map(
+                                    (title) => (
+                                      <li key={title}>{title}</li>
+                                    )
+                                  )}
+                                </ol>
+                              </div>
+                            ) : null}
+                            <div className="review-structure">
+                              <div className="metric">
+                                Planned format
+                                <strong>
+                                  {reviewPlan.recommended.plannedLayoutFamily}
+                                </strong>
+                              </div>
+                              <div className="metric">
+                                Visual direction
+                                <strong>
+                                  {reviewPlan.recommended.isLegacy
+                                    ? reviewPlan.recommended.brief.description
+                                    : reviewPlan.recommended.brief.visualDirection}
+                                </strong>
+                              </div>
+                              {reviewPlan.recommended.structureSummary ? (
+                                <div className="metric">
+                                  Structure
+                                  <strong>
+                                    {reviewPlan.recommended.structureSummary}
+                                  </strong>
+                                </div>
+                              ) : null}
+                            </div>
+                          </article>
+                        ) : null}
+
+                        {reviewPlan && reviewPlan.alternatives.length > 0 ? (
+                          <div className="review-alts">
+                            <div className="review-alts-label">
+                              Other directions
+                            </div>
+                            <div className="review-alt-grid">
+                              {reviewPlan.alternatives.map((card) => (
+                                <article
+                                  key={card.brief.id}
+                                  className={`review-alt-card${card.isSelected ? " selected" : ""}`}
+                                >
+                                  <div className="kicker">
+                                    {formatCarouselEnumLabel(
+                                      card.brief.contentFormat
+                                    )}
+                                  </div>
+                                  <h3>{card.brief.title}</h3>
+                                  <p>{card.brief.corePromise}</p>
+                                  <div className="review-alt-meta">
+                                    <span>
+                                      {card.brief.estimatedSlideCount} slides
+                                    </span>
+                                    <span>
+                                      Score {card.brief.scores.overall}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="btn ghost review-select-btn"
+                                    onClick={() => setSelectedStrategy(card.index)}
+                                  >
+                                    {card.isSelected ? "Selected" : "Select"}
+                                  </button>
+                                </article>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
 
                         <div className="strategy-actions">
                           <button
@@ -1399,9 +1552,11 @@ export function CarouselStudioApp() {
                             disabled={
                               isStartingCarousel ||
                               !strategies ||
-                              !selectedAngle
+                              !selectedAngle ||
+                              !canConfirmGenerate
                             }
                             onClick={() => {
+                              if (selectedStrategy == null) return;
                               void startGenerate(selectedStrategy);
                             }}
                           >

@@ -143,6 +143,14 @@ describe("Carousel Studio router vs remake routes", () => {
     expect(studioRouter).not.toMatch(/resolveCarouselNiche\s*\(/);
   });
 
+  it("selects generateFromInput from recommendedBriefIndex rather than raw index zero", () => {
+    expect(studioRouter).toContain("planGenerateFromInput");
+    expect(studioRouter).not.toMatch(
+      /generateFromInput[\s\S]*const selected = angles\[0\]/
+    );
+    expect(studioRouter).toContain("buildStudioRemakeHandoff");
+  });
+
   it("keeps saved-niche fallback on existing non-Studio remake routes", () => {
     expect(remakeRouter).toMatch(/start:[\s\S]*resolveCarouselNiche\(/);
     expect(remakeRouter).toMatch(

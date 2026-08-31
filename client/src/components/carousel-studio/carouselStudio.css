@@ -193,6 +193,81 @@
   .cs .insight-card h4{margin:0 0 6px;font-size:14px}
   .cs .insight-card p{margin:0;font-size:12px;line-height:1.55;color:#d8d4f1}
   .cs .strategy-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+  .cs .review-recommended{
+    position:relative;
+    border:1px solid var(--border);
+    background:var(--panel);
+    border-radius:20px;
+    padding:20px;
+    margin-bottom:18px;
+    cursor:pointer;
+    transition:.2s ease;
+  }
+  .cs .review-recommended:hover{border-color:#454557}
+  .cs .review-recommended.selected{
+    border-color:var(--purple);
+    box-shadow:0 0 0 3px rgba(124,92,255,.12);
+  }
+  .cs .review-recommended-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+  }
+  .cs .review-badge{
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:#c9ffe0;
+    background:rgba(50,213,131,.1);
+    border:1px solid rgba(50,213,131,.28);
+    border-radius:999px;
+    padding:6px 10px;
+  }
+  .cs .review-recommended h3{font-size:26px;line-height:1.25;margin:12px 0 8px}
+  .cs .review-hook{color:#d8d8e2;font-size:14px;line-height:1.55;margin:0 0 16px}
+  .cs .review-facts,.cs .review-structure{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .cs .review-promise,.cs .review-points{margin-bottom:14px}
+  .cs .review-promise span,.cs .review-points span{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .cs .review-promise p{margin:0;color:#fff;font-size:14px;line-height:1.5}
+  .cs .review-points ol{margin:0;padding-left:18px;color:#d8d8e2;font-size:13px;line-height:1.55}
+  .cs .review-alts-label{
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-weight:800;
+    margin:4px 0 10px;
+  }
+  .cs .review-alt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .cs .review-alt-card{
+    border:1px solid var(--border);
+    background:var(--panel);
+    border-radius:16px;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .cs .review-alt-card.selected{
+    border-color:var(--purple);
+    box-shadow:0 0 0 3px rgba(124,92,255,.12);
+  }
+  .cs .review-alt-card h3{font-size:16px;line-height:1.3;margin:0}
+  .cs .review-alt-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+  .cs .review-alt-meta{display:flex;gap:12px;font-size:11px;color:var(--muted)}
+  .cs .review-select-btn{align-self:flex-start;margin-top:4px}
   .cs .progress-box{max-width:760px;margin:60px auto;border:1px solid var(--border);background:var(--panel);border-radius:20px;padding:24px}
   .cs .progress-box h2{margin:0 0 10px}
   .cs .progress-list{display:flex;flex-direction:column;gap:12px;margin-top:22px}
@@ -318,7 +393,7 @@
     .cs .bottom-bar{left:0}
     .cs .content{padding:18px}
     .cs h1{font-size:36px}
-    .cs .recent-grid, .cs .strategy-grid, .cs .stat-grid, .cs .tabs, .cs .preserve-grid, .cs .small-grid, .cs .source-grid{grid-template-columns:1fr}
+    .cs .recent-grid, .cs .strategy-grid, .cs .stat-grid, .cs .tabs, .cs .preserve-grid, .cs .small-grid, .cs .source-grid, .cs .review-alt-grid, .cs .review-facts, .cs .review-structure{grid-template-columns:1fr}
     .cs .editor-shell{grid-template-columns:1fr;height:auto}
     .cs .panel{min-height:420px}
     .cs .modal-body, .cs .package-layout, .cs .carry-grid, .cs .comparison-panel{grid-template-columns:1fr}

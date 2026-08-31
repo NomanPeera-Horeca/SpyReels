@@ -1967,7 +1967,7 @@ export const coachScriptFeedback = mysqlTable(
 export type CoachScriptFeedback = typeof coachScriptFeedback.$inferSelect;
 export type InsertCoachScriptFeedback = typeof coachScriptFeedback.$inferInsert;
 
-import type { CarouselAngleOption } from "../shared/carouselStudio";
+import type { CarouselStoredAngleOptionsJson } from "../shared/carouselStudio";
 import type { CarouselGenerationMetrics } from "../shared/carouselGenerationMetrics";
 
 /**
@@ -1993,8 +1993,14 @@ export const carouselRemakes = mysqlTable(
     /** Worker-reported remake stage: writing_copy | generating_images | saving. */
     progressStage: varchar("progressStage", { length: 32 }),
     slotValuesJson: json("slotValuesJson").$type<Record<string, Record<string, string>>>(),
-    /** Carousel Studio: 3 proposed angles before the user picks one. */
-    angleOptionsJson: json("angleOptionsJson").$type<CarouselAngleOption[]>(),
+    /**
+     * Carousel Studio stored payload: historic four-field angles and/or modern
+     * schemaVersion 2 briefs. Production may also contain invalid rows.
+     * Always normalize with normalizeStoredCarouselBriefs before use.
+     */
+    angleOptionsJson: json("angleOptionsJson").$type<
+      CarouselStoredAngleOptionsJson | unknown
+    >(),
     /** Index into angleOptionsJson (0-2) for the chosen direction. */
     selectedAngleIndex: int("selectedAngleIndex"),
     /** Ephemeral slide list when remake used a different middle-section count than the template. */

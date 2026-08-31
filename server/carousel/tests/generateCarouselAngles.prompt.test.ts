@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCarouselAnglesJsonSchema,
   buildCarouselAnglesSystemPrompt,
   buildCarouselAnglesUserPrompt,
 } from "../generateCarouselAngles";
@@ -59,5 +60,93 @@ describe("generateCarouselAngles prompt builder", () => {
     expect(system).toContain(
       "Brand voice may affect tone but never topic, industry, or audience."
     );
+  });
+});
+
+describe("generateCarouselAngles JSON schema", () => {
+  const schema = buildCarouselAnglesJsonSchema();
+  const angles = schema.schema.properties as {
+    angles: {
+      minItems?: number;
+      maxItems?: number;
+      items: {
+        required: string[];
+        properties: Record<string, { required?: string[]; properties?: Record<string, unknown>; minItems?: number; maxItems?: number }>;
+      };
+    };
+  };
+
+  it("requires all new brief fields except id and overall", () => {
+    const required = angles.angles.items.required;
+    expect(required).toEqual(
+      expect.arrayContaining([
+        "kicker",
+        "title",
+        "description",
+        "estimatedSlideCount",
+        "topic",
+        "inferredAudience",
+        "audienceReasoning",
+        "contentGoal",
+        "contentFormat",
+        "angleType",
+        "hook",
+        "corePromise",
+        "centralInsight",
+        "keyPoints",
+        "slideOutline",
+        "layoutFamily",
+        "visualDirection",
+        "imageDirection",
+        "claimRisk",
+        "researchMode",
+        "evidenceRequirements",
+        "prohibitedClaims",
+        "ctaDirection",
+        "scores",
+        "confidence",
+      ])
+    );
+    expect(required).not.toContain("id");
+    expect(required).not.toContain("schemaVersion");
+    expect(angles.angles.items.properties).not.toHaveProperty("schemaVersion");
+    expect(angles.angles.items.properties.scores.required).not.toContain("overall");
+    expect(angles.angles.items.properties.scores.properties).not.toHaveProperty(
+      "overall"
+    );
+  });
+
+  it("requires exactly three briefs", () => {
+    expect(angles.angles.minItems).toBe(3);
+    expect(angles.angles.maxItems).toBe(3);
+  });
+
+  it("limits keyPoints and slideOutline", () => {
+    expect(angles.angles.items.properties.keyPoints.minItems).toBe(4);
+    expect(angles.angles.items.properties.keyPoints.maxItems).toBe(8);
+    expect(angles.angles.items.properties.slideOutline.minItems).toBe(5);
+    expect(angles.angles.items.properties.slideOutline.maxItems).toBe(12);
+  });
+});
+
+describe("generateCarouselAngles planning guidance", () => {
+  it("can represent a fat-loss request as health/fitness claim verification", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent: "Make me a carousel about losing fat",
+    });
+    expect(user).toContain("Make me a carousel about losing fat");
+    expect(user).toContain("health and fitness");
+    expect(user).toContain("claim_verification");
+    expect(user).toContain("prohibitedClaims");
+    expect(user).toContain("unsupported absolutes");
+  });
+
+  it("can represent a cash-flow request with breakdown or diagnostic planning", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent: "Make me a carousel about why small businesses run out of cash.",
+    });
+    expect(user).toContain("small businesses run out of cash");
+    expect(user).toContain("diagnostic/breakdown");
+    expect(user).toContain("practical framework");
   });
 });

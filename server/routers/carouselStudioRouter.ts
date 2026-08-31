@@ -1,6 +1,6 @@
 /**
- * Carousel Studio admin endpoints: generate 3 angles (server picks index 0 by default),
- * then fire the existing remake worker. Optional plan-review path returns angles first.
+ * Carousel Studio admin endpoints: generate 3 creative briefs, recommend by score,
+ * then fire the existing remake worker. Optional plan-review path returns briefs first.
  * Remix/source-carousel analysis is intentionally not implemented in this phase.
  */
 import { TRPCError } from "@trpc/server";
@@ -10,12 +10,22 @@ import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import {
   CAROUSEL_STUDIO_ANGLE_COUNT,
   CAROUSEL_STUDIO_TEMPLATE_ID,
+  buildCreativeBriefSelectionTelemetry,
+  logCreativeBriefSelectionTelemetry,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
+  normalizeStoredCarouselBriefs,
   resolveStudioCarouselNiche,
-  studioPlannedSlideCount,
-  type CarouselAngleOption,
+  type CarouselCreativeBrief,
+  type NormalizedCarouselBrief,
 } from "@shared/carouselStudio";
+import {
+  buildStudioRemakeHandoff,
+  planGenerateAngles,
+  planGenerateCarousel,
+  planGenerateFromInput,
+  plannedSlideCountFromBrief,
+} from "../carousel/studioOrchestration";
 import { carouselRemakes } from "../../drizzle/schema";
 import { adminPanelProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -62,16 +72,8 @@ const STUDIO_GENERATE_ANGLES_INPUT = z.object({
   ...STUDIO_RESOLVED_SOURCE_FIELDS,
 });
 
-function angleDirectionFromOption(angle: CarouselAngleOption): string {
-  return `${angle.title.trim()}\n\n${angle.description.trim()}`;
-}
-
 function middleCountFromEstimatedSlides(estimated: number): number {
   return Math.min(Math.max(estimated - 2, 3), 18);
-}
-
-function plannedSlideCountFromAngle(angle: CarouselAngleOption): number {
-  return studioPlannedSlideCount(angle.estimatedSlideCount);
 }
 
 type StudioResolvedSource = {
@@ -108,7 +110,7 @@ async function proposeStudioAngles(args: {
   /** Explicit Customize override only. Empty means infer audience from source. */
   niche?: string;
   brandVoice?: string;
-}): Promise<CarouselAngleOption[]> {
+}): Promise<CarouselCreativeBrief[]> {
   try {
     return await generateCarouselAngles({
       sourceContent: args.sourceContent,
@@ -129,18 +131,20 @@ async function proposeStudioAngles(args: {
 function fireStudioRemake(args: {
   remakeId: number;
   niche: string;
-  selected: CarouselAngleOption;
+  selected: NormalizedCarouselBrief;
   sourceContent: string;
   sourceImage: string | null;
   sourceReelId: string | null;
   telemetry?: GenerationTelemetryContext;
 }): void {
+  const remakeHandoff = buildStudioRemakeHandoff(args.selected);
   generateCarouselRemake(args.remakeId, CAROUSEL_STUDIO_TEMPLATE_ID, args.niche, {
     slideCountOption: middleCountFromEstimatedSlides(
       args.selected.estimatedSlideCount
     ),
     sourceContent: args.sourceContent || undefined,
-    angleDirection: angleDirectionFromOption(args.selected),
+    creativeBrief: remakeHandoff.creativeBrief,
+    angleDirection: remakeHandoff.angleDirection,
     sourceImage: args.sourceImage,
     sourceReelId: args.sourceReelId,
     telemetry: args.telemetry,
@@ -249,8 +253,8 @@ export const carouselStudioRouter = router({
           })
         )
       );
-      const selected = angles[0];
-      if (!selected) {
+      const plan = planGenerateAngles(angles);
+      if (!plan.selected) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Could not generate carousel angles.",
@@ -273,8 +277,8 @@ export const carouselStudioRouter = router({
         niche: remakeNiche.slice(0, 500),
         sourceUrl: resolved.sourceUrl,
         status: "pending",
-        angleOptionsJson: angles,
-        selectedAngleIndex: null,
+        angleOptionsJson: plan.angles,
+        selectedAngleIndex: plan.selectedAngleIndex,
         aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
       });
       const remakeId = insertResult[0].insertId;
@@ -286,17 +290,26 @@ export const carouselStudioRouter = router({
       }
       if (telemetry) telemetry.remakeId = remakeId;
       await persistInProgressMetrics(remakeId, telemetry);
+      logCreativeBriefSelectionTelemetry({
+        remakeId,
+        ...buildCreativeBriefSelectionTelemetry({
+          briefs: plan.angles,
+          recommendedBriefIndex: plan.recommendedBriefIndex,
+          selectedAngleIndex: plan.selectedAngleIndex,
+        }),
+      });
 
       return {
         remakeId,
         status: "pending" as const,
-        angles,
+        angles: plan.angles,
         sourceContent: resolved.sourceContent,
         sourceUrl: resolved.sourceUrl,
         sourceImage: resolved.sourceImage,
         sourceReelId: resolved.sourceReelId,
-        estimatedSlideCount: plannedSlideCountFromAngle(selected),
-        selectedAngleIndex: null,
+        estimatedSlideCount: plannedSlideCountFromBrief(plan.selected),
+        selectedAngleIndex: plan.selectedAngleIndex,
+        recommendedBriefIndex: plan.recommendedBriefIndex,
       };
     }),
 
@@ -340,8 +353,8 @@ export const carouselStudioRouter = router({
           })
         )
       );
-      const selected = angles[0];
-      if (!selected) {
+      const plan = planGenerateFromInput(angles);
+      if (!plan.selected) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Could not generate carousel angles.",
@@ -364,8 +377,8 @@ export const carouselStudioRouter = router({
         niche: remakeNiche.slice(0, 500),
         sourceUrl: resolved.sourceUrl,
         status: "processing",
-        angleOptionsJson: angles,
-        selectedAngleIndex: 0,
+        angleOptionsJson: plan.angles,
+        selectedAngleIndex: plan.selectedAngleIndex,
         aspectRatioOverride: input.aspectRatioOverride ?? "4:5",
       });
       const remakeId = insertResult[0].insertId;
@@ -377,11 +390,19 @@ export const carouselStudioRouter = router({
       }
       if (telemetry) telemetry.remakeId = remakeId;
       await persistInProgressMetrics(remakeId, telemetry);
+      logCreativeBriefSelectionTelemetry({
+        remakeId,
+        ...buildCreativeBriefSelectionTelemetry({
+          briefs: plan.angles,
+          recommendedBriefIndex: plan.recommendedBriefIndex,
+          selectedAngleIndex: plan.selectedAngleIndex,
+        }),
+      });
 
       fireStudioRemake({
         remakeId,
         niche: remakeNiche,
-        selected,
+        selected: plan.selected,
         sourceContent: resolved.sourceContent,
         sourceImage: resolved.sourceImage,
         sourceReelId: resolved.sourceReelId,
@@ -391,13 +412,14 @@ export const carouselStudioRouter = router({
       return {
         remakeId,
         status: "processing" as const,
-        angles,
+        angles: plan.angles,
         sourceContent: resolved.sourceContent,
         sourceUrl: resolved.sourceUrl,
         sourceImage: resolved.sourceImage,
         sourceReelId: resolved.sourceReelId,
-        estimatedSlideCount: plannedSlideCountFromAngle(selected),
-        selectedAngleIndex: 0,
+        estimatedSlideCount: plannedSlideCountFromBrief(plan.selected),
+        selectedAngleIndex: plan.selectedAngleIndex,
+        recommendedBriefIndex: plan.recommendedBriefIndex,
       };
     }),
 
@@ -452,10 +474,11 @@ export const carouselStudioRouter = router({
         });
       }
 
-      const angles = Array.isArray(row.angleOptionsJson)
-        ? row.angleOptionsJson
-        : [];
-      const selected = angles[input.selectedAngleIndex];
+      const angles = normalizeStoredCarouselBriefs(row.angleOptionsJson);
+      const { selected, recommendedBriefIndex } = planGenerateCarousel(
+        angles,
+        input.selectedAngleIndex
+      );
       if (!selected) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -507,6 +530,15 @@ export const carouselStudioRouter = router({
           errorMessage: null,
         })
         .where(eq(carouselRemakes.id, row.id));
+
+      logCreativeBriefSelectionTelemetry({
+        remakeId: row.id,
+        ...buildCreativeBriefSelectionTelemetry({
+          briefs: angles,
+          recommendedBriefIndex,
+          selectedAngleIndex: input.selectedAngleIndex,
+        }),
+      });
 
       fireStudioRemake({
         remakeId: row.id,
