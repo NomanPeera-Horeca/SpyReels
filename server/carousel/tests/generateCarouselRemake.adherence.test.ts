@@ -153,6 +153,46 @@ describe("copy-generation slideIntent schema", () => {
     expect(firstSlide.properties?.closingType?.enum).toContain("question");
     expect(firstSlide.properties?.closingType?.enum).toContain("dm");
   });
+
+  it("uses a non-strict 10-slide copy schema without dropping slots or intent fields", () => {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get("listicle_7_mistakes");
+    expect(template).toBeDefined();
+    const slides = [
+      ...template!.slides,
+      {
+        ...template!.slides[1]!,
+        id: "slide_10",
+      },
+    ];
+    expect(slides).toHaveLength(10);
+
+    const schema = buildCarouselRemakeJsonSchema(slides);
+    expect(schema.name).toBe("carousel_remake_slots");
+    expect(schema.strict).toBe(false);
+
+    const properties = schema.schema.properties as Record<
+      string,
+      {
+        properties?: Record<string, unknown>;
+        required?: string[];
+      }
+    >;
+    const required = schema.schema.required as string[];
+    expect(required).toEqual(slides.map((slide) => slide.id));
+
+    for (const slide of slides) {
+      expect(properties[slide.id]).toBeDefined();
+      const slideSchema = properties[slide.id]!;
+      expect(slideSchema.required).toContain("slideIntent");
+      expect(slideSchema.required).not.toContain("closingType");
+      expect(slideSchema.properties?.closingType).toBeDefined();
+      expect(slideSchema.properties?.slideIntent).toBeDefined();
+      for (const slot of slide.slots) {
+        expect(slideSchema.properties?.[slot.id]).toBeDefined();
+        expect(slideSchema.required).toContain(slot.id);
+      }
+    }
+  });
 });
 
 describe("brief-to-slide positional mapping", () => {
@@ -390,6 +430,27 @@ describe("final closing copy adherence", () => {
         { brief, slideRoles: ["hook", "list_item", "list_item", "list_item", "list_item"] }
       )
     ).toEqual([]);
+  });
+
+  it("rejects a slide that omits slideIntent", () => {
+    expect(
+      closingCopyIssues(
+        {
+          headline: "Which leak will you plug first?",
+          body: "Pick one drain and handle it this week.",
+          slideIntent: "closing",
+          closingType: "question",
+        },
+        {
+          middle: {
+            slide_03: {
+              headline: "Money leaves before it lands",
+              body: "Work can be done while payment is still weeks away.",
+            },
+          },
+        }
+      )
+    ).toContain("Position 3 is missing slideIntent");
   });
 
   it("rejects a final closing that omits closingType", () => {

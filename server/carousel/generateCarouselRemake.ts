@@ -240,7 +240,7 @@ function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unkno
 /** Programmatically derive a forced-tool JSON schema from an arbitrary slide list. */
 export function buildCarouselRemakeJsonSchema(slides: CarouselSlideSpec[]): {
   name: string;
-  strict: true;
+  strict: false;
   schema: Record<string, unknown>;
 } {
   const properties: Record<string, unknown> = {};
@@ -251,7 +251,7 @@ export function buildCarouselRemakeJsonSchema(slides: CarouselSlideSpec[]): {
   }
   return {
     name: "carousel_remake_slots",
-    strict: true,
+    strict: false,
     schema: {
       type: "object",
       properties,
