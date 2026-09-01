@@ -170,6 +170,6 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("diagnostic/breakdown");
     expect(user).toContain("practical framework");
     expect(user).toContain("outline Leak/Problem N before Fix N");
-    expect(user).toContain("exactly one CTA role");
+    expect(user).toContain("exactly one intentional final closing");
   });
 });

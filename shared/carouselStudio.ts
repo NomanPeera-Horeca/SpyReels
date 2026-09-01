@@ -1179,9 +1179,6 @@ export type CarouselBriefSlideBinding = {
 
 export type CarouselCopySlotValues = Record<string, Record<string, string>>;
 
-const COPY_CTA_PATTERN =
-  /\b(screenshot|save this now|save this|follow for more|share with your|which leak hits you)\b/i;
-
 const QUALIFIED_CLAIM_CHECKS: Array<{ re: RegExp; message: string }> = [
   {
     re: /most owners have at least two/i,
@@ -1197,6 +1194,14 @@ const QUALIFIED_CLAIM_CHECKS: Array<{ re: RegExp; message: string }> = [
     re: /a reserve is not a luxury/i,
     message:
       'Unsupported claim "A reserve is not a luxury". Qualify this as an opinion, not a verified fact.',
+  },
+];
+
+const CLOSING_CLAIM_CHECKS: Array<{ re: RegExp; message: string }> = [
+  {
+    re: /instagram will never show you/i,
+    message:
+      'Unsupported claim "Instagram will never show you our posts unless you follow". Use qualified wording such as "Instagram may not show you the next one - follow so you do not miss it".',
   },
 ];
 
@@ -1231,6 +1236,9 @@ function briefPlanningText(brief: CarouselCreativeBrief): string {
   ].join("\n");
 }
 
+const PAIRED_SOLUTION_PROMISE_RE =
+  /\b(?:how to fix each|fix each|fix for each|plug them|plug each|how to plug them)\b/i;
+
 export function promisedCarouselItemCount(
   text: string,
   kind: "problem" | "fix"
@@ -1239,7 +1247,7 @@ export function promisedCarouselItemCount(
     return maxCountMatches(
       text,
       new RegExp(
-        `\\b(${COUNT_TOKEN_RE})\\s+(?:cash\\s+)?(?:leaks|problems|mistakes|reasons|traps)\\b`,
+        `\\b(${COUNT_TOKEN_RE})\\s+(?:cash\\s+)?(?:leaks|problems)\\b`,
         "gi"
       )
     );
@@ -1253,7 +1261,7 @@ export function promisedCarouselItemCount(
     new RegExp(`\\ball\\s+(${COUNT_TOKEN_RE})\\s+plugged\\b`, "gi")
   );
   let implied: number | null = null;
-  if (/\b(?:fix each|fix for each|plug them|plug each)\b/i.test(text)) {
+  if (PAIRED_SOLUTION_PROMISE_RE.test(text)) {
     implied = promisedCarouselItemCount(text, "problem");
   }
   return [named, allPlugged, implied].reduce<number | null>((max, value) => {
@@ -1261,6 +1269,18 @@ export function promisedCarouselItemCount(
     if (max == null || value > max) return value;
     return max;
   }, null);
+}
+
+export function briefPromisesPairedSolutions(
+  brief: CarouselCreativeBrief
+): boolean {
+  const text = briefPlanningText(brief);
+  if (promisedCarouselItemCount(text, "fix") != null) return true;
+  const numbered = collectNumberedCarouselItems([
+    ...brief.keyPoints.map((point) => point.title),
+    ...brief.slideOutline.map((slide) => slide.objective),
+  ]);
+  return numbered.problems.size > 0 && numbered.fixes.size > 0;
 }
 
 export function isNumberedProblemSolutionBrief(
@@ -1274,14 +1294,37 @@ export function isNumberedProblemSolutionBrief(
   );
 }
 
+type NumberedCarouselItem = { kind: "problem" | "fix"; n: number };
+
 function parseNumberedCarouselItem(
   text: string
-): { kind: "problem" | "fix"; n: number } | null {
+): NumberedCarouselItem | null {
   const problem = text.match(/\b(?:leak|problem)\s*([1-9]|1[0-2])\b/i);
   if (problem) return { kind: "problem", n: Number(problem[1]) };
   const fix = text.match(/\b(?:fix|plug)\s*([1-9]|1[0-2])\b/i);
   if (fix) return { kind: "fix", n: Number(fix[1]) };
   return null;
+}
+
+function numberedItemKey(item: NumberedCarouselItem): string {
+  return `${item.kind}:${item.n}`;
+}
+
+function numberedItemLabel(item: NumberedCarouselItem): string {
+  return `${item.kind === "problem" ? "Leak" : "Fix"} ${item.n}`;
+}
+
+function expectedNumberedItemPositions(
+  outline: CarouselCreativeBriefSlideOutlineItem[]
+): Map<string, number> {
+  const expected = new Map<string, number>();
+  for (const slide of outline) {
+    const planned = parseNumberedCarouselItem(slide.objective);
+    if (!planned) continue;
+    const key = numberedItemKey(planned);
+    if (!expected.has(key)) expected.set(key, slide.position);
+  }
+  return expected;
 }
 
 function collectNumberedCarouselItems(texts: string[]): {
@@ -1325,23 +1368,27 @@ export function bindBriefOutlineToSlides(
   }));
 }
 
+function isClosingRole(role: string): boolean {
+  return role === "cta" || role === "takeaway";
+}
+
 export function validateCarouselBriefSemantics(
   brief: CarouselCreativeBrief
 ): string[] {
   const issues: string[] = [];
   const outline = brief.slideOutline;
+  const last = outline[outline.length - 1];
+  if (!last || !isClosingRole(last.role)) {
+    issues.push("Brief must contain exactly one final closing");
+  }
   const ctaPositions = outline
     .filter((slide) => slide.role === "cta")
     .map((slide) => slide.position);
-  if (ctaPositions.length > 1) {
-    issues.push("More than one CTA role exists");
-  }
-  const last = outline[outline.length - 1];
-  if (ctaPositions.length > 0 && last && last.role !== "cta") {
-    issues.push("CTA is not the final slide");
-  }
-  if (ctaPositions.some((position) => position !== outline.length)) {
-    issues.push("CTA is not the final slide");
+  if (
+    ctaPositions.length > 1 ||
+    ctaPositions.some((position) => position !== outline.length)
+  ) {
+    issues.push("Brief has multiple competing endings");
   }
 
   const seenObjectives = new Map<string, number>();
@@ -1350,6 +1397,9 @@ export function validateCarouselBriefSemantics(
     if (!key) continue;
     const prior = seenObjectives.get(key);
     if (prior != null) {
+      if (slide.position === outline.length) {
+        issues.push("Duplicated closing language");
+      }
       issues.push(
         `Repeated objective creates a filler slide at position ${slide.position}`
       );
@@ -1388,7 +1438,11 @@ export function validateCarouselBriefSemantics(
   }
 
   const promisedFixes = promisedCarouselItemCount(planningText, "fix");
-  if (promisedFixes != null && numbered.fixes.size < promisedFixes) {
+  if (
+    briefPromisesPairedSolutions(brief) &&
+    promisedFixes != null &&
+    numbered.fixes.size < promisedFixes
+  ) {
     issues.push(
       `A summary claims ${promisedFixes} solutions that were not introduced`
     );
@@ -1496,13 +1550,29 @@ function copyMatchesObjective(objective: string, generated: string): boolean {
   return hits >= needed;
 }
 
-function generatedCopyLooksLikeCta(args: {
-  role: string;
-  text: string;
-  hasCtaLabel: boolean;
+function slideHasCtaSpecificSlot(
+  slots: Record<string, string> | undefined
+): boolean {
+  if (!slots) return false;
+  for (const [key, value] of Object.entries(slots)) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (key === "cta_label" || key.startsWith("cta_")) return true;
+  }
+  return false;
+}
+
+function slideHasCompetingClosingSignal(args: {
+  plannedRole: string;
+  templateRole: string;
+  hasCtaSlot: boolean;
+  isFinal: boolean;
 }): boolean {
-  if (args.role === "cta" || args.hasCtaLabel) return true;
-  return COPY_CTA_PATTERN.test(args.text);
+  if (args.isFinal) return false;
+  return (
+    args.plannedRole === "cta" ||
+    args.templateRole === "cta" ||
+    args.hasCtaSlot
+  );
 }
 
 export function validateCopyBriefAdherence(args: {
@@ -1524,7 +1594,9 @@ export function validateCopyBriefAdherence(args: {
   }
 
   const generatedTexts: string[] = [];
-  const ctaPositions: number[] = [];
+  const competingClosingPositions: number[] = [];
+  const expectedByKey = expectedNumberedItemPositions(outline);
+  const lastPosition = outline.length;
 
   for (const binding of bindings) {
     const index = binding.position - 1;
@@ -1542,13 +1614,16 @@ export function validateCopyBriefAdherence(args: {
     }
     const copy = slideCopyText(values, binding.slideId);
     generatedTexts.push(`${copy.title} ${copy.all}`);
-    const role = slideRoles[index] ?? "";
-    const looksLikeCta = generatedCopyLooksLikeCta({
-      role,
-      text: `${copy.title} ${copy.all}`,
-      hasCtaLabel: Boolean(values[binding.slideId]?.cta_label?.trim()),
-    });
-    if (looksLikeCta) ctaPositions.push(binding.position);
+    if (
+      slideHasCompetingClosingSignal({
+        plannedRole: binding.role,
+        templateRole: slideRoles[index] ?? "",
+        hasCtaSlot: slideHasCtaSpecificSlot(values[binding.slideId]),
+        isFinal: binding.position === lastPosition,
+      })
+    ) {
+      competingClosingPositions.push(binding.position);
+    }
 
     const plannedItem = parseNumberedCarouselItem(binding.objective);
     const generatedItem = parseNumberedCarouselItem(`${copy.title} ${copy.all}`);
@@ -1558,15 +1633,22 @@ export function validateCopyBriefAdherence(args: {
         generatedItem.kind !== plannedItem.kind ||
         generatedItem.n !== plannedItem.n)
     ) {
-      const label = plannedItem.kind === "problem" ? "Leak" : "Fix";
       issues.push(
-        `Position ${binding.position} is missing ${label} ${plannedItem.n}`
+        `Position ${binding.position} is missing ${numberedItemLabel(plannedItem)}`
       );
+    }
+    if (generatedItem) {
+      const expectedPosition = expectedByKey.get(numberedItemKey(generatedItem));
+      if (expectedPosition != null && expectedPosition !== binding.position) {
+        issues.push(
+          `Unexpected ${numberedItemLabel(generatedItem)} at position ${binding.position}; expected at position ${expectedPosition}`
+        );
+      }
     }
 
     if (!copyMatchesObjective(binding.objective, `${copy.title} ${copy.body} ${copy.all}`)) {
-      issues.push(
-        `Position ${binding.position} title/body does not match planned objective: ${binding.objective}`
+      console.info(
+        `[carouselStudio] copy objective overlap diagnostic at position ${binding.position}: ${binding.objective}`
       );
     }
   }
@@ -1600,16 +1682,33 @@ export function validateCopyBriefAdherence(args: {
     );
   }
 
-  if (ctaPositions.length > 1) {
-    issues.push("More than one CTA slide exists");
+  const lastOutline = outline[outline.length - 1];
+  if (!lastOutline || !isClosingRole(lastOutline.role)) {
+    issues.push("Copy is missing an intentional final closing");
   }
-  const lastPosition = outline.length;
-  if (ctaPositions.some((position) => position !== lastPosition)) {
-    issues.push("CTA appears before the final slide");
+  if (competingClosingPositions.length > 0) {
+    issues.push("Copy has multiple competing endings");
   }
 
+  const lastCopy = generatedTexts[generatedTexts.length - 1] ?? "";
+  if (lastCopy && generatedTexts.length > 1) {
+    const lastKey = normalizeObjectiveKey(lastCopy);
+    if (
+      lastKey &&
+      generatedTexts.slice(0, -1).some((text) => normalizeObjectiveKey(text) === lastKey)
+    ) {
+      issues.push("Duplicated closing language");
+    }
+  }
+  if (lastOutline && !lastCopy.trim()) {
+    issues.push("Final closing slide is filler");
+  }
+
+  const allCopy = generatedTexts.join("\n");
+  for (const check of CLOSING_CLAIM_CHECKS) {
+    if (check.re.test(allCopy)) issues.push(check.message);
+  }
   if (brief.researchMode === "claim_verification") {
-    const allCopy = generatedTexts.join("\n");
     for (const check of QUALIFIED_CLAIM_CHECKS) {
       if (check.re.test(allCopy)) issues.push(check.message);
     }

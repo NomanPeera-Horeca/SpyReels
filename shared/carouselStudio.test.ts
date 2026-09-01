@@ -113,21 +113,23 @@ describe("deriveCarouselLibraryMeta", () => {
 });
 
 function sampleOutline(count: number) {
-  const roles = [
+  const middleRoles = [
     "hook",
     "context",
     "problem",
     "insight",
     "example",
     "takeaway",
-    "cta",
   ] as const;
-  return Array.from({ length: count }, (_, i) => ({
-    position: i + 1,
-    role: roles[Math.min(i, roles.length - 1)]!,
-    objective: `Cover beat ${i + 1} without repeating other slides.`,
-    recommendedVisual: i === 0 ? "text" : "checklist",
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const isLast = i === count - 1;
+    return {
+      position: i + 1,
+      role: isLast ? "cta" : middleRoles[Math.min(i, middleRoles.length - 1)]!,
+      objective: `Cover beat ${i + 1} without repeating other slides.`,
+      recommendedVisual: i === 0 ? "text" : "checklist",
+    };
+  });
 }
 
 function sampleKeyPoints(count = 4) {
@@ -911,6 +913,32 @@ describe("empty recommendation callers", () => {
   });
 });
 
+function listicleOutline(
+  noun: "Reason" | "Mistake",
+  count: number
+): CarouselCreativeBrief["slideOutline"] {
+  return [
+    {
+      position: 1,
+      role: "hook",
+      objective: `Promise ${count} ${noun.toLowerCase()}s without a matching fix for each.`,
+      recommendedVisual: "text",
+    },
+    ...Array.from({ length: count }, (_, i) => ({
+      position: i + 2,
+      role: "insight" as const,
+      objective: `${noun} ${i + 1} explains a distinct cash-flow beat.`,
+      recommendedVisual: "checklist" as const,
+    })),
+    {
+      position: count + 2,
+      role: "cta",
+      objective: `Ask readers to save the ${count} ${noun.toLowerCase()}s and audit cash this week.`,
+      recommendedVisual: "text",
+    },
+  ];
+}
+
 describe("carousel brief semantic validation", () => {
   it("rejects Fix N without Leak N and a CTA that is not last", () => {
     const brief = sampleBrief({
@@ -957,12 +985,377 @@ describe("carousel brief semantic validation", () => {
     });
     const issues = validateCarouselBriefSemantics(brief);
     expect(issues).toContain("Fix 1 exists without Problem/Leak 1");
-    expect(issues).toContain("CTA is not the final slide");
+    expect(issues).toContain("Brief has multiple competing endings");
     expect(issues.some((issue) => /5 solutions/.test(issue))).toBe(true);
     expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
   });
 
   it("keeps a generic diagnostic sample brief that is not a numbered sequence", () => {
     expect(validateCarouselBriefSemantics(sampleBrief())).toEqual([]);
+  });
+
+  it("accepts a strong takeaway ending with no CTA role", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Name the timing trap.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+  });
+
+  it("accepts a question ending as the final closing", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      ctaDirection: "Ask which leak they will plug first.",
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Name the timing trap.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Ask which leak they will plug first this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+  });
+
+  it("accepts a follow CTA as the final closing", () => {
+    expect(validateCarouselBriefSemantics(sampleBrief())).toEqual([]);
+  });
+
+  it("rejects a brief with no intentional final closing", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Name the timing trap.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 5,
+          role: "example",
+          objective: "Walk one missed deposit.",
+          recommendedVisual: "timeline",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Brief must contain exactly one final closing"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects two competing endings", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "cta",
+          objective: "Ask them to follow for the next cash check.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "example",
+          objective: "Walk one missed deposit.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    const issues = validateCarouselBriefSemantics(brief);
+    expect(issues).toContain("Brief has multiple competing endings");
+    expect(issues).not.toContain("Brief must contain exactly one CTA");
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects duplicated closing language on the final slide", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Name the timing trap.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Duplicated closing language"
+    );
+  });
+
+  it("accepts a 5 Reasons listicle with Reason 1-5 and one final closing", () => {
+    const brief = sampleBrief({
+      title: "5 Reasons Small Businesses Run Out of Cash",
+      hook: "Five reasons small businesses run out of cash.",
+      corePromise: "Walk through five reasons cash disappears.",
+      estimatedSlideCount: 7,
+      slideOutline: listicleOutline("Reason", 5),
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+  });
+
+  it("accepts a 5 Mistakes listicle with Mistake 1-5", () => {
+    const brief = sampleBrief({
+      title: "5 Mistakes That Empty a Business Account",
+      hook: "Five mistakes that empty a business account.",
+      corePromise: "Name five mistakes owners can stop repeating.",
+      estimatedSlideCount: 7,
+      slideOutline: listicleOutline("Mistake", 5),
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+  });
+
+  it("rejects 5 Leaks that promise a fix for each but outline only two fixes", () => {
+    const brief = sampleBrief({
+      title: "Five leaks and how to plug them",
+      hook: "Five leaks are draining cash. Fix each one.",
+      estimatedSlideCount: 6,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise five leaks and a fix for each.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "problem",
+          objective: "Introduce Leak 1 invoice timing.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Present Fix 1 shorter payment cycles.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "problem",
+          objective: "Introduce Leak 2 inventory overstock.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 5,
+          role: "insight",
+          objective: "Present Fix 2 demand-led ordering.",
+          recommendedVisual: "data",
+        },
+        {
+          position: 6,
+          role: "cta",
+          objective: "Ask them to screenshot the five leaks this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    const issues = validateCarouselBriefSemantics(brief);
+    expect(issues.some((issue) => /5 solutions/.test(issue))).toBe(true);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects Fix 1 without Leak or Problem 1", () => {
+    const brief = sampleBrief({
+      title: "Plug the first leak",
+      hook: "Start with Fix 1.",
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise a first fix.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "insight",
+          objective: "Present Fix 1 shorter payment cycles.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 3,
+          role: "example",
+          objective: "Walk a deposit example.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 4,
+          role: "takeaway",
+          objective: "Recap the first fix.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 5,
+          role: "cta",
+          objective: "Ask them to apply Fix 1 this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Fix 1 exists without Problem/Leak 1"
+    );
+  });
+
+  it("accepts Leak 1 followed by Fix 1", () => {
+    const brief = sampleBrief({
+      title: "Leak 1 and Fix 1",
+      hook: "Name Leak 1, then Fix 1.",
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise Leak 1 and Fix 1.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "problem",
+          objective: "Introduce Leak 1 invoice timing.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Present Fix 1 shorter payment cycles.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "takeaway",
+          objective: "Recap the paired leak and fix.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 5,
+          role: "cta",
+          objective: "Ask them to apply the first plug this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
   });
 });
