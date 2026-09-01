@@ -10,6 +10,7 @@ import {
 } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import {
+  buildCarouselRemakeJsonSchema,
   buildCarouselRemakePrompt,
   effectiveSlidesForCreativeBrief,
 } from "../generateCarouselRemake";
@@ -76,11 +77,10 @@ describe("carousel remake 64 copy adherence", () => {
     expect(issues.some((issue) => /5 solutions/.test(issue))).toBe(true);
   });
 
-  it("still fails remake 64 without treating slide 11 as a second CTA", () => {
+  it("fails remake 64 for sequence errors and competing endings", () => {
     const issues = adherenceIssues();
     expect(issues.length).toBeGreaterThan(0);
-    expect(issues).not.toContain("More than one CTA slide exists");
-    expect(issues).not.toContain("Copy has multiple competing endings");
+    expect(issues).toContain("Copy has multiple competing endings");
     expect(issues).toContain(
       "Unexpected Leak 1 at position 2; expected at position 3"
     );
@@ -128,6 +128,29 @@ describe("carousel remake 64 copy adherence", () => {
         values: VALID_FIVE_LEAK_FIVE_FIX_VALUES,
       })
     ).toEqual([]);
+  });
+});
+
+describe("copy-generation slideIntent schema", () => {
+  it("requires slideIntent and closingType on every generated slide object", () => {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get("photo_story_test");
+    expect(template).toBeDefined();
+    const schema = buildCarouselRemakeJsonSchema(template!.slides);
+    const firstSlide = (
+      schema.schema.properties as Record<string, Record<string, unknown>>
+    )[template!.slides[0]!.id] as {
+      properties?: Record<string, { enum?: string[] }>;
+      required?: string[];
+    };
+    expect(firstSlide.required).toContain("slideIntent");
+    expect(firstSlide.required).toContain("closingType");
+    expect(firstSlide.properties?.slideIntent?.enum).toEqual([
+      "content",
+      "transition",
+      "closing",
+    ]);
+    expect(firstSlide.properties?.closingType?.enum).toContain("question");
+    expect(firstSlide.properties?.closingType?.enum).toContain("dm");
   });
 });
 
@@ -301,18 +324,22 @@ function genericMiddleValues(): CarouselCopySlotValues {
     slide_01: {
       headline: "Bank accounts go quiet first",
       body: "A full P and L can still hide a dry week.",
+      slideIntent: "content",
     },
     slide_02: {
       headline: "Paper gains can hide an empty checking account",
       body: "Owners often celebrate sales while the register is already thin.",
+      slideIntent: "content",
     },
     slide_03: {
       headline: "Money leaves before it lands",
       body: "Work can be done while payment is still weeks away.",
+      slideIntent: "content",
     },
     slide_04: {
       headline: "Look at the account every Friday",
       body: "A short weekly review spots drains early.",
+      slideIntent: "content",
     },
   };
 }
@@ -356,6 +383,8 @@ describe("final closing copy adherence", () => {
         {
           headline: "Keep one Friday cash check",
           body: "That single habit is the whole point of the carousel.",
+          slideIntent: "closing",
+          closingType: "takeaway",
         },
         { brief, slideRoles: ["hook", "list_item", "list_item", "list_item", "list_item"] }
       )
@@ -367,6 +396,8 @@ describe("final closing copy adherence", () => {
       closingCopyIssues({
         headline: "Which leak will you plug first?",
         body: "Pick one drain and handle it this week.",
+        slideIntent: "closing",
+        closingType: "question",
       })
     ).toEqual([]);
   });
@@ -377,6 +408,8 @@ describe("final closing copy adherence", () => {
         headline: "Instagram may not show you the next one",
         body: "Follow so you do not miss the next cash check.",
         cta_label: "Follow along",
+        slideIntent: "closing",
+        closingType: "follow",
       })
     ).toEqual([]);
   });
@@ -387,6 +420,8 @@ describe("final closing copy adherence", () => {
         headline: "Comment the leak that hits you",
         body: "Name it below so you commit to plugging it.",
         cta_label: "Comment below",
+        slideIntent: "closing",
+        closingType: "comment",
       })
     ).toEqual([]);
   });
@@ -397,6 +432,8 @@ describe("final closing copy adherence", () => {
         headline: "DM CASH for the checklist",
         body: "Send the keyword and we will reply with the weekly review.",
         cta_label: "DM CASH",
+        slideIntent: "closing",
+        closingType: "dm",
       })
     ).toEqual([]);
   });
@@ -406,22 +443,27 @@ describe("final closing copy adherence", () => {
       closingCopyIssues({
         headline: "Audit cash this Friday",
         body: "Open the account and mark every outgoing charge.",
+        slideIntent: "closing",
+        closingType: "practical_action",
       })
     ).toEqual([]);
   });
 
-  it("rejects two competing endings when a non-final slide has a CTA slot", () => {
+  it("rejects a non-final question marked closing", () => {
     const issues = closingCopyIssues(
       {
         headline: "Keep one Friday cash check",
         body: "That single habit is the whole point of the carousel.",
+        slideIntent: "closing",
+        closingType: "takeaway",
       },
       {
         middle: {
           slide_04: {
-            headline: "Follow for the next check",
-            body: "Turn on alerts so the next post reaches you.",
-            cta_label: "Follow along",
+            headline: "Which leak hits you most?",
+            body: "Name the drain that is already emptying the account.",
+            slideIntent: "closing",
+            closingType: "question",
           },
         },
       }
@@ -429,17 +471,102 @@ describe("final closing copy adherence", () => {
     expect(issues).toContain("Copy has multiple competing endings");
   });
 
+  it("rejects a non-final follow, comment, or DM closing", () => {
+    const follow = closingCopyIssues(
+      {
+        headline: "Keep one Friday cash check",
+        body: "That single habit is the whole point of the carousel.",
+        slideIntent: "closing",
+        closingType: "takeaway",
+      },
+      {
+        middle: {
+          slide_04: {
+            headline: "Follow for the next check",
+            body: "Turn on alerts so the next post reaches you.",
+            slideIntent: "closing",
+            closingType: "follow",
+          },
+        },
+      }
+    );
+    const comment = closingCopyIssues(
+      {
+        headline: "Keep one Friday cash check",
+        body: "That single habit is the whole point of the carousel.",
+        slideIntent: "closing",
+        closingType: "takeaway",
+      },
+      {
+        middle: {
+          slide_04: {
+            headline: "Comment the leak that hits you",
+            body: "Name it below so you commit to plugging it.",
+            slideIntent: "closing",
+            closingType: "comment",
+          },
+        },
+      }
+    );
+    const dm = closingCopyIssues(
+      {
+        headline: "Keep one Friday cash check",
+        body: "That single habit is the whole point of the carousel.",
+        slideIntent: "closing",
+        closingType: "takeaway",
+      },
+      {
+        middle: {
+          slide_04: {
+            headline: "DM CASH for the checklist",
+            body: "Send the keyword and we will reply with the weekly review.",
+            slideIntent: "closing",
+            closingType: "dm",
+          },
+        },
+      }
+    );
+    expect(follow).toContain("Copy has multiple competing endings");
+    expect(comment).toContain("Copy has multiple competing endings");
+    expect(dm).toContain("Copy has multiple competing endings");
+  });
+
+  it("accepts a normal educational question in the middle marked content", () => {
+    expect(
+      closingCopyIssues(
+        {
+          headline: "Which leak will you plug first?",
+          body: "Pick one drain and handle it this week.",
+          slideIntent: "closing",
+          closingType: "question",
+        },
+        {
+          middle: {
+            slide_03: {
+              headline: "Which timing trap empties the account first?",
+              body: "Work can be done while payment is still weeks away.",
+              slideIntent: "content",
+            },
+          },
+        }
+      )
+    ).toEqual([]);
+  });
+
   it("rejects duplicated closing language", () => {
     const issues = closingCopyIssues(
       {
         headline: "Look at the account every Friday",
         body: "A short weekly review spots drains early.",
+        slideIntent: "closing",
+        closingType: "takeaway",
       },
       {
         middle: {
           slide_04: {
             headline: "Look at the account every Friday",
             body: "A short weekly review spots drains early.",
+            slideIntent: "content",
           },
         },
       }
@@ -452,6 +579,8 @@ describe("final closing copy adherence", () => {
       headline: "Instagram will never show you our posts unless you follow",
       body: "Hit follow now or this account disappears from your feed.",
       cta_label: "Follow now",
+      slideIntent: "closing",
+      closingType: "follow",
     });
     expect(
       issues.some((issue) => /Instagram will never show you our posts/.test(issue))
@@ -464,12 +593,15 @@ describe("final closing copy adherence", () => {
         {
           headline: "Which leak will you plug first?",
           body: "Pick one drain and handle it this week.",
+          slideIntent: "closing",
+          closingType: "question",
         },
         {
           middle: {
             slide_04: {
               headline: "Owners can save cash by checking Friday",
               body: "A weekly review is how you save the account from quiet leaks.",
+              slideIntent: "content",
             },
           },
         }
@@ -481,6 +613,8 @@ describe("final closing copy adherence", () => {
     const issues = closingCopyIssues({
       headline: "Park this weekly review nearby",
       body: "Use it the next time the register feels thin.",
+      slideIntent: "closing",
+      closingType: "soft_close",
     });
     expect(
       issues.filter((issue) => /does not match planned objective/.test(issue))

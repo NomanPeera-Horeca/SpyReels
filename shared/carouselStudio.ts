@@ -1179,6 +1179,69 @@ export type CarouselBriefSlideBinding = {
 
 export type CarouselCopySlotValues = Record<string, Record<string, string>>;
 
+export const CAROUSEL_SLIDE_INTENTS = [
+  "content",
+  "transition",
+  "closing",
+] as const;
+export type CarouselSlideIntent = (typeof CAROUSEL_SLIDE_INTENTS)[number];
+
+export const CAROUSEL_CLOSING_TYPES = [
+  "takeaway",
+  "question",
+  "practical_action",
+  "follow",
+  "comment",
+  "dm",
+  "save",
+  "share",
+  "click",
+  "soft_close",
+] as const;
+export type CarouselClosingType = (typeof CAROUSEL_CLOSING_TYPES)[number];
+
+export function isCarouselSlideIntent(
+  value: unknown
+): value is CarouselSlideIntent {
+  return includesUnion(CAROUSEL_SLIDE_INTENTS, value);
+}
+
+export function isCarouselClosingType(
+  value: unknown
+): value is CarouselClosingType {
+  return includesUnion(CAROUSEL_CLOSING_TYPES, value);
+}
+
+export function readSlideIntentMetadata(
+  slots: Record<string, string> | undefined
+): {
+  slideIntent: CarouselSlideIntent | null;
+  closingType: CarouselClosingType | null;
+} {
+  const slideIntentRaw = slots?.slideIntent?.trim();
+  const closingTypeRaw = slots?.closingType?.trim();
+  return {
+    slideIntent: isCarouselSlideIntent(slideIntentRaw) ? slideIntentRaw : null,
+    closingType: isCarouselClosingType(closingTypeRaw) ? closingTypeRaw : null,
+  };
+}
+
+/** Drop copy-call metadata so it is never persisted as visible slide text. */
+export function stripSlideIntentMetadata(
+  values: CarouselCopySlotValues
+): CarouselCopySlotValues {
+  const next: CarouselCopySlotValues = {};
+  for (const [slideId, slots] of Object.entries(values)) {
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(slots)) {
+      if (key === "slideIntent" || key === "closingType") continue;
+      cleaned[key] = value;
+    }
+    next[slideId] = cleaned;
+  }
+  return next;
+}
+
 const QUALIFIED_CLAIM_CHECKS: Array<{ re: RegExp; message: string }> = [
   {
     re: /most owners have at least two/i,
@@ -1482,8 +1545,9 @@ function slideCopyText(
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter((value) => value.length > 0 && value !== title)
     .join(" ");
-  const all = Object.values(slots)
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
+  const all = Object.entries(slots)
+    .filter(([key]) => key !== "slideIntent" && key !== "closingType")
+    .map(([, value]) => (typeof value === "string" ? value.trim() : ""))
     .filter(Boolean)
     .join(" ");
   return { title, body, all };
@@ -1550,31 +1614,6 @@ function copyMatchesObjective(objective: string, generated: string): boolean {
   return hits >= needed;
 }
 
-function slideHasCtaSpecificSlot(
-  slots: Record<string, string> | undefined
-): boolean {
-  if (!slots) return false;
-  for (const [key, value] of Object.entries(slots)) {
-    if (typeof value !== "string" || !value.trim()) continue;
-    if (key === "cta_label" || key.startsWith("cta_")) return true;
-  }
-  return false;
-}
-
-function slideHasCompetingClosingSignal(args: {
-  plannedRole: string;
-  templateRole: string;
-  hasCtaSlot: boolean;
-  isFinal: boolean;
-}): boolean {
-  if (args.isFinal) return false;
-  return (
-    args.plannedRole === "cta" ||
-    args.templateRole === "cta" ||
-    args.hasCtaSlot
-  );
-}
-
 export function validateCopyBriefAdherence(args: {
   brief: CarouselCreativeBrief;
   slideIds: string[];
@@ -1582,7 +1621,6 @@ export function validateCopyBriefAdherence(args: {
   values: CarouselCopySlotValues;
 }): string[] {
   const { brief, slideIds, values } = args;
-  const slideRoles = args.slideRoles ?? [];
   const issues: string[] = [];
   const outline = brief.slideOutline;
   const bindings = bindBriefOutlineToSlides(outline, slideIds);
@@ -1614,15 +1652,21 @@ export function validateCopyBriefAdherence(args: {
     }
     const copy = slideCopyText(values, binding.slideId);
     generatedTexts.push(`${copy.title} ${copy.all}`);
-    if (
-      slideHasCompetingClosingSignal({
-        plannedRole: binding.role,
-        templateRole: slideRoles[index] ?? "",
-        hasCtaSlot: slideHasCtaSpecificSlot(values[binding.slideId]),
-        isFinal: binding.position === lastPosition,
-      })
-    ) {
-      competingClosingPositions.push(binding.position);
+    const { slideIntent, closingType } = readSlideIntentMetadata(
+      values[binding.slideId]
+    );
+    const isFinal = binding.position === lastPosition;
+    if (!slideIntent) {
+      issues.push(`Position ${binding.position} is missing slideIntent`);
+    } else if (slideIntent === "closing") {
+      if (!isFinal) {
+        competingClosingPositions.push(binding.position);
+      }
+      if (!closingType) {
+        issues.push(`Position ${binding.position} is missing closingType`);
+      }
+    } else if (isFinal) {
+      issues.push("Copy is missing an intentional final closing");
     }
 
     const plannedItem = parseNumberedCarouselItem(binding.objective);

@@ -190,68 +190,82 @@ export const CASH_LEAKS_REMAKE_64_BRIEF: CarouselCreativeBrief = {
   confidence: 0.93,
 };
 
-/** Exact generated titles/bodies from production remake 64. */
+/** Exact generated titles/bodies from production remake 64, plus copy-call intent metadata. */
 export const CASH_LEAKS_REMAKE_64_VALUES: CarouselCopySlotValues = {
   slide_01: {
     kicker: "CASH FLOW",
     headline: "5 Leaks Draining Your Business",
     subhead:
       "You may be profitable on paper but still run dry. Here are the five reasons why.",
+    slideIntent: "content",
   },
   slide_02: {
     kicker: "01",
     headline: "Leak 1: Invoice Timing",
     body: "Sending invoices late or on loose terms delays your cash by weeks. The work is done but the money hasn't arrived.",
+    slideIntent: "content",
   },
   slide_03: {
     kicker: "02",
     headline: "Fix 1: Shorter Pay Cycles",
     body: "Use upfront deposits, tighter net terms, and automated reminders. Get paid faster without chasing every client.",
+    slideIntent: "content",
   },
   slide_04: {
     kicker: "03",
     headline: "Leak 2: Inventory Overstock",
     body: "Ordering more than demand requires traps cash in unsold goods sitting on your shelves instead of in your account.",
+    slideIntent: "content",
   },
   slide_05: {
     kicker: "04",
     headline: "Fix 2: Demand-Led Ordering",
     body: "Use recent sales data to set a reorder threshold. Match your orders to actual demand, not optimistic projections.",
+    slideIntent: "content",
   },
   slide_06: {
     kicker: "05",
     headline: "Leak 3: Unused Subscriptions",
     body: "Software and service subscriptions pile up fast. Many go unused for months, quietly draining your account every cycle.",
+    slideIntent: "content",
   },
   slide_07: {
     kicker: "06",
     headline: "Leak 4: Premature Hiring",
     body: "Adding payroll before revenue supports it creates a fixed cost that outlasts the optimism that prompted the hire.",
+    slideIntent: "content",
   },
   slide_08: {
     kicker: "07",
     headline: "Leak 5: No Cash Reserve",
     body: "No buffer means any revenue dip becomes an immediate crisis. A reserve is not a luxury, it is a structural need.",
+    slideIntent: "content",
   },
   slide_09: {
     kicker: "08",
     headline: "The Weekly Cash Check",
     body: "Review cash in, cash out, and cash on hand every week. One simple habit catches leaks before they become crises.",
+    slideIntent: "transition",
   },
   slide_10: {
     kicker: "09",
     headline: "Five Leaks vs. Five Plugs",
     body: "All five leaks active means constant pressure. All five plugged means predictable cash and far fewer emergencies.",
+    slideIntent: "content",
   },
   slide_11: {
     kicker: "10",
     headline: "Which Leak Hits You Most?",
     body: "Most owners have at least two of these running right now. Audit each one this week and see where your cash is going.",
+    slideIntent: "closing",
+    closingType: "question",
   },
   slide_12: {
     headline: "Screenshot and audit this week",
     subhead: "Share with your accountant or business partner today.",
     cta_label: "Save this now",
+    slideIntent: "closing",
+    closingType: "save",
   },
 };
 
@@ -292,11 +306,13 @@ export const CASH_LEAKS_MISSING_LEAK1_VALUES: CarouselCopySlotValues = {
     kicker: "01",
     headline: "Fix 1: Shorter Pay Cycles",
     body: "Use upfront deposits, tighter net terms, and automated reminders. Get paid faster without chasing every client.",
+    slideIntent: "content",
   },
   slide_03: {
     kicker: "02",
     headline: "Leak 2: Inventory Overstock",
     body: "Ordering more than demand requires traps cash in unsold goods sitting on your shelves instead of in your account.",
+    slideIntent: "content",
   },
 };
 
@@ -430,60 +446,73 @@ export const VALID_FIVE_LEAK_FIVE_FIX_VALUES: CarouselCopySlotValues = {
     kicker: "CASH FLOW",
     headline: "Five leaks, five matching plugs",
     subhead: "Each leak has a plug you can use this week.",
+    slideIntent: "content",
   },
   slide_02: {
     kicker: "01",
     headline: "Leak 1: Invoice Timing",
     body: "Late invoices delay cash receipt. Work is done, but the money is still sitting with the client.",
+    slideIntent: "content",
   },
   slide_03: {
     kicker: "02",
     headline: "Fix 1: Shorter Pay Cycles",
     body: "Use deposits, tighter terms, and reminders so payment cycles collect cash faster.",
+    slideIntent: "content",
   },
   slide_04: {
     kicker: "03",
     headline: "Leak 2: Inventory Overstock",
     body: "Overstocking freezes cash in unsold goods. Extra stock is cash you cannot spend.",
+    slideIntent: "content",
   },
   slide_05: {
     kicker: "04",
     headline: "Fix 2: Demand-Led Ordering",
     body: "Set reorder points from recent sales data so demand, not hope, decides the next order.",
+    slideIntent: "content",
   },
   slide_06: {
     kicker: "05",
     headline: "Leak 3: Unused Subscriptions",
     body: "Unused subscriptions and recurring charges keep leaving the account every month.",
+    slideIntent: "content",
   },
   slide_07: {
     kicker: "06",
     headline: "Fix 3: Cancel Unused Tools",
     body: "Audit software this week and cancel unused subscriptions before the next charge.",
+    slideIntent: "content",
   },
   slide_08: {
     kicker: "07",
     headline: "Leak 4: Premature Hiring",
     body: "Premature hiring creates a payroll timing trap when revenue cannot support the cost.",
+    slideIntent: "content",
   },
   slide_09: {
     kicker: "08",
     headline: "Fix 4: Hire From Cash",
     body: "Add payroll only after cash on hand can support the new hire for several months.",
+    slideIntent: "content",
   },
   slide_10: {
     kicker: "09",
     headline: "Leak 5: No Cash Reserve",
     body: "No operating buffer means a quiet week turns into an immediate cash emergency.",
+    slideIntent: "content",
   },
   slide_11: {
     kicker: "10",
     headline: "Fix 5: Build a Buffer",
     body: "Park leftover cash each week until a basic operating buffer covers a slow month.",
+    slideIntent: "content",
   },
   slide_12: {
     headline: "Screenshot the five leaks",
     subhead: "Audit cash this week and keep the matching plugs nearby.",
     cta_label: "Save this list",
+    slideIntent: "closing",
+    closingType: "save",
   },
 };

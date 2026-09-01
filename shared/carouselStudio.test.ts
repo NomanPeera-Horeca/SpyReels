@@ -24,6 +24,7 @@ import {
   scoreCarouselCreativeBrief,
   selectRecommendedCreativeBrief,
   selectSemanticallyValidCarouselBriefs,
+  stripSlideIntentMetadata,
   studioGenerateActionEnabled,
   validateCarouselBriefSemantics,
   type CarouselCreativeBrief,
@@ -938,6 +939,35 @@ function listicleOutline(
     },
   ];
 }
+
+describe("slideIntent metadata", () => {
+  it("strips slideIntent and closingType so they are not visible slide text", () => {
+    expect(
+      stripSlideIntentMetadata({
+        slide_01: {
+          headline: "Five leaks, five matching plugs",
+          body: "Each leak has a plug you can use this week.",
+          slideIntent: "content",
+        },
+        slide_02: {
+          headline: "Which leak will you plug first?",
+          body: "Pick one drain and handle it this week.",
+          slideIntent: "closing",
+          closingType: "question",
+        },
+      })
+    ).toEqual({
+      slide_01: {
+        headline: "Five leaks, five matching plugs",
+        body: "Each leak has a plug you can use this week.",
+      },
+      slide_02: {
+        headline: "Which leak will you plug first?",
+        body: "Pick one drain and handle it this week.",
+      },
+    });
+  });
+});
 
 describe("carousel brief semantic validation", () => {
   it("rejects Fix N without Leak N and a CTA that is not last", () => {

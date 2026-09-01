@@ -17,9 +17,12 @@ import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import {
+  CAROUSEL_CLOSING_TYPES,
+  CAROUSEL_SLIDE_INTENTS,
   CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE,
   bindBriefOutlineToSlides,
   formatApprovedCreativeBriefForCopy,
+  stripSlideIntentMetadata,
   validateCopyBriefAdherence,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
@@ -213,6 +216,20 @@ function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unkno
     };
     required.push(slot.id);
   }
+  properties.slideIntent = {
+    type: "string",
+    enum: [...CAROUSEL_SLIDE_INTENTS],
+    description:
+      "content, transition, or closing. Only the final slide may be closing. The final slide must be closing. Metadata only, not visible slide text.",
+  };
+  required.push("slideIntent");
+  properties.closingType = {
+    type: "string",
+    enum: [...CAROUSEL_CLOSING_TYPES],
+    description:
+      "Required when slideIntent is closing. Ignored for content and transition. Metadata only, not visible slide text.",
+  };
+  required.push("closingType");
   return {
     type: "object",
     properties,
@@ -347,7 +364,7 @@ Rules:
 2. Follow the approved brief's sequence, order and emphasis. Outline position N maps to the Nth slide exactly. Do not skip, swap, or compress planned slides.
 3. Preserve the source topic. Do not replace it with a different niche.
 4. Avoid every prohibitedClaims entry.
-5. Use the CTA direction instead of defaulting to "Follow for more". CTA copy belongs only on the final slide.
+5. Use the CTA direction instead of defaulting to "Follow for more". Set slideIntent on every slide: content or transition for earlier slides, and closing only on the final slide. The final slide must be closing. A closing may use any creative wording. Set closingType when slideIntent is closing. slideIntent and closingType are metadata, not visible slide text.
 6. Prefer short postable lines. Aim for under ~40 words of readable text per slide across its slots combined when budgets allow.
 7. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
 8. Preserve each slide's viral beat described in "Viral why".
@@ -360,7 +377,7 @@ ${
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
    - If the slot label is "Number" or "Step number": use "01", "02", etc.
    - If the slot label is "Stat": use a short striking number from the source when available.
-10. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
+10. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
   }
 
@@ -388,7 +405,7 @@ Rules:
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
    - If the slot label is "Number" or "Step number": use "01", "02", etc.
    - If the slot label is "Stat": use a short striking number from the source when available.
-7. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
+7. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled. Only the final slide may use slideIntent closing. The final slide must use closing. slideIntent and closingType are metadata, not visible slide text.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
   }
 
@@ -411,7 +428,7 @@ Rules:
    - If the slot label is "Number" or "Step number": use a short sequence number like "01", "02" (match the tone/length of defaultText).
    - If the slot label is "Stat": the kicker IS the statistic itself (e.g. "82%", "4X", "10K", "90"). Do not use audience nouns or sequence numbers. Prefer a short striking number within the character budget.
    Always stay within the character budget for that slot.
-7. Return ONLY the tool payload with every slide id and every slot id filled.${averageNotRule}${noNamedBrandRule}
+7. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled. Only the final slide may use slideIntent closing. The final slide must use closing. slideIntent and closingType are metadata, not visible slide text.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
 }
 
@@ -920,7 +937,7 @@ export async function generateCarouselRemake(
       .set({ progressStage: "writing_copy" })
       .where(eq(carouselRemakes.id, remakeId));
 
-    const { values, validation } = await withGenerationStage(
+    const { values: generatedValues, validation } = await withGenerationStage(
       telemetry,
       "copy_generation",
       async () => {
@@ -962,6 +979,7 @@ export async function generateCarouselRemake(
         return { values: nextValues, validation: nextValidation };
       }
     );
+    const values = stripSlideIntentMetadata(generatedValues);
 
     if (!validation.ok) {
       const hardIssues = validation.issues.filter(
