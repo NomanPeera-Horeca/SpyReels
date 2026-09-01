@@ -21,6 +21,7 @@ import {
   CAROUSEL_STUDIO_MAX_SLIDES,
   CAROUSEL_STUDIO_MIN_SLIDES,
   normalizeGeneratedCarouselBriefs,
+  selectSemanticallyValidCarouselBriefs,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
 import { invokeLLM } from "../_core/llm";
@@ -320,6 +321,8 @@ export function buildCarouselAnglesUserPrompt(args: {
     "Decide the core promise and central insight before listing key points.",
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
+    "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
+    "Use exactly one CTA role, and only as the final slide.",
     "Match contentFormat and layoutFamily.",
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
     "Avoid unsupported absolutes and sensational claims.",
@@ -344,8 +347,13 @@ export function buildCarouselAnglesUserPrompt(args: {
   return lines.join("\n");
 }
 
-export function buildCarouselAnglesRepairNote(validCount: number): string {
-  return `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid creative briefs, each with kicker, title, description, topic, inferredAudience, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), matching contentFormat and layoutFamily, claimRisk, researchMode, ctaDirection, component scores, and confidence. Do not include id, schemaVersion, or overall. Got ${validCount} valid briefs.`;
+export function buildCarouselAnglesRepairNote(
+  validCount: number,
+  semanticIssues: string[] = []
+): string {
+  const base = `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid creative briefs, each with kicker, title, description, topic, inferredAudience, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), matching contentFormat and layoutFamily, claimRisk, researchMode, ctaDirection, component scores, and confidence. Do not include id, schemaVersion, or overall. Numbered problem-solution briefs must include every promised leak/problem before its fix, must not claim N plugs that were never outlined, must have exactly one CTA, and that CTA must be the final slide. Got ${validCount} valid briefs.`;
+  if (semanticIssues.length === 0) return base;
+  return `${base} Semantic issues to fix: ${semanticIssues.join(" ")}`;
 }
 
 async function invokeCarouselAnglesOnce(args: {
@@ -353,7 +361,10 @@ async function invokeCarouselAnglesOnce(args: {
   niche?: string | null;
   brandVoice?: string | null;
   repairNote?: string;
-}): Promise<CarouselCreativeBrief[]> {
+}): Promise<{
+  briefs: CarouselCreativeBrief[];
+  semanticIssues: string[];
+}> {
   const schema = buildCarouselAnglesJsonSchema();
   const basePrompt = buildCarouselAnglesUserPrompt({
     sourceContent: args.sourceContent,
@@ -385,7 +396,8 @@ async function invokeCarouselAnglesOnce(args: {
 
   const raw = String(response.choices[0]?.message?.content ?? "");
   const parsed = parseLlmJson<BriefsLlmPayload>(raw, { angles: [] });
-  return normalizeGeneratedCarouselBriefs(parsed.angles);
+  const normalized = normalizeGeneratedCarouselBriefs(parsed.angles);
+  return selectSemanticallyValidCarouselBriefs(normalized);
 }
 
 /**
@@ -403,19 +415,24 @@ export async function generateCarouselAngles(args: {
     throw new Error("sourceContent is required to generate carousel angles.");
   }
 
-  let briefs = await invokeCarouselAnglesOnce({
+  let first = await invokeCarouselAnglesOnce({
     sourceContent,
     niche,
     brandVoice: args.brandVoice,
   });
+  let briefs = first.briefs;
 
   if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
-    briefs = await invokeCarouselAnglesOnce({
+    const repaired = await invokeCarouselAnglesOnce({
       sourceContent,
       niche,
       brandVoice: args.brandVoice,
-      repairNote: buildCarouselAnglesRepairNote(briefs.length),
+      repairNote: buildCarouselAnglesRepairNote(
+        briefs.length,
+        first.semanticIssues
+      ),
     });
+    briefs = repaired.briefs;
   }
 
   if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {

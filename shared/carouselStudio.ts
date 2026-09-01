@@ -1153,3 +1153,467 @@ export function resolveUserSelectedStudioBrief(
     selected: briefs[selectedAngleIndex] ?? null,
   };
 }
+
+const WORD_COUNT_TOKENS: Record<string, number> = {
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+const COUNT_TOKEN_RE = "twelve|eleven|ten|nine|eight|seven|six|five|four|three|two|[2-9]|1[0-2]";
+
+export type CarouselBriefSlideBinding = {
+  position: number;
+  role: CarouselSlideRole;
+  objective: string;
+  slideId: string | null;
+};
+
+export type CarouselCopySlotValues = Record<string, Record<string, string>>;
+
+const COPY_CTA_PATTERN =
+  /\b(screenshot|save this now|save this|follow for more|share with your|which leak hits you)\b/i;
+
+const QUALIFIED_CLAIM_CHECKS: Array<{ re: RegExp; message: string }> = [
+  {
+    re: /most owners have at least two/i,
+    message:
+      'Unsupported claim "Most owners have at least two of these". Use qualified wording such as "Many owners may have more than one".',
+  },
+  {
+    re: /all five plugged means predictable cash/i,
+    message:
+      'Unsupported claim "All five plugged means predictable cash". Use qualified wording such as "Fixing these leaks can make cash flow more predictable".',
+  },
+  {
+    re: /a reserve is not a luxury/i,
+    message:
+      'Unsupported claim "A reserve is not a luxury". Qualify this as an opinion, not a verified fact.',
+  },
+];
+
+function parseCountToken(raw: string): number | null {
+  const asNumber = Number(raw);
+  if (Number.isInteger(asNumber) && asNumber >= 2 && asNumber <= 12) {
+    return asNumber;
+  }
+  return WORD_COUNT_TOKENS[raw.toLowerCase()] ?? null;
+}
+
+function maxCountMatches(text: string, pattern: RegExp): number | null {
+  let max: number | null = null;
+  for (const match of text.matchAll(pattern)) {
+    const parsed = parseCountToken(match[1] ?? "");
+    if (parsed == null) continue;
+    if (max == null || parsed > max) max = parsed;
+  }
+  return max;
+}
+
+function briefPlanningText(brief: CarouselCreativeBrief): string {
+  return [
+    brief.title,
+    brief.hook,
+    brief.corePromise,
+    brief.centralInsight,
+    ...brief.keyPoints.map(
+      (point) => `${point.title} ${point.explanation} ${point.purpose}`
+    ),
+    ...brief.slideOutline.map((slide) => slide.objective),
+  ].join("\n");
+}
+
+export function promisedCarouselItemCount(
+  text: string,
+  kind: "problem" | "fix"
+): number | null {
+  if (kind === "problem") {
+    return maxCountMatches(
+      text,
+      new RegExp(
+        `\\b(${COUNT_TOKEN_RE})\\s+(?:cash\\s+)?(?:leaks|problems|mistakes|reasons|traps)\\b`,
+        "gi"
+      )
+    );
+  }
+  const named = maxCountMatches(
+    text,
+    new RegExp(`\\b(${COUNT_TOKEN_RE})\\s+(?:plugs|fixes|solutions)\\b`, "gi")
+  );
+  const allPlugged = maxCountMatches(
+    text,
+    new RegExp(`\\ball\\s+(${COUNT_TOKEN_RE})\\s+plugged\\b`, "gi")
+  );
+  let implied: number | null = null;
+  if (/\b(?:fix each|fix for each|plug them|plug each)\b/i.test(text)) {
+    implied = promisedCarouselItemCount(text, "problem");
+  }
+  return [named, allPlugged, implied].reduce<number | null>((max, value) => {
+    if (value == null) return max;
+    if (max == null || value > max) return value;
+    return max;
+  }, null);
+}
+
+export function isNumberedProblemSolutionBrief(
+  brief: CarouselCreativeBrief
+): boolean {
+  const text = briefPlanningText(brief);
+  if (/\b(?:leak|problem|fix|plug)\s*[1-9]\b/i.test(text)) return true;
+  return (
+    promisedCarouselItemCount(text, "problem") != null ||
+    promisedCarouselItemCount(text, "fix") != null
+  );
+}
+
+function parseNumberedCarouselItem(
+  text: string
+): { kind: "problem" | "fix"; n: number } | null {
+  const problem = text.match(/\b(?:leak|problem)\s*([1-9]|1[0-2])\b/i);
+  if (problem) return { kind: "problem", n: Number(problem[1]) };
+  const fix = text.match(/\b(?:fix|plug)\s*([1-9]|1[0-2])\b/i);
+  if (fix) return { kind: "fix", n: Number(fix[1]) };
+  return null;
+}
+
+function collectNumberedCarouselItems(texts: string[]): {
+  problems: Set<number>;
+  fixes: Set<number>;
+  problemPosition: Map<number, number>;
+  fixPosition: Map<number, number>;
+} {
+  const problems = new Set<number>();
+  const fixes = new Set<number>();
+  const problemPosition = new Map<number, number>();
+  const fixPosition = new Map<number, number>();
+  texts.forEach((text, index) => {
+    const parsed = parseNumberedCarouselItem(text);
+    if (!parsed) return;
+    const position = index + 1;
+    if (parsed.kind === "problem") {
+      problems.add(parsed.n);
+      if (!problemPosition.has(parsed.n)) problemPosition.set(parsed.n, position);
+      return;
+    }
+    fixes.add(parsed.n);
+    if (!fixPosition.has(parsed.n)) fixPosition.set(parsed.n, position);
+  });
+  return { problems, fixes, problemPosition, fixPosition };
+}
+
+function normalizeObjectiveKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+export function bindBriefOutlineToSlides(
+  outline: CarouselCreativeBriefSlideOutlineItem[],
+  slideIds: string[]
+): CarouselBriefSlideBinding[] {
+  return outline.map((item, index) => ({
+    position: item.position,
+    role: item.role,
+    objective: item.objective,
+    slideId: slideIds[index] ?? null,
+  }));
+}
+
+export function validateCarouselBriefSemantics(
+  brief: CarouselCreativeBrief
+): string[] {
+  const issues: string[] = [];
+  const outline = brief.slideOutline;
+  const ctaPositions = outline
+    .filter((slide) => slide.role === "cta")
+    .map((slide) => slide.position);
+  if (ctaPositions.length > 1) {
+    issues.push("More than one CTA role exists");
+  }
+  const last = outline[outline.length - 1];
+  if (ctaPositions.length > 0 && last && last.role !== "cta") {
+    issues.push("CTA is not the final slide");
+  }
+  if (ctaPositions.some((position) => position !== outline.length)) {
+    issues.push("CTA is not the final slide");
+  }
+
+  const seenObjectives = new Map<string, number>();
+  for (const slide of outline) {
+    const key = normalizeObjectiveKey(slide.objective);
+    if (!key) continue;
+    const prior = seenObjectives.get(key);
+    if (prior != null) {
+      issues.push(
+        `Repeated objective creates a filler slide at position ${slide.position}`
+      );
+    } else {
+      seenObjectives.set(key, slide.position);
+    }
+  }
+
+  if (!isNumberedProblemSolutionBrief(brief)) {
+    return uniqueIssues(issues);
+  }
+
+  const planningText = briefPlanningText(brief);
+  const numbered = collectNumberedCarouselItems([
+    ...brief.keyPoints.map((point) => point.title),
+    ...outline.map((slide) => slide.objective),
+  ]);
+  for (const n of numbered.fixes) {
+    if (!numbered.problems.has(n)) {
+      issues.push(`Fix ${n} exists without Problem/Leak ${n}`);
+    }
+  }
+  for (const n of numbered.fixes) {
+    const fixAt = numbered.fixPosition.get(n);
+    const leakAt = numbered.problemPosition.get(n);
+    if (fixAt != null && leakAt != null && fixAt < leakAt) {
+      issues.push(`Fix ${n} appears before Leak ${n}`);
+    }
+  }
+
+  const promisedProblems = promisedCarouselItemCount(planningText, "problem");
+  if (promisedProblems != null && numbered.problems.size < promisedProblems) {
+    issues.push(
+      `The hook promises ${promisedProblems} items but fewer than ${promisedProblems} are outlined`
+    );
+  }
+
+  const promisedFixes = promisedCarouselItemCount(planningText, "fix");
+  if (promisedFixes != null && numbered.fixes.size < promisedFixes) {
+    issues.push(
+      `A summary claims ${promisedFixes} solutions that were not introduced`
+    );
+  }
+
+  return uniqueIssues(issues);
+}
+
+export function selectSemanticallyValidCarouselBriefs(
+  briefs: CarouselCreativeBrief[]
+): { briefs: CarouselCreativeBrief[]; semanticIssues: string[] } {
+  const accepted: CarouselCreativeBrief[] = [];
+  const semanticIssues: string[] = [];
+  for (const brief of briefs) {
+    const issues = validateCarouselBriefSemantics(brief);
+    if (issues.length > 0) {
+      semanticIssues.push(`Brief "${brief.title}": ${issues.join("; ")}`);
+      continue;
+    }
+    accepted.push(brief);
+  }
+  return { briefs: accepted, semanticIssues };
+}
+
+function uniqueIssues(issues: string[]): string[] {
+  return [...new Set(issues)];
+}
+
+function slideCopyText(
+  values: CarouselCopySlotValues,
+  slideId: string
+): { title: string; body: string; all: string } {
+  const slots = values[slideId] ?? {};
+  const title =
+    slots.headline?.trim() || slots.title?.trim() || slots.kicker?.trim() || "";
+  const body = [slots.body, slots.subhead, slots.cta_label]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0 && value !== title)
+    .join(" ");
+  const all = Object.values(slots)
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .join(" ");
+  return { title, body, all };
+}
+
+function significantCopyTokens(text: string): Set<string> {
+  const stop = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "your",
+    "you",
+    "are",
+    "was",
+    "how",
+    "why",
+    "each",
+    "then",
+    "than",
+    "them",
+    "they",
+    "will",
+    "can",
+    "not",
+    "but",
+    "use",
+    "own",
+    "all",
+    "any",
+    "has",
+    "have",
+    "had",
+    "been",
+    "into",
+    "over",
+    "onto",
+  ]);
+  const tokens = new Set<string>();
+  for (const raw of text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)) {
+    if (raw.length < 4 || stop.has(raw)) continue;
+    tokens.add(raw);
+    if (raw.endsWith("s") && raw.length > 4) tokens.add(raw.slice(0, -1));
+    else tokens.add(`${raw}s`);
+  }
+  return tokens;
+}
+
+function copyMatchesObjective(objective: string, generated: string): boolean {
+  const planned = significantCopyTokens(objective);
+  if (planned.size === 0) return true;
+  const actual = significantCopyTokens(generated);
+  let hits = 0;
+  for (const token of planned) {
+    if (actual.has(token)) hits += 1;
+  }
+  const needed = Math.max(2, Math.ceil(planned.size * 0.35));
+  return hits >= needed;
+}
+
+function generatedCopyLooksLikeCta(args: {
+  role: string;
+  text: string;
+  hasCtaLabel: boolean;
+}): boolean {
+  if (args.role === "cta" || args.hasCtaLabel) return true;
+  return COPY_CTA_PATTERN.test(args.text);
+}
+
+export function validateCopyBriefAdherence(args: {
+  brief: CarouselCreativeBrief;
+  slideIds: string[];
+  slideRoles?: string[];
+  values: CarouselCopySlotValues;
+}): string[] {
+  const { brief, slideIds, values } = args;
+  const slideRoles = args.slideRoles ?? [];
+  const issues: string[] = [];
+  const outline = brief.slideOutline;
+  const bindings = bindBriefOutlineToSlides(outline, slideIds);
+
+  if (slideIds.length !== outline.length) {
+    issues.push(
+      `Generated slide count ${slideIds.length} does not match outline length ${outline.length}`
+    );
+  }
+
+  const generatedTexts: string[] = [];
+  const ctaPositions: number[] = [];
+
+  for (const binding of bindings) {
+    const index = binding.position - 1;
+    const expectedId = slideIds[index] ?? null;
+    if (binding.slideId !== expectedId) {
+      issues.push(
+        `Outline position ${binding.position} is not bound to effective slide ${index + 1}`
+      );
+    }
+    if (!binding.slideId) {
+      issues.push(
+        `Missing planned slide at position ${binding.position}: ${binding.role}`
+      );
+      continue;
+    }
+    const copy = slideCopyText(values, binding.slideId);
+    generatedTexts.push(`${copy.title} ${copy.all}`);
+    const role = slideRoles[index] ?? "";
+    const looksLikeCta = generatedCopyLooksLikeCta({
+      role,
+      text: `${copy.title} ${copy.all}`,
+      hasCtaLabel: Boolean(values[binding.slideId]?.cta_label?.trim()),
+    });
+    if (looksLikeCta) ctaPositions.push(binding.position);
+
+    const plannedItem = parseNumberedCarouselItem(binding.objective);
+    const generatedItem = parseNumberedCarouselItem(`${copy.title} ${copy.all}`);
+    if (
+      plannedItem &&
+      (!generatedItem ||
+        generatedItem.kind !== plannedItem.kind ||
+        generatedItem.n !== plannedItem.n)
+    ) {
+      const label = plannedItem.kind === "problem" ? "Leak" : "Fix";
+      issues.push(
+        `Position ${binding.position} is missing ${label} ${plannedItem.n}`
+      );
+    }
+
+    if (!copyMatchesObjective(binding.objective, `${copy.title} ${copy.body} ${copy.all}`)) {
+      issues.push(
+        `Position ${binding.position} title/body does not match planned objective: ${binding.objective}`
+      );
+    }
+  }
+
+  const numbered = collectNumberedCarouselItems(generatedTexts);
+  const promisedProblems = promisedCarouselItemCount(
+    briefPlanningText(brief),
+    "problem"
+  );
+  if (promisedProblems != null) {
+    for (let n = 1; n <= promisedProblems; n += 1) {
+      if (!numbered.problems.has(n)) {
+        issues.push(`Missing Leak ${n}`);
+      }
+    }
+  }
+  for (const n of numbered.fixes) {
+    if (!numbered.problems.has(n)) {
+      issues.push(`Fix ${n} exists without Problem/Leak ${n}`);
+    }
+    const fixAt = numbered.fixPosition.get(n);
+    const leakAt = numbered.problemPosition.get(n);
+    if (fixAt != null && (leakAt == null || fixAt < leakAt)) {
+      issues.push(`Fix ${n} appears before Leak ${n}`);
+    }
+  }
+  const promisedFixes = promisedCarouselItemCount(briefPlanningText(brief), "fix");
+  if (promisedFixes != null && numbered.fixes.size < promisedFixes) {
+    issues.push(
+      `A summary claims ${promisedFixes} solutions that were not introduced`
+    );
+  }
+
+  if (ctaPositions.length > 1) {
+    issues.push("More than one CTA slide exists");
+  }
+  const lastPosition = outline.length;
+  if (ctaPositions.some((position) => position !== lastPosition)) {
+    issues.push("CTA appears before the final slide");
+  }
+
+  if (brief.researchMode === "claim_verification") {
+    const allCopy = generatedTexts.join("\n");
+    for (const check of QUALIFIED_CLAIM_CHECKS) {
+      if (check.re.test(allCopy)) issues.push(check.message);
+    }
+  }
+
+  return uniqueIssues(issues);
+}

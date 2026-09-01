@@ -18,7 +18,9 @@ import { parseLlmJson } from "../utils/parseLlmJson";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import {
   CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE,
+  bindBriefOutlineToSlides,
   formatApprovedCreativeBriefForCopy,
+  validateCopyBriefAdherence,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
 import { resolveSlideImage } from "./resolveSlideImage";
@@ -269,9 +271,22 @@ export function buildCarouselRemakePrompt(
     (slide) => slideHasAverageNotLinePair(slide) && !lockedFacts.has(slide.id)
   );
 
+  const outlineBindings = creativeBrief
+    ? bindBriefOutlineToSlides(
+        creativeBrief.slideOutline,
+        slides.map((slide) => slide.id)
+      )
+    : [];
+  const plannedBySlideId = new Map(
+    outlineBindings
+      .filter((binding) => binding.slideId)
+      .map((binding) => [binding.slideId as string, binding])
+  );
+
   const slideBlocks = slides
-    .map((slide) => {
+    .map((slide, index) => {
       const locked = lockedFacts.get(slide.id);
+      const planned = plannedBySlideId.get(slide.id);
       const slotLines = slide.slots
         .map((slot) => {
           if (locked && slot.id === "average") {
@@ -286,8 +301,11 @@ export function buildCarouselRemakePrompt(
       const lockNote = locked
         ? `\nVetted fact lock: average is fixed. ${reframeAngleInstruction(locked.reframeAngle)}`
         : "";
-      return `Slide ${slide.id} (role: ${slide.role}):
-Viral why (preserve this beat): ${slide.viralWhy}${lockNote}
+      const plannedNote = planned
+        ? `\nPlanned role: ${planned.role}\nPlanned objective (this slide must deliver this, not another slide's point): ${planned.objective}`
+        : "";
+      return `Slide ${slide.id} (position ${index + 1}, layout role: ${slide.role}):
+Viral why (preserve this beat): ${slide.viralWhy}${plannedNote}${lockNote}
 Slots:
 ${slotLines}`;
     })
@@ -326,13 +344,18 @@ ${templateDescription}
 
 Rules:
 1. Use the source content as the only source of facts. Keep the creator's points; tighten for mobile slides.
-2. Follow the approved brief's sequence, order and emphasis. Map each planned objective to the matching slide position.
+2. Follow the approved brief's sequence, order and emphasis. Outline position N maps to the Nth slide exactly. Do not skip, swap, or compress planned slides.
 3. Preserve the source topic. Do not replace it with a different niche.
 4. Avoid every prohibitedClaims entry.
-5. Use the CTA direction instead of defaulting to "Follow for more".
+5. Use the CTA direction instead of defaulting to "Follow for more". CTA copy belongs only on the final slide.
 6. Prefer short postable lines. Aim for under ~40 words of readable text per slide across its slots combined when budgets allow.
 7. Character budgets are HARD limits. Every string MUST be between min and max inclusive (count characters, including spaces).
 8. Preserve each slide's viral beat described in "Viral why".
+${
+  creativeBrief.researchMode === "claim_verification"
+    ? `8b. Qualify unsupported claims. Do not write unsupported absolutes such as "Most owners have at least two of these", "All five plugged means predictable cash", or "A reserve is not a luxury". Prefer qualified wording such as "Many owners may have more than one" and "Fixing these leaks can make cash flow more predictable".`
+    : ""
+}
 9. For slots with role "kicker":
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
    - If the slot label is "Number" or "Step number": use "01", "02", etc.
@@ -419,6 +442,27 @@ function validateBudgets(
         );
       }
     }
+  }
+  return issues.length === 0 ? { ok: true } : { ok: false, issues };
+}
+
+export function validateGeneratedCarouselCopy(
+  slides: CarouselSlideSpec[],
+  values: CarouselSlideValuesMap,
+  lockedFacts: LockedSlideFacts = new Map(),
+  creativeBrief?: CarouselCreativeBrief
+): { ok: true } | { ok: false; issues: string[] } {
+  const budget = validateBudgets(slides, values, lockedFacts);
+  const issues = budget.ok ? [] : [...budget.issues];
+  if (creativeBrief) {
+    issues.push(
+      ...validateCopyBriefAdherence({
+        brief: creativeBrief,
+        slideIds: slides.map((slide) => slide.id),
+        slideRoles: slides.map((slide) => slide.role),
+        values,
+      })
+    );
   }
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
 }
@@ -688,6 +732,18 @@ function buildDynamicSlideList(
   return [{ ...hook, id: "slide_01" }, ...middleSlides, ctaRenumbered];
 }
 
+export function effectiveSlidesForCreativeBrief(
+  template: CarouselTemplate,
+  brief: CarouselCreativeBrief
+): CarouselSlideSpec[] {
+  const plannedCount =
+    brief.slideOutline.length > 0
+      ? brief.slideOutline.length
+      : brief.estimatedSlideCount;
+  const targetMiddleCount = Math.min(Math.max(plannedCount - 2, 3), 18);
+  return buildDynamicSlideList(template, targetMiddleCount);
+}
+
 /**
  * Background job: rewrite all carousel slot text for a niche, optionally at
  * a different slide count than the template's default.
@@ -825,6 +881,8 @@ export async function generateCarouselRemake(
         analysis.resolvedImageUrls.filter(Boolean).length > 0
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
+    } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
+      effectiveSlides = effectiveSlidesForCreativeBrief(template, creativeBrief);
     } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
@@ -876,10 +934,11 @@ export async function generateCarouselRemake(
           sourceContent,
           creativeBrief
         );
-        let nextValidation = validateBudgets(
+        let nextValidation = validateGeneratedCarouselCopy(
           effectiveSlides,
           nextValues,
-          lockedFacts
+          lockedFacts,
+          creativeBrief
         );
 
         if (!nextValidation.ok) {
@@ -893,10 +952,11 @@ export async function generateCarouselRemake(
             sourceContent,
             creativeBrief
           );
-          nextValidation = validateBudgets(
+          nextValidation = validateGeneratedCarouselCopy(
             effectiveSlides,
             nextValues,
-            lockedFacts
+            lockedFacts,
+            creativeBrief
           );
         }
         return { values: nextValues, validation: nextValidation };

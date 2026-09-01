@@ -157,6 +157,9 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(buildCarouselAnglesRepairNote(2)).toContain(
       "matching contentFormat and layoutFamily"
     );
+    expect(buildCarouselAnglesRepairNote(2, ["Brief X: Fix 1 exists without Problem/Leak 1"])).toContain(
+      "Semantic issues to fix"
+    );
   });
 
   it("can represent a cash-flow request with breakdown or diagnostic planning", () => {
@@ -166,5 +169,7 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("small businesses run out of cash");
     expect(user).toContain("diagnostic/breakdown");
     expect(user).toContain("practical framework");
+    expect(user).toContain("outline Leak/Problem N before Fix N");
+    expect(user).toContain("exactly one CTA role");
   });
 });

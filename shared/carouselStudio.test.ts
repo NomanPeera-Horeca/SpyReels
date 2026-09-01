@@ -23,7 +23,9 @@ import {
   resolveUserSelectedStudioBrief,
   scoreCarouselCreativeBrief,
   selectRecommendedCreativeBrief,
+  selectSemanticallyValidCarouselBriefs,
   studioGenerateActionEnabled,
+  validateCarouselBriefSemantics,
   type CarouselCreativeBrief,
 } from "./carouselStudio";
 
@@ -906,5 +908,61 @@ describe("empty recommendation callers", () => {
     expect(view.recommended).toBeNull();
     expect(view.cards).toEqual([]);
     expect(studioGenerateActionEnabled(pending)).toBe(false);
+  });
+});
+
+describe("carousel brief semantic validation", () => {
+  it("rejects Fix N without Leak N and a CTA that is not last", () => {
+    const brief = sampleBrief({
+      title: "Five leaks and how to plug them",
+      hook: "Five leaks are draining cash. Fix each one.",
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise five leaks and five plugs.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "cta",
+          objective: "Ask them to save the list now.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Present Fix 1 with no matching problem slide.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "problem",
+          objective: "Introduce Leak 2 inventory later.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 5,
+          role: "insight",
+          objective: "Present Fix 2 demand-led ordering.",
+          recommendedVisual: "data",
+        },
+        {
+          position: 6,
+          role: "takeaway",
+          objective: "Claim all five plugged after two fixes.",
+          recommendedVisual: "comparison",
+        },
+      ],
+    });
+    const issues = validateCarouselBriefSemantics(brief);
+    expect(issues).toContain("Fix 1 exists without Problem/Leak 1");
+    expect(issues).toContain("CTA is not the final slide");
+    expect(issues.some((issue) => /5 solutions/.test(issue))).toBe(true);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("keeps a generic diagnostic sample brief that is not a numbered sequence", () => {
+    expect(validateCarouselBriefSemantics(sampleBrief())).toEqual([]);
   });
 });

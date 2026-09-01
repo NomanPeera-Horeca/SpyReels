@@ -146,6 +146,9 @@ describe("generateCarouselRemake creative brief handoff", () => {
     expect(prompt).toContain("Guaranteed profit in 30 days");
     expect(prompt).toContain("Download the cash calendar");
     expect(prompt).toContain('instead of defaulting to "Follow for more"');
+    expect(prompt).toContain("Outline position N maps to the Nth slide exactly");
+    expect(prompt).toContain("Slide slide_01 (position 1, layout role: hook)");
+    expect(prompt).toContain("Many owners may have more than one");
     expect(prompt).not.toContain("Chosen carousel angle (follow this direction):");
   });
 
