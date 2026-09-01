@@ -16,7 +16,6 @@ import {
   normalizeCarouselSourceUrl,
   normalizeStoredCarouselBriefEntries,
   resolveStudioCarouselNiche,
-  type CarouselCreativeBrief,
   type NormalizedCarouselBrief,
 } from "@shared/carouselStudio";
 import {
@@ -29,7 +28,11 @@ import {
 import { carouselRemakes } from "../../drizzle/schema";
 import { adminPanelProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { generateCarouselAngles } from "../carousel/generateCarouselAngles";
+import { proposeStudioAngles } from "../carousel/proposeStudioAngles";
+import {
+  logGenerateFromInputCaughtError,
+  resolveAngleGenerationCorrelationId,
+} from "../carousel/angleGenerationObservability";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import {
   CarouselSourceUrlError,
@@ -103,29 +106,6 @@ function prefetchOrResolveSource(
     userId: user.id,
     openId: user.openId,
   });
-}
-
-async function proposeStudioAngles(args: {
-  sourceContent: string;
-  /** Explicit Customize override only. Empty means infer audience from source. */
-  niche?: string;
-  brandVoice?: string;
-}): Promise<CarouselCreativeBrief[]> {
-  try {
-    return await generateCarouselAngles({
-      sourceContent: args.sourceContent,
-      niche: args.niche,
-      brandVoice: args.brandVoice,
-    });
-  } catch (err) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message:
-        err instanceof Error
-          ? err.message
-          : "Could not generate carousel angles.",
-    });
-  }
 }
 
 function fireStudioRemake(args: {
@@ -250,6 +230,8 @@ export const carouselStudioRouter = router({
             sourceContent: resolved.sourceContent,
             niche: nicheOverride,
             brandVoice: input.brandVoice,
+            correlationId: telemetry?.runId,
+            entryPoint: "carouselStudio.generateAngles",
           })
         )
       );
@@ -319,7 +301,10 @@ export const carouselStudioRouter = router({
       const telemetry = createGenerationTelemetryContext({
         entryPoint: "carouselStudio.generateFromInput",
       });
+      const correlationId = resolveAngleGenerationCorrelationId(telemetry?.runId);
+      const requestStartedAt = performance.now();
 
+      try {
       if (!CAROUSEL_TEMPLATES_BY_ID.has(CAROUSEL_STUDIO_TEMPLATE_ID)) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -350,6 +335,8 @@ export const carouselStudioRouter = router({
             sourceContent: resolved.sourceContent,
             niche: nicheOverride,
             brandVoice: input.brandVoice,
+            correlationId,
+            entryPoint: "carouselStudio.generateFromInput",
           })
         )
       );
@@ -425,6 +412,14 @@ export const carouselStudioRouter = router({
         selectedAngleIndex: plan.selectedAngleIndex,
         recommendedBriefIndex: plan.recommendedBriefIndex,
       };
+      } catch (err) {
+        logGenerateFromInputCaughtError({
+          correlationId,
+          durationMs: Math.max(0, Math.round(performance.now() - requestStartedAt)),
+          error: err,
+        });
+        throw err;
+      }
     }),
 
   generateCarousel: adminPanelProcedure

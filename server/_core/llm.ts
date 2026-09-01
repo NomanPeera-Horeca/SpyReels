@@ -6,6 +6,11 @@ import {
   type IdeaScriptErrorContext,
 } from "@shared/ideaScriptErrors";
 import {
+  extractProviderErrorFields,
+  isAngleGenerationOperation,
+  logAngleInvokeLlmEvent,
+} from "../carousel/angleGenerationObservability";
+import {
   categorizeGenerationError,
   resolveInvokeTelemetry,
   type GenerationTelemetryContext,
@@ -425,7 +430,25 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const repairIteration = params.repairIteration ?? 0;
   const requestedModel = model ?? DEFAULT_LLM_MODEL;
   const logicalStarted = performance.now();
+  const correlationId = telemetry?.runId ?? null;
+  const logAngleInvoke = (
+    event: Parameters<typeof logAngleInvokeLlmEvent>[0],
+    extra: Omit<
+      Parameters<typeof logAngleInvokeLlmEvent>[1],
+      "correlationId" | "operation" | "requestedModel" | "repairIteration"
+    > = {}
+  ) => {
+    if (!isAngleGenerationOperation(operation)) return;
+    logAngleInvokeLlmEvent(event, {
+      correlationId,
+      operation,
+      requestedModel,
+      repairIteration,
+      ...extra,
+    });
+  };
   telemetry?.collector.beginLogicalLlmCall();
+  logAngleInvoke("logical_started");
 
   let response: Awaited<ReturnType<Anthropic["messages"]["create"]>> | null = null;
   let lastError: unknown;
@@ -492,10 +515,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     const currentModel = modelsToTry[modelIndex]!;
     if (modelIndex > 0) {
       console.warn(`[invokeLLM] retrying with fallback model ${currentModel}`);
+      logAngleInvoke("fallback_started", { actualModel: currentModel });
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const attemptStarted = performance.now();
+      logAngleInvoke("physical_started", {
+        actualModel: currentModel,
+        attemptNumber: attempt + 1,
+      });
       try {
         response = await client.messages.create({
           model: currentModel,
@@ -507,34 +535,57 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
             ? { tools: [forcedSchemaTool], tool_choice: forcedToolChoice }
             : {}),
         });
+        const physicalDurationMs = performance.now() - attemptStarted;
         recordPhysical({
           model: response.model || currentModel,
           attemptNumber: attempt + 1,
-          durationMs: performance.now() - attemptStarted,
+          durationMs: physicalDurationMs,
           success: true,
           fallbackOccurred: modelIndex > 0,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
         });
+        logAngleInvoke("physical_completed", {
+          actualModel: response.model || currentModel,
+          attemptNumber: attempt + 1,
+          durationMs: Math.max(0, Math.round(physicalDurationMs)),
+        });
         break modelLoop;
       } catch (err) {
         lastError = err;
+        const physicalDurationMs = performance.now() - attemptStarted;
         recordPhysical({
           model: currentModel,
           attemptNumber: attempt + 1,
-          durationMs: performance.now() - attemptStarted,
+          durationMs: physicalDurationMs,
           success: false,
           error: err,
           fallbackOccurred: modelIndex > 0,
         });
+        const extracted = extractProviderErrorFields(err);
         const status = (err as { status?: number })?.status;
         console.error(
           `[invokeLLM] attempt ${attempt + 1}/3 failed`,
           { status, model: currentModel, message: err instanceof Error ? err.message : String(err) }
         );
+        logAngleInvoke("physical_failed", {
+          actualModel: currentModel,
+          attemptNumber: attempt + 1,
+          durationMs: Math.max(0, Math.round(physicalDurationMs)),
+          httpStatus: extracted.statusCode,
+          providerRequestId: extracted.providerRequestId,
+          errorMessage: extracted.errorMessage,
+        });
 
         if (!isRetryableLlmError(err)) {
           recordLogical({ success: false, actualModel: null });
+          logAngleInvoke("logical_failed", {
+            actualModel: null,
+            durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
+            httpStatus: extracted.statusCode,
+            providerRequestId: extracted.providerRequestId,
+            errorMessage: extracted.errorMessage,
+          });
           throw asUserFacingLlmError(err, errorContextForOperation(operation));
         }
 
@@ -548,6 +599,16 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   if (!response) {
     recordLogical({ success: false, actualModel: null });
+    const extracted = extractProviderErrorFields(
+      lastError instanceof Error ? lastError : new Error("LLM request failed")
+    );
+    logAngleInvoke("logical_failed", {
+      actualModel: null,
+      durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
+      httpStatus: extracted.statusCode,
+      providerRequestId: extracted.providerRequestId,
+      errorMessage: extracted.errorMessage,
+    });
     throw asUserFacingLlmError(
       lastError instanceof Error ? lastError : new Error("LLM request failed"),
       errorContextForOperation(operation)
@@ -573,6 +634,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     actualModel: response.model,
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
+  });
+  logAngleInvoke("logical_completed", {
+    actualModel: response.model,
+    durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
   });
 
   return {

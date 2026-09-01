@@ -25,8 +25,17 @@ import {
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
 import { invokeLLM } from "../_core/llm";
+import {
+  logAngleGenerationCompleted,
+  logAngleGenerationFailed,
+  logAngleGenerationStarted,
+  resolveAngleGenerationCorrelationId,
+  resolveAngleGenerationEntryPoint,
+} from "./angleGenerationObservability";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
+
+const ANGLE_GENERATION_REQUESTED_MODEL = "claude-sonnet-4-6";
 
 type BriefsLlmPayload = {
   angles?: unknown[];
@@ -364,6 +373,8 @@ async function invokeCarouselAnglesOnce(args: {
 }): Promise<{
   briefs: CarouselCreativeBrief[];
   semanticIssues: string[];
+  rawCandidateCount: number;
+  normalizedCandidateCount: number;
 }> {
   const schema = buildCarouselAnglesJsonSchema();
   const basePrompt = buildCarouselAnglesUserPrompt({
@@ -396,8 +407,14 @@ async function invokeCarouselAnglesOnce(args: {
 
   const raw = String(response.choices[0]?.message?.content ?? "");
   const parsed = parseLlmJson<BriefsLlmPayload>(raw, { angles: [] });
+  const rawAngles = Array.isArray(parsed.angles) ? parsed.angles : [];
   const normalized = normalizeGeneratedCarouselBriefs(parsed.angles);
-  return selectSemanticallyValidCarouselBriefs(normalized);
+  const selected = selectSemanticallyValidCarouselBriefs(normalized);
+  return {
+    ...selected,
+    rawCandidateCount: rawAngles.length,
+    normalizedCandidateCount: normalized.length,
+  };
 }
 
 /**
@@ -408,6 +425,8 @@ export async function generateCarouselAngles(args: {
   sourceContent: string;
   niche?: string | null;
   brandVoice?: string | null;
+  correlationId?: string;
+  entryPoint?: string;
 }): Promise<CarouselCreativeBrief[]> {
   const sourceContent = args.sourceContent.trim();
   const niche = args.niche?.trim() || undefined;
@@ -415,31 +434,77 @@ export async function generateCarouselAngles(args: {
     throw new Error("sourceContent is required to generate carousel angles.");
   }
 
-  let first = await invokeCarouselAnglesOnce({
-    sourceContent,
-    niche,
-    brandVoice: args.brandVoice,
-  });
-  let briefs = first.briefs;
+  const correlationId = resolveAngleGenerationCorrelationId(args.correlationId);
+  const startedAt = performance.now();
+  let repairRan = false;
+  let repairIteration = 0;
+  let rawCandidateCount: number | null = null;
+  let normalizedCandidateCount = 0;
+  let acceptedSemanticCandidateCount = 0;
 
-  if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
-    const repaired = await invokeCarouselAnglesOnce({
+  logAngleGenerationStarted({
+    entryPoint: resolveAngleGenerationEntryPoint(args.entryPoint),
+    correlationId,
+    sourceCharacterCount: sourceContent.length,
+    hasNicheOverride: Boolean(niche),
+    hasBrandVoice: Boolean(args.brandVoice?.trim()),
+    timestamp: new Date().toISOString(),
+  });
+
+  try {
+    let first = await invokeCarouselAnglesOnce({
       sourceContent,
       niche,
       brandVoice: args.brandVoice,
-      repairNote: buildCarouselAnglesRepairNote(
-        briefs.length,
-        first.semanticIssues
-      ),
     });
-    briefs = repaired.briefs;
-  }
+    let briefs = first.briefs;
+    rawCandidateCount = first.rawCandidateCount;
+    normalizedCandidateCount = first.normalizedCandidateCount;
+    acceptedSemanticCandidateCount = briefs.length;
 
-  if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
-    throw new Error(
-      `Expected ${CAROUSEL_STUDIO_ANGLE_COUNT} carousel briefs, got ${briefs.length}.`
-    );
-  }
+    if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
+      repairRan = true;
+      repairIteration = 1;
+      const repaired = await invokeCarouselAnglesOnce({
+        sourceContent,
+        niche,
+        brandVoice: args.brandVoice,
+        repairNote: buildCarouselAnglesRepairNote(
+          briefs.length,
+          first.semanticIssues
+        ),
+      });
+      briefs = repaired.briefs;
+      rawCandidateCount = repaired.rawCandidateCount;
+      normalizedCandidateCount = repaired.normalizedCandidateCount;
+      acceptedSemanticCandidateCount = briefs.length;
+    }
 
-  return briefs;
+    if (briefs.length !== CAROUSEL_STUDIO_ANGLE_COUNT) {
+      throw new Error(
+        `Expected ${CAROUSEL_STUDIO_ANGLE_COUNT} carousel briefs, got ${briefs.length}.`
+      );
+    }
+
+    logAngleGenerationCompleted({
+      correlationId,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      rawCandidateCount,
+      normalizedCandidateCount,
+      acceptedSemanticCandidateCount,
+      repairRan,
+    });
+
+    return briefs;
+  } catch (err) {
+    logAngleGenerationFailed({
+      correlationId,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      error: err,
+      operation: "angle_generation",
+      requestedModel: ANGLE_GENERATION_REQUESTED_MODEL,
+      repairIteration,
+    });
+    throw err;
+  }
 }
