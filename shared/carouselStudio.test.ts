@@ -18,6 +18,7 @@ import {
   normalizedIndexFromOriginalIndex,
   originalIndexFromNormalizedIndex,
   pendingStudioSelectionViewState,
+  rankCarouselCreativeBriefs,
   researchModeLabel,
   resolveRecommendedStudioBrief,
   resolveUserSelectedStudioBrief,
@@ -345,6 +346,19 @@ describe("selectRecommendedCreativeBrief", () => {
     });
   });
 
+  it("ranks briefs with the same comparison used for recommendation", () => {
+    const briefs = [
+      sampleBrief({ id: "brief_1", scores: { overall: 40, relevance: 40 } }),
+      sampleBrief({ id: "brief_2", scores: { overall: 88, relevance: 90 } }),
+      sampleBrief({ id: "brief_3", scores: { overall: 70, relevance: 70 } }),
+    ];
+    expect(rankCarouselCreativeBriefs(briefs).map((brief) => brief.id)).toEqual([
+      "brief_2",
+      "brief_3",
+      "brief_1",
+    ]);
+  });
+
   it("keeps original order when overall scores are equal and later tie-breaks decide", () => {
     const base = scoreCarouselCreativeBrief({
       relevance: 70,
@@ -559,6 +573,35 @@ describe("generated brief validation", () => {
 });
 
 describe("Review Plan view-model helpers", () => {
+  it("renders one recommended card and no alternatives for a single brief", () => {
+    const briefs = [sampleBrief({ id: "brief_1", title: "Only plan" })];
+    const model = buildReviewPlanViewModel({
+      briefs,
+      recommendedBriefIndex: 0,
+      selectedIndex: 0,
+    });
+    expect(model.recommended?.index).toBe(0);
+    expect(model.recommended?.brief.title).toBe("Only plan");
+    expect(model.alternatives).toHaveLength(0);
+    expect(model.cards).toHaveLength(1);
+  });
+
+  it("renders one recommended card and one alternative for two briefs", () => {
+    const briefs = [
+      sampleBrief({ id: "brief_1", title: "First plan" }),
+      sampleBrief({ id: "brief_2", title: "Second plan" }),
+    ];
+    const model = buildReviewPlanViewModel({
+      briefs,
+      recommendedBriefIndex: 1,
+      selectedIndex: 1,
+    });
+    expect(model.recommended?.index).toBe(1);
+    expect(model.alternatives).toHaveLength(1);
+    expect(model.alternatives[0]?.index).toBe(0);
+    expect(model.cards).toHaveLength(2);
+  });
+
   it("marks recommended and selected plans correctly", () => {
     const briefs = [
       sampleBrief({ id: "brief_1", title: "Low" }),

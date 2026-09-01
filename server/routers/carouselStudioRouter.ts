@@ -232,6 +232,7 @@ export const carouselStudioRouter = router({
             brandVoice: input.brandVoice,
             correlationId: telemetry?.runId,
             entryPoint: "carouselStudio.generateAngles",
+            requiredValidBriefs: 3,
           })
         )
       );
@@ -337,6 +338,7 @@ export const carouselStudioRouter = router({
             brandVoice: input.brandVoice,
             correlationId,
             entryPoint: "carouselStudio.generateFromInput",
+            requiredValidBriefs: 1,
           })
         )
       );

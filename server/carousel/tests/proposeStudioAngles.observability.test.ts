@@ -84,6 +84,24 @@ describe("proposeStudioAngles observability", () => {
     expect(trpc).not.toBe(original);
   });
 
+  it("forwards requiredValidBriefs to generateCarouselAngles", async () => {
+    mockedGenerate.mockResolvedValueOnce([]);
+
+    await proposeStudioAngles({
+      sourceContent: SECRET_SOURCE,
+      correlationId: "corr-required",
+      requiredValidBriefs: 1,
+    });
+
+    expect(mockedGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceContent: SECRET_SOURCE,
+        correlationId: "corr-required",
+        requiredValidBriefs: 1,
+      })
+    );
+  });
+
   it("returns generateCarouselAngles results unchanged on success", async () => {
     const briefs = [{ title: "Kept brief" }] as never;
     mockedGenerate.mockResolvedValueOnce(briefs);
@@ -99,6 +117,7 @@ describe("proposeStudioAngles observability", () => {
       expect.objectContaining({
         sourceContent: SECRET_SOURCE,
         correlationId: "corr-ok",
+        requiredValidBriefs: undefined,
       })
     );
   });

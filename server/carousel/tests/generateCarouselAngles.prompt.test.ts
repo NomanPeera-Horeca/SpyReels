@@ -162,6 +162,18 @@ describe("generateCarouselAngles planning guidance", () => {
     );
   });
 
+  it("repair note asks for distinct replacements of missing Review Plan briefs", () => {
+    const note = buildCarouselAnglesRepairNote(1, [], {
+      missingCount: 2,
+      acceptedBriefs: [{ title: "Cash is a system", angleType: "diagnostic" }],
+    });
+    expect(note).toContain("Need 2 additional distinct briefs.");
+    expect(note).toContain('Already accepted: "Cash is a system" (diagnostic).');
+    expect(note).toContain("Generate distinct replacements.");
+    expect(note).toContain("Do not repeat accepted strategies.");
+    expect(note).not.toContain("UNIQUE_SECRET_SOURCE");
+  });
+
   it("can represent a cash-flow request with breakdown or diagnostic planning", () => {
     const user = buildCarouselAnglesUserPrompt({
       sourceContent: "Make me a carousel about why small businesses run out of cash.",

@@ -497,6 +497,18 @@ export function selectRecommendedCreativeBrief(
   return { index: bestIndex, brief: briefs[bestIndex] ?? null };
 }
 
+/** Rank briefs with the same comparison used to pick the recommended plan. */
+export function rankCarouselCreativeBriefs<T extends NormalizedCarouselBrief>(
+  briefs: T[]
+): T[] {
+  return briefs
+    .map((brief, index) => ({ brief, index }))
+    .sort((a, b) =>
+      compareCreativeBriefRecommendation(a.brief, b.brief, a.index, b.index)
+    )
+    .map((entry) => entry.brief);
+}
+
 function compareCreativeBriefRecommendation(
   a: NormalizedCarouselBrief,
   b: NormalizedCarouselBrief,

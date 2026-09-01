@@ -13,6 +13,7 @@ export async function proposeStudioAngles(args: {
   brandVoice?: string;
   correlationId?: string;
   entryPoint?: string;
+  requiredValidBriefs?: 1 | 3;
 }): Promise<CarouselCreativeBrief[]> {
   const correlationId = resolveAngleGenerationCorrelationId(args.correlationId);
   const startedAt = performance.now();
@@ -23,6 +24,7 @@ export async function proposeStudioAngles(args: {
       brandVoice: args.brandVoice,
       correlationId,
       entryPoint: args.entryPoint,
+      requiredValidBriefs: args.requiredValidBriefs,
     });
   } catch (err) {
     logAngleGenerationFailed({

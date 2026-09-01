@@ -154,6 +154,11 @@ describe("generateCarouselAngles observability", () => {
     expect(dumped).toContain("carouselStudio.generateFromInput");
     expect(dumped).toContain('"repairRan":false');
     expect(dumped).toContain('"acceptedSemanticCandidateCount":3');
+    expect(dumped).toContain('"firstAttemptValidCount":3');
+    expect(dumped).toContain('"repairAttemptValidCount":0');
+    expect(dumped).toContain('"mergedValidCount":3');
+    expect(dumped).toContain('"requiredValidBriefs":3');
+    expect(dumped).toContain('"proceededWithGracefulDegradation":false');
     expect(dumped).not.toContain(SECRET_SOURCE);
     expect(dumped).not.toContain("Direct and practical");
     expect(errorSpy).not.toHaveBeenCalled();

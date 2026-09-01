@@ -152,6 +152,12 @@ export function logAngleGenerationStarted(fields: {
   });
 }
 
+export type SemanticIssuesByCandidate = {
+  attempt: "first" | "repair";
+  candidateIndex: number;
+  codes: string[];
+};
+
 export function logAngleGenerationCompleted(fields: {
   correlationId: string;
   durationMs: number;
@@ -159,6 +165,12 @@ export function logAngleGenerationCompleted(fields: {
   normalizedCandidateCount: number;
   acceptedSemanticCandidateCount: number;
   repairRan: boolean;
+  firstAttemptValidCount?: number;
+  repairAttemptValidCount?: number;
+  mergedValidCount?: number;
+  requiredValidBriefs?: 1 | 3;
+  proceededWithGracefulDegradation?: boolean;
+  semanticIssuesByCandidate?: SemanticIssuesByCandidate[];
 }): void {
   console.info(ANGLE_GENERATION_COMPLETED, {
     correlationId: fields.correlationId,
@@ -167,6 +179,13 @@ export function logAngleGenerationCompleted(fields: {
     normalizedCandidateCount: fields.normalizedCandidateCount,
     acceptedSemanticCandidateCount: fields.acceptedSemanticCandidateCount,
     repairRan: fields.repairRan,
+    firstAttemptValidCount: fields.firstAttemptValidCount ?? null,
+    repairAttemptValidCount: fields.repairAttemptValidCount ?? null,
+    mergedValidCount: fields.mergedValidCount ?? null,
+    requiredValidBriefs: fields.requiredValidBriefs ?? null,
+    proceededWithGracefulDegradation:
+      fields.proceededWithGracefulDegradation ?? false,
+    semanticIssuesByCandidate: fields.semanticIssuesByCandidate ?? [],
   });
 }
 
