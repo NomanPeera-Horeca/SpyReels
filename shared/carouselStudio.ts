@@ -1444,14 +1444,18 @@ export function validateCarouselBriefSemantics(
   if (!last || !isClosingRole(last.role)) {
     issues.push("Brief must contain exactly one final closing");
   }
-  const ctaPositions = outline
-    .filter((slide) => slide.role === "cta")
+  const closingPositions = outline
+    .filter((slide) => slide.role === "cta" || slide.role === "takeaway")
     .map((slide) => slide.position);
   if (
-    ctaPositions.length > 1 ||
-    ctaPositions.some((position) => position !== outline.length)
+    closingPositions.length !== 1 ||
+    closingPositions[0] !== outline.length
   ) {
-    issues.push("Brief has multiple competing endings");
+    if (closingPositions.length === 0) {
+      issues.push("Brief must contain exactly one final closing");
+    } else {
+      issues.push("Brief has multiple competing endings");
+    }
   }
 
   const seenObjectives = new Map<string, number>();

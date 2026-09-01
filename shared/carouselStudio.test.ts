@@ -1192,6 +1192,177 @@ describe("carousel brief semantic validation", () => {
     expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
   });
 
+  it("rejects a non-final takeaway plus a final CTA", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 5,
+          role: "cta",
+          objective: "Ask them to save the list this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Brief has multiple competing endings"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects a non-final CTA plus a final takeaway", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "cta",
+          objective: "Ask them to follow for the next cash check.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "example",
+          objective: "Walk one missed deposit.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Brief has multiple competing endings"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects two takeaway roles", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "takeaway",
+          objective: "Leave them with one cash-check habit to keep.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 5,
+          role: "takeaway",
+          objective: "Ask which leak they will plug first this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Brief has multiple competing endings"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects a brief with no closing role", () => {
+    const brief = sampleBrief({
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the cash warning.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Frame profit versus cash.",
+          recommendedVisual: "comparison",
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Name the timing trap.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Show a weekly cash habit.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 5,
+          role: "example",
+          objective: "Walk one missed deposit.",
+          recommendedVisual: "timeline",
+        },
+      ],
+    });
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Brief must contain exactly one final closing"
+    );
+    expect(validateCarouselBriefSemantics(brief)).not.toContain(
+      "Brief has multiple competing endings"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
   it("rejects duplicated closing language on the final slide", () => {
     const brief = sampleBrief({
       estimatedSlideCount: 5,
@@ -1374,7 +1545,7 @@ describe("carousel brief semantic validation", () => {
         },
         {
           position: 4,
-          role: "takeaway",
+          role: "example",
           objective: "Recap the paired leak and fix.",
           recommendedVisual: "text",
         },

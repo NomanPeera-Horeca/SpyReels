@@ -132,7 +132,7 @@ describe("carousel remake 64 copy adherence", () => {
 });
 
 describe("copy-generation slideIntent schema", () => {
-  it("requires slideIntent and closingType on every generated slide object", () => {
+  it("requires slideIntent on every slide and allows optional closingType", () => {
     const template = CAROUSEL_TEMPLATES_BY_ID.get("photo_story_test");
     expect(template).toBeDefined();
     const schema = buildCarouselRemakeJsonSchema(template!.slides);
@@ -143,7 +143,8 @@ describe("copy-generation slideIntent schema", () => {
       required?: string[];
     };
     expect(firstSlide.required).toContain("slideIntent");
-    expect(firstSlide.required).toContain("closingType");
+    expect(firstSlide.required).not.toContain("closingType");
+    expect(firstSlide.properties?.closingType).toBeDefined();
     expect(firstSlide.properties?.slideIntent?.enum).toEqual([
       "content",
       "transition",
@@ -387,6 +388,38 @@ describe("final closing copy adherence", () => {
           closingType: "takeaway",
         },
         { brief, slideRoles: ["hook", "list_item", "list_item", "list_item", "list_item"] }
+      )
+    ).toEqual([]);
+  });
+
+  it("rejects a final closing that omits closingType", () => {
+    expect(
+      closingCopyIssues({
+        headline: "Which leak will you plug first?",
+        body: "Pick one drain and handle it this week.",
+        slideIntent: "closing",
+      })
+    ).toContain("Position 5 is missing closingType");
+  });
+
+  it("accepts a content slide that omits closingType", () => {
+    expect(
+      closingCopyIssues(
+        {
+          headline: "Which leak will you plug first?",
+          body: "Pick one drain and handle it this week.",
+          slideIntent: "closing",
+          closingType: "question",
+        },
+        {
+          middle: {
+            slide_03: {
+              headline: "Which timing trap empties the account first?",
+              body: "Work can be done while payment is still weeks away.",
+              slideIntent: "content",
+            },
+          },
+        }
       )
     ).toEqual([]);
   });

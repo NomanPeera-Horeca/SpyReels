@@ -229,7 +229,6 @@ function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unkno
     description:
       "Required when slideIntent is closing. Ignored for content and transition. Metadata only, not visible slide text.",
   };
-  required.push("closingType");
   return {
     type: "object",
     properties,
