@@ -17,6 +17,8 @@ import {
   CAROUSEL_COMPOSITION_IR_VERSION,
   FORBIDDEN_CAROUSEL_COMPOSITION_IR_KEYS,
   compilePlanningIRToBaselineCompositionIR,
+  describeCarouselArchetypeVisualContract,
+  validateCarouselArchetypeVisualRegions,
   validateCarouselCompositionIR,
   type CarouselCompositionIR,
   type CarouselCompositionVisualRegion,
@@ -613,7 +615,7 @@ describe("validateCarouselCompositionIR", () => {
       "Slide 1 archetype text_focus must not include visual regions"
     );
     expect(issues).toContain(
-      "Slide 4 visual kind is incompatible with diagram_focus"
+      "Slide 4 archetype diagram_focus requires kind diagram; got photo"
     );
   });
 
@@ -703,10 +705,10 @@ describe("validateCarouselCompositionIR", () => {
     expect(issues).toContain("Slide 2 has unknown visual kind");
     expect(issues).toContain("Slide 2 has unknown visual placement");
     expect(issues).toContain(
-      "Slide 4 visual kind is incompatible with diagram_focus"
+      "Slide 4 archetype diagram_focus requires kind diagram; got photo"
     );
     expect(issues).toContain(
-      "Slide 4 visual placement is incompatible with diagram_focus"
+      "Slide 4 archetype diagram_focus requires placement center; got right"
     );
   });
 
@@ -726,5 +728,56 @@ describe("validateCarouselCompositionIR", () => {
     expect(issues).toContain("Composition IR must contain exactly one cover");
     expect(issues).toContain("Composition IR must contain exactly one closing");
     expect(issues).toContain("Slide 1 semanticRole must remain cover");
+  });
+});
+
+describe("validateCarouselArchetypeVisualRegions", () => {
+  it("is the shared compatibility helper used by Composition IR messages", () => {
+    expect(
+      validateCarouselArchetypeVisualRegions({
+        archetype: "full_bleed_visual",
+        visualRegions: [
+          { role: "primary", kind: "photo", placement: "background" },
+        ],
+        subjectLabel: "Beat beat_01",
+      })
+    ).toEqual([
+      "Beat beat_01 archetype full_bleed_visual requires placement full_bleed; got background",
+    ]);
+    expect(
+      validateCarouselArchetypeVisualRegions({
+        archetype: "checklist_stack",
+        visualRegions: [],
+        subjectLabel: "Beat beat_02",
+      })
+    ).toEqual([
+      "Beat beat_02 archetype checklist_stack requires at least one visual region with kind checklist and placement center or bottom",
+    ]);
+  });
+
+  it("generates the Visual Director prompt contract from the same rules", () => {
+    const contract = describeCarouselArchetypeVisualContract();
+    expect(contract).toContain("- text_focus -> no visual region");
+    expect(contract).toContain("- number_focus -> no visual region");
+    expect(contract).toContain("- closing_focus -> no visual region");
+    expect(contract).toContain(
+      "- text_visual_split -> photo / illustration / icon_scene -> left / right / split"
+    );
+    expect(contract).toContain(
+      "- full_bleed_visual -> photo / illustration -> full_bleed"
+    );
+    expect(contract).toContain(
+      "- comparison_split -> comparison -> split / left / right"
+    );
+    expect(contract).toContain(
+      "- checklist_stack -> checklist -> center / bottom"
+    );
+    expect(contract).toContain("- timeline_flow -> timeline -> center");
+    expect(contract).toContain("- diagram_focus -> diagram -> center");
+    expect(contract).toContain("- data_focus -> data -> center");
+    expect(contract).not.toMatch(/templateId|layoutId|fontSize|imagePrompt/);
+    expect(CAROUSEL_COMPOSITION_ARCHETYPES.every((archetype) =>
+      contract.includes(`- ${archetype} ->`)
+    )).toBe(true);
   });
 });

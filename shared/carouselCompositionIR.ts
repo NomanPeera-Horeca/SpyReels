@@ -244,6 +244,92 @@ const ARCHETYPE_VISUAL_RULES: Record<
   },
 };
 
+function joinExpectedVisualValues(values: readonly string[]): string {
+  if (values.length === 0) return "";
+  if (values.length === 1) return values[0]!;
+  if (values.length === 2) return `${values[0]} or ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")} or ${values[values.length - 1]}`;
+}
+
+/**
+ * Concise archetype visual contract for Visual Director prompts.
+ * Generated from ARCHETYPE_VISUAL_RULES so the model sees the same rules
+ * the validator uses. No coordinates, CSS, or template information.
+ */
+export function describeCarouselArchetypeVisualContract(): string {
+  return CAROUSEL_COMPOSITION_ARCHETYPES.map((archetype) => {
+    const rule = ARCHETYPE_VISUAL_RULES[archetype];
+    if (rule.requireNull) {
+      return `- ${archetype} -> no visual region`;
+    }
+    const kinds = (rule.kinds ?? []).join(" / ");
+    const placements = (rule.placements ?? []).join(" / ");
+    return `- ${archetype} -> ${kinds} -> ${placements}`;
+  }).join("\n");
+}
+
+/**
+ * Single source of truth for archetype -> visual kind/placement compatibility.
+ * Visual Director and Composition IR both call this. Do not duplicate
+ * ARCHETYPE_VISUAL_RULES elsewhere.
+ */
+export function validateCarouselArchetypeVisualRegions(args: {
+  archetype: string;
+  visualRegions: unknown;
+  subjectLabel: string;
+}): string[] {
+  const issues: string[] = [];
+  if (!ARCHETYPE_SET.has(args.archetype)) {
+    return issues;
+  }
+  const archetype = args.archetype as CarouselCompositionArchetype;
+  const rule = ARCHETYPE_VISUAL_RULES[archetype];
+  const regions = args.visualRegions;
+  if (!Array.isArray(regions)) {
+    issues.push(`${args.subjectLabel} visualRegions must be an array`);
+    return issues;
+  }
+
+  if (rule.requireNull) {
+    if (regions.length > 0) {
+      issues.push(
+        `${args.subjectLabel} archetype ${archetype} must not include visual regions`
+      );
+    }
+    return issues;
+  }
+
+  const expectedKinds = joinExpectedVisualValues(rule.kinds ?? []);
+  const expectedPlacements = joinExpectedVisualValues(rule.placements ?? []);
+
+  if (regions.length === 0) {
+    issues.push(
+      `${args.subjectLabel} archetype ${archetype} requires at least one visual region with kind ${expectedKinds} and placement ${expectedPlacements}`
+    );
+    return issues;
+  }
+
+  for (const region of regions) {
+    if (!region || typeof region !== "object" || Array.isArray(region)) {
+      continue;
+    }
+    const row = region as { kind?: unknown; placement?: unknown };
+    const kind = typeof row.kind === "string" ? row.kind : "";
+    const placement = typeof row.placement === "string" ? row.placement : "";
+    if (rule.kinds && kind && !includesUnion(rule.kinds, kind)) {
+      issues.push(
+        `${args.subjectLabel} archetype ${archetype} requires kind ${expectedKinds}; got ${kind}`
+      );
+    }
+    if (rule.placements && placement && !includesUnion(rule.placements, placement)) {
+      issues.push(
+        `${args.subjectLabel} archetype ${archetype} requires placement ${expectedPlacements}; got ${placement}`
+      );
+    }
+  }
+  return issues;
+}
+
 function uniqueIssues(issues: string[]): string[] {
   return [...new Set(issues)];
 }
@@ -495,24 +581,9 @@ function validateVisualCompatibility(
     issues.push(`Slide ${slide.position} has unknown archetype`);
     return;
   }
-  const rule = ARCHETYPE_VISUAL_RULES[slide.archetype];
   const regions = slide.visualRegions;
   if (!Array.isArray(regions)) {
     issues.push(`Slide ${slide.position} visualRegions must be an array`);
-    return;
-  }
-  if (rule.requireNull) {
-    if (regions.length > 0) {
-      issues.push(
-        `Slide ${slide.position} archetype ${slide.archetype} must not include visual regions`
-      );
-    }
-    return;
-  }
-  if (regions.length === 0) {
-    issues.push(
-      `Slide ${slide.position} archetype ${slide.archetype} must include a visual region`
-    );
     return;
   }
   for (const region of regions) {
@@ -525,17 +596,14 @@ function validateVisualCompatibility(
     if (!VISUAL_PLACEMENT_SET.has(region.placement)) {
       issues.push(`Slide ${slide.position} has unknown visual placement`);
     }
-    if (rule.kinds && !includesUnion(rule.kinds, region.kind)) {
-      issues.push(
-        `Slide ${slide.position} visual kind is incompatible with ${slide.archetype}`
-      );
-    }
-    if (rule.placements && !includesUnion(rule.placements, region.placement)) {
-      issues.push(
-        `Slide ${slide.position} visual placement is incompatible with ${slide.archetype}`
-      );
-    }
   }
+  issues.push(
+    ...validateCarouselArchetypeVisualRegions({
+      archetype: slide.archetype,
+      visualRegions: regions,
+      subjectLabel: `Slide ${slide.position}`,
+    })
+  );
 }
 
 export function validateCarouselCompositionIR(

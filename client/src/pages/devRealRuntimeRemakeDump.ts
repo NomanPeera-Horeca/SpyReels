@@ -1,5 +1,5 @@
 export const remakeDump = {
-  "remakeId": 73,
+  "remakeId": 75,
   "status": "completed",
   "errorMessage": null,
   "niche": "The 6 Silent Cash Drains Killing Small Businesses",
@@ -7,183 +7,456 @@ export const remakeDump = {
   "angleOptionsJson": [
     {
       "id": "brief_1",
-      "hook": "Most small businesses don't die from one big expense. They bleed out quietly from 6 places owners never check.",
-      "title": "Which of These 6 Cash Drains Is Silently Bleeding Your Business?",
+      "hook": "Before you close out this quarter, run these 6 checks or quietly lose money doing it.",
+      "title": "6 Cash Drains to Audit Before Your Next Quarter",
       "topic": "6 silent cash drains killing small businesses",
-      "kicker": "Diagnostic",
+      "kicker": "Framework",
       "scores": {
-        "overall": 87,
-        "relevance": 98,
-        "usefulness": 92,
-        "originality": 72,
-        "specificity": 88,
-        "factualSafety": 74,
-        "visualPotential": 85
+        "overall": 88,
+        "relevance": 97,
+        "usefulness": 93,
+        "originality": 68,
+        "specificity": 91,
+        "factualSafety": 78,
+        "visualPotential": 90
       },
       "isLegacy": false,
-      "angleType": "diagnostic",
+      "angleType": "checklist",
       "claimRisk": "medium",
       "keyPoints": [
         {
-          "title": "Drain 1: Unused Subscriptions and Software",
-          "purpose": "Opens with the most relatable and immediately fixable drain to build credibility.",
-          "explanation": "Recurring SaaS and tool costs accumulate invisibly because auto-renewals require no active decision."
+          "title": "Subscription audit step",
+          "purpose": "Turns the most common drain into a specific, doable task with a clear output.",
+          "explanation": "Pull every recurring charge from the last 90 days and mark each one as active-use or cancel-candidate."
         },
         {
-          "title": "Drain 2: Underpriced Products or Services",
-          "purpose": "Challenges a common owner blind spot around pricing inertia.",
-          "explanation": "Pricing set at launch and never revisited quietly erodes margin as costs rise."
+          "title": "Pricing review step",
+          "purpose": "Gives owners a structured trigger to revisit pricing they otherwise never touch.",
+          "explanation": "Compare current rates against actual costs and a simple market check to flag underpriced services."
         },
         {
-          "title": "Drain 3: Employee Time on Low-Value Tasks",
-          "purpose": "Reframes labor cost as a drain, not just a fixed expense.",
-          "explanation": "Hourly labor spent on manual, automatable work is a hidden payroll cost most owners don't calculate."
+          "title": "Receivables aging check",
+          "purpose": "Converts a passive cash flow problem into a managed receivables process.",
+          "explanation": "Sort outstanding invoices by age and flag any over 30 days for immediate follow-up action."
         },
         {
-          "title": "Drain 4: Poor Inventory Management",
-          "purpose": "Addresses a drain specific to product-based businesses.",
-          "explanation": "Overstocking ties up cash and understocking creates lost-sale costs that rarely appear on a report."
+          "title": "Inventory or asset utilization check",
+          "purpose": "Forces a capital efficiency review that most small business owners skip entirely.",
+          "explanation": "List all purchased inventory or assets and flag items unused for more than 60 days."
         },
         {
-          "title": "Drain 5: Merchant and Payment Processing Fees",
-          "purpose": "Highlights a drain that is easy to overlook because it appears as a small percentage per sale.",
-          "explanation": "Interchange, platform, and gateway fees compound across thousands of transactions and go unreviewed."
+          "title": "Marketing spend attribution review",
+          "purpose": "Gives non-finance owners a simple accountability test for their marketing budget.",
+          "explanation": "Map each active ad or marketing spend to a measurable outcome and pause any with no trackable return."
         },
         {
-          "title": "Drain 6: Customer Churn Without a Retention System",
-          "purpose": "Closes the list with a strategic, high-impact drain that motivates deeper business thinking.",
-          "explanation": "Acquiring a new customer costs significantly more than retaining one, making churn a recurring silent expense."
+          "title": "Personal-business expense separation check",
+          "purpose": "Closes the checklist with the compliance and clarity step that protects both cash view and tax accuracy.",
+          "explanation": "Scan transactions for any personal costs coded to the business and move them before the quarter closes."
         }
       ],
-      "confidence": 0.88,
+      "confidence": 0.91,
       "contentGoal": "saves",
-      "corePromise": "Readers will be able to self-diagnose which cash drains are active in their own business right now.",
-      "description": "A self-diagnostic framework that lets small business owners identify which specific drain applies to them, making the carousel feel personally relevant and driving saves.",
-      "ctaDirection": "Ask readers to save this post, pick the one drain most likely active in their business today, and take one action on it before the week ends.",
+      "corePromise": "Readers leave with a concrete, repeatable 6-point cash audit they can use every quarter.",
+      "description": "A practical checklist framework giving owners a repeatable quarterly audit routine built around all 6 cash drains, optimized for saves and return visits.",
+      "ctaDirection": "Ask readers to save this as their end-of-quarter checklist and tag the business owner they would send it to.",
       "layoutFamily": "framework",
       "researchMode": "claim_verification",
       "slideOutline": [
         {
           "role": "hook",
           "position": 1,
-          "objective": "Present the provocative premise that small businesses bleed out from 6 quiet places, not one big failure.",
+          "objective": "Frame the quarterly audit habit as the single action that separates intentional owners from reactive ones.",
           "listItemIndex": null,
           "recommendedVisual": "text"
         },
         {
           "role": "framework",
           "position": 2,
-          "objective": "Introduce Cash Drain 1 (unused subscriptions) and prompt the owner to audit their active tools this week.",
+          "objective": "Present Audit Check 1, subscription review, as a timed 15-minute pull of recurring charges.",
           "listItemIndex": 1,
           "recommendedVisual": "checklist"
         },
         {
           "role": "framework",
           "position": 3,
-          "objective": "Introduce Cash Drain 2 (underpriced offerings) and prompt the owner to compare their current prices to rising costs.",
+          "objective": "Present Audit Check 2, pricing review, as a three-question rate-versus-cost comparison.",
           "listItemIndex": 2,
           "recommendedVisual": "comparison"
         },
         {
           "role": "framework",
           "position": 4,
-          "objective": "Introduce Cash Drain 3 (employee time on low-value tasks) and prompt the owner to calculate the real hourly cost of manual processes.",
+          "objective": "Present Audit Check 3, receivables aging, as a sort-and-flag routine for overdue invoices.",
           "listItemIndex": 3,
           "recommendedVisual": "data"
         },
         {
           "role": "framework",
           "position": 5,
-          "objective": "Introduce Cash Drain 4 (poor inventory management) and prompt the owner to identify their last overstock or stockout event.",
+          "objective": "Present Audit Check 4, inventory and asset utilization, as a flagging exercise for idle capital.",
           "listItemIndex": 4,
-          "recommendedVisual": "diagram"
+          "recommendedVisual": "checklist"
         },
         {
           "role": "framework",
           "position": 6,
-          "objective": "Introduce Cash Drain 5 (payment processing fees) and prompt the owner to pull their last three months of merchant statements.",
+          "objective": "Present Audit Check 5, marketing attribution review, as a spend-to-outcome mapping step.",
           "listItemIndex": 5,
-          "recommendedVisual": "data"
+          "recommendedVisual": "diagram"
         },
         {
           "role": "framework",
           "position": 7,
-          "objective": "Introduce Cash Drain 6 (customer churn without retention) and prompt the owner to calculate their current monthly churn rate.",
+          "objective": "Present Audit Check 6, personal-business expense separation, as a transaction scan before quarter close.",
           "listItemIndex": 6,
-          "recommendedVisual": "diagram"
+          "recommendedVisual": "checklist"
         },
         {
           "role": "cta",
           "position": 8,
-          "objective": "Direct the owner to save this post and audit one drain this week, with a specific action step.",
+          "objective": "Prompt readers to save the carousel as their quarterly audit checklist and share it with their accountant or business partner.",
           "listItemIndex": null,
           "recommendedVisual": "text"
         }
       ],
       "contentFormat": "framework",
       "schemaVersion": 2,
-      "centralInsight": "Silent cash drains are dangerous precisely because they don't show up as obvious line items, so most owners don't look for them until serious damage is done.",
-      "imageDirection": "Use simple flat icons representing each drain category (e.g., subscriptions, pricing tag, clock, boxes, credit card, revolving door).",
-      "visualDirection": "Clean, high-contrast dark background with bold accent color per drain number, consistent icon system for each category.",
-      "inferredAudience": "Small business owners and entrepreneurs",
+      "centralInsight": "Silent cash drains persist because owners never build a scheduled moment to look for them, so a quarterly checklist converts awareness into an actionable habit.",
+      "imageDirection": "Minimal flat icons paired with structured checklist graphics, using consistent brand-neutral colors for broad shareability.",
+      "visualDirection": "Clean checklist-style panels with a progress tracker element across slides and green checkmark iconography for a satisfying completion feel.",
+      "inferredAudience": "Small business owners and self-employed founders",
       "prohibitedClaims": [
-        "Most small businesses fail because of cash drains (unsupported absolute)",
-        "Customer acquisition costs X times more than retention (do not cite a specific multiplier without verification)",
-        "The average small business wastes $X on unused subscriptions (do not cite without a verified source)",
-        "These 6 drains are the definitive causes of small business failure",
-        "Fixing these drains guarantees business survival or profitability"
+        "Running this audit guarantees improved cash flow",
+        "All six drains apply equally to every business",
+        "This checklist replaces professional accounting advice",
+        "Businesses that skip this audit will fail"
       ],
-      "audienceReasoning": "The source content directly addresses small businesses as the subject of the cash drains.",
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
       "estimatedSlideCount": 8,
       "evidenceRequirements": [
-        "Verify that customer acquisition costs consistently exceed retention costs across small business categories",
-        "Confirm that payment processing fee ranges cited are current and sourced",
-        "Verify that SaaS subscription waste statistics apply to small businesses specifically",
-        "Confirm pricing inertia impact on small business margins is substantiated",
-        "Verify inventory mismanagement cost estimates before using specific figures"
+        "Verify that quarterly financial reviews are a recognized best practice for SMB cash management",
+        "Confirm 30-day receivables aging as a standard benchmark for follow-up",
+        "Check that personal-business expense blurring has documented tax and cash flow implications",
+        "Confirm that unattributed ad spend is a measurable and documented waste category"
+      ]
+    },
+    {
+      "id": "brief_2",
+      "hook": "She made $12k that month. Her account showed $400. Here is what was silently draining her business.",
+      "title": "She Was Profitable on Paper and Broke in Real Life",
+      "topic": "6 silent cash drains killing small businesses",
+      "kicker": "Story",
+      "scores": {
+        "overall": 87,
+        "relevance": 96,
+        "usefulness": 84,
+        "originality": 82,
+        "specificity": 80,
+        "factualSafety": 88,
+        "visualPotential": 85
+      },
+      "isLegacy": false,
+      "angleType": "story",
+      "claimRisk": "low",
+      "keyPoints": [
+        {
+          "title": "The wake-up moment",
+          "purpose": "Creates emotional entry into the story and establishes stakes.",
+          "explanation": "A jarring gap between expected and actual bank balance triggers a full financial review."
+        },
+        {
+          "title": "Drain 1 discovered: forgotten subscriptions",
+          "purpose": "Shows the story mechanism and names the first drain naturally within the narrative.",
+          "explanation": "A line-by-line bank review reveals recurring tools that are unused but still charging monthly."
+        },
+        {
+          "title": "Drain 2 discovered: stale pricing",
+          "purpose": "Introduces underpricing as a drain the character overlooked, not a mistake she made deliberately.",
+          "explanation": "She realizes her rates have not changed in two years despite rising supplier costs."
+        },
+        {
+          "title": "Drain 3 discovered: slow-paying clients",
+          "purpose": "Dramatizes how income exists on paper but not in practice.",
+          "explanation": "Three outstanding invoices reveal a pattern of 60-plus-day payment gaps bleeding her float."
+        },
+        {
+          "title": "Drain 4 discovered: overordered inventory",
+          "purpose": "Extends the story to product-based business readers.",
+          "explanation": "A back-room count shows capital sitting in stock ordered for a slow season."
+        },
+        {
+          "title": "Drain 5 discovered: untracked ad spend",
+          "purpose": "Grounds a common growth activity as a hidden cost within the story.",
+          "explanation": "Ad reports show spend with no revenue attribution, revealing pure leakage."
+        },
+        {
+          "title": "Drain 6 discovered: blurred personal expenses",
+          "purpose": "Closes the discovery arc with the most personally uncomfortable drain.",
+          "explanation": "Several personal purchases ran through the business account, inflating overhead invisibly."
+        }
+      ],
+      "confidence": 0.87,
+      "contentGoal": "shares",
+      "corePromise": "Readers follow a relatable story that reveals all 6 cash drains through lived experience, making each one memorable.",
+      "description": "A narrative carousel following one business owner's discovery of all 6 cash drains through a single financial wake-up moment, making the lesson emotionally resonant and highly shareable.",
+      "ctaDirection": "Invite readers to share this with a business owner friend who needs to run this audit before their next quarter closes.",
+      "layoutFamily": "story",
+      "researchMode": "none",
+      "slideOutline": [
+        {
+          "role": "hook",
+          "position": 1,
+          "objective": "Open with the jarring contrast of strong revenue and an almost empty account to hook readers immediately.",
+          "listItemIndex": null,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "insight",
+          "position": 2,
+          "objective": "Reveal Cash Drain 1, forgotten subscriptions, discovered during the emergency bank review.",
+          "listItemIndex": 1,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "insight",
+          "position": 3,
+          "objective": "Reveal Cash Drain 2, stale pricing, surfaced when she compares old rates to current supplier costs.",
+          "listItemIndex": 2,
+          "recommendedVisual": "comparison"
+        },
+        {
+          "role": "insight",
+          "position": 4,
+          "objective": "Reveal Cash Drain 3, slow-paying clients, shown through the stack of outstanding invoices.",
+          "listItemIndex": 3,
+          "recommendedVisual": "data"
+        },
+        {
+          "role": "insight",
+          "position": 5,
+          "objective": "Reveal Cash Drain 4, overordered inventory, discovered during a back-room stock count.",
+          "listItemIndex": 4,
+          "recommendedVisual": "photo"
+        },
+        {
+          "role": "insight",
+          "position": 6,
+          "objective": "Reveal Cash Drain 5, untracked ad spend, exposed when she pulls the ad platform report.",
+          "listItemIndex": 5,
+          "recommendedVisual": "data"
+        },
+        {
+          "role": "insight",
+          "position": 7,
+          "objective": "Reveal Cash Drain 6, blurred personal expenses, the final uncomfortable discovery in the audit.",
+          "listItemIndex": 6,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "takeaway",
+          "position": 8,
+          "objective": "Close the story with the lesson: profit is not the same as cash, and silence is the most expensive drain of all.",
+          "listItemIndex": null,
+          "recommendedVisual": "text"
+        }
+      ],
+      "contentFormat": "story",
+      "schemaVersion": 2,
+      "centralInsight": "Cash drains are not obvious until a financial crisis forces a full audit, and every drain has a human habit or blind spot behind it.",
+      "imageDirection": "Lifestyle photo of a business owner reviewing documents at a desk, transitioning to relief imagery by the final slide.",
+      "visualDirection": "Warm, human-centered panels with a single protagonist silhouette and progressive tension built through color shifting from neutral to alert tones.",
+      "inferredAudience": "Small business owners and self-employed founders",
+      "prohibitedClaims": [
+        "This exact scenario happens to most small businesses",
+        "Ignoring these drains always leads to business failure",
+        "Profit and cash flow are never the same for any business"
+      ],
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
+      "estimatedSlideCount": 8,
+      "evidenceRequirements": [
+        "Confirm the illustrative revenue and account figures are presented as fictional to avoid misleading readers",
+        "Ensure pricing stagnation claim is framed as a common pattern, not a universal rule"
+      ]
+    },
+    {
+      "id": "brief_3",
+      "hook": "If your revenue looks fine but your bank account disagrees, one of these 6 drains is probably why.",
+      "title": "Which of These 6 Cash Drains Is Bleeding Your Business?",
+      "topic": "6 silent cash drains killing small businesses",
+      "kicker": "Diagnostic",
+      "scores": {
+        "overall": 87,
+        "relevance": 98,
+        "usefulness": 90,
+        "originality": 72,
+        "specificity": 85,
+        "factualSafety": 75,
+        "visualPotential": 88
+      },
+      "isLegacy": false,
+      "angleType": "diagnostic",
+      "claimRisk": "medium",
+      "keyPoints": [
+        {
+          "title": "Untracked recurring subscriptions",
+          "purpose": "Opens the audit with the most overlooked and easiest-to-fix drain.",
+          "explanation": "Software and tool subscriptions auto-renew without review, quietly compounding into significant monthly waste."
+        },
+        {
+          "title": "Underpriced services",
+          "purpose": "Reframes a revenue decision as a cash drain, which surprises most readers.",
+          "explanation": "Many owners set prices once and never revisit them, steadily losing margin as costs rise."
+        },
+        {
+          "title": "Late payment cycles",
+          "purpose": "Shifts focus from income to timing, a nuance most owners miss.",
+          "explanation": "Slow-paying clients create cash flow gaps that force owners to cover expenses out of pocket."
+        },
+        {
+          "title": "Excess inventory or unused stock",
+          "purpose": "Applies to product-based businesses and broadens the carousel's relevance.",
+          "explanation": "Overstocking ties up liquid capital in assets that may depreciate or never sell."
+        },
+        {
+          "title": "Unmeasured ad spend",
+          "purpose": "Connects a common growth activity to a hidden cost.",
+          "explanation": "Marketing budgets without attribution tracking leak money into channels with no proven return."
+        },
+        {
+          "title": "Owner-paid personal costs through the business",
+          "purpose": "Closes the list with the drain that is hardest to admit but extremely common.",
+          "explanation": "Blurred personal and business expenses inflate overhead and distort true profitability."
+        }
+      ],
+      "confidence": 0.88,
+      "contentGoal": "saves",
+      "corePromise": "Readers will identify which specific cash drains apply to their business right now.",
+      "description": "A self-diagnostic breakdown that turns each cash drain into a yes/no audit question, driving saves as owners flag their own leaks.",
+      "ctaDirection": "Ask readers to drop a number in the comments for the drain they recognized in their business, and share with another owner.",
+      "layoutFamily": "breakdown",
+      "researchMode": "claim_verification",
+      "slideOutline": [
+        {
+          "role": "hook",
+          "position": 1,
+          "objective": "Present the core tension: revenue looks healthy but cash is disappearing somewhere.",
+          "listItemIndex": null,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "insight",
+          "position": 2,
+          "objective": "Introduce Cash Drain 1, untracked recurring subscriptions, with a diagnostic check question.",
+          "listItemIndex": 1,
+          "recommendedVisual": "checklist"
+        },
+        {
+          "role": "insight",
+          "position": 3,
+          "objective": "Introduce Cash Drain 2, underpriced services, prompting readers to recall their last price review.",
+          "listItemIndex": 2,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "insight",
+          "position": 4,
+          "objective": "Introduce Cash Drain 3, late payment cycles, illustrating the gap between invoiced and received cash.",
+          "listItemIndex": 3,
+          "recommendedVisual": "diagram"
+        },
+        {
+          "role": "insight",
+          "position": 5,
+          "objective": "Introduce Cash Drain 4, excess inventory or unused stock, showing capital locked in static assets.",
+          "listItemIndex": 4,
+          "recommendedVisual": "data"
+        },
+        {
+          "role": "insight",
+          "position": 6,
+          "objective": "Introduce Cash Drain 5, unmeasured ad spend, flagging the risk of marketing without attribution.",
+          "listItemIndex": 5,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "insight",
+          "position": 7,
+          "objective": "Introduce Cash Drain 6, owner-paid personal costs through the business, exposing blurred expense lines.",
+          "listItemIndex": 6,
+          "recommendedVisual": "text"
+        },
+        {
+          "role": "cta",
+          "position": 8,
+          "objective": "Prompt readers to screenshot the drain they recognized most and tag a business owner who needs the audit.",
+          "listItemIndex": null,
+          "recommendedVisual": "text"
+        }
+      ],
+      "contentFormat": "breakdown",
+      "schemaVersion": 2,
+      "centralInsight": "Most small business cash problems are silent, meaning they do not show up as obvious losses but as slow, unnoticed bleeds across six common pressure points.",
+      "imageDirection": "Flat-design icons representing each drain category against a clean, high-contrast background.",
+      "visualDirection": "Bold numbered cards with a red accent indicator per drain and a simple yes/no checkbox graphic on each slide.",
+      "inferredAudience": "Small business owners and self-employed founders",
+      "prohibitedClaims": [
+        "These 6 drains are the only causes of small business cash problems",
+        "Most small businesses fail because of these drains",
+        "Fixing these drains guarantees profitability"
+      ],
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
+      "estimatedSlideCount": 8,
+      "evidenceRequirements": [
+        "Verify that subscription cost overruns are a documented small business expense issue",
+        "Confirm that late payment cycles measurably impact SMB cash flow",
+        "Check that unattributed ad spend waste is a documented marketing problem",
+        "Confirm that owner expense blurring is a recognized bookkeeping risk"
       ]
     }
   ],
   "slotValuesJson": {
     "slide_01": {
-      "kicker": "SMALL BUSINESS",
-      "subhead": "Not from one big expense. From 6 quiet places most owners never check.",
-      "headline": "Your business may be bleeding out"
+      "kicker": "FOUNDERS",
+      "support": "Before the quarter closes, intentional owners audit. Reactive ones find out too late.",
+      "headline": "Run These 6 Checks First"
     },
     "slide_02": {
-      "body": "Auto-renewals stack up with no active decision. Audit every active tool and cancel what you no longer use.",
+      "body": "Pull every recurring charge from the last 90 days. Mark each one: active use or cancel candidate.",
       "kicker": "01",
-      "headline": "Unused Subscriptions"
+      "headline": "Subscription Audit"
     },
     "slide_03": {
-      "body": "Launch pricing set years ago quietly erodes margin as costs rise. Compare your current prices to what things cost you now.",
+      "body": "Ask: Do current rates cover actual costs? Are competitors charging more? Flag any underpriced service.",
+      "left": "Your Current Rate",
+      "right": "True Cost + Market",
       "kicker": "02",
-      "headline": "Underpriced Offerings"
+      "headline": "Pricing Review"
     },
     "slide_04": {
-      "body": "Manual, automatable work is a hidden payroll cost. Calculate what your team's time on repetitive tasks actually costs per hour.",
+      "body": "Sort open invoices by age. Any invoice over 30 days gets an immediate follow-up action today.",
       "kicker": "03",
-      "headline": "Labor on Low-Value Tasks"
+      "headline": "Receivables Aging Check"
     },
     "slide_05": {
-      "body": "Overstocking ties up cash. Stockouts create lost sales. When did either last happen in your business? That cost is real.",
+      "body": "List all purchased inventory or assets. Flag anything unused for more than 60 days as idle capital.",
       "kicker": "04",
-      "headline": "Poor Inventory Management"
+      "headline": "Idle Inventory and Assets"
     },
     "slide_06": {
-      "body": "Interchange, platform, and gateway fees compound across every transaction. Pull your last 3 months of merchant statements and look.",
       "kicker": "05",
-      "headline": "Payment Processing Fees"
+      "support": "Map each ad spend to a measurable outcome. Pause anything with no trackable return.",
+      "headline": "Marketing Attribution Review"
     },
     "slide_07": {
-      "body": "Acquiring new customers costs more than keeping existing ones. Calculate your monthly churn rate. That number is a recurring expense.",
+      "body": "Scan transactions for personal costs coded to the business. Move them before the quarter closes.",
       "kicker": "06",
-      "headline": "Churn Without Retention"
+      "headline": "Personal vs. Business Expenses"
     },
     "slide_08": {
-      "subhead": "Pick the one most likely active in your business. Take one action before Friday.",
-      "headline": "Save this and audit one drain this week",
-      "cta_label": "Save for later"
+      "support": "Tag the business owner who needs this checklist. Share it with your accountant before quarter close.",
+      "headline": "Save This as Your Q Audit",
+      "cta_label": "Save and Tag Someone"
     }
   },
   "slideStructureJson": [
@@ -197,9 +470,9 @@ export const remakeDump = {
           "label": "Kicker",
           "budget": {
             "max": 22,
-            "min": 8
+            "min": 4
           },
-          "defaultText": "REAL RESULT"
+          "defaultText": ""
         },
         {
           "id": "headline",
@@ -207,31 +480,38 @@ export const remakeDump = {
           "label": "Headline",
           "budget": {
             "max": 48,
-            "min": 18
+            "min": 14
           },
-          "defaultText": "This is what changed"
+          "defaultText": ""
         },
         {
-          "id": "subhead",
+          "id": "support",
           "role": "subhead",
-          "label": "Subhead",
+          "label": "Support",
           "budget": {
             "max": 90,
-            "min": 28
+            "min": 8
           },
-          "defaultText": "One year of consistency, one photo tells the story."
+          "defaultText": ""
         }
       ],
       "layoutId": "hook_photo_top",
-      "viralWhy": "A real photo in the hook builds immediate credibility for a personal-result story, more than text alone.",
+      "viralWhy": "Frame the quarterly audit habit as the single action that separates intentional owners from reactive ones.",
       "imageSlots": [
         {
           "id": "photo",
           "label": "Photo",
-          "defaultImageUrl": "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=800",
-          "searchQueryHint": ""
+          "defaultImageUrl": "https://images.pexels.com/photos/590022/pexels-photo-590022.jpeg?auto=compress&cs=tinysrgb&w=800",
+          "searchQueryHint": "Frame the quarterly audit habit as the single action that separates intentional owners from reactive ones."
         }
-      ]
+      ],
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "text_visual_split",
+        "treatment": "text_visual_split",
+        "semanticRole": "cover",
+        "listItemIndex": null
+      }
     },
     {
       "id": "slide_02",
@@ -250,26 +530,33 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
           "id": "body",
           "role": "body",
-          "label": "Detail",
+          "label": "Body",
           "budget": {
             "max": 140,
-            "min": 50
+            "min": 24
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 1, subscription review, as a timed 15-minute pull of recurring charges.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "checklist_stack",
+        "treatment": "number_focus",
+        "semanticRole": "list_item",
+        "listItemIndex": 1
+      }
     },
     {
       "id": "slide_03",
@@ -288,26 +575,53 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
           "id": "body",
           "role": "body",
-          "label": "Detail",
+          "label": "Body",
           "budget": {
             "max": 140,
-            "min": 50
+            "min": 24
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
+        },
+        {
+          "id": "left",
+          "role": "headline",
+          "label": "Left comparison",
+          "budget": {
+            "max": 28,
+            "min": 4
+          },
+          "defaultText": ""
+        },
+        {
+          "id": "right",
+          "role": "headline",
+          "label": "Right comparison",
+          "budget": {
+            "max": 28,
+            "min": 4
+          },
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 2, pricing review, as a three-question rate-versus-cost comparison.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "comparison_split",
+        "treatment": "comparison_split",
+        "semanticRole": "list_item",
+        "listItemIndex": 2
+      }
     },
     {
       "id": "slide_04",
@@ -326,26 +640,33 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
           "id": "body",
           "role": "body",
-          "label": "Detail",
+          "label": "Body",
           "budget": {
             "max": 140,
-            "min": 50
+            "min": 24
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 3, receivables aging, as a sort-and-flag routine for overdue invoices.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "data_focus",
+        "treatment": "number_focus",
+        "semanticRole": "list_item",
+        "listItemIndex": 3
+      }
     },
     {
       "id": "slide_05",
@@ -364,26 +685,33 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
           "id": "body",
           "role": "body",
-          "label": "Detail",
+          "label": "Body",
           "budget": {
             "max": 140,
-            "min": 50
+            "min": 24
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 4, inventory and asset utilization, as a flagging exercise for idle capital.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "checklist_stack",
+        "treatment": "number_focus",
+        "semanticRole": "list_item",
+        "listItemIndex": 4
+      }
     },
     {
       "id": "slide_06",
@@ -402,26 +730,33 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
-          "id": "body",
-          "role": "body",
-          "label": "Detail",
+          "id": "support",
+          "role": "subhead",
+          "label": "Support",
           "budget": {
-            "max": 140,
-            "min": 50
+            "max": 90,
+            "min": 8
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 5, marketing attribution review, as a spend-to-outcome mapping step.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "diagram_focus",
+        "treatment": "diagram_focus",
+        "semanticRole": "list_item",
+        "listItemIndex": 5
+      }
     },
     {
       "id": "slide_07",
@@ -440,26 +775,33 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "Beat title",
+          "label": "Headline",
           "budget": {
-            "max": 40,
+            "max": 48,
             "min": 14
           },
-          "defaultText": "Where I started"
+          "defaultText": ""
         },
         {
           "id": "body",
           "role": "body",
-          "label": "Detail",
+          "label": "Body",
           "budget": {
             "max": 140,
-            "min": 50
+            "min": 24
           },
-          "defaultText": "No plan, no system, just showing up inconsistently and hoping something would click."
+          "defaultText": ""
         }
       ],
       "layoutId": "list_item_numbered",
-      "viralWhy": "First beat sets up where things started, grounding the story before the payoff."
+      "viralWhy": "Present Audit Check 6, personal-business expense separation, as a transaction scan before quarter close.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "checklist_stack",
+        "treatment": "number_focus",
+        "semanticRole": "list_item",
+        "listItemIndex": 6
+      }
     },
     {
       "id": "slide_08",
@@ -468,41 +810,48 @@ export const remakeDump = {
         {
           "id": "headline",
           "role": "headline",
-          "label": "CTA headline",
+          "label": "Headline",
           "budget": {
             "max": 48,
-            "min": 16
+            "min": 14
           },
-          "defaultText": "Save this if you're where I started"
+          "defaultText": ""
         },
         {
-          "id": "subhead",
+          "id": "support",
           "role": "subhead",
-          "label": "CTA subhead",
+          "label": "Support",
           "budget": {
-            "max": 80,
-            "min": 24
+            "max": 90,
+            "min": 8
           },
-          "defaultText": "Follow for the real, unfiltered version of this journey."
+          "defaultText": ""
         },
         {
           "id": "cta_label",
           "role": "cta_label",
-          "label": "Button / chip label",
+          "label": "CTA",
           "budget": {
-            "max": 22,
+            "max": 28,
             "min": 6
           },
-          "defaultText": "Follow for more"
+          "defaultText": ""
         }
       ],
       "layoutId": "cta_bold_center",
-      "viralWhy": "Close with one clear action plus a soft identity line."
+      "viralWhy": "Prompt readers to save the carousel as their quarterly audit checklist and share it with their accountant or business partner.",
+      "composition": {
+        "family": "breakdown_listicle",
+        "archetype": "closing_focus",
+        "treatment": "closing_focus",
+        "semanticRole": "closing",
+        "listItemIndex": null
+      }
     }
   ],
   "imageUrlsJson": null,
   "generationMetricsJson": {
-    "runId": "dcb99782-ca32-4c90-b294-ecc6a87c267a",
+    "runId": "342e0ad7-eeec-450e-af31-ed10b39d13df",
     "stages": [
       {
         "name": "source_resolution",
@@ -513,13 +862,19 @@ export const remakeDump = {
       {
         "name": "angle_generation",
         "status": "ok",
-        "durationMs": 80454,
+        "durationMs": 156954,
+        "occurrenceCount": 1
+      },
+      {
+        "name": "visual_direction",
+        "status": "ok",
+        "durationMs": 8649,
         "occurrenceCount": 1
       },
       {
         "name": "copy_generation",
         "status": "ok",
-        "durationMs": 12919,
+        "durationMs": 23111,
         "occurrenceCount": 1
       },
       {
@@ -542,22 +897,74 @@ export const remakeDump = {
         "success": true,
         "estimated": true,
         "operation": "angle_generation",
-        "durationMs": 80446,
+        "durationMs": 87465,
         "actualModel": "claude-sonnet-4-6",
         "inputTokens": 3261,
-        "totalTokens": 7383,
-        "outputTokens": 4122,
+        "totalTokens": 7511,
+        "outputTokens": 4250,
         "requestedModel": "claude-sonnet-4-6",
         "repairIteration": 0,
-        "estimatedCostUsd": 0.071613,
+        "estimatedCostUsd": 0.073533,
         "physicalAttempts": [
           {
             "model": "claude-sonnet-4-6",
             "success": true,
-            "durationMs": 80446,
+            "durationMs": 87464,
             "inputTokens": 3261,
-            "totalTokens": 7383,
-            "outputTokens": 4122,
+            "totalTokens": 7511,
+            "outputTokens": 4250,
+            "attemptNumber": 1,
+            "errorCategory": null,
+            "fallbackOccurred": false
+          }
+        ]
+      },
+      {
+        "success": true,
+        "estimated": true,
+        "operation": "angle_generation",
+        "durationMs": 69473,
+        "actualModel": "claude-sonnet-4-6",
+        "inputTokens": 3640,
+        "totalTokens": 7216,
+        "outputTokens": 3576,
+        "requestedModel": "claude-sonnet-4-6",
+        "repairIteration": 1,
+        "estimatedCostUsd": 0.06456,
+        "physicalAttempts": [
+          {
+            "model": "claude-sonnet-4-6",
+            "success": true,
+            "durationMs": 69472,
+            "inputTokens": 3640,
+            "totalTokens": 7216,
+            "outputTokens": 3576,
+            "attemptNumber": 1,
+            "errorCategory": null,
+            "fallbackOccurred": false
+          }
+        ]
+      },
+      {
+        "success": true,
+        "estimated": true,
+        "operation": "carousel_visual_direction",
+        "durationMs": 8644,
+        "actualModel": "claude-sonnet-4-6",
+        "inputTokens": 3316,
+        "totalTokens": 3968,
+        "outputTokens": 652,
+        "requestedModel": "claude-sonnet-4-6",
+        "repairIteration": 0,
+        "estimatedCostUsd": 0.019728,
+        "physicalAttempts": [
+          {
+            "model": "claude-sonnet-4-6",
+            "success": true,
+            "durationMs": 8643,
+            "inputTokens": 3316,
+            "totalTokens": 3968,
+            "outputTokens": 652,
             "attemptNumber": 1,
             "errorCategory": null,
             "fallbackOccurred": false
@@ -568,22 +975,48 @@ export const remakeDump = {
         "success": true,
         "estimated": true,
         "operation": "copy_generation",
-        "durationMs": 12912,
+        "durationMs": 11967,
         "actualModel": "claude-sonnet-4-6",
-        "inputTokens": 6410,
-        "totalTokens": 7004,
-        "outputTokens": 594,
+        "inputTokens": 6196,
+        "totalTokens": 6805,
+        "outputTokens": 609,
         "requestedModel": "claude-sonnet-4-6",
         "repairIteration": 0,
-        "estimatedCostUsd": 0.02814,
+        "estimatedCostUsd": 0.027723,
         "physicalAttempts": [
           {
             "model": "claude-sonnet-4-6",
             "success": true,
-            "durationMs": 12912,
-            "inputTokens": 6410,
-            "totalTokens": 7004,
-            "outputTokens": 594,
+            "durationMs": 11967,
+            "inputTokens": 6196,
+            "totalTokens": 6805,
+            "outputTokens": 609,
+            "attemptNumber": 1,
+            "errorCategory": null,
+            "fallbackOccurred": false
+          }
+        ]
+      },
+      {
+        "success": true,
+        "estimated": true,
+        "operation": "copy_generation",
+        "durationMs": 11135,
+        "actualModel": "claude-sonnet-4-6",
+        "inputTokens": 6246,
+        "totalTokens": 6826,
+        "outputTokens": 580,
+        "requestedModel": "claude-sonnet-4-6",
+        "repairIteration": 1,
+        "estimatedCostUsd": 0.027438,
+        "physicalAttempts": [
+          {
+            "model": "claude-sonnet-4-6",
+            "success": true,
+            "durationMs": 11135,
+            "inputTokens": 6246,
+            "totalTokens": 6826,
+            "outputTokens": 580,
             "attemptNumber": 1,
             "errorCategory": null,
             "fallbackOccurred": false
@@ -591,25 +1024,25 @@ export const remakeDump = {
         ]
       }
     ],
-    "remakeId": 73,
-    "startedAt": "2026-09-02T13:55:23.090Z",
+    "remakeId": 75,
+    "startedAt": "2026-09-02T17:14:22.631Z",
     "aggregates": {
       "imageSlotCount": 1,
-      "llmInputTokens": 9671,
-      "llmTotalTokens": 14387,
-      "llmOutputTokens": 4716,
+      "llmInputTokens": 22659,
+      "llmTotalTokens": 32326,
+      "llmOutputTokens": 9667,
       "slidesGenerated": 8,
       "imageSlotsFailed": 1,
       "imageBillableCount": 0,
       "imageSlotsResolved": 0,
-      "llmEstimatedCostUsd": 0.099753,
-      "llmLogicalCallCount": 2,
+      "llmEstimatedCostUsd": 0.212982,
+      "llmLogicalCallCount": 5,
       "imageEstimatedCostUsd": 0,
-      "totalEstimatedCostUsd": 0.099753,
-      "llmBillableAttemptCount": 2,
-      "llmPhysicalAttemptCount": 2
+      "totalEstimatedCostUsd": 0.212982,
+      "llmBillableAttemptCount": 5,
+      "llmPhysicalAttemptCount": 5
     },
-    "durationMs": 93926,
+    "durationMs": 189649,
     "entryPoint": "carouselStudio.generateFromInput",
     "imageCalls": [
       {
@@ -632,7 +1065,7 @@ export const remakeDump = {
       }
     ],
     "codeVersion": null,
-    "completedAt": "2026-09-02T13:56:57.016Z",
+    "completedAt": "2026-09-02T17:17:32.278Z",
     "environment": "development",
     "failureStage": null,
     "errorCategory": null,
@@ -640,143 +1073,414 @@ export const remakeDump = {
     "pricingVersion": "2026-08-30"
   },
   "aspectRatioOverride": "4:5",
-  "createdAt": "2026-09-02T13:56:43.000Z",
-  "updatedAt": "2026-09-02T13:56:57.000Z",
-  "visualDirectorSourceFromLog": null,
+  "createdAt": "2026-09-02T17:17:00.000Z",
+  "updatedAt": "2026-09-02T17:17:32.000Z",
+  "visualDirectorSourceFromLog": "ai",
   "generateFromInputAngles": [
     {
       "schemaVersion": 2,
       "isLegacy": false,
       "id": "brief_1",
-      "kicker": "Diagnostic",
-      "title": "Which of These 6 Cash Drains Is Silently Bleeding Your Business?",
-      "description": "A self-diagnostic framework that lets small business owners identify which specific drain applies to them, making the carousel feel personally relevant and driving saves.",
+      "kicker": "Framework",
+      "title": "6 Cash Drains to Audit Before Your Next Quarter",
+      "description": "A practical checklist framework giving owners a repeatable quarterly audit routine built around all 6 cash drains, optimized for saves and return visits.",
       "estimatedSlideCount": 8,
       "topic": "6 silent cash drains killing small businesses",
-      "inferredAudience": "Small business owners and entrepreneurs",
-      "audienceReasoning": "The source content directly addresses small businesses as the subject of the cash drains.",
+      "inferredAudience": "Small business owners and self-employed founders",
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
       "contentGoal": "saves",
       "contentFormat": "framework",
-      "angleType": "diagnostic",
-      "hook": "Most small businesses don't die from one big expense. They bleed out quietly from 6 places owners never check.",
-      "corePromise": "Readers will be able to self-diagnose which cash drains are active in their own business right now.",
-      "centralInsight": "Silent cash drains are dangerous precisely because they don't show up as obvious line items, so most owners don't look for them until serious damage is done.",
+      "angleType": "checklist",
+      "hook": "Before you close out this quarter, run these 6 checks or quietly lose money doing it.",
+      "corePromise": "Readers leave with a concrete, repeatable 6-point cash audit they can use every quarter.",
+      "centralInsight": "Silent cash drains persist because owners never build a scheduled moment to look for them, so a quarterly checklist converts awareness into an actionable habit.",
       "keyPoints": [
         {
-          "title": "Drain 1: Unused Subscriptions and Software",
-          "explanation": "Recurring SaaS and tool costs accumulate invisibly because auto-renewals require no active decision.",
-          "purpose": "Opens with the most relatable and immediately fixable drain to build credibility."
+          "title": "Subscription audit step",
+          "explanation": "Pull every recurring charge from the last 90 days and mark each one as active-use or cancel-candidate.",
+          "purpose": "Turns the most common drain into a specific, doable task with a clear output."
         },
         {
-          "title": "Drain 2: Underpriced Products or Services",
-          "explanation": "Pricing set at launch and never revisited quietly erodes margin as costs rise.",
-          "purpose": "Challenges a common owner blind spot around pricing inertia."
+          "title": "Pricing review step",
+          "explanation": "Compare current rates against actual costs and a simple market check to flag underpriced services.",
+          "purpose": "Gives owners a structured trigger to revisit pricing they otherwise never touch."
         },
         {
-          "title": "Drain 3: Employee Time on Low-Value Tasks",
-          "explanation": "Hourly labor spent on manual, automatable work is a hidden payroll cost most owners don't calculate.",
-          "purpose": "Reframes labor cost as a drain, not just a fixed expense."
+          "title": "Receivables aging check",
+          "explanation": "Sort outstanding invoices by age and flag any over 30 days for immediate follow-up action.",
+          "purpose": "Converts a passive cash flow problem into a managed receivables process."
         },
         {
-          "title": "Drain 4: Poor Inventory Management",
-          "explanation": "Overstocking ties up cash and understocking creates lost-sale costs that rarely appear on a report.",
-          "purpose": "Addresses a drain specific to product-based businesses."
+          "title": "Inventory or asset utilization check",
+          "explanation": "List all purchased inventory or assets and flag items unused for more than 60 days.",
+          "purpose": "Forces a capital efficiency review that most small business owners skip entirely."
         },
         {
-          "title": "Drain 5: Merchant and Payment Processing Fees",
-          "explanation": "Interchange, platform, and gateway fees compound across thousands of transactions and go unreviewed.",
-          "purpose": "Highlights a drain that is easy to overlook because it appears as a small percentage per sale."
+          "title": "Marketing spend attribution review",
+          "explanation": "Map each active ad or marketing spend to a measurable outcome and pause any with no trackable return.",
+          "purpose": "Gives non-finance owners a simple accountability test for their marketing budget."
         },
         {
-          "title": "Drain 6: Customer Churn Without a Retention System",
-          "explanation": "Acquiring a new customer costs significantly more than retaining one, making churn a recurring silent expense.",
-          "purpose": "Closes the list with a strategic, high-impact drain that motivates deeper business thinking."
+          "title": "Personal-business expense separation check",
+          "explanation": "Scan transactions for any personal costs coded to the business and move them before the quarter closes.",
+          "purpose": "Closes the checklist with the compliance and clarity step that protects both cash view and tax accuracy."
         }
       ],
       "slideOutline": [
         {
           "position": 1,
           "role": "hook",
-          "objective": "Present the provocative premise that small businesses bleed out from 6 quiet places, not one big failure.",
+          "objective": "Frame the quarterly audit habit as the single action that separates intentional owners from reactive ones.",
           "recommendedVisual": "text",
           "listItemIndex": null
         },
         {
           "position": 2,
           "role": "framework",
-          "objective": "Introduce Cash Drain 1 (unused subscriptions) and prompt the owner to audit their active tools this week.",
+          "objective": "Present Audit Check 1, subscription review, as a timed 15-minute pull of recurring charges.",
           "recommendedVisual": "checklist",
           "listItemIndex": 1
         },
         {
           "position": 3,
           "role": "framework",
-          "objective": "Introduce Cash Drain 2 (underpriced offerings) and prompt the owner to compare their current prices to rising costs.",
+          "objective": "Present Audit Check 2, pricing review, as a three-question rate-versus-cost comparison.",
           "recommendedVisual": "comparison",
           "listItemIndex": 2
         },
         {
           "position": 4,
           "role": "framework",
-          "objective": "Introduce Cash Drain 3 (employee time on low-value tasks) and prompt the owner to calculate the real hourly cost of manual processes.",
+          "objective": "Present Audit Check 3, receivables aging, as a sort-and-flag routine for overdue invoices.",
           "recommendedVisual": "data",
           "listItemIndex": 3
         },
         {
           "position": 5,
           "role": "framework",
-          "objective": "Introduce Cash Drain 4 (poor inventory management) and prompt the owner to identify their last overstock or stockout event.",
-          "recommendedVisual": "diagram",
+          "objective": "Present Audit Check 4, inventory and asset utilization, as a flagging exercise for idle capital.",
+          "recommendedVisual": "checklist",
           "listItemIndex": 4
         },
         {
           "position": 6,
           "role": "framework",
-          "objective": "Introduce Cash Drain 5 (payment processing fees) and prompt the owner to pull their last three months of merchant statements.",
-          "recommendedVisual": "data",
+          "objective": "Present Audit Check 5, marketing attribution review, as a spend-to-outcome mapping step.",
+          "recommendedVisual": "diagram",
           "listItemIndex": 5
         },
         {
           "position": 7,
           "role": "framework",
-          "objective": "Introduce Cash Drain 6 (customer churn without retention) and prompt the owner to calculate their current monthly churn rate.",
-          "recommendedVisual": "diagram",
+          "objective": "Present Audit Check 6, personal-business expense separation, as a transaction scan before quarter close.",
+          "recommendedVisual": "checklist",
           "listItemIndex": 6
         },
         {
           "position": 8,
           "role": "cta",
-          "objective": "Direct the owner to save this post and audit one drain this week, with a specific action step.",
+          "objective": "Prompt readers to save the carousel as their quarterly audit checklist and share it with their accountant or business partner.",
           "recommendedVisual": "text",
           "listItemIndex": null
         }
       ],
       "layoutFamily": "framework",
-      "visualDirection": "Clean, high-contrast dark background with bold accent color per drain number, consistent icon system for each category.",
-      "imageDirection": "Use simple flat icons representing each drain category (e.g., subscriptions, pricing tag, clock, boxes, credit card, revolving door).",
+      "visualDirection": "Clean checklist-style panels with a progress tracker element across slides and green checkmark iconography for a satisfying completion feel.",
+      "imageDirection": "Minimal flat icons paired with structured checklist graphics, using consistent brand-neutral colors for broad shareability.",
       "claimRisk": "medium",
       "researchMode": "claim_verification",
       "evidenceRequirements": [
-        "Verify that customer acquisition costs consistently exceed retention costs across small business categories",
-        "Confirm that payment processing fee ranges cited are current and sourced",
-        "Verify that SaaS subscription waste statistics apply to small businesses specifically",
-        "Confirm pricing inertia impact on small business margins is substantiated",
-        "Verify inventory mismanagement cost estimates before using specific figures"
+        "Verify that quarterly financial reviews are a recognized best practice for SMB cash management",
+        "Confirm 30-day receivables aging as a standard benchmark for follow-up",
+        "Check that personal-business expense blurring has documented tax and cash flow implications",
+        "Confirm that unattributed ad spend is a measurable and documented waste category"
       ],
       "prohibitedClaims": [
-        "Most small businesses fail because of cash drains (unsupported absolute)",
-        "Customer acquisition costs X times more than retention (do not cite a specific multiplier without verification)",
-        "The average small business wastes $X on unused subscriptions (do not cite without a verified source)",
-        "These 6 drains are the definitive causes of small business failure",
-        "Fixing these drains guarantees business survival or profitability"
+        "Running this audit guarantees improved cash flow",
+        "All six drains apply equally to every business",
+        "This checklist replaces professional accounting advice",
+        "Businesses that skip this audit will fail"
       ],
-      "ctaDirection": "Ask readers to save this post, pick the one drain most likely active in their business today, and take one action on it before the week ends.",
+      "ctaDirection": "Ask readers to save this as their end-of-quarter checklist and tag the business owner they would send it to.",
+      "scores": {
+        "relevance": 97,
+        "usefulness": 93,
+        "specificity": 91,
+        "visualPotential": 90,
+        "factualSafety": 78,
+        "originality": 68,
+        "overall": 88
+      },
+      "confidence": 0.91
+    },
+    {
+      "schemaVersion": 2,
+      "isLegacy": false,
+      "id": "brief_2",
+      "kicker": "Story",
+      "title": "She Was Profitable on Paper and Broke in Real Life",
+      "description": "A narrative carousel following one business owner's discovery of all 6 cash drains through a single financial wake-up moment, making the lesson emotionally resonant and highly shareable.",
+      "estimatedSlideCount": 8,
+      "topic": "6 silent cash drains killing small businesses",
+      "inferredAudience": "Small business owners and self-employed founders",
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
+      "contentGoal": "shares",
+      "contentFormat": "story",
+      "angleType": "story",
+      "hook": "She made $12k that month. Her account showed $400. Here is what was silently draining her business.",
+      "corePromise": "Readers follow a relatable story that reveals all 6 cash drains through lived experience, making each one memorable.",
+      "centralInsight": "Cash drains are not obvious until a financial crisis forces a full audit, and every drain has a human habit or blind spot behind it.",
+      "keyPoints": [
+        {
+          "title": "The wake-up moment",
+          "explanation": "A jarring gap between expected and actual bank balance triggers a full financial review.",
+          "purpose": "Creates emotional entry into the story and establishes stakes."
+        },
+        {
+          "title": "Drain 1 discovered: forgotten subscriptions",
+          "explanation": "A line-by-line bank review reveals recurring tools that are unused but still charging monthly.",
+          "purpose": "Shows the story mechanism and names the first drain naturally within the narrative."
+        },
+        {
+          "title": "Drain 2 discovered: stale pricing",
+          "explanation": "She realizes her rates have not changed in two years despite rising supplier costs.",
+          "purpose": "Introduces underpricing as a drain the character overlooked, not a mistake she made deliberately."
+        },
+        {
+          "title": "Drain 3 discovered: slow-paying clients",
+          "explanation": "Three outstanding invoices reveal a pattern of 60-plus-day payment gaps bleeding her float.",
+          "purpose": "Dramatizes how income exists on paper but not in practice."
+        },
+        {
+          "title": "Drain 4 discovered: overordered inventory",
+          "explanation": "A back-room count shows capital sitting in stock ordered for a slow season.",
+          "purpose": "Extends the story to product-based business readers."
+        },
+        {
+          "title": "Drain 5 discovered: untracked ad spend",
+          "explanation": "Ad reports show spend with no revenue attribution, revealing pure leakage.",
+          "purpose": "Grounds a common growth activity as a hidden cost within the story."
+        },
+        {
+          "title": "Drain 6 discovered: blurred personal expenses",
+          "explanation": "Several personal purchases ran through the business account, inflating overhead invisibly.",
+          "purpose": "Closes the discovery arc with the most personally uncomfortable drain."
+        }
+      ],
+      "slideOutline": [
+        {
+          "position": 1,
+          "role": "hook",
+          "objective": "Open with the jarring contrast of strong revenue and an almost empty account to hook readers immediately.",
+          "recommendedVisual": "text",
+          "listItemIndex": null
+        },
+        {
+          "position": 2,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 1, forgotten subscriptions, discovered during the emergency bank review.",
+          "recommendedVisual": "text",
+          "listItemIndex": 1
+        },
+        {
+          "position": 3,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 2, stale pricing, surfaced when she compares old rates to current supplier costs.",
+          "recommendedVisual": "comparison",
+          "listItemIndex": 2
+        },
+        {
+          "position": 4,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 3, slow-paying clients, shown through the stack of outstanding invoices.",
+          "recommendedVisual": "data",
+          "listItemIndex": 3
+        },
+        {
+          "position": 5,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 4, overordered inventory, discovered during a back-room stock count.",
+          "recommendedVisual": "photo",
+          "listItemIndex": 4
+        },
+        {
+          "position": 6,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 5, untracked ad spend, exposed when she pulls the ad platform report.",
+          "recommendedVisual": "data",
+          "listItemIndex": 5
+        },
+        {
+          "position": 7,
+          "role": "insight",
+          "objective": "Reveal Cash Drain 6, blurred personal expenses, the final uncomfortable discovery in the audit.",
+          "recommendedVisual": "text",
+          "listItemIndex": 6
+        },
+        {
+          "position": 8,
+          "role": "takeaway",
+          "objective": "Close the story with the lesson: profit is not the same as cash, and silence is the most expensive drain of all.",
+          "recommendedVisual": "text",
+          "listItemIndex": null
+        }
+      ],
+      "layoutFamily": "story",
+      "visualDirection": "Warm, human-centered panels with a single protagonist silhouette and progressive tension built through color shifting from neutral to alert tones.",
+      "imageDirection": "Lifestyle photo of a business owner reviewing documents at a desk, transitioning to relief imagery by the final slide.",
+      "claimRisk": "low",
+      "researchMode": "none",
+      "evidenceRequirements": [
+        "Confirm the illustrative revenue and account figures are presented as fictional to avoid misleading readers",
+        "Ensure pricing stagnation claim is framed as a common pattern, not a universal rule"
+      ],
+      "prohibitedClaims": [
+        "This exact scenario happens to most small businesses",
+        "Ignoring these drains always leads to business failure",
+        "Profit and cash flow are never the same for any business"
+      ],
+      "ctaDirection": "Invite readers to share this with a business owner friend who needs to run this audit before their next quarter closes.",
+      "scores": {
+        "relevance": 96,
+        "usefulness": 84,
+        "specificity": 80,
+        "visualPotential": 85,
+        "factualSafety": 88,
+        "originality": 82,
+        "overall": 87
+      },
+      "confidence": 0.87
+    },
+    {
+      "schemaVersion": 2,
+      "isLegacy": false,
+      "id": "brief_3",
+      "kicker": "Diagnostic",
+      "title": "Which of These 6 Cash Drains Is Bleeding Your Business?",
+      "description": "A self-diagnostic breakdown that turns each cash drain into a yes/no audit question, driving saves as owners flag their own leaks.",
+      "estimatedSlideCount": 8,
+      "topic": "6 silent cash drains killing small businesses",
+      "inferredAudience": "Small business owners and self-employed founders",
+      "audienceReasoning": "The source explicitly addresses small businesses as the affected group.",
+      "contentGoal": "saves",
+      "contentFormat": "breakdown",
+      "angleType": "diagnostic",
+      "hook": "If your revenue looks fine but your bank account disagrees, one of these 6 drains is probably why.",
+      "corePromise": "Readers will identify which specific cash drains apply to their business right now.",
+      "centralInsight": "Most small business cash problems are silent, meaning they do not show up as obvious losses but as slow, unnoticed bleeds across six common pressure points.",
+      "keyPoints": [
+        {
+          "title": "Untracked recurring subscriptions",
+          "explanation": "Software and tool subscriptions auto-renew without review, quietly compounding into significant monthly waste.",
+          "purpose": "Opens the audit with the most overlooked and easiest-to-fix drain."
+        },
+        {
+          "title": "Underpriced services",
+          "explanation": "Many owners set prices once and never revisit them, steadily losing margin as costs rise.",
+          "purpose": "Reframes a revenue decision as a cash drain, which surprises most readers."
+        },
+        {
+          "title": "Late payment cycles",
+          "explanation": "Slow-paying clients create cash flow gaps that force owners to cover expenses out of pocket.",
+          "purpose": "Shifts focus from income to timing, a nuance most owners miss."
+        },
+        {
+          "title": "Excess inventory or unused stock",
+          "explanation": "Overstocking ties up liquid capital in assets that may depreciate or never sell.",
+          "purpose": "Applies to product-based businesses and broadens the carousel's relevance."
+        },
+        {
+          "title": "Unmeasured ad spend",
+          "explanation": "Marketing budgets without attribution tracking leak money into channels with no proven return.",
+          "purpose": "Connects a common growth activity to a hidden cost."
+        },
+        {
+          "title": "Owner-paid personal costs through the business",
+          "explanation": "Blurred personal and business expenses inflate overhead and distort true profitability.",
+          "purpose": "Closes the list with the drain that is hardest to admit but extremely common."
+        }
+      ],
+      "slideOutline": [
+        {
+          "position": 1,
+          "role": "hook",
+          "objective": "Present the core tension: revenue looks healthy but cash is disappearing somewhere.",
+          "recommendedVisual": "text",
+          "listItemIndex": null
+        },
+        {
+          "position": 2,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 1, untracked recurring subscriptions, with a diagnostic check question.",
+          "recommendedVisual": "checklist",
+          "listItemIndex": 1
+        },
+        {
+          "position": 3,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 2, underpriced services, prompting readers to recall their last price review.",
+          "recommendedVisual": "text",
+          "listItemIndex": 2
+        },
+        {
+          "position": 4,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 3, late payment cycles, illustrating the gap between invoiced and received cash.",
+          "recommendedVisual": "diagram",
+          "listItemIndex": 3
+        },
+        {
+          "position": 5,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 4, excess inventory or unused stock, showing capital locked in static assets.",
+          "recommendedVisual": "data",
+          "listItemIndex": 4
+        },
+        {
+          "position": 6,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 5, unmeasured ad spend, flagging the risk of marketing without attribution.",
+          "recommendedVisual": "text",
+          "listItemIndex": 5
+        },
+        {
+          "position": 7,
+          "role": "insight",
+          "objective": "Introduce Cash Drain 6, owner-paid personal costs through the business, exposing blurred expense lines.",
+          "recommendedVisual": "text",
+          "listItemIndex": 6
+        },
+        {
+          "position": 8,
+          "role": "cta",
+          "objective": "Prompt readers to screenshot the drain they recognized most and tag a business owner who needs the audit.",
+          "recommendedVisual": "text",
+          "listItemIndex": null
+        }
+      ],
+      "layoutFamily": "breakdown",
+      "visualDirection": "Bold numbered cards with a red accent indicator per drain and a simple yes/no checkbox graphic on each slide.",
+      "imageDirection": "Flat-design icons representing each drain category against a clean, high-contrast background.",
+      "claimRisk": "medium",
+      "researchMode": "claim_verification",
+      "evidenceRequirements": [
+        "Verify that subscription cost overruns are a documented small business expense issue",
+        "Confirm that late payment cycles measurably impact SMB cash flow",
+        "Check that unattributed ad spend waste is a documented marketing problem",
+        "Confirm that owner expense blurring is a recognized bookkeeping risk"
+      ],
+      "prohibitedClaims": [
+        "These 6 drains are the only causes of small business cash problems",
+        "Most small businesses fail because of these drains",
+        "Fixing these drains guarantees profitability"
+      ],
+      "ctaDirection": "Ask readers to drop a number in the comments for the drain they recognized in their business, and share with another owner.",
       "scores": {
         "relevance": 98,
-        "usefulness": 92,
-        "specificity": 88,
-        "visualPotential": 85,
-        "factualSafety": 74,
+        "usefulness": 90,
+        "specificity": 85,
+        "visualPotential": 88,
+        "factualSafety": 75,
         "originality": 72,
         "overall": 87
       },
@@ -785,6 +1489,5 @@ export const remakeDump = {
   ],
   "recommendedBriefIndex": 0,
   "selectedAngleIndexFromStart": 0,
-  "wallClockMs": 96767
-}
-;
+  "wallClockMs": 194551
+};
