@@ -19,6 +19,7 @@ import {
   compilePlanningIRToBaselineCompositionIR,
   validateCarouselCompositionIR,
   type CarouselCompositionIR,
+  type CarouselCompositionVisualRegion,
 } from "./carouselCompositionIR";
 import {
   OPEN_CASH_FLOW_USER_PROMPT,
@@ -96,6 +97,62 @@ function sampleBrief(
       }),
     confidence: overrides.confidence ?? 0.8,
   };
+}
+
+function storyBrief(): CarouselCreativeBrief {
+  return sampleBrief({
+    title: "The night the till went quiet",
+    hook: "The night the till went quiet.",
+    corePromise: "Walk owners through one cash-crisis night.",
+    contentFormat: "story",
+    layoutFamily: "story",
+    angleType: "story",
+    estimatedSlideCount: 6,
+    slideOutline: [
+      {
+        position: 1,
+        role: "hook",
+        objective: "Open on the quiet till.",
+        recommendedVisual: "photo",
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "context",
+        objective: "Set the night.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 3,
+        role: "problem",
+        objective: "Show the cash gap.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 4,
+        role: "insight",
+        objective: "Name the missed signal.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 5,
+        role: "example",
+        objective: "Replay the closing hour.",
+        recommendedVisual: "photo",
+        listItemIndex: null,
+      },
+      {
+        position: 6,
+        role: "cta",
+        objective: "Ask them to check tonight.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+    ],
+  });
 }
 
 function planningFromBrief(
@@ -201,7 +258,13 @@ describe("compilePlanningIRToBaselineCompositionIR", () => {
     ]);
     expect(new Set(archetypes.slice(1, 7)).size).toBeGreaterThan(1);
     expect(compositionIR.slides[0]?.density).toBe("low");
+    expect(compositionIR.slides[0]?.visualRegions).toEqual([]);
+    expect(compositionIR.slides[2]?.visualRegions).toEqual([]);
+    expect(compositionIR.slides[3]?.visualRegions).toEqual([
+      { role: "primary", kind: "diagram", placement: "center" },
+    ]);
     expect(compositionIR.slides[7]?.emphasis).toBe("cta");
+    expect(compositionIR.slides[7]?.visualRegions).toEqual([]);
     expect(validateCarouselCompositionIR(compositionIR, planningIR)).toEqual([]);
   });
 
@@ -235,7 +298,11 @@ describe("compilePlanningIRToBaselineCompositionIR", () => {
     expect(sequenced).toHaveLength(10);
     expect(regionRoles(compositionIR.slides[0]!)).not.toContain("sequence");
     expect(regionRoles(compositionIR.slides[11]!)).not.toContain("sequence");
+    expect(compositionIR.slides[0]?.visualRegions).toEqual([]);
     expect(compositionIR.slides[1]?.archetype).toBe("timeline_flow");
+    expect(compositionIR.slides[1]?.visualRegions).toEqual([
+      { role: "primary", kind: "timeline", placement: "center" },
+    ]);
     expect(compositionIR.slides[2]?.archetype).toBe("checklist_stack");
     expect(compositionIR.slides[3]?.archetype).toBe("diagram_focus");
     expect(compositionIR.slides[4]?.archetype).toBe("data_focus");
@@ -290,7 +357,7 @@ describe("compilePlanningIRToBaselineCompositionIR", () => {
     ]);
     expect(compositionIR.slides[1]?.archetype).toBe("comparison_split");
     expect(compositionIR.slides[3]?.archetype).toBe("comparison_split");
-    expect(compositionIR.slides[1]?.visual?.placement).toBe("split");
+    expect(compositionIR.slides[1]?.visualRegions[0]?.placement).toBe("split");
     expect(
       compositionIR.slides.every((slide) => !regionRoles(slide).includes("sequence"))
     ).toBe(true);
@@ -298,65 +365,11 @@ describe("compilePlanningIRToBaselineCompositionIR", () => {
   });
 
   it("maps a story carousel to story scenes without numbering", () => {
-    const { planningIR, compositionIR } = compileValid(
-      sampleBrief({
-        title: "The night the till went quiet",
-        hook: "The night the till went quiet.",
-        corePromise: "Walk owners through one cash-crisis night.",
-        contentFormat: "story",
-        layoutFamily: "story",
-        angleType: "story",
-        estimatedSlideCount: 6,
-        slideOutline: [
-          {
-            position: 1,
-            role: "hook",
-            objective: "Open on the quiet till.",
-            recommendedVisual: "photo",
-            listItemIndex: null,
-          },
-          {
-            position: 2,
-            role: "context",
-            objective: "Set the night.",
-            recommendedVisual: "text",
-            listItemIndex: null,
-          },
-          {
-            position: 3,
-            role: "problem",
-            objective: "Show the cash gap.",
-            recommendedVisual: "text",
-            listItemIndex: null,
-          },
-          {
-            position: 4,
-            role: "insight",
-            objective: "Name the missed signal.",
-            recommendedVisual: "text",
-            listItemIndex: null,
-          },
-          {
-            position: 5,
-            role: "example",
-            objective: "Replay the closing hour.",
-            recommendedVisual: "photo",
-            listItemIndex: null,
-          },
-          {
-            position: 6,
-            role: "cta",
-            objective: "Ask them to check tonight.",
-            recommendedVisual: "text",
-            listItemIndex: null,
-          },
-        ],
-      })
-    );
+    const { planningIR, compositionIR } = compileValid(storyBrief());
     expect(planningIR.strategy.preferredFamily).toBe("story");
     expect(planningIR.beats.every((beat) => beat.sequence == null)).toBe(true);
     expect(compositionIR.slides[0]?.archetype).toBe("text_visual_split");
-    expect(compositionIR.slides[0]?.visual?.placement).toBe("right");
+    expect(compositionIR.slides[0]?.visualRegions[0]?.placement).toBe("right");
     expect(compositionIR.slides[4]?.archetype).toBe("text_visual_split");
     expect(compositionIR.slides[5]?.archetype).toBe("closing_focus");
     expect(
@@ -452,7 +465,7 @@ describe("compilePlanningIRToBaselineCompositionIR", () => {
     expect(planningIR.contract.itemType).toBeNull();
     expect(compositionIR.slides[1]?.archetype).toBe("timeline_flow");
     expect(compositionIR.slides[2]?.archetype).toBe("timeline_flow");
-    expect(compositionIR.slides[2]?.visual?.placement).toBe("center");
+    expect(compositionIR.slides[2]?.visualRegions[0]?.placement).toBe("center");
     expect(compositionIR.slides[3]?.archetype).toBe("data_focus");
     expect(
       compositionIR.slides.every((slide) => !regionRoles(slide).includes("sequence"))
@@ -571,21 +584,25 @@ describe("validateCarouselCompositionIR", () => {
         if (index === 0) {
           return {
             ...slide,
-            visual: {
-              kind: "photo",
-              placement: "right",
-              importance: "primary",
-            },
+            visualRegions: [
+              {
+                role: "primary",
+                kind: "photo",
+                placement: "right",
+              },
+            ],
           };
         }
         if (index === 3) {
           return {
             ...slide,
-            visual: {
-              kind: "photo",
-              placement: "right",
-              importance: "primary",
-            },
+            visualRegions: [
+              {
+                role: "primary",
+                kind: "photo",
+                placement: "right",
+              },
+            ],
           };
         }
         return slide;
@@ -593,10 +610,103 @@ describe("validateCarouselCompositionIR", () => {
     };
     const issues = validateCarouselCompositionIR(mutated, planningIR);
     expect(issues).toContain(
-      "Slide 1 archetype text_focus must not include a visual"
+      "Slide 1 archetype text_focus must not include visual regions"
     );
     expect(issues).toContain(
       "Slide 4 visual kind is incompatible with diagram_focus"
+    );
+  });
+
+  it("allows text_focus slides with an empty visualRegions array", () => {
+    const { planningIR, compositionIR } = compileValid(sampleBrief());
+    expect(compositionIR.slides[0]?.archetype).toBe("text_focus");
+    expect(compositionIR.slides[0]?.visualRegions).toEqual([]);
+    expect(validateCarouselCompositionIR(compositionIR, planningIR)).toEqual([]);
+  });
+
+  it("allows text_visual_split slides with one primary or supporting photo region", () => {
+    const { planningIR, compositionIR } = compileValid(storyBrief());
+    const cover = compositionIR.slides[0]!;
+    expect(cover.archetype).toBe("text_visual_split");
+    expect(cover.visualRegions).toEqual([
+      { role: "supporting", kind: "photo", placement: "right" },
+    ]);
+    const withPrimary: CarouselCompositionIR = {
+      ...compositionIR,
+      slides: compositionIR.slides.map((slide, index) =>
+        index === 0
+          ? {
+              ...slide,
+              visualRegions: [
+                { role: "primary", kind: "photo", placement: "left" },
+              ],
+            }
+          : slide
+      ),
+    };
+    expect(validateCarouselCompositionIR(compositionIR, planningIR)).toEqual([]);
+    expect(validateCarouselCompositionIR(withPrimary, planningIR)).toEqual([]);
+  });
+
+  it("accepts multiple semantic visual regions on a compatible slide", () => {
+    const { planningIR, compositionIR } = compileValid(storyBrief());
+    const mutated: CarouselCompositionIR = {
+      ...compositionIR,
+      slides: compositionIR.slides.map((slide, index) =>
+        index === 0
+          ? {
+              ...slide,
+              visualRegions: [
+                { role: "primary", kind: "photo", placement: "right" },
+                { role: "supporting", kind: "illustration", placement: "left" },
+                { role: "annotation", kind: "icon_scene", placement: "split" },
+              ],
+            }
+          : slide
+      ),
+    };
+    expect(mutated.slides[0]?.visualRegions).toHaveLength(3);
+    expect(validateCarouselCompositionIR(mutated, planningIR)).toEqual([]);
+  });
+
+  it("rejects invalid visual kinds and placements", () => {
+    const { planningIR, compositionIR } = compileValid(
+      cashDrainsRemake67CorrectedBrief()
+    );
+    const mutated: CarouselCompositionIR = {
+      ...compositionIR,
+      slides: compositionIR.slides.map((slide, index) => {
+        if (index === 1) {
+          return {
+            ...slide,
+            visualRegions: [
+              {
+                role: "primary",
+                kind: "not_a_kind",
+                placement: "not_a_placement",
+              } as CarouselCompositionVisualRegion,
+            ],
+          };
+        }
+        if (index === 3) {
+          return {
+            ...slide,
+            visualRegions: [
+              { role: "primary", kind: "photo", placement: "right" },
+            ],
+          };
+        }
+        return slide;
+      }),
+    };
+    const issues = validateCarouselCompositionIR(mutated, planningIR);
+    expect(issues).toContain("Slide 2 has unknown visual kind");
+    expect(issues).toContain("Slide 2 has unknown visual placement");
+    expect(issues).toContain(
+      "Slide 4 visual kind is incompatible with diagram_focus"
+    );
+    expect(issues).toContain(
+      "Slide 4 visual placement is incompatible with diagram_focus"
     );
   });
 

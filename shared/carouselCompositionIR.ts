@@ -102,17 +102,18 @@ export const CAROUSEL_COMPOSITION_VISUAL_PLACEMENTS = [
 export type CarouselCompositionVisualPlacement =
   (typeof CAROUSEL_COMPOSITION_VISUAL_PLACEMENTS)[number];
 
-export const CAROUSEL_COMPOSITION_VISUAL_IMPORTANCES = [
+export const CAROUSEL_COMPOSITION_VISUAL_ROLES = [
   "primary",
   "supporting",
+  "annotation",
 ] as const;
-export type CarouselCompositionVisualImportance =
-  (typeof CAROUSEL_COMPOSITION_VISUAL_IMPORTANCES)[number];
+export type CarouselCompositionVisualRole =
+  (typeof CAROUSEL_COMPOSITION_VISUAL_ROLES)[number];
 
-export type CarouselCompositionVisual = {
+export type CarouselCompositionVisualRegion = {
+  role: CarouselCompositionVisualRole;
   kind: CarouselCompositionVisualKind;
   placement: CarouselCompositionVisualPlacement;
-  importance: CarouselCompositionVisualImportance;
 };
 
 export type CarouselCompositionSlide = {
@@ -123,7 +124,7 @@ export type CarouselCompositionSlide = {
   emphasis: CarouselCompositionEmphasis;
   density: CarouselCompositionDensity;
   textRegions: CarouselCompositionTextRegion[];
-  visual: CarouselCompositionVisual | null;
+  visualRegions: CarouselCompositionVisualRegion[];
 };
 
 export type CarouselCompositionIR = {
@@ -189,9 +190,7 @@ const VISUAL_KIND_SET = new Set<string>(CAROUSEL_COMPOSITION_VISUAL_KINDS);
 const VISUAL_PLACEMENT_SET = new Set<string>(
   CAROUSEL_COMPOSITION_VISUAL_PLACEMENTS
 );
-const VISUAL_IMPORTANCE_SET = new Set<string>(
-  CAROUSEL_COMPOSITION_VISUAL_IMPORTANCES
-);
+const VISUAL_ROLE_SET = new Set<string>(CAROUSEL_COMPOSITION_VISUAL_ROLES);
 
 type ArchetypeVisualRule = {
   requireNull?: boolean;
@@ -350,30 +349,30 @@ function baselineTextRegions(
   return regions;
 }
 
-function baselineVisual(
+function baselineVisualRegions(
   archetype: CarouselCompositionArchetype
-): CarouselCompositionVisual | null {
+): CarouselCompositionVisualRegion[] {
   switch (archetype) {
     case "text_visual_split":
-      return { kind: "photo", placement: "right", importance: "supporting" };
+      return [{ role: "supporting", kind: "photo", placement: "right" }];
     case "full_bleed_visual":
-      return { kind: "photo", placement: "full_bleed", importance: "primary" };
+      return [{ role: "primary", kind: "photo", placement: "full_bleed" }];
     case "comparison_split":
-      return { kind: "comparison", placement: "split", importance: "primary" };
+      return [{ role: "primary", kind: "comparison", placement: "split" }];
     case "checklist_stack":
-      return { kind: "checklist", placement: "center", importance: "supporting" };
+      return [{ role: "supporting", kind: "checklist", placement: "center" }];
     case "timeline_flow":
-      return { kind: "timeline", placement: "center", importance: "primary" };
+      return [{ role: "primary", kind: "timeline", placement: "center" }];
     case "diagram_focus":
-      return { kind: "diagram", placement: "center", importance: "primary" };
+      return [{ role: "primary", kind: "diagram", placement: "center" }];
     case "data_focus":
-      return { kind: "data", placement: "center", importance: "primary" };
+      return [{ role: "primary", kind: "data", placement: "center" }];
     case "story_scene":
-      return { kind: "photo", placement: "background", importance: "supporting" };
+      return [{ role: "supporting", kind: "photo", placement: "background" }];
     case "framework_grid":
-      return { kind: "diagram", placement: "center", importance: "supporting" };
+      return [{ role: "supporting", kind: "diagram", placement: "center" }];
     default:
-      return null;
+      return [];
   }
 }
 
@@ -388,7 +387,7 @@ function compileSlide(beat: CarouselPlanningBeat): CarouselCompositionSlide {
     emphasis,
     density: baselineDensity(beat.role, archetype),
     textRegions: baselineTextRegions(beat, emphasis),
-    visual: baselineVisual(archetype),
+    visualRegions: baselineVisualRegions(archetype),
   };
 }
 
@@ -497,38 +496,45 @@ function validateVisualCompatibility(
     return;
   }
   const rule = ARCHETYPE_VISUAL_RULES[slide.archetype];
+  const regions = slide.visualRegions;
+  if (!Array.isArray(regions)) {
+    issues.push(`Slide ${slide.position} visualRegions must be an array`);
+    return;
+  }
   if (rule.requireNull) {
-    if (slide.visual != null) {
+    if (regions.length > 0) {
       issues.push(
-        `Slide ${slide.position} archetype ${slide.archetype} must not include a visual`
+        `Slide ${slide.position} archetype ${slide.archetype} must not include visual regions`
       );
     }
     return;
   }
-  if (slide.visual == null) {
+  if (regions.length === 0) {
     issues.push(
-      `Slide ${slide.position} archetype ${slide.archetype} must include a visual`
+      `Slide ${slide.position} archetype ${slide.archetype} must include a visual region`
     );
     return;
   }
-  if (!VISUAL_KIND_SET.has(slide.visual.kind)) {
-    issues.push(`Slide ${slide.position} has unknown visual kind`);
-  }
-  if (!VISUAL_PLACEMENT_SET.has(slide.visual.placement)) {
-    issues.push(`Slide ${slide.position} has unknown visual placement`);
-  }
-  if (!VISUAL_IMPORTANCE_SET.has(slide.visual.importance)) {
-    issues.push(`Slide ${slide.position} has unknown visual importance`);
-  }
-  if (rule.kinds && !includesUnion(rule.kinds, slide.visual.kind)) {
-    issues.push(
-      `Slide ${slide.position} visual kind is incompatible with ${slide.archetype}`
-    );
-  }
-  if (rule.placements && !includesUnion(rule.placements, slide.visual.placement)) {
-    issues.push(
-      `Slide ${slide.position} visual placement is incompatible with ${slide.archetype}`
-    );
+  for (const region of regions) {
+    if (!VISUAL_ROLE_SET.has(region.role)) {
+      issues.push(`Slide ${slide.position} has unknown visual region role`);
+    }
+    if (!VISUAL_KIND_SET.has(region.kind)) {
+      issues.push(`Slide ${slide.position} has unknown visual kind`);
+    }
+    if (!VISUAL_PLACEMENT_SET.has(region.placement)) {
+      issues.push(`Slide ${slide.position} has unknown visual placement`);
+    }
+    if (rule.kinds && !includesUnion(rule.kinds, region.kind)) {
+      issues.push(
+        `Slide ${slide.position} visual kind is incompatible with ${slide.archetype}`
+      );
+    }
+    if (rule.placements && !includesUnion(rule.placements, region.placement)) {
+      issues.push(
+        `Slide ${slide.position} visual placement is incompatible with ${slide.archetype}`
+      );
+    }
   }
 }
 
