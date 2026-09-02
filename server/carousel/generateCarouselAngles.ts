@@ -21,11 +21,14 @@ import {
   CAROUSEL_STUDIO_ANGLE_COUNT,
   CAROUSEL_STUDIO_MAX_SLIDES,
   CAROUSEL_STUDIO_MIN_SLIDES,
+  detectExplicitCarouselListContract,
+  expectedExplicitListicleSlideCount,
   normalizeGeneratedCarouselBriefs,
   rankCarouselCreativeBriefs,
   selectSemanticallyValidCarouselBriefs,
   validateCarouselBriefSemantics,
   type CarouselCreativeBrief,
+  type CarouselListContract,
 } from "@shared/carouselStudio";
 import { invokeLLM } from "../_core/llm";
 import {
@@ -127,8 +130,19 @@ export function buildCarouselAnglesJsonSchema(): {
         CAROUSEL_RECOMMENDED_VISUALS,
         "Planned visual treatment. Not a rendered layout."
       ),
+      listItemIndex: {
+        type: ["integer", "null"],
+        description:
+          "1-based promised list item number. Set only on actual list items. Null on cover, context, example, takeaway, and CTA. Never derive from physical slide position.",
+      },
     },
-    required: ["position", "role", "objective", "recommendedVisual"],
+    required: [
+      "position",
+      "role",
+      "objective",
+      "recommendedVisual",
+      "listItemIndex",
+    ],
     additionalProperties: false,
   };
 
@@ -306,13 +320,31 @@ export function buildCarouselAnglesSystemPrompt(): string {
   );
 }
 
+function explicitListContractPromptLines(
+  listContract: CarouselListContract | null
+): string[] {
+  if (!listContract) return [];
+  const { promisedCount, promisedItemType } = listContract;
+  const slideCount = expectedExplicitListicleSlideCount(promisedCount);
+  return [
+    `EXPLICIT LIST CONTRACT from the user source: promised count ${promisedCount}, promised item type "${promisedItemType}".`,
+    `Preserve this count and semantic item type. Hook wording may improve, but do not replace "${promisedItemType}" with a different taxonomy such as myths, reasons, tips, or signs unless that is the promised type.`,
+    `Default structure: cover, then ${promisedCount} ${promisedItemType} item slides, then one final closing. estimatedSlideCount should be ${slideCount}. Put setup on the cover. Do not insert a standalone context slide unless it is materially necessary.`,
+    `Only the ${promisedCount} promised item slides get listItemIndex 1 through ${promisedCount}. Cover, context, example, takeaway, and CTA must set listItemIndex to null. Never derive listItemIndex from physical slide position.`,
+  ];
+}
+
 export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
   niche?: string | null;
   brandVoice?: string | null;
+  listContract?: CarouselListContract | null;
 }): string {
   const brand = args.brandVoice?.trim();
   const override = args.niche?.trim() ?? "";
+  const listContract =
+    args.listContract ??
+    detectExplicitCarouselListContract(args.sourceContent);
   const audienceLine = override
     ? `Audience override (targeting only; do not replace unrelated source facts): ${override}`
     : "Audience / industry: infer from the source content.";
@@ -335,6 +367,7 @@ export function buildCarouselAnglesUserPrompt(args: {
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
+    ...explicitListContractPromptLines(listContract),
     "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
     "Match contentFormat and layoutFamily.",
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
@@ -431,15 +464,36 @@ function semanticIssueCode(issue: string): string {
   if (/^A summary claims \d+ solutions that were not introduced$/.test(issue)) {
     return "unintroduced_solutions";
   }
+  if (issue === "The brief changed the promised item type") {
+    return "list_type_changed";
+  }
+  if (issue === "The hook changed the promised item count") {
+    return "list_count_changed";
+  }
+  if (/^The outline has more than \d+ item slides$/.test(issue)) {
+    return "promised_count_mismatch";
+  }
+  if (issue === "A context or closing slide consumed a list item number") {
+    return "non_item_consumed_index";
+  }
+  if (/^Item numbering must run exactly 1 through \d+$/.test(issue)) {
+    return "list_numbering_invalid";
+  }
+  if (issue === "Slide titles use a different item type than the hook promised") {
+    return "list_type_changed";
+  }
   return "semantic_invalid";
 }
 
 function semanticIssuesByCandidate(
   attempt: "first" | "repair",
-  briefs: CarouselCreativeBrief[]
+  briefs: CarouselCreativeBrief[],
+  listContract?: CarouselListContract | null
 ): SemanticIssuesByCandidate[] {
   return briefs.flatMap((brief, candidateIndex) => {
-    const codes = validateCarouselBriefSemantics(brief).map(semanticIssueCode);
+    const codes = validateCarouselBriefSemantics(brief, listContract).map(
+      semanticIssueCode
+    );
     if (codes.length === 0) return [];
     return [{ attempt, candidateIndex, codes }];
   });
@@ -451,6 +505,7 @@ export function buildCarouselAnglesRepairNote(
   options?: {
     missingCount?: number;
     acceptedBriefs?: AcceptedCarouselBriefSummary[];
+    listContract?: CarouselListContract | null;
   }
 ): string {
   const base = `Expected exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} valid creative briefs, each with kicker, title, description, topic, inferredAudience, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), matching contentFormat and layoutFamily, claimRisk, researchMode, ctaDirection, component scores, and confidence. Do not include id, schemaVersion, or overall. Numbered problem-solution briefs must include every promised leak/problem before its fix, must not claim N plugs that were never outlined, must have exactly one final closing, and that closing must be a cta or takeaway last slide with no competing endings. Got ${validCount} valid briefs.`;
@@ -474,6 +529,12 @@ export function buildCarouselAnglesRepairNote(
   if (semanticIssues.length > 0) {
     parts.push(`Semantic issues to fix: ${semanticIssues.join(" ")}`);
   }
+  const listContract = options?.listContract;
+  if (listContract?.explicitListContract) {
+    parts.push(
+      `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}.`
+    );
+  }
   return parts.join(" ");
 }
 
@@ -488,12 +549,15 @@ async function invokeCarouselAnglesOnce(args: {
   semanticIssues: string[];
   rawCandidateCount: number;
   normalizedCandidateCount: number;
+  listContract: CarouselListContract | null;
 }> {
   const schema = buildCarouselAnglesJsonSchema();
+  const listContract = detectExplicitCarouselListContract(args.sourceContent);
   const basePrompt = buildCarouselAnglesUserPrompt({
     sourceContent: args.sourceContent,
     niche: args.niche,
     brandVoice: args.brandVoice,
+    listContract,
   });
   const userPrompt = args.repairNote
     ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${args.repairNote}`
@@ -522,12 +586,16 @@ async function invokeCarouselAnglesOnce(args: {
   const parsed = parseLlmJson<BriefsLlmPayload>(raw, { angles: [] });
   const rawAngles = Array.isArray(parsed.angles) ? parsed.angles : [];
   const normalized = normalizeGeneratedCarouselBriefs(parsed.angles);
-  const selected = selectSemanticallyValidCarouselBriefs(normalized);
+  const selected = selectSemanticallyValidCarouselBriefs(
+    normalized,
+    listContract
+  );
   return {
     ...selected,
     allNormalized: normalized,
     rawCandidateCount: rawAngles.length,
     normalizedCandidateCount: normalized.length,
+    listContract,
   };
 }
 
@@ -582,7 +650,8 @@ export async function generateCarouselAngles(args: {
     const firstAttemptValidCount = firstValid.length;
     const loggedIssues: SemanticIssuesByCandidate[] = semanticIssuesByCandidate(
       "first",
-      first.allNormalized
+      first.allNormalized,
+      first.listContract
     );
 
     let repairValid: CarouselCreativeBrief[] = [];
@@ -606,15 +675,18 @@ export async function generateCarouselAngles(args: {
         repairNote: buildCarouselAnglesRepairNote(
           firstAttemptValidCount,
           first.semanticIssues,
-          requiredValidBriefs === 3
-            ? {
-                missingCount,
-                acceptedBriefs: firstValid.map((brief) => ({
-                  title: brief.title,
-                  angleType: brief.angleType,
-                })),
-              }
-            : undefined
+          {
+            ...(requiredValidBriefs === 3
+              ? {
+                  missingCount,
+                  acceptedBriefs: firstValid.map((brief) => ({
+                    title: brief.title,
+                    angleType: brief.angleType,
+                  })),
+                }
+              : {}),
+            listContract: first.listContract,
+          }
         ),
       });
       repairValid = repaired.briefs;
@@ -623,7 +695,11 @@ export async function generateCarouselAngles(args: {
       normalizedCandidateCount =
         first.normalizedCandidateCount + repaired.normalizedCandidateCount;
       loggedIssues.push(
-        ...semanticIssuesByCandidate("repair", repaired.allNormalized)
+        ...semanticIssuesByCandidate(
+          "repair",
+          repaired.allNormalized,
+          repaired.listContract
+        )
       );
     }
 

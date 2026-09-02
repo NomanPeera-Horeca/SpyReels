@@ -246,6 +246,73 @@ describe("brief-to-slide positional mapping", () => {
     expect(prompt).toContain("Introduce Leak 1 (invoice timing)");
     expect(prompt).toContain("Many owners may have more than one");
   });
+
+  it("numbers list items from listItemIndex, not physical position", () => {
+    expect(template).toBeDefined();
+    const brief = validFiveLeakFiveFixBrief();
+    const drainOutline = [
+      {
+        position: 1,
+        role: "hook" as const,
+        objective: "Promise six cash drains on the cover.",
+        recommendedVisual: "text" as const,
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "context" as const,
+        objective: "Keep setup on the cover and do not consume item 01.",
+        recommendedVisual: "text" as const,
+        listItemIndex: null,
+      },
+      ...Array.from({ length: 6 }, (_, i) => ({
+        position: i + 3,
+        role: "insight" as const,
+        objective: `Cash drain ${i + 1} names a distinct silent leak.`,
+        recommendedVisual: "checklist" as const,
+        listItemIndex: i + 1,
+      })),
+      {
+        position: 9,
+        role: "cta" as const,
+        objective: "Ask them to audit the six cash drains this week.",
+        recommendedVisual: "text" as const,
+        listItemIndex: null,
+      },
+    ];
+    const listBrief: CarouselCreativeBrief = {
+      ...brief,
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 9,
+      slideOutline: drainOutline,
+    };
+    const slides = effectiveSlidesForCreativeBrief(template!, listBrief);
+    expect(slides).toHaveLength(9);
+    const contextKicker = slides[1]?.slots.find((slot) => slot.id === "kicker");
+    const firstItemKicker = slides[2]?.slots.find((slot) => slot.id === "kicker");
+    const lastItemKicker = slides[7]?.slots.find((slot) => slot.id === "kicker");
+    expect(contextKicker?.defaultText).toBe("·");
+    expect(firstItemKicker?.defaultText).toBe("01");
+    expect(lastItemKicker?.defaultText).toBe("06");
+    const prompt = buildCarouselRemakePrompt(
+      template!.name,
+      template!.description,
+      slides,
+      "infer from source",
+      new Map(),
+      "The 6 Silent Cash Drains Killing Small Businesses",
+      listBrief
+    );
+    expect(prompt).toContain(
+      "List item number: 01. Use this for Number kickers, not the physical slide position."
+    );
+    expect(prompt).toContain(
+      "Not a numbered list item. Do not assign a promised item number to this slide."
+    );
+    expect(prompt).toContain("Never number from physical slide position.");
+  });
 });
 
 const GENERIC_SLIDE_IDS = [

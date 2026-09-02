@@ -128,6 +128,12 @@ export type CarouselCreativeBriefSlideOutlineItem = {
   role: CarouselSlideRole;
   objective: string;
   recommendedVisual: CarouselRecommendedVisual;
+  /**
+   * 1-based promised list item number. Only actual list items set this.
+   * Cover, context, example, takeaway, and CTA stay null.
+   * Never derived from physical slide position.
+   */
+  listItemIndex?: number | null;
 };
 
 type CarouselCreativeBriefBody = {
@@ -227,6 +233,21 @@ export const CAROUSEL_STUDIO_MAX_SLIDES = 12;
 export function studioPlannedSlideCount(estimatedSlideCount: number): number {
   const middle = Math.min(Math.max(estimatedSlideCount - 2, 3), 18);
   return middle + 2;
+}
+
+/** Visible list item label. Never derived from physical slide position. */
+export function formatCarouselListItemNumber(index: number): string {
+  return String(index).padStart(2, "0");
+}
+
+/** Cover + N items + closing, clamped to the studio slide range. */
+export function expectedExplicitListicleSlideCount(promisedCount: number): number {
+  return clampInt(
+    promisedCount + 2,
+    CAROUSEL_STUDIO_MIN_SLIDES,
+    CAROUSEL_STUDIO_MAX_SLIDES,
+    8
+  );
 }
 
 /** Same photo-led template as content-to-carousel "photo" style. */
@@ -565,6 +586,14 @@ function parseKeyPoints(
   return out;
 }
 
+function parseOptionalListItemIndex(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const raw = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(raw) || raw < 1 || raw > 12) return null;
+  return raw;
+}
+
 function parseSlideOutline(
   value: unknown,
   expectedCount: number
@@ -585,11 +614,13 @@ function parseSlideOutline(
       ? row.recommendedVisual
       : null;
     if (!role || !objective || !recommendedVisual) continue;
+    const listItemIndex = parseOptionalListItemIndex(row.listItemIndex);
     out.push({
       position: out.length + 1,
       role,
       objective,
       recommendedVisual,
+      ...(listItemIndex !== undefined ? { listItemIndex } : {}),
     });
     if (out.length >= expectedCount) break;
   }
@@ -1101,10 +1132,13 @@ export function formatApprovedCreativeBriefForCopy(
   const outline =
     brief.slideOutline.length > 0
       ? brief.slideOutline
-          .map(
-            (slide) =>
-              `${slide.position}. [${slide.role}] ${slide.objective} (visual: ${slide.recommendedVisual})`
-          )
+          .map((slide) => {
+            const listNote =
+              slide.listItemIndex != null
+                ? `; listItemIndex ${formatCarouselListItemNumber(slide.listItemIndex)}`
+                : "";
+            return `${slide.position}. [${slide.role}] ${slide.objective} (visual: ${slide.recommendedVisual}${listNote})`;
+          })
           .join("\n")
       : "None";
   const evidence =
@@ -1187,6 +1221,7 @@ export type CarouselBriefSlideBinding = {
   role: CarouselSlideRole;
   objective: string;
   slideId: string | null;
+  listItemIndex: number | null;
 };
 
 export type CarouselCopySlotValues = Record<string, Record<string, string>>;
@@ -1286,6 +1321,341 @@ function parseCountToken(raw: string): number | null {
     return asNumber;
   }
   return WORD_COUNT_TOKENS[raw.toLowerCase()] ?? null;
+}
+
+const LISTICLE_NOUNS = [
+  "drains",
+  "drain",
+  "mistakes",
+  "mistake",
+  "signs",
+  "sign",
+  "ways",
+  "way",
+  "lessons",
+  "lesson",
+  "reasons",
+  "reason",
+  "myths",
+  "myth",
+  "tips",
+  "tip",
+  "steps",
+  "step",
+  "leaks",
+  "leak",
+  "problems",
+  "problem",
+  "traps",
+  "trap",
+  "habits",
+  "habit",
+  "secrets",
+  "secret",
+  "rules",
+  "rule",
+  "hacks",
+  "hack",
+  "truths",
+  "truth",
+  "lies",
+  "lie",
+] as const;
+
+const LISTICLE_NOUN_ALTERNATION = [...LISTICLE_NOUNS]
+  .sort((a, b) => b.length - a.length)
+  .join("|");
+
+const LISTICLE_STEM_BY_NOUN: Record<string, string> = {
+  drain: "drain",
+  drains: "drain",
+  mistake: "mistake",
+  mistakes: "mistake",
+  sign: "sign",
+  signs: "sign",
+  way: "way",
+  ways: "way",
+  lesson: "lesson",
+  lessons: "lesson",
+  reason: "reason",
+  reasons: "reason",
+  myth: "myth",
+  myths: "myth",
+  tip: "tip",
+  tips: "tip",
+  step: "step",
+  steps: "step",
+  leak: "leak",
+  leaks: "leak",
+  problem: "problem",
+  problems: "problem",
+  trap: "trap",
+  traps: "trap",
+  habit: "habit",
+  habits: "habit",
+  secret: "secret",
+  secrets: "secret",
+  rule: "rule",
+  rules: "rule",
+  hack: "hack",
+  hacks: "hack",
+  truth: "truth",
+  truths: "truth",
+  lie: "lie",
+  lies: "lie",
+};
+
+const LISTICLE_INTENSIFIERS = new Set([
+  "silent",
+  "hidden",
+  "biggest",
+  "worst",
+  "top",
+  "key",
+  "main",
+  "deadly",
+  "surprising",
+  "common",
+  "critical",
+  "dangerous",
+  "costly",
+  "quiet",
+  "sneaky",
+  "tiny",
+  "major",
+  "simple",
+  "scary",
+  "ugly",
+  "weird",
+  "obvious",
+  "hard",
+  "easy",
+  "real",
+  "true",
+]);
+
+const ENUMERATED_LIST_RE = new RegExp(
+  `\\b(${COUNT_TOKEN_RE})\\s+((?:[A-Za-z][A-Za-z']*\\s+){0,3}(?:${LISTICLE_NOUN_ALTERNATION}))\\b`,
+  "gi"
+);
+
+const ENUMERATED_SLIDE_TAXONOMY_RE = new RegExp(
+  `^(${LISTICLE_NOUN_ALTERNATION})(?:\\s*[:#-]|\\s+(?:${COUNT_TOKEN_RE}|[1-9]|1[0-2])\\b)`,
+  "i"
+);
+
+export type CarouselListContract = {
+  explicitListContract: true;
+  promisedCount: number;
+  promisedItemType: string;
+};
+
+function normalizeListNounPhrase(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/s\b/g, "");
+}
+
+function listicleHeadStem(phrase: string): string | null {
+  const tokens = phrase
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const last = tokens[tokens.length - 1] ?? "";
+  return LISTICLE_STEM_BY_NOUN[last] ?? null;
+}
+
+function stripListicleIntensifiers(phrase: string): string {
+  const tokens = phrase
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  while (
+    tokens.length > 1 &&
+    LISTICLE_INTENSIFIERS.has(tokens[0]!.toLowerCase())
+  ) {
+    tokens.shift();
+  }
+  return tokens.join(" ").toLowerCase();
+}
+
+function listItemTypesAlign(promised: string, candidate: string): boolean {
+  const promisedNorm = normalizeListNounPhrase(promised);
+  const candidateNorm = normalizeListNounPhrase(candidate);
+  if (!promisedNorm || !candidateNorm) return false;
+  if (promisedNorm === candidateNorm) return true;
+  if (promisedNorm.includes(candidateNorm) || candidateNorm.includes(promisedNorm)) {
+    return true;
+  }
+  const promisedStem = listicleHeadStem(promised);
+  const candidateStem = listicleHeadStem(candidate);
+  return promisedStem != null && promisedStem === candidateStem;
+}
+
+function countTokenAliases(count: number): string[] {
+  const aliases = [String(count)];
+  for (const [word, value] of Object.entries(WORD_COUNT_TOKENS)) {
+    if (value === count) aliases.push(word);
+  }
+  return aliases;
+}
+
+function framingMentionsCount(text: string, count: number): boolean {
+  const pattern = new RegExp(
+    `\\b(?:${countTokenAliases(count).join("|")})\\b`,
+    "i"
+  );
+  return pattern.test(text);
+}
+
+function framingMentionsItemType(text: string, itemType: string): boolean {
+  const stem = listicleHeadStem(itemType);
+  if (stem && new RegExp(`\\b${stem}s?\\b`, "i").test(text)) return true;
+  const normalizedType = normalizeListNounPhrase(itemType);
+  return (
+    normalizedType.length > 0 &&
+    normalizeListNounPhrase(text).includes(normalizedType)
+  );
+}
+
+function taxonomyFromSlideText(text: string): string | null {
+  const trimmed = text.trim();
+  const prefix = trimmed.match(ENUMERATED_SLIDE_TAXONOMY_RE);
+  if (prefix?.[1]) {
+    return LISTICLE_STEM_BY_NOUN[prefix[1].toLowerCase()] ?? null;
+  }
+  const labeled = trimmed.match(
+    new RegExp(`\\b(${LISTICLE_NOUN_ALTERNATION})\\s*[:#-]`, "i")
+  );
+  if (labeled?.[1]) {
+    return LISTICLE_STEM_BY_NOUN[labeled[1].toLowerCase()] ?? null;
+  }
+  return null;
+}
+
+export function detectExplicitCarouselListContract(
+  sourceContent: string
+): CarouselListContract | null {
+  const text = sourceContent.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  ENUMERATED_LIST_RE.lastIndex = 0;
+  const match = ENUMERATED_LIST_RE.exec(text);
+  if (!match) return null;
+  const promisedCount = parseCountToken(match[1] ?? "");
+  if (promisedCount == null) return null;
+  const promisedItemType = stripListicleIntensifiers(match[2] ?? "");
+  if (!promisedItemType || !listicleHeadStem(promisedItemType)) return null;
+  return {
+    explicitListContract: true,
+    promisedCount,
+    promisedItemType,
+  };
+}
+
+const NON_LIST_ITEM_ROLES = new Set<CarouselSlideRole>([
+  "hook",
+  "context",
+  "example",
+  "comparison",
+  "takeaway",
+  "cta",
+]);
+
+const LIST_ITEM_ROLES = new Set<CarouselSlideRole>([
+  "problem",
+  "insight",
+  "framework",
+]);
+
+function resolveOutlineListItemIndexes(
+  outline: CarouselCreativeBriefSlideOutlineItem[]
+): Array<number | null> {
+  const allExplicit = outline.every((slide) => slide.listItemIndex !== undefined);
+  if (allExplicit) {
+    return outline.map((slide) =>
+      typeof slide.listItemIndex === "number" ? slide.listItemIndex : null
+    );
+  }
+  let next = 1;
+  return outline.map((slide) => {
+    if (typeof slide.listItemIndex === "number") return slide.listItemIndex;
+    if (slide.listItemIndex === null) return null;
+    if (NON_LIST_ITEM_ROLES.has(slide.role)) return null;
+    if (LIST_ITEM_ROLES.has(slide.role)) return next++;
+    return null;
+  });
+}
+
+function validateExplicitListContract(
+  brief: CarouselCreativeBrief,
+  contract: CarouselListContract
+): string[] {
+  const issues: string[] = [];
+  const framing = [brief.title, brief.hook, brief.corePromise].join("\n");
+  const briefContract = detectExplicitCarouselListContract(framing);
+  if (briefContract) {
+    if (briefContract.promisedCount !== contract.promisedCount) {
+      issues.push("The hook changed the promised item count");
+    }
+    if (!listItemTypesAlign(contract.promisedItemType, briefContract.promisedItemType)) {
+      issues.push("The brief changed the promised item type");
+    }
+  } else {
+    if (!framingMentionsCount(framing, contract.promisedCount)) {
+      issues.push("The hook changed the promised item count");
+    }
+    if (!framingMentionsItemType(framing, contract.promisedItemType)) {
+      issues.push("The brief changed the promised item type");
+    }
+  }
+
+  const indexes = resolveOutlineListItemIndexes(brief.slideOutline);
+  const itemIndexes = indexes
+    .filter((value): value is number => value != null)
+    .sort((a, b) => a - b);
+  if (itemIndexes.length < contract.promisedCount) {
+    issues.push(
+      `The hook promises ${contract.promisedCount} items but fewer than ${contract.promisedCount} are outlined`
+    );
+  } else if (itemIndexes.length > contract.promisedCount) {
+    issues.push(
+      `The outline has more than ${contract.promisedCount} item slides`
+    );
+  }
+  const expected = Array.from(
+    { length: contract.promisedCount },
+    (_, i) => i + 1
+  );
+  if (
+    itemIndexes.length === contract.promisedCount &&
+    itemIndexes.some((value, i) => value !== expected[i])
+  ) {
+    issues.push(
+      `Item numbering must run exactly 1 through ${contract.promisedCount}`
+    );
+  }
+
+  const promisedStem = listicleHeadStem(contract.promisedItemType);
+  brief.slideOutline.forEach((slide, index) => {
+    const listItemIndex = indexes[index] ?? null;
+    if (NON_LIST_ITEM_ROLES.has(slide.role) && listItemIndex != null) {
+      issues.push("A context or closing slide consumed a list item number");
+    }
+    if (listItemIndex == null) return;
+    const slideStem = taxonomyFromSlideText(slide.objective);
+    if (slideStem && promisedStem && slideStem !== promisedStem) {
+      issues.push(
+        "Slide titles use a different item type than the hook promised"
+      );
+    }
+  });
+
+  return issues;
 }
 
 function maxCountMatches(text: string, pattern: RegExp): number | null {
@@ -1440,6 +1810,8 @@ export function bindBriefOutlineToSlides(
     role: item.role,
     objective: item.objective,
     slideId: slideIds[index] ?? null,
+    listItemIndex:
+      typeof item.listItemIndex === "number" ? item.listItemIndex : null,
   }));
 }
 
@@ -1448,7 +1820,8 @@ function isClosingRole(role: string): boolean {
 }
 
 export function validateCarouselBriefSemantics(
-  brief: CarouselCreativeBrief
+  brief: CarouselCreativeBrief,
+  listContract?: CarouselListContract | null
 ): string[] {
   const issues: string[] = [];
   const outline = brief.slideOutline;
@@ -1485,6 +1858,10 @@ export function validateCarouselBriefSemantics(
     } else {
       seenObjectives.set(key, slide.position);
     }
+  }
+
+  if (listContract?.explicitListContract) {
+    issues.push(...validateExplicitListContract(brief, listContract));
   }
 
   if (!isNumberedProblemSolutionBrief(brief)) {
@@ -1531,12 +1908,13 @@ export function validateCarouselBriefSemantics(
 }
 
 export function selectSemanticallyValidCarouselBriefs(
-  briefs: CarouselCreativeBrief[]
+  briefs: CarouselCreativeBrief[],
+  listContract?: CarouselListContract | null
 ): { briefs: CarouselCreativeBrief[]; semanticIssues: string[] } {
   const accepted: CarouselCreativeBrief[] = [];
   const semanticIssues: string[] = [];
   for (const brief of briefs) {
-    const issues = validateCarouselBriefSemantics(brief);
+    const issues = validateCarouselBriefSemantics(brief, listContract);
     if (issues.length > 0) {
       semanticIssues.push(`Brief "${brief.title}": ${issues.join("; ")}`);
       continue;
@@ -1548,6 +1926,14 @@ export function selectSemanticallyValidCarouselBriefs(
 
 function uniqueIssues(issues: string[]): string[] {
   return [...new Set(issues)];
+}
+
+function parseVisibleListItemNumber(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d{1,2}$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) return null;
+  return parsed;
 }
 
 function slideCopyText(
@@ -1651,6 +2037,7 @@ export function validateCopyBriefAdherence(args: {
   const competingClosingPositions: number[] = [];
   const expectedByKey = expectedNumberedItemPositions(outline);
   const lastPosition = outline.length;
+  const usesListItemIndex = outline.some((slide) => slide.listItemIndex != null);
 
   for (const binding of bindings) {
     const index = binding.position - 1;
@@ -1683,6 +2070,30 @@ export function validateCopyBriefAdherence(args: {
       }
     } else if (isFinal) {
       issues.push("Copy is missing an intentional final closing");
+    }
+
+    const kicker = values[binding.slideId]?.kicker?.trim() ?? "";
+    const kickerItemNumber = usesListItemIndex
+      ? parseVisibleListItemNumber(kicker)
+      : null;
+    if (
+      usesListItemIndex &&
+      binding.listItemIndex != null &&
+      kickerItemNumber != null &&
+      kickerItemNumber !== binding.listItemIndex
+    ) {
+      issues.push(
+        `Position ${binding.position} used item number ${formatCarouselListItemNumber(kickerItemNumber)} instead of listItemIndex ${formatCarouselListItemNumber(binding.listItemIndex)}`
+      );
+    }
+    if (
+      usesListItemIndex &&
+      binding.listItemIndex == null &&
+      kickerItemNumber != null
+    ) {
+      issues.push(
+        `A non-item slide at position ${binding.position} consumed item number ${formatCarouselListItemNumber(kickerItemNumber)}`
+      );
     }
 
     const plannedItem = parseNumberedCarouselItem(binding.objective);

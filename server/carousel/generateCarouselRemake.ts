@@ -22,6 +22,7 @@ import {
   CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE,
   bindBriefOutlineToSlides,
   formatApprovedCreativeBriefForCopy,
+  formatCarouselListItemNumber,
   stripSlideIntentMetadata,
   validateCopyBriefAdherence,
   type CarouselCreativeBrief,
@@ -318,7 +319,13 @@ export function buildCarouselRemakePrompt(
         ? `\nVetted fact lock: average is fixed. ${reframeAngleInstruction(locked.reframeAngle)}`
         : "";
       const plannedNote = planned
-        ? `\nPlanned role: ${planned.role}\nPlanned objective (this slide must deliver this, not another slide's point): ${planned.objective}`
+        ? `\nPlanned role: ${planned.role}\nPlanned objective (this slide must deliver this, not another slide's point): ${planned.objective}${
+            planned.listItemIndex != null
+              ? `\nList item number: ${formatCarouselListItemNumber(planned.listItemIndex)}. Use this for Number kickers, not the physical slide position.`
+              : outlineBindings.some((binding) => binding.listItemIndex != null)
+                ? "\nNot a numbered list item. Do not assign a promised item number to this slide."
+                : ""
+          }`
         : "";
       return `Slide ${slide.id} (position ${index + 1}, layout role: ${slide.role}):
 Viral why (preserve this beat): ${slide.viralWhy}${plannedNote}${lockNote}
@@ -339,6 +346,12 @@ ${slotLines}`;
   const trimmedSource = sourceContent?.trim() ?? "";
   if (trimmedSource.length > 0 && creativeBrief) {
     const briefBlock = formatApprovedCreativeBriefForCopy(creativeBrief);
+    const usesListItemIndex = creativeBrief.slideOutline.some(
+      (slide) => slide.listItemIndex != null
+    );
+    const numberKickerRule = usesListItemIndex
+      ? 'use listItemIndex as "01", "02", etc. If the planned slide has no listItemIndex, do not use a promised item number. Never number from physical slide position.'
+      : 'use "01", "02", etc.';
     return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
 
 Creator niche / audience context (optional):
@@ -374,7 +387,7 @@ ${
 }
 9. For slots with role "kicker":
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
-   - If the slot label is "Number" or "Step number": use "01", "02", etc.
+   - If the slot label is "Number" or "Step number": ${numberKickerRule}
    - If the slot label is "Stat": use a short striking number from the source when available.
 10. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
@@ -709,7 +722,8 @@ function rotateClonedStyleHint(
 
 function buildDynamicSlideList(
   template: CarouselTemplate,
-  desiredMiddleCount: number
+  desiredMiddleCount: number,
+  outlineListItemIndexes?: Array<number | null>
 ): CarouselSlideSpec[] {
   const hook = template.slides[0];
   const cta = template.slides[template.slides.length - 1];
@@ -717,7 +731,13 @@ function buildDynamicSlideList(
 
   const middleSlides: CarouselSlideSpec[] = [];
   for (let i = 0; i < desiredMiddleCount; i++) {
-    const num = String(i + 1).padStart(2, "0");
+    const listItemIndex = outlineListItemIndexes?.[i + 1];
+    const num =
+      typeof listItemIndex === "number"
+        ? formatCarouselListItemNumber(listItemIndex)
+        : outlineListItemIndexes
+          ? "·"
+          : String(i + 1).padStart(2, "0");
     const clonedSlots = middlePattern.slots.map((slot) => {
       if (slot.role === "kicker") {
         return { ...slot, defaultText: num };
@@ -757,7 +777,18 @@ export function effectiveSlidesForCreativeBrief(
       ? brief.slideOutline.length
       : brief.estimatedSlideCount;
   const targetMiddleCount = Math.min(Math.max(plannedCount - 2, 3), 18);
-  return buildDynamicSlideList(template, targetMiddleCount);
+  const outlineListItemIndexes = brief.slideOutline.some(
+    (slide) => slide.listItemIndex != null
+  )
+    ? brief.slideOutline.map((slide) =>
+        typeof slide.listItemIndex === "number" ? slide.listItemIndex : null
+      )
+    : undefined;
+  return buildDynamicSlideList(
+    template,
+    targetMiddleCount,
+    outlineListItemIndexes
+  );
 }
 
 /**

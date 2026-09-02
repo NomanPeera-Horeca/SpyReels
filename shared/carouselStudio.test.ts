@@ -7,8 +7,11 @@ import {
   CAROUSEL_CREATIVE_BRIEF_VERSION,
   clampCarouselBriefScore,
   deriveCarouselLibraryMeta,
+  detectExplicitCarouselListContract,
+  expectedExplicitListicleSlideCount,
   findBriefByOriginalStoredIndex,
   formatApprovedCreativeBriefForCopy,
+  formatCarouselListItemNumber,
   identityCarouselBriefEntries,
   isLegacyCreativeBrief,
   normalizeGeneratedCarouselBrief,
@@ -28,7 +31,9 @@ import {
   stripSlideIntentMetadata,
   studioGenerateActionEnabled,
   validateCarouselBriefSemantics,
+  validateCopyBriefAdherence,
   type CarouselCreativeBrief,
+  type CarouselListContract,
 } from "./carouselStudio";
 
 const structure = [
@@ -1601,5 +1606,310 @@ describe("carousel brief semantic validation", () => {
       ],
     });
     expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+  });
+});
+
+const CASH_DRAINS_SOURCE = "The 6 Silent Cash Drains Killing Small Businesses";
+const MISTAKES_SOURCE = "5 mistakes restaurant owners make";
+const SIGNS_SOURCE = "7 signs your restaurant is losing money";
+const OPEN_TOPIC_SOURCE = "cash flow problems for small businesses";
+
+function explicitListContract(
+  source: string
+): CarouselListContract {
+  const contract = detectExplicitCarouselListContract(source);
+  if (!contract) {
+    throw new Error(`expected an explicit list contract for: ${source}`);
+  }
+  return contract;
+}
+
+function numberedItemOutline(args: {
+  itemLabel: string;
+  count: number;
+  includeContext?: boolean;
+  contextConsumesFirstItem?: boolean;
+  itemCountOverride?: number;
+  taxonomyLabel?: string;
+}): CarouselCreativeBrief["slideOutline"] {
+  const itemCount = args.itemCountOverride ?? args.count;
+  const slides: CarouselCreativeBrief["slideOutline"] = [
+    {
+      position: 1,
+      role: "hook",
+      objective: `Promise ${args.count} ${args.itemLabel} on the cover.`,
+      recommendedVisual: "text",
+      listItemIndex: null,
+    },
+  ];
+  if (args.includeContext) {
+    slides.push({
+      position: 2,
+      role: "context",
+      objective: args.contextConsumesFirstItem
+        ? "Why owners look away from the first item."
+        : "Cover setup stays on the cover; this is extra framing only.",
+      recommendedVisual: "text",
+      listItemIndex: args.contextConsumesFirstItem ? 1 : null,
+    });
+  }
+  const startPosition = slides.length + 1;
+  for (let i = 0; i < itemCount; i += 1) {
+    const label = args.taxonomyLabel ?? args.itemLabel;
+    slides.push({
+      position: startPosition + i,
+      role: "insight",
+      objective: `${label} ${i + 1} names a distinct beat.`,
+      recommendedVisual: "checklist",
+      listItemIndex: args.contextConsumesFirstItem ? i + 2 : i + 1,
+    });
+  }
+  slides.push({
+    position: slides.length + 1,
+    role: "cta",
+    objective: `Ask them to save the ${args.count} ${args.itemLabel} this week.`,
+    recommendedVisual: "text",
+    listItemIndex: null,
+  });
+  return slides;
+}
+
+describe("explicit carousel list contract", () => {
+  it("extracts six cash drains from an enumerated title", () => {
+    expect(detectExplicitCarouselListContract(CASH_DRAINS_SOURCE)).toEqual({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+  });
+
+  it("extracts five mistakes from an enumerated title", () => {
+    expect(detectExplicitCarouselListContract(MISTAKES_SOURCE)).toEqual({
+      explicitListContract: true,
+      promisedCount: 5,
+      promisedItemType: "mistakes",
+    });
+  });
+
+  it("extracts seven signs from an enumerated title", () => {
+    expect(detectExplicitCarouselListContract(SIGNS_SOURCE)).toEqual({
+      explicitListContract: true,
+      promisedCount: 7,
+      promisedItemType: "signs",
+    });
+  });
+
+  it("does not lock an open topic with no enumerated framing", () => {
+    expect(detectExplicitCarouselListContract(OPEN_TOPIC_SOURCE)).toBeNull();
+  });
+
+  it("accepts six drain items and rejects a myth rewrite", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const drainBrief = sampleBrief({
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+      }),
+    });
+    expect(drainBrief.slideOutline).toHaveLength(8);
+    expect(expectedExplicitListicleSlideCount(6)).toBe(8);
+    expect(validateCarouselBriefSemantics(drainBrief, contract)).toEqual([]);
+    expect(
+      selectSemanticallyValidCarouselBriefs([drainBrief], contract).briefs
+    ).toHaveLength(1);
+
+    const mythBrief = sampleBrief({
+      title: "6 Cash Myths Killing Your Business",
+      hook: "6 Cash Myths Killing Your Business",
+      corePromise: "Bust six cash myths owners still believe.",
+      estimatedSlideCount: 8,
+      angleType: "myth_busting",
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        taxonomyLabel: "Myth",
+      }),
+    });
+    const mythIssues = validateCarouselBriefSemantics(mythBrief, contract);
+    expect(mythIssues).toContain("The brief changed the promised item type");
+    expect(mythIssues).toContain(
+      "Slide titles use a different item type than the hook promised"
+    );
+    expect(
+      selectSemanticallyValidCarouselBriefs([mythBrief], contract).briefs
+    ).toEqual([]);
+  });
+
+  it("accepts five mistake items", () => {
+    const contract = explicitListContract(MISTAKES_SOURCE);
+    const brief = sampleBrief({
+      title: "5 Mistakes Restaurant Owners Still Make",
+      hook: "5 mistakes restaurant owners still make on a busy night.",
+      corePromise: "Name five mistakes owners can stop repeating.",
+      estimatedSlideCount: 7,
+      slideOutline: numberedItemOutline({
+        itemLabel: "mistake",
+        count: 5,
+      }),
+    });
+    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+  });
+
+  it("accepts seven sign items", () => {
+    const contract = explicitListContract(SIGNS_SOURCE);
+    const brief = sampleBrief({
+      title: "7 Signs Your Restaurant Is Losing Money",
+      hook: "7 signs your restaurant is losing money.",
+      corePromise: "Spot seven signs before cash gets tighter.",
+      estimatedSlideCount: 9,
+      slideOutline: numberedItemOutline({
+        itemLabel: "sign",
+        count: 7,
+      }),
+    });
+    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+  });
+
+  it("keeps myth-busting allowed on an open topic", () => {
+    const contract = detectExplicitCarouselListContract(OPEN_TOPIC_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Myths Owners Still Believe",
+      hook: "6 Cash Myths Owners Still Believe",
+      corePromise: "Bust six cash myths with clearer habits.",
+      angleType: "myth_busting",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "myth",
+        count: 6,
+        taxonomyLabel: "Myth",
+      }),
+    });
+    expect(contract).toBeNull();
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+    expect(brief.angleType).toBe("myth_busting");
+  });
+
+  it("rejects a context slide that consumes item 01", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        includeContext: true,
+        contextConsumesFirstItem: true,
+        itemCountOverride: 5,
+      }),
+    });
+    const issues = validateCarouselBriefSemantics(brief, contract);
+    expect(issues).toContain(
+      "A context or closing slide consumed a list item number"
+    );
+  });
+
+  it("uses cover plus six items plus CTA for a basic six-item listicle", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+      }),
+    });
+    expect(brief.estimatedSlideCount).toBe(8);
+    expect(brief.slideOutline).toHaveLength(8);
+    expect(brief.slideOutline[0]?.role).toBe("hook");
+    expect(brief.slideOutline[7]?.role).toBe("cta");
+    expect(
+      brief.slideOutline.filter((slide) => slide.listItemIndex != null)
+    ).toHaveLength(6);
+    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+  });
+
+  it("rejects five item slides when the hook promises six", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 7,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        itemCountOverride: 5,
+      }),
+    });
+    expect(validateCarouselBriefSemantics(brief, contract)).toContain(
+      "The hook promises 6 items but fewer than 6 are outlined"
+    );
+  });
+
+  it("keeps item numbers 01-06 when a context slide sits at position 2", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Drains Quietly Bleeding Your Business",
+      hook: "6 Cash Drains Quietly Bleeding Your Business",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 9,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        includeContext: true,
+      }),
+    });
+    expect(brief.slideOutline[1]?.role).toBe("context");
+    expect(brief.slideOutline[1]?.listItemIndex).toBeNull();
+    expect(brief.slideOutline[1]?.position).toBe(2);
+    const itemIndexes = brief.slideOutline
+      .filter((slide) => slide.listItemIndex != null)
+      .map((slide) => slide.listItemIndex);
+    expect(itemIndexes).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(itemIndexes.map((index) => formatCarouselListItemNumber(index!))).toEqual(
+      ["01", "02", "03", "04", "05", "06"]
+    );
+    expect(brief.slideOutline[2]?.position).toBe(3);
+    expect(brief.slideOutline[2]?.listItemIndex).toBe(1);
+    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+
+    const slideIds = brief.slideOutline.map(
+      (_, i) => `slide_${String(i + 1).padStart(2, "0")}`
+    );
+    const values = Object.fromEntries(
+      brief.slideOutline.map((slide, i) => [
+        slideIds[i]!,
+        {
+          headline: slide.objective,
+          body: slide.objective,
+          kicker:
+            slide.listItemIndex != null
+              ? formatCarouselListItemNumber(slide.listItemIndex)
+              : "NOTE",
+          slideIntent: i === brief.slideOutline.length - 1 ? "closing" : "content",
+          ...(i === brief.slideOutline.length - 1
+            ? { closingType: "save" }
+            : {}),
+        },
+      ])
+    );
+    const copyIssues = validateCopyBriefAdherence({
+      brief,
+      slideIds,
+      values,
+    });
+    expect(copyIssues).toEqual([]);
+    expect(values.slide_02?.kicker).toBe("NOTE");
+    expect(values.slide_03?.kicker).toBe("01");
+    expect(values.slide_08?.kicker).toBe("06");
   });
 });

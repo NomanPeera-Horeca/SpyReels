@@ -184,4 +184,41 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("outline Leak/Problem N before Fix N");
     expect(user).toContain("exactly one intentional final closing");
   });
+
+  it("locks an explicit six-drain list contract in the planner prompt", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    expect(user).toContain("EXPLICIT LIST CONTRACT");
+    expect(user).toContain("promised count 6");
+    expect(user).toContain("cash drains");
+    expect(user).toContain("estimatedSlideCount should be 8");
+    expect(user).toContain("listItemIndex 1 through 6");
+    expect(user).toContain("do not replace \"cash drains\"");
+  });
+
+  it("does not lock taxonomy on an open cash-flow topic", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent: "cash flow problems for small businesses",
+    });
+    expect(user).not.toContain("EXPLICIT LIST CONTRACT");
+    expect(user).not.toContain("promised count");
+    expect(user).toContain("diagnostic/breakdown");
+    expect(user).toContain("practical framework");
+  });
+
+  it("adds list-contract repair guidance without a third model call", () => {
+    const note = buildCarouselAnglesRepairNote(0, [
+      'Brief "6 Cash Myths": The brief changed the promised item type',
+    ], {
+      listContract: {
+        explicitListContract: true,
+        promisedCount: 6,
+        promisedItemType: "cash drains",
+      },
+    });
+    expect(note).toContain("Preserve the explicit list contract: exactly 6 cash drains.");
+    expect(note).toContain("Semantic issues to fix");
+    expect(note).toContain("The brief changed the promised item type");
+  });
 });
