@@ -1,7 +1,7 @@
 /**
- * Fixture-driven Breakdown/Listicle slice for Remake 67.
+ * Test fixture for Breakdown/Listicle slide-build coverage.
  * Planning IR is real. Visual Director decisions are mocked so the
- * eight slides use varied treatments. Pixels still come from the family.
+ * eight slides use varied treatments.
  */
 
 import {
@@ -9,27 +9,27 @@ import {
   validateCarouselCompositionIR,
   type CarouselCompositionIR,
   type CarouselCompositionSlide,
-} from "./carouselCompositionIR";
+} from "@shared/carouselCompositionIR";
 import {
   compileCreativeBriefToPlanningIR,
   type CarouselPlanningIR,
-} from "./carouselPlanningIR";
-import {
-  CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
-  OPEN_CASH_FLOW_USER_PROMPT,
-  cashDrainsRemake67CorrectedBrief,
-} from "../server/carousel/tests/fixtures/cashDrainsRemake67";
+} from "@shared/carouselPlanningIR";
 import {
   applyPlanningSequenceToCopy,
   buildBreakdownListicleSlides,
-} from "./carouselBreakdownFamily";
+} from "@shared/carouselBreakdownFamily";
 import {
   CAROUSEL_TEMPLATES_BY_ID,
   type CarouselImageUrlMap,
   type CarouselSlideSpec,
   type CarouselSlotValues,
-} from "./carouselTemplates";
-import { CAROUSEL_STUDIO_TEMPLATE_ID } from "./carouselStudio";
+} from "@shared/carouselTemplates";
+import { CAROUSEL_STUDIO_TEMPLATE_ID } from "@shared/carouselStudio";
+import {
+  CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
+  OPEN_CASH_FLOW_USER_PROMPT,
+  cashDrainsRemake67CorrectedBrief,
+} from "./cashDrainsRemake67";
 
 export const CASH_DRAINS_BREAKDOWN_SLICE_TITLE =
   "The 6 Silent Cash Drains Killing Small Businesses";

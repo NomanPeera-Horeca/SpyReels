@@ -223,13 +223,24 @@ function textContextForImageSlot(
   return first?.trim() ?? "";
 }
 
+function slotSchemaDescription(slot: CarouselSlideSpec["slots"][number]): string {
+  const budget = `${slot.budget.min}-${slot.budget.max} characters.`;
+  if (slot.label === "Checklist lines") {
+    return `Checklist lines (${slot.role}). Write 2-4 short actionable lines, each separated by a newline. Use only facts from the source or approved brief. ${budget}`;
+  }
+  if (slot.label === "Data point") {
+    return `Data point (${slot.role}). Write one concise metric, threshold, or key data phrase grounded in the source or approved brief. Do not invent an unsupported statistic. ${budget}`;
+  }
+  return `${slot.label} (${slot.role}). ${budget}`;
+}
+
 function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
   for (const slot of slide.slots) {
     properties[slot.id] = {
       type: "string",
-      description: `${slot.label} (${slot.role}). ${slot.budget.min}-${slot.budget.max} characters.`,
+      description: slotSchemaDescription(slot),
     };
     required.push(slot.id);
   }
@@ -385,12 +396,12 @@ ${slotLines}`;
     const checklistLinesHint = slides.some((slide) =>
       slide.slots.some((slot) => slot.label === "Checklist lines")
     )
-      ? `\n9b. For slots labeled "Checklist lines": write 2-4 short check items, each on its own line. Use only facts from the source or approved brief.`
+      ? `\n9b. For slots labeled "Checklist lines": write 2-4 short actionable lines, each separated by a newline. Use only facts from the source or approved brief.`
       : "";
     const dataPointHint = slides.some((slide) =>
       slide.slots.some((slot) => slot.label === "Data point")
     )
-      ? `\n9c. For slots labeled "Data point": write one metric or threshold taken from the source or approved brief. Do not invent a number.`
+      ? `\n9c. For slots labeled "Data point": write one concise metric, threshold, or key data phrase grounded in the source or approved brief. Do not invent an unsupported statistic.`
       : "";
     return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
 

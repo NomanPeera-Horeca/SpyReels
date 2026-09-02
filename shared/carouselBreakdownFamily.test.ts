@@ -25,7 +25,7 @@ import {
   OPEN_CASH_FLOW_USER_PROMPT,
   cashDrainsRemake67CorrectedBrief,
 } from "../server/carousel/tests/fixtures/cashDrainsRemake67";
-import { buildCashDrainsBreakdownSlice } from "./carouselBreakdownSliceFixture";
+import { buildCashDrainsBreakdownSlice } from "../server/carousel/tests/fixtures/cashDrainsBreakdownSlice";
 import { effectiveSlidesForCreativeBrief } from "../server/carousel/generateCarouselRemake";
 
 function sampleBrief(): CarouselCreativeBrief {

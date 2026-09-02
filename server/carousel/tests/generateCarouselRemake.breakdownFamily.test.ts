@@ -4,7 +4,10 @@ import {
   scoreCarouselCreativeBrief,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
-import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
+import {
+  buildBreakdownListicleSlides,
+  isBreakdownListicleSlide,
+} from "@shared/carouselBreakdownFamily";
 import {
   CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
   OPEN_CASH_FLOW_USER_PROMPT,
@@ -42,7 +45,11 @@ vi.mock("../resolveSlideImage", () => ({
 }));
 
 import { invokeLLM } from "../../_core/llm";
-import { generateCarouselRemake } from "../generateCarouselRemake";
+import {
+  buildCarouselRemakeJsonSchema,
+  buildCarouselRemakePrompt,
+  generateCarouselRemake,
+} from "../generateCarouselRemake";
 
 const mockedInvokeLLM = vi.mocked(invokeLLM);
 
@@ -226,6 +233,92 @@ describe("generateCarouselRemake breakdown family wiring", () => {
     >;
     expect(values.slide_04?.support).toBe("Over 30 days");
     expect(values.slide_04?.support).not.toBe("82%");
+  });
+
+  it("guides checklist and data support slots in copy prompt and schema", () => {
+    const brief = cashDrainsRemake67CorrectedBrief();
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    const baseline = compilePlanningIRToBaselineCompositionIR(planningIR);
+    const compositionIR = {
+      ...baseline,
+      slides: baseline.slides.map((slide, index) => {
+        if (index === 1) {
+          return {
+            ...slide,
+            archetype: "checklist_stack" as const,
+            visualRegions: [
+              {
+                role: "supporting" as const,
+                kind: "checklist" as const,
+                placement: "center" as const,
+              },
+            ],
+          };
+        }
+        if (index === 3) {
+          return {
+            ...slide,
+            archetype: "data_focus" as const,
+            visualRegions: [
+              {
+                role: "primary" as const,
+                kind: "data" as const,
+                placement: "center" as const,
+              },
+            ],
+          };
+        }
+        return slide;
+      }),
+    };
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID);
+    const slides = buildBreakdownListicleSlides({
+      template: template!,
+      planningIR,
+      compositionIR,
+    });
+    const prompt = buildCarouselRemakePrompt(
+      template!.name,
+      template!.description,
+      slides,
+      "infer from source",
+      new Map(),
+      "The 6 Silent Cash Drains Killing Small Businesses",
+      brief,
+      planningIR
+    );
+    expect(prompt).toContain(
+      'For slots labeled "Checklist lines": write 2-4 short actionable lines, each separated by a newline'
+    );
+    expect(prompt).toContain(
+      'For slots labeled "Data point": write one concise metric, threshold, or key data phrase'
+    );
+    expect(prompt).toContain("Do not invent an unsupported statistic");
+    const schema = buildCarouselRemakeJsonSchema(slides);
+    const slide02 = (
+      schema.schema.properties as Record<
+        string,
+        { properties?: Record<string, { description?: string }> }
+      >
+    ).slide_02;
+    const slide04 = (
+      schema.schema.properties as Record<
+        string,
+        { properties?: Record<string, { description?: string }> }
+      >
+    ).slide_04;
+    expect(slide02?.properties?.support?.description).toContain(
+      "2-4 short actionable lines"
+    );
+    expect(slide04?.properties?.support?.description).toContain(
+      "one concise metric, threshold, or key data phrase"
+    );
+    expect(slide04?.properties?.support?.description).toContain(
+      "Do not invent an unsupported statistic"
+    );
   });
 
   it("falls back to baseline composition when Visual Director fails", async () => {
