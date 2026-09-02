@@ -775,10 +775,111 @@ function tryBuildCompositionIR(
   }
 }
 
+type VisualDirectorInvokeMeta = {
+  raw: unknown;
+  jsonParsed: boolean;
+  emptyContent: boolean;
+  finishReason: string | null;
+  requestedModel: string;
+  actualModel: string | null;
+};
+
+function summarizeVisualDirectorDecision(
+  decision: CarouselVisualDirectorDecision
+): CarouselVisualDirectorDecision {
+  return {
+    beatId: decision.beatId,
+    archetype: decision.archetype,
+    emphasis: decision.emphasis,
+    density: decision.density,
+    textRegions: decision.textRegions.map((region) => ({
+      role: region.role,
+      priority: region.priority,
+    })),
+    visualRegions: decision.visualRegions.map((region) => ({
+      role: region.role,
+      kind: region.kind,
+      placement: region.placement,
+    })),
+  };
+}
+
+function collectAttemptDiagnostics(
+  planningIR: CarouselPlanningIR,
+  raw: unknown
+): {
+  decisions: CarouselVisualDirectorDecision[];
+  rawSlideCount: number;
+  visualDirectorIssues: string[];
+  compositionIssues: string[];
+} {
+  const decisions = normalizeVisualDirectorDecisions(raw);
+  const rawSlideCount = extractRawDecisionObjects(raw).length;
+  const visualDirectorIssues = validateVisualDirectorDecisions(
+    planningIR,
+    decisions,
+    raw
+  );
+  let compositionIssues: string[] = [];
+  if (visualDirectorIssues.length === 0 && rawSlideCount > 0) {
+    try {
+      const compositionIR = assembleVisualDirectorCompositionIR({
+        planningIR,
+        decisions,
+      });
+      compositionIssues = validateCarouselCompositionIR(
+        compositionIR,
+        planningIR
+      );
+    } catch (error) {
+      compositionIssues = [
+        error instanceof Error ? error.message : String(error),
+      ];
+    }
+  }
+  return { decisions, rawSlideCount, visualDirectorIssues, compositionIssues };
+}
+
+function logVisualDirectorAttempt(args: {
+  attempt: number;
+  invokeSucceeded: boolean;
+  meta?: Partial<VisualDirectorInvokeMeta> & {
+    rawSlideCount?: number;
+    normalizedCount?: number;
+  };
+  decisions?: CarouselVisualDirectorDecision[];
+  visualDirectorIssues?: string[];
+  compositionIssues?: string[];
+  invokeError?: string;
+}): void {
+  console.log(
+    "[visualDirector:diag] attempt",
+    args.attempt,
+    JSON.stringify(
+      {
+        invokeSucceeded: args.invokeSucceeded,
+        requestedModel: args.meta?.requestedModel ?? null,
+        actualModel: args.meta?.actualModel ?? null,
+        finishReason: args.meta?.finishReason ?? null,
+        jsonParsed: args.meta?.jsonParsed ?? null,
+        emptyContent: args.meta?.emptyContent ?? null,
+        rawSlideCount: args.meta?.rawSlideCount ?? null,
+        normalizedDecisionCount: args.meta?.normalizedCount ?? null,
+        decisions: (args.decisions ?? []).map(summarizeVisualDirectorDecision),
+        visualDirectorIssues: args.visualDirectorIssues ?? [],
+        compositionIssues: args.compositionIssues ?? [],
+        invokeError: args.invokeError ?? null,
+      },
+      null,
+      2
+    )
+  );
+}
+
 async function invokeVisualDirectorOnce(args: {
   planningIR: CarouselPlanningIR;
   repairNote?: string;
-}): Promise<unknown> {
+}): Promise<VisualDirectorInvokeMeta> {
   const schema = buildCarouselVisualDirectionJsonSchema();
   const basePrompt = buildCarouselVisualDirectionUserPrompt(args.planningIR);
   const userPrompt = args.repairNote
@@ -804,11 +905,40 @@ async function invokeVisualDirectorOnce(args: {
     },
   });
 
-  const raw = String(response.choices[0]?.message?.content ?? "");
-  if (!raw.trim()) {
-    return { slides: [] };
+  const requestedModel = "claude-sonnet-4-6";
+  const actualModel =
+    typeof response.model === "string" ? response.model : null;
+  const finishReason = response.choices[0]?.finish_reason ?? null;
+  const rawText = String(response.choices[0]?.message?.content ?? "");
+  if (!rawText.trim()) {
+    return {
+      raw: { slides: [] },
+      jsonParsed: false,
+      emptyContent: true,
+      finishReason,
+      requestedModel,
+      actualModel,
+    };
   }
-  return parseLlmJson<DecisionsPayload>(raw, { slides: [] });
+  const parsed = parseLlmJson<DecisionsPayload | null>(rawText, null);
+  if (parsed == null) {
+    return {
+      raw: { slides: [] },
+      jsonParsed: false,
+      emptyContent: false,
+      finishReason,
+      requestedModel,
+      actualModel,
+    };
+  }
+  return {
+    raw: parsed,
+    jsonParsed: true,
+    emptyContent: false,
+    finishReason,
+    requestedModel,
+    actualModel,
+  };
 }
 
 function fallbackResult(
@@ -836,8 +966,21 @@ export async function generateCarouselVisualDirection(
 
   try {
     attempts = 1;
-    const firstRaw = await invokeVisualDirectorOnce({ planningIR });
-    const first = tryBuildCompositionIR(planningIR, firstRaw);
+    const firstInvoke = await invokeVisualDirectorOnce({ planningIR });
+    const firstDiag = collectAttemptDiagnostics(planningIR, firstInvoke.raw);
+    logVisualDirectorAttempt({
+      attempt: 1,
+      invokeSucceeded: true,
+      meta: {
+        ...firstInvoke,
+        rawSlideCount: firstDiag.rawSlideCount,
+        normalizedCount: firstDiag.decisions.length,
+      },
+      decisions: firstDiag.decisions,
+      visualDirectorIssues: firstDiag.visualDirectorIssues,
+      compositionIssues: firstDiag.compositionIssues,
+    });
+    const first = tryBuildCompositionIR(planningIR, firstInvoke.raw);
     if (first.ok) {
       return {
         compositionIR: first.compositionIR,
@@ -849,11 +992,24 @@ export async function generateCarouselVisualDirection(
     issues.push(...first.issues);
 
     attempts = 2;
-    const repairRaw = await invokeVisualDirectorOnce({
+    const repairInvoke = await invokeVisualDirectorOnce({
       planningIR,
       repairNote: buildCarouselVisualDirectionRepairNote(first.issues),
     });
-    const repaired = tryBuildCompositionIR(planningIR, repairRaw);
+    const repairDiag = collectAttemptDiagnostics(planningIR, repairInvoke.raw);
+    logVisualDirectorAttempt({
+      attempt: 2,
+      invokeSucceeded: true,
+      meta: {
+        ...repairInvoke,
+        rawSlideCount: repairDiag.rawSlideCount,
+        normalizedCount: repairDiag.decisions.length,
+      },
+      decisions: repairDiag.decisions,
+      visualDirectorIssues: repairDiag.visualDirectorIssues,
+      compositionIssues: repairDiag.compositionIssues,
+    });
+    const repaired = tryBuildCompositionIR(planningIR, repairInvoke.raw);
     if (repaired.ok) {
       return {
         compositionIR: repaired.compositionIR,
@@ -865,7 +1021,14 @@ export async function generateCarouselVisualDirection(
     issues.push(...repaired.issues);
     return fallbackResult(planningIR, 2, issues);
   } catch (error) {
-    issues.push(error instanceof Error ? error.message : String(error));
+    const invokeError =
+      error instanceof Error ? error.message : String(error);
+    logVisualDirectorAttempt({
+      attempt: Math.max(attempts, 1),
+      invokeSucceeded: false,
+      invokeError,
+    });
+    issues.push(invokeError);
     return fallbackResult(planningIR, Math.max(attempts, 1), issues);
   }
 }
