@@ -205,6 +205,10 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).not.toContain("promised count");
     expect(user).toContain("diagnostic/breakdown");
     expect(user).toContain("practical framework");
+    expect(user).toContain(
+      "If you create an enumerated list in the title, hook, corePromise, or centralInsight"
+    );
+    expect(user).toContain("Do not add a standalone context slide.");
   });
 
   it("adds list-contract repair guidance without a third model call", () => {

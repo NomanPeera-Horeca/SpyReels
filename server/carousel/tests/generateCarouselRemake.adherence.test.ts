@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   bindBriefOutlineToSlides,
+  detectCarouselListContractFromBrief,
+  detectExplicitCarouselListContract,
   scoreCarouselCreativeBrief,
   selectSemanticallyValidCarouselBriefs,
   validateCarouselBriefSemantics,
@@ -15,6 +17,10 @@ import {
   effectiveSlidesForCreativeBrief,
 } from "../generateCarouselRemake";
 import { buildCarouselAnglesRepairNote } from "../generateCarouselAngles";
+import {
+  CASH_DRAINS_REMAKE_67_BRIEF,
+  OPEN_CASH_FLOW_USER_PROMPT,
+} from "./fixtures/cashDrainsRemake67";
 import {
   CASH_LEAKS_MISSING_LEAK1_VALUES,
   CASH_LEAKS_REMAKE_64_BRIEF,
@@ -36,6 +42,25 @@ function adherenceIssues(
     values,
   });
 }
+
+describe("carousel remake 67 brief semantics", () => {
+  it("fails the production six-drain brief without an explicit user list contract", () => {
+    expect(detectExplicitCarouselListContract(OPEN_CASH_FLOW_USER_PROMPT)).toBeNull();
+    expect(detectCarouselListContractFromBrief(CASH_DRAINS_REMAKE_67_BRIEF)).toEqual({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    const issues = validateCarouselBriefSemantics(CASH_DRAINS_REMAKE_67_BRIEF);
+    expect(issues).toContain("The hook promises 6 items but fewer than 6 are outlined");
+    expect(issues).toContain(
+      "Simple listicles should not include a standalone context slide"
+    );
+    expect(
+      selectSemanticallyValidCarouselBriefs([CASH_DRAINS_REMAKE_67_BRIEF]).briefs
+    ).toEqual([]);
+  });
+});
 
 describe("carousel remake 64 brief semantics", () => {
   it("rejects the selected brief for five plugs with only two fixes", () => {

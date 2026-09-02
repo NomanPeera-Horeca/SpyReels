@@ -1448,7 +1448,34 @@ export type CarouselListContract = {
   explicitListContract: true;
   promisedCount: number;
   promisedItemType: string;
+  /** Narrow exception for non-standard structures. Unused on simple listicle regressions. */
+  allowStandaloneContext?: boolean;
 };
+
+const SIMPLE_LISTICLE_CONTEXT_ISSUE =
+  "Simple listicles should not include a standalone context slide";
+
+export function detectCarouselListContractFromBrief(
+  brief: Pick<
+    CarouselCreativeBrief,
+    "title" | "hook" | "corePromise" | "centralInsight"
+  >
+): CarouselListContract | null {
+  return detectExplicitCarouselListContract(
+    [brief.title, brief.hook, brief.corePromise, brief.centralInsight].join("\n")
+  );
+}
+
+export function resolveCarouselListContract(
+  sourceContract: CarouselListContract | null | undefined,
+  brief: Pick<
+    CarouselCreativeBrief,
+    "title" | "hook" | "corePromise" | "centralInsight"
+  >
+): CarouselListContract | null {
+  if (sourceContract?.explicitListContract) return sourceContract;
+  return detectCarouselListContractFromBrief(brief);
+}
 
 function normalizeListNounPhrase(value: string): string {
   return value
@@ -1591,6 +1618,40 @@ function resolveOutlineListItemIndexes(
   });
 }
 
+function slideMentionsPromisedItemType(
+  text: string,
+  itemType: string
+): boolean {
+  return framingMentionsItemType(text, itemType);
+}
+
+function resolvePromisedListItemIndexes(
+  outline: CarouselCreativeBriefSlideOutlineItem[],
+  contract: CarouselListContract
+): Array<number | null> {
+  const typeMentioned = outline.some(
+    (slide) =>
+      !NON_LIST_ITEM_ROLES.has(slide.role) &&
+      slideMentionsPromisedItemType(slide.objective, contract.promisedItemType)
+  );
+  if (!typeMentioned) {
+    return resolveOutlineListItemIndexes(outline);
+  }
+  let next = 1;
+  return outline.map((slide) => {
+    if (NON_LIST_ITEM_ROLES.has(slide.role)) {
+      return typeof slide.listItemIndex === "number" ? slide.listItemIndex : null;
+    }
+    if (typeof slide.listItemIndex === "number") return slide.listItemIndex;
+    if (
+      slideMentionsPromisedItemType(slide.objective, contract.promisedItemType)
+    ) {
+      return next++;
+    }
+    return null;
+  });
+}
+
 function validateExplicitListContract(
   brief: CarouselCreativeBrief,
   contract: CarouselListContract
@@ -1614,7 +1675,20 @@ function validateExplicitListContract(
     }
   }
 
-  const indexes = resolveOutlineListItemIndexes(brief.slideOutline);
+  const pairedSolution = isNumberedProblemSolutionBrief(brief);
+  if (
+    !contract.allowStandaloneContext &&
+    !pairedSolution &&
+    brief.slideOutline.some((slide) => slide.role === "context")
+  ) {
+    issues.push(SIMPLE_LISTICLE_CONTEXT_ISSUE);
+  }
+
+  if (pairedSolution) {
+    return issues;
+  }
+
+  const indexes = resolvePromisedListItemIndexes(brief.slideOutline, contract);
   const itemIndexes = indexes
     .filter((value): value is number => value != null)
     .sort((a, b) => a - b);
@@ -1860,8 +1934,9 @@ export function validateCarouselBriefSemantics(
     }
   }
 
-  if (listContract?.explicitListContract) {
-    issues.push(...validateExplicitListContract(brief, listContract));
+  const effectiveListContract = resolveCarouselListContract(listContract, brief);
+  if (effectiveListContract) {
+    issues.push(...validateExplicitListContract(brief, effectiveListContract));
   }
 
   if (!isNumberedProblemSolutionBrief(brief)) {

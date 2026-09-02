@@ -7,6 +7,7 @@ import {
   CAROUSEL_CREATIVE_BRIEF_VERSION,
   clampCarouselBriefScore,
   deriveCarouselLibraryMeta,
+  detectCarouselListContractFromBrief,
   detectExplicitCarouselListContract,
   expectedExplicitListicleSlideCount,
   findBriefByOriginalStoredIndex,
@@ -35,6 +36,10 @@ import {
   type CarouselCreativeBrief,
   type CarouselListContract,
 } from "./carouselStudio";
+import {
+  CASH_DRAINS_REMAKE_67_BRIEF,
+  OPEN_CASH_FLOW_USER_PROMPT,
+} from "../server/carousel/tests/fixtures/cashDrainsRemake67";
 
 const structure = [
   { id: "hook" },
@@ -1880,7 +1885,12 @@ describe("explicit carousel list contract", () => {
     );
     expect(brief.slideOutline[2]?.position).toBe(3);
     expect(brief.slideOutline[2]?.listItemIndex).toBe(1);
-    expect(validateCarouselBriefSemantics(brief, contract)).toEqual([]);
+    expect(
+      validateCarouselBriefSemantics(brief, {
+        ...contract,
+        allowStandaloneContext: true,
+      })
+    ).toEqual([]);
 
     const slideIds = brief.slideOutline.map(
       (_, i) => `slide_${String(i + 1).padStart(2, "0")}`
@@ -1911,5 +1921,152 @@ describe("explicit carousel list contract", () => {
     expect(values.slide_02?.kicker).toBe("NOTE");
     expect(values.slide_03?.kicker).toBe("01");
     expect(values.slide_08?.kicker).toBe("06");
+  });
+
+  it("derives a brief-level contract from an open prompt plus a 6 cash drains title", () => {
+    const userContract = detectExplicitCarouselListContract(OPEN_CASH_FLOW_USER_PROMPT);
+    const brief = sampleBrief({
+      title: "The 6 Silent Cash Drains Killing Small Businesses",
+      hook: "6 Silent Cash Drains Killing Small Businesses",
+      corePromise: "Name the six cash drains owners miss.",
+      centralInsight: "The drains hide in timing, not in sales.",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+      }),
+    });
+    expect(userContract).toBeNull();
+    expect(detectCarouselListContractFromBrief(brief)).toEqual({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(validateCarouselBriefSemantics(brief, userContract)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+  });
+
+  it("rejects remake 67 when the strategist promised six drains and delivered five", () => {
+    const userContract = detectExplicitCarouselListContract(OPEN_CASH_FLOW_USER_PROMPT);
+    expect(userContract).toBeNull();
+    expect(detectCarouselListContractFromBrief(CASH_DRAINS_REMAKE_67_BRIEF)).toEqual({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    const issues = validateCarouselBriefSemantics(CASH_DRAINS_REMAKE_67_BRIEF);
+    expect(issues).toContain("The hook promises 6 items but fewer than 6 are outlined");
+    expect(issues).toContain(
+      "Simple listicles should not include a standalone context slide"
+    );
+    expect(
+      validateCarouselBriefSemantics(CASH_DRAINS_REMAKE_67_BRIEF, userContract)
+    ).toEqual(issues);
+    expect(
+      selectSemanticallyValidCarouselBriefs([CASH_DRAINS_REMAKE_67_BRIEF]).briefs
+    ).toEqual([]);
+  });
+
+  it("accepts an open prompt plus a generated 6 myths brief with six myth items", () => {
+    const userContract = detectExplicitCarouselListContract(OPEN_CASH_FLOW_USER_PROMPT);
+    const brief = sampleBrief({
+      title: "6 Cash Myths Owners Still Believe",
+      hook: "6 Cash Myths Owners Still Believe",
+      corePromise: "Bust six cash myths with clearer habits.",
+      centralInsight: "The myths hide in habits, not in sales.",
+      angleType: "myth_busting",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "myth",
+        count: 6,
+        taxonomyLabel: "Myth",
+      }),
+    });
+    expect(userContract).toBeNull();
+    expect(detectCarouselListContractFromBrief(brief)).toEqual({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash myths",
+    });
+    expect(brief.slideOutline).toHaveLength(8);
+    expect(brief.slideOutline.some((slide) => slide.role === "context")).toBe(
+      false
+    );
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(validateCarouselBriefSemantics(brief, userContract)).toEqual([]);
+  });
+
+  it("keeps an explicit user drain contract from becoming myths", () => {
+    const contract = explicitListContract(CASH_DRAINS_SOURCE);
+    const brief = sampleBrief({
+      title: "6 Cash Myths Killing Your Business",
+      hook: "6 Cash Myths Killing Your Business",
+      corePromise: "Bust six cash myths owners still believe.",
+      angleType: "myth_busting",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        taxonomyLabel: "Myth",
+      }),
+    });
+    const issues = validateCarouselBriefSemantics(brief, contract);
+    expect(issues).toContain("The brief changed the promised item type");
+    expect(issues).toContain(
+      "Slide titles use a different item type than the hook promised"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief], contract).briefs).toEqual(
+      []
+    );
+  });
+
+  it("defaults a simple six-item listicle to exactly 8 slides with no context", () => {
+    const brief = sampleBrief({
+      title: "The 6 Silent Cash Drains Killing Small Businesses",
+      hook: "The 6 Silent Cash Drains Killing Small Businesses",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: expectedExplicitListicleSlideCount(6),
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+      }),
+    });
+    expect(expectedExplicitListicleSlideCount(6)).toBe(8);
+    expect(brief.estimatedSlideCount).toBe(8);
+    expect(brief.slideOutline).toHaveLength(8);
+    expect(brief.slideOutline.map((slide) => slide.role)).toEqual([
+      "hook",
+      "insight",
+      "insight",
+      "insight",
+      "insight",
+      "insight",
+      "insight",
+      "cta",
+    ]);
+    expect(brief.slideOutline.some((slide) => slide.role === "context")).toBe(
+      false
+    );
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+  });
+
+  it("rejects a standalone context slide on a simple six-drain listicle", () => {
+    const brief = sampleBrief({
+      title: "The 6 Silent Cash Drains Killing Small Businesses",
+      hook: "The 6 Silent Cash Drains Killing Small Businesses",
+      corePromise: "Name the six cash drains owners miss.",
+      estimatedSlideCount: 9,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash drain",
+        count: 6,
+        includeContext: true,
+      }),
+    });
+    const issues = validateCarouselBriefSemantics(brief);
+    expect(issues).toContain(
+      "Simple listicles should not include a standalone context slide"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
   });
 });

@@ -329,8 +329,16 @@ function explicitListContractPromptLines(
   return [
     `EXPLICIT LIST CONTRACT from the user source: promised count ${promisedCount}, promised item type "${promisedItemType}".`,
     `Preserve this count and semantic item type. Hook wording may improve, but do not replace "${promisedItemType}" with a different taxonomy such as myths, reasons, tips, or signs unless that is the promised type.`,
-    `Default structure: cover, then ${promisedCount} ${promisedItemType} item slides, then one final closing. estimatedSlideCount should be ${slideCount}. Put setup on the cover. Do not insert a standalone context slide unless it is materially necessary.`,
+    `Default structure: cover, then ${promisedCount} ${promisedItemType} item slides, then one final closing. estimatedSlideCount should be ${slideCount}. Put setup on the cover. Do not insert a standalone context slide.`,
     `Only the ${promisedCount} promised item slides get listItemIndex 1 through ${promisedCount}. Cover, context, example, takeaway, and CTA must set listItemIndex to null. Never derive listItemIndex from physical slide position.`,
+  ];
+}
+
+function inventedListContractPromptLines(): string[] {
+  return [
+    "If you create an enumerated list in the title, hook, corePromise, or centralInsight, that list is a contract: deliver exactly that many item slides of that item type.",
+    "Straightforward enumerated listicles use cover, then the N item slides, then one closing. Put setup on the cover. Do not add a standalone context slide.",
+    "Only promised item slides get listItemIndex 1 through N. Cover, context, example, takeaway, and CTA stay null.",
   ];
 }
 
@@ -368,6 +376,7 @@ export function buildCarouselAnglesUserPrompt(args: {
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
     ...explicitListContractPromptLines(listContract),
+    ...(listContract ? [] : inventedListContractPromptLines()),
     "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
     "Match contentFormat and layoutFamily.",
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
@@ -482,6 +491,9 @@ function semanticIssueCode(issue: string): string {
   if (issue === "Slide titles use a different item type than the hook promised") {
     return "list_type_changed";
   }
+  if (issue === "Simple listicles should not include a standalone context slide") {
+    return "standalone_context_on_listicle";
+  }
   return "semantic_invalid";
 }
 
@@ -532,7 +544,11 @@ export function buildCarouselAnglesRepairNote(
   const listContract = options?.listContract;
   if (listContract?.explicitListContract) {
     parts.push(
-      `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}.`
+      `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}. Straightforward listicles are cover plus ${listContract.promisedCount} items plus one closing. Do not add a standalone context slide.`
+    );
+  } else {
+    parts.push(
+      "If a brief creates an enumerated list, honor that count and item type. Straightforward listicles are cover plus N items plus one closing, with no standalone context slide."
     );
   }
   return parts.join(" ");
