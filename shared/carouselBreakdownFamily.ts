@@ -38,6 +38,8 @@ export const BREAKDOWN_LISTICLE_TREATMENTS = [
   "comparison_split",
   "diagram_focus",
   "timeline_flow",
+  "checklist_stack",
+  "data_focus",
   "closing_focus",
 ] as const;
 export type BreakdownListicleTreatment =
@@ -50,6 +52,8 @@ export const BREAKDOWN_LISTICLE_SUPPORTED_ARCHETYPES = [
   "comparison_split",
   "diagram_focus",
   "timeline_flow",
+  "checklist_stack",
+  "data_focus",
   "closing_focus",
 ] as const;
 export type BreakdownListicleSupportedArchetype =
@@ -142,9 +146,36 @@ export function resolveBreakdownListicleTreatment(args: {
   if (archetype === "comparison_split") return "comparison_split";
   if (archetype === "diagram_focus") return "diagram_focus";
   if (archetype === "timeline_flow") return "timeline_flow";
+  if (archetype === "checklist_stack") return "checklist_stack";
+  if (archetype === "data_focus") return "data_focus";
   if (archetype === "text_focus") return "text_focus";
 
   if (semanticRole === "list_item") return "number_focus";
+  return "text_focus";
+}
+
+function hasResolvedBreakdownImage(imageUrl?: string | null): boolean {
+  return typeof imageUrl === "string" && imageUrl.trim().length > 0;
+}
+
+/**
+ * Renderer-only degradation. Does not change Composition IR or stored treatment.
+ * A split slide with no image must not reserve an empty image box.
+ */
+export function resolveBreakdownListicleRenderTreatment(args: {
+  archetype: string;
+  semanticRole: string;
+  imageUrl?: string | null;
+  listItemIndex?: number | null;
+}): BreakdownListicleTreatment {
+  const treatment = resolveBreakdownListicleTreatment({
+    archetype: args.archetype,
+    semanticRole: args.semanticRole,
+  });
+  if (treatment !== "text_visual_split") return treatment;
+  if (hasResolvedBreakdownImage(args.imageUrl)) return treatment;
+  if (args.semanticRole === "cover") return "strong_cover";
+  if (args.listItemIndex != null) return "number_focus";
   return "text_focus";
 }
 
@@ -254,6 +285,30 @@ function extraComparisonSlots(): CarouselTextSlot[] {
   ];
 }
 
+function supportSlotForTreatment(
+  treatment: BreakdownListicleTreatment
+): CarouselTextSlot {
+  if (treatment === "checklist_stack") {
+    return {
+      id: "support",
+      role: "subhead",
+      label: "Checklist lines",
+      budget: REGION_BUDGET.support,
+      defaultText: "",
+    };
+  }
+  if (treatment === "data_focus") {
+    return {
+      id: "support",
+      role: "subhead",
+      label: "Data point",
+      budget: REGION_BUDGET.support,
+      defaultText: "",
+    };
+  }
+  return slotForRegion("support", "");
+}
+
 function slotsForCompositionSlide(args: {
   compositionSlide: CarouselCompositionSlide;
   treatment: BreakdownListicleTreatment;
@@ -283,9 +338,20 @@ function slotsForCompositionSlide(args: {
   if (treatment === "comparison_split") {
     slots.push(...extraComparisonSlots());
   }
-  if (treatment === "diagram_focus" || treatment === "timeline_flow") {
+  if (
+    treatment === "diagram_focus" ||
+    treatment === "timeline_flow" ||
+    treatment === "checklist_stack" ||
+    treatment === "data_focus"
+  ) {
     if (!slots.some((slot) => slot.id === "support")) {
-      slots.push(slotForRegion("support", ""));
+      slots.push(supportSlotForTreatment(treatment));
+    } else if (treatment === "checklist_stack" || treatment === "data_focus") {
+      const support = slots.find((slot) => slot.id === "support");
+      if (support) {
+        support.label =
+          treatment === "checklist_stack" ? "Checklist lines" : "Data point";
+      }
     }
   }
 
@@ -415,4 +481,54 @@ export function splitNativeSteps(text: string): string[] {
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.slice(0, 4);
+}
+
+export function splitChecklistLines(text: string): string[] {
+  const native = splitNativeSteps(text);
+  if (native.length >= 2) return native.slice(0, 4);
+  if (native.length === 1) {
+    const sentences = native[0]!
+      .split(/(?<=\.)\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (sentences.length >= 2) return sentences.slice(0, 4);
+  }
+  return native.slice(0, 4);
+}
+
+export function breakdownChecklistLines(values: CarouselSlotValues): string[] {
+  const fromSupport = splitChecklistLines(breakdownRegionCopy(values, "support"));
+  if (fromSupport.length > 0) return fromSupport;
+  return splitChecklistLines(breakdownRegionCopy(values, "body"));
+}
+
+export function breakdownDataPoint(values: CarouselSlotValues): string {
+  return breakdownRegionCopy(values, "support").trim();
+}
+
+export function breakdownTreatmentChrome(
+  treatment: BreakdownListicleTreatment
+): readonly string[] {
+  switch (treatment) {
+    case "strong_cover":
+      return ["kicker", "headline", "accent-rule", "body"];
+    case "text_focus":
+      return ["small-sequence", "headline", "body"];
+    case "text_visual_split":
+      return ["small-sequence", "headline", "body", "image-panel"];
+    case "number_focus":
+      return ["hero-sequence", "headline", "body"];
+    case "comparison_split":
+      return ["small-sequence", "headline", "left-right", "body"];
+    case "diagram_focus":
+      return ["small-sequence", "headline", "diagram-nodes"];
+    case "timeline_flow":
+      return ["small-sequence", "headline", "timeline-points"];
+    case "checklist_stack":
+      return ["small-sequence", "headline", "body", "check-rows"];
+    case "data_focus":
+      return ["small-sequence", "headline", "data-point", "body"];
+    case "closing_focus":
+      return ["headline", "body", "cta"];
+  }
 }

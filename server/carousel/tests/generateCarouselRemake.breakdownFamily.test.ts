@@ -137,6 +137,97 @@ describe("generateCarouselRemake breakdown family wiring", () => {
     expect(values.slide_04?.kicker).toBe("03");
   });
 
+  it("keeps Visual Director checklist_stack and data_focus treatments", async () => {
+    const brief = cashDrainsRemake67CorrectedBrief();
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    const baseline = compilePlanningIRToBaselineCompositionIR(planningIR);
+    const compositionIR = {
+      ...baseline,
+      slides: baseline.slides.map((slide, index) => {
+        if (index === 1) {
+          return {
+            ...slide,
+            archetype: "checklist_stack" as const,
+            visualRegions: [
+              {
+                role: "supporting" as const,
+                kind: "checklist" as const,
+                placement: "center" as const,
+              },
+            ],
+          };
+        }
+        if (index === 3) {
+          return {
+            ...slide,
+            archetype: "data_focus" as const,
+            visualRegions: [
+              {
+                role: "primary" as const,
+                kind: "data" as const,
+                placement: "center" as const,
+              },
+            ],
+          };
+        }
+        return slide;
+      }),
+    };
+    visualDirectionMock.mockResolvedValue({
+      compositionIR,
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              ...cashDrainsCopyPayload(),
+              slide_02: {
+                ...cashDrainsCopyPayload().slide_02,
+                support: "Pull charges\nMark unused\nCancel idle",
+              },
+              slide_04: {
+                ...cashDrainsCopyPayload().slide_04,
+                support: "Over 30 days",
+              },
+            }),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6708, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+      creativeBrief: brief,
+    });
+
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      composition?: { treatment?: string; archetype?: string };
+      slots?: Array<{ id: string; label?: string }>;
+    }>;
+    expect(slides[1]?.composition?.archetype).toBe("checklist_stack");
+    expect(slides[1]?.composition?.treatment).toBe("checklist_stack");
+    expect(slides[1]?.slots?.some((slot) => slot.label === "Checklist lines")).toBe(
+      true
+    );
+    expect(slides[3]?.composition?.archetype).toBe("data_focus");
+    expect(slides[3]?.composition?.treatment).toBe("data_focus");
+    expect(slides[3]?.slots?.some((slot) => slot.label === "Data point")).toBe(true);
+    const values = completed?.slotValuesJson as Record<
+      string,
+      Record<string, string>
+    >;
+    expect(values.slide_04?.support).toBe("Over 30 days");
+    expect(values.slide_04?.support).not.toBe("82%");
+  });
+
   it("falls back to baseline composition when Visual Director fails", async () => {
     const brief = cashDrainsRemake67CorrectedBrief();
     const planningIR = compileCreativeBriefToPlanningIR({

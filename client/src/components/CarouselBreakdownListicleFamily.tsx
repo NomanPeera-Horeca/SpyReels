@@ -4,9 +4,11 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import {
+  breakdownChecklistLines,
+  breakdownDataPoint,
   breakdownRegionCopy,
   breakdownSequenceLabel,
-  resolveBreakdownListicleTreatment,
+  resolveBreakdownListicleRenderTreatment,
   splitNativeSteps,
   type BreakdownListicleTreatment,
 } from "@shared/carouselBreakdownFamily";
@@ -635,6 +637,205 @@ function DiagramFocusTreatment({
   );
 }
 
+function ChecklistStackTreatment({
+  tokens,
+  values,
+  handle,
+  editable,
+  onSlotChange,
+  sequence,
+}: TreatmentProps) {
+  const headline = breakdownRegionCopy(values, "headline");
+  const body = breakdownRegionCopy(values, "body");
+  const support = breakdownRegionCopy(values, "support");
+  const rows = breakdownChecklistLines(values);
+  const showBody = Boolean(support) && Boolean(body);
+  return (
+    <div
+      style={{
+        ...shellStyle(tokens),
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        padding: "2.1rem 1.55rem",
+      }}
+    >
+      <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <SequenceMark sequence={sequence} tokens={tokens} size="small" />
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
+          style={{
+            margin: "0.7rem 0 0",
+            fontFamily: tokens.fontFamily.display,
+            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
+            fontWeight: 700,
+            lineHeight: 1.18,
+          }}
+        />
+        {showBody ? (
+          <CarouselEditableText
+            as="p"
+            slotId="body"
+            value={body}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
+            style={{
+              margin: "0.75rem 0 0",
+              fontSize: "0.88rem",
+              lineHeight: 1.45,
+              color: tokens.colors.muted,
+            }}
+          />
+        ) : null}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.7rem",
+            marginTop: "1.15rem",
+          }}
+        >
+          {rows.map((row, index) => (
+            <div
+              key={`${row}-${index}`}
+              data-breakdown-check-row={index + 1}
+              style={{ display: "flex", gap: "0.7rem", alignItems: "flex-start" }}
+            >
+              <div
+                style={{
+                  width: "1.05rem",
+                  height: "1.05rem",
+                  borderRadius: "0.28rem",
+                  border: `1.5px solid ${tokens.colors.accent}`,
+                  background: `${tokens.colors.accent}22`,
+                  color: tokens.colors.accent,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: "0.12rem",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                }}
+              >
+                ✓
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.92rem",
+                  lineHeight: 1.4,
+                  color: tokens.colors.foreground,
+                }}
+              >
+                {row}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <HandleMark handle={handle} tokens={tokens} />
+    </div>
+  );
+}
+
+function DataFocusTreatment({
+  tokens,
+  values,
+  handle,
+  editable,
+  onSlotChange,
+  sequence,
+}: TreatmentProps) {
+  const headline = breakdownRegionCopy(values, "headline");
+  const body = breakdownRegionCopy(values, "body");
+  const metric = breakdownDataPoint(values);
+  return (
+    <div
+      style={{
+        ...shellStyle(tokens),
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        padding: "2.2rem 1.6rem",
+      }}
+    >
+      <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <SequenceMark sequence={sequence} tokens={tokens} size="small" />
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
+          style={{
+            margin: "0.7rem 0 0",
+            fontFamily: tokens.fontFamily.display,
+            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
+            fontWeight: 700,
+            lineHeight: 1.18,
+          }}
+        />
+        {metric ? (
+          <CarouselEditableText
+            as="p"
+            slotId="support"
+            value={metric}
+            editable={editable}
+            onCommit={onSlotChange}
+            style={{
+              margin: "1.15rem 0 0",
+              fontFamily: tokens.fontFamily.display,
+              fontSize: "clamp(1.85rem, 7.2vw, 2.45rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.05,
+              color: tokens.colors.accent,
+            }}
+          />
+        ) : null}
+        {body ? (
+          <div
+            style={{
+              marginTop: metric ? "1.05rem" : "1.15rem",
+              border: `1px solid ${tokens.colors.accent}66`,
+              borderRadius: "1rem",
+              padding: "0.95rem 1rem",
+              background: `${tokens.colors.accent}12`,
+            }}
+          >
+            <CarouselEditableText
+              as="p"
+              slotId="body"
+              value={body}
+              editable={editable}
+              onCommit={onSlotChange}
+              multiline
+              style={{
+                margin: 0,
+                fontSize: "0.92rem",
+                lineHeight: 1.45,
+                color: tokens.colors.foreground,
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
+      <HandleMark handle={handle} tokens={tokens} />
+    </div>
+  );
+}
+
 function TimelineFlowTreatment({
   tokens,
   values,
@@ -821,6 +1022,8 @@ const TREATMENT_RENDERERS: Record<
   comparison_split: ComparisonSplitTreatment,
   diagram_focus: DiagramFocusTreatment,
   timeline_flow: TimelineFlowTreatment,
+  checklist_stack: ChecklistStackTreatment,
+  data_focus: DataFocusTreatment,
   closing_focus: ClosingFocusTreatment,
 };
 
@@ -830,9 +1033,11 @@ const TREATMENT_RENDERERS: Record<
 export function CarouselBreakdownListicleFamily(
   props: CarouselBreakdownListicleFamilyProps
 ) {
-  const treatment = resolveBreakdownListicleTreatment({
+  const treatment = resolveBreakdownListicleRenderTreatment({
     archetype: props.composition?.archetype ?? props.composition?.treatment ?? "",
     semanticRole: props.composition?.semanticRole ?? "",
+    imageUrl: props.imageUrl,
+    listItemIndex: props.composition?.listItemIndex ?? null,
   });
   const sequence = breakdownSequenceLabel(
     props.composition?.listItemIndex ?? null

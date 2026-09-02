@@ -9,11 +9,15 @@ import {
 import { CAROUSEL_TEMPLATES_BY_ID } from "./carouselTemplates";
 import {
   applyPlanningSequenceToCopy,
+  breakdownChecklistLines,
+  breakdownDataPoint,
   breakdownSequenceLabel,
+  breakdownTreatmentChrome,
   buildBreakdownListicleSlides,
   canUseBreakdownListicleFamily,
   isBreakdownListicleSlide,
   isSupportedBreakdownArchetype,
+  resolveBreakdownListicleRenderTreatment,
   resolveBreakdownListicleTreatment,
   shouldUseBreakdownListicleFamily,
 } from "./carouselBreakdownFamily";
@@ -147,6 +151,229 @@ describe("breakdown listicle family treatments", () => {
         semanticRole: "closing",
       })
     ).toBe("closing_focus");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "checklist_stack",
+        semanticRole: "list_item",
+      })
+    ).toBe("checklist_stack");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "data_focus",
+        semanticRole: "list_item",
+      })
+    ).toBe("data_focus");
+  });
+
+  it("resolves checklist_stack to checklist_stack, not number_focus", () => {
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "checklist_stack",
+        semanticRole: "list_item",
+      })
+    ).toBe("checklist_stack");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "checklist_stack",
+        semanticRole: "list_item",
+      })
+    ).not.toBe("number_focus");
+  });
+
+  it("resolves data_focus to data_focus, not number_focus", () => {
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "data_focus",
+        semanticRole: "list_item",
+      })
+    ).toBe("data_focus");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "data_focus",
+        semanticRole: "list_item",
+      })
+    ).not.toBe("number_focus");
+  });
+
+  it("renders checklist_stack visibly differently from number_focus", () => {
+    const checklist = breakdownTreatmentChrome("checklist_stack");
+    const number = breakdownTreatmentChrome("number_focus");
+    expect(checklist).toContain("check-rows");
+    expect(number).not.toContain("check-rows");
+    expect(checklist).not.toEqual(number);
+  });
+
+  it("renders data_focus visibly differently from number_focus", () => {
+    const data = breakdownTreatmentChrome("data_focus");
+    const number = breakdownTreatmentChrome("number_focus");
+    expect(data).toContain("data-point");
+    expect(number).not.toContain("data-point");
+    expect(data).not.toEqual(number);
+  });
+
+  it("keeps checklist numbering from Planning IR", () => {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID);
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: cashDrainsRemake67CorrectedBrief(),
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    const baseline = compilePlanningIRToBaselineCompositionIR(planningIR);
+    const compositionIR = {
+      ...baseline,
+      slides: baseline.slides.map((slide, index) =>
+        index === 3
+          ? {
+              ...slide,
+              archetype: "checklist_stack" as const,
+              visualRegions: [
+                {
+                  role: "supporting" as const,
+                  kind: "checklist" as const,
+                  placement: "center" as const,
+                },
+              ],
+            }
+          : slide
+      ),
+    };
+    const slides = buildBreakdownListicleSlides({
+      template: template!,
+      planningIR,
+      compositionIR,
+    });
+    expect(slides[3]?.composition?.treatment).toBe("checklist_stack");
+    expect(slides[3]?.composition?.listItemIndex).toBe(3);
+    expect(breakdownSequenceLabel(slides[3]?.composition?.listItemIndex)).toBe(
+      "03"
+    );
+    expect(planningIR.beats[3]?.position).toBe(4);
+    expect(slides[3]?.slots.some((slot) => slot.id === "support")).toBe(true);
+    expect(slides[3]?.slots.find((slot) => slot.id === "support")?.label).toBe(
+      "Checklist lines"
+    );
+  });
+
+  it("does not invent a hard-coded data metric", () => {
+    expect(breakdownDataPoint({ support: "30 days" })).toBe("30 days");
+    expect(
+      breakdownDataPoint({
+        headline: "Receivables Aging Check",
+        body: "Sort open invoices by age. Any invoice over 30 days gets an immediate follow-up action today.",
+      })
+    ).toBe("");
+    expect(breakdownDataPoint({})).toBe("");
+    expect(breakdownDataPoint({ body: "Flag anything unused for 60 days." })).not.toMatch(
+      /\d/
+    );
+  });
+
+  it("uses the split treatment when text_visual_split has an image", () => {
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "cover",
+        imageUrl: "https://images.example.com/cover.jpg",
+      })
+    ).toBe("text_visual_split");
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "list_item",
+        imageUrl: "https://images.example.com/item.jpg",
+        listItemIndex: 2,
+      })
+    ).toBe("text_visual_split");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "cover",
+      })
+    ).toBe("text_visual_split");
+  });
+
+  it("uses a text treatment when text_visual_split has no image", () => {
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "cover",
+      })
+    ).toBe("strong_cover");
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "cover",
+        imageUrl: "   ",
+      })
+    ).toBe("strong_cover");
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "list_item",
+        listItemIndex: 1,
+      })
+    ).toBe("number_focus");
+    expect(
+      resolveBreakdownListicleRenderTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "insight",
+      })
+    ).toBe("text_focus");
+    expect(
+      resolveBreakdownListicleTreatment({
+        archetype: "text_visual_split",
+        semanticRole: "cover",
+      })
+    ).toBe("text_visual_split");
+  });
+
+  it("reads checklist lines from support copy", () => {
+    expect(
+      breakdownChecklistLines({
+        support: "Pull recurring charges\nMark unused tools\nCancel idle apps",
+        body: "A longer explanation that is not the checklist.",
+      })
+    ).toEqual([
+      "Pull recurring charges",
+      "Mark unused tools",
+      "Cancel idle apps",
+    ]);
+  });
+
+  it("gives data_focus a semantic support slot for the copied metric", () => {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID);
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: cashDrainsRemake67CorrectedBrief(),
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    const baseline = compilePlanningIRToBaselineCompositionIR(planningIR);
+    const compositionIR = {
+      ...baseline,
+      slides: baseline.slides.map((slide, index) =>
+        index === 3
+          ? {
+              ...slide,
+              archetype: "data_focus" as const,
+              visualRegions: [
+                {
+                  role: "primary" as const,
+                  kind: "data" as const,
+                  placement: "center" as const,
+                },
+              ],
+            }
+          : slide
+      ),
+    };
+    const slides = buildBreakdownListicleSlides({
+      template: template!,
+      planningIR,
+      compositionIR,
+    });
+    expect(slides[3]?.composition?.treatment).toBe("data_focus");
+    expect(slides[3]?.composition?.listItemIndex).toBe(3);
+    expect(slides[3]?.slots.find((slot) => slot.id === "support")?.label).toBe(
+      "Data point"
+    );
   });
 
   it("renders comparison differently from number_focus", () => {
@@ -197,7 +424,7 @@ describe("breakdown listicle family treatments", () => {
         archetype: "data_focus",
         semanticRole: "insight",
       })
-    ).toBe("text_focus");
+    ).toBe("data_focus");
     expect(
       resolveBreakdownListicleTreatment({
         archetype: "story_scene",
@@ -261,6 +488,8 @@ describe("breakdown listicle slide build", () => {
     expect(slides[2]?.imageSlots).toBeUndefined();
     expect(slides[3]?.slots.some((slot) => slot.id === "support")).toBe(true);
     expect(slides[4]?.slots.some((slot) => slot.id === "support")).toBe(true);
+    expect(isSupportedBreakdownArchetype("checklist_stack")).toBe(true);
+    expect(isSupportedBreakdownArchetype("data_focus")).toBe(true);
     expect(slides[3]?.slots.find((slot) => slot.id === "kicker")?.budget).toEqual({
       min: 1,
       max: 3,

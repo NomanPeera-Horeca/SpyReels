@@ -382,6 +382,16 @@ ${slotLines}`;
     const numberKickerRule = usesListItemIndex
       ? 'use listItemIndex as "01", "02", etc. If the planned slide has no listItemIndex, do not use a promised item number. Never number from physical slide position.'
       : 'use "01", "02", etc.';
+    const checklistLinesHint = slides.some((slide) =>
+      slide.slots.some((slot) => slot.label === "Checklist lines")
+    )
+      ? `\n9b. For slots labeled "Checklist lines": write 2-4 short check items, each on its own line. Use only facts from the source or approved brief.`
+      : "";
+    const dataPointHint = slides.some((slide) =>
+      slide.slots.some((slot) => slot.label === "Data point")
+    )
+      ? `\n9c. For slots labeled "Data point": write one metric or threshold taken from the source or approved brief. Do not invent a number.`
+      : "";
     return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
 
 Creator niche / audience context (optional):
@@ -418,7 +428,7 @@ ${
 9. For slots with role "kicker":
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
    - If the slot label is "Number" or "Step number": ${numberKickerRule}
-   - If the slot label is "Stat": use a short striking number from the source when available.
+   - If the slot label is "Stat": use a short striking number from the source when available.${checklistLinesHint}${dataPointHint}
 10. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
   }
