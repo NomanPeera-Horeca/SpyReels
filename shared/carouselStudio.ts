@@ -1675,7 +1675,7 @@ function validateExplicitListContract(
     }
   }
 
-  const pairedSolution = isNumberedProblemSolutionBrief(brief);
+  const pairedSolution = briefPromisesPairedSolutions(brief);
   if (
     !contract.allowStandaloneContext &&
     !pairedSolution &&

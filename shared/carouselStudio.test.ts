@@ -31,6 +31,7 @@ import {
   selectSemanticallyValidCarouselBriefs,
   stripSlideIntentMetadata,
   studioGenerateActionEnabled,
+  briefPromisesPairedSolutions,
   validateCarouselBriefSemantics,
   validateCopyBriefAdherence,
   type CarouselCreativeBrief,
@@ -40,6 +41,10 @@ import {
   CASH_DRAINS_REMAKE_67_BRIEF,
   OPEN_CASH_FLOW_USER_PROMPT,
 } from "../server/carousel/tests/fixtures/cashDrainsRemake67";
+import {
+  CASH_LEAKS_REMAKE_64_BRIEF,
+  validFiveLeakFiveFixBrief,
+} from "../server/carousel/tests/fixtures/cashLeaksRemake64";
 
 const structure = [
   { id: "hook" },
@@ -2068,5 +2073,156 @@ describe("explicit carousel list contract", () => {
       "Simple listicles should not include a standalone context slide"
     );
     expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("rejects a 5-problem listicle with only 4 problem item slides", () => {
+    const brief = sampleBrief({
+      title: "5 Problems Killing Restaurant Profit",
+      hook: "5 Problems Killing Restaurant Profit",
+      corePromise: "Name the five problems owners miss.",
+      estimatedSlideCount: 6,
+      slideOutline: numberedItemOutline({
+        itemLabel: "problem",
+        count: 5,
+        itemCountOverride: 4,
+      }),
+    });
+    expect(briefPromisesPairedSolutions(brief)).toBe(false);
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "The hook promises 5 items but fewer than 5 are outlined"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("accepts a 5-problem listicle with exactly 5 problem item slides", () => {
+    const brief = sampleBrief({
+      title: "5 Problems Killing Restaurant Profit",
+      hook: "5 Problems Killing Restaurant Profit",
+      corePromise: "Name the five problems owners miss.",
+      estimatedSlideCount: 7,
+      slideOutline: numberedItemOutline({
+        itemLabel: "problem",
+        count: 5,
+      }),
+    });
+    expect(briefPromisesPairedSolutions(brief)).toBe(false);
+    expect(brief.slideOutline.map((slide) => slide.listItemIndex)).toEqual([
+      null,
+      1,
+      2,
+      3,
+      4,
+      5,
+      null,
+    ]);
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+  });
+
+  it("rejects a standalone context slide on a simple 5-problem listicle", () => {
+    const brief = sampleBrief({
+      title: "5 Problems Killing Restaurant Profit",
+      hook: "5 Problems Killing Restaurant Profit",
+      corePromise: "Name the five problems owners miss.",
+      estimatedSlideCount: 8,
+      slideOutline: numberedItemOutline({
+        itemLabel: "problem",
+        count: 5,
+        includeContext: true,
+      }),
+    });
+    expect(briefPromisesPairedSolutions(brief)).toBe(false);
+    expect(validateCarouselBriefSemantics(brief)).toContain(
+      "Simple listicles should not include a standalone context slide"
+    );
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toEqual([]);
+  });
+
+  it("treats 5 cash leaks as a simple listicle when no fixes are promised", () => {
+    const brief = sampleBrief({
+      title: "5 Cash Leaks Hurting Your Business",
+      hook: "5 Cash Leaks Hurting Your Business",
+      corePromise: "Name the five cash leaks owners miss.",
+      estimatedSlideCount: 7,
+      slideOutline: numberedItemOutline({
+        itemLabel: "cash leak",
+        count: 5,
+      }),
+    });
+    expect(detectCarouselListContractFromBrief(brief)).toEqual({
+      explicitListContract: true,
+      promisedCount: 5,
+      promisedItemType: "cash leaks",
+    });
+    expect(briefPromisesPairedSolutions(brief)).toBe(false);
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+  });
+
+  it("keeps 5 leaks and how to fix each on the paired leak/fix validator", () => {
+    const incomplete = sampleBrief({
+      title: "5 leaks and how to fix each",
+      hook: "5 leaks and how to fix each",
+      corePromise: "Name five leaks and show a matching fix for each one.",
+      estimatedSlideCount: 6,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise five leaks and a fix for each.",
+          recommendedVisual: "text",
+        },
+        {
+          position: 2,
+          role: "problem",
+          objective: "Introduce Leak 1 invoice timing.",
+          recommendedVisual: "timeline",
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Present Fix 1 shorter payment cycles.",
+          recommendedVisual: "checklist",
+        },
+        {
+          position: 4,
+          role: "problem",
+          objective: "Introduce Leak 2 inventory overstock.",
+          recommendedVisual: "diagram",
+        },
+        {
+          position: 5,
+          role: "insight",
+          objective: "Present Fix 2 demand-led ordering.",
+          recommendedVisual: "data",
+        },
+        {
+          position: 6,
+          role: "cta",
+          objective: "Ask them to screenshot the five leaks this week.",
+          recommendedVisual: "text",
+        },
+      ],
+    });
+    expect(briefPromisesPairedSolutions(incomplete)).toBe(true);
+    const incompleteIssues = validateCarouselBriefSemantics(incomplete);
+    expect(incompleteIssues.some((issue) => /5 solutions/.test(issue))).toBe(true);
+
+    const complete = {
+      ...validFiveLeakFiveFixBrief(),
+      title: "5 leaks and how to fix each",
+      hook: "5 leaks and how to fix each",
+    };
+    expect(briefPromisesPairedSolutions(complete)).toBe(true);
+    expect(validateCarouselBriefSemantics(complete)).toEqual([]);
+  });
+
+  it("still accepts a valid remake 64 five-leak five-fix outline", () => {
+    const brief = validFiveLeakFiveFixBrief();
+    expect(briefPromisesPairedSolutions(brief)).toBe(true);
+    expect(validateCarouselBriefSemantics(brief)).toEqual([]);
+    expect(selectSemanticallyValidCarouselBriefs([brief]).briefs).toHaveLength(1);
+    const remake64Issues = validateCarouselBriefSemantics(CASH_LEAKS_REMAKE_64_BRIEF);
+    expect(remake64Issues.some((issue) => /5 solutions/.test(issue))).toBe(true);
   });
 });
