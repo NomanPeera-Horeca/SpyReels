@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CAROUSEL_STUDIO_TEMPLATE_ID } from "@shared/carouselStudio";
+import {
+  CAROUSEL_STUDIO_TEMPLATE_ID,
+  scoreCarouselCreativeBrief,
+  type CarouselCreativeBrief,
+} from "@shared/carouselStudio";
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
 import {
   CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
+  OPEN_CASH_FLOW_USER_PROMPT,
   cashDrainsRemake67CorrectedBrief,
 } from "./fixtures/cashDrainsRemake67";
 import { compilePlanningIRToBaselineCompositionIR } from "@shared/carouselCompositionIR";
@@ -165,6 +170,225 @@ describe("generateCarouselRemake breakdown family wiring", () => {
       composition?: { family?: string };
     }>;
     expect(slides.every(isBreakdownListicleSlide)).toBe(true);
+  });
+
+  it("wires Visual Director for a framework-labeled enumerated list plan", async () => {
+    const base = cashDrainsRemake67CorrectedBrief();
+    const brief: CarouselCreativeBrief = {
+      ...base,
+      contentFormat: "framework",
+      layoutFamily: "framework",
+      slideOutline: base.slideOutline.map((slide, index) => {
+        if (index === 0 || index === base.slideOutline.length - 1) return slide;
+        return { ...slide, role: "framework" };
+      }),
+    };
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("framework");
+    visualDirectionMock.mockResolvedValue({
+      compositionIR: compilePlanningIRToBaselineCompositionIR(planningIR),
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(cashDrainsCopyPayload()),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6705, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+      creativeBrief: brief,
+    });
+
+    expect(visualDirectionMock).toHaveBeenCalledTimes(1);
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      composition?: { family?: string; listItemIndex?: number | null };
+    }>;
+    expect(slides.every(isBreakdownListicleSlide)).toBe(true);
+    expect(slides[3]?.composition?.listItemIndex).toBe(3);
+    const values = completed?.slotValuesJson as Record<
+      string,
+      Record<string, string>
+    >;
+    expect(values.slide_04?.kicker).toBe("03");
+  });
+
+  it("leaves a story plan with no list sequence on the old path", async () => {
+    const brief: CarouselCreativeBrief = {
+      ...cashDrainsRemake67CorrectedBrief(),
+      title: "The night the till went quiet",
+      hook: "The night the till went quiet.",
+      corePromise: "Walk owners through one cash-crisis night.",
+      contentFormat: "story",
+      layoutFamily: "story",
+      angleType: "story",
+      estimatedSlideCount: 6,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Open on the quiet till.",
+          recommendedVisual: "photo",
+          listItemIndex: null,
+        },
+        {
+          position: 2,
+          role: "context",
+          objective: "Set the night.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 3,
+          role: "problem",
+          objective: "Show the cash gap.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 4,
+          role: "insight",
+          objective: "Name the missed signal.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 5,
+          role: "example",
+          objective: "Replay the closing hour.",
+          recommendedVisual: "photo",
+          listItemIndex: null,
+        },
+        {
+          position: 6,
+          role: "cta",
+          objective: "Ask what they would check first.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+      ],
+      scores: scoreCarouselCreativeBrief({
+        relevance: 80,
+        usefulness: 80,
+        specificity: 80,
+        visualPotential: 80,
+        factualSafety: 80,
+        originality: 80,
+      }),
+    };
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(
+              genericCopyPayload(
+                brief.slideOutline.map((_, index) =>
+                  `slide_${String(index + 1).padStart(2, "0")}`
+                )
+              )
+            ),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6706, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+      creativeBrief: brief,
+    });
+
+    expect(visualDirectionMock).not.toHaveBeenCalled();
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      composition?: unknown;
+    }>;
+    expect(slides.some(isBreakdownListicleSlide)).toBe(false);
+  });
+
+  it("does not auto-route an open framework with framework_step beats", async () => {
+    const brief: CarouselCreativeBrief = {
+      ...cashDrainsRemake67CorrectedBrief(),
+      title: "A weekly cash check owners can repeat",
+      hook: "A weekly cash check owners can repeat.",
+      corePromise: "Give owners a weekly cash check they can run every Monday.",
+      contentFormat: "framework",
+      layoutFamily: "framework",
+      estimatedSlideCount: 5,
+      slideOutline: [
+        {
+          position: 1,
+          role: "hook",
+          objective: "Promise a weekly cash check.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 2,
+          role: "framework",
+          objective: "Show the first weekly check step.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 3,
+          role: "insight",
+          objective: "Name why the check works.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 4,
+          role: "framework",
+          objective: "Show the second weekly check step.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+        {
+          position: 5,
+          role: "cta",
+          objective: "Ask them to run it next Monday.",
+          recommendedVisual: "text",
+          listItemIndex: null,
+        },
+      ],
+    };
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(
+              genericCopyPayload(
+                brief.slideOutline.map((_, index) =>
+                  `slide_${String(index + 1).padStart(2, "0")}`
+                )
+              )
+            ),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6707, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+      creativeBrief: brief,
+    });
+
+    expect(visualDirectionMock).not.toHaveBeenCalled();
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      composition?: unknown;
+    }>;
+    expect(slides.some(isBreakdownListicleSlide)).toBe(false);
   });
 
   it("leaves the legacy template path unchanged when there is no modern brief", async () => {

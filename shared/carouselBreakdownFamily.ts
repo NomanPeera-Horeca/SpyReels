@@ -73,11 +73,46 @@ export function isBreakdownListicleSlide(
   return slide.composition?.family === BREAKDOWN_LISTICLE_FAMILY;
 }
 
+function isStraightforwardEnumeratedListicle(
+  planningIR: CarouselPlanningIR
+): boolean {
+  if (planningIR.contract.kind !== "enumerated") return false;
+
+  const beats = planningIR.beats;
+  if (beats.length < 3) return false;
+
+  const coverCount = beats.filter((beat) => beat.role === "cover").length;
+  const closingCount = beats.filter((beat) => beat.role === "closing").length;
+  if (coverCount !== 1 || closingCount !== 1) return false;
+  if (beats[0]?.role !== "cover") return false;
+  if (beats[beats.length - 1]?.role !== "closing") return false;
+
+  const body = beats.slice(1, -1);
+  const listBeats = body.filter((beat) => beat.sequence?.kind === "list");
+  if (listBeats.length === 0) return false;
+
+  return body.every(
+    (beat) => beat.role === "list_item" && beat.sequence?.kind === "list"
+  );
+}
+
+/**
+ * Execution eligibility from Planning IR structure.
+ * preferredFamily is a strategist recommendation, not the gate.
+ */
+export function canUseBreakdownListicleFamily(
+  planningIR: CarouselPlanningIR | null | undefined
+): boolean {
+  if (!planningIR) return false;
+  if (planningIR.strategy.preferredFamily === "breakdown") return true;
+  return isStraightforwardEnumeratedListicle(planningIR);
+}
+
 export function shouldUseBreakdownListicleFamily(args: {
   layoutFamily?: string | null;
   planningIR?: CarouselPlanningIR | null;
 }): boolean {
-  return args.layoutFamily === "breakdown" && args.planningIR != null;
+  return canUseBreakdownListicleFamily(args.planningIR);
 }
 
 export function breakdownSequenceLabel(

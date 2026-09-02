@@ -40,7 +40,7 @@ import {
 import {
   applyPlanningSequenceToCopy,
   buildBreakdownListicleSlides,
-  shouldUseBreakdownListicleFamily,
+  canUseBreakdownListicleFamily,
 } from "@shared/carouselBreakdownFamily";
 import { generateCarouselVisualDirection } from "./generateCarouselVisualDirection";
 import { resolveSlideImage } from "./resolveSlideImage";
@@ -994,13 +994,7 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      if (
-        planningIR &&
-        shouldUseBreakdownListicleFamily({
-          layoutFamily: creativeBrief.layoutFamily,
-          planningIR,
-        })
-      ) {
+      if (planningIR && canUseBreakdownListicleFamily(planningIR)) {
         const visualDirection = await withGenerationStage(
           telemetry,
           "visual_direction",

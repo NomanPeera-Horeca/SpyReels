@@ -11,13 +11,17 @@ import {
   applyPlanningSequenceToCopy,
   breakdownSequenceLabel,
   buildBreakdownListicleSlides,
+  canUseBreakdownListicleFamily,
   isBreakdownListicleSlide,
   isSupportedBreakdownArchetype,
   resolveBreakdownListicleTreatment,
   shouldUseBreakdownListicleFamily,
 } from "./carouselBreakdownFamily";
+import {
+  OPEN_CASH_FLOW_USER_PROMPT,
+  cashDrainsRemake67CorrectedBrief,
+} from "../server/carousel/tests/fixtures/cashDrainsRemake67";
 import { buildCashDrainsBreakdownSlice } from "./carouselBreakdownSliceFixture";
-import { OPEN_CASH_FLOW_USER_PROMPT } from "../server/carousel/tests/fixtures/cashDrainsRemake67";
 import { effectiveSlidesForCreativeBrief } from "../server/carousel/generateCarouselRemake";
 
 function sampleBrief(): CarouselCreativeBrief {
@@ -299,23 +303,14 @@ describe("legacy template path", () => {
     expect(slides.at(-1)?.layoutId).toBe("cta_bold_center");
   });
 
-  it("does not activate the family for non-breakdown formats", () => {
-    const planningIR = compileCreativeBriefToPlanningIR({
-      brief: { ...sampleBrief(), layoutFamily: "story", contentFormat: "story" },
-      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
-    });
-    expect(
-      shouldUseBreakdownListicleFamily({
-        layoutFamily: "story",
-        planningIR,
-      })
-    ).toBe(false);
+  it("does not activate the family without a planning IR", () => {
     expect(
       shouldUseBreakdownListicleFamily({
         layoutFamily: "breakdown",
         planningIR: null,
       })
     ).toBe(false);
+    expect(canUseBreakdownListicleFamily(null)).toBe(false);
   });
 
   it("keeps baseline composition available when Visual Director is skipped", () => {
@@ -327,5 +322,188 @@ describe("legacy template path", () => {
     expect(baseline.slides[0]?.semanticRole).toBe("cover");
     expect(baseline.slides.at(-1)?.semanticRole).toBe("closing");
     expect(baseline.slides[0]?.archetype).toBe("text_focus");
+  });
+});
+
+function frameworkLabeledCashDrainsBrief(): CarouselCreativeBrief {
+  const brief = cashDrainsRemake67CorrectedBrief();
+  return {
+    ...brief,
+    contentFormat: "framework",
+    layoutFamily: "framework",
+    slideOutline: brief.slideOutline.map((slide, index) => {
+      if (index === 0 || index === brief.slideOutline.length - 1) return slide;
+      return { ...slide, role: "framework" };
+    }),
+  };
+}
+
+function storyPlanBrief(): CarouselCreativeBrief {
+  return {
+    ...sampleBrief(),
+    title: "The night the till went quiet",
+    hook: "The night the till went quiet.",
+    corePromise: "Walk owners through one cash-crisis night.",
+    contentFormat: "story",
+    layoutFamily: "story",
+    angleType: "story",
+    estimatedSlideCount: 6,
+    slideOutline: [
+      {
+        position: 1,
+        role: "hook",
+        objective: "Open on the quiet till.",
+        recommendedVisual: "photo",
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "context",
+        objective: "Set the night.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 3,
+        role: "problem",
+        objective: "Show the cash gap.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 4,
+        role: "insight",
+        objective: "Name the missed signal.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 5,
+        role: "example",
+        objective: "Replay the closing hour.",
+        recommendedVisual: "photo",
+        listItemIndex: null,
+      },
+      {
+        position: 6,
+        role: "cta",
+        objective: "Ask what they would check first.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+    ],
+  };
+}
+
+function openFrameworkBrief(): CarouselCreativeBrief {
+  return {
+    ...sampleBrief(),
+    title: "A weekly cash check owners can repeat",
+    hook: "A weekly cash check owners can repeat.",
+    corePromise: "Give owners a weekly cash check they can run every Monday.",
+    contentFormat: "framework",
+    layoutFamily: "framework",
+    estimatedSlideCount: 5,
+    slideOutline: [
+      {
+        position: 1,
+        role: "hook",
+        objective: "Promise a weekly cash check.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "framework",
+        objective: "Show the first weekly check step.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 3,
+        role: "insight",
+        objective: "Name why the check works.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 4,
+        role: "framework",
+        objective: "Show the second weekly check step.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 5,
+        role: "cta",
+        objective: "Ask them to run it next Monday.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+    ],
+  };
+}
+
+describe("canUseBreakdownListicleFamily", () => {
+  it("is eligible when preferredFamily is breakdown", () => {
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: cashDrainsRemake67CorrectedBrief(),
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("breakdown");
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(true);
+  });
+
+  it("is eligible for a framework-labeled cover plus list items plus closing", () => {
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: frameworkLabeledCashDrainsBrief(),
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("framework");
+    expect(planningIR.contract.kind).toBe("enumerated");
+    expect(planningIR.beats.map((beat) => beat.role)).toEqual([
+      "cover",
+      "list_item",
+      "list_item",
+      "list_item",
+      "list_item",
+      "list_item",
+      "list_item",
+      "closing",
+    ]);
+    expect(
+      planningIR.beats
+        .slice(1, -1)
+        .every((beat) => beat.sequence?.kind === "list")
+    ).toBe(true);
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(true);
+  });
+
+  it("is not eligible for a story plan with no list sequence", () => {
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: storyPlanBrief(),
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("story");
+    expect(planningIR.beats.every((beat) => beat.sequence == null)).toBe(true);
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(false);
+  });
+
+  it("does not treat an open framework with framework_step beats as a listicle", () => {
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: openFrameworkBrief(),
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("framework");
+    expect(planningIR.contract.kind).toBe("open");
+    expect(planningIR.beats.map((beat) => beat.role)).toEqual([
+      "cover",
+      "framework_step",
+      "insight",
+      "framework_step",
+      "closing",
+    ]);
+    expect(planningIR.beats.every((beat) => beat.sequence == null)).toBe(true);
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(false);
   });
 });
