@@ -8,37 +8,58 @@ import { useSearch } from "wouter";
 import { CarouselRenderer } from "@/components/CarouselRenderer";
 import { buildCashDrainsBreakdownSlice } from "@shared/carouselBreakdownSliceFixture";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import type { CarouselSlideSpec } from "@shared/carouselTemplates";
 import { CAROUSEL_STUDIO_TEMPLATE_ID } from "@shared/carouselStudio";
+import { remakeDump } from "./devRealRuntimeRemakeDump";
 
-const slice = buildCashDrainsBreakdownSlice();
+const fixtureSlice = buildCashDrainsBreakdownSlice();
 const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID)!;
+const realSlides = remakeDump.slideStructureJson as CarouselSlideSpec[];
+const realValues = remakeDump.slotValuesJson as Record<
+  string,
+  Record<string, string>
+>;
+const realImageUrls = (remakeDump.imageUrlsJson ?? undefined) as
+  | Record<string, string | Record<string, string>>
+  | undefined;
 
 export default function DevBreakdownSlicePreview() {
   const search = useSearch();
-  const slideParam = Number(new URLSearchParams(search).get("slide") ?? "0");
+  const params = new URLSearchParams(search);
+  const useRealRemake = params.get("source") === "real";
+  const slides = useRealRemake ? realSlides : fixtureSlice.slides;
+  const slideValues = useRealRemake ? realValues : fixtureSlice.values;
+  const imageUrls = useRealRemake ? realImageUrls : fixtureSlice.imageUrls;
+  const slideParam = Number(params.get("slide") ?? "0");
   const visibleSlides =
-    slideParam >= 1 && slideParam <= slice.slides.length
-      ? [slice.slides[slideParam - 1]!]
-      : slice.slides;
+    slideParam >= 1 && slideParam <= slides.length
+      ? [slides[slideParam - 1]!]
+      : slides;
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-[92rem] space-y-6">
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          THROWAWAY DEV PREVIEW. Fixture-driven Breakdown/Listicle slice. Not a
-          product surface.
+          THROWAWAY DEV PREVIEW.{" "}
+          {useRealRemake
+            ? `Stored remake ${remakeDump.remakeId} from remake dump.`
+            : "Fixture-driven Breakdown/Listicle slice."}{" "}
+          Not a product surface.
         </p>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            The 6 Silent Cash Drains Killing Small Businesses
+            {useRealRemake
+              ? `Remake ${remakeDump.remakeId} stored slides`
+              : "The 6 Silent Cash Drains Killing Small Businesses"}
           </h1>
           <p className="max-w-2xl text-sm text-neutral-400 mt-2">
-            Cover, comparison, number, diagram, timeline, text plus visual,
-            number, closing. Sequence numbers come from Planning IR.
+            {useRealRemake
+              ? "Loaded from the remake dump. Layouts come from slideStructureJson."
+              : "Cover, comparison, number, diagram, timeline, text plus visual, number, closing. Sequence numbers come from Planning IR."}
           </p>
         </div>
         <div
           className={
-            slideParam >= 1 && slideParam <= slice.slides.length
+            slideParam >= 1 && slideParam <= slides.length
               ? "flex justify-center"
               : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6"
           }
@@ -46,17 +67,29 @@ export default function DevBreakdownSlicePreview() {
           {visibleSlides.map((slide) => (
             <div key={slide.id} className="space-y-2">
               <p className="text-xs uppercase tracking-wide text-neutral-400">
-                Slide {slice.slides.indexOf(slide) + 1} / {slide.composition?.treatment} /{" "}
+                Slide {slides.indexOf(slide) + 1} / {slide.layoutId}
+                {slide.composition?.treatment
+                  ? ` / ${slide.composition.treatment}`
+                  : ""}
                 {slide.composition?.listItemIndex != null
-                  ? `item ${String(slide.composition.listItemIndex).padStart(2, "0")}`
-                  : slide.composition?.semanticRole}
+                  ? ` / item ${String(slide.composition.listItemIndex).padStart(2, "0")}`
+                  : slide.composition?.semanticRole
+                    ? ` / ${slide.composition.semanticRole}`
+                    : ""}
               </p>
-              <CarouselRenderer
-                template={template}
-                slides={[slide]}
-                slideValues={slice.values}
-                imageUrls={slice.imageUrls}
-              />
+              <div
+                data-breakdown-family={
+                  useRealRemake ? undefined : true
+                }
+                data-real-runtime-slide={useRealRemake ? slide.id : undefined}
+              >
+                <CarouselRenderer
+                  template={template}
+                  slides={[slide]}
+                  slideValues={slideValues}
+                  imageUrls={imageUrls}
+                />
+              </div>
             </div>
           ))}
         </div>

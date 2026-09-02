@@ -1006,6 +1006,9 @@ export async function generateCarouselRemake(
           "visual_direction",
           () => generateCarouselVisualDirection(planningIR)
         );
+        console.log(
+          `[carouselRemake] ${remakeId}: Visual Director source=${visualDirection.source} attempts=${visualDirection.attempts}`
+        );
         if (visualDirection.source === "baseline_fallback") {
           console.warn(
             `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,

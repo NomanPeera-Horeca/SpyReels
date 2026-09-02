@@ -105,6 +105,10 @@ const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPrevie
 const DevBreakdownSlicePreview = lazyWithRetry(
   () => import("./pages/DevBreakdownSlicePreview")
 );
+/** THROWAWAY: real remake 73 stored-slide proof. */
+const DevBreakdownRealRuntimePreview = lazyWithRetry(
+  () => import("./pages/DevBreakdownRealRuntimePreview")
+);
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
 const DevRemakeWorkspacePreview = lazyWithRetry(
   () => import("./pages/DevRemakeWorkspacePreview")
@@ -288,6 +292,10 @@ function Router() {
         <Route
           path="/dev/carousel-breakdown-slice"
           component={DevBreakdownSlicePreview}
+        />
+        <Route
+          path="/dev/carousel-breakdown-real-runtime"
+          component={DevBreakdownRealRuntimePreview}
         />
         {/* THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */}
         <Route path="/dev/remake-workspace" component={DevRemakeWorkspacePreview} />
