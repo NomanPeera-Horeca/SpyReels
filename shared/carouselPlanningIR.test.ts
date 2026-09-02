@@ -9,6 +9,8 @@ import {
   FORBIDDEN_CAROUSEL_PLANNING_IR_KEYS,
   bindPlanningIRToSlides,
   compileCreativeBriefToPlanningIR,
+  planningCopySequenceFromIR,
+  planningIRCopyGenerationGate,
   planningIRListItemIndexes,
   validateCarouselPlanningIR,
   type CarouselPlanningIR,
@@ -593,5 +595,56 @@ describe("bindPlanningIRToSlides", () => {
       6,
       null,
     ]);
+  });
+});
+
+describe("planningIRCopyGenerationGate", () => {
+  it("blocks invalid remake 67 IR before copy generation", () => {
+    const ir = compileCreativeBriefToPlanningIR({
+      brief: CASH_DRAINS_REMAKE_67_BRIEF,
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    const gate = planningIRCopyGenerationGate(ir);
+    expect(gate.blocked).toBe(true);
+    if (gate.blocked) {
+      expect(gate.errorCategory).toBe("planning_ir_validation");
+      expect(gate.issues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("allows valid remake 64 and corrected remake 67 IR", () => {
+    expect(
+      planningIRCopyGenerationGate(
+        compileCreativeBriefToPlanningIR({
+          brief: validFiveLeakFiveFixBrief(),
+          sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+        })
+      )
+    ).toEqual({ blocked: false });
+    expect(
+      planningIRCopyGenerationGate(
+        compileCreativeBriefToPlanningIR({
+          brief: cashDrainsRemake67CorrectedBrief(),
+          sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+        })
+      )
+    ).toEqual({ blocked: false });
+  });
+
+  it("exposes list vs problem_solution copy sequences", () => {
+    const list = planningCopySequenceFromIR(
+      compileCreativeBriefToPlanningIR({
+        brief: cashDrainsRemake67CorrectedBrief(),
+        sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+      })
+    );
+    const paired = planningCopySequenceFromIR(
+      compileCreativeBriefToPlanningIR({
+        brief: validFiveLeakFiveFixBrief(),
+        sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+      })
+    );
+    expect(list.kind).toBe("list");
+    expect(paired.kind).toBe("problem_solution");
   });
 });

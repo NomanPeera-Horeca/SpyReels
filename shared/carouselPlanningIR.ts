@@ -15,6 +15,7 @@ import {
   type CarouselContentGoal,
   type CarouselCreativeBrief,
   type CarouselLayoutFamily,
+  type CarouselCopyPlanningSequence,
   type CarouselListContract,
   type CarouselRecommendedVisual,
   type CarouselResearchMode,
@@ -537,4 +538,43 @@ export function planningIRListItemIndexes(
   return ir.beats.map((beat) =>
     beat.sequence?.kind === "list" ? beat.sequence.index : null
   );
+}
+
+export const PLANNING_IR_VALIDATION_ERROR_CATEGORY =
+  "planning_ir_validation" as const;
+
+export function planningCopySequenceFromIR(
+  ir: CarouselPlanningIR
+): CarouselCopyPlanningSequence {
+  const hasPairs = ir.beats.some(
+    (beat) => beat.sequence?.kind === "problem_solution"
+  );
+  const hasList = ir.beats.some((beat) => beat.sequence?.kind === "list");
+  return {
+    kind: hasPairs ? "problem_solution" : hasList ? "list" : "open",
+    beats: ir.beats.map((beat) => ({
+      position: beat.position,
+      role: beat.role,
+      sequence: beat.sequence,
+    })),
+  };
+}
+
+export function planningIRCopyGenerationGate(
+  ir: CarouselPlanningIR | null | undefined
+):
+  | { blocked: false }
+  | {
+      blocked: true;
+      issues: string[];
+      errorCategory: typeof PLANNING_IR_VALIDATION_ERROR_CATEGORY;
+    } {
+  if (!ir) return { blocked: false };
+  const issues = validateCarouselPlanningIR(ir);
+  if (issues.length === 0) return { blocked: false };
+  return {
+    blocked: true,
+    issues,
+    errorCategory: PLANNING_IR_VALIDATION_ERROR_CATEGORY,
+  };
 }

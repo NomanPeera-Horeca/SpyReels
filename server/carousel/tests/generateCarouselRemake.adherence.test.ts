@@ -10,6 +10,10 @@ import {
   type CarouselCopySlotValues,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
+import {
+  compileCreativeBriefToPlanningIR,
+  planningCopySequenceFromIR,
+} from "@shared/carouselPlanningIR";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import {
   buildCarouselRemakeJsonSchema,
@@ -18,8 +22,12 @@ import {
 } from "../generateCarouselRemake";
 import { buildCarouselAnglesRepairNote } from "../generateCarouselAngles";
 import {
+  CASH_DRAINS_REMAKE_67_BAD_NUMBER_VALUES,
   CASH_DRAINS_REMAKE_67_BRIEF,
+  CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
+  CASH_DRAINS_REMAKE_67_SLIDE_IDS,
   OPEN_CASH_FLOW_USER_PROMPT,
+  cashDrainsRemake67CorrectedBrief,
 } from "./fixtures/cashDrainsRemake67";
 import {
   CASH_LEAKS_MISSING_LEAK1_VALUES,
@@ -31,6 +39,15 @@ import {
   validFiveLeakFiveFixBrief,
 } from "./fixtures/cashLeaksRemake64";
 
+function planningSequenceFor(brief: CarouselCreativeBrief) {
+  return planningCopySequenceFromIR(
+    compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    })
+  );
+}
+
 function adherenceIssues(
   values = CASH_LEAKS_REMAKE_64_VALUES,
   brief = CASH_LEAKS_REMAKE_64_BRIEF
@@ -40,6 +57,7 @@ function adherenceIssues(
     slideIds: CASH_LEAKS_REMAKE_64_SLIDE_IDS,
     slideRoles: CASH_LEAKS_REMAKE_64_SLIDE_ROLES,
     values,
+    planningSequence: planningSequenceFor(brief),
   });
 }
 
@@ -145,14 +163,271 @@ describe("carousel remake 64 copy adherence", () => {
   });
 
   it("accepts copy that follows a valid five-leak five-fix outline", () => {
+    const brief = validFiveLeakFiveFixBrief();
     expect(
       validateCopyBriefAdherence({
-        brief: validFiveLeakFiveFixBrief(),
+        brief,
         slideIds: CASH_LEAKS_REMAKE_64_SLIDE_IDS,
         slideRoles: CASH_LEAKS_REMAKE_64_SLIDE_ROLES,
         values: VALID_FIVE_LEAK_FIVE_FIX_VALUES,
+        planningSequence: planningSequenceFor(brief),
       })
     ).toEqual([]);
+  });
+
+  it("keeps paired leak/fix validation when planning IR is problem_solution", () => {
+    const sequence = planningSequenceFor(validFiveLeakFiveFixBrief());
+    expect(sequence.kind).toBe("problem_solution");
+    const issues = adherenceIssues(
+      CASH_LEAKS_MISSING_LEAK1_VALUES,
+      validFiveLeakFiveFixBrief()
+    );
+    expect(issues.some((issue) => /Missing Leak 1/.test(issue))).toBe(true);
+  });
+});
+
+describe("carousel remake 67 copy adherence", () => {
+  it("accepts corrected remake 67 list copy without literal leak labels", () => {
+    const brief = cashDrainsRemake67CorrectedBrief();
+    const sequence = planningSequenceFor(brief);
+    expect(sequence.kind).toBe("list");
+    expect(
+      validateCopyBriefAdherence({
+        brief,
+        slideIds: CASH_DRAINS_REMAKE_67_SLIDE_IDS,
+        values: CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
+        planningSequence: sequence,
+      })
+    ).toEqual([]);
+  });
+
+  it("rejects corrected remake 67 copy with the wrong visible number", () => {
+    const brief = cashDrainsRemake67CorrectedBrief();
+    const issues = validateCopyBriefAdherence({
+      brief,
+      slideIds: CASH_DRAINS_REMAKE_67_SLIDE_IDS,
+      values: CASH_DRAINS_REMAKE_67_BAD_NUMBER_VALUES,
+      planningSequence: planningSequenceFor(brief),
+    });
+    expect(
+      issues.some((issue) =>
+        /Position 3 used item number 04 instead of listItemIndex 02/.test(issue)
+      )
+    ).toBe(true);
+  });
+});
+
+function fiveProblemsStartingBusinessBrief(): CarouselCreativeBrief {
+  const brief = validFiveLeakFiveFixBrief();
+  return {
+    ...brief,
+    id: "brief_5_problems",
+    title: "5 problems of starting a business",
+    hook: "5 problems of starting a business",
+    corePromise: "Name five problems new owners hit first.",
+    centralInsight: "The first year fails from avoidable operating gaps.",
+    estimatedSlideCount: 7,
+    keyPoints: [
+      {
+        title: "No market validation",
+        explanation: "Building before anyone wants it.",
+        purpose: "Name problem 1.",
+      },
+      {
+        title: "Poor cash planning",
+        explanation: "Spending before a runway exists.",
+        purpose: "Name problem 2.",
+      },
+      {
+        title: "Wrong pricing",
+        explanation: "Charging too little to survive.",
+        purpose: "Name problem 3.",
+      },
+      {
+        title: "Hiring too early",
+        explanation: "Payroll before cash can carry it.",
+        purpose: "Name problem 4.",
+      },
+      {
+        title: "No distribution",
+        explanation: "A product with no path to buyers.",
+        purpose: "Name problem 5.",
+      },
+    ],
+    slideOutline: [
+      {
+        position: 1,
+        role: "hook",
+        objective: "Promise five problems of starting a business on the cover.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "insight",
+        objective: "Name the first problem: no market validation.",
+        recommendedVisual: "checklist",
+        listItemIndex: 1,
+      },
+      {
+        position: 3,
+        role: "insight",
+        objective: "Name the second problem: poor cash planning.",
+        recommendedVisual: "checklist",
+        listItemIndex: 2,
+      },
+      {
+        position: 4,
+        role: "insight",
+        objective: "Name the third problem: wrong pricing.",
+        recommendedVisual: "checklist",
+        listItemIndex: 3,
+      },
+      {
+        position: 5,
+        role: "insight",
+        objective: "Name the fourth problem: hiring too early.",
+        recommendedVisual: "checklist",
+        listItemIndex: 4,
+      },
+      {
+        position: 6,
+        role: "insight",
+        objective: "Name the fifth problem: no distribution.",
+        recommendedVisual: "checklist",
+        listItemIndex: 5,
+      },
+      {
+        position: 7,
+        role: "cta",
+        objective: "Ask them to save the five problems and check their plan.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+    ],
+  };
+}
+
+const FIVE_PROBLEMS_SLIDE_IDS = [
+  "slide_01",
+  "slide_02",
+  "slide_03",
+  "slide_04",
+  "slide_05",
+  "slide_06",
+  "slide_07",
+];
+
+function fiveProblemsListCopy(): CarouselCopySlotValues {
+  return {
+    slide_01: {
+      kicker: "STARTUP",
+      headline: "5 problems of starting a business",
+      body: "The first year usually breaks on one of these gaps.",
+      slideIntent: "content",
+    },
+    slide_02: {
+      headline: "01 - No market validation",
+      body: "Building before anyone wants the offer wastes months.",
+      slideIntent: "content",
+    },
+    slide_03: {
+      headline: "02 - Poor cash planning",
+      body: "Spending before a runway exists empties the account.",
+      slideIntent: "content",
+    },
+    slide_04: {
+      headline: "03 - Wrong pricing",
+      body: "Charging too little cannot cover the real cost of the work.",
+      slideIntent: "content",
+    },
+    slide_05: {
+      headline: "04 - Hiring too early",
+      body: "Payroll before cash can carry it becomes a fixed drain.",
+      slideIntent: "content",
+    },
+    slide_06: {
+      headline: "05 - No distribution",
+      body: "A product with no path to buyers stays invisible.",
+      slideIntent: "content",
+    },
+    slide_07: {
+      headline: "Save this list before you hire",
+      body: "Check each gap against the plan you are about to fund.",
+      slideIntent: "closing",
+      closingType: "save",
+    },
+  };
+}
+
+describe("five problems list copy adherence", () => {
+  it("accepts simple list copy without literal Problem 1 text", () => {
+    const brief = fiveProblemsStartingBusinessBrief();
+    const sequence = planningSequenceFor(brief);
+    expect(sequence.kind).toBe("list");
+    const copy = fiveProblemsListCopy();
+    const allText = Object.values(copy)
+      .map((slots) => Object.values(slots).join(" "))
+      .join(" ");
+    expect(allText).not.toMatch(/Problem\s*1|Leak\s*1/i);
+    expect(
+      validateCopyBriefAdherence({
+        brief,
+        slideIds: FIVE_PROBLEMS_SLIDE_IDS,
+        values: copy,
+        planningSequence: sequence,
+      })
+    ).toEqual([]);
+  });
+
+  it("accepts visible 01 through 05 that match the IR sequence", () => {
+    const brief = fiveProblemsStartingBusinessBrief();
+    expect(
+      validateCopyBriefAdherence({
+        brief,
+        slideIds: FIVE_PROBLEMS_SLIDE_IDS,
+        values: fiveProblemsListCopy(),
+        planningSequence: planningSequenceFor(brief),
+      })
+    ).toEqual([]);
+  });
+
+  it("rejects a wrong visible list number", () => {
+    const brief = fiveProblemsStartingBusinessBrief();
+    const values = fiveProblemsListCopy();
+    values.slide_03 = {
+      ...values.slide_03!,
+      headline: "03 - Poor cash planning",
+    };
+    const issues = validateCopyBriefAdherence({
+      brief,
+      slideIds: FIVE_PROBLEMS_SLIDE_IDS,
+      values,
+      planningSequence: planningSequenceFor(brief),
+    });
+    expect(
+      issues.some((issue) =>
+        /Position 3 used item number 03 instead of listItemIndex 02/.test(issue)
+      )
+    ).toBe(true);
+  });
+
+  it("rejects a non-item beat that consumes a list number", () => {
+    const brief = fiveProblemsStartingBusinessBrief();
+    const values = fiveProblemsListCopy();
+    values.slide_01 = {
+      ...values.slide_01!,
+      kicker: "01",
+    };
+    const issues = validateCopyBriefAdherence({
+      brief,
+      slideIds: FIVE_PROBLEMS_SLIDE_IDS,
+      values,
+      planningSequence: planningSequenceFor(brief),
+    });
+    expect(issues).toContain(
+      "A non-item slide at position 1 consumed item number 01"
+    );
   });
 });
 
@@ -340,6 +615,26 @@ describe("brief-to-slide positional mapping", () => {
     expect(prompt).toContain("Planned role: cover");
     expect(prompt).toContain("Planned role: list_item");
     expect(prompt).toContain("Planned role: closing");
+  });
+
+  it("uses planning IR beat count as the modern slide-count source", () => {
+    expect(template).toBeDefined();
+    const brief = cashDrainsRemake67CorrectedBrief();
+    const ir = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    expect(brief.slideOutline).toHaveLength(8);
+    expect(ir.beats).toHaveLength(8);
+    const shorterIR = { ...ir, beats: ir.beats.slice(0, 7) };
+    const slides = effectiveSlidesForCreativeBrief(
+      template!,
+      brief,
+      OPEN_CASH_FLOW_USER_PROMPT,
+      shorterIR
+    );
+    expect(slides).toHaveLength(7);
+    expect(brief.slideOutline).toHaveLength(8);
   });
 });
 

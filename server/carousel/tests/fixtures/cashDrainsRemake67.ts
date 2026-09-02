@@ -1,5 +1,6 @@
 import {
   scoreCarouselCreativeBrief,
+  type CarouselCopySlotValues,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
 
@@ -240,3 +241,75 @@ export function cashDrainsRemake67CorrectedBrief(): CarouselCreativeBrief {
     ],
   };
 }
+
+export const CASH_DRAINS_REMAKE_67_SLIDE_IDS = [
+  "slide_01",
+  "slide_02",
+  "slide_03",
+  "slide_04",
+  "slide_05",
+  "slide_06",
+  "slide_07",
+  "slide_08",
+];
+
+export const CASH_DRAINS_REMAKE_67_CORRECTED_VALUES: CarouselCopySlotValues = {
+  slide_01: {
+    kicker: "CASH FLOW",
+    headline: "Profitable on paper, empty at the bank",
+    body: "The gap is usually a drain you can name, not a sales problem.",
+    slideIntent: "content",
+  },
+  slide_02: {
+    kicker: "01",
+    headline: "Paper profit is not spendable cash",
+    body: "A strong P and L can still hide a dry checking account.",
+    slideIntent: "content",
+  },
+  slide_03: {
+    kicker: "02",
+    headline: "Slow invoicing delays the deposit",
+    body: "Work can be done while payment is still weeks away.",
+    slideIntent: "content",
+  },
+  slide_04: {
+    kicker: "03",
+    headline: "Dead stock traps working capital",
+    body: "Unsold goods lock cash on the shelf instead of in the bank.",
+    slideIntent: "content",
+  },
+  slide_05: {
+    kicker: "04",
+    headline: "You pay out faster than you collect",
+    body: "Mismatched terms create a float problem owners rarely name.",
+    slideIntent: "content",
+  },
+  slide_06: {
+    kicker: "05",
+    headline: "No reserve turns a slow week into a crisis",
+    body: "A quiet month becomes urgent when there is no buffer.",
+    slideIntent: "content",
+  },
+  slide_07: {
+    kicker: "06",
+    headline: "Tax season arrives as a lump-sum shock",
+    body: "Money that was never set aside still comes due.",
+    slideIntent: "content",
+  },
+  slide_08: {
+    headline: "Which drain is hitting you now?",
+    body: "Name it, comment it, and keep this list nearby.",
+    slideIntent: "closing",
+    closingType: "question",
+  },
+};
+
+export const CASH_DRAINS_REMAKE_67_BAD_NUMBER_VALUES: CarouselCopySlotValues = {
+  ...CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
+  slide_03: {
+    kicker: "04",
+    headline: "Slow invoicing delays the deposit",
+    body: "Work can be done while payment is still weeks away.",
+    slideIntent: "content",
+  },
+};

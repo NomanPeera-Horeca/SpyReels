@@ -31,9 +31,10 @@ import {
 import {
   bindPlanningIRToSlides,
   compileCreativeBriefToPlanningIR,
+  planningCopySequenceFromIR,
+  planningIRCopyGenerationGate,
   planningIRListItemIndexes,
   planningIRUsesListSequence,
-  validateCarouselPlanningIR,
   type CarouselPlanningIR,
 } from "@shared/carouselPlanningIR";
 import { resolveSlideImage } from "./resolveSlideImage";
@@ -502,7 +503,8 @@ export function validateGeneratedCarouselCopy(
   slides: CarouselSlideSpec[],
   values: CarouselSlideValuesMap,
   lockedFacts: LockedSlideFacts = new Map(),
-  creativeBrief?: CarouselCreativeBrief
+  creativeBrief?: CarouselCreativeBrief,
+  planningIR?: CarouselPlanningIR | null
 ): { ok: true } | { ok: false; issues: string[] } {
   const budget = validateBudgets(slides, values, lockedFacts);
   const issues = budget.ok ? [] : [...budget.issues];
@@ -513,6 +515,9 @@ export function validateGeneratedCarouselCopy(
         slideIds: slides.map((slide) => slide.id),
         slideRoles: slides.map((slide) => slide.role),
         values,
+        planningSequence: planningIR
+          ? planningCopySequenceFromIR(planningIR)
+          : undefined,
       })
     );
   }
@@ -799,13 +804,15 @@ export function effectiveSlidesForCreativeBrief(
   sourceContent?: string,
   planningIR?: CarouselPlanningIR | null
 ): CarouselSlideSpec[] {
-  const plannedCount =
-    brief.slideOutline.length > 0
-      ? brief.slideOutline.length
-      : brief.estimatedSlideCount;
-  const targetMiddleCount = Math.min(Math.max(plannedCount - 2, 3), 18);
   const resolvedIR =
     planningIR ?? planningIRForModernBrief(brief, sourceContent);
+  const plannedCount =
+    resolvedIR && resolvedIR.beats.length > 0
+      ? resolvedIR.beats.length
+      : brief.slideOutline.length > 0
+        ? brief.slideOutline.length
+        : brief.estimatedSlideCount;
+  const targetMiddleCount = Math.min(Math.max(plannedCount - 2, 3), 18);
   const irListIndexes = resolvedIR
     ? planningIRListItemIndexes(resolvedIR)
     : [];
@@ -880,14 +887,6 @@ export async function generateCarouselRemake(
   let sourceContent = options?.sourceContent?.trim() || undefined;
   const creativeBrief = options?.creativeBrief;
   const planningIR = planningIRForModernBrief(creativeBrief, sourceContent);
-  if (planningIR) {
-    const irIssues = validateCarouselPlanningIR(planningIR);
-    if (irIssues.length > 0) {
-      console.info(
-        `[carouselRemake] ${remakeId}: planning IR issues: ${irIssues.join("; ")}`
-      );
-    }
-  }
   const angleDirection = options?.angleDirection?.trim();
   if (!creativeBrief && angleDirection) {
     sourceContent = sourceContent
@@ -918,6 +917,24 @@ export async function generateCarouselRemake(
         finalizeGenerationMetrics(telemetry, "failed", remakeId, {
           failureStage: "unknown_template",
           errorCategory: "unknown_template",
+        })
+      );
+      return;
+    }
+
+    const irGate = planningIRCopyGenerationGate(planningIR);
+    if (irGate.blocked) {
+      const errorMessage = `Planning IR invalid: ${irGate.issues.slice(0, 5).join("; ")}`;
+      await persistTerminalRemake(
+        remakeId,
+        {
+          status: "failed",
+          progressStage: null,
+          errorMessage,
+        },
+        finalizeGenerationMetrics(telemetry, "failed", remakeId, {
+          failureStage: "planning_ir_validation",
+          errorCategory: irGate.errorCategory,
         })
       );
       return;
@@ -1033,7 +1050,8 @@ export async function generateCarouselRemake(
           effectiveSlides,
           nextValues,
           lockedFacts,
-          creativeBrief
+          creativeBrief,
+          planningIR
         );
 
         if (!nextValidation.ok) {
@@ -1052,7 +1070,8 @@ export async function generateCarouselRemake(
             effectiveSlides,
             nextValues,
             lockedFacts,
-            creativeBrief
+            creativeBrief,
+            planningIR
           );
         }
         return { values: nextValues, validation: nextValidation };

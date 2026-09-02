@@ -159,7 +159,12 @@ describe("generateCarouselRemake creative brief handoff", () => {
     expect(remake).toContain("if (!creativeBrief && angleDirection)");
     expect(remake).toContain("CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE");
     expect(remake).toContain("compileCreativeBriefToPlanningIR");
-    expect(remake).toContain("validateCarouselPlanningIR");
+    expect(remake).toContain("planningIRCopyGenerationGate");
+    expect(remake).toContain("planning_ir_validation");
     expect(remake).toContain("bindPlanningIRToSlides");
+    const gateAt = remake.indexOf("planningIRCopyGenerationGate");
+    const copyAt = remake.indexOf('progressStage: "writing_copy"');
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(copyAt).toBeGreaterThan(gateAt);
   });
 });

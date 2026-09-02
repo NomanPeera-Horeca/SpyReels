@@ -1224,6 +1224,19 @@ export type CarouselBriefSlideBinding = {
   listItemIndex: number | null;
 };
 
+/** Semantic beat sequence passed from Planning IR into copy adherence. */
+export type CarouselCopyPlanningSequence = {
+  kind: "list" | "problem_solution" | "open";
+  beats: Array<{
+    position: number;
+    role: string;
+    sequence:
+      | { kind: "list"; index: number }
+      | { kind: "problem_solution"; index: number; side: "problem" | "solution" }
+      | null;
+  }>;
+};
+
 export type CarouselCopySlotValues = Record<string, Record<string, string>>;
 
 export const CAROUSEL_SLIDE_INTENTS = [
@@ -1900,7 +1913,7 @@ export function bindBriefOutlineToSlides(
 }
 
 function isClosingRole(role: string): boolean {
-  return role === "cta" || role === "takeaway";
+  return role === "cta" || role === "takeaway" || role === "closing";
 }
 
 export function validateCarouselBriefSemantics(
@@ -2021,6 +2034,33 @@ function parseVisibleListItemNumber(text: string): number | null {
   return parsed;
 }
 
+function parseLeadingPaddedItemNumber(title: string): number | null {
+  const padded = title.trim().match(/^0([1-9])\b/);
+  if (padded) return Number(padded[1]);
+  const tenToTwelve = title.trim().match(/^(1[0-2])\b/);
+  if (!tenToTwelve) return null;
+  return Number(tenToTwelve[1]);
+}
+
+function parseVisibleListItemNumberFromCopy(args: {
+  kicker: string;
+  title: string;
+  isListItem: boolean;
+}): number | null {
+  const fromKicker = parseVisibleListItemNumber(args.kicker);
+  if (fromKicker != null) return fromKicker;
+  if (args.isListItem) {
+    const padded = parseLeadingPaddedItemNumber(args.title);
+    if (padded != null) return padded;
+    const unpadded = args.title.trim().match(/^([1-9]|1[0-2])\b/);
+    if (!unpadded) return null;
+    const parsed = Number(unpadded[1]);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) return null;
+    return parsed;
+  }
+  return parseLeadingPaddedItemNumber(args.title);
+}
+
 function slideCopyText(
   values: CarouselCopySlotValues,
   slideId: string
@@ -2106,23 +2146,39 @@ export function validateCopyBriefAdherence(args: {
   slideIds: string[];
   slideRoles?: string[];
   values: CarouselCopySlotValues;
+  planningSequence?: CarouselCopyPlanningSequence;
 }): string[] {
-  const { brief, slideIds, values } = args;
+  const { brief, slideIds, values, planningSequence } = args;
   const issues: string[] = [];
   const outline = brief.slideOutline;
-  const bindings = bindBriefOutlineToSlides(outline, slideIds);
+  const plannedLength = planningSequence?.beats.length ?? outline.length;
+  const bindings = planningSequence
+    ? planningSequence.beats.map((beat, index) => ({
+        position: beat.position,
+        role: beat.role,
+        objective: outline[index]?.objective ?? "",
+        slideId: slideIds[index] ?? null,
+        listItemIndex:
+          beat.sequence?.kind === "list" ? beat.sequence.index : null,
+      }))
+    : bindBriefOutlineToSlides(outline, slideIds);
 
-  if (slideIds.length !== outline.length) {
+  if (slideIds.length !== plannedLength) {
     issues.push(
-      `Generated slide count ${slideIds.length} does not match outline length ${outline.length}`
+      planningSequence
+        ? `Generated slide count ${slideIds.length} does not match planning IR beat count ${plannedLength}`
+        : `Generated slide count ${slideIds.length} does not match outline length ${outline.length}`
     );
   }
 
   const generatedTexts: string[] = [];
   const competingClosingPositions: number[] = [];
   const expectedByKey = expectedNumberedItemPositions(outline);
-  const lastPosition = outline.length;
-  const usesListItemIndex = outline.some((slide) => slide.listItemIndex != null);
+  const lastPosition = plannedLength;
+  const usesListSequence = planningSequence
+    ? planningSequence.kind === "list"
+    : outline.some((slide) => slide.listItemIndex != null);
+  const skipKeywordPairChecks = planningSequence?.kind === "list";
 
   for (const binding of bindings) {
     const index = binding.position - 1;
@@ -2158,47 +2214,53 @@ export function validateCopyBriefAdherence(args: {
     }
 
     const kicker = values[binding.slideId]?.kicker?.trim() ?? "";
-    const kickerItemNumber = usesListItemIndex
-      ? parseVisibleListItemNumber(kicker)
+    const visibleItemNumber = usesListSequence
+      ? parseVisibleListItemNumberFromCopy({
+          kicker,
+          title: copy.title,
+          isListItem: binding.listItemIndex != null,
+        })
       : null;
     if (
-      usesListItemIndex &&
+      usesListSequence &&
       binding.listItemIndex != null &&
-      kickerItemNumber != null &&
-      kickerItemNumber !== binding.listItemIndex
+      visibleItemNumber != null &&
+      visibleItemNumber !== binding.listItemIndex
     ) {
       issues.push(
-        `Position ${binding.position} used item number ${formatCarouselListItemNumber(kickerItemNumber)} instead of listItemIndex ${formatCarouselListItemNumber(binding.listItemIndex)}`
+        `Position ${binding.position} used item number ${formatCarouselListItemNumber(visibleItemNumber)} instead of listItemIndex ${formatCarouselListItemNumber(binding.listItemIndex)}`
       );
     }
     if (
-      usesListItemIndex &&
+      usesListSequence &&
       binding.listItemIndex == null &&
-      kickerItemNumber != null
+      visibleItemNumber != null
     ) {
       issues.push(
-        `A non-item slide at position ${binding.position} consumed item number ${formatCarouselListItemNumber(kickerItemNumber)}`
+        `A non-item slide at position ${binding.position} consumed item number ${formatCarouselListItemNumber(visibleItemNumber)}`
       );
     }
 
-    const plannedItem = parseNumberedCarouselItem(binding.objective);
-    const generatedItem = parseNumberedCarouselItem(`${copy.title} ${copy.all}`);
-    if (
-      plannedItem &&
-      (!generatedItem ||
-        generatedItem.kind !== plannedItem.kind ||
-        generatedItem.n !== plannedItem.n)
-    ) {
-      issues.push(
-        `Position ${binding.position} is missing ${numberedItemLabel(plannedItem)}`
-      );
-    }
-    if (generatedItem) {
-      const expectedPosition = expectedByKey.get(numberedItemKey(generatedItem));
-      if (expectedPosition != null && expectedPosition !== binding.position) {
+    if (!skipKeywordPairChecks) {
+      const plannedItem = parseNumberedCarouselItem(binding.objective);
+      const generatedItem = parseNumberedCarouselItem(`${copy.title} ${copy.all}`);
+      if (
+        plannedItem &&
+        (!generatedItem ||
+          generatedItem.kind !== plannedItem.kind ||
+          generatedItem.n !== plannedItem.n)
+      ) {
         issues.push(
-          `Unexpected ${numberedItemLabel(generatedItem)} at position ${binding.position}; expected at position ${expectedPosition}`
+          `Position ${binding.position} is missing ${numberedItemLabel(plannedItem)}`
         );
+      }
+      if (generatedItem) {
+        const expectedPosition = expectedByKey.get(numberedItemKey(generatedItem));
+        if (expectedPosition != null && expectedPosition !== binding.position) {
+          issues.push(
+            `Unexpected ${numberedItemLabel(generatedItem)} at position ${binding.position}; expected at position ${expectedPosition}`
+          );
+        }
       }
     }
 
@@ -2209,37 +2271,41 @@ export function validateCopyBriefAdherence(args: {
     }
   }
 
-  const numbered = collectNumberedCarouselItems(generatedTexts);
-  const promisedProblems = promisedCarouselItemCount(
-    briefPlanningText(brief),
-    "problem"
-  );
-  if (promisedProblems != null) {
-    for (let n = 1; n <= promisedProblems; n += 1) {
-      if (!numbered.problems.has(n)) {
-        issues.push(`Missing Leak ${n}`);
+  if (!skipKeywordPairChecks) {
+    const numbered = collectNumberedCarouselItems(generatedTexts);
+    const promisedProblems = promisedCarouselItemCount(
+      briefPlanningText(brief),
+      "problem"
+    );
+    if (promisedProblems != null) {
+      for (let n = 1; n <= promisedProblems; n += 1) {
+        if (!numbered.problems.has(n)) {
+          issues.push(`Missing Leak ${n}`);
+        }
       }
     }
-  }
-  for (const n of numbered.fixes) {
-    if (!numbered.problems.has(n)) {
-      issues.push(`Fix ${n} exists without Problem/Leak ${n}`);
+    for (const n of numbered.fixes) {
+      if (!numbered.problems.has(n)) {
+        issues.push(`Fix ${n} exists without Problem/Leak ${n}`);
+      }
+      const fixAt = numbered.fixPosition.get(n);
+      const leakAt = numbered.problemPosition.get(n);
+      if (fixAt != null && (leakAt == null || fixAt < leakAt)) {
+        issues.push(`Fix ${n} appears before Leak ${n}`);
+      }
     }
-    const fixAt = numbered.fixPosition.get(n);
-    const leakAt = numbered.problemPosition.get(n);
-    if (fixAt != null && (leakAt == null || fixAt < leakAt)) {
-      issues.push(`Fix ${n} appears before Leak ${n}`);
+    const promisedFixes = promisedCarouselItemCount(briefPlanningText(brief), "fix");
+    if (promisedFixes != null && numbered.fixes.size < promisedFixes) {
+      issues.push(
+        `A summary claims ${promisedFixes} solutions that were not introduced`
+      );
     }
-  }
-  const promisedFixes = promisedCarouselItemCount(briefPlanningText(brief), "fix");
-  if (promisedFixes != null && numbered.fixes.size < promisedFixes) {
-    issues.push(
-      `A summary claims ${promisedFixes} solutions that were not introduced`
-    );
   }
 
-  const lastOutline = outline[outline.length - 1];
-  if (!lastOutline || !isClosingRole(lastOutline.role)) {
+  const lastRole = planningSequence
+    ? planningSequence.beats[planningSequence.beats.length - 1]?.role
+    : outline[outline.length - 1]?.role;
+  if (!lastRole || !isClosingRole(lastRole)) {
     issues.push("Copy is missing an intentional final closing");
   }
   if (competingClosingPositions.length > 0) {
@@ -2256,7 +2322,7 @@ export function validateCopyBriefAdherence(args: {
       issues.push("Duplicated closing language");
     }
   }
-  if (lastOutline && !lastCopy.trim()) {
+  if (lastRole && !lastCopy.trim()) {
     issues.push("Final closing slide is filler");
   }
 
