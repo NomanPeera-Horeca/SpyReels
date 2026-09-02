@@ -4,12 +4,14 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CAROUSEL_CREATIVE_BRIEF_VERSION,
+  CAROUSEL_RECOMMENDED_VISUALS,
   scoreCarouselCreativeBrief,
   type CarouselCreativeBrief,
   type CarouselSlideRole,
 } from "@shared/carouselStudio";
 import {
   compileCreativeBriefToPlanningIR,
+  type CarouselPlanningBeat,
   type CarouselPlanningIR,
 } from "@shared/carouselPlanningIR";
 import {
@@ -33,9 +35,11 @@ import {
   buildCarouselVisualDirectionJsonSchema,
   buildCarouselVisualDirectionSystemPrompt,
   buildCarouselVisualDirectionUserPrompt,
+  compatibleVisualDirectorArchetypes,
   generateCarouselVisualDirection,
   normalizeVisualDirectorDecisions,
   validateVisualDirectorDecisions,
+  validateVisualDirectorPlanningCompatibility,
   type CarouselVisualDirectorDecision,
 } from "../generateCarouselVisualDirection";
 
@@ -179,6 +183,36 @@ function storyBrief(): CarouselCreativeBrief {
       },
     ],
   });
+}
+
+const COVER_SAFE_ARCHETYPES = new Set([
+  "text_focus",
+  "text_visual_split",
+  "full_bleed_visual",
+  "story_scene",
+]);
+const LIST_ITEM_SAFE_ARCHETYPES = new Set([
+  "number_focus",
+  "text_visual_split",
+  "comparison_split",
+  "timeline_flow",
+  "diagram_focus",
+  "checklist_stack",
+  "data_focus",
+]);
+
+function sampleBeat(
+  overrides: Partial<CarouselPlanningBeat> = {}
+): CarouselPlanningBeat {
+  return {
+    id: "beat_01",
+    position: 1,
+    role: "insight",
+    objective: "Show the cash gap.",
+    visualIntent: "text",
+    sequence: null,
+    ...overrides,
+  };
 }
 
 function planningFromBrief(
@@ -912,6 +946,125 @@ describe("Visual Director non-list formats", () => {
       "example",
       "closing",
     ]);
+  });
+});
+
+describe("Visual Director role-bound archetypes", () => {
+  it("does not accept timeline_flow on a cover with timeline visualIntent", () => {
+    const beat = sampleBeat({ role: "cover", visualIntent: "timeline" });
+    const allowed = compatibleVisualDirectorArchetypes(beat);
+    expect(allowed).not.toBeNull();
+    expect(allowed!.has("timeline_flow")).toBe(false);
+    for (const archetype of allowed!) {
+      expect(COVER_SAFE_ARCHETYPES.has(archetype)).toBe(true);
+    }
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "timeline_flow",
+      })
+    ).not.toEqual([]);
+
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = remake67StrongDecisions(planningIR).map((decision, index) =>
+      index === 0 ? { ...decision, archetype: "timeline_flow" as const } : decision
+    );
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(
+      issues.some((issue) => /must use a cover-safe archetype/.test(issue))
+    ).toBe(true);
+  });
+
+  it("does not accept diagram_focus on a cover with diagram visualIntent", () => {
+    const beat = sampleBeat({ role: "cover", visualIntent: "diagram" });
+    const allowed = compatibleVisualDirectorArchetypes(beat);
+    expect(allowed).not.toBeNull();
+    expect(allowed!.has("diagram_focus")).toBe(false);
+    for (const archetype of allowed!) {
+      expect(COVER_SAFE_ARCHETYPES.has(archetype)).toBe(true);
+    }
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "diagram_focus",
+      })
+    ).not.toEqual([]);
+  });
+
+  it("allows photo-compatible cover archetypes when visualIntent is photo", () => {
+    const beat = sampleBeat({ role: "cover", visualIntent: "photo" });
+    const allowed = compatibleVisualDirectorArchetypes(beat);
+    expect(allowed).not.toBeNull();
+    expect([...allowed!].sort()).toEqual(
+      ["full_bleed_visual", "story_scene", "text_visual_split"].sort()
+    );
+    for (const archetype of [
+      "text_visual_split",
+      "full_bleed_visual",
+      "story_scene",
+    ] as const) {
+      expect(
+        validateVisualDirectorPlanningCompatibility(beat, { archetype })
+      ).toEqual([]);
+    }
+  });
+
+  it("still requires timeline_flow on a normal body timeline beat", () => {
+    const beat = sampleBeat({ role: "insight", visualIntent: "timeline" });
+    const allowed = compatibleVisualDirectorArchetypes(beat);
+    expect(allowed).not.toBeNull();
+    expect([...allowed!]).toEqual(["timeline_flow"]);
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "timeline_flow",
+      })
+    ).toEqual([]);
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "text_focus",
+      })
+    ).not.toEqual([]);
+  });
+
+  it("still requires diagram_focus on a normal body diagram beat", () => {
+    const beat = sampleBeat({ role: "insight", visualIntent: "diagram" });
+    const allowed = compatibleVisualDirectorArchetypes(beat);
+    expect(allowed).not.toBeNull();
+    expect([...allowed!]).toEqual(["diagram_focus"]);
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "diagram_focus",
+      })
+    ).toEqual([]);
+    expect(
+      validateVisualDirectorPlanningCompatibility(beat, {
+        archetype: "text_focus",
+      })
+    ).not.toEqual([]);
+  });
+
+  it("never lets list_item escape LIST_ITEM archetypes", () => {
+    for (const visualIntent of CAROUSEL_RECOMMENDED_VISUALS) {
+      const beat = sampleBeat({
+        role: "list_item",
+        visualIntent,
+        sequence: { kind: "list", index: 1 },
+      });
+      const allowed = compatibleVisualDirectorArchetypes(beat);
+      if (!allowed) continue;
+      for (const archetype of allowed) {
+        expect(LIST_ITEM_SAFE_ARCHETYPES.has(archetype)).toBe(true);
+      }
+    }
+
+    const photoBeat = sampleBeat({
+      role: "list_item",
+      visualIntent: "photo",
+      sequence: { kind: "list", index: 1 },
+    });
+    const photoAllowed = compatibleVisualDirectorArchetypes(photoBeat);
+    expect(photoAllowed).not.toBeNull();
+    expect(photoAllowed!.has("text_visual_split")).toBe(true);
+    expect(photoAllowed!.has("full_bleed_visual")).toBe(false);
+    expect(photoAllowed!.has("story_scene")).toBe(false);
   });
 });
 

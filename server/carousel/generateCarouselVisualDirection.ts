@@ -151,12 +151,12 @@ function beatHasSequence(beat: CarouselPlanningBeat): boolean {
 }
 
 function intersectArchetypes(
-  preferred: ReadonlySet<CarouselCompositionArchetype>,
-  required: readonly CarouselCompositionArchetype[] | undefined
+  roleAllowed: ReadonlySet<CarouselCompositionArchetype>,
+  intentAllowed: readonly CarouselCompositionArchetype[] | undefined
 ): ReadonlySet<CarouselCompositionArchetype> {
-  if (!required || required.length === 0) return preferred;
-  const overlap = required.filter((value) => preferred.has(value));
-  return new Set(overlap.length > 0 ? overlap : required);
+  if (!intentAllowed || intentAllowed.length === 0) return roleAllowed;
+  const overlap = intentAllowed.filter((value) => roleAllowed.has(value));
+  return new Set(overlap.length > 0 ? overlap : roleAllowed);
 }
 
 export function compatibleVisualDirectorArchetypes(
@@ -434,6 +434,9 @@ export function validateVisualDirectorDecisions(
     }
 
     if (beat.role === "cover") {
+      if (!COVER_ARCHETYPES.has(decision.archetype)) {
+        issues.push(`Cover beat ${beat.id} must use a cover-safe archetype`);
+      }
       if (decision.density !== "low") {
         issues.push(`Cover beat ${beat.id} must use low density`);
       }
