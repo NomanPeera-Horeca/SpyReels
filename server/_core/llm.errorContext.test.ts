@@ -33,6 +33,18 @@ describe("errorContextForOperation", () => {
     );
   });
 
+  it("uses carousel wording for carousel_visual_direction", () => {
+    expect(errorContextForOperation("carousel_visual_direction")).toBe(
+      "carousel"
+    );
+    expect(userFacingMessage("carousel_visual_direction")).toBe(
+      "Something went wrong while creating your carousel plan. Tap Retry to try again."
+    );
+    expect(userFacingMessage("carousel_visual_direction")).not.toContain(
+      "writing your script"
+    );
+  });
+
   it("keeps script wording for normal script operations", () => {
     expect(errorContextForOperation()).toBe("script");
     expect(errorContextForOperation("script_generation")).toBe("script");

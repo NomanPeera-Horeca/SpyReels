@@ -17,7 +17,11 @@ import {
 } from "../carousel/generationTelemetry";
 
 export function errorContextForOperation(operation?: string): IdeaScriptErrorContext {
-  if (operation === "angle_generation" || operation === "copy_generation") {
+  if (
+    operation === "angle_generation" ||
+    operation === "copy_generation" ||
+    operation === "carousel_visual_direction"
+  ) {
     return "carousel";
   }
   return "script";
