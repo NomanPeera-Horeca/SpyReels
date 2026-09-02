@@ -165,3 +165,78 @@ export const CASH_DRAINS_REMAKE_67_BRIEF: CarouselCreativeBrief = {
 
 export const OPEN_CASH_FLOW_USER_PROMPT =
   "Make me a carousel about why small businesses run out of cash.";
+
+/** Corrected remake 67: cover + six drain items + closing. */
+export function cashDrainsRemake67CorrectedBrief(): CarouselCreativeBrief {
+  return {
+    ...CASH_DRAINS_REMAKE_67_BRIEF,
+    id: "brief_67_corrected",
+    estimatedSlideCount: 8,
+    slideOutline: [
+      {
+        position: 1,
+        role: "hook",
+        objective:
+          "Confront owners with the paradox of being profitable but broke to earn an immediate stop-scroll.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+      {
+        position: 2,
+        role: "problem",
+        objective:
+          "Introduce profit versus cash confusion as Cash Drain 1 and show why paper profit is not spendable cash.",
+        recommendedVisual: "comparison",
+        listItemIndex: 1,
+      },
+      {
+        position: 3,
+        role: "problem",
+        objective:
+          "Introduce slow invoicing and late collections as Cash Drain 2 with a concrete scenario.",
+        recommendedVisual: "text",
+        listItemIndex: 2,
+      },
+      {
+        position: 4,
+        role: "problem",
+        objective:
+          "Introduce dead inventory as Cash Drain 3 and show how it silently ties up working capital.",
+        recommendedVisual: "diagram",
+        listItemIndex: 3,
+      },
+      {
+        position: 5,
+        role: "problem",
+        objective:
+          "Introduce mismatched supplier and customer payment terms as Cash Drain 4.",
+        recommendedVisual: "timeline",
+        listItemIndex: 4,
+      },
+      {
+        position: 6,
+        role: "problem",
+        objective:
+          "Introduce operating without a cash reserve as Cash Drain 5 and frame it as a structural gap.",
+        recommendedVisual: "text",
+        listItemIndex: 5,
+      },
+      {
+        position: 7,
+        role: "problem",
+        objective:
+          "Introduce unplanned tax obligations as Cash Drain 6 and show the typical surprise timing.",
+        recommendedVisual: "text",
+        listItemIndex: 6,
+      },
+      {
+        position: 8,
+        role: "cta",
+        objective:
+          "Prompt owners to identify their biggest drain and comment or save for future reference.",
+        recommendedVisual: "text",
+        listItemIndex: null,
+      },
+    ],
+  };
+}

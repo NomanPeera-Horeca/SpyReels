@@ -1625,6 +1625,16 @@ function slideMentionsPromisedItemType(
   return framingMentionsItemType(text, itemType);
 }
 
+export function resolveCarouselOutlineListIndexes(
+  outline: CarouselCreativeBriefSlideOutlineItem[],
+  contract: CarouselListContract | null | undefined
+): Array<number | null> {
+  if (contract?.explicitListContract) {
+    return resolvePromisedListItemIndexes(outline, contract);
+  }
+  return resolveOutlineListItemIndexes(outline);
+}
+
 function resolvePromisedListItemIndexes(
   outline: CarouselCreativeBriefSlideOutlineItem[],
   contract: CarouselListContract
@@ -1813,9 +1823,9 @@ export function isNumberedProblemSolutionBrief(
   );
 }
 
-type NumberedCarouselItem = { kind: "problem" | "fix"; n: number };
+export type NumberedCarouselItem = { kind: "problem" | "fix"; n: number };
 
-function parseNumberedCarouselItem(
+export function parseNumberedCarouselItem(
   text: string
 ): NumberedCarouselItem | null {
   const problem = text.match(/\b(?:leak|problem)\s*([1-9]|1[0-2])\b/i);

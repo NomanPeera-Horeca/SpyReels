@@ -158,5 +158,8 @@ describe("generateCarouselRemake creative brief handoff", () => {
     expect(remake).toContain("creativeBrief?: CarouselCreativeBrief");
     expect(remake).toContain("if (!creativeBrief && angleDirection)");
     expect(remake).toContain("CREATIVE_BRIEF_NOT_FACTUAL_SOURCE_RULE");
+    expect(remake).toContain("compileCreativeBriefToPlanningIR");
+    expect(remake).toContain("validateCarouselPlanningIR");
+    expect(remake).toContain("bindPlanningIRToSlides");
   });
 });

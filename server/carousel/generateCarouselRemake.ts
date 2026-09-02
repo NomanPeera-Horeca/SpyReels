@@ -23,10 +23,19 @@ import {
   bindBriefOutlineToSlides,
   formatApprovedCreativeBriefForCopy,
   formatCarouselListItemNumber,
+  isLegacyCreativeBrief,
   stripSlideIntentMetadata,
   validateCopyBriefAdherence,
   type CarouselCreativeBrief,
 } from "@shared/carouselStudio";
+import {
+  bindPlanningIRToSlides,
+  compileCreativeBriefToPlanningIR,
+  planningIRListItemIndexes,
+  planningIRUsesListSequence,
+  validateCarouselPlanningIR,
+  type CarouselPlanningIR,
+} from "@shared/carouselPlanningIR";
 import { resolveSlideImage } from "./resolveSlideImage";
 import {
   assignPoolPhotosToSlots,
@@ -274,6 +283,17 @@ function reframeAngleInstruction(angle: VettedFact["reframeAngle"]): string {
     : 'Apply Rule 8 branch (a) TIMEFRAME/AGE/SCALE (craving negation) for not_line on this slide.';
 }
 
+function planningIRForModernBrief(
+  creativeBrief: CarouselCreativeBrief | undefined,
+  sourceContent?: string
+): CarouselPlanningIR | null {
+  if (!creativeBrief || isLegacyCreativeBrief(creativeBrief)) return null;
+  return compileCreativeBriefToPlanningIR({
+    brief: creativeBrief,
+    sourceContent: sourceContent ?? "",
+  });
+}
+
 export function buildCarouselRemakePrompt(
   templateName: string,
   templateDescription: string,
@@ -281,19 +301,22 @@ export function buildCarouselRemakePrompt(
   niche: string,
   lockedFacts: LockedSlideFacts = new Map(),
   sourceContent?: string,
-  creativeBrief?: CarouselCreativeBrief
+  creativeBrief?: CarouselCreativeBrief,
+  planningIR?: CarouselPlanningIR | null
 ): string {
   const hasAverageNotPair = slides.some(slideHasAverageNotLinePair);
   const unlockedAverageSlides = slides.filter(
     (slide) => slideHasAverageNotLinePair(slide) && !lockedFacts.has(slide.id)
   );
 
-  const outlineBindings = creativeBrief
-    ? bindBriefOutlineToSlides(
-        creativeBrief.slideOutline,
-        slides.map((slide) => slide.id)
-      )
-    : [];
+  const resolvedPlanningIR =
+    planningIR ?? planningIRForModernBrief(creativeBrief, sourceContent);
+  const slideIds = slides.map((slide) => slide.id);
+  const outlineBindings = resolvedPlanningIR
+    ? bindPlanningIRToSlides(resolvedPlanningIR, slideIds)
+    : creativeBrief
+      ? bindBriefOutlineToSlides(creativeBrief.slideOutline, slideIds)
+      : [];
   const plannedBySlideId = new Map(
     outlineBindings
       .filter((binding) => binding.slideId)
@@ -346,9 +369,9 @@ ${slotLines}`;
   const trimmedSource = sourceContent?.trim() ?? "";
   if (trimmedSource.length > 0 && creativeBrief) {
     const briefBlock = formatApprovedCreativeBriefForCopy(creativeBrief);
-    const usesListItemIndex = creativeBrief.slideOutline.some(
-      (slide) => slide.listItemIndex != null
-    );
+    const usesListItemIndex = resolvedPlanningIR
+      ? planningIRUsesListSequence(resolvedPlanningIR)
+      : creativeBrief.slideOutline.some((slide) => slide.listItemIndex != null);
     const numberKickerRule = usesListItemIndex
       ? 'use listItemIndex as "01", "02", etc. If the planned slide has no listItemIndex, do not use a promised item number. Never number from physical slide position.'
       : 'use "01", "02", etc.';
@@ -571,7 +594,8 @@ async function invokeCarouselRemakeOnce(
   lockedFacts: LockedSlideFacts = new Map(),
   repairNote?: string,
   sourceContent?: string,
-  creativeBrief?: CarouselCreativeBrief
+  creativeBrief?: CarouselCreativeBrief,
+  planningIR?: CarouselPlanningIR | null
 ): Promise<CarouselSlideValuesMap> {
   const schema = buildCarouselRemakeJsonSchema(slides);
   const basePrompt = buildCarouselRemakePrompt(
@@ -581,7 +605,8 @@ async function invokeCarouselRemakeOnce(
     niche,
     lockedFacts,
     sourceContent,
-    creativeBrief
+    creativeBrief,
+    planningIR
   );
   const userPrompt = repairNote
     ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return a full corrected payload:\n${repairNote}`
@@ -770,20 +795,28 @@ function buildDynamicSlideList(
 
 export function effectiveSlidesForCreativeBrief(
   template: CarouselTemplate,
-  brief: CarouselCreativeBrief
+  brief: CarouselCreativeBrief,
+  sourceContent?: string,
+  planningIR?: CarouselPlanningIR | null
 ): CarouselSlideSpec[] {
   const plannedCount =
     brief.slideOutline.length > 0
       ? brief.slideOutline.length
       : brief.estimatedSlideCount;
   const targetMiddleCount = Math.min(Math.max(plannedCount - 2, 3), 18);
-  const outlineListItemIndexes = brief.slideOutline.some(
-    (slide) => slide.listItemIndex != null
-  )
-    ? brief.slideOutline.map((slide) =>
-        typeof slide.listItemIndex === "number" ? slide.listItemIndex : null
-      )
-    : undefined;
+  const resolvedIR =
+    planningIR ?? planningIRForModernBrief(brief, sourceContent);
+  const irListIndexes = resolvedIR
+    ? planningIRListItemIndexes(resolvedIR)
+    : [];
+  const outlineListItemIndexes =
+    resolvedIR && planningIRUsesListSequence(resolvedIR)
+      ? irListIndexes
+      : brief.slideOutline.some((slide) => slide.listItemIndex != null)
+        ? brief.slideOutline.map((slide) =>
+            typeof slide.listItemIndex === "number" ? slide.listItemIndex : null
+          )
+        : undefined;
   return buildDynamicSlideList(
     template,
     targetMiddleCount,
@@ -846,6 +879,15 @@ export async function generateCarouselRemake(
   const uploadedImagePool = options?.uploadedImagePool;
   let sourceContent = options?.sourceContent?.trim() || undefined;
   const creativeBrief = options?.creativeBrief;
+  const planningIR = planningIRForModernBrief(creativeBrief, sourceContent);
+  if (planningIR) {
+    const irIssues = validateCarouselPlanningIR(planningIR);
+    if (irIssues.length > 0) {
+      console.info(
+        `[carouselRemake] ${remakeId}: planning IR issues: ${irIssues.join("; ")}`
+      );
+    }
+  }
   const angleDirection = options?.angleDirection?.trim();
   if (!creativeBrief && angleDirection) {
     sourceContent = sourceContent
@@ -929,7 +971,12 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      effectiveSlides = effectiveSlidesForCreativeBrief(template, creativeBrief);
+      effectiveSlides = effectiveSlidesForCreativeBrief(
+        template,
+        creativeBrief,
+        sourceContent,
+        planningIR
+      );
     } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
@@ -979,7 +1026,8 @@ export async function generateCarouselRemake(
           lockedFacts,
           undefined,
           sourceContent,
-          creativeBrief
+          creativeBrief,
+          planningIR
         );
         let nextValidation = validateGeneratedCarouselCopy(
           effectiveSlides,
@@ -997,7 +1045,8 @@ export async function generateCarouselRemake(
             lockedFacts,
             nextValidation.issues.join("\n"),
             sourceContent,
-            creativeBrief
+            creativeBrief,
+            planningIR
           );
           nextValidation = validateGeneratedCarouselCopy(
             effectiveSlides,

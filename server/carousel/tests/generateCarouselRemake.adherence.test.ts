@@ -337,6 +337,9 @@ describe("brief-to-slide positional mapping", () => {
       "Not a numbered list item. Do not assign a promised item number to this slide."
     );
     expect(prompt).toContain("Never number from physical slide position.");
+    expect(prompt).toContain("Planned role: cover");
+    expect(prompt).toContain("Planned role: list_item");
+    expect(prompt).toContain("Planned role: closing");
   });
 });
 
