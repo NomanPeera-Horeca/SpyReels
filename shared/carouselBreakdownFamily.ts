@@ -502,6 +502,13 @@ export function breakdownChecklistLines(values: CarouselSlotValues): string[] {
   return splitChecklistLines(breakdownRegionCopy(values, "body"));
 }
 
+export function breakdownDiagramNodes(values: CarouselSlotValues): string[] {
+  const fromSupport = splitNativeSteps(breakdownRegionCopy(values, "support"));
+  if (fromSupport.length >= 2) return fromSupport.slice(0, 4);
+  if (fromSupport.length === 1) return fromSupport;
+  return splitChecklistLines(breakdownRegionCopy(values, "body")).slice(0, 4);
+}
+
 export function breakdownDataPoint(values: CarouselSlotValues): string {
   return breakdownRegionCopy(values, "support").trim();
 }

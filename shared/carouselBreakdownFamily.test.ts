@@ -11,6 +11,7 @@ import {
   applyPlanningSequenceToCopy,
   breakdownChecklistLines,
   breakdownDataPoint,
+  breakdownDiagramNodes,
   breakdownSequenceLabel,
   breakdownTreatmentChrome,
   buildBreakdownListicleSlides,
@@ -337,6 +338,30 @@ describe("breakdown listicle family treatments", () => {
       "Mark unused tools",
       "Cancel idle apps",
     ]);
+  });
+
+  it("builds diagram nodes from support, then body, never headline", () => {
+    expect(
+      breakdownDiagramNodes({
+        headline: "Marketing Spend Attribution",
+        support: "Map the spend\nPause no-return ads",
+        body: "A longer explanation that is not the diagram.",
+      })
+    ).toEqual(["Map the spend", "Pause no-return ads"]);
+    expect(
+      breakdownDiagramNodes({
+        headline: "Marketing Spend Attribution",
+        body: "Map each active ad to a measurable outcome. Pause spend with no return.",
+      })
+    ).toEqual([
+      "Map each active ad to a measurable outcome.",
+      "Pause spend with no return.",
+    ]);
+    expect(
+      breakdownDiagramNodes({
+        headline: "Marketing Spend Attribution",
+      })
+    ).toEqual([]);
   });
 
   it("gives data_focus a semantic support slot for the copied metric", () => {

@@ -6,6 +6,7 @@ import type {
 import {
   breakdownChecklistLines,
   breakdownDataPoint,
+  breakdownDiagramNodes,
   breakdownRegionCopy,
   breakdownSequenceLabel,
   resolveBreakdownListicleRenderTreatment,
@@ -58,6 +59,71 @@ function shellStyle(tokens: CarouselDesignTokens): CSSProperties {
   };
 }
 
+function wash(color: string, alpha: number): string {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+function recessedCard(tokens: CarouselDesignTokens): CSSProperties {
+  return {
+    background: wash(tokens.colors.foreground, 0.045),
+    border: `1px solid ${wash(tokens.colors.foreground, 0.1)}`,
+    borderRadius: "0.95rem",
+  };
+}
+
+function accentCard(tokens: CarouselDesignTokens, strong = false): CSSProperties {
+  return {
+    background: wash(tokens.colors.accent, strong ? 0.2 : 0.12),
+    border: `1px solid ${wash(tokens.colors.accent, strong ? 0.85 : 0.55)}`,
+    borderRadius: "0.95rem",
+  };
+}
+
+function bodySlideHeadlineStyle(
+  tokens: CarouselDesignTokens,
+  extra?: CSSProperties
+): CSSProperties {
+  return {
+    margin: 0,
+    fontFamily: tokens.fontFamily.display,
+    fontSize: "clamp(1.38rem, 5.3vw, 1.7rem)",
+    fontWeight: 700,
+    lineHeight: 1.16,
+    letterSpacing: "-0.03em",
+    ...extra,
+  };
+}
+
+function bodyCopyStyle(
+  tokens: CarouselDesignTokens,
+  extra?: CSSProperties
+): CSSProperties {
+  return {
+    margin: 0,
+    fontSize: "0.86rem",
+    lineHeight: 1.48,
+    color: tokens.colors.muted,
+    ...extra,
+  };
+}
+
+function AccentRail({ tokens }: { tokens: CarouselDesignTokens }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        width: "0.28rem",
+        backgroundColor: tokens.colors.accent,
+        zIndex: 1,
+      }}
+    />
+  );
+}
+
 function HandleMark({
   handle,
   tokens,
@@ -103,10 +169,10 @@ function SequenceMark({
       style={{
         margin: 0,
         fontFamily: tokens.fontFamily.display,
-        fontSize: size === "hero" ? "clamp(3.4rem, 15vw, 4.75rem)" : "1.15rem",
+        fontSize: size === "hero" ? "clamp(3.4rem, 15vw, 4.75rem)" : "1.02rem",
         fontWeight: 700,
         lineHeight: 0.9,
-        letterSpacing: "-0.03em",
+        letterSpacing: size === "hero" ? "-0.03em" : "0.04em",
         color: tokens.colors.accent,
       }}
     />
@@ -129,11 +195,12 @@ function StrongCoverTreatment({
         ...shellStyle(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-end",
-        padding: "2.6rem 1.85rem 2.4rem",
+        justifyContent: "space-between",
+        padding: "2.05rem 1.65rem 2.1rem 1.85rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
+      <AccentRail tokens={tokens} />
       <div style={{ position: "relative", zIndex: 1 }}>
         {kicker ? (
           <CarouselEditableText
@@ -143,16 +210,21 @@ function StrongCoverTreatment({
             editable={editable}
             onCommit={onSlotChange}
             style={{
+              display: "inline-block",
               margin: 0,
-              marginBottom: "1rem",
-              fontSize: "0.72rem",
+              padding: "0.38rem 0.7rem",
+              borderRadius: "999px",
+              fontSize: "0.68rem",
               fontWeight: 700,
-              letterSpacing: "0.2em",
+              letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: tokens.colors.accent,
+              backgroundColor: tokens.colors.accent,
+              color: tokens.colors.background,
             }}
           />
         ) : null}
+      </div>
+      <div style={{ position: "relative", zIndex: 1 }}>
         <CarouselEditableText
           as="h2"
           slotId="headline"
@@ -163,18 +235,18 @@ function StrongCoverTreatment({
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(2rem, 8vw, 2.7rem)",
+            fontSize: "clamp(2.35rem, 9.6vw, 3.05rem)",
             fontWeight: 700,
-            lineHeight: 1.12,
-            letterSpacing: "-0.03em",
-            maxWidth: "12ch",
+            lineHeight: 1.04,
+            letterSpacing: "-0.04em",
+            maxWidth: "13ch",
           }}
         />
         <div
           style={{
-            width: "3.2rem",
-            height: "0.18rem",
-            margin: "1.2rem 0",
+            width: "2.6rem",
+            height: "0.26rem",
+            margin: "1.15rem 0 1rem",
             backgroundColor: tokens.colors.accent,
           }}
         />
@@ -186,13 +258,11 @@ function StrongCoverTreatment({
             editable={editable}
             onCommit={onSlotChange}
             multiline
-            style={{
-              margin: 0,
-              fontSize: "0.95rem",
+            style={bodyCopyStyle(tokens, {
+              fontSize: "0.9rem",
               lineHeight: 1.5,
-              color: tokens.colors.muted,
-              maxWidth: "28ch",
-            }}
+              maxWidth: "30ch",
+            })}
           />
         ) : null}
       </div>
@@ -218,7 +288,7 @@ function TextFocusTreatment({
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        padding: "2.5rem 1.85rem",
+        padding: "2.25rem 1.7rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -231,14 +301,11 @@ function TextFocusTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            margin: sequence ? "0.85rem 0 0" : 0,
-            fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.7rem, 6.5vw, 2.15rem)",
-            fontWeight: 700,
-            lineHeight: 1.18,
-            maxWidth: "14ch",
-          }}
+          style={bodySlideHeadlineStyle(tokens, {
+            margin: sequence ? "0.8rem 0 0" : 0,
+            fontSize: "clamp(1.7rem, 6.6vw, 2.15rem)",
+            maxWidth: "13ch",
+          })}
         />
         {body ? (
           <CarouselEditableText
@@ -248,13 +315,11 @@ function TextFocusTreatment({
             editable={editable}
             onCommit={onSlotChange}
             multiline
-            style={{
-              margin: "1rem 0 0",
-              fontSize: "0.95rem",
-              lineHeight: 1.5,
-              color: tokens.colors.muted,
+            style={bodyCopyStyle(tokens, {
+              margin: "1.05rem 0 0",
+              fontSize: "0.9rem",
               maxWidth: "30ch",
-            }}
+            })}
           />
         ) : null}
       </div>
@@ -293,14 +358,11 @@ function NumberFocusTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            margin: "1.15rem 0 0",
-            fontFamily: tokens.fontFamily.display,
+          style={bodySlideHeadlineStyle(tokens, {
+            margin: "1.05rem 0 0",
             fontSize: "clamp(1.45rem, 5.6vw, 1.9rem)",
-            fontWeight: 700,
-            lineHeight: 1.15,
             maxWidth: "16ch",
-          }}
+          })}
         />
         {body ? (
           <CarouselEditableText
@@ -310,13 +372,11 @@ function NumberFocusTreatment({
             editable={editable}
             onCommit={onSlotChange}
             multiline
-            style={{
+            style={bodyCopyStyle(tokens, {
               margin: "0.95rem 0 0",
-              fontSize: "0.95rem",
-              lineHeight: 1.5,
-              color: tokens.colors.muted,
+              fontSize: "0.9rem",
               maxWidth: "30ch",
-            }}
+            })}
           />
         ) : null}
       </div>
@@ -445,7 +505,7 @@ function ComparisonSplitTreatment({
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: "2.1rem 1.5rem 2rem",
+        padding: "2.05rem 1.45rem 1.95rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -458,13 +518,7 @@ function ComparisonSplitTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            margin: "0.7rem 0 0",
-            fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.35rem, 5.2vw, 1.7rem)",
-            fontWeight: 700,
-            lineHeight: 1.18,
-          }}
+          style={bodySlideHeadlineStyle(tokens, { margin: "0.65rem 0 0" })}
         />
       </div>
       <div
@@ -473,17 +527,20 @@ function ComparisonSplitTreatment({
           zIndex: 1,
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
-          gap: "0.6rem",
+          gap: "0.45rem",
           alignItems: "stretch",
-          margin: "1.4rem 0",
+          margin: "1.2rem 0",
+          flex: 1,
+          minHeight: "8.2rem",
         }}
       >
         <div
           style={{
-            border: `1px solid ${tokens.colors.muted}66`,
-            borderRadius: "1rem",
-            padding: "1rem 0.8rem",
-            background: "rgba(255,255,255,0.03)",
+            ...recessedCard(tokens),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.15rem 0.7rem",
           }}
         >
           <CarouselEditableText
@@ -495,32 +552,40 @@ function ComparisonSplitTreatment({
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
-              fontSize: "1.15rem",
+              fontSize: "1.05rem",
               fontWeight: 700,
+              lineHeight: 1.2,
               textAlign: "center",
+              letterSpacing: "-0.02em",
             }}
           />
         </div>
         <div
           style={{
             alignSelf: "center",
-            padding: "0.35rem 0.55rem",
+            width: "2rem",
+            height: "2rem",
             borderRadius: "999px",
             backgroundColor: tokens.colors.accent,
             color: tokens.colors.background,
-            fontSize: "0.65rem",
+            fontSize: "0.62rem",
             fontWeight: 700,
-            letterSpacing: "0.08em",
+            letterSpacing: "0.06em",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
           }}
         >
           VS
         </div>
         <div
           style={{
-            border: `1px solid ${tokens.colors.accent}`,
-            borderRadius: "1rem",
-            padding: "1rem 0.8rem",
-            background: `${tokens.colors.accent}14`,
+            ...accentCard(tokens, true),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.15rem 0.7rem",
           }}
         >
           <CarouselEditableText
@@ -532,9 +597,11 @@ function ComparisonSplitTreatment({
             style={{
               margin: 0,
               fontFamily: tokens.fontFamily.display,
-              fontSize: "1.15rem",
+              fontSize: "1.05rem",
               fontWeight: 700,
+              lineHeight: 1.2,
               textAlign: "center",
+              letterSpacing: "-0.02em",
             }}
           />
         </div>
@@ -547,14 +614,7 @@ function ComparisonSplitTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            position: "relative",
-            zIndex: 1,
-            margin: 0,
-            fontSize: "0.88rem",
-            lineHeight: 1.45,
-            color: tokens.colors.muted,
-          }}
+          style={bodyCopyStyle(tokens, { position: "relative", zIndex: 1 })}
         />
       ) : null}
       <HandleMark handle={handle} tokens={tokens} />
@@ -572,16 +632,21 @@ function DiagramFocusTreatment({
 }: TreatmentProps) {
   const headline = breakdownRegionCopy(values, "headline");
   const body = breakdownRegionCopy(values, "body");
-  const nodes = splitNativeSteps(breakdownRegionCopy(values, "support"));
-  const boxes = nodes.length >= 2 ? nodes : [headline, body].filter(Boolean);
+  const support = breakdownRegionCopy(values, "support");
+  const supportSteps = splitNativeSteps(support);
+  const nodes =
+    supportSteps.length === 1 && body
+      ? [supportSteps[0]!, body]
+      : breakdownDiagramNodes(values);
+  const showBody = supportSteps.length >= 2 && Boolean(body);
   return (
     <div
       style={{
         ...shellStyle(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
-        padding: "2.1rem 1.55rem",
+        justifyContent: "space-between",
+        padding: "2.05rem 1.45rem 1.95rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -594,44 +659,93 @@ function DiagramFocusTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            margin: "0.7rem 0 1.2rem",
-            fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
-            fontWeight: 700,
-            lineHeight: 1.18,
-          }}
+          style={bodySlideHeadlineStyle(tokens, { margin: "0.65rem 0 0" })}
         />
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {boxes.map((node, index) => (
-            <div key={`${node}-${index}`}>
+      </div>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          margin: "1.15rem 0 0",
+          flex: 1,
+          justifyContent: "center",
+        }}
+      >
+        {nodes.map((node, index) => (
+          <div
+            key={`${node}-${index}`}
+            style={{ display: "flex", gap: "0.75rem", alignItems: "stretch" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                width: "1.55rem",
+                flexShrink: 0,
+              }}
+            >
               <div
                 style={{
-                  border: `1px solid ${tokens.colors.accent}88`,
-                  borderRadius: "0.85rem",
-                  padding: "0.75rem 0.9rem",
-                  background: "rgba(255,255,255,0.03)",
-                  fontFamily: tokens.fontFamily.display,
-                  fontSize: "0.92rem",
+                  width: "1.55rem",
+                  height: "1.55rem",
+                  borderRadius: "999px",
+                  backgroundColor: tokens.colors.accent,
+                  color: tokens.colors.background,
+                  fontSize: "0.68rem",
                   fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                {node}
+                {String(index + 1).padStart(2, "0")}
               </div>
-              {index < boxes.length - 1 ? (
+              {index < nodes.length - 1 ? (
                 <div
                   style={{
                     width: "2px",
-                    height: "0.85rem",
-                    margin: "0 auto",
-                    backgroundColor: tokens.colors.accent,
+                    flex: 1,
+                    minHeight: "0.85rem",
+                    backgroundColor: wash(tokens.colors.accent, 0.7),
                   }}
                 />
               ) : null}
             </div>
-          ))}
-        </div>
+            <div
+              style={{
+                ...(index === 0 ? accentCard(tokens) : recessedCard(tokens)),
+                flex: 1,
+                padding: "0.85rem 0.9rem",
+                marginBottom: index < nodes.length - 1 ? "0.7rem" : 0,
+                fontSize: "0.86rem",
+                lineHeight: 1.42,
+                fontWeight: 600,
+              }}
+            >
+              {node}
+            </div>
+          </div>
+        ))}
       </div>
+      {showBody ? (
+        <CarouselEditableText
+          as="p"
+          slotId="body"
+          value={body}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
+          style={bodyCopyStyle(tokens, {
+            position: "relative",
+            zIndex: 1,
+            marginTop: "1rem",
+          })}
+        />
+      ) : null}
       <HandleMark handle={handle} tokens={tokens} />
     </div>
   );
@@ -656,8 +770,8 @@ function ChecklistStackTreatment({
         ...shellStyle(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
-        padding: "2.1rem 1.55rem",
+        justifyContent: "space-between",
+        padding: "2.05rem 1.45rem 1.95rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -670,13 +784,7 @@ function ChecklistStackTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{
-            margin: "0.7rem 0 0",
-            fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
-            fontWeight: 700,
-            lineHeight: 1.18,
-          }}
+          style={bodySlideHeadlineStyle(tokens, { margin: "0.65rem 0 0" })}
         />
         {showBody ? (
           <CarouselEditableText
@@ -686,61 +794,66 @@ function ChecklistStackTreatment({
             editable={editable}
             onCommit={onSlotChange}
             multiline
-            style={{
-              margin: "0.75rem 0 0",
-              fontSize: "0.88rem",
-              lineHeight: 1.45,
-              color: tokens.colors.muted,
-            }}
+            style={bodyCopyStyle(tokens, { margin: "0.7rem 0 0" })}
           />
         ) : null}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.7rem",
-            marginTop: "1.15rem",
-          }}
-        >
-          {rows.map((row, index) => (
+      </div>
+      <div
+        style={{
+          ...recessedCard(tokens),
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: "1.15rem",
+          overflow: "hidden",
+        }}
+      >
+        {rows.map((row, index) => (
+          <div
+            key={`${row}-${index}`}
+            data-breakdown-check-row={index + 1}
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              alignItems: "flex-start",
+              padding: "0.92rem 0.95rem",
+              borderTop:
+                index === 0 ? "none" : `1px solid ${wash(tokens.colors.foreground, 0.08)}`,
+            }}
+          >
             <div
-              key={`${row}-${index}`}
-              data-breakdown-check-row={index + 1}
-              style={{ display: "flex", gap: "0.7rem", alignItems: "flex-start" }}
+              style={{
+                width: "1.2rem",
+                height: "1.2rem",
+                borderRadius: "0.32rem",
+                backgroundColor: tokens.colors.accent,
+                color: tokens.colors.background,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                marginTop: "0.05rem",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
             >
-              <div
-                style={{
-                  width: "1.05rem",
-                  height: "1.05rem",
-                  borderRadius: "0.28rem",
-                  border: `1.5px solid ${tokens.colors.accent}`,
-                  background: `${tokens.colors.accent}22`,
-                  color: tokens.colors.accent,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  marginTop: "0.12rem",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                }}
-              >
-                ✓
-              </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.92rem",
-                  lineHeight: 1.4,
-                  color: tokens.colors.foreground,
-                }}
-              >
-                {row}
-              </p>
+              ✓
             </div>
-          ))}
-        </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.9rem",
+                lineHeight: 1.38,
+                fontWeight: 600,
+                color: tokens.colors.foreground,
+              }}
+            >
+              {row}
+            </p>
+          </div>
+        ))}
       </div>
       <HandleMark handle={handle} tokens={tokens} />
     </div>
@@ -764,8 +877,8 @@ function DataFocusTreatment({
         ...shellStyle(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
-        padding: "2.2rem 1.6rem",
+        justifyContent: "space-between",
+        padding: "2.05rem 1.45rem 1.95rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -778,12 +891,27 @@ function DataFocusTreatment({
           editable={editable}
           onCommit={onSlotChange}
           multiline
+          style={bodySlideHeadlineStyle(tokens, { margin: "0.65rem 0 0" })}
+        />
+      </div>
+      <div
+        style={{
+          ...accentCard(tokens, true),
+          position: "relative",
+          zIndex: 1,
+          marginTop: "1.15rem",
+          padding: "1.05rem 1rem 1.1rem",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          aria-hidden
           style={{
-            margin: "0.7rem 0 0",
-            fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
-            fontWeight: 700,
-            lineHeight: 1.18,
+            width: "2.1rem",
+            height: "0.22rem",
+            marginBottom: "0.75rem",
+            backgroundColor: tokens.colors.accent,
+            borderRadius: "999px",
           }}
         />
         {metric ? (
@@ -794,41 +922,29 @@ function DataFocusTreatment({
             editable={editable}
             onCommit={onSlotChange}
             style={{
-              margin: "1.15rem 0 0",
+              margin: 0,
               fontFamily: tokens.fontFamily.display,
-              fontSize: "clamp(1.85rem, 7.2vw, 2.45rem)",
+              fontSize: "clamp(1.12rem, 4.6vw, 1.38rem)",
               fontWeight: 700,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.05,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.22,
               color: tokens.colors.accent,
             }}
           />
         ) : null}
         {body ? (
-          <div
-            style={{
-              marginTop: metric ? "1.05rem" : "1.15rem",
-              border: `1px solid ${tokens.colors.accent}66`,
-              borderRadius: "1rem",
-              padding: "0.95rem 1rem",
-              background: `${tokens.colors.accent}12`,
-            }}
-          >
-            <CarouselEditableText
-              as="p"
-              slotId="body"
-              value={body}
-              editable={editable}
-              onCommit={onSlotChange}
-              multiline
-              style={{
-                margin: 0,
-                fontSize: "0.92rem",
-                lineHeight: 1.45,
-                color: tokens.colors.foreground,
-              }}
-            />
-          </div>
+          <CarouselEditableText
+            as="p"
+            slotId="body"
+            value={body}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
+            style={bodyCopyStyle(tokens, {
+              margin: metric ? "0.85rem 0 0" : 0,
+              color: tokens.colors.foreground,
+            })}
+          />
         ) : null}
       </div>
       <HandleMark handle={handle} tokens={tokens} />
@@ -869,11 +985,12 @@ function TimelineFlowTreatment({
           onCommit={onSlotChange}
           multiline
           style={{
-            margin: "0.7rem 0 1.25rem",
+            margin: "0.65rem 0 1.2rem",
             fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.3rem, 5vw, 1.65rem)",
+            fontSize: "clamp(1.38rem, 5.3vw, 1.7rem)",
             fontWeight: 700,
-            lineHeight: 1.18,
+            lineHeight: 1.16,
+            letterSpacing: "-0.03em",
           }}
         />
         <div style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
@@ -950,11 +1067,30 @@ function ClosingFocusTreatment({
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
-        padding: "2.5rem 1.75rem",
+        padding: "2.15rem 1.45rem",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
-      <div style={{ position: "relative", zIndex: 1, maxWidth: "18rem" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          maxWidth: "19rem",
+          ...recessedCard(tokens),
+          padding: "1.7rem 1.2rem 1.55rem",
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            width: "2.2rem",
+            height: "0.22rem",
+            margin: "0 auto 1.15rem",
+            backgroundColor: tokens.colors.accent,
+            borderRadius: "999px",
+          }}
+        />
         <CarouselEditableText
           as="h2"
           slotId="headline"
@@ -965,9 +1101,10 @@ function ClosingFocusTreatment({
           style={{
             margin: 0,
             fontFamily: tokens.fontFamily.display,
-            fontSize: "clamp(1.7rem, 6.8vw, 2.2rem)",
+            fontSize: "clamp(1.75rem, 6.8vw, 2.2rem)",
             fontWeight: 700,
-            lineHeight: 1.15,
+            lineHeight: 1.12,
+            letterSpacing: "-0.03em",
           }}
         />
         {body ? (
@@ -978,12 +1115,7 @@ function ClosingFocusTreatment({
             editable={editable}
             onCommit={onSlotChange}
             multiline
-            style={{
-              margin: "1.1rem 0 0",
-              fontSize: "0.95rem",
-              lineHeight: 1.5,
-              color: tokens.colors.muted,
-            }}
+            style={bodyCopyStyle(tokens, { margin: "0.95rem 0 0" })}
           />
         ) : null}
         {cta ? (
@@ -995,10 +1127,10 @@ function ClosingFocusTreatment({
             onCommit={onSlotChange}
             style={{
               display: "inline-block",
-              marginTop: "1.6rem",
-              padding: "0.7rem 1.3rem",
+              marginTop: "1.35rem",
+              padding: "0.78rem 1.45rem",
               borderRadius: "999px",
-              fontSize: "0.85rem",
+              fontSize: "0.86rem",
               fontWeight: 700,
               backgroundColor: tokens.colors.accent,
               color: tokens.colors.background,
