@@ -6,7 +6,7 @@ import type {
   CarouselImageUrlMap,
 } from "@shared/carouselTemplates";
 import { normalizeSlideImages } from "@shared/carouselTemplates";
-import { CAROUSEL_LAYOUT_REGISTRY } from "@/components/carouselLayoutRegistry";
+import { resolveCarouselSlideComponent } from "@/components/carouselLayoutRegistry";
 
 /** Per-slide slot overrides, keyed by CarouselSlideSpec.id */
 export type CarouselSlideValuesById = Record<string, CarouselSlotValues>;
@@ -150,7 +150,7 @@ export function CarouselRenderer({
       }}
     >
       {effectiveSlides.map((slide) => {
-        const Layout = CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
+        const Layout = resolveCarouselSlideComponent(slide);
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
         const { imageUrl, imageUrlsBySlot } = template.shareCoverImage
           ? { imageUrl: sharedCoverUrl, imageUrlsBySlot: undefined }
@@ -168,6 +168,7 @@ export function CarouselRenderer({
               imageUrl={imageUrl}
               imageUrlsBySlot={imageUrlsBySlot}
               editable={editable}
+              composition={slide.composition}
               onSlotChange={
                 onSlotChange
                   ? (slotId, value) => onSlotChange(slide.id, slotId, value)

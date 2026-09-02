@@ -29,6 +29,7 @@ export type CarouselGenerationStageName =
   | "source_vision_analysis"
   | "angle_generation"
   | "slide_count_decision"
+  | "visual_direction"
   | "copy_generation"
   | "image_prompt_generation"
   | "image_generation"

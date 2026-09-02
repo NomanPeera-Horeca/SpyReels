@@ -3,7 +3,7 @@
  * One whole-carousel LLM call chooses presentation. Deterministic code
  * assembles Composition IR so Planning IR remains semantic truth.
  *
- * Independently callable. Not wired into the remake worker.
+ * Wired into the modern breakdown remake path with baseline fallback.
  */
 
 import {

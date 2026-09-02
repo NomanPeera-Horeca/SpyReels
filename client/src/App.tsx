@@ -101,6 +101,10 @@ const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"))
 
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
+/** THROWAWAY: breakdown listicle slice visual proof. */
+const DevBreakdownSlicePreview = lazyWithRetry(
+  () => import("./pages/DevBreakdownSlicePreview")
+);
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
 const DevRemakeWorkspacePreview = lazyWithRetry(
   () => import("./pages/DevRemakeWorkspacePreview")
@@ -281,6 +285,10 @@ function Router() {
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
         <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
+        <Route
+          path="/dev/carousel-breakdown-slice"
+          component={DevBreakdownSlicePreview}
+        />
         {/* THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */}
         <Route path="/dev/remake-workspace" component={DevRemakeWorkspacePreview} />
         {/* THROWAWAY: Viral Posts visual proof. Remove with DevViralPostsPreview. */}

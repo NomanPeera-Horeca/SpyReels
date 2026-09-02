@@ -37,6 +37,12 @@ import {
   planningIRUsesListSequence,
   type CarouselPlanningIR,
 } from "@shared/carouselPlanningIR";
+import {
+  applyPlanningSequenceToCopy,
+  buildBreakdownListicleSlides,
+  shouldUseBreakdownListicleFamily,
+} from "@shared/carouselBreakdownFamily";
+import { generateCarouselVisualDirection } from "./generateCarouselVisualDirection";
 import { resolveSlideImage } from "./resolveSlideImage";
 import {
   assignPoolPhotosToSlots,
@@ -988,12 +994,37 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      effectiveSlides = effectiveSlidesForCreativeBrief(
-        template,
-        creativeBrief,
-        sourceContent,
-        planningIR
-      );
+      if (
+        planningIR &&
+        shouldUseBreakdownListicleFamily({
+          layoutFamily: creativeBrief.layoutFamily,
+          planningIR,
+        })
+      ) {
+        const visualDirection = await withGenerationStage(
+          telemetry,
+          "visual_direction",
+          () => generateCarouselVisualDirection(planningIR)
+        );
+        if (visualDirection.source === "baseline_fallback") {
+          console.warn(
+            `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,
+            visualDirection.issues.slice(0, 5).join("; ")
+          );
+        }
+        effectiveSlides = buildBreakdownListicleSlides({
+          template,
+          planningIR,
+          compositionIR: visualDirection.compositionIR,
+        });
+      } else {
+        effectiveSlides = effectiveSlidesForCreativeBrief(
+          template,
+          creativeBrief,
+          sourceContent,
+          planningIR
+        );
+      }
     } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
@@ -1077,7 +1108,10 @@ export async function generateCarouselRemake(
         return { values: nextValues, validation: nextValidation };
       }
     );
-    const values = stripSlideIntentMetadata(generatedValues);
+    const values = applyPlanningSequenceToCopy(
+      effectiveSlides,
+      stripSlideIntentMetadata(generatedValues)
+    );
 
     if (!validation.ok) {
       const hardIssues = validation.issues.filter(
