@@ -513,6 +513,32 @@ export function breakdownDataPoint(values: CarouselSlotValues): string {
   return breakdownRegionCopy(values, "support").trim();
 }
 
+/**
+ * Presentation-only. Lifts a threshold or metric phrase from the support slot.
+ * Never reads body. Never invents a statistic.
+ */
+const SUPPORT_THRESHOLD_PHRASE_RE =
+  /\b(\d+(?:\.\d+)?\+?\s*(?:days?|hours?|weeks?|months?|years?|mins?|minutes?)|\d+(?:\.\d+)?%|\$[\d,]+(?:\.\d+)?|\d+(?:\.\d+)?x)\b/i;
+
+export function breakdownDataHero(values: CarouselSlotValues): string {
+  const support = breakdownDataPoint(values);
+  if (!support) return "";
+  const match = support.match(SUPPORT_THRESHOLD_PHRASE_RE);
+  if (!match?.[1]) return support;
+  return match[1].replace(/\s+/g, " ").trim();
+}
+
+export type BreakdownChecklistRhythm = "compact" | "roomy" | "lead";
+
+export function breakdownChecklistRhythm(
+  listItemIndex: number | null | undefined
+): BreakdownChecklistRhythm {
+  const n = listItemIndex ?? 1;
+  if (n <= 2) return "compact";
+  if (n <= 4) return "roomy";
+  return "lead";
+}
+
 export function breakdownTreatmentChrome(
   treatment: BreakdownListicleTreatment
 ): readonly string[] {
@@ -534,7 +560,7 @@ export function breakdownTreatmentChrome(
     case "checklist_stack":
       return ["small-sequence", "headline", "body", "check-rows"];
     case "data_focus":
-      return ["small-sequence", "headline", "data-point", "body"];
+      return ["small-sequence", "headline", "data-hero", "data-point", "body"];
     case "closing_focus":
       return ["headline", "body", "cta"];
   }

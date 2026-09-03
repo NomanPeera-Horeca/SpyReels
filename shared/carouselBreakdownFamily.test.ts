@@ -10,6 +10,8 @@ import { CAROUSEL_TEMPLATES_BY_ID } from "./carouselTemplates";
 import {
   applyPlanningSequenceToCopy,
   breakdownChecklistLines,
+  breakdownChecklistRhythm,
+  breakdownDataHero,
   breakdownDataPoint,
   breakdownDiagramNodes,
   breakdownSequenceLabel,
@@ -207,7 +209,9 @@ describe("breakdown listicle family treatments", () => {
   it("renders data_focus visibly differently from number_focus", () => {
     const data = breakdownTreatmentChrome("data_focus");
     const number = breakdownTreatmentChrome("number_focus");
+    expect(data).toContain("data-hero");
     expect(data).toContain("data-point");
+    expect(number).not.toContain("data-hero");
     expect(number).not.toContain("data-point");
     expect(data).not.toEqual(number);
   });
@@ -266,6 +270,29 @@ describe("breakdown listicle family treatments", () => {
     expect(breakdownDataPoint({ body: "Flag anything unused for 60 days." })).not.toMatch(
       /\d/
     );
+  });
+
+  it("lifts a threshold phrase from support only for the data hero", () => {
+    expect(
+      breakdownDataHero({
+        support: "Flag all invoices past 30 days for follow-up",
+        body: "Sort all outstanding invoices by age. Any invoice over 30 days old is a recognized follow-up trigger, so act on it now.",
+      })
+    ).toBe("30 days");
+    expect(breakdownDataHero({ support: "30 days" })).toBe("30 days");
+    expect(
+      breakdownDataHero({
+        body: "Flag anything unused for 60 days.",
+      })
+    ).toBe("");
+    expect(breakdownDataHero({})).toBe("");
+  });
+
+  it("varies checklist rhythm from Planning IR sequence, not a new template", () => {
+    expect(breakdownChecklistRhythm(1)).toBe("compact");
+    expect(breakdownChecklistRhythm(4)).toBe("roomy");
+    expect(breakdownChecklistRhythm(6)).toBe("lead");
+    expect(breakdownChecklistRhythm(null)).toBe("compact");
   });
 
   it("uses the split treatment when text_visual_split has an image", () => {
