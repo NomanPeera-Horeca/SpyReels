@@ -4,6 +4,7 @@ import { ANGLE_GENERATION_FAILED } from "../angleGenerationObservability";
 
 vi.mock("../generateCarouselAngles", () => ({
   generateCarouselAngles: vi.fn(),
+  ANGLE_REVIEW_PLAN_MODEL: "claude-sonnet-4-6",
 }));
 
 import { generateCarouselAngles } from "../generateCarouselAngles";

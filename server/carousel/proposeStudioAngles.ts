@@ -1,5 +1,8 @@
 import type { CarouselCreativeBrief } from "@shared/carouselStudio";
-import { generateCarouselAngles } from "./generateCarouselAngles";
+import {
+  ANGLE_REVIEW_PLAN_MODEL,
+  generateCarouselAngles,
+} from "./generateCarouselAngles";
 import {
   logAngleGenerationFailed,
   resolveAngleGenerationCorrelationId,
@@ -32,7 +35,7 @@ export async function proposeStudioAngles(args: {
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
       error: err,
       operation: "angle_generation",
-      requestedModel: "claude-sonnet-4-6",
+      requestedModel: ANGLE_REVIEW_PLAN_MODEL,
     });
     wrapProposeStudioAnglesError(err);
   }

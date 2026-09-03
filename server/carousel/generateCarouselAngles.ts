@@ -55,7 +55,10 @@ import {
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { parseLlmJson } from "../utils/parseLlmJson";
 
-const ANGLE_GENERATION_REQUESTED_MODEL = "claude-sonnet-4-6";
+export const ANGLE_HAIKU_MODEL = "claude-haiku-4-5-20251001";
+export const ANGLE_REVIEW_PLAN_MODEL = "claude-sonnet-4-6";
+export const ANGLE_COMPACT_CANDIDATE_MODEL = ANGLE_HAIKU_MODEL;
+export const ANGLE_EXPANSION_MODEL = ANGLE_REVIEW_PLAN_MODEL;
 const COMPACT_CANDIDATE_MAX_TOKENS = 2048;
 const EXPANSION_MAX_TOKENS = 4096;
 
@@ -1216,6 +1219,7 @@ async function invokeCarouselAngleCandidatesOnce(args: {
   sourceContent: string;
   niche?: string | null;
   brandVoice?: string | null;
+  model?: string;
 }): Promise<{
   candidates: CarouselAngleCandidate[];
   fullBriefs: CarouselCreativeBrief[];
@@ -1238,6 +1242,7 @@ async function invokeCarouselAngleCandidatesOnce(args: {
     operation: "angle_generation",
     repairIteration: 0,
     maxTokens: COMPACT_CANDIDATE_MAX_TOKENS,
+    model: args.model ?? ANGLE_COMPACT_CANDIDATE_MODEL,
     messages: [
       {
         role: "system",
@@ -1286,6 +1291,7 @@ async function invokeCarouselAngleExpansionOnce(args: {
   brandVoice?: string | null;
   candidate: CarouselAngleCandidate;
   repairNote?: string;
+  model?: string;
 }): Promise<{
   briefs: CarouselCreativeBrief[];
   allNormalized: CarouselCreativeBrief[];
@@ -1311,6 +1317,7 @@ async function invokeCarouselAngleExpansionOnce(args: {
     operation: "angle_generation",
     repairIteration: args.repairNote ? 1 : 0,
     maxTokens: EXPANSION_MAX_TOKENS,
+    model: args.model ?? ANGLE_EXPANSION_MODEL,
     messages: [
       {
         role: "system",
@@ -1362,6 +1369,8 @@ export async function generateCarouselAngles(args: {
   correlationId?: string;
   entryPoint?: string;
   requiredValidBriefs?: CarouselAngleRequiredValidBriefs;
+  compactModel?: string;
+  expansionModel?: string;
 }): Promise<CarouselCreativeBrief[]> {
   const sourceContent = args.sourceContent.trim();
   const niche = args.niche?.trim() || undefined;
@@ -1371,6 +1380,12 @@ export async function generateCarouselAngles(args: {
 
   const requiredValidBriefs: CarouselAngleRequiredValidBriefs =
     args.requiredValidBriefs === 1 ? 1 : 3;
+  const compactModel =
+    args.compactModel?.trim() || ANGLE_COMPACT_CANDIDATE_MODEL;
+  const expansionModel =
+    args.expansionModel?.trim() || ANGLE_EXPANSION_MODEL;
+  const requestedModel =
+    requiredValidBriefs === 1 ? expansionModel : ANGLE_REVIEW_PLAN_MODEL;
   const correlationId = resolveAngleGenerationCorrelationId(args.correlationId);
   const startedAt = performance.now();
   let repairRan = false;
@@ -1421,6 +1436,7 @@ export async function generateCarouselAngles(args: {
         sourceContent,
         niche,
         brandVoice: args.brandVoice,
+        model: compactModel,
       });
       rawCandidateCount = compact.rawCandidateCount;
       compactCandidateCount = compact.candidates.length;
@@ -1482,6 +1498,7 @@ export async function generateCarouselAngles(args: {
           niche,
           brandVoice: args.brandVoice,
           candidate: selected,
+          model: expansionModel,
         });
         firstAttemptValidCount = expanded.briefs.length;
         normalizedCandidateCount = expanded.allNormalized.length;
@@ -1511,6 +1528,7 @@ export async function generateCarouselAngles(args: {
             niche,
             brandVoice: args.brandVoice,
             candidate: selected,
+            model: expansionModel,
             repairNote: buildCarouselAnglesRepairNote(
               0,
               expanded.semanticIssues,
@@ -1637,7 +1655,7 @@ export async function generateCarouselAngles(args: {
       requiredValidBriefs,
       proceededWithGracefulDegradation,
       semanticIssuesByCandidate: loggedIssues,
-      requestedModel: ANGLE_GENERATION_REQUESTED_MODEL,
+      requestedModel,
       angleGenerationMode,
       expansionRan,
       compactCandidateCount: compactCandidateCount ?? undefined,
@@ -1653,7 +1671,7 @@ export async function generateCarouselAngles(args: {
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
       error: err,
       operation: "angle_generation",
-      requestedModel: ANGLE_GENERATION_REQUESTED_MODEL,
+      requestedModel,
       repairIteration,
     });
     throw err;
