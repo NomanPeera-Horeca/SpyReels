@@ -272,10 +272,25 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.maxTokens).toBe(2048);
     expect(mockedInvokeLLM.mock.calls[1]?.[0]?.maxTokens).toBe(4096);
+    const compactSystem = String(
+      mockedInvokeLLM.mock.calls[0]?.[0]?.messages?.[0]?.content ?? ""
+    );
+    const compactUser = String(
+      mockedInvokeLLM.mock.calls[0]?.[0]?.messages?.[1]?.content ?? ""
+    );
+    const expandSystem = String(
+      mockedInvokeLLM.mock.calls[1]?.[0]?.messages?.[0]?.content ?? ""
+    );
     const expandPrompt = String(
       mockedInvokeLLM.mock.calls[1]?.[0]?.messages?.[1]?.content ?? ""
     );
+    expect(compactSystem).toContain("exactly 3 concise strategic candidates");
+    expect(compactSystem).not.toContain("three complete production-ready");
+    expect(compactUser).not.toContain("Propose exactly 3 genuinely different");
+    expect(expandSystem).toContain("Expand exactly one already-selected candidate");
+    expect(expandSystem).not.toContain("Propose exactly 3 genuinely different");
     expect(expandPrompt).toContain("Highest compact");
+    expect(expandPrompt).not.toContain("Propose exactly 3 genuinely different");
     expect(expandPrompt).not.toContain("Need 2 additional distinct briefs.");
     const payload = completionPayload();
     expect(payload.angleGenerationMode).toBe("candidates_then_expand");
@@ -283,6 +298,11 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(payload.compactCandidateCount).toBe(3);
     expect(payload.repairRan).toBe(false);
     expect(payload.firstAttemptValidCount).toBe(1);
+    const compact = payload.compact as { validCompactCandidateCount?: number };
+    const expansion = payload.expansion as { firstPassValid?: boolean; repairRan?: boolean };
+    expect(compact.validCompactCandidateCount).toBe(3);
+    expect(expansion.firstPassValid).toBe(true);
+    expect(expansion.repairRan).toBe(false);
   });
 
   it("auto mode repairs an invalid expansion without a third candidate call", async () => {

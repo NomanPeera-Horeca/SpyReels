@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCarouselAngleCandidatesJsonSchema,
+  buildCarouselAngleCandidatesSystemPrompt,
+  buildCarouselAngleCandidatesUserPrompt,
   buildCarouselAngleExpansionJsonSchema,
+  buildCarouselAngleExpansionSystemPrompt,
+  buildCarouselAngleExpansionUserPrompt,
   buildCarouselAnglesJsonSchema,
   buildCarouselAnglesRepairNote,
   buildCarouselAnglesSystemPrompt,
   buildCarouselAnglesUserPrompt,
+  normalizeGeneratedCarouselAngleCandidate,
+  selectValidCarouselAngleCandidates,
+  type CarouselAngleCandidate,
 } from "../generateCarouselAngles";
 import { resolveStudioCarouselNiche } from "@shared/carouselStudio";
 
@@ -259,6 +266,10 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("listItemIndex 1 through 6");
     expect(user).toContain("do not replace \"cash drains\"");
     expect(user).toContain("Every candidate must honor this contract.");
+    expect(user).toContain("Propose exactly 3 genuinely different content strategies");
+    expect(buildCarouselAnglesSystemPrompt()).toContain(
+      "three complete production-ready creative briefs"
+    );
   });
 
   it("does not lock taxonomy on an open cash-flow topic", () => {
@@ -288,5 +299,166 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(note).toContain("Preserve the explicit list contract: exactly 6 cash drains.");
     expect(note).toContain("Semantic issues to fix");
     expect(note).toContain("The brief changed the promised item type");
+  });
+});
+
+const CASH_DRAINS_SOURCE = "The 6 Silent Cash Drains Killing Small Businesses";
+
+function sampleCompactCandidate(
+  overrides: Partial<CarouselAngleCandidate> = {}
+): CarouselAngleCandidate {
+  return {
+    kicker: "Diagnostic",
+    title: "The 6 Silent Cash Drains Killing Small Businesses",
+    description: "Name the six cash drains owners miss.",
+    estimatedSlideCount: 8,
+    topic: "cash drains",
+    inferredAudience: "small business owners",
+    contentGoal: "education",
+    contentFormat: "breakdown",
+    angleType: "diagnostic",
+    hook: "The 6 Silent Cash Drains Killing Small Businesses",
+    corePromise: "Name the six cash drains owners miss.",
+    centralInsight: "Cash timing is the silent killer.",
+    layoutFamily: "breakdown",
+    claimRisk: "medium",
+    researchMode: "claim_verification",
+    scores: {
+      relevance: 80,
+      usefulness: 70,
+      specificity: 60,
+      visualPotential: 50,
+      factualSafety: 90,
+      originality: 40,
+      overall: 65,
+    },
+    confidence: 0.8,
+    ...overrides,
+  };
+}
+
+describe("generateCarouselAngles dedicated compact and expansion prompts", () => {
+  it("keeps Review Plan on the full three-brief system and user prompts", () => {
+    const system = buildCarouselAnglesSystemPrompt();
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent: CASH_DRAINS_SOURCE,
+    });
+    expect(system).toContain("three complete production-ready creative briefs");
+    expect(user).toContain("Propose exactly 3 genuinely different content strategies");
+    expect(user).toContain("Each brief needs");
+    expect(user).toContain("slideOutline length must equal estimatedSlideCount");
+  });
+
+  it("uses a compact-only system and user prompt", () => {
+    const system = buildCarouselAngleCandidatesSystemPrompt();
+    const user = buildCarouselAngleCandidatesUserPrompt({
+      sourceContent: CASH_DRAINS_SOURCE,
+    });
+    expect(system).toContain("exactly 3 concise strategic candidates");
+    expect(system).toContain("These are not complete creative briefs.");
+    expect(system).not.toContain("three complete production-ready");
+    expect(system).not.toContain("Propose exactly 3 genuinely different");
+    expect(user).not.toContain("three complete production-ready");
+    expect(user).not.toContain("Propose exactly 3 genuinely different");
+    expect(user).not.toContain("Each brief needs");
+    expect(user).not.toContain("slideOutline length must equal estimatedSlideCount");
+    expect(user).toContain("promised item type = cash drains");
+    expect(user).toContain("promised count = 6");
+    expect(user).toContain("estimated slide count = 8");
+    expect(user).toContain("Every candidate must remain a 6-item cash drains carousel.");
+    expect(user).toContain("not by taxonomy or count");
+    expect(user).toContain(CASH_DRAINS_SOURCE);
+  });
+
+  it("uses an expansion-only system and user prompt", () => {
+    const candidate = sampleCompactCandidate();
+    const system = buildCarouselAngleExpansionSystemPrompt();
+    const user = buildCarouselAngleExpansionUserPrompt({
+      sourceContent: CASH_DRAINS_SOURCE,
+      candidate,
+    });
+    expect(system).toContain("Expand exactly one already-selected candidate");
+    expect(system).toContain("Do not propose alternative strategies.");
+    expect(system).toContain("one complete production-ready creative brief");
+    expect(system).not.toContain("three complete production-ready");
+    expect(system).not.toContain("Propose exactly 3 genuinely different");
+    expect(user).not.toContain("Propose exactly 3 genuinely different");
+    expect(user).not.toContain("three complete production-ready");
+    expect(user).not.toContain("The three candidates should normally represent");
+    expect(user).toContain("Expand ONLY the selected candidate");
+    expect(user).toContain("Do not propose other strategies.");
+    expect(user).toContain(candidate.title);
+    expect(user).toContain("This selected brief must honor the contract.");
+    expect(user).toContain("slideOutline length must equal estimatedSlideCount");
+    expect(user).toContain("This brief needs");
+  });
+
+  it("bakes the explicit list contract into compact schema field descriptions", () => {
+    const schema = buildCarouselAngleCandidatesJsonSchema({
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    const angles = schema.schema.properties as {
+      angles: { items: { properties: Record<string, { description?: string }> } };
+    };
+    expect(angles.angles.items.properties.title.description).toContain(
+      "Keep promised count 6 and item type \"cash drains\""
+    );
+    expect(angles.angles.items.properties.estimatedSlideCount.description).toContain(
+      "Must be 8"
+    );
+    expect(angles.angles.items.properties).not.toHaveProperty("slideOutline");
+  });
+
+  it("normalizes compact estimatedSlideCount to the list-contract slide count", () => {
+    const raw = {
+      ...sampleCompactCandidate({ estimatedSlideCount: 7 }),
+      scores: {
+        relevance: 80,
+        usefulness: 70,
+        specificity: 60,
+        visualPotential: 50,
+        factualSafety: 90,
+        originality: 40,
+      },
+    };
+    const selected = selectValidCarouselAngleCandidates([raw], {
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    expect(selected.candidates).toHaveLength(1);
+    expect(selected.candidates[0]?.estimatedSlideCount).toBe(8);
+    expect(normalizeGeneratedCarouselAngleCandidate(raw)?.estimatedSlideCount).toBe(
+      7
+    );
+  });
+
+  it("still rejects compact candidates that change list taxonomy", () => {
+    const raw = {
+      ...sampleCompactCandidate({
+        title: "6 Cash Myths Killing Your Business",
+        hook: "6 Cash Myths Killing Your Business",
+        corePromise: "Bust six cash myths owners still believe.",
+      }),
+      scores: {
+        relevance: 80,
+        usefulness: 70,
+        specificity: 60,
+        visualPotential: 50,
+        factualSafety: 90,
+        originality: 40,
+      },
+    };
+    const selected = selectValidCarouselAngleCandidates([raw], {
+      explicitListContract: true,
+      promisedCount: 6,
+      promisedItemType: "cash drains",
+    });
+    expect(selected.candidates).toEqual([]);
+    expect(selected.semanticIssues.join(" ")).toContain(
+      "The brief changed the promised item type"
+    );
   });
 });

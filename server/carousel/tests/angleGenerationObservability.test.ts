@@ -4,6 +4,7 @@ import {
   ANGLE_GENERATION_COMPLETED,
   ANGLE_GENERATION_FAILED,
   ANGLE_GENERATION_STARTED,
+  ANGLE_GENERATION_SUBSTAGE_COMPLETED,
   GENERATE_FROM_INPUT_FAILED,
   INVOKE_LLM_LOGICAL_FAILED,
   INVOKE_LLM_LOGICAL_STARTED,
@@ -12,6 +13,7 @@ import {
   logAngleGenerationFailed,
   logAngleGenerationStarted,
   logAngleInvokeLlmEvent,
+  logAngleSubstageCompleted,
   logGenerateFromInputCaughtError,
   wrapProposeStudioAnglesError,
 } from "../angleGenerationObservability";
@@ -105,6 +107,40 @@ describe("angle generation log payloads", () => {
     expect(dumped).not.toContain("prompt");
     expect(info.mock.calls[0]?.[1]).not.toHaveProperty("sourceContent");
     expect(info.mock.calls[0]?.[1]).not.toHaveProperty("prompt");
+  });
+
+  it("substage logs report counts and tokens without source text", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    logAngleSubstageCompleted({
+      correlationId: "corr-sub",
+      substage: "compact",
+      inputCharacterCount: 2100,
+      inputTokens: 800,
+      outputTokens: 400,
+      durationMs: 22000,
+      rawCandidateCount: 3,
+      validCompactCandidateCount: 3,
+    });
+    logAngleSubstageCompleted({
+      correlationId: "corr-sub",
+      substage: "expansion",
+      inputCharacterCount: 2800,
+      inputTokens: 1100,
+      outputTokens: 1500,
+      durationMs: 30000,
+      firstPassValid: true,
+      repairRan: false,
+    });
+
+    const dumped = flattenLogCalls(info);
+    expect(dumped).toContain(ANGLE_GENERATION_SUBSTAGE_COMPLETED);
+    expect(dumped).toContain('"substage":"compact"');
+    expect(dumped).toContain('"validCompactCandidateCount":3');
+    expect(dumped).toContain('"firstPassValid":true');
+    expect(dumped).toContain('"repairRan":false');
+    expect(dumped).not.toContain(SECRET_SOURCE);
+    expect(dumped).not.toContain(SECRET_PROMPT);
+    expect(dumped).not.toContain("prompt");
   });
 
   it("failure logs the original error before any wrap helper runs", () => {

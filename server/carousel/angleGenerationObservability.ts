@@ -9,6 +9,8 @@ import { getActiveGenerationTelemetry } from "./generationTelemetry";
 export const ANGLE_GENERATION_STARTED = "[carouselStudio] angle generation started";
 export const ANGLE_GENERATION_COMPLETED = "[carouselStudio] angle generation completed";
 export const ANGLE_GENERATION_FAILED = "[carouselStudio] angle generation failed";
+export const ANGLE_GENERATION_SUBSTAGE_COMPLETED =
+  "[carouselStudio] angle substage completed";
 export const GENERATE_FROM_INPUT_FAILED =
   "[carouselStudio] generateFromInput failed";
 
@@ -158,6 +160,52 @@ export type SemanticIssuesByCandidate = {
   codes: string[];
 };
 
+export type AngleSubstageName = "compact" | "expansion";
+
+export type CompactSubstageMetrics = {
+  inputCharacterCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  rawCandidateCount: number;
+  validCompactCandidateCount: number;
+};
+
+export type ExpansionSubstageMetrics = {
+  inputCharacterCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  firstPassValid: boolean;
+  repairRan: boolean;
+};
+
+export function logAngleSubstageCompleted(fields: {
+  correlationId: string;
+  substage: AngleSubstageName;
+  inputCharacterCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  rawCandidateCount?: number | null;
+  validCompactCandidateCount?: number | null;
+  firstPassValid?: boolean | null;
+  repairRan?: boolean | null;
+}): void {
+  console.info(ANGLE_GENERATION_SUBSTAGE_COMPLETED, {
+    correlationId: fields.correlationId,
+    substage: fields.substage,
+    inputCharacterCount: fields.inputCharacterCount,
+    inputTokens: fields.inputTokens,
+    outputTokens: fields.outputTokens,
+    durationMs: fields.durationMs,
+    rawCandidateCount: fields.rawCandidateCount ?? null,
+    validCompactCandidateCount: fields.validCompactCandidateCount ?? null,
+    firstPassValid: fields.firstPassValid ?? null,
+    repairRan: fields.repairRan ?? null,
+  });
+}
+
 export function logAngleGenerationCompleted(fields: {
   correlationId: string;
   durationMs: number;
@@ -176,6 +224,8 @@ export function logAngleGenerationCompleted(fields: {
   expansionRan?: boolean;
   compactCandidateCount?: number;
   repairReason?: string | null;
+  compact?: CompactSubstageMetrics | null;
+  expansion?: ExpansionSubstageMetrics | null;
 }): void {
   console.info(ANGLE_GENERATION_COMPLETED, {
     correlationId: fields.correlationId,
@@ -196,6 +246,8 @@ export function logAngleGenerationCompleted(fields: {
     expansionRan: fields.expansionRan ?? false,
     compactCandidateCount: fields.compactCandidateCount ?? null,
     repairReason: fields.repairReason ?? null,
+    compact: fields.compact ?? null,
+    expansion: fields.expansion ?? null,
   });
 }
 
