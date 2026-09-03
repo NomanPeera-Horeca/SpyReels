@@ -33,6 +33,7 @@ import { invokeLLM } from "../../_core/llm";
 import {
   assembleVisualDirectorCompositionIR,
   buildCarouselVisualDirectionJsonSchema,
+  buildCarouselVisualDirectionRepairNote,
   buildCarouselVisualDirectionSystemPrompt,
   buildCarouselVisualDirectionUserPrompt,
   compatibleVisualDirectorArchetypes,
@@ -418,6 +419,16 @@ describe("generateCarouselVisualDirection module boundary", () => {
       expect(VISUAL_DIRECTOR_SOURCE).not.toContain(templateId);
     }
   });
+
+  it("does not duplicate ARCHETYPE_VISUAL_RULES", () => {
+    expect(VISUAL_DIRECTOR_SOURCE).not.toContain("ARCHETYPE_VISUAL_RULES");
+    expect(VISUAL_DIRECTOR_SOURCE).toContain(
+      "validateCarouselArchetypeVisualRegions"
+    );
+    expect(VISUAL_DIRECTOR_SOURCE).toContain(
+      "describeCarouselArchetypeVisualContract"
+    );
+  });
 });
 
 describe("Visual Director provider schema", () => {
@@ -479,6 +490,24 @@ describe("Visual Director prompt", () => {
     expect(user.toLowerCase()).not.toContain("researchmode");
     expect(user).not.toMatch(/templateId|layoutId|slotId|fontSize|imagePrompt/);
     expect(user).not.toMatch(/#[0-9a-fA-F]{3,8}|font-family:|width:\s*\d/);
+    expect(user).toContain("- text_focus -> no visual region");
+    expect(user).toContain("- number_focus -> no visual region");
+    expect(user).toContain("- closing_focus -> no visual region");
+    expect(user).toContain(
+      "- text_visual_split -> photo / illustration / icon_scene -> left / right / split"
+    );
+    expect(user).toContain(
+      "- full_bleed_visual -> photo / illustration -> full_bleed"
+    );
+    expect(user).toContain(
+      "- comparison_split -> comparison -> split / left / right"
+    );
+    expect(user).toContain(
+      "- checklist_stack -> checklist -> center / bottom"
+    );
+    expect(user).toContain("- timeline_flow -> timeline -> center");
+    expect(user).toContain("- diagram_focus -> diagram -> center");
+    expect(user).toContain("- data_focus -> data -> center");
     for (const templateId of OLD_TEMPLATE_IDS) {
       expect(system).not.toContain(templateId);
       expect(user).not.toContain(templateId);
@@ -1097,5 +1126,135 @@ describe("Visual Director locked planning fields", () => {
     expect(assembled.slides[1]?.semanticRole).toBe("problem");
     expect(assembled.slides[1]?.position).toBe(2);
     expect(planningIR).toEqual(before);
+  });
+});
+
+describe("Visual Director archetype visualRegions", () => {
+  function withDecision(
+    planningIR: CarouselPlanningIR,
+    beatId: string,
+    patch: Partial<CarouselVisualDirectorDecision>
+  ): CarouselVisualDirectorDecision[] {
+    return remake67StrongDecisions(planningIR).map((decision) =>
+      decision.beatId === beatId ? { ...decision, ...patch } : decision
+    );
+  }
+
+  it("rejects full_bleed_visual with background and names the required full_bleed placement", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = withDecision(planningIR, "beat_01", {
+      archetype: "full_bleed_visual",
+      emphasis: "visual",
+      visualRegions: [
+        { role: "primary", kind: "photo", placement: "background" },
+      ],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(issues).toContain(
+      "Beat beat_01 archetype full_bleed_visual requires placement full_bleed; got background"
+    );
+  });
+
+  it("rejects checklist_stack with no visual region and names the required checklist visual", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = withDecision(planningIR, "beat_06", {
+      archetype: "checklist_stack",
+      emphasis: "headline",
+      visualRegions: [],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(issues).toContain(
+      "Beat beat_06 archetype checklist_stack requires at least one visual region with kind checklist and placement center or bottom"
+    );
+  });
+
+  it("accepts checklist_stack with a checklist visual at bottom", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = withDecision(planningIR, "beat_06", {
+      archetype: "checklist_stack",
+      emphasis: "headline",
+      visualRegions: [
+        { role: "supporting", kind: "checklist", placement: "bottom" },
+      ],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(
+      issues.filter((issue) => /checklist_stack|visual region/.test(issue))
+    ).toEqual([]);
+    const compositionIR = assembleVisualDirectorCompositionIR({
+      planningIR,
+      decisions,
+    });
+    expect(validateCarouselCompositionIR(compositionIR, planningIR)).toEqual([]);
+  });
+
+  it("rejects comparison_split with the wrong visual kind", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = withDecision(planningIR, "beat_02", {
+      visualRegions: [
+        { role: "primary", kind: "illustration", placement: "split" },
+      ],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(issues).toContain(
+      "Beat beat_02 archetype comparison_split requires kind comparison; got illustration"
+    );
+  });
+
+  it("rejects number_focus when a visual region is present", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = withDecision(planningIR, "beat_03", {
+      archetype: "number_focus",
+      visualRegions: [
+        { role: "supporting", kind: "photo", placement: "right" },
+      ],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, decisions);
+    expect(issues).toContain(
+      "Beat beat_03 archetype number_focus must not include visual regions"
+    );
+  });
+
+  it("still accepts a valid Visual Director decision in both VD and Composition IR", () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const decisions = remake67StrongDecisions(planningIR);
+    expect(validateVisualDirectorDecisions(planningIR, decisions)).toEqual([]);
+    const compositionIR = assembleVisualDirectorCompositionIR({
+      planningIR,
+      decisions,
+    });
+    expect(validateCarouselCompositionIR(compositionIR, planningIR)).toEqual([]);
+  });
+
+  it("puts beat-specific visual contract issues in the repair prompt", async () => {
+    const planningIR = planningFromBrief(cashDrainsRemake67CorrectedBrief());
+    const valid = remake67StrongDecisions(planningIR);
+    const invalid = withDecision(planningIR, "beat_01", {
+      archetype: "full_bleed_visual",
+      emphasis: "visual",
+      visualRegions: [
+        { role: "primary", kind: "photo", placement: "background" },
+      ],
+    });
+    const issues = validateVisualDirectorDecisions(planningIR, invalid);
+    const repairNote = buildCarouselVisualDirectionRepairNote(issues);
+    expect(repairNote).toContain(
+      "Beat beat_01 archetype full_bleed_visual requires placement full_bleed; got background"
+    );
+
+    mockedInvokeLLM.mockReset();
+    mockedInvokeLLM
+      .mockResolvedValueOnce(llmResult(invalid))
+      .mockResolvedValueOnce(llmResult(valid));
+    const result = await generateCarouselVisualDirection(planningIR);
+    expect(result.source).toBe("ai_repair");
+    const repairCall = mockedInvokeLLM.mock.calls[1]?.[0] as {
+      messages?: { role: string; content: string }[];
+    };
+    const repairUser = repairCall.messages?.find((message) => message.role === "user")
+      ?.content;
+    expect(repairUser).toContain(
+      "Beat beat_01 archetype full_bleed_visual requires placement full_bleed; got background"
+    );
   });
 });

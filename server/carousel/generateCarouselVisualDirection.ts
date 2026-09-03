@@ -3,7 +3,7 @@
  * One whole-carousel LLM call chooses presentation. Deterministic code
  * assembles Composition IR so Planning IR remains semantic truth.
  *
- * Independently callable. Not wired into the remake worker.
+ * Wired into the modern breakdown remake path with baseline fallback.
  */
 
 import {
@@ -18,6 +18,8 @@ import {
   CAROUSEL_COMPOSITION_VISUAL_ROLES,
   FORBIDDEN_CAROUSEL_COMPOSITION_IR_KEYS,
   compilePlanningIRToBaselineCompositionIR,
+  describeCarouselArchetypeVisualContract,
+  validateCarouselArchetypeVisualRegions,
   validateCarouselCompositionIR,
   type CarouselCompositionArchetype,
   type CarouselCompositionDensity,
@@ -433,6 +435,14 @@ export function validateVisualDirectorDecisions(
       }
     }
 
+    issues.push(
+      ...validateCarouselArchetypeVisualRegions({
+        archetype: decision.archetype,
+        visualRegions: decision.visualRegions,
+        subjectLabel: `Beat ${beat.id}`,
+      })
+    );
+
     if (beat.role === "cover") {
       if (!COVER_ARCHETYPES.has(decision.archetype)) {
         issues.push(`Cover beat ${beat.id} must use a cover-safe archetype`);
@@ -720,6 +730,9 @@ export function buildCarouselVisualDirectionUserPrompt(
     "Planning IR owns sequence.index. Do not flatten problem/solution pairs into list_item.",
     "List items may use number_focus, text_visual_split, comparison_split, timeline_flow, diagram_focus, checklist_stack, or data_focus when justified.",
     "",
+    "Archetype visual contract (kind and placement must match the chosen archetype):",
+    describeCarouselArchetypeVisualContract(),
+    "",
     "Text regions are semantic only. No finished copy.",
     "Most slides should use 0 or 1 visual regions. Use multiple only when they improve communication.",
     "Do not create visuals just to fill space.",
@@ -804,11 +817,12 @@ async function invokeVisualDirectorOnce(args: {
     },
   });
 
-  const raw = String(response.choices[0]?.message?.content ?? "");
-  if (!raw.trim()) {
+  const rawText = String(response.choices[0]?.message?.content ?? "");
+  if (!rawText.trim()) {
     return { slides: [] };
   }
-  return parseLlmJson<DecisionsPayload>(raw, { slides: [] });
+  const parsed = parseLlmJson<DecisionsPayload | null>(rawText, null);
+  return parsed ?? { slides: [] };
 }
 
 function fallbackResult(
@@ -865,7 +879,9 @@ export async function generateCarouselVisualDirection(
     issues.push(...repaired.issues);
     return fallbackResult(planningIR, 2, issues);
   } catch (error) {
-    issues.push(error instanceof Error ? error.message : String(error));
+    const invokeError =
+      error instanceof Error ? error.message : String(error);
+    issues.push(invokeError);
     return fallbackResult(planningIR, Math.max(attempts, 1), issues);
   }
 }

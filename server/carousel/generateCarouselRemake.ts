@@ -37,6 +37,12 @@ import {
   planningIRUsesListSequence,
   type CarouselPlanningIR,
 } from "@shared/carouselPlanningIR";
+import {
+  applyPlanningSequenceToCopy,
+  buildBreakdownListicleSlides,
+  canUseBreakdownListicleFamily,
+} from "@shared/carouselBreakdownFamily";
+import { generateCarouselVisualDirection } from "./generateCarouselVisualDirection";
 import { resolveSlideImage } from "./resolveSlideImage";
 import {
   assignPoolPhotosToSlots,
@@ -217,13 +223,24 @@ function textContextForImageSlot(
   return first?.trim() ?? "";
 }
 
+function slotSchemaDescription(slot: CarouselSlideSpec["slots"][number]): string {
+  const budget = `${slot.budget.min}-${slot.budget.max} characters.`;
+  if (slot.label === "Checklist lines") {
+    return `Checklist lines (${slot.role}). Write 2-4 short actionable lines, each separated by a newline. Use only facts from the source or approved brief. ${budget}`;
+  }
+  if (slot.label === "Data point") {
+    return `Data point (${slot.role}). Write one concise metric, threshold, or key data phrase grounded in the source or approved brief. Do not invent an unsupported statistic. ${budget}`;
+  }
+  return `${slot.label} (${slot.role}). ${budget}`;
+}
+
 function buildSlotSchemaForSlide(slide: CarouselSlideSpec): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
   for (const slot of slide.slots) {
     properties[slot.id] = {
       type: "string",
-      description: `${slot.label} (${slot.role}). ${slot.budget.min}-${slot.budget.max} characters.`,
+      description: slotSchemaDescription(slot),
     };
     required.push(slot.id);
   }
@@ -376,6 +393,16 @@ ${slotLines}`;
     const numberKickerRule = usesListItemIndex
       ? 'use listItemIndex as "01", "02", etc. If the planned slide has no listItemIndex, do not use a promised item number. Never number from physical slide position.'
       : 'use "01", "02", etc.';
+    const checklistLinesHint = slides.some((slide) =>
+      slide.slots.some((slot) => slot.label === "Checklist lines")
+    )
+      ? `\n9b. For slots labeled "Checklist lines": write 2-4 short actionable lines, each separated by a newline. Use only facts from the source or approved brief.`
+      : "";
+    const dataPointHint = slides.some((slide) =>
+      slide.slots.some((slot) => slot.label === "Data point")
+    )
+      ? `\n9c. For slots labeled "Data point": write one concise metric, threshold, or key data phrase grounded in the source or approved brief. Do not invent an unsupported statistic.`
+      : "";
     return `You turn existing creator content into Instagram carousel slide text. The template layout, fonts, colors, and slide order are LOCKED. You only write slot text.
 
 Creator niche / audience context (optional):
@@ -412,7 +439,7 @@ ${
 9. For slots with role "kicker":
    - If the slot label is "Kicker": use a short uppercased audience or theme word from the source when possible.
    - If the slot label is "Number" or "Step number": ${numberKickerRule}
-   - If the slot label is "Stat": use a short striking number from the source when available.
+   - If the slot label is "Stat": use a short striking number from the source when available.${checklistLinesHint}${dataPointHint}
 10. Return ONLY the tool payload with every slide id, every slot id, slideIntent, and closingType filled.${averageNotRule}${noNamedBrandRule}
 ${slideBlocks}`;
   }
@@ -988,12 +1015,34 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      effectiveSlides = effectiveSlidesForCreativeBrief(
-        template,
-        creativeBrief,
-        sourceContent,
-        planningIR
-      );
+      if (planningIR && canUseBreakdownListicleFamily(planningIR)) {
+        const visualDirection = await withGenerationStage(
+          telemetry,
+          "visual_direction",
+          () => generateCarouselVisualDirection(planningIR)
+        );
+        console.log(
+          `[carouselRemake] ${remakeId}: Visual Director source=${visualDirection.source} attempts=${visualDirection.attempts}`
+        );
+        if (visualDirection.source === "baseline_fallback") {
+          console.warn(
+            `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,
+            visualDirection.issues.slice(0, 5).join("; ")
+          );
+        }
+        effectiveSlides = buildBreakdownListicleSlides({
+          template,
+          planningIR,
+          compositionIR: visualDirection.compositionIR,
+        });
+      } else {
+        effectiveSlides = effectiveSlidesForCreativeBrief(
+          template,
+          creativeBrief,
+          sourceContent,
+          planningIR
+        );
+      }
     } else if (slideCountOption !== undefined) {
       const defaultMiddleCount = countMiddleSlides(template);
       const targetMiddleCount =
@@ -1077,7 +1126,10 @@ export async function generateCarouselRemake(
         return { values: nextValues, validation: nextValidation };
       }
     );
-    const values = stripSlideIntentMetadata(generatedValues);
+    const values = applyPlanningSequenceToCopy(
+      effectiveSlides,
+      stripSlideIntentMetadata(generatedValues)
+    );
 
     if (!validation.ok) {
       const hardIssues = validation.issues.filter(

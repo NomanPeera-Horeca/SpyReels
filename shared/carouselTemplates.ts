@@ -261,6 +261,17 @@ export type CarouselSlideSpec = {
   slots: CarouselTextSlot[];
   /** Optional photo region(s) for this slide. Most slides have none. */
   imageSlots?: CarouselImageSlot[];
+  /**
+   * Breakdown/listicle family metadata from Composition IR.
+   * Absent on legacy catalog templates. Renderer uses this to pick a treatment.
+   */
+  composition?: {
+    family: "breakdown_listicle";
+    archetype: string;
+    treatment: string;
+    semanticRole: string;
+    listItemIndex: number | null;
+  };
 };
 
 export type CarouselTemplate = {

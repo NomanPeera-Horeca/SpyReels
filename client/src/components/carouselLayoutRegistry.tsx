@@ -2,8 +2,11 @@ import type { ComponentType } from "react";
 import type {
   CarouselDesignTokens,
   CarouselLayoutId,
+  CarouselSlideSpec,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
+import { CarouselBreakdownListicleFamily } from "@/components/CarouselBreakdownListicleFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
 import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCenter";
@@ -32,6 +35,8 @@ export type CarouselSlideLayoutProps = {
   editable?: boolean;
   /** Commit a slot edit; slotId matches template slot ids. */
   onSlotChange?: (slotId: string, value: string) => void;
+  /** Breakdown family metadata. Ignored by legacy layouts. */
+  composition?: CarouselSlideSpec["composition"];
 };
 
 /**
@@ -56,3 +61,12 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
   stat_split_stack: CarouselSlideStatSplitStack,
   photo_quote_bubbles: CarouselSlidePhotoQuoteBubbles,
 };
+
+export function resolveCarouselSlideComponent(
+  slide: Pick<CarouselSlideSpec, "layoutId" | "composition">
+): ComponentType<CarouselSlideLayoutProps> {
+  if (isBreakdownListicleSlide(slide)) {
+    return CarouselBreakdownListicleFamily;
+  }
+  return CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
+}
