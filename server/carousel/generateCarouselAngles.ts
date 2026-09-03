@@ -57,8 +57,27 @@ import { parseLlmJson } from "../utils/parseLlmJson";
 
 export const ANGLE_HAIKU_MODEL = "claude-haiku-4-5-20251001";
 export const ANGLE_REVIEW_PLAN_MODEL = "claude-sonnet-4-6";
+/** Compact model for sources with an explicit list contract. */
 export const ANGLE_COMPACT_CANDIDATE_MODEL = ANGLE_HAIKU_MODEL;
 export const ANGLE_EXPANSION_MODEL = ANGLE_REVIEW_PLAN_MODEL;
+
+/**
+ * Compact candidates use Haiku only when the source has an explicit list
+ * contract. Open-ended stories and opinions stay on Sonnet.
+ */
+export function resolveCompactCandidateModel(
+  sourceContent: string,
+  listContract?: CarouselListContract | null
+): string {
+  const contract =
+    listContract === undefined
+      ? detectExplicitCarouselListContract(sourceContent)
+      : listContract;
+  return contract?.explicitListContract
+    ? ANGLE_COMPACT_CANDIDATE_MODEL
+    : ANGLE_EXPANSION_MODEL;
+}
+
 const COMPACT_CANDIDATE_MAX_TOKENS = 2048;
 /** Remake 78 full-brief expansion used 1494 output tokens. Slim payload stays under this. */
 export const EXPANSION_MAX_TOKENS = 4096;
@@ -803,6 +822,12 @@ function inventedListContractPromptLines(): string[] {
   ];
 }
 
+export const ONE_CLOSING_EXPANSION_CONTRACT =
+  "slideOutline must contain exactly ONE final closing. Valid: insight then cta, or insight then takeaway. Invalid: takeaway then cta. The last slide is the one intentional ending. If you were planning both a takeaway and a CTA, use the penultimate position for a real content, story, or insight beat, and keep only the final slide as cta or takeaway. Do not add a second competing ending. Preserve estimatedSlideCount. Do not drop a slide to hide an extra closing.";
+
+export const COMPETING_ENDINGS_REPAIR_CONTRACT =
+  "Exactly one closing. Do not return takeaway and cta as two final slides. Preserve the total slide count. Convert the extra closing into a substantive content, story, or insight beat. Keep only the last slide as cta or takeaway.";
+
 export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
   niche?: string | null;
@@ -920,6 +945,7 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
     "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
+    ONE_CLOSING_EXPANSION_CONTRACT,
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
     "Avoid unsupported absolutes and sensational claims.",
     "Record risky or unsupported statements under prohibitedClaims.",
@@ -1144,6 +1170,7 @@ export function buildCarouselAngleExpansionRepairNote(
     `Fix the expansion fields only: audienceReasoning, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to the selected estimatedSlideCount${slideCount != null ? ` (${slideCount})` : ""}, visualDirection, imageDirection, evidenceRequirements, prohibitedClaims, and ctaDirection.`,
     "Do not regenerate title, hook, corePromise, centralInsight, audience, format, layout, angle, or research classification.",
     "Numbered problem-solution outlines must include every promised leak/problem before its fix, must not claim N plugs that were never outlined, must have exactly one final closing, and that closing must be a cta or takeaway last slide with no competing endings.",
+    COMPETING_ENDINGS_REPAIR_CONTRACT,
   ];
   if (semanticIssues.length > 0) {
     parts.push(`Semantic issues to fix: ${semanticIssues.join(" ")}`);
@@ -1521,7 +1548,7 @@ export async function generateCarouselAngles(args: {
   const requiredValidBriefs: CarouselAngleRequiredValidBriefs =
     args.requiredValidBriefs === 1 ? 1 : 3;
   const compactModel =
-    args.compactModel?.trim() || ANGLE_COMPACT_CANDIDATE_MODEL;
+    args.compactModel?.trim() || resolveCompactCandidateModel(sourceContent);
   const expansionModel =
     args.expansionModel?.trim() || ANGLE_EXPANSION_MODEL;
   const requestedModel =

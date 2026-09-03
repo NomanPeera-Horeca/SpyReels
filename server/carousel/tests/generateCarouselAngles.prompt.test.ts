@@ -4,13 +4,16 @@ import {
   buildCarouselAngleCandidatesSystemPrompt,
   buildCarouselAngleCandidatesUserPrompt,
   buildCarouselAngleExpansionJsonSchema,
+  buildCarouselAngleExpansionRepairNote,
   buildCarouselAngleExpansionSystemPrompt,
   buildCarouselAngleExpansionUserPrompt,
   buildCarouselAnglesJsonSchema,
   buildCarouselAnglesRepairNote,
   buildCarouselAnglesSystemPrompt,
   buildCarouselAnglesUserPrompt,
+  COMPETING_ENDINGS_REPAIR_CONTRACT,
   normalizeGeneratedCarouselAngleCandidate,
+  ONE_CLOSING_EXPANSION_CONTRACT,
   selectValidCarouselAngleCandidates,
   type CarouselAngleCandidate,
 } from "../generateCarouselAngles";
@@ -422,6 +425,47 @@ describe("generateCarouselAngles dedicated compact and expansion prompts", () =>
       "slideOutline length must equal the selected estimatedSlideCount (8)"
     );
     expect(user).toContain("This payload needs");
+    expect(user).toContain(ONE_CLOSING_EXPANSION_CONTRACT);
+    expect(user).toContain("exactly ONE final closing");
+    expect(user).toContain("Invalid: takeaway then cta");
+    expect(user).toContain(
+      "use the penultimate position for a real content, story, or insight beat"
+    );
+  });
+
+  it("puts the one-closing contract on every expansion format, including stories", () => {
+    const storyUser = buildCarouselAngleExpansionUserPrompt({
+      sourceContent:
+        "How I lost my first company and rebuilt from scratch as a solo founder",
+      candidate: sampleCompactCandidate({
+        title: "I lost the company and started over",
+        hook: "The first company died. The second one is mine.",
+        corePromise: "Walk through the rebuild without turning it into a numbered list.",
+        contentFormat: "story",
+        layoutFamily: "story",
+        angleType: "story",
+        estimatedSlideCount: 7,
+      }),
+    });
+    expect(storyUser).toContain(ONE_CLOSING_EXPANSION_CONTRACT);
+    expect(storyUser).toContain("exactly ONE final closing");
+    expect(storyUser).not.toContain("EXPLICIT LIST CONTRACT");
+  });
+
+  it("repairs competing endings without dropping a slide", () => {
+    const note = buildCarouselAngleExpansionRepairNote(
+      ['Brief "Founder rebuild": Brief has multiple competing endings'],
+      { estimatedSlideCount: 7 }
+    );
+    expect(note).toContain(COMPETING_ENDINGS_REPAIR_CONTRACT);
+    expect(note).toContain("Exactly one closing.");
+    expect(note).toContain("Do not return takeaway and cta as two final slides.");
+    expect(note).toContain("Preserve the total slide count.");
+    expect(note).toContain(
+      "Convert the extra closing into a substantive content, story, or insight beat."
+    );
+    expect(note).toContain("Brief has multiple competing endings");
+    expect(note).toContain("slideOutline length equal to the selected estimatedSlideCount (7)");
   });
 
   it("bakes the explicit list contract into compact schema field descriptions", () => {

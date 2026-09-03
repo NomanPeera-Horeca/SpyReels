@@ -11,6 +11,7 @@ import {
   ANGLE_HAIKU_MODEL,
   ANGLE_REVIEW_PLAN_MODEL,
   generateCarouselAngles,
+  resolveCompactCandidateModel,
 } from "../generateCarouselAngles";
 
 const mockedInvokeLLM = vi.mocked(invokeLLM);
@@ -61,11 +62,21 @@ function compactCandidate() {
   };
 }
 
-function expansionPayload() {
+function listCompactCandidate() {
+  return {
+    ...compactCandidate(),
+    title: "The 6 Silent Cash Drains Killing Small Businesses",
+    hook: "The 6 Silent Cash Drains Killing Small Businesses",
+    corePromise: "Name the six cash drains owners miss.",
+    estimatedSlideCount: 8,
+  };
+}
+
+function expansionPayload(slideCount = 6) {
   return {
     audienceReasoning: "The source names this audience.",
     keyPoints: sampleKeyPoints(),
-    slideOutline: sampleOutline(6),
+    slideOutline: sampleOutline(slideCount),
     visualDirection: "Simple numbered breakdown cards.",
     imageDirection: "Neutral desk and ledger photos.",
     evidenceRequirements: ["Verify cash-cycle claims"],
@@ -124,24 +135,61 @@ describe("generateCarouselAngles model routing", () => {
 
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.model).toBeUndefined();
     expect(ANGLE_REVIEW_PLAN_MODEL).toBe("claude-sonnet-4-6");
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(1);
   });
 
-  it("routes auto compact and expansion through explicit model constants", async () => {
+  it("routes explicit-list compact to Haiku and expansion to Sonnet", async () => {
     mockedInvokeLLM
-      .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
-      .mockResolvedValueOnce(llmResult({ expansion: expansionPayload() }));
+      .mockResolvedValueOnce(llmResult({ angles: [listCompactCandidate()] }))
+      .mockResolvedValueOnce(llmResult({ expansion: expansionPayload(8) }));
 
     await generateCarouselAngles({
-      sourceContent: "Why small businesses run out of cash.",
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
       requiredValidBriefs: 1,
     });
 
     expect(ANGLE_COMPACT_CANDIDATE_MODEL).toBe(ANGLE_HAIKU_MODEL);
     expect(ANGLE_EXPANSION_MODEL).toBe(ANGLE_REVIEW_PLAN_MODEL);
+    expect(
+      resolveCompactCandidateModel(
+        "The 6 Silent Cash Drains Killing Small Businesses"
+      )
+    ).toBe(ANGLE_HAIKU_MODEL);
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.model).toBe(ANGLE_HAIKU_MODEL);
     expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(
       ANGLE_REVIEW_PLAN_MODEL
     );
+  });
+
+  it("routes open-ended story compact to Sonnet and expansion to Sonnet", async () => {
+    mockedInvokeLLM
+      .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
+      .mockResolvedValueOnce(llmResult({ expansion: expansionPayload() }));
+
+    await generateCarouselAngles({
+      sourceContent:
+        "How I lost my first company and rebuilt from scratch as a solo founder",
+      requiredValidBriefs: 1,
+    });
+
+    expect(
+      resolveCompactCandidateModel(
+        "How I lost my first company and rebuilt from scratch as a solo founder"
+      )
+    ).toBe(ANGLE_REVIEW_PLAN_MODEL);
+    expect(mockedInvokeLLM.mock.calls[0]?.[0]?.model).toBe(
+      ANGLE_REVIEW_PLAN_MODEL
+    );
+    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(
+      ANGLE_REVIEW_PLAN_MODEL
+    );
+  });
+
+  it("keeps compact Haiku and expansion Sonnet constants explicit", () => {
+    expect(ANGLE_COMPACT_CANDIDATE_MODEL).toBe(ANGLE_HAIKU_MODEL);
+    expect(ANGLE_EXPANSION_MODEL).toBe(ANGLE_REVIEW_PLAN_MODEL);
+    expect(ANGLE_HAIKU_MODEL).toBe("claude-haiku-4-5-20251001");
+    expect(ANGLE_REVIEW_PLAN_MODEL).toBe("claude-sonnet-4-6");
   });
 
   it("honors compact and expansion model overrides", async () => {
