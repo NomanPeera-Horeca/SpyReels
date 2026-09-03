@@ -1675,13 +1675,13 @@ function resolvePromisedListItemIndexes(
   });
 }
 
-function validateExplicitListContract(
-  brief: CarouselCreativeBrief,
+export function validateCarouselListContractFraming(
+  framing: Pick<CarouselCreativeBrief, "title" | "hook" | "corePromise">,
   contract: CarouselListContract
 ): string[] {
   const issues: string[] = [];
-  const framing = [brief.title, brief.hook, brief.corePromise].join("\n");
-  const briefContract = detectExplicitCarouselListContract(framing);
+  const text = [framing.title, framing.hook, framing.corePromise].join("\n");
+  const briefContract = detectExplicitCarouselListContract(text);
   if (briefContract) {
     if (briefContract.promisedCount !== contract.promisedCount) {
       issues.push("The hook changed the promised item count");
@@ -1689,14 +1689,22 @@ function validateExplicitListContract(
     if (!listItemTypesAlign(contract.promisedItemType, briefContract.promisedItemType)) {
       issues.push("The brief changed the promised item type");
     }
-  } else {
-    if (!framingMentionsCount(framing, contract.promisedCount)) {
-      issues.push("The hook changed the promised item count");
-    }
-    if (!framingMentionsItemType(framing, contract.promisedItemType)) {
-      issues.push("The brief changed the promised item type");
-    }
+    return issues;
   }
+  if (!framingMentionsCount(text, contract.promisedCount)) {
+    issues.push("The hook changed the promised item count");
+  }
+  if (!framingMentionsItemType(text, contract.promisedItemType)) {
+    issues.push("The brief changed the promised item type");
+  }
+  return issues;
+}
+
+function validateExplicitListContract(
+  brief: CarouselCreativeBrief,
+  contract: CarouselListContract
+): string[] {
+  const issues = validateCarouselListContractFraming(brief, contract);
 
   const pairedSolution = briefPromisesPairedSolutions(brief);
   if (

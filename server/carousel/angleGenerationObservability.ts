@@ -171,6 +171,11 @@ export function logAngleGenerationCompleted(fields: {
   requiredValidBriefs?: 1 | 3;
   proceededWithGracefulDegradation?: boolean;
   semanticIssuesByCandidate?: SemanticIssuesByCandidate[];
+  requestedModel?: string;
+  angleGenerationMode?: "full_briefs" | "candidates_then_expand";
+  expansionRan?: boolean;
+  compactCandidateCount?: number;
+  repairReason?: string | null;
 }): void {
   console.info(ANGLE_GENERATION_COMPLETED, {
     correlationId: fields.correlationId,
@@ -186,6 +191,11 @@ export function logAngleGenerationCompleted(fields: {
     proceededWithGracefulDegradation:
       fields.proceededWithGracefulDegradation ?? false,
     semanticIssuesByCandidate: fields.semanticIssuesByCandidate ?? [],
+    requestedModel: fields.requestedModel ?? "claude-sonnet-4-6",
+    angleGenerationMode: fields.angleGenerationMode ?? "full_briefs",
+    expansionRan: fields.expansionRan ?? false,
+    compactCandidateCount: fields.compactCandidateCount ?? null,
+    repairReason: fields.repairReason ?? null,
   });
 }
 

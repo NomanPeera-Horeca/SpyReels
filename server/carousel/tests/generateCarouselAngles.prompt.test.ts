@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCarouselAngleCandidatesJsonSchema,
+  buildCarouselAngleExpansionJsonSchema,
   buildCarouselAnglesJsonSchema,
   buildCarouselAnglesRepairNote,
   buildCarouselAnglesSystemPrompt,
@@ -141,6 +143,67 @@ describe("generateCarouselAngles JSON schema", () => {
   });
 });
 
+describe("generateCarouselAngles compact candidate schema", () => {
+  function assertNoUnsupportedArrayBounds(schema: Record<string, unknown>) {
+    const unsupported: string[] = [];
+    const walk = (value: unknown, path: string) => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => walk(item, `${path}[${index}]`));
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      if (typeof record.minItems === "number" && record.minItems !== 0 && record.minItems !== 1) {
+        unsupported.push(`${path}.minItems=${record.minItems}`);
+      }
+      if (typeof record.maxItems === "number") {
+        unsupported.push(`${path}.maxItems=${record.maxItems}`);
+      }
+      for (const [key, child] of Object.entries(record)) {
+        walk(child, `${path}.${key}`);
+      }
+    };
+    walk(schema, "schema");
+    expect(unsupported).toEqual([]);
+  }
+
+  it("omits expanded brief fields from compact candidates", () => {
+    const schema = buildCarouselAngleCandidatesJsonSchema();
+    const angles = schema.schema.properties as {
+      angles: { items: { required: string[]; properties: Record<string, unknown> } };
+    };
+    const required = angles.angles.items.required;
+    expect(required).toEqual(
+      expect.arrayContaining([
+        "title",
+        "hook",
+        "corePromise",
+        "centralInsight",
+        "angleType",
+        "scores",
+      ])
+    );
+    expect(required).not.toContain("keyPoints");
+    expect(required).not.toContain("slideOutline");
+    expect(required).not.toContain("visualDirection");
+    expect(required).not.toContain("imageDirection");
+    expect(required).not.toContain("evidenceRequirements");
+    expect(required).not.toContain("prohibitedClaims");
+    expect(required).not.toContain("audienceReasoning");
+    expect(required).not.toContain("ctaDirection");
+    expect(angles.angles.items.properties).not.toHaveProperty("keyPoints");
+    expect(angles.angles.items.properties).not.toHaveProperty("slideOutline");
+    assertNoUnsupportedArrayBounds(schema.schema);
+  });
+
+  it("expands a single brief without an angles array", () => {
+    const schema = buildCarouselAngleExpansionJsonSchema();
+    expect(schema.schema.required).toEqual(["brief"]);
+    expect(schema.schema.properties).not.toHaveProperty("angles");
+    assertNoUnsupportedArrayBounds(schema.schema);
+  });
+});
+
 describe("generateCarouselAngles planning guidance", () => {
   it("can represent a fat-loss request as health/fitness claim verification", () => {
     const user = buildCarouselAnglesUserPrompt({
@@ -195,6 +258,7 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("estimatedSlideCount should be 8");
     expect(user).toContain("listItemIndex 1 through 6");
     expect(user).toContain("do not replace \"cash drains\"");
+    expect(user).toContain("Every candidate must honor this contract.");
   });
 
   it("does not lock taxonomy on an open cash-flow topic", () => {

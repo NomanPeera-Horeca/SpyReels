@@ -33,6 +33,7 @@ import {
   studioGenerateActionEnabled,
   briefPromisesPairedSolutions,
   validateCarouselBriefSemantics,
+  validateCarouselListContractFraming,
   validateCopyBriefAdherence,
   type CarouselCreativeBrief,
   type CarouselListContract,
@@ -2024,6 +2025,16 @@ describe("explicit carousel list contract", () => {
     expect(selectSemanticallyValidCarouselBriefs([brief], contract).briefs).toEqual(
       []
     );
+    expect(
+      validateCarouselListContractFraming(
+        {
+          title: brief.title,
+          hook: brief.hook,
+          corePromise: brief.corePromise,
+        },
+        contract
+      )
+    ).toContain("The brief changed the promised item type");
   });
 
   it("defaults a simple six-item listicle to exactly 8 slides with no context", () => {
