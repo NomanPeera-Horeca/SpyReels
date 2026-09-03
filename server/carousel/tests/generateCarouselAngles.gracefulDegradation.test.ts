@@ -158,7 +158,33 @@ function compactCandidate(
   };
 }
 
-function llmBriefResult(brief: unknown) {
+function expansionPayload(
+  overrides: {
+    lastRole?: "takeaway" | "insight";
+    title?: string;
+    hook?: string;
+  } = {}
+) {
+  const brief = rawBrief({
+    title: overrides.title ?? "Expansion-only payload",
+    angleType: "diagnostic",
+    lastRole: overrides.lastRole,
+  });
+  return {
+    audienceReasoning: brief.audienceReasoning,
+    keyPoints: brief.keyPoints,
+    slideOutline: brief.slideOutline,
+    visualDirection: brief.visualDirection,
+    imageDirection: brief.imageDirection,
+    evidenceRequirements: brief.evidenceRequirements,
+    prohibitedClaims: brief.prohibitedClaims,
+    ctaDirection: brief.ctaDirection,
+    title: overrides.title,
+    hook: overrides.hook,
+  };
+}
+
+function llmExpansionResult(expansion: unknown) {
   return {
     id: "msg_test",
     created: 0,
@@ -168,7 +194,7 @@ function llmBriefResult(brief: unknown) {
         index: 0,
         message: {
           role: "assistant" as const,
-          content: JSON.stringify({ brief }),
+          content: JSON.stringify({ expansion }),
         },
         finish_reason: "stop",
       },
@@ -257,8 +283,8 @@ describe("generateCarouselAngles graceful degradation", () => {
         ])
       )
       .mockResolvedValueOnce(
-        llmBriefResult(
-          rawBrief({ title: "Highest compact", angleType: "story" })
+        llmExpansionResult(
+          expansionPayload({ title: "Ignore this expansion title" })
         )
       );
 
@@ -271,7 +297,7 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(briefs[0]?.title).toBe("Highest compact");
     expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.maxTokens).toBe(2048);
-    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.maxTokens).toBe(4096);
+    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.maxTokens).toBe(2048);
     const compactSystem = String(
       mockedInvokeLLM.mock.calls[0]?.[0]?.messages?.[0]?.content ?? ""
     );
@@ -310,9 +336,13 @@ describe("generateCarouselAngles graceful degradation", () => {
       .mockResolvedValueOnce(
         llmResult([compactCandidate({ title: "Cash candidate", angleType: "diagnostic" })])
       )
-      .mockResolvedValueOnce(llmBriefResult(invalidBrief("Broken expansion")))
       .mockResolvedValueOnce(
-        llmBriefResult(rawBrief({ title: "Expanded cash plan", angleType: "diagnostic" }))
+        llmExpansionResult(expansionPayload({ lastRole: "insight" }))
+      )
+      .mockResolvedValueOnce(
+        llmExpansionResult(
+          expansionPayload({ title: "Expanded cash plan", lastRole: "takeaway" })
+        )
       );
 
     const briefs = await generateCarouselAngles({
@@ -321,7 +351,7 @@ describe("generateCarouselAngles graceful degradation", () => {
     });
 
     expect(briefs).toHaveLength(1);
-    expect(briefs[0]?.title).toBe("Expanded cash plan");
+    expect(briefs[0]?.title).toBe("Cash candidate");
     expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
     const payload = completionPayload();
     expect(payload.expansionRan).toBe(true);

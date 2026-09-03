@@ -61,9 +61,8 @@ function compactCandidate() {
   };
 }
 
-function rawBrief() {
+function expansionPayload() {
   return {
-    ...compactCandidate(),
     audienceReasoning: "The source names this audience.",
     keyPoints: sampleKeyPoints(),
     slideOutline: sampleOutline(6),
@@ -72,6 +71,13 @@ function rawBrief() {
     evidenceRequirements: ["Verify cash-cycle claims"],
     prohibitedClaims: ["Guaranteed profit in 30 days"],
     ctaDirection: "Save this cash-check list",
+  };
+}
+
+function rawBrief() {
+  return {
+    ...compactCandidate(),
+    ...expansionPayload(),
   };
 }
 
@@ -123,7 +129,7 @@ describe("generateCarouselAngles model routing", () => {
   it("routes auto compact and expansion through explicit model constants", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
-      .mockResolvedValueOnce(llmResult({ brief: rawBrief() }));
+      .mockResolvedValueOnce(llmResult({ expansion: expansionPayload() }));
 
     await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
@@ -141,7 +147,7 @@ describe("generateCarouselAngles model routing", () => {
   it("honors compact and expansion model overrides", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
-      .mockResolvedValueOnce(llmResult({ brief: rawBrief() }));
+      .mockResolvedValueOnce(llmResult({ expansion: expansionPayload() }));
 
     await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",

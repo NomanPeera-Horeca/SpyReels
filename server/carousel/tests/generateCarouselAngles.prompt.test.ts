@@ -203,10 +203,31 @@ describe("generateCarouselAngles compact candidate schema", () => {
     assertNoUnsupportedArrayBounds(schema.schema);
   });
 
-  it("expands a single brief without an angles array", () => {
+  it("asks the expansion model for expansion fields only", () => {
     const schema = buildCarouselAngleExpansionJsonSchema();
-    expect(schema.schema.required).toEqual(["brief"]);
+    const expansion = schema.schema.properties as {
+      expansion: { required: string[]; properties: Record<string, unknown> };
+    };
+    expect(schema.schema.required).toEqual(["expansion"]);
     expect(schema.schema.properties).not.toHaveProperty("angles");
+    expect(schema.schema.properties).not.toHaveProperty("brief");
+    expect(expansion.expansion.required).toEqual([
+      "audienceReasoning",
+      "keyPoints",
+      "slideOutline",
+      "visualDirection",
+      "imageDirection",
+      "evidenceRequirements",
+      "prohibitedClaims",
+      "ctaDirection",
+    ]);
+    expect(expansion.expansion.properties).not.toHaveProperty("title");
+    expect(expansion.expansion.properties).not.toHaveProperty("hook");
+    expect(expansion.expansion.properties).not.toHaveProperty("corePromise");
+    expect(expansion.expansion.properties).not.toHaveProperty("centralInsight");
+    expect(expansion.expansion.properties).not.toHaveProperty("estimatedSlideCount");
+    expect(expansion.expansion.properties).not.toHaveProperty("angleType");
+    expect(expansion.expansion.properties).not.toHaveProperty("scores");
     assertNoUnsupportedArrayBounds(schema.schema);
   });
 });
@@ -379,18 +400,28 @@ describe("generateCarouselAngles dedicated compact and expansion prompts", () =>
     });
     expect(system).toContain("Expand exactly one already-selected candidate");
     expect(system).toContain("Do not propose alternative strategies.");
-    expect(system).toContain("one complete production-ready creative brief");
+    expect(system).toContain("expansion payload");
+    expect(system).toContain(
+      "Do not regenerate title, hook, corePromise, centralInsight, audience, format, layout, angle, research classification, or scores."
+    );
+    expect(system).not.toContain("one complete production-ready creative brief");
     expect(system).not.toContain("three complete production-ready");
     expect(system).not.toContain("Propose exactly 3 genuinely different");
     expect(user).not.toContain("Propose exactly 3 genuinely different");
     expect(user).not.toContain("three complete production-ready");
     expect(user).not.toContain("The three candidates should normally represent");
-    expect(user).toContain("Expand ONLY the selected candidate");
+    expect(user).toContain("Write ONLY the expansion fields");
     expect(user).toContain("Do not propose other strategies.");
+    expect(user).toContain(
+      "Do not regenerate title, hook, corePromise, centralInsight, estimatedSlideCount, audience, format, layout, angle, research classification, or scores."
+    );
+    expect(user).not.toContain("Score relevance, usefulness");
     expect(user).toContain(candidate.title);
-    expect(user).toContain("This selected brief must honor the contract.");
-    expect(user).toContain("slideOutline length must equal estimatedSlideCount");
-    expect(user).toContain("This brief needs");
+    expect(user).toContain("This expansion must honor the contract.");
+    expect(user).toContain(
+      "slideOutline length must equal the selected estimatedSlideCount (8)"
+    );
+    expect(user).toContain("This payload needs");
   });
 
   it("bakes the explicit list contract into compact schema field descriptions", () => {

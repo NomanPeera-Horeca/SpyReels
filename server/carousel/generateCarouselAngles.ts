@@ -60,15 +60,47 @@ export const ANGLE_REVIEW_PLAN_MODEL = "claude-sonnet-4-6";
 export const ANGLE_COMPACT_CANDIDATE_MODEL = ANGLE_HAIKU_MODEL;
 export const ANGLE_EXPANSION_MODEL = ANGLE_REVIEW_PLAN_MODEL;
 const COMPACT_CANDIDATE_MAX_TOKENS = 2048;
-const EXPANSION_MAX_TOKENS = 4096;
+/** Remake 78 full-brief expansion used 1494 output tokens. Slim payload stays under this. */
+export const EXPANSION_MAX_TOKENS = 2048;
 
 type BriefsLlmPayload = {
   angles?: unknown[];
 };
 
-type BriefLlmPayload = {
-  brief?: unknown;
+type ExpansionLlmPayload = {
+  expansion?: unknown;
 };
+
+export const CAROUSEL_ANGLE_STRATEGY_FIELDS = [
+  "kicker",
+  "title",
+  "description",
+  "estimatedSlideCount",
+  "topic",
+  "inferredAudience",
+  "contentGoal",
+  "contentFormat",
+  "angleType",
+  "hook",
+  "corePromise",
+  "centralInsight",
+  "layoutFamily",
+  "claimRisk",
+  "researchMode",
+  "scores",
+  "confidence",
+] as const;
+
+export const CAROUSEL_ANGLE_EXPANSION_FIELDS = [
+  "audienceReasoning",
+  "keyPoints",
+  "slideOutline",
+  "visualDirection",
+  "imageDirection",
+  "evidenceRequirements",
+  "prohibitedClaims",
+  "ctaDirection",
+] as const;
 
 export type CarouselAngleCandidate = {
   kicker: string;
@@ -114,6 +146,59 @@ const ENUM_STRING = (values: readonly string[], description: string) => ({
   description,
 });
 
+function keyPointSchema() {
+  return {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "Short point title, not slide copy." },
+      explanation: {
+        type: "string",
+        description: "One concise sentence. Not full slide copy.",
+      },
+      purpose: {
+        type: "string",
+        description: "Why this point belongs in the carousel.",
+      },
+    },
+    required: ["title", "explanation", "purpose"],
+    additionalProperties: false,
+  };
+}
+
+function slideOutlineItemSchema() {
+  return {
+    type: "object",
+    properties: {
+      position: {
+        type: "integer",
+        description: "1-based slide position matching estimatedSlideCount.",
+      },
+      role: ENUM_STRING(CAROUSEL_SLIDE_ROLES, "Functional role of this planned slide."),
+      objective: {
+        type: "string",
+        description: "One concise sentence. Distinct from other slides.",
+      },
+      recommendedVisual: ENUM_STRING(
+        CAROUSEL_RECOMMENDED_VISUALS,
+        "Planned visual treatment. Not a rendered layout."
+      ),
+      listItemIndex: {
+        type: ["integer", "null"],
+        description:
+          "1-based promised list item number. Set only on actual list items. Null on cover, context, example, takeaway, and CTA. Never derive from physical slide position.",
+      },
+    },
+    required: [
+      "position",
+      "role",
+      "objective",
+      "recommendedVisual",
+      "listItemIndex",
+    ],
+    additionalProperties: false,
+  };
+}
+
 export function buildCarouselAnglesJsonSchema(): {
   name: string;
   strict: true;
@@ -153,55 +238,6 @@ export function buildCarouselAnglesJsonSchema(): {
       "visualPotential",
       "factualSafety",
       "originality",
-    ],
-    additionalProperties: false,
-  };
-
-  const keyPointSchema = {
-    type: "object",
-    properties: {
-      title: { type: "string", description: "Short point title, not slide copy." },
-      explanation: {
-        type: "string",
-        description: "One concise sentence. Not full slide copy.",
-      },
-      purpose: {
-        type: "string",
-        description: "Why this point belongs in the carousel.",
-      },
-    },
-    required: ["title", "explanation", "purpose"],
-    additionalProperties: false,
-  };
-
-  const slideOutlineItemSchema = {
-    type: "object",
-    properties: {
-      position: {
-        type: "integer",
-        description: "1-based slide position matching estimatedSlideCount.",
-      },
-      role: ENUM_STRING(CAROUSEL_SLIDE_ROLES, "Functional role of this planned slide."),
-      objective: {
-        type: "string",
-        description: "One concise sentence. Distinct from other slides.",
-      },
-      recommendedVisual: ENUM_STRING(
-        CAROUSEL_RECOMMENDED_VISUALS,
-        "Planned visual treatment. Not a rendered layout."
-      ),
-      listItemIndex: {
-        type: ["integer", "null"],
-        description:
-          "1-based promised list item number. Set only on actual list items. Null on cover, context, example, takeaway, and CTA. Never derive from physical slide position.",
-      },
-    },
-    required: [
-      "position",
-      "role",
-      "objective",
-      "recommendedVisual",
-      "listItemIndex",
     ],
     additionalProperties: false,
   };
@@ -305,13 +341,13 @@ export function buildCarouselAnglesJsonSchema(): {
               keyPoints: {
                 type: "array",
                 description: `${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} useful, specific points. Plans only.`,
-                items: keyPointSchema,
+                items: keyPointSchema(),
               },
               slideOutline: {
                 type: "array",
                 description:
                   "One item per planned slide. Length must equal estimatedSlideCount. Distinct objectives. No full slide copy.",
-                items: slideOutlineItemSchema,
+                items: slideOutlineItemSchema(),
               },
               layoutFamily: ENUM_STRING(
                 CAROUSEL_LAYOUT_FAMILIES,
@@ -542,24 +578,100 @@ export function buildCarouselAngleExpansionJsonSchema(): {
   strict: true;
   schema: Record<string, unknown>;
 } {
-  const full = buildCarouselAnglesJsonSchema();
-  const angles = (full.schema.properties as { angles: { items: Record<string, unknown> } })
-    .angles;
   return {
     name: "carousel_studio_angle_expansion",
     strict: true,
     schema: {
       type: "object",
       properties: {
-        brief: {
-          ...angles.items,
+        expansion: {
+          type: "object",
           description:
-            "One complete production-ready creative brief for the selected candidate. Do not include id, schemaVersion, or overall score.",
+            "Expansion-only fields for the selected compact candidate. Do not regenerate title, hook, corePromise, centralInsight, audience, format, layout, angle, research classification, or scores.",
+          properties: {
+            audienceReasoning: {
+              type: "string",
+              description: "One concise sentence for why this audience fits.",
+            },
+            keyPoints: {
+              type: "array",
+              description: `${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} useful, specific points. Plans only.`,
+              items: keyPointSchema(),
+            },
+            slideOutline: {
+              type: "array",
+              description:
+                "One item per planned slide. Length must equal the selected estimatedSlideCount. Distinct objectives. No full slide copy.",
+              items: slideOutlineItemSchema(),
+            },
+            visualDirection: {
+              type: "string",
+              description: "One sentence on the planned visual system.",
+            },
+            imageDirection: {
+              type: "string",
+              description: "One sentence on photo or graphic direction.",
+            },
+            evidenceRequirements: {
+              type: "array",
+              description: `What would need verification before publishing. Max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. No citations.`,
+              items: { type: "string" },
+            },
+            prohibitedClaims: {
+              type: "array",
+              description: `Claims this brief must not make. Max ${CAROUSEL_BRIEF_PROHIBITED_MAX}. Include unsupported absolutes.`,
+              items: { type: "string" },
+            },
+            ctaDirection: {
+              type: "string",
+              description:
+                "Specific CTA direction. Never default to Follow for more.",
+            },
+          },
+          required: [...CAROUSEL_ANGLE_EXPANSION_FIELDS],
+          additionalProperties: false,
         },
       },
-      required: ["brief"],
+      required: ["expansion"],
       additionalProperties: false,
     },
+  };
+}
+
+export function assembleCarouselCreativeBriefFromExpansion(
+  candidate: CarouselAngleCandidate,
+  expansion: unknown
+): Record<string, unknown> {
+  const payload =
+    expansion && typeof expansion === "object" && !Array.isArray(expansion)
+      ? (expansion as Record<string, unknown>)
+      : {};
+  return {
+    audienceReasoning: payload.audienceReasoning,
+    keyPoints: payload.keyPoints,
+    slideOutline: payload.slideOutline,
+    visualDirection: payload.visualDirection,
+    imageDirection: payload.imageDirection,
+    evidenceRequirements: payload.evidenceRequirements,
+    prohibitedClaims: payload.prohibitedClaims,
+    ctaDirection: payload.ctaDirection,
+    kicker: candidate.kicker,
+    title: candidate.title,
+    description: candidate.description,
+    estimatedSlideCount: candidate.estimatedSlideCount,
+    topic: candidate.topic,
+    inferredAudience: candidate.inferredAudience,
+    contentGoal: candidate.contentGoal,
+    contentFormat: candidate.contentFormat,
+    angleType: candidate.angleType,
+    hook: candidate.hook,
+    corePromise: candidate.corePromise,
+    centralInsight: candidate.centralInsight,
+    layoutFamily: candidate.layoutFamily,
+    claimRisk: candidate.claimRisk,
+    researchMode: candidate.researchMode,
+    scores: candidate.scores,
+    confidence: candidate.confidence,
   };
 }
 
@@ -599,16 +711,16 @@ export function buildCarouselAngleCandidatesSystemPrompt(): string {
 export function buildCarouselAngleExpansionSystemPrompt(): string {
   return withAiFormattingRules(
     [
-      "You are a SpyReels carousel strategist. Expand exactly one already-selected candidate into one complete production-ready creative brief as structured tool output only.",
+      "You are a SpyReels carousel strategist. Expand exactly one already-selected candidate into an expansion payload as structured tool output only.",
       "Do not propose alternative strategies.",
-      "Preserve the selected strategy.",
+      "The selected candidate is the immutable strategy.",
+      "Do not regenerate title, hook, corePromise, centralInsight, audience, format, layout, angle, research classification, or scores.",
       "Source content is the primary authority for topic, industry, and audience.",
       "If the source explicitly mentions an audience or industry, preserve it.",
       "Never convert the source into the creator's saved niche unless an explicit audience override was provided.",
       "Audience override affects targeting only; it must not replace unrelated source facts.",
       "Brand voice may affect tone but never topic, industry, or audience.",
       "Return plans, not finished slide copy. No citations or invented sources.",
-      "Do not create id or schemaVersion fields. Do not include an overall score.",
     ].join(" ")
   );
 }
@@ -655,8 +767,8 @@ function explicitSelectedBriefListContractPromptLines(
   const slideCount = expectedExplicitListicleSlideCount(promisedCount);
   return [
     `EXPLICIT LIST CONTRACT from the user source: promised count ${promisedCount}, promised item type "${promisedItemType}".`,
-    `This selected brief must honor the contract. Keep ${promisedCount} ${promisedItemType}. Do not replace "${promisedItemType}" with a different taxonomy such as myths, reasons, tips, or signs.`,
-    `Default structure: cover, then ${promisedCount} ${promisedItemType} item slides, then one final closing. estimatedSlideCount should be ${slideCount}. Put setup on the cover. Do not insert a standalone context slide.`,
+    `This expansion must honor the contract. Keep ${promisedCount} ${promisedItemType}. Do not replace "${promisedItemType}" with a different taxonomy such as myths, reasons, tips, or signs.`,
+    `slideOutline must be ${slideCount} slides: cover, then ${promisedCount} ${promisedItemType} item slides, then one final closing. Put setup on the cover. Do not insert a standalone context slide.`,
     `Only the ${promisedCount} promised item slides get listItemIndex 1 through ${promisedCount}. Cover, context, example, takeaway, and CTA must set listItemIndex to null. Never derive listItemIndex from physical slide position.`,
   ];
 }
@@ -797,33 +909,27 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
   const lines = [
     ...audienceAndSourcePromptLines(args),
     "",
-    "Expand ONLY the selected candidate below into one complete production-ready creative brief.",
-    "Do not propose other strategies. Do not return multiple briefs.",
-    "Preserve its title, angleType, contentFormat, layoutFamily, hook, corePromise, centralInsight, and estimatedSlideCount unless a list contract forces a legal slide count.",
+    "Write ONLY the expansion fields for the selected candidate below.",
+    "Do not propose other strategies. Do not return multiple payloads.",
+    "Do not regenerate title, hook, corePromise, centralInsight, estimatedSlideCount, audience, format, layout, angle, research classification, or scores.",
+    "The assembler copies those selected strategy fields onto the finished brief.",
+    "Build keyPoints and slideOutline from the already-chosen promise and insight.",
     ...explicitSelectedBriefListContractPromptLines(listContract),
     ...(listContract ? [] : inventedListContractPromptLines()),
-    "Decide the core promise and central insight before listing key points.",
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
     "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
-    "Match contentFormat and layoutFamily.",
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
     "Avoid unsupported absolutes and sensational claims.",
     "Record risky or unsupported statements under prohibitedClaims.",
-    "Classify researchMode only. Do not perform research or add citations.",
-    "",
-    "researchMode = none: personal stories, motivation, general productivity, creative inspiration, low-risk opinion content.",
-    "researchMode = claim_verification: health and fitness, nutrition, business finance, mortgages and home buying, marketing statistics, product comparisons, technical performance claims.",
-    "researchMode = research_required: diagnosis or medical treatment, legal advice, tax guidance, investment recommendations, safety-critical instructions, laws or regulations, current events, current statistics.",
+    "Do not perform research or add citations.",
     "",
     "Return plans, not finished slide copy. No paragraph-length reasoning.",
-    `This brief needs ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints.`,
-    `estimatedSlideCount must be an integer from ${CAROUSEL_STUDIO_MIN_SLIDES} to ${CAROUSEL_STUDIO_MAX_SLIDES}.`,
-    "slideOutline length must equal estimatedSlideCount.",
+    `This payload needs ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints.`,
+    `slideOutline length must equal the selected estimatedSlideCount (${args.candidate.estimatedSlideCount}).`,
     `evidenceRequirements max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. prohibitedClaims max ${CAROUSEL_BRIEF_PROHIBITED_MAX}.`,
     "Each explanation and objective must be one concise sentence.",
-    "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
     "",
     "Selected compact candidate:",
     JSON.stringify({
@@ -1020,6 +1126,36 @@ export function buildCarouselAnglesRepairNote(
   } else {
     parts.push(
       "If a brief creates an enumerated list, honor that count and item type. Straightforward listicles are cover plus N items plus one closing, with no standalone context slide."
+    );
+  }
+  return parts.join(" ");
+}
+
+export function buildCarouselAngleExpansionRepairNote(
+  semanticIssues: string[] = [],
+  options?: {
+    listContract?: CarouselListContract | null;
+    estimatedSlideCount?: number;
+  }
+): string {
+  const slideCount = options?.estimatedSlideCount;
+  const parts = [
+    "The expansion payload failed validation after it was assembled onto the selected candidate.",
+    `Fix the expansion fields only: audienceReasoning, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to the selected estimatedSlideCount${slideCount != null ? ` (${slideCount})` : ""}, visualDirection, imageDirection, evidenceRequirements, prohibitedClaims, and ctaDirection.`,
+    "Do not regenerate title, hook, corePromise, centralInsight, audience, format, layout, angle, or research classification.",
+    "Numbered problem-solution outlines must include every promised leak/problem before its fix, must not claim N plugs that were never outlined, must have exactly one final closing, and that closing must be a cta or takeaway last slide with no competing endings.",
+  ];
+  if (semanticIssues.length > 0) {
+    parts.push(`Semantic issues to fix: ${semanticIssues.join(" ")}`);
+  }
+  const listContract = options?.listContract;
+  if (listContract?.explicitListContract) {
+    parts.push(
+      `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}. Straightforward listicles are cover plus ${listContract.promisedCount} items plus one closing. Do not add a standalone context slide.`
+    );
+  } else {
+    parts.push(
+      "If the selected candidate creates an enumerated list, honor that count and item type. Straightforward listicles are cover plus N items plus one closing, with no standalone context slide."
     );
   }
   return parts.join(" ");
@@ -1309,7 +1445,7 @@ async function invokeCarouselAngleExpansionOnce(args: {
     candidate: args.candidate,
   });
   const userPrompt = args.repairNote
-    ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return one complete brief:\n${args.repairNote}`
+    ? `${basePrompt}\n\nPREVIOUS OUTPUT FAILED VALIDATION. Fix ONLY these issues and return one expansion payload:\n${args.repairNote}`
     : basePrompt;
   const startedAt = performance.now();
 
@@ -1336,8 +1472,12 @@ async function invokeCarouselAngleExpansionOnce(args: {
   const tokens = llmTokenUsage(response);
 
   const raw = String(response.choices[0]?.message?.content ?? "");
-  const parsed = parseLlmJson<BriefLlmPayload>(raw, {});
-  const normalized = normalizeGeneratedCarouselBrief(parsed.brief, 0);
+  const parsed = parseLlmJson<ExpansionLlmPayload>(raw, {});
+  const assembled = assembleCarouselCreativeBriefFromExpansion(
+    args.candidate,
+    parsed.expansion
+  );
+  const normalized = normalizeGeneratedCarouselBrief(assembled, 0);
   const allNormalized = normalized ? [normalized] : [];
   const selected = selectSemanticallyValidCarouselBriefs(
     allNormalized,
@@ -1529,10 +1669,12 @@ export async function generateCarouselAngles(args: {
             brandVoice: args.brandVoice,
             candidate: selected,
             model: expansionModel,
-            repairNote: buildCarouselAnglesRepairNote(
-              0,
+            repairNote: buildCarouselAngleExpansionRepairNote(
               expanded.semanticIssues,
-              { listContract: expanded.listContract }
+              {
+                listContract: expanded.listContract,
+                estimatedSlideCount: selected.estimatedSlideCount,
+              }
             ),
           });
           repairAttemptValidCount = repaired.briefs.length;
