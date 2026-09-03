@@ -297,7 +297,7 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(briefs[0]?.title).toBe("Highest compact");
     expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.maxTokens).toBe(2048);
-    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.maxTokens).toBe(2048);
+    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.maxTokens).toBe(4096);
     const compactSystem = String(
       mockedInvokeLLM.mock.calls[0]?.[0]?.messages?.[0]?.content ?? ""
     );

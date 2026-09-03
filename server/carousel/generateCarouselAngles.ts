@@ -61,7 +61,7 @@ export const ANGLE_COMPACT_CANDIDATE_MODEL = ANGLE_HAIKU_MODEL;
 export const ANGLE_EXPANSION_MODEL = ANGLE_REVIEW_PLAN_MODEL;
 const COMPACT_CANDIDATE_MAX_TOKENS = 2048;
 /** Remake 78 full-brief expansion used 1494 output tokens. Slim payload stays under this. */
-export const EXPANSION_MAX_TOKENS = 2048;
+export const EXPANSION_MAX_TOKENS = 4096;
 
 type BriefsLlmPayload = {
   angles?: unknown[];
