@@ -76,6 +76,7 @@ export function classifyCoachIdeaSpecificity(rawIdea: string): CoachIdeaSpecific
     extracted.delayedTerms.length > 0 ||
     extracted.forbiddenTerms.length > 0 ||
     extracted.forbiddenTopics.length > 0 ||
+    Boolean(extracted.requiredOpening) ||
     Boolean(extracted.requiredEnding) ||
     CONSTRAINT_RE.test(text);
 

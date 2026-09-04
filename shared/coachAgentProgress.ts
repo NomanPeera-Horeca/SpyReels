@@ -145,7 +145,7 @@ export function personalizedCoachScriptStepLabels(_args: {
   };
 }
 
-export const COACH_AGENT_FOOTER = "Usually about a minute.";
+export const COACH_AGENT_FOOTER = "Usually 1-2 minutes.";
 
 export const PASTE_CONVERT_FOOTER =
   "Your spoken lines stay as pasted. We only fill filming directions Studio needs.";

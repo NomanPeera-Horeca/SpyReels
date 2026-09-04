@@ -284,7 +284,36 @@ export async function generateCoachScriptForWorkspace(args: {
 
   args.onPhase?.("production_notes");
 
-  const finalized = await finalizeCoachGenerated(generated, scriptMode);
+  const finalizedCandidate = await finalizeCoachGenerated(generated, scriptMode);
+  const finalizedCheck = validateCoachScriptConstraints(
+    spokenScriptFromGenerated({
+      ...finalizedCandidate.generated,
+      hook: finalizedCandidate.hook,
+      explain: finalizedCandidate.sections.explain,
+      illustrate: finalizedCandidate.sections.illustrate,
+      teach: finalizedCandidate.sections.teach,
+      cta: finalizedCandidate.sections.cta,
+    }),
+    creatorConstraints
+  );
+  const finalized = finalizedCheck.ok
+    ? finalizedCandidate
+    : (() => {
+        const safeSections = sectionsFromGenerated(constrained.generated);
+        const safeHook = String(constrained.generated.hook ?? "");
+        console.info("[CoachConstraints] finalize_reverted", {
+          codes: finalizedCheck.violations.map((item) => item.code),
+        });
+        return {
+          generated: constrained.generated,
+          sections: safeSections,
+          hook: safeHook,
+          estimatedDuration: durationLabelFromWordCount(
+            coachScriptWordCount(safeHook, safeSections),
+            scriptMode
+          ),
+        };
+      })();
   const { generated: finalGenerated, sections, hook, estimatedDuration } = finalized;
   const productionCoach = normalizeProductionCoach(finalGenerated.productionCoach);
 

@@ -44,8 +44,8 @@ export function AgentProgressPanel({
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
             {doneCount > 0
-              ? `${doneCount} of ${steps.length} steps complete. Usually about a minute.`
-              : "Usually about a minute."}
+              ? `${doneCount} of ${steps.length} steps complete. Usually 1-2 minutes.`
+              : "Usually 1-2 minutes."}
           </p>
         )}
       </div>

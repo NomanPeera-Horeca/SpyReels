@@ -8,6 +8,7 @@ export type CoachCreatorConstraints = {
   requiredTerms: string[];
   forbiddenTerms: string[];
   delayedTerms: DelayedTermConstraint[];
+  requiredOpening: string | null;
   requiredEnding: string | null;
   forbiddenTopics: string[];
   stanceRequirements: string[];
@@ -30,12 +31,19 @@ const DELAYED_TERM_RE =
   /do(?:\s+no|\s*n['’]?)t\s+(?:say|name|mention|use)\s+["“]?([A-Za-z][\w.-]{1,40})["”]?\s+until\s+the\s+final\s+(?:line|sentence)/gi;
 const FORBIDDEN_PHRASE_RE =
   /do(?:\s+no|\s*n['’]?)t\s+(?:say|name|mention)\s+["“']([^"”']{2,80})["”']/gi;
+const REQUIRED_OPENING_RE = /(?:open|start|begin)\s+with\s+["“]([^"”]+)["”]/i;
+const REQUIRED_ENDING_QUOTED_RE = /(?:end|finish)\s+with\s+["“]([^"”]+)["”]/i;
+const REQUIRED_ENDING_FALLBACK_RE = /\bend (?:with|by) ([^.]+)/i;
+const FORBIDDEN_TOPIC_RE =
+  /do(?:\s+no|\s*n['’]?)t\s+(?:discuss|talk about|mention)\s+([^.\n]+)/gi;
+const DELAYED_UNTIL_FINAL_RE = /until\s+the\s+final\s+(?:line|sentence)/i;
 
 export function emptyCoachCreatorConstraints(): CoachCreatorConstraints {
   return {
     requiredTerms: [],
     forbiddenTerms: [],
     delayedTerms: [],
+    requiredOpening: null,
     requiredEnding: null,
     forbiddenTopics: [],
     stanceRequirements: [],
@@ -47,6 +55,47 @@ function uniquePush(list: string[], value: string): void {
   if (!trimmed) return;
   if (list.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;
   list.push(trimmed);
+}
+
+export function normalizeConstraintText(value: string): string {
+  return value
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitSpokenSentences(value: string): string[] {
+  const normalized = normalizeConstraintText(value);
+  if (!normalized) return [];
+  const parts = normalized.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [normalized];
+  return parts.map((part) => normalizeConstraintText(part)).filter(Boolean);
+}
+
+export function firstSpokenSentence(value: string): string {
+  return splitSpokenSentences(value)[0] ?? "";
+}
+
+export function lastSpokenSentenceFromScript(script: CoachSpokenScript): string {
+  const sections = spokenSections(script);
+  const lastSection = sections[sections.length - 1] ?? "";
+  const sentences = splitSpokenSentences(lastSection);
+  return sentences[sentences.length - 1] ?? "";
+}
+
+function extractForbiddenTopicsFromClause(clause: string): string[] {
+  const cleaned = normalizeConstraintText(clause)
+    .replace(DELAYED_UNTIL_FINAL_RE, "")
+    .replace(/\b(?:this|that|it|any|the)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return [];
+
+  return cleaned
+    .split(/\s*,\s*|\s+or\s+|\s+and\s+/i)
+    .map((item) => normalizeConstraintText(item))
+    .filter((item) => item.length >= 2 && item.length <= 40 && !/\s{3,}/.test(item));
 }
 
 export function extractCoachCreatorConstraints(rawIdea: string): CoachCreatorConstraints {
@@ -77,6 +126,34 @@ export function extractCoachCreatorConstraints(rawIdea: string): CoachCreatorCon
     uniquePush(constraints.forbiddenTerms, phrase);
   }
 
+  const openingMatch = text.match(REQUIRED_OPENING_RE);
+  if (openingMatch?.[1]) {
+    constraints.requiredOpening = normalizeConstraintText(openingMatch[1]);
+  }
+
+  const quotedEnding = text.match(REQUIRED_ENDING_QUOTED_RE);
+  if (quotedEnding?.[1]) {
+    constraints.requiredEnding = normalizeConstraintText(quotedEnding[1]);
+  } else {
+    const endMatch = text.match(REQUIRED_ENDING_FALLBACK_RE);
+    if (endMatch?.[1]) {
+      constraints.requiredEnding = normalizeConstraintText(endMatch[1]);
+    }
+  }
+
+  for (const match of text.matchAll(FORBIDDEN_TOPIC_RE)) {
+    const full = match[0] ?? "";
+    const clause = match[1] ?? "";
+    if (DELAYED_UNTIL_FINAL_RE.test(full) || DELAYED_UNTIL_FINAL_RE.test(clause)) continue;
+    for (const topic of extractForbiddenTopicsFromClause(clause)) {
+      const isDelayed = constraints.delayedTerms.some(
+        (item) => item.term.toLowerCase() === topic.toLowerCase()
+      );
+      if (isDelayed) continue;
+      uniquePush(constraints.forbiddenTopics, topic);
+    }
+  }
+
   const forbidsPriceLane =
     /do not turn this into a .{0,120}(financ|price|pricing)/i.test(text) ||
     /do not talk about (?:price|pricing|financ)/i.test(text) ||
@@ -91,11 +168,6 @@ export function extractCoachCreatorConstraints(rawIdea: string): CoachCreatorCon
       constraints.stanceRequirements,
       "preserve the stated opinion without hedging or balancing it"
     );
-  }
-
-  const endMatch = text.match(/\bend (?:with|by) ([^.]+)/i);
-  if (endMatch?.[1]) {
-    constraints.requiredEnding = endMatch[1].trim();
   }
 
   return constraints;
@@ -150,6 +222,10 @@ function hasForbiddenPricingContent(spoken: string): boolean {
   return false;
 }
 
+function isPriceLaneTopic(topic: string): boolean {
+  return /financ|price|pricing/i.test(topic);
+}
+
 export function validateCoachScriptConstraints(
   script: CoachSpokenScript,
   constraints: CoachCreatorConstraints
@@ -158,6 +234,28 @@ export function validateCoachScriptConstraints(
   const spoken = spokenSections(script).join("\n");
   const finalLine = finalSpokenLine(script);
   const earlier = earlierSpokenText(script);
+
+  if (constraints.requiredOpening) {
+    const expected = normalizeConstraintText(constraints.requiredOpening);
+    const actual = firstSpokenSentence(script.hook);
+    if (!expected || actual !== expected) {
+      violations.push({
+        code: "required_opening_mismatch",
+        message: `The spoken hook must open with exactly: ${expected}`,
+      });
+    }
+  }
+
+  if (constraints.requiredEnding) {
+    const expected = normalizeConstraintText(constraints.requiredEnding);
+    const actual = lastSpokenSentenceFromScript(script);
+    if (!expected || actual !== expected) {
+      violations.push({
+        code: "required_ending_mismatch",
+        message: `The final spoken line must be exactly: ${expected}`,
+      });
+    }
+  }
 
   for (const delayed of constraints.delayedTerms) {
     const inFinal = containsTerm(finalLine, delayed.term);
@@ -197,9 +295,7 @@ export function validateCoachScriptConstraints(
     }
   }
 
-  const caresAboutPrice = constraints.forbiddenTopics.some((topic) =>
-    /financ|price|pricing/i.test(topic)
-  );
+  const caresAboutPrice = constraints.forbiddenTopics.some((topic) => isPriceLaneTopic(topic));
   if (caresAboutPrice && hasForbiddenPricingContent(spoken)) {
     violations.push({
       code: "forbidden_topic",
@@ -207,11 +303,24 @@ export function validateCoachScriptConstraints(
     });
   }
 
+  for (const topic of constraints.forbiddenTopics) {
+    if (isPriceLaneTopic(topic)) continue;
+    if (containsTerm(spoken, topic)) {
+      violations.push({
+        code: "forbidden_topic",
+        message: `The script must not discuss ${topic}.`,
+      });
+    }
+  }
+
   return { ok: violations.length === 0, violations };
 }
 
 export function formatCoachCreatorConstraintsForPrompt(constraints: CoachCreatorConstraints): string {
   const lines: string[] = [];
+  if (constraints.requiredOpening) {
+    lines.push(`- Open with exactly this spoken line: "${constraints.requiredOpening}"`);
+  }
   for (const delayed of constraints.delayedTerms) {
     lines.push(
       `- ${delayed.term} must appear in the final spoken line and nowhere earlier.`
@@ -227,13 +336,17 @@ export function formatCoachCreatorConstraintsForPrompt(constraints: CoachCreator
     lines.push(`- Do not say "${term}".`);
   }
   for (const topic of constraints.forbiddenTopics) {
-    lines.push(`- Do not turn this into a ${topic} video. Do not invent dollar amounts as equipment cost.`);
+    if (isPriceLaneTopic(topic)) {
+      lines.push(`- Do not turn this into a ${topic} video. Do not invent dollar amounts as equipment cost.`);
+    } else {
+      lines.push(`- Do not discuss ${topic}.`);
+    }
   }
   for (const stance of constraints.stanceRequirements) {
     lines.push(`- Stance: ${stance}.`);
   }
   if (constraints.requiredEnding) {
-    lines.push(`- End by: ${constraints.requiredEnding}.`);
+    lines.push(`- End with exactly this spoken line: "${constraints.requiredEnding}"`);
   }
   if (lines.length === 0) return "";
   return `CREATOR CONSTRAINTS (hard rules; these beat strategy, niche, and research):\n${lines.join("\n")}`;

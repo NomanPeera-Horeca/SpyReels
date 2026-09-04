@@ -55,8 +55,14 @@ export async function enforceCoachScriptConstraints(args: {
     args.constraints
   );
   if (first.ok) {
+    console.info("[CoachConstraints] initial_ok correctionCount=0", {
+      hook: String(args.generated.hook ?? "").slice(0, 160),
+    });
     return { generated: args.generated, correctionCount: 0 };
   }
+  console.info("[CoachConstraints] initial_fail", {
+    codes: first.violations.map((item) => item.code),
+  });
 
   const corrected = await rewriteCoachScriptForConstraintViolations({
     generated: args.generated,
@@ -78,6 +84,7 @@ export async function enforceCoachScriptConstraints(args: {
     args.constraints
   );
   if (second.ok) {
+    console.info("[CoachConstraints] corrected correctionCount=1");
     return { generated: corrected, correctionCount: 1 };
   }
 
