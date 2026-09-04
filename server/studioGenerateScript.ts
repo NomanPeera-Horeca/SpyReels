@@ -20,8 +20,15 @@ import {
   coachScriptWordCount,
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
-import { creatorIdeaForKeywordRouting } from "@shared/coachIdeaGroundTruth";
+import {
+  extractCoachCreatorConstraints,
+  formatCoachCreatorConstraintsForPrompt,
+  spokenScriptFromGenerated,
+  validateCoachScriptConstraints,
+} from "@shared/coachCreatorConstraints";
+import { creatorIdeaForKeywordRouting, resolveCoachSourceIdea } from "@shared/coachIdeaGroundTruth";
 import { coachScriptModeForPlanCard, inferCoachScriptMode, type CoachScriptMode } from "@shared/coachScriptMode";
+import { enforceCoachScriptConstraints } from "./coachConstraintCorrection";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
@@ -94,6 +101,8 @@ export async function generateCoachScriptForWorkspace(args: {
   profileOverride?: CreatorCoachProfile;
   audienceResearchBlock?: string;
   researchGroundingBlock?: string;
+  rawCreatorIdea?: string;
+  selectedStrategyBlock?: string;
   onPhase?: (phase: "hook_angle" | "write_script" | "quality_check" | "production_notes") => void;
   scriptModeOverride?: CoachScriptMode;
 }): Promise<GeneratedCoachScript> {
@@ -130,13 +139,21 @@ export async function generateCoachScriptForWorkspace(args: {
 
   args.onPhase?.("write_script");
 
+  const rawCreatorIdea = resolveCoachSourceIdea({
+    rawCreatorIdea: args.rawCreatorIdea,
+    description: args.description,
+  });
+  const creatorConstraints = extractCoachCreatorConstraints(rawCreatorIdea);
+  const creatorConstraintsBlock = formatCoachCreatorConstraintsForPrompt(creatorConstraints);
+
   let effectiveDescription = args.description;
   let explicitUserAngle =
+    Boolean(rawCreatorIdea) ||
     args.description.includes("Creator goal (ground truth") ||
     args.description.includes("Creator's chosen angle");
   let scriptMode: CoachScriptMode =
     args.scriptModeOverride ??
-    inferCoachScriptMode({ description: creatorIdeaForKeywordRouting(args.description) });
+    inferCoachScriptMode({ description: creatorIdeaForKeywordRouting(rawCreatorIdea || args.description) });
   let funnelStage: string | null = null;
 
   if (args.planCardId) {
@@ -154,7 +171,7 @@ export async function generateCoachScriptForWorkspace(args: {
       }
       funnelStage = planCard.funnelStage ?? null;
       scriptMode = coachScriptModeForPlanCard({
-        description: creatorIdeaForKeywordRouting(args.description),
+        description: creatorIdeaForKeywordRouting(rawCreatorIdea || args.description),
         contentFormat: planCard.contentFormat,
         funnelStage: planCard.funnelStage,
         sourceType: planCard.sourceType,
@@ -198,6 +215,9 @@ export async function generateCoachScriptForWorkspace(args: {
             scriptMode,
             funnelStage,
             researchGroundingBlock: args.researchGroundingBlock,
+            rawCreatorIdea,
+            selectedStrategyBlock: args.selectedStrategyBlock,
+            creatorConstraintsBlock,
           }
         ),
       },
@@ -216,11 +236,19 @@ export async function generateCoachScriptForWorkspace(args: {
     });
   }
 
+  const constrained = await enforceCoachScriptConstraints({
+    generated,
+    rawCreatorIdea,
+    constraints: creatorConstraints,
+    throwOnFailure: true,
+  });
+  generated = constrained.generated;
+
   args.onPhase?.("quality_check");
   const judged = await judgeAndImproveCoachScript({
     generated,
     ctx: {
-      description: effectiveDescription,
+      description: rawCreatorIdea,
       niche: profile.niche,
       targetAudience: profile.targetAudience,
       brandDescription: profile.brandDescription,
@@ -229,6 +257,13 @@ export async function generateCoachScriptForWorkspace(args: {
     onRewrite: () => args.onPhase?.("quality_check"),
   });
   generated = judged.generated;
+  const afterJudge = validateCoachScriptConstraints(
+    spokenScriptFromGenerated(generated),
+    creatorConstraints
+  );
+  if (!afterJudge.ok) {
+    generated = constrained.generated;
+  }
   if (!coachScriptIsComplete(generated)) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -256,7 +291,7 @@ export async function generateCoachScriptForWorkspace(args: {
     funnelStage: funnelStage ?? undefined,
     scriptMode,
     hookType: hookTypeRaw || undefined,
-    sourceDescription: effectiveDescription.trim().slice(0, 2000),
+    sourceDescription: rawCreatorIdea.trim().slice(0, 2000),
     coachJudge: {
       overallScore: judged.judge.overallScore,
       hookEffectiveness: judged.judge.hookEffectiveness,

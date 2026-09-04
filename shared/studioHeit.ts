@@ -50,7 +50,7 @@ Critical rules:
 export const COACH_EXPLICIT_ANGLE_RULES = `Explicit angle mode:
 - The raw idea or attached plan/spark note defines WHAT the video is about. Niche and audience define WHO it is for and HOW to speak.
 - If the idea names a product, SaaS, app, tool, or brand (examples: SpyReels, their own software), serve that marketing or product-story goal.
-- If the creator says not to name the tool on camera, use problem-first or curiosity content without the brand name.
+- Product naming is not all-or-nothing. "Do not mention X" means X must never appear. "Do not mention X until the final line/sentence" means X MUST appear, but only in the final spoken line.
 - Meta instructions (for example "for SpyReels", "promo for my tool") are ground truth even when the niche profile points elsewhere.
 - The explicit angle wins over default niche assumptions and over any source reel subject.`;
 
@@ -119,8 +119,15 @@ export function buildCoachPrompt(
     funnelStage?: string | null;
     contentFormat?: string | null;
     researchGroundingBlock?: string;
+    rawCreatorIdea?: string;
+    selectedStrategyBlock?: string;
+    creatorConstraintsBlock?: string;
   }
 ): string {
+  const rawIdea = (options?.rawCreatorIdea?.trim() || creatorIdeaForKeywordRouting(description)).trim();
+  const strategyBlock = options?.selectedStrategyBlock?.trim() ?? "";
+  const constraintsBlock = options?.creatorConstraintsBlock?.trim() ?? "";
+  const quotedIdea = rawIdea || description;
   const clarificationBlock =
     clarifications && clarifications.length > 0
       ? `\n\nAdditional context (treat as ground truth):\n${clarifications.map((c) => `Q: ${c.question}\nA: ${c.answer}`).join("\n\n")}`
@@ -143,7 +150,7 @@ export function buildCoachPrompt(
 
   const resolvedHookType = resolveCoachHookTypeForPrompt({
     contentFormat: options?.contentFormat,
-    description: creatorIdeaForKeywordRouting(description),
+    description: rawIdea || creatorIdeaForKeywordRouting(description),
   });
   const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing: you must output this exact hookType value).`;
 
@@ -151,9 +158,14 @@ export function buildCoachPrompt(
     ? "I section only. One story, analogy, or example. Concrete details must come from the Verified research block above (or stay hypothetical if that block has nothing usable)."
     : "I section only. One story, analogy, or example with concrete detail. Prefer hypothetical/relatable framing; do not invent specific stats or named entities as facts.";
 
+  const strategySection = strategyBlock
+    ? `\n\nINTERNAL SELECTED STRATEGY (framing only; never overrides the raw idea or creator constraints):\n${strategyBlock}`
+    : "";
+  const constraintsSection = constraintsBlock ? `\n\n${constraintsBlock}` : "";
+
   return `A content creator just shared this raw idea:
 
-"${description}"${clarificationBlock}${audienceBlock}${researchBlock}
+"${quotedIdea}"${constraintsSection}${strategySection}${clarificationBlock}${audienceBlock}${researchBlock}
 
 ${buildStudioDateContext()}
 

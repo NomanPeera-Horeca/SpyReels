@@ -141,14 +141,48 @@ export function parseCoachStrategySelection(
     return null;
   }
 
+  return enforceCoachStrategyIntentGate(
+    {
+      selectedId,
+      scores,
+      selectionReason,
+      developedAngle,
+      hookDirection,
+      narrativePlan,
+      mustPreserve,
+    },
+    directions
+  );
+}
+
+export const COACH_STRATEGY_MIN_INTENT_FIDELITY = 8;
+
+export function enforceCoachStrategyIntentGate(
+  selection: SelectedCoachStrategy,
+  directions: CoachStrategyDirection[]
+): SelectedCoachStrategy {
+  const eligible = selection.scores.filter(
+    (score) => score.intentFidelity >= COACH_STRATEGY_MIN_INTENT_FIDELITY
+  );
+  const pool =
+    eligible.length > 0
+      ? eligible
+      : [...selection.scores].sort((a, b) => b.intentFidelity - a.intentFidelity).slice(0, 1);
+  if (pool.some((score) => score.id === selection.selectedId)) {
+    return selection;
+  }
+
+  const winner = [...pool].sort(
+    (a, b) => b.overall - a.overall || b.intentFidelity - a.intentFidelity
+  )[0];
+  const chosen = directions.find((direction) => direction.id === winner.id);
+  const rejected = selection.scores.find((score) => score.id === selection.selectedId);
   return {
-    selectedId,
-    scores,
-    selectionReason,
-    developedAngle,
-    hookDirection,
-    narrativePlan,
-    mustPreserve,
+    ...selection,
+    selectedId: winner.id,
+    selectionReason: `Intent fidelity gate replaced ${selection.selectedId} (intent ${rejected?.intentFidelity ?? 0}) with ${winner.id} (intent ${winner.intentFidelity}). ${selection.selectionReason}`,
+    developedAngle: chosen?.angle || selection.developedAngle,
+    hookDirection: chosen?.hookDirection || selection.hookDirection,
   };
 }
 

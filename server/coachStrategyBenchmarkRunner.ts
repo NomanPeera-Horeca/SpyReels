@@ -11,8 +11,13 @@ import {
   type CoachBenchmarkCandidateId,
   type CoachBenchmarkSpecificity,
 } from "@shared/coachStrategyBenchmark";
+import {
+  extractCoachCreatorConstraints,
+  formatCoachCreatorConstraintsForPrompt,
+} from "@shared/coachCreatorConstraints";
 import { inferCoachScriptMode } from "@shared/coachScriptMode";
 import { invokeLLM } from "./_core/llm";
+import { enforceCoachScriptConstraints } from "./coachConstraintCorrection";
 import { developCoachStrategyDirections, selectCoachStrategy } from "./coachStrategyPlanner";
 import { withAiFormattingRules } from "./utils/aiFormattingRules";
 import { normalizeCoachScriptPayload, parseLlmJson } from "./utils/parseLlmJson";
@@ -114,8 +119,13 @@ function stringField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function generateWriterScript(fixture: BenchmarkFixture, description: string): Promise<ScriptPayload> {
+async function generateWriterScript(
+  fixture: BenchmarkFixture,
+  description: string,
+  selectedStrategyBlock?: string
+): Promise<{ script: ScriptPayload; correctionCount: number }> {
   const scriptMode = inferCoachScriptMode({ description: fixture.rawIdea });
+  const constraints = extractCoachCreatorConstraints(fixture.rawIdea);
   const response = await invokeLLM({
     messages: [
       {
@@ -135,6 +145,9 @@ async function generateWriterScript(fixture: BenchmarkFixture, description: stri
             explicitUserAngle: true,
             scriptMode,
             researchGroundingBlock: "",
+            rawCreatorIdea: fixture.rawIdea,
+            selectedStrategyBlock,
+            creatorConstraintsBlock: formatCoachCreatorConstraintsForPrompt(constraints),
           }
         ),
       },
@@ -145,19 +158,28 @@ async function generateWriterScript(fixture: BenchmarkFixture, description: stri
 
   const raw = readTextContent(response.choices[0]?.message?.content);
   const parsed = normalizeCoachScriptPayload(parseLlmJson<Record<string, unknown>>(raw, {}));
+  if (!stringField(parsed.hook) || !stringField(parsed.explain) || !stringField(parsed.illustrate) || !stringField(parsed.teach)) {
+    throw new Error(`Incomplete benchmark script for ${fixture.id}`);
+  }
+
+  const enforced = await enforceCoachScriptConstraints({
+    generated: parsed,
+    rawCreatorIdea: fixture.rawIdea,
+    constraints,
+  });
   const script: ScriptPayload = {
-    title: stringField(parsed.title),
-    hook: stringField(parsed.hook),
-    explain: stringField(parsed.explain),
-    illustrate: stringField(parsed.illustrate),
-    teach: stringField(parsed.teach),
-    cta: stringField(parsed.cta),
+    title: stringField(enforced.generated.title),
+    hook: stringField(enforced.generated.hook),
+    explain: stringField(enforced.generated.explain),
+    illustrate: stringField(enforced.generated.illustrate),
+    teach: stringField(enforced.generated.teach),
+    cta: stringField(enforced.generated.cta),
   };
 
   if (!script.hook || !script.explain || !script.illustrate || !script.teach) {
     throw new Error(`Incomplete benchmark script for ${fixture.id}`);
   }
-  return script;
+  return { script, correctionCount: enforced.correctionCount };
 }
 
 function formatScriptForJudge(script: ScriptPayload): string {
@@ -211,8 +233,12 @@ async function judgeBlind(args: {
 
 async function runFixture(fixture: BenchmarkFixture, index: number) {
   const groundTruthIdea = markCreatorIdeaGroundTruth(fixture.rawIdea);
-  const directScript = await generateWriterScript(fixture, groundTruthIdea);
+  const directStarted = Date.now();
+  const directResult = await generateWriterScript(fixture, groundTruthIdea);
+  const directMs = Date.now() - directStarted;
+  const directScript = directResult.script;
 
+  const strategyStarted = Date.now();
   const draft = await developCoachStrategyDirections({
     rawIdea: fixture.rawIdea,
     niche: fixture.niche,
@@ -221,10 +247,9 @@ async function runFixture(fixture: BenchmarkFixture, index: number) {
   });
   const selection = await selectCoachStrategy({ rawIdea: fixture.rawIdea, draft });
   const strategyBlock = formatSelectedCoachStrategy(draft, selection);
-  const strategyScript = await generateWriterScript(
-    fixture,
-    `${groundTruthIdea}\n\n${strategyBlock}`
-  );
+  const strategyResult = await generateWriterScript(fixture, groundTruthIdea, strategyBlock);
+  const strategyMs = Date.now() - strategyStarted;
+  const strategyScript = strategyResult.script;
 
   // Alternate the hidden candidate position to reduce X/Y position bias.
   const strategyCandidate: CoachBenchmarkCandidateId = index % 2 === 0 ? "Y" : "X";
@@ -237,6 +262,10 @@ async function runFixture(fixture: BenchmarkFixture, index: number) {
     specificity: fixture.specificity,
     strategyCandidate,
     judgment,
+    strategyConstraintCorrections: strategyResult.correctionCount,
+    directConstraintCorrections: directResult.correctionCount,
+    strategyMs,
+    directMs,
   };
 
   return {

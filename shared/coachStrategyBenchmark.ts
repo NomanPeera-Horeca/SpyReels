@@ -25,6 +25,10 @@ export type CoachBenchmarkCaseResult = {
   specificity: CoachBenchmarkSpecificity;
   strategyCandidate: CoachBenchmarkCandidateId;
   judgment: CoachBenchmarkJudgment;
+  strategyConstraintCorrections?: number;
+  directConstraintCorrections?: number;
+  strategyMs?: number;
+  directMs?: number;
 };
 
 export type CoachBenchmarkSummary = {
@@ -35,6 +39,10 @@ export type CoachBenchmarkSummary = {
   strategyAverages: CoachBenchmarkScores;
   directAverages: CoachBenchmarkScores;
   specificStrategyIntentViolationCases: number;
+  strategyConstraintCorrections: number;
+  directConstraintCorrections: number;
+  averageStrategyMs: number;
+  averageDirectMs: number;
   passed: boolean;
   passCriteria: {
     strategyOverallAtLeastDirect: boolean;
@@ -193,6 +201,10 @@ export function summarizeCoachBenchmark(results: CoachBenchmarkCaseResult[]): Co
   let directWins = 0;
   let ties = 0;
   let specificStrategyIntentViolationCases = 0;
+  let strategyConstraintCorrections = 0;
+  let directConstraintCorrections = 0;
+  let strategyMsTotal = 0;
+  let directMsTotal = 0;
 
   for (const result of results) {
     const directCandidate: CoachBenchmarkCandidateId = result.strategyCandidate === "X" ? "Y" : "X";
@@ -213,6 +225,11 @@ export function summarizeCoachBenchmark(results: CoachBenchmarkCaseResult[]): Co
     ) {
       specificStrategyIntentViolationCases++;
     }
+
+    strategyConstraintCorrections += result.strategyConstraintCorrections ?? 0;
+    directConstraintCorrections += result.directConstraintCorrections ?? 0;
+    strategyMsTotal += result.strategyMs ?? 0;
+    directMsTotal += result.directMs ?? 0;
   }
 
   const strategyAverages = averageScores(strategyScores);
@@ -232,6 +249,10 @@ export function summarizeCoachBenchmark(results: CoachBenchmarkCaseResult[]): Co
     strategyAverages,
     directAverages,
     specificStrategyIntentViolationCases,
+    strategyConstraintCorrections,
+    directConstraintCorrections,
+    averageStrategyMs: results.length ? Math.round(strategyMsTotal / results.length) : 0,
+    averageDirectMs: results.length ? Math.round(directMsTotal / results.length) : 0,
     passed: Object.values(passCriteria).every(Boolean),
     passCriteria,
   };

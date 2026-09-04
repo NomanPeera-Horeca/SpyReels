@@ -21,19 +21,43 @@ export function markCreatorIdeaGroundTruth(description: string): string {
   return `Creator's chosen angle (ground truth — preserve this topic and intent; creatively develop only details the creator did not specify):\n${trimmed}`;
 }
 
-const SELECTED_STRATEGY_MARKER = "--- Selected creative strategy";
+export const SELECTED_STRATEGY_MARKER = "--- Selected creative strategy";
+
+function stripGroundTruthPrefix(text: string): string {
+  return text
+    .replace(/^Creator's chosen angle(?:\s*\([^)]*\))?:\s*/i, "")
+    .replace(/^Creator goal(?:\s*\([^)]*\))?:\s*/i, "")
+    .trim();
+}
+
+export function splitCreatorDescription(description: string): {
+  rawCreatorIdea: string;
+  strategyBlock: string;
+} {
+  const trimmed = description.trim();
+  if (!trimmed) return { rawCreatorIdea: "", strategyBlock: "" };
+  const strategyIdx = trimmed.indexOf(SELECTED_STRATEGY_MARKER);
+  const before = (strategyIdx >= 0 ? trimmed.slice(0, strategyIdx) : trimmed).trim();
+  return {
+    rawCreatorIdea: stripGroundTruthPrefix(before),
+    strategyBlock: strategyIdx >= 0 ? trimmed.slice(strategyIdx).trim() : "",
+  };
+}
 
 /**
  * Keyword routers (script mode, hook type, content format) must read the
  * creator's own words, not the internal selected-strategy block appended later.
  */
 export function creatorIdeaForKeywordRouting(description: string): string {
-  const trimmed = description.trim();
-  if (!trimmed) return trimmed;
-  const strategyIdx = trimmed.indexOf(SELECTED_STRATEGY_MARKER);
-  const withoutStrategy = (strategyIdx >= 0 ? trimmed.slice(0, strategyIdx) : trimmed).trim();
-  return withoutStrategy
-    .replace(/^Creator's chosen angle(?:\s*\([^)]*\))?:\s*/i, "")
-    .replace(/^Creator goal(?:\s*\([^)]*\))?:\s*/i, "")
-    .trim();
+  return splitCreatorDescription(description).rawCreatorIdea;
+}
+
+/** Judge, rewrite, and persisted sourceDescription must use the creator's own words. */
+export function resolveCoachSourceIdea(args: {
+  rawCreatorIdea?: string | null;
+  description: string;
+}): string {
+  const explicit = args.rawCreatorIdea?.trim();
+  if (explicit) return stripGroundTruthPrefix(explicit);
+  return splitCreatorDescription(args.description).rawCreatorIdea;
 }

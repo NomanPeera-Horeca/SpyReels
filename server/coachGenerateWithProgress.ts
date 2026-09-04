@@ -122,18 +122,13 @@ export async function generateCoachScriptWithProgress(args: {
     });
     const strategyBlock = formatSelectedCoachStrategy(strategyDraft, selectedStrategy);
 
-    const creatorGroundTruthDescription = [
-      markCreatorIdeaGroundTruth(args.description),
-      strategyBlock,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
     const script = await generateCoachScriptForWorkspace({
       userId: args.userId,
       workspaceId: args.workspaceId,
       openId: args.openId,
-      description: creatorGroundTruthDescription,
+      description: markCreatorIdeaGroundTruth(args.description),
+      rawCreatorIdea: args.description,
+      selectedStrategyBlock: strategyBlock,
       clarifications: args.clarifications,
       planCardId: args.planCardId,
       audienceSignalIds,
