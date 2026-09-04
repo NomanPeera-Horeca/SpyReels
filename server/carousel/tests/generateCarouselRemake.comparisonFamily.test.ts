@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CAROUSEL_STUDIO_TEMPLATE_ID,
@@ -45,6 +47,16 @@ import { normalizeSlideImages } from "@shared/carouselTemplates";
 
 const mockedInvokeLLM = vi.mocked(invokeLLM);
 const mockedResolveSlideImage = vi.mocked(resolveSlideImage);
+
+const REMAKE_103_DUMP = JSON.parse(
+  readFileSync(
+    resolve("docs/qa/carousel-comparison-family-v1/remake-103-brief.json"),
+    "utf8"
+  )
+) as {
+  sourceContent: string;
+  brief: CarouselCreativeBrief;
+};
 
 function comparisonBrief(): CarouselCreativeBrief {
   return {
@@ -107,6 +119,7 @@ function genericCopyPayload(slideIds: string[]) {
       body: `Body copy for ${id} that stays inside the budget for a mobile slide.`,
       left: "Cheap equipment",
       right: "Buy it once",
+      support: `Support line for ${id} that fills the extra Comparison slot.`,
       cta_label: "Save this",
       slideIntent: index === slideIds.length - 1 ? "closing" : "content",
       ...(index === slideIds.length - 1 ? { closingType: "follow" } : {}),
@@ -333,5 +346,75 @@ describe("generateCarouselRemake Comparison family wiring", () => {
       photo: "https://images.example.com/photo.jpg",
       photo_b: "https://images.example.com/photo_b.jpg",
     });
+  });
+
+  it("routes remake 103 Comparison brief through Comparison despite list sequences", async () => {
+    const brief = REMAKE_103_DUMP.brief;
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: REMAKE_103_DUMP.sourceContent,
+    });
+    expect(planningIR.contract.source).toBe("none");
+    expect(planningIR.contract.kind).toBe("open");
+    expect(planningIR.strategy.preferredFamily).toBe("comparison");
+    expect(
+      planningIR.beats.filter((beat) => beat.sequence?.kind === "list")
+    ).toHaveLength(5);
+    visualDirectionMock.mockResolvedValue({
+      compositionIR: compilePlanningIRToBaselineCompositionIR(planningIR),
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(
+              genericCopyPayload(
+                brief.slideOutline.map((_, index) =>
+                  `slide_${String(index + 1).padStart(2, "0")}`
+                )
+              )
+            ),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6810, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent: REMAKE_103_DUMP.sourceContent,
+      creativeBrief: brief,
+    });
+
+    expect(visualDirectionMock).toHaveBeenCalledTimes(1);
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    expect(completed).toBeTruthy();
+    const slides = completed?.slideStructureJson as Array<{
+      layoutId?: string;
+      composition?: {
+        family?: string;
+        treatment?: string;
+        sequence?: { kind?: string; index?: number } | null;
+      };
+    }>;
+    expect(slides).toHaveLength(11);
+    expect(slides.every(isComparisonFamilySlide)).toBe(true);
+    expect(slides.some(isStoryNarrativeSlide)).toBe(false);
+    expect(slides.some(isBreakdownListicleSlide)).toBe(false);
+    expect(slides.every((slide) => slide.layoutId !== "list_item_numbered")).toBe(
+      true
+    );
+    expect(slides.at(-1)?.composition?.treatment).toBe("comparison_closing");
+    const listSequences = slides
+      .map((slide) => slide.composition?.sequence)
+      .filter((sequence) => sequence?.kind === "list");
+    expect(listSequences).toEqual([
+      { kind: "list", index: 1 },
+      { kind: "list", index: 2 },
+      { kind: "list", index: 3 },
+      { kind: "list", index: 4 },
+      { kind: "list", index: 5 },
+    ]);
   });
 });
