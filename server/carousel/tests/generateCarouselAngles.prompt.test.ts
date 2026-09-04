@@ -205,6 +205,25 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("exactly one intentional final closing");
   });
 
+  it("teaches format fit for contrast, story, list, and framework without vs routing", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+    });
+    const compact = buildCarouselAngleCandidatesUserPrompt({
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+    });
+    expect(user).toContain("include a comparison candidate");
+    expect(user).toContain("Score relevance as format fit");
+    expect(user).toContain("Do not force comparison just because two subjects appear");
+    expect(user).toContain("Do not treat a contrast word as automatic comparison");
+    expect(compact).toContain("include a comparison candidate");
+    expect(compact).toContain("Score relevance as format fit");
+    expect(user).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
+    expect(compact).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
+  });
+
   it("locks an explicit six-drain list contract in the planner prompt", () => {
     const user = buildCarouselAnglesUserPrompt({
       sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
