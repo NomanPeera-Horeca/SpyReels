@@ -224,7 +224,7 @@ export const carouselStudioRouter = router({
         nicheOverride,
         resolved.sourceContent
       );
-      const angles = await runWithGenerationTelemetry(telemetry, () =>
+      const proposal = await runWithGenerationTelemetry(telemetry, () =>
         withGenerationStage(telemetry, "angle_generation", () =>
           proposeStudioAngles({
             sourceContent: resolved.sourceContent,
@@ -236,7 +236,11 @@ export const carouselStudioRouter = router({
           })
         )
       );
-      const plan = planGenerateAngles(angles);
+      const plan = planGenerateAngles(
+        proposal.briefs,
+        proposal.formatRecommendation,
+        resolved.sourceContent
+      );
       if (plan.recommendedBriefIndex == null || !plan.selected) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -330,7 +334,7 @@ export const carouselStudioRouter = router({
         nicheOverride,
         resolved.sourceContent
       );
-      const angles = await runWithGenerationTelemetry(telemetry, () =>
+      const proposal = await runWithGenerationTelemetry(telemetry, () =>
         withGenerationStage(telemetry, "angle_generation", () =>
           proposeStudioAngles({
             sourceContent: resolved.sourceContent,
@@ -342,7 +346,11 @@ export const carouselStudioRouter = router({
           })
         )
       );
-      const plan = planGenerateFromInput(angles);
+      const plan = planGenerateFromInput(
+        proposal.briefs,
+        proposal.formatRecommendation,
+        resolved.sourceContent
+      );
       if (
         plan.recommendedBriefIndex == null ||
         plan.selectedAngleIndex == null ||

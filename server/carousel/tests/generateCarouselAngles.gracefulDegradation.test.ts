@@ -225,7 +225,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         briefResult(rawBrief({ title: "Cash is a system", angleType: "diagnostic" }))
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -268,7 +268,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         briefResult(rawBrief({ title: "Repaired cash plan", angleType: "diagnostic" }))
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -332,7 +332,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         ])
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 3,
     });
@@ -375,7 +375,7 @@ describe("generateCarouselAngles graceful degradation", () => {
       )
       .mockResolvedValueOnce(anglesResult([invalidBrief("Repair failed")]));
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 3,
     });
@@ -409,7 +409,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         ])
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 3,
     });
@@ -513,7 +513,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         )
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -552,7 +552,7 @@ describe("generateCarouselAngles graceful degradation", () => {
       .mockResolvedValueOnce(briefResult(invalid))
       .mockResolvedValueOnce(briefResult(CASH_LEAKS_REMAKE_64_BRIEF));
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -599,7 +599,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         ])
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
     });
 

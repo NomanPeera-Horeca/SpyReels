@@ -1,4 +1,4 @@
-import type { CarouselCreativeBrief } from "@shared/carouselStudio";
+import type { CarouselAngleGenerationResult } from "./generateCarouselAngles";
 import { generateCarouselAngles } from "./generateCarouselAngles";
 import {
   logAngleGenerationFailed,
@@ -14,7 +14,7 @@ export async function proposeStudioAngles(args: {
   correlationId?: string;
   entryPoint?: string;
   requiredValidBriefs?: 1 | 3;
-}): Promise<CarouselCreativeBrief[]> {
+}): Promise<CarouselAngleGenerationResult> {
   const correlationId = resolveAngleGenerationCorrelationId(args.correlationId);
   const startedAt = performance.now();
   try {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   INVENTED_LIST_REPAIR_CONTRACT,
+  buildCarouselAngleCandidatesJsonSchema,
   buildCarouselAngleCandidatesUserPrompt,
   buildCarouselAngleExpansionRepairNote,
   buildCarouselAngleExpansionUserPrompt,
@@ -222,6 +223,20 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(compact).toContain("Score relevance as format fit");
     expect(user).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
     expect(compact).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
+    expect(user).toContain("recommendedFormat");
+    expect(user).toContain("formatConfidence");
+    expect(compact).toContain("recommendedFormat");
+  });
+
+  it("asks the strategist schema for top-level recommendedFormat metadata", () => {
+    const schema = buildCarouselAnglesJsonSchema();
+    const compact = buildCarouselAngleCandidatesJsonSchema();
+    expect(schema.schema.required).toEqual(
+      expect.arrayContaining(["angles", "recommendedFormat", "formatConfidence"])
+    );
+    expect(compact.schema.required).toEqual(
+      expect.arrayContaining(["angles", "recommendedFormat", "formatConfidence"])
+    );
   });
 
   it("locks an explicit six-drain list contract in the planner prompt", () => {
