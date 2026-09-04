@@ -8,6 +8,7 @@ import {
   buildBreakdownListicleSlides,
   isBreakdownListicleSlide,
 } from "@shared/carouselBreakdownFamily";
+import { isFrameworkFamilySlide } from "@shared/carouselFrameworkFamily";
 import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import {
   CASH_DRAINS_REMAKE_67_CORRECTED_VALUES,
@@ -514,7 +515,7 @@ describe("generateCarouselRemake breakdown family wiring", () => {
     );
   });
 
-  it("does not auto-route an open framework with framework_step beats", async () => {
+  it("does not steal an open framework with framework_step beats", async () => {
     const brief: CarouselCreativeBrief = {
       ...cashDrainsRemake67CorrectedBrief(),
       title: "A weekly cash check owners can repeat",
@@ -561,15 +562,42 @@ describe("generateCarouselRemake breakdown family wiring", () => {
         },
       ],
     };
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: OPEN_CASH_FLOW_USER_PROMPT,
+    });
+    visualDirectionMock.mockResolvedValue({
+      compositionIR: compilePlanningIRToBaselineCompositionIR(planningIR),
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
     mockedInvokeLLM.mockResolvedValue({
       choices: [
         {
           message: {
             content: JSON.stringify(
-              genericCopyPayload(
-                brief.slideOutline.map((_, index) =>
-                  `slide_${String(index + 1).padStart(2, "0")}`
-                )
+              Object.fromEntries(
+                brief.slideOutline.map((_, index) => {
+                  const id = `slide_${String(index + 1).padStart(2, "0")}`;
+                  return [
+                    id,
+                    {
+                      kicker: index === 0 ? "FRAMEWORK" : "",
+                      headline: `Headline for ${id} that is long enough`,
+                      body: `Body copy for ${id} that stays inside the budget for a mobile slide.`,
+                      support: `Support line for ${id} that fills the extra Framework slot.`,
+                      cta_label: "Follow for more",
+                      slideIntent:
+                        index === brief.slideOutline.length - 1
+                          ? "closing"
+                          : "content",
+                      ...(index === brief.slideOutline.length - 1
+                        ? { closingType: "follow" }
+                        : {}),
+                    },
+                  ];
+                })
               )
             ),
           },
@@ -582,11 +610,12 @@ describe("generateCarouselRemake breakdown family wiring", () => {
       creativeBrief: brief,
     });
 
-    expect(visualDirectionMock).not.toHaveBeenCalled();
+    expect(visualDirectionMock).toHaveBeenCalledTimes(1);
     const completed = persistUpdates.find((fields) => fields.status === "completed");
     const slides = completed?.slideStructureJson as Array<{
-      composition?: unknown;
+      composition?: { family?: string };
     }>;
+    expect(slides.every(isFrameworkFamilySlide)).toBe(true);
     expect(slides.some(isBreakdownListicleSlide)).toBe(false);
   });
 
