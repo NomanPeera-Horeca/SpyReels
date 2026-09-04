@@ -1,6 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compilePlanningIRToBaselineCompositionIR } from "./carouselCompositionIR";
-import type { CarouselPlanningIR } from "./carouselPlanningIR";
+import {
+  compileCreativeBriefToPlanningIR,
+  type CarouselPlanningIR,
+} from "./carouselPlanningIR";
 import { canUseBreakdownListicleFamily } from "./carouselBreakdownFamily";
 import {
   buildComparisonFamilySlides,
@@ -16,7 +21,23 @@ import {
 } from "./carouselComparisonFamily";
 import { canUseStoryNarrativeFamily } from "./carouselStoryFamily";
 import { CAROUSEL_TEMPLATES_BY_ID } from "./carouselTemplates";
-import { CAROUSEL_STUDIO_TEMPLATE_ID } from "./carouselStudio";
+import {
+  CAROUSEL_STUDIO_TEMPLATE_ID,
+  CAROUSEL_CREATIVE_BRIEF_VERSION,
+  type CarouselCreativeBrief,
+} from "./carouselStudio";
+
+const REMAKE_103_DUMP = JSON.parse(
+  readFileSync(
+    resolve(
+      "docs/qa/carousel-comparison-family-v1/remake-103-brief.json"
+    ),
+    "utf8"
+  )
+) as {
+  sourceContent: string;
+  brief: CarouselCreativeBrief;
+};
 
 function comparisonPlanningIR(
   overrides?: Partial<CarouselPlanningIR>
@@ -318,6 +339,147 @@ describe("Comparison family routing", () => {
   it("does not steal enumerated listicles even when one item compares", () => {
     expect(canUseComparisonFamily(listiclePlanningIR())).toBe(false);
     expect(canUseBreakdownListicleFamily(listiclePlanningIR())).toBe(true);
+  });
+
+  it("keeps remake 103 open Comparison eligible despite internal list sequences", () => {
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief: REMAKE_103_DUMP.brief,
+      sourceContent: REMAKE_103_DUMP.sourceContent,
+    });
+    expect(planningIR.contract.source).toBe("none");
+    expect(planningIR.contract.kind).toBe("open");
+    expect(planningIR.strategy.preferredFamily).toBe("comparison");
+    const listSequences = planningIR.beats
+      .map((beat) => beat.sequence)
+      .filter((sequence) => sequence?.kind === "list");
+    expect(listSequences).toEqual([
+      { kind: "list", index: 1 },
+      { kind: "list", index: 2 },
+      { kind: "list", index: 3 },
+      { kind: "list", index: 4 },
+      { kind: "list", index: 5 },
+    ]);
+    expect(canUseComparisonFamily(planningIR)).toBe(true);
+    expect(canUseStoryNarrativeFamily(planningIR)).toBe(false);
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(false);
+  });
+
+  it("does not steal an open non-Comparison plan that has list sequences", () => {
+    const ir = comparisonPlanningIR({
+      contract: {
+        source: "none",
+        kind: "open",
+        count: null,
+        itemType: null,
+        locked: false,
+      },
+      strategy: {
+        ...comparisonPlanningIR().strategy,
+        preferredFamily: "framework",
+        angleType: "checklist",
+      },
+      beats: [
+        {
+          id: "beat_01",
+          position: 1,
+          role: "cover",
+          objective: "Open the checklist",
+          visualIntent: "text",
+          sequence: null,
+        },
+        {
+          id: "beat_02",
+          position: 2,
+          role: "list_item",
+          objective: "First ordered beat",
+          visualIntent: "text",
+          sequence: { kind: "list", index: 1 },
+        },
+        {
+          id: "beat_03",
+          position: 3,
+          role: "list_item",
+          objective: "Second ordered beat",
+          visualIntent: "text",
+          sequence: { kind: "list", index: 2 },
+        },
+        {
+          id: "beat_04",
+          position: 4,
+          role: "closing",
+          objective: "Close",
+          visualIntent: "text",
+          sequence: null,
+        },
+      ],
+    });
+    expect(ir.contract.kind).toBe("open");
+    expect(ir.strategy.preferredFamily).toBe("framework");
+    expect(canUseComparisonFamily(ir)).toBe(false);
+  });
+
+  it("keeps an explicit user enumeration out of Comparison even if preferredFamily is comparison", () => {
+    const brief: CarouselCreativeBrief = {
+      schemaVersion: CAROUSEL_CREATIVE_BRIEF_VERSION,
+      isLegacy: false,
+      id: "brief_user_menu_mistakes",
+      kicker: "Mistakes",
+      title: "5 restaurant menu mistakes",
+      description: "Name five menu mistakes owners can stop repeating.",
+      estimatedSlideCount: 7,
+      topic: "restaurant menus",
+      inferredAudience: "restaurant owners",
+      audienceReasoning: "The source names this audience.",
+      contentGoal: "education",
+      contentFormat: "comparison",
+      angleType: "mistakes",
+      hook: "5 restaurant menu mistakes that quietly cost you.",
+      corePromise: "Name five menu mistakes owners can stop repeating.",
+      centralInsight: "Menu bloat hides operating cost.",
+      keyPoints: [
+        { title: "Mistake 1", purpose: "Name it", explanation: "Too many items." },
+        { title: "Mistake 2", purpose: "Name it", explanation: "No signatures." },
+        { title: "Mistake 3", purpose: "Name it", explanation: "Weak costing." },
+        { title: "Mistake 4", purpose: "Name it", explanation: "Slow tickets." },
+        { title: "Mistake 5", purpose: "Name it", explanation: "No cuts." },
+      ],
+      slideOutline: [
+        { position: 1, role: "hook", objective: "Open the five mistakes", recommendedVisual: "text", listItemIndex: null },
+        { position: 2, role: "problem", objective: "Mistake 1: too many items", recommendedVisual: "text", listItemIndex: 1 },
+        { position: 3, role: "problem", objective: "Mistake 2: no signatures", recommendedVisual: "text", listItemIndex: 2 },
+        { position: 4, role: "problem", objective: "Mistake 3: weak costing", recommendedVisual: "text", listItemIndex: 3 },
+        { position: 5, role: "problem", objective: "Mistake 4: slow tickets", recommendedVisual: "text", listItemIndex: 4 },
+        { position: 6, role: "problem", objective: "Mistake 5: no cuts", recommendedVisual: "text", listItemIndex: 5 },
+        { position: 7, role: "cta", objective: "Close the list", recommendedVisual: "text", listItemIndex: null },
+      ],
+      layoutFamily: "comparison",
+      visualDirection: "Simple numbered cards.",
+      imageDirection: "Neutral kitchen photos.",
+      claimRisk: "low",
+      researchMode: "none",
+      evidenceRequirements: [],
+      prohibitedClaims: [],
+      ctaDirection: "Fix the first mistake",
+      scores: {
+        relevance: 80,
+        usefulness: 80,
+        specificity: 80,
+        visualPotential: 80,
+        factualSafety: 80,
+        originality: 80,
+        overall: 80,
+      },
+      confidence: 0.8,
+    };
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent: "5 restaurant menu mistakes",
+    });
+    expect(planningIR.contract.source).toBe("user");
+    expect(planningIR.contract.kind).toBe("enumerated");
+    expect(planningIR.strategy.preferredFamily).toBe("comparison");
+    expect(canUseComparisonFamily(planningIR)).toBe(false);
+    expect(canUseBreakdownListicleFamily(planningIR)).toBe(true);
   });
 
   it("does not steal Story plans", () => {
