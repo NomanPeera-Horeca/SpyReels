@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  INVENTED_LIST_REPAIR_CONTRACT,
   buildCarouselAngleCandidatesUserPrompt,
+  buildCarouselAngleExpansionRepairNote,
   buildCarouselAngleExpansionUserPrompt,
   buildCarouselAnglesJsonSchema,
   buildCarouselAnglesRepairNote,
@@ -119,6 +121,22 @@ describe("generateCarouselAngles JSON schema", () => {
     );
   });
 
+  it("tells invented numbered titles to deliver N items or drop the number", () => {
+    const properties = angles.angles.items.properties as Record<
+      string,
+      { description?: string }
+    >;
+    expect(properties.title.description).toContain(
+      "If it names N items, the outline must deliver exactly N item slides"
+    );
+    expect(properties.hook.description).toContain(
+      "If it names N items, the outline must deliver exactly N item slides"
+    );
+    expect(properties.slideOutline.description).toContain(
+      "include exactly N item slides then one closing"
+    );
+  });
+
   it("omits Anthropic-unsupported array minItems and maxItems", () => {
     const unsupported: string[] = [];
     const walk = (value: unknown, path: string) => {
@@ -211,6 +229,9 @@ describe("generateCarouselAngles planning guidance", () => {
       "If you create an enumerated list in the title, hook, corePromise, or centralInsight"
     );
     expect(user).toContain("Do not add a standalone context slide.");
+    expect(user).toContain(
+      "remove the number from title, hook, corePromise, and centralInsight instead of under-delivering"
+    );
   });
 
   it("adds list-contract repair guidance without a third model call", () => {
@@ -274,6 +295,18 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("This is not a slim expansion payload.");
     expect(user).toContain("never both in the same outline");
     expect(user).toContain("Invalid: takeaway then cta");
+    expect(user).toContain(
+      "remove the number from title, hook, corePromise, and centralInsight instead of under-delivering"
+    );
     expect(user).not.toContain("Write ONLY the expansion fields");
+  });
+
+  it("expansion repair tells invented lists to deliver N items or drop the number", () => {
+    const note = buildCarouselAngleExpansionRepairNote([
+      "The hook promises 5 items but fewer than 5 are outlined",
+    ]);
+    expect(note).toContain(INVENTED_LIST_REPAIR_CONTRACT);
+    expect(note).toContain("The hook promises 5 items but fewer than 5 are outlined");
+    expect(note).toContain("Keep exactly one closing as the last slide");
   });
 });

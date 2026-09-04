@@ -321,7 +321,7 @@ export function buildCarouselAnglesJsonSchema(): {
               title: {
                 type: "string",
                 description:
-                  "Punchy carousel-ready title / hook for this direction (not full slide copy).",
+                  "Punchy carousel-ready title / hook for this direction (not full slide copy). If it names N items, the outline must deliver exactly N item slides or the number must be removed.",
               },
               description: {
                 type: "string",
@@ -359,7 +359,8 @@ export function buildCarouselAnglesJsonSchema(): {
               ),
               hook: {
                 type: "string",
-                description: "Planned opening hook. Not finished slide copy.",
+                description:
+                  "Planned opening hook. Not finished slide copy. If it names N items, the outline must deliver exactly N item slides or the number must be removed.",
               },
               corePromise: {
                 type: "string",
@@ -377,7 +378,7 @@ export function buildCarouselAnglesJsonSchema(): {
               slideOutline: {
                 type: "array",
                 description:
-                  "One item per planned slide. Length must equal estimatedSlideCount. Distinct objectives. No full slide copy.",
+                  "One item per planned slide. Length must equal estimatedSlideCount. Distinct objectives. No full slide copy. If title or hook names N items, include exactly N item slides then one closing. Do not add a standalone context slide on a straightforward listicle.",
                 items: slideOutlineItemSchema,
               },
               layoutFamily: ENUM_STRING(
@@ -464,8 +465,11 @@ function explicitListContractPromptLines(
 function inventedListContractPromptLines(): string[] {
   return [
     "If you create an enumerated list in the title, hook, corePromise, or centralInsight, that list is a contract: deliver exactly that many item slides of that item type.",
+    "If title or hook names N steps, signs, mistakes, lessons, rooms, or other list items, slideOutline must contain exactly N item slides with listItemIndex 1 through N. estimatedSlideCount must be N plus cover plus one closing.",
+    "If you cannot outline all N items, remove the number from title, hook, corePromise, and centralInsight instead of under-delivering.",
     "Straightforward enumerated listicles use cover, then the N item slides, then one closing. Put setup on the cover. Do not add a standalone context slide.",
     "Only promised item slides get listItemIndex 1 through N. Cover, context, example, takeaway, and CTA stay null. Never put a list item number on a context or closing slide.",
+    "Keep exactly one closing as the last slide after the N items.",
   ];
 }
 
@@ -474,6 +478,9 @@ export const ONE_CLOSING_EXPANSION_CONTRACT =
 
 export const COMPETING_ENDINGS_REPAIR_CONTRACT =
   "Exactly one closing. takeaway and cta cannot both appear. If the outline currently ends takeaway then cta, change the penultimate role from takeaway to insight or example and keep the last slide as cta. Preserve the total slide count. Do not keep a takeaway slide when a cta slide exists.";
+
+export const INVENTED_LIST_REPAIR_CONTRACT =
+  "If title or hook promises N items, outline exactly N item slides with listItemIndex 1 through N, or remove the number from title, hook, corePromise, and centralInsight. Straightforward invented listicles are cover plus N items plus one closing. Do not add a standalone context slide. Keep exactly one closing as the last slide.";
 
 export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
@@ -1033,9 +1040,7 @@ export function buildCarouselAnglesRepairNote(
       `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}. Straightforward listicles are cover plus ${listContract.promisedCount} items plus one closing. Do not add a standalone context slide.`
     );
   } else {
-    parts.push(
-      "If a brief creates an enumerated list, honor that count and item type. Straightforward listicles are cover plus N items plus one closing, with no standalone context slide."
-    );
+    parts.push(INVENTED_LIST_REPAIR_CONTRACT);
   }
   return parts.join(" ");
 }
@@ -1253,9 +1258,7 @@ export function buildCarouselAngleExpansionRepairNote(
       `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}. Do not change the item type or count. Only promised item slides may use listItemIndex 1 through ${listContract.promisedCount}. Straightforward listicles are cover plus ${listContract.promisedCount} items plus one closing. Do not add a standalone context slide.`
     );
   } else {
-    parts.push(
-      "If the brief creates an enumerated list, honor that count and item type. Straightforward listicles are cover plus N items plus one closing, with no standalone context slide."
-    );
+    parts.push(INVENTED_LIST_REPAIR_CONTRACT);
   }
   return parts.join(" ");
 }
