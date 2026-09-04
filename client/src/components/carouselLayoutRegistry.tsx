@@ -6,7 +6,7 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
-import { CarouselBreakdownListicleFamily } from "@/components/CarouselBreakdownListicleFamily";
+import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
 import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCenter";
@@ -66,7 +66,7 @@ export function resolveCarouselSlideComponent(
   slide: Pick<CarouselSlideSpec, "layoutId" | "composition">
 ): ComponentType<CarouselSlideLayoutProps> {
   if (isBreakdownListicleSlide(slide)) {
-    return CarouselBreakdownListicleFamily;
+    return CarouselBreakdownPremiumFamily;
   }
   return CAROUSEL_LAYOUT_REGISTRY[slide.layoutId];
 }
