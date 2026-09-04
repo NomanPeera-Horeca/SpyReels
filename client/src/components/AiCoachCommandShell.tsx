@@ -118,11 +118,13 @@ export function AiCoachCommandShell({
     onCapabilitySelect(activeCapability === id ? null : id);
   };
 
+  const secondaryCapabilities = COACH_CAPABILITIES.filter((cap) => cap.id !== "write_script");
+
   return (
     <div className="flex min-h-[calc(80vh-4rem)] flex-1 items-center justify-center px-4 py-10 sm:px-6">
       <div className="w-full max-w-xl">
         <div className="mb-8 text-center sm:mb-10">
-          <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Sparkles className="h-5 w-5" aria-hidden />
           </div>
           <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground sm:text-3xl">
@@ -132,9 +134,7 @@ export function AiCoachCommandShell({
             {heroSubhead}
           </p>
           {nichePill ? (
-            <p className="mt-3 inline-flex items-center rounded-full border border-border/80 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground">
-              {nichePill}
-            </p>
+            <p className="mt-3 text-xs text-muted-foreground">{nichePill}</p>
           ) : null}
         </div>
 
@@ -219,19 +219,20 @@ export function AiCoachCommandShell({
           </div>
         ) : null}
 
-        <div className="mt-8" ref={modePanelRef}>
-          <div className="flex flex-wrap justify-center gap-2">
-            {COACH_CAPABILITIES.map((cap) => (
+        <div className="mt-10" ref={modePanelRef}>
+          <p className="mb-3 text-center text-xs text-muted-foreground">More ways to create</p>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            {secondaryCapabilities.map((cap) => (
               <button
                 key={cap.id}
                 type="button"
                 onClick={() => handleModeClick(cap.id)}
                 disabled={isStreaming}
                 className={cn(
-                  "rounded-full border px-3.5 py-2 text-xs font-medium transition-colors",
+                  "text-sm transition-colors",
                   activeCapability === cap.id
-                    ? "border-primary/40 bg-primary/10 text-foreground"
-                    : "border-border/70 bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
                 title={cap.hint}
               >
@@ -241,8 +242,8 @@ export function AiCoachCommandShell({
           </div>
 
           {activeCapability ? (
-            <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card">
-              <p className="border-b border-border px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border/70 bg-card">
+              <p className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground">
                 {activeCapability === "write_script"
                   ? writeScriptHeader
                   : COACH_MODE_PANEL_HEADERS[activeCapability]}

@@ -1,0 +1,74 @@
+{
+  "picks": {
+    "talkingHead": {
+      "id": 263,
+      "title": "Fix the System First",
+      "format": "talking-head heit",
+      "spokenLen": 501,
+      "talkingHead": true,
+      "story": false,
+      "long": false,
+      "productionHeavy": true
+    },
+    "story": {
+      "id": 265,
+      "title": "Wrong Fix for a Slow Kitchen",
+      "format": "story_reel heit",
+      "spokenLen": 464,
+      "talkingHead": false,
+      "story": true,
+      "long": false,
+      "productionHeavy": true
+    },
+    "long": {
+      "id": 264,
+      "title": "The Blank Page Every Restaurant Owner Knows",
+      "format": "story_reel heit",
+      "spokenLen": 644,
+      "talkingHead": false,
+      "story": true,
+      "long": false,
+      "productionHeavy": true
+    },
+    "productionHeavy": {
+      "id": 265,
+      "title": "Wrong Fix for a Slow Kitchen",
+      "format": "story_reel heit",
+      "spokenLen": 464,
+      "talkingHead": false,
+      "story": true,
+      "long": false,
+      "productionHeavy": true
+    }
+  },
+  "screenshots": {
+    "desktopEntry": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/01-desktop-entry.png",
+    "desktopLoading": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/02-desktop-loading.png",
+    "desktopResult": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/03-desktop-result.png",
+    "desktopHowToFilm": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/04-desktop-how-to-film.png",
+    "desktopMore": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/06-desktop-more-menu.png",
+    "desktopHookOptions": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/05-desktop-hook-options.png",
+    "desktop-story": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/extra-desktop-story.png",
+    "desktop-long": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/extra-desktop-long.png",
+    "desktop-production-heavy": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/extra-desktop-production-heavy.png",
+    "mobileEntry390": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/07-mobile-entry-390.png",
+    "mobileResult390": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/08-mobile-result-390.png",
+    "mobileHowToFilm390": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/09-mobile-how-to-film-390.png",
+    "mobileMore390": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/10a-mobile-more-390.png",
+    "mobileHookOptions390": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/10-mobile-hook-options-390.png",
+    "mobileEntry360": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/extra-mobile-entry-360.png",
+    "mobileResult360": "/Users/nomanpeera/Desktop/reels-dashboard-ai-coach-polish/docs/qa/ai-coach-mature-ui/extra-mobile-result-360.png"
+  },
+  "mobile": {
+    "overflow390Entry": 0,
+    "overflow390Result": 0,
+    "overflow360Result": 0,
+    "actions360": {
+      "copy": true,
+      "edit": true,
+      "refine": true,
+      "more": true,
+      "savedOrSave": true
+    }
+  }
+}
