@@ -171,14 +171,25 @@ export type CompactSubstageMetrics = {
   validCompactCandidateCount: number;
 };
 
+export type ExpansionAttemptMetrics = {
+  inputCharacterCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  issues: string[];
+};
+
 export type ExpansionSubstageMetrics = {
   candidateIndex: number;
+  model: string;
   inputCharacterCount: number;
   inputTokens: number | null;
   outputTokens: number | null;
   durationMs: number;
   firstPassValid: boolean;
   repairRan: boolean;
+  firstPass: ExpansionAttemptMetrics;
+  repair: ExpansionAttemptMetrics | null;
 };
 
 export type CarouselAngleGenerationMode =
@@ -232,9 +243,18 @@ export function logAngleGenerationCompleted(fields: {
   compactCandidateCount?: number | null;
   repairReason?: string | null;
   compact?: CompactSubstageMetrics | null;
+  compactRepair?: CompactSubstageMetrics | null;
   expansions?: ExpansionSubstageMetrics[] | null;
   parallelExpansionWallClockMs?: number | null;
+  targetCompactCandidateCount?: number | null;
+  targetFullBriefCount?: number | null;
+  compactRepairRan?: boolean;
+  completeFullBriefCount?: number | null;
+  fewerThanThreeCompleteFullBriefs?: boolean;
+  rankedFullBriefCount?: number | null;
+  degradedToReviewPlanFallback?: boolean;
 }): void {
+  const completeFullBriefCount = fields.completeFullBriefCount ?? null;
   console.info(ANGLE_GENERATION_COMPLETED, {
     correlationId: fields.correlationId,
     durationMs: fields.durationMs,
@@ -255,8 +275,17 @@ export function logAngleGenerationCompleted(fields: {
     compactCandidateCount: fields.compactCandidateCount ?? null,
     repairReason: fields.repairReason ?? null,
     compact: fields.compact ?? null,
+    compactRepair: fields.compactRepair ?? null,
     expansions: fields.expansions ?? null,
     parallelExpansionWallClockMs: fields.parallelExpansionWallClockMs ?? null,
+    targetCompactCandidateCount: fields.targetCompactCandidateCount ?? null,
+    targetFullBriefCount: fields.targetFullBriefCount ?? null,
+    compactRepairRan: fields.compactRepairRan ?? false,
+    completeFullBriefCount,
+    fewerThanThreeCompleteFullBriefs:
+      fields.fewerThanThreeCompleteFullBriefs ?? false,
+    rankedFullBriefCount: fields.rankedFullBriefCount ?? null,
+    degradedToReviewPlanFallback: fields.degradedToReviewPlanFallback ?? false,
   });
 }
 

@@ -7,12 +7,17 @@ vi.mock("../../_core/llm", () => ({
 
 import { invokeLLM } from "../../_core/llm";
 import {
+  alignExpansionListItemIndexes,
   buildCarouselAngleCandidatesJsonSchema,
+  buildCarouselAngleCandidatesRepairNote,
   buildCarouselAngleCandidatesUserPrompt,
+  buildCarouselAngleExpansionRepairNote,
   buildCarouselAngleExpansionSystemPrompt,
   buildCarouselAngleExpansionUserPrompt,
   buildCarouselAngleFullBriefExpansionJsonSchema,
+  classifyCarouselAngleExpansionAttempt,
   generateCarouselAngles,
+  mergeCompactCandidates,
 } from "../generateCarouselAngles";
 
 const mockedInvokeLLM = vi.mocked(invokeLLM);
@@ -160,6 +165,94 @@ describe("generateCarouselAngles parallel full expansion", () => {
     expect(Array.isArray(payload.expansions)).toBe(true);
     expect((payload.expansions as unknown[]).length).toBe(3);
     expect(typeof payload.parallelExpansionWallClockMs).toBe("number");
+    expect(payload.targetCompactCandidateCount).toBe(3);
+    expect(payload.targetFullBriefCount).toBe(3);
+    expect(payload.compactRepairRan).toBe(false);
+    expect(payload.completeFullBriefCount).toBe(3);
+    expect(payload.fewerThanThreeCompleteFullBriefs).toBe(false);
+    expect(payload.rankedFullBriefCount).toBe(3);
+    const expansions = payload.expansions as Array<{
+      firstPassValid: boolean;
+      firstPass: { issues: string[] };
+      repair: null | { issues: string[] };
+    }>;
+    expect(expansions.every((row) => row.firstPassValid)).toBe(true);
+    expect(expansions.every((row) => row.firstPass.issues.length === 0)).toBe(
+      true
+    );
+    expect(expansions.every((row) => row.repair == null)).toBe(true);
+  });
+
+  it("runs one compact repair for a shortfall and expands exactly three candidates", async () => {
+    mockedInvokeLLM
+      .mockResolvedValueOnce(
+        llmResult({
+          angles: [
+            compactCandidate("Diagnostic cash", "diagnostic"),
+            compactCandidate("Cash story", "story"),
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        llmResult({
+          angles: [compactCandidate("Cash how-to", "how_to")],
+        })
+      )
+      .mockResolvedValueOnce(llmResult({ brief: rawBrief("Diagnostic cash", "diagnostic") }))
+      .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash story", "story") }))
+      .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash how-to", "how_to") }));
+
+    const briefs = await generateCarouselAngles({
+      sourceContent: "Why small businesses run out of cash.",
+      requiredValidBriefs: 1,
+    });
+
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(5);
+    expect(briefs).toHaveLength(3);
+    const compactRepairPrompt = String(
+      mockedInvokeLLM.mock.calls[1]?.[0]?.messages?.[1]?.content ?? ""
+    );
+    expect(compactRepairPrompt).toContain("Need 1 additional distinct compact candidate.");
+    expect(compactRepairPrompt).toContain("Do not duplicate an existing strategy.");
+    const payload = completionPayload();
+    expect(payload.compactRepairRan).toBe(true);
+    expect(payload.compactCandidateCount).toBe(3);
+    expect(payload.completeFullBriefCount).toBe(3);
+    expect(payload.fewerThanThreeCompleteFullBriefs).toBe(false);
+    expect((payload.expansions as unknown[]).length).toBe(3);
+  });
+
+  it("does not treat a duplicate compact repair as a third strategy", async () => {
+    mockedInvokeLLM
+      .mockResolvedValueOnce(
+        llmResult({
+          angles: [
+            compactCandidate("Diagnostic cash", "diagnostic"),
+            compactCandidate("Cash story", "story"),
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        llmResult({
+          angles: [compactCandidate("Diagnostic cash", "diagnostic")],
+        })
+      )
+      .mockResolvedValueOnce(llmResult({ brief: rawBrief("Diagnostic cash", "diagnostic") }))
+      .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash story", "story") }));
+
+    const briefs = await generateCarouselAngles({
+      sourceContent: "Why small businesses run out of cash.",
+      requiredValidBriefs: 1,
+    });
+
+    expect(briefs).toHaveLength(2);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(4);
+    const payload = completionPayload();
+    expect(payload.compactCandidateCount).toBe(2);
+    expect(payload.completeFullBriefCount).toBe(2);
+    expect(payload.fewerThanThreeCompleteFullBriefs).toBe(true);
+    expect(payload.rankedFullBriefCount).toBe(2);
+    expect(payload.proceededWithGracefulDegradation).toBe(true);
   });
 
   it("keeps ranking among valid full briefs when one expansion fails", async () => {
@@ -266,9 +359,14 @@ describe("generateCarouselAngles expansion schema and prompts", () => {
     });
     expect(system).toContain("complete production-ready creative brief");
     expect(system).toContain("Do not return a slim expansion payload.");
+    expect(system).toContain(
+      "The last slide role must be cta or takeaway, never both"
+    );
     expect(user).toContain("complete production-ready creative brief");
     expect(user).toContain("This is not a slim expansion payload.");
     expect(user).toContain("Cash story");
+    expect(user).toContain("never both in the same outline");
+    expect(user).toContain("Invalid: takeaway then cta");
     expect(user).not.toContain("The assembler copies those selected strategy fields");
   });
 
@@ -280,5 +378,63 @@ describe("generateCarouselAngles expansion schema and prompts", () => {
     expect(user).toContain("Do not write keyPoints, slideOutline");
     expect(user).toContain("EXPLICIT LIST CONTRACT");
     expect(user).toContain("promised count 6");
+  });
+
+  it("classifies first-pass normalize and semantic failures with full issue strings", () => {
+    const missingClosing = classifyCarouselAngleExpansionAttempt({
+      ...rawBrief("Broken closer", "diagnostic"),
+      slideOutline: sampleOutline(6).map((slide, index) =>
+        index === 5 ? { ...slide, role: "insight" } : slide
+      ),
+    });
+    expect(missingClosing.normalized).toBe(true);
+    expect(missingClosing.issues).toContain(
+      "Brief must contain exactly one final closing"
+    );
+
+    const lengthMismatch = classifyCarouselAngleExpansionAttempt({
+      ...rawBrief("Short outline", "diagnostic"),
+      estimatedSlideCount: 8,
+      slideOutline: sampleOutline(6),
+    });
+    expect(lengthMismatch.normalized).toBe(false);
+    expect(lengthMismatch.issues).toContain(
+      "slideOutline length mismatch: got 6, estimatedSlideCount 8"
+    );
+  });
+
+  it("compact repair note and merge keep candidates distinct", () => {
+    const note = buildCarouselAngleCandidatesRepairNote({
+      missingCount: 1,
+      accepted: [{ title: "Diagnostic cash", angleType: "diagnostic" }],
+    });
+    expect(note).toContain("Target exactly 3 distinct compact candidates");
+    expect(note).toContain("Need 1 additional distinct compact candidate.");
+    expect(note).toContain("Do not duplicate an existing strategy.");
+    const merged = mergeCompactCandidates(
+      [compactCandidate("Diagnostic cash", "diagnostic")],
+      [
+        compactCandidate("Diagnostic cash", "diagnostic"),
+        compactCandidate("Cash story", "story"),
+      ]
+    );
+    expect(merged.map((candidate) => candidate.title)).toEqual([
+      "Diagnostic cash",
+      "Cash story",
+    ]);
+  });
+
+  it("clears listItemIndex on cover, context, and closing slides only", () => {
+    const brief = rawBrief("Numbered story", "diagnostic");
+    brief.slideOutline[0] = { ...brief.slideOutline[0], listItemIndex: 1 };
+    brief.slideOutline[1] = { ...brief.slideOutline[1], listItemIndex: 2 };
+    brief.slideOutline[5] = { ...brief.slideOutline[5], listItemIndex: 6 };
+    const aligned = alignExpansionListItemIndexes(brief as never);
+    expect(aligned.slideOutline[0]?.listItemIndex).toBeNull();
+    expect(aligned.slideOutline[1]?.listItemIndex).toBe(2);
+    expect(aligned.slideOutline[5]?.listItemIndex).toBeNull();
+    expect(buildCarouselAngleExpansionRepairNote(["Brief has multiple competing endings"])).toContain(
+      "takeaway and cta cannot both appear"
+    );
   });
 });

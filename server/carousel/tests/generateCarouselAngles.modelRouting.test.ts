@@ -156,6 +156,7 @@ describe("generateCarouselAngles model routing", () => {
   it("routes explicit-list compact to Haiku and every expansion to Sonnet", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(llmResult({ angles: [listCompactCandidate()] }))
+      .mockResolvedValueOnce(llmResult({ angles: [] }))
       .mockResolvedValueOnce(
         llmResult({
           brief: rawBrief({
@@ -179,7 +180,8 @@ describe("generateCarouselAngles model routing", () => {
       )
     ).toBe(ANGLE_HAIKU_MODEL);
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.model).toBe(ANGLE_HAIKU_MODEL);
-    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(
+    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(ANGLE_HAIKU_MODEL);
+    expect(mockedInvokeLLM.mock.calls[2]?.[0]?.model).toBe(
       ANGLE_REVIEW_PLAN_MODEL
     );
   });
@@ -187,6 +189,7 @@ describe("generateCarouselAngles model routing", () => {
   it("routes open-ended story compact to Sonnet and expansion to Sonnet", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
+      .mockResolvedValueOnce(llmResult({ angles: [] }))
       .mockResolvedValueOnce(llmResult({ brief: rawBrief() }));
 
     await generateCarouselAngles({
@@ -206,6 +209,9 @@ describe("generateCarouselAngles model routing", () => {
     expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(
       ANGLE_REVIEW_PLAN_MODEL
     );
+    expect(mockedInvokeLLM.mock.calls[2]?.[0]?.model).toBe(
+      ANGLE_REVIEW_PLAN_MODEL
+    );
   });
 
   it("keeps compact Haiku and expansion Sonnet constants explicit", () => {
@@ -218,6 +224,7 @@ describe("generateCarouselAngles model routing", () => {
   it("honors compact and expansion model overrides", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(llmResult({ angles: [compactCandidate()] }))
+      .mockResolvedValueOnce(llmResult({ angles: [] }))
       .mockResolvedValueOnce(llmResult({ brief: rawBrief() }));
 
     await generateCarouselAngles({
@@ -228,7 +235,8 @@ describe("generateCarouselAngles model routing", () => {
     });
 
     expect(mockedInvokeLLM.mock.calls[0]?.[0]?.model).toBe(ANGLE_HAIKU_MODEL);
-    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(
+    expect(mockedInvokeLLM.mock.calls[1]?.[0]?.model).toBe(ANGLE_HAIKU_MODEL);
+    expect(mockedInvokeLLM.mock.calls[2]?.[0]?.model).toBe(
       ANGLE_REVIEW_PLAN_MODEL
     );
   });

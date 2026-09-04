@@ -213,13 +213,14 @@ describe("generateCarouselAngles graceful degradation", () => {
     vi.restoreAllMocks();
   });
 
-  it("auto mode returns one first-attempt valid brief without repair", async () => {
+  it("auto mode repairs a compact shortfall then expands the surviving candidates", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(
         anglesResult([
           compactCandidate({ title: "Cash is a system", angleType: "diagnostic" }),
         ])
       )
+      .mockResolvedValueOnce(anglesResult([]))
       .mockResolvedValueOnce(
         briefResult(rawBrief({ title: "Cash is a system", angleType: "diagnostic" }))
       );
@@ -231,13 +232,25 @@ describe("generateCarouselAngles graceful degradation", () => {
 
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.title).toBe("Cash is a system");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
+    const compactRepairPrompt = String(
+      mockedInvokeLLM.mock.calls[1]?.[0]?.messages?.[1]?.content ?? ""
+    );
+    expect(compactRepairPrompt).toContain(
+      "Target exactly 3 distinct compact candidates before expansion."
+    );
+    expect(compactRepairPrompt).toContain("Need 2 additional distinct compact candidates.");
+    expect(compactRepairPrompt).toContain('Already accepted: "Cash is a system" (diagnostic).');
+    expect(compactRepairPrompt).toContain("Do not duplicate an existing strategy.");
     const payload = completionPayload();
     expect(payload.firstAttemptValidCount).toBe(1);
     expect(payload.repairAttemptValidCount).toBe(0);
     expect(payload.mergedValidCount).toBe(1);
     expect(payload.requiredValidBriefs).toBe(1);
-    expect(payload.repairRan).toBe(false);
+    expect(payload.compactRepairRan).toBe(true);
+    expect(payload.completeFullBriefCount).toBe(1);
+    expect(payload.fewerThanThreeCompleteFullBriefs).toBe(true);
+    expect(payload.rankedFullBriefCount).toBe(1);
     expect(payload.proceededWithGracefulDegradation).toBe(true);
     expect(payload.angleGenerationMode).toBe("parallel_full_expansions");
   });
@@ -249,6 +262,7 @@ describe("generateCarouselAngles graceful degradation", () => {
           compactCandidate({ title: "Cash is a system", angleType: "diagnostic" }),
         ])
       )
+      .mockResolvedValueOnce(anglesResult([]))
       .mockResolvedValueOnce(briefResult(invalidBrief("Broken A")))
       .mockResolvedValueOnce(
         briefResult(rawBrief({ title: "Repaired cash plan", angleType: "diagnostic" }))
@@ -261,7 +275,7 @@ describe("generateCarouselAngles graceful degradation", () => {
 
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.title).toBe("Repaired cash plan");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(4);
     const payload = completionPayload();
     expect(payload.firstAttemptValidCount).toBe(0);
     expect(payload.repairAttemptValidCount).toBe(1);
@@ -276,6 +290,7 @@ describe("generateCarouselAngles graceful degradation", () => {
           compactCandidate({ title: "Broken A", angleType: "diagnostic" }),
         ])
       )
+      .mockResolvedValueOnce(anglesResult([]))
       .mockResolvedValueOnce(briefResult(invalidBrief("Broken A")))
       .mockResolvedValueOnce(briefResult(invalidBrief("Broken B")));
 
@@ -285,7 +300,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         requiredValidBriefs: 1,
       })
     ).rejects.toThrow("Expected at least 1 carousel briefs, got 0.");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(4);
   });
 
   it("review mode merges a preserved first brief with two distinct repaired briefs", async () => {

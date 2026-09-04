@@ -272,6 +272,8 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("Rebuild after the crash");
     expect(user).toContain("complete production-ready creative brief");
     expect(user).toContain("This is not a slim expansion payload.");
+    expect(user).toContain("never both in the same outline");
+    expect(user).toContain("Invalid: takeaway then cta");
     expect(user).not.toContain("Write ONLY the expansion fields");
   });
 });

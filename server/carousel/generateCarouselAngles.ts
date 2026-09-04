@@ -1,8 +1,10 @@
 /**
  * Carousel Studio: propose creative briefs from source content.
  * Review Plan: one Sonnet call for 3 full briefs, plus at most one repair.
- * Auto generateFromInput: 3 compact candidates, then expand ALL THREE into
- * complete creative briefs concurrently. Rank only after full development.
+ * Auto generateFromInput: target exactly 3 compact candidates (one compact
+ * repair for any shortfall), then expand ALL THREE into complete creative
+ * briefs concurrently. Rank only after full development. If fewer than 3
+ * complete briefs exist after repairs, telemetry marks that degradation.
  * Does not generate full slide copy. Selected brief is passed into
  * generateCarouselRemake separately from sourceContent.
  */
@@ -52,6 +54,7 @@ import {
   resolveAngleGenerationEntryPoint,
   type CarouselAngleGenerationMode,
   type CompactSubstageMetrics,
+  type ExpansionAttemptMetrics,
   type ExpansionSubstageMetrics,
   type SemanticIssuesByCandidate,
 } from "./angleGenerationObservability";
@@ -242,7 +245,10 @@ export function buildCarouselAnglesJsonSchema(): {
         type: "integer",
         description: "1-based slide position matching estimatedSlideCount.",
       },
-      role: ENUM_STRING(CAROUSEL_SLIDE_ROLES, "Functional role of this planned slide."),
+      role: ENUM_STRING(
+        CAROUSEL_SLIDE_ROLES,
+        "Functional role of this planned slide. The last slide must be cta or takeaway. takeaway and cta cannot both appear in the same outline."
+      ),
       objective: {
         type: "string",
         description: "One concise sentence. Distinct from other slides.",
@@ -459,9 +465,15 @@ function inventedListContractPromptLines(): string[] {
   return [
     "If you create an enumerated list in the title, hook, corePromise, or centralInsight, that list is a contract: deliver exactly that many item slides of that item type.",
     "Straightforward enumerated listicles use cover, then the N item slides, then one closing. Put setup on the cover. Do not add a standalone context slide.",
-    "Only promised item slides get listItemIndex 1 through N. Cover, context, example, takeaway, and CTA stay null.",
+    "Only promised item slides get listItemIndex 1 through N. Cover, context, example, takeaway, and CTA stay null. Never put a list item number on a context or closing slide.",
   ];
 }
+
+export const ONE_CLOSING_EXPANSION_CONTRACT =
+  "slideOutline must contain exactly ONE final closing. takeaway and cta are both closing roles. Never include both. Valid last two roles: insight then cta, example then cta, or insight then takeaway. Invalid: takeaway then cta. If the last slide is cta, the penultimate role must be insight, example, problem, or framework, never takeaway. Preserve estimatedSlideCount. Do not drop a slide to hide an extra closing.";
+
+export const COMPETING_ENDINGS_REPAIR_CONTRACT =
+  "Exactly one closing. takeaway and cta cannot both appear. If the outline currently ends takeaway then cta, change the penultimate role from takeaway to insight or example and keep the last slide as cta. Preserve the total slide count. Do not keep a takeaway slide when a cta slide exists.";
 
 export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
@@ -762,6 +774,7 @@ export function buildCarouselAngleExpansionSystemPrompt(): string {
       "You are a SpyReels carousel strategist. Expand exactly one strategic candidate into one complete production-ready creative brief as structured tool output only.",
       "Honor the candidate strategic direction: angleType, core promise, central insight, and hook framing.",
       "Produce every brief field, including keyPoints, slideOutline, visualDirection, imageDirection, evidenceRequirements, prohibitedClaims, audienceReasoning, ctaDirection, scores, and confidence.",
+      "End with exactly one closing. The last slide role must be cta or takeaway, never both in the same outline.",
       "Do not return a slim expansion payload. Do not propose alternative strategies. Do not return multiple briefs.",
       "Source content is the primary authority for topic, industry, and audience.",
       "If the source explicitly mentions an audience or industry, preserve it.",
@@ -830,7 +843,8 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
     ...explicitListContractPromptLines(listContract),
     ...(listContract ? [] : inventedListContractPromptLines()),
-    "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
+    "End with exactly one intentional final closing. The last slide role must be cta or takeaway, never both in the same outline. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway ending is valid only when there is no cta slide. Do not add a second competing ending.",
+    ONE_CLOSING_EXPANSION_CONTRACT,
     "Match contentFormat and layoutFamily.",
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
     "Avoid unsupported absolutes and sensational claims.",
@@ -1026,6 +1040,197 @@ export function buildCarouselAnglesRepairNote(
   return parts.join(" ");
 }
 
+export function compactCandidateIdentityKey(
+  candidate: Pick<CarouselAngleCandidate, "title" | "angleType" | "centralInsight">
+): string {
+  return [candidate.title, candidate.angleType, candidate.centralInsight]
+    .map(normalizeBriefIdentityPart)
+    .join("\u0001");
+}
+
+export function mergeCompactCandidates(
+  first: CarouselAngleCandidate[],
+  repaired: CarouselAngleCandidate[]
+): CarouselAngleCandidate[] {
+  const seen = new Set<string>();
+  const merged: CarouselAngleCandidate[] = [];
+  for (const candidate of [...first, ...repaired]) {
+    const key = compactCandidateIdentityKey(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(candidate);
+    if (merged.length >= CAROUSEL_STUDIO_ANGLE_COUNT) break;
+  }
+  return merged;
+}
+
+export function buildCarouselAngleCandidatesRepairNote(args: {
+  missingCount: number;
+  accepted: Array<{ title: string; angleType: string }>;
+  listContract?: CarouselListContract | null;
+}): string {
+  const parts = [
+    `Target exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} distinct compact candidates before expansion.`,
+    `Need ${args.missingCount} additional distinct compact candidate${args.missingCount === 1 ? "" : "s"}.`,
+  ];
+  if (args.accepted.length > 0) {
+    const acceptedList = args.accepted
+      .map((candidate) => `"${candidate.title}" (${candidate.angleType})`)
+      .join(", ");
+    parts.push(`Already accepted: ${acceptedList}.`);
+    parts.push(
+      "Do not duplicate an existing strategy. Change angleType, core promise, or central insight."
+    );
+  }
+  parts.push(
+    "Return compact candidates only. Do not write keyPoints, slideOutline, or finished copy."
+  );
+  const listContract = args.listContract;
+  if (listContract?.explicitListContract) {
+    parts.push(
+      `Preserve the explicit list contract: exactly ${listContract.promisedCount} ${listContract.promisedItemType}.`
+    );
+  }
+  return parts.join(" ");
+}
+
+const EXPANSION_REQUIRED_STRING_FIELDS = [
+  "kicker",
+  "title",
+  "description",
+  "topic",
+  "inferredAudience",
+  "audienceReasoning",
+  "hook",
+  "corePromise",
+  "centralInsight",
+  "visualDirection",
+  "imageDirection",
+  "ctaDirection",
+] as const;
+
+function rawTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+export function explainCarouselBriefNormalizeFailure(rawBrief: unknown): string[] {
+  if (!rawBrief || typeof rawBrief !== "object" || Array.isArray(rawBrief)) {
+    return ["schema/parse failure: expansion brief is missing or not an object"];
+  }
+  const row = rawBrief as Record<string, unknown>;
+  const issues: string[] = [];
+  for (const key of EXPANSION_REQUIRED_STRING_FIELDS) {
+    if (!rawTrimmedString(row[key])) {
+      issues.push(`schema/parse failure: missing required field ${key}`);
+    }
+  }
+  if (!includesUnion(CAROUSEL_CONTENT_GOALS, row.contentGoal)) {
+    issues.push("schema/parse failure: invalid contentGoal");
+  }
+  if (!includesUnion(CAROUSEL_CONTENT_FORMATS, row.contentFormat)) {
+    issues.push("schema/parse failure: invalid contentFormat");
+  }
+  if (!includesUnion(CAROUSEL_ANGLE_TYPES, row.angleType)) {
+    issues.push("schema/parse failure: invalid angleType");
+  }
+  if (!includesUnion(CAROUSEL_LAYOUT_FAMILIES, row.layoutFamily)) {
+    issues.push("schema/parse failure: invalid layoutFamily");
+  }
+  if (
+    typeof row.contentFormat === "string" &&
+    typeof row.layoutFamily === "string" &&
+    row.contentFormat !== row.layoutFamily
+  ) {
+    issues.push(
+      `contentFormat/layoutFamily mismatch: contentFormat=${row.contentFormat} layoutFamily=${row.layoutFamily}`
+    );
+  }
+  const keyPoints = Array.isArray(row.keyPoints) ? row.keyPoints : [];
+  if (
+    keyPoints.length < CAROUSEL_BRIEF_KEY_POINTS_MIN ||
+    keyPoints.length > CAROUSEL_BRIEF_KEY_POINTS_MAX
+  ) {
+    issues.push(
+      `keyPoint bounds: got ${keyPoints.length}, need ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX}`
+    );
+  }
+  const estimated =
+    typeof row.estimatedSlideCount === "number"
+      ? row.estimatedSlideCount
+      : Number(row.estimatedSlideCount);
+  const outline = Array.isArray(row.slideOutline) ? row.slideOutline : [];
+  if (
+    !Number.isInteger(estimated) ||
+    estimated < CAROUSEL_STUDIO_MIN_SLIDES ||
+    estimated > CAROUSEL_STUDIO_MAX_SLIDES
+  ) {
+    issues.push(
+      `schema/parse failure: estimatedSlideCount ${String(row.estimatedSlideCount)} is out of range`
+    );
+  } else if (outline.length !== estimated) {
+    issues.push(
+      `slideOutline length mismatch: got ${outline.length}, estimatedSlideCount ${estimated}`
+    );
+  }
+  const invalidRoles: string[] = [];
+  for (const item of outline) {
+    if (!item || typeof item !== "object") continue;
+    const role = (item as Record<string, unknown>).role;
+    if (typeof role === "string" && !includesUnion(CAROUSEL_SLIDE_ROLES, role)) {
+      invalidRoles.push(role);
+    }
+  }
+  if (invalidRoles.length > 0) {
+    issues.push(
+      `unsupported structural ending or role: ${invalidRoles.join(", ")}`
+    );
+  }
+  if (issues.length === 0) {
+    issues.push("schema/parse failure: normalizeGeneratedCarouselBrief returned null");
+  }
+  return issues;
+}
+
+const NON_LIST_ITEM_ROLES = new Set([
+  "hook",
+  "context",
+  "example",
+  "comparison",
+  "takeaway",
+  "cta",
+]);
+
+export function alignExpansionListItemIndexes(
+  brief: CarouselCreativeBrief
+): CarouselCreativeBrief {
+  return {
+    ...brief,
+    slideOutline: brief.slideOutline.map((slide) =>
+      NON_LIST_ITEM_ROLES.has(slide.role) && slide.listItemIndex != null
+        ? { ...slide, listItemIndex: null }
+        : slide
+    ),
+  };
+}
+
+export function classifyCarouselAngleExpansionAttempt(
+  rawBrief: unknown,
+  listContract?: CarouselListContract | null
+): { normalized: boolean; issues: string[] } {
+  const normalized = normalizeGeneratedCarouselBrief(rawBrief, 0);
+  if (!normalized) {
+    return {
+      normalized: false,
+      issues: explainCarouselBriefNormalizeFailure(rawBrief),
+    };
+  }
+  const aligned = alignExpansionListItemIndexes(normalized);
+  return {
+    normalized: true,
+    issues: validateCarouselBriefSemantics(aligned, listContract),
+  };
+}
+
 export function buildCarouselAngleExpansionRepairNote(
   semanticIssues: string[] = [],
   options?: {
@@ -1037,6 +1242,7 @@ export function buildCarouselAngleExpansionRepairNote(
     `Return one full corrected brief with kicker, title, description, topic, inferredAudience, audienceReasoning, contentGoal, contentFormat, angleType, hook, corePromise, centralInsight, ${CAROUSEL_BRIEF_KEY_POINTS_MIN}-${CAROUSEL_BRIEF_KEY_POINTS_MAX} keyPoints, slideOutline length equal to estimatedSlideCount (${CAROUSEL_STUDIO_MIN_SLIDES}-${CAROUSEL_STUDIO_MAX_SLIDES}), matching contentFormat and layoutFamily, visualDirection, imageDirection, claimRisk, researchMode, evidenceRequirements, prohibitedClaims, ctaDirection, component scores, and confidence.`,
     "Honor the original candidate strategic direction. Do not switch to a different strategy.",
     "Numbered problem-solution briefs must include every promised leak/problem before its fix, must not claim N plugs that were never outlined, must have exactly one final closing, and that closing must be a cta or takeaway last slide with no competing endings.",
+    COMPETING_ENDINGS_REPAIR_CONTRACT,
   ];
   if (semanticIssues.length > 0) {
     parts.push(`Semantic issues to fix: ${semanticIssues.join(" ")}`);
@@ -1219,6 +1425,7 @@ async function invokeCarouselAngleCandidatesOnce(args: {
   niche?: string | null;
   brandVoice?: string | null;
   model?: string;
+  repairNote?: string;
 }): Promise<{
   candidates: CarouselAngleCandidate[];
   semanticIssues: string[];
@@ -1228,16 +1435,19 @@ async function invokeCarouselAngleCandidatesOnce(args: {
 }> {
   const listContract = detectExplicitCarouselListContract(args.sourceContent);
   const system = buildCarouselAngleCandidatesSystemPrompt();
-  const user = buildCarouselAngleCandidatesUserPrompt({
+  const basePrompt = buildCarouselAngleCandidatesUserPrompt({
     sourceContent: args.sourceContent,
     niche: args.niche,
     brandVoice: args.brandVoice,
     listContract,
   });
+  const user = args.repairNote
+    ? `${basePrompt}\n\nPREVIOUS OUTPUT DID NOT PRODUCE ${CAROUSEL_STUDIO_ANGLE_COUNT} DISTINCT COMPACT CANDIDATES. Fix ONLY the shortfall:\n${args.repairNote}`
+    : basePrompt;
   const startedAt = performance.now();
   const response = await invokeLLM({
     operation: "angle_generation",
-    repairIteration: 0,
+    repairIteration: args.repairNote ? 1 : 0,
     maxTokens: COMPACT_CANDIDATE_MAX_TOKENS,
     model: args.model ?? resolveCompactCandidateModel(args.sourceContent, listContract),
     messages: [
@@ -1286,6 +1496,7 @@ async function invokeCarouselAngleFullBriefExpansionOnce(args: {
   allNormalized: CarouselCreativeBrief[];
   semanticIssues: string[];
   listContract: CarouselListContract | null;
+  classification: { normalized: boolean; issues: string[] };
   telemetry: AngleCallTelemetry;
 }> {
   const listContract = detectExplicitCarouselListContract(args.sourceContent);
@@ -1323,7 +1534,14 @@ async function invokeCarouselAngleFullBriefExpansionOnce(args: {
   const tokens = llmTokenUsage(response);
   const raw = String(response.choices[0]?.message?.content ?? "");
   const parsed = parseLlmJson<FullBriefLlmPayload>(raw, {});
-  const normalized = normalizeGeneratedCarouselBrief(parsed.brief, 0);
+  const classification = classifyCarouselAngleExpansionAttempt(
+    parsed.brief,
+    listContract
+  );
+  const normalizedRaw = normalizeGeneratedCarouselBrief(parsed.brief, 0);
+  const normalized = normalizedRaw
+    ? alignExpansionListItemIndexes(normalizedRaw)
+    : null;
   const allNormalized = normalized ? [normalized] : [];
   const selected = selectSemanticallyValidCarouselBriefs(
     allNormalized,
@@ -1333,12 +1551,26 @@ async function invokeCarouselAngleFullBriefExpansionOnce(args: {
     ...selected,
     allNormalized,
     listContract,
+    classification,
     telemetry: {
       inputCharacterCount: system.length + user.length,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
     },
+  };
+}
+
+function expansionAttemptMetrics(
+  telemetry: AngleCallTelemetry,
+  issues: string[]
+): ExpansionAttemptMetrics {
+  return {
+    inputCharacterCount: telemetry.inputCharacterCount,
+    inputTokens: telemetry.inputTokens,
+    outputTokens: telemetry.outputTokens,
+    durationMs: telemetry.durationMs,
+    issues,
   };
 }
 
@@ -1357,13 +1589,14 @@ async function expandOneCandidateWithRepair(args: {
   semanticIssues: SemanticIssuesByCandidate[];
   metrics: ExpansionSubstageMetrics;
 }> {
+  const model = args.model ?? ANGLE_EXPANSION_MODEL;
   const semanticIssues: SemanticIssuesByCandidate[] = [];
-  let first = await invokeCarouselAngleFullBriefExpansionOnce({
+  const first = await invokeCarouselAngleFullBriefExpansionOnce({
     sourceContent: args.sourceContent,
     niche: args.niche,
     brandVoice: args.brandVoice,
     candidate: args.candidate,
-    model: args.model,
+    model,
   });
   semanticIssues.push(
     ...semanticIssuesByCandidate(
@@ -1373,7 +1606,13 @@ async function expandOneCandidateWithRepair(args: {
     ).map((row) => ({ ...row, candidateIndex: args.candidateIndex }))
   );
   const firstPassValid = first.briefs.length > 0;
+  const firstPass = expansionAttemptMetrics(
+    first.telemetry,
+    first.classification.issues
+  );
+  let repair: ExpansionAttemptMetrics | null = null;
   let repairRan = false;
+  let resolved = first;
   if (!firstPassValid) {
     repairRan = true;
     const repaired = await invokeCarouselAngleFullBriefExpansionOnce({
@@ -1381,10 +1620,15 @@ async function expandOneCandidateWithRepair(args: {
       niche: args.niche,
       brandVoice: args.brandVoice,
       candidate: args.candidate,
-      model: args.model,
-      repairNote: buildCarouselAngleExpansionRepairNote(first.semanticIssues, {
-        listContract: first.listContract,
-      }),
+      model,
+      repairNote: buildCarouselAngleExpansionRepairNote(
+        first.classification.issues.length > 0
+          ? first.classification.issues
+          : first.semanticIssues,
+        {
+          listContract: first.listContract,
+        }
+      ),
     });
     semanticIssues.push(
       ...semanticIssuesByCandidate(
@@ -1393,40 +1637,40 @@ async function expandOneCandidateWithRepair(args: {
         repaired.listContract
       ).map((row) => ({ ...row, candidateIndex: args.candidateIndex }))
     );
-    first = {
-      ...repaired,
-      telemetry: {
-        inputCharacterCount:
-          first.telemetry.inputCharacterCount +
-          repaired.telemetry.inputCharacterCount,
-        inputTokens:
-          first.telemetry.inputTokens != null &&
-          repaired.telemetry.inputTokens != null
-            ? first.telemetry.inputTokens + repaired.telemetry.inputTokens
-            : first.telemetry.inputTokens ?? repaired.telemetry.inputTokens,
-        outputTokens:
-          first.telemetry.outputTokens != null &&
-          repaired.telemetry.outputTokens != null
-            ? first.telemetry.outputTokens + repaired.telemetry.outputTokens
-            : first.telemetry.outputTokens ?? repaired.telemetry.outputTokens,
-        durationMs: first.telemetry.durationMs + repaired.telemetry.durationMs,
-      },
-    };
+    repair = expansionAttemptMetrics(
+      repaired.telemetry,
+      repaired.classification.issues
+    );
+    resolved = repaired;
   }
   return {
-    briefs: first.briefs,
-    allNormalized: first.allNormalized,
+    briefs: resolved.briefs,
+    allNormalized: resolved.allNormalized,
     firstPassValid,
     repairRan,
     semanticIssues,
     metrics: {
       candidateIndex: args.candidateIndex,
-      inputCharacterCount: first.telemetry.inputCharacterCount,
-      inputTokens: first.telemetry.inputTokens,
-      outputTokens: first.telemetry.outputTokens,
-      durationMs: first.telemetry.durationMs,
+      model,
+      inputCharacterCount:
+        first.telemetry.inputCharacterCount +
+        (repair?.inputCharacterCount ?? 0),
+      inputTokens:
+        first.telemetry.inputTokens != null &&
+        (repair == null || repair.inputTokens != null)
+          ? first.telemetry.inputTokens + (repair?.inputTokens ?? 0)
+          : first.telemetry.inputTokens ?? repair?.inputTokens ?? null,
+      outputTokens:
+        first.telemetry.outputTokens != null &&
+        (repair == null || repair.outputTokens != null)
+          ? first.telemetry.outputTokens + (repair?.outputTokens ?? 0)
+          : first.telemetry.outputTokens ?? repair?.outputTokens ?? null,
+      durationMs:
+        first.telemetry.durationMs + (repair?.durationMs ?? 0),
       firstPassValid,
       repairRan,
+      firstPass,
+      repair,
     },
   };
 }
@@ -1434,8 +1678,8 @@ async function expandOneCandidateWithRepair(args: {
 /**
  * Propose creative briefs from source content.
  * requiredValidBriefs defaults to 3 (Review Plan). Auto generateFromInput uses 1.
- * Auto path: compact candidates, then expand every candidate into a full brief
- * concurrently. Rank only after all valid full briefs exist.
+ * Auto path: target exactly 3 compact candidates, then expand every candidate
+ * into a full brief concurrently. Rank only after developed full briefs exist.
  * Review Plan: one 3-brief call. At most one repair call.
  */
 export async function generateCarouselAngles(args: {
@@ -1489,12 +1733,17 @@ export async function generateCarouselAngles(args: {
     let repairReason: string | null = null;
     let merged: CarouselCreativeBrief[] = [];
     let compactMetrics: CompactSubstageMetrics | null = null;
+    let compactRepairMetrics: CompactSubstageMetrics | null = null;
     let expansionMetrics: ExpansionSubstageMetrics[] | null = null;
     let parallelExpansionWallClockMs: number | null = null;
+    let compactRepairRan = false;
+    let degradedToReviewPlanFallback = false;
+    const targetCompactCandidateCount = CAROUSEL_STUDIO_ANGLE_COUNT;
+    const targetFullBriefCount = CAROUSEL_STUDIO_ANGLE_COUNT;
 
     if (requiredValidBriefs === 1) {
       angleGenerationMode = "parallel_full_expansions";
-      const compact = await invokeCarouselAngleCandidatesOnce({
+      let compact = await invokeCarouselAngleCandidatesOnce({
         sourceContent,
         niche,
         brandVoice: args.brandVoice,
@@ -1516,6 +1765,62 @@ export async function generateCarouselAngles(args: {
         ...compactMetrics,
       });
 
+      if (compact.candidates.length < targetCompactCandidateCount) {
+        const missingCount = Math.max(
+          0,
+          targetCompactCandidateCount - compact.candidates.length
+        );
+        const repairedCompact = await invokeCarouselAngleCandidatesOnce({
+          sourceContent,
+          niche,
+          brandVoice: args.brandVoice,
+          model: compactModel,
+          repairNote: buildCarouselAngleCandidatesRepairNote({
+            missingCount,
+            accepted: compact.candidates.map((candidate) => ({
+              title: candidate.title,
+              angleType: candidate.angleType,
+            })),
+            listContract: compact.listContract,
+          }),
+        });
+        compactRepairRan = true;
+        repairRan = true;
+        repairIteration = 1;
+        repairReason =
+          compact.candidates.length === 0
+            ? "missing_compact_candidates"
+            : "compact_shortfall";
+        compactRepairMetrics = {
+          inputCharacterCount: repairedCompact.telemetry.inputCharacterCount,
+          inputTokens: repairedCompact.telemetry.inputTokens,
+          outputTokens: repairedCompact.telemetry.outputTokens,
+          durationMs: repairedCompact.telemetry.durationMs,
+          rawCandidateCount: repairedCompact.rawCandidateCount,
+          validCompactCandidateCount: repairedCompact.candidates.length,
+        };
+        logAngleSubstageCompleted({
+          correlationId,
+          substage: "compact",
+          ...compactRepairMetrics,
+        });
+        compact = {
+          ...compact,
+          candidates: mergeCompactCandidates(
+            compact.candidates,
+            repairedCompact.candidates
+          ),
+          rawCandidateCount:
+            compact.rawCandidateCount + repairedCompact.rawCandidateCount,
+          semanticIssues: [
+            ...compact.semanticIssues,
+            ...repairedCompact.semanticIssues,
+          ],
+        };
+        rawCandidateCount = compact.rawCandidateCount;
+        compactCandidateCount = compact.candidates.length;
+      }
+
       if (compact.candidates.length === 0) {
         const fallback = await invokeCarouselAnglesOnce({
           sourceContent,
@@ -1527,7 +1832,8 @@ export async function generateCarouselAngles(args: {
         });
         repairRan = true;
         repairIteration = 1;
-        repairReason = "zero_compact_candidates";
+        repairReason = "zero_compact_candidates_after_repair";
+        degradedToReviewPlanFallback = true;
         firstAttemptValidCount = 0;
         repairAttemptValidCount = fallback.briefs.length;
         rawCandidateCount =
@@ -1544,8 +1850,9 @@ export async function generateCarouselAngles(args: {
       } else {
         expansionRan = true;
         const expansionStartedAt = performance.now();
+        const toExpand = compact.candidates.slice(0, targetFullBriefCount);
         const expansions = await Promise.all(
-          compact.candidates.map((candidate, candidateIndex) =>
+          toExpand.map((candidate, candidateIndex) =>
             expandOneCandidateWithRepair({
               sourceContent,
               niche,
@@ -1561,12 +1868,21 @@ export async function generateCarouselAngles(args: {
               semanticIssues: [] as SemanticIssuesByCandidate[],
               metrics: {
                 candidateIndex,
+                model: expansionModel,
                 inputCharacterCount: 0,
                 inputTokens: null,
                 outputTokens: null,
                 durationMs: 0,
                 firstPassValid: false,
                 repairRan: false,
+                firstPass: {
+                  inputCharacterCount: 0,
+                  inputTokens: null,
+                  outputTokens: null,
+                  durationMs: 0,
+                  issues: ["schema/parse failure: expansion call failed"],
+                },
+                repair: null,
               } satisfies ExpansionSubstageMetrics,
             }))
           )
@@ -1671,6 +1987,10 @@ export async function generateCarouselAngles(args: {
     const briefs = reindexCarouselBriefs(ranked);
     mergedValidCount = merged.length;
     acceptedSemanticCandidateCount = briefs.length;
+    const completeFullBriefCount = merged.length;
+    const fewerThanThreeCompleteFullBriefs =
+      requiredValidBriefs === 1 &&
+      completeFullBriefCount < targetFullBriefCount;
     const proceededWithGracefulDegradation =
       briefs.length > 0 && briefs.length < CAROUSEL_STUDIO_ANGLE_COUNT;
 
@@ -1699,8 +2019,18 @@ export async function generateCarouselAngles(args: {
       compactCandidateCount,
       repairReason,
       compact: compactMetrics,
+      compactRepair: compactRepairMetrics,
       expansions: expansionMetrics,
       parallelExpansionWallClockMs,
+      targetCompactCandidateCount:
+        requiredValidBriefs === 1 ? targetCompactCandidateCount : null,
+      targetFullBriefCount:
+        requiredValidBriefs === 1 ? targetFullBriefCount : CAROUSEL_STUDIO_ANGLE_COUNT,
+      compactRepairRan,
+      completeFullBriefCount,
+      fewerThanThreeCompleteFullBriefs,
+      rankedFullBriefCount: briefs.length,
+      degradedToReviewPlanFallback,
     });
 
     return briefs;
