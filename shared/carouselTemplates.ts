@@ -266,7 +266,7 @@ export type CarouselSlideSpec = {
    * Absent on legacy catalog templates. Renderer uses this to pick a treatment.
    */
   composition?: {
-    family: "breakdown_listicle" | "story_narrative" | "comparison";
+    family: "breakdown_listicle" | "story_narrative" | "comparison" | "framework";
     sequence?: {
       kind: string;
       index: number;
@@ -278,6 +278,9 @@ export type CarouselSlideSpec = {
     treatment: string;
     semanticRole: string;
     listItemIndex: number | null;
+    frameworkPartCount?: number;
+    frameworkPartIndex?: number | null;
+    frameworkPartSource?: "framework_steps" | "ordered_parts" | "none";
   };
 };
 
