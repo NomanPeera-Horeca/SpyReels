@@ -18,7 +18,9 @@ import {
   resolveFrameworkRenderTreatment,
   resolveFrameworkTreatment,
   resolveFrameworkTreatments,
+  type FrameworkTreatment,
 } from "./carouselFrameworkFamily";
+import { resolveFrameworkPremiumVariants } from "./carouselFrameworkPremiumDesignSystem";
 import { CAROUSEL_TEMPLATES_BY_ID } from "./carouselTemplates";
 import {
   CAROUSEL_STUDIO_TEMPLATE_ID,
@@ -863,5 +865,58 @@ describe("Framework part structure", () => {
       "Uncovers hidden complexity before a dish reaches a single customer."
     );
     expect(labels.slice(1)).toEqual([null, null, null]);
+  });
+
+  it("does not change part metadata when resolving visual variants", () => {
+    const promptA = promptAPlanningIR();
+    const promptB = promptBPlanningIR();
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID)!;
+    const slidesA = buildFrameworkFamilySlides({
+      template,
+      planningIR: promptA,
+      compositionIR: compilePlanningIRToBaselineCompositionIR(promptA),
+    });
+    const slidesB = buildFrameworkFamilySlides({
+      template,
+      planningIR: promptB,
+      compositionIR: compilePlanningIRToBaselineCompositionIR(promptB),
+    });
+    const beforeA = slidesA.map((slide) => ({
+      count: slide.composition?.frameworkPartCount,
+      index: slide.composition?.frameworkPartIndex ?? null,
+    }));
+    const beforeB = slidesB.map((slide) => ({
+      count: slide.composition?.frameworkPartCount,
+      index: slide.composition?.frameworkPartIndex ?? null,
+    }));
+    resolveFrameworkPremiumVariants(
+      slidesA.map((slide) => ({
+        treatment: slide.composition!.treatment as FrameworkTreatment,
+        position: slide.composition!.position ?? 1,
+        totalSlides: slide.composition!.totalSlides ?? slidesA.length,
+        frameworkPartCount: slide.composition!.frameworkPartCount,
+        frameworkPartIndex: slide.composition!.frameworkPartIndex,
+      }))
+    );
+    resolveFrameworkPremiumVariants(
+      slidesB.map((slide) => ({
+        treatment: slide.composition!.treatment as FrameworkTreatment,
+        position: slide.composition!.position ?? 1,
+        totalSlides: slide.composition!.totalSlides ?? slidesB.length,
+        frameworkPartCount: slide.composition!.frameworkPartCount,
+        frameworkPartIndex: slide.composition!.frameworkPartIndex,
+      }))
+    );
+    expect(slidesA.map((slide) => ({
+      count: slide.composition?.frameworkPartCount,
+      index: slide.composition?.frameworkPartIndex ?? null,
+    }))).toEqual(beforeA);
+    expect(slidesB.map((slide) => ({
+      count: slide.composition?.frameworkPartCount,
+      index: slide.composition?.frameworkPartIndex ?? null,
+    }))).toEqual(beforeB);
+    expect(beforeA.map((item) => item.count)).toEqual([4, 4, 4, 4, 4, 4, 4]);
+    expect(beforeA.map((item) => item.index)).toEqual([null, null, 1, 2, 3, 4, null]);
+    expect(beforeB.every((item) => item.count === 0 && item.index == null)).toBe(true);
   });
 });

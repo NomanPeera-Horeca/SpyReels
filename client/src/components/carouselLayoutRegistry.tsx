@@ -12,6 +12,7 @@ import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
 import { CarouselComparisonPremiumFamily } from "@/components/CarouselComparisonPremiumFamily";
 import { CarouselFrameworkPremiumFamily } from "@/components/CarouselFrameworkPremiumFamily";
+import type { FrameworkPremiumVariant } from "@shared/carouselFrameworkPremiumDesignSystem";
 import { CarouselStoryPremiumFamily } from "@/components/CarouselStoryPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
@@ -43,6 +44,8 @@ export type CarouselSlideLayoutProps = {
   onSlotChange?: (slotId: string, value: string) => void;
   /** Composition-aware family metadata. Ignored by legacy layouts. */
   composition?: CarouselSlideSpec["composition"];
+  /** Framework-only previous slide variant. Other families ignore it. */
+  previousVariant?: FrameworkPremiumVariant | null;
 };
 
 /**

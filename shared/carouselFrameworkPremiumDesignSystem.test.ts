@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FRAMEWORK_PREMIUM_DESIGN_FOUNDATION,
   resolveFrameworkPremiumVariant,
+  resolveFrameworkPremiumVariants,
 } from "./carouselFrameworkPremiumDesignSystem";
 
 describe("premium Framework design system", () => {
@@ -123,7 +124,15 @@ describe("premium Framework design system", () => {
         totalSlides: 7,
         frameworkPartCount: 0,
       })
-    ).toBe("manifesto");
+    ).toBe("centered_system");
+    expect(
+      resolveFrameworkPremiumVariant({
+        treatment: "model_overview",
+        position: 3,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      })
+    ).not.toBe("connected_nodes");
     expect(
       resolveFrameworkPremiumVariant({
         treatment: "pillar_system",
@@ -132,6 +141,53 @@ describe("premium Framework design system", () => {
         frameworkPartCount: 0,
       })
     ).toBe("manifesto");
+  });
+
+  it("breaks consecutive principle manifesto with a safe editorial card", () => {
+    const variants = resolveFrameworkPremiumVariants([
+      {
+        treatment: "principle_focus",
+        position: 2,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      },
+      {
+        treatment: "principle_focus",
+        position: 4,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      },
+    ]);
+    expect(variants[0]).toBe("manifesto");
+    expect(variants[1]).toBe("centered_system");
+    expect(variants[1]).not.toBe(variants[0]);
+  });
+
+  it("gives Prompt B editorial rhythm without inventing parts", () => {
+    const inputs = [
+      { treatment: "framework_cover" as const, position: 1, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "principle_focus" as const, position: 2, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "model_overview" as const, position: 3, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "principle_focus" as const, position: 4, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "principle_focus" as const, position: 5, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "example_application" as const, position: 6, totalSlides: 7, frameworkPartCount: 0 },
+      { treatment: "framework_closing" as const, position: 7, totalSlides: 7, frameworkPartCount: 0 },
+    ];
+    const variants = resolveFrameworkPremiumVariants(inputs);
+    expect(inputs.every((slide) => slide.frameworkPartCount === 0)).toBe(true);
+    expect(variants).toEqual([
+      "cover_editorial",
+      "manifesto",
+      "centered_system",
+      "manifesto",
+      "centered_system",
+      "model_plus_example",
+      "framework_takeaway",
+    ]);
+    expect(new Set(variants.slice(1, 5)).size).toBeGreaterThan(1);
+    expect(variants).not.toContain("cover_diagram");
+    expect(variants).not.toContain("connected_nodes");
+    expect(variants).not.toContain("vertical_pillars");
   });
 
   it("reuses the premium design foundation without cloning it", () => {
