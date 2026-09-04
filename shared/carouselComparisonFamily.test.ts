@@ -12,6 +12,7 @@ import {
   resolveComparisonTradeoffDensity,
   resolveComparisonTreatment,
   resolveComparisonTreatments,
+  textContextForComparisonImageSlot,
 } from "./carouselComparisonFamily";
 import { canUseStoryNarrativeFamily } from "./carouselStoryFamily";
 import { CAROUSEL_TEMPLATES_BY_ID } from "./carouselTemplates";
@@ -499,6 +500,23 @@ describe("Comparison treatments and sequence", () => {
         treatment: "comparison_closing",
       })
     ).toBe("comparison_closing");
+  });
+
+  it("grounds two-sided images from structured left/right slots", () => {
+    const values = {
+      left: "Cheap equipment",
+      right: "Buy it once",
+      headline: "Headline should not win when sides exist",
+    };
+    expect(textContextForComparisonImageSlot(values, "photo")).toBe(
+      "Cheap equipment"
+    );
+    expect(textContextForComparisonImageSlot(values, "photo_b")).toBe(
+      "Buy it once"
+    );
+    expect(textContextForComparisonImageSlot({ headline: "Only headline" }, "photo")).toBe(
+      null
+    );
   });
 
   it("uses structured side labels and never invents generic A/B chrome", () => {

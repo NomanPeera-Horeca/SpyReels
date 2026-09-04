@@ -159,6 +159,23 @@ export type ComparisonSideLabels = {
 };
 
 /**
+ * Two-sided Comparison imagery uses structured left/right slots.
+ * Slot ids are the only mapping. Copy is never parsed for meaning.
+ */
+export function textContextForComparisonImageSlot(
+  slideVals: Record<string, string | undefined>,
+  imageSlotId: string
+): string | null {
+  const sideKey =
+    imageSlotId === "photo_b" || imageSlotId === "right" ? "right" : "left";
+  const sideCopy = slideVals[sideKey];
+  if (typeof sideCopy === "string" && sideCopy.trim()) {
+    return sideCopy.trim();
+  }
+  return null;
+}
+
+/**
  * Chrome labels only when structure already names the sides.
  * Slot copy is the identity when present. Never invent Option A / This side.
  */

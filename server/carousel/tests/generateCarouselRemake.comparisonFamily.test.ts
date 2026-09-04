@@ -40,8 +40,11 @@ vi.mock("../resolveSlideImage", () => ({
 
 import { invokeLLM } from "../../_core/llm";
 import { generateCarouselRemake } from "../generateCarouselRemake";
+import { resolveSlideImage } from "../resolveSlideImage";
+import { normalizeSlideImages } from "@shared/carouselTemplates";
 
 const mockedInvokeLLM = vi.mocked(invokeLLM);
+const mockedResolveSlideImage = vi.mocked(resolveSlideImage);
 
 function comparisonBrief(): CarouselCreativeBrief {
   return {
@@ -117,6 +120,11 @@ describe("generateCarouselRemake Comparison family wiring", () => {
     persistUpdates.length = 0;
     mockedInvokeLLM.mockReset();
     visualDirectionMock.mockReset();
+    mockedResolveSlideImage.mockReset();
+    mockedResolveSlideImage.mockImplementation(
+      async (_hint, _niche, _uploaded, _text, options) =>
+        `https://images.example.com/${options?.imageSlotId ?? "photo"}.jpg`
+    );
   });
 
   it("wires Visual Director into the Comparison family path", async () => {
@@ -230,5 +238,100 @@ describe("generateCarouselRemake Comparison family wiring", () => {
     expect(slides.every(isStoryNarrativeSlide)).toBe(true);
     expect(slides.some(isComparisonFamilySlide)).toBe(false);
     expect(slides.some(isBreakdownListicleSlide)).toBe(false);
+
+    const imageCalls = mockedResolveSlideImage.mock.calls;
+    const slideIds = new Set(
+      imageCalls.map((call) => call[4]?.slideId).filter(Boolean)
+    );
+    for (const slideId of slideIds) {
+      const callsForSlide = imageCalls.filter(
+        (call) => call[4]?.slideId === slideId
+      );
+      expect(callsForSlide).toHaveLength(1);
+      expect(callsForSlide[0]?.[4]?.imageSlotId).not.toBe("photo_b");
+    }
+    const persisted = completed?.imageUrlsJson as
+      | Record<string, string | Record<string, string>>
+      | undefined;
+    for (const entry of Object.values(persisted ?? {})) {
+      expect(typeof entry).toBe("string");
+    }
+  });
+
+  it("resolves both Comparison image slots with side-aware text context", async () => {
+    const brief = comparisonBrief();
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+    });
+    visualDirectionMock.mockResolvedValue({
+      compositionIR: compilePlanningIRToBaselineCompositionIR(planningIR),
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(
+              genericCopyPayload(
+                brief.slideOutline.map((_, index) =>
+                  `slide_${String(index + 1).padStart(2, "0")}`
+                )
+              )
+            ),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6803, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+      creativeBrief: brief,
+    });
+
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      id: string;
+      imageSlots?: Array<{ id: string }>;
+    }>;
+    const twoSlot = slides.find((slide) => (slide.imageSlots?.length ?? 0) > 1);
+    expect(twoSlot?.imageSlots?.map((slot) => slot.id)).toEqual([
+      "photo",
+      "photo_b",
+    ]);
+
+    const calls = mockedResolveSlideImage.mock.calls.filter(
+      (call) => call[4]?.slideId === twoSlot?.id
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => call[4]?.imageSlotId).sort()).toEqual([
+      "photo",
+      "photo_b",
+    ]);
+
+    const primary = calls.find((call) => call[4]?.imageSlotId === "photo");
+    const secondary = calls.find((call) => call[4]?.imageSlotId === "photo_b");
+    expect(primary?.[3]).toBe("Cheap equipment");
+    expect(secondary?.[3]).toBe("Buy it once");
+    expect(primary?.[3]).not.toBe(secondary?.[3]);
+
+    const persisted = (
+      completed?.imageUrlsJson as Record<string, Record<string, string>>
+    )[twoSlot!.id];
+    expect(persisted).toEqual({
+      photo: "https://images.example.com/photo.jpg",
+      photo_b: "https://images.example.com/photo_b.jpg",
+    });
+
+    const rendererShape = normalizeSlideImages(persisted);
+    expect(rendererShape.imageUrl).toBe("https://images.example.com/photo.jpg");
+    expect(rendererShape.imageUrlsBySlot).toEqual({
+      photo: "https://images.example.com/photo.jpg",
+      photo_b: "https://images.example.com/photo_b.jpg",
+    });
   });
 });
