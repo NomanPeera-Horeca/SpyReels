@@ -1,0 +1,156 @@
+{
+  "sourceContent": "Large restaurant menu vs focused restaurant menu",
+  "selectedAngleIndex": 2,
+  "recommendedBriefIndex": 0,
+  "brief": {
+    "schemaVersion": 2,
+    "isLegacy": false,
+    "id": "brief_3",
+    "kicker": "Myth-Busting",
+    "title": "The Menu Size Myths Restaurants Keep Falling For",
+    "description": "A myth-busting carousel that directly dismantles common beliefs restaurant owners hold about large menus, pairing each myth with the operational reality, which drives shares and positions the creator as a contrarian authority.",
+    "estimatedSlideCount": 11,
+    "topic": "Large vs focused restaurant menu",
+    "inferredAudience": "Independent restaurant owners and operators",
+    "audienceReasoning": "Operators are the ones who hold these myths and make the menu decisions this carousel challenges.",
+    "contentGoal": "authority",
+    "contentFormat": "comparison",
+    "angleType": "myth_busting",
+    "hook": "Most restaurants are making these menu mistakes without realizing it.",
+    "corePromise": "Readers will leave with a clearer, evidence-grounded view of what menu size actually does and does not do for a restaurant.",
+    "centralInsight": "The belief that a larger menu signals quality and appeals to more guests is the most expensive myth in the restaurant industry.",
+    "keyPoints": [
+      {
+        "title": "Myth: More Options Mean More Sales",
+        "purpose": "Attacks the most common justification for menu bloat.",
+        "explanation": "Guest spending per head often stays flat or drops when too many choices compete for attention."
+      },
+      {
+        "title": "Myth: A Big Menu Attracts Larger Groups",
+        "purpose": "Dismantles a specific operational belief owners use to justify large menus.",
+        "explanation": "Groups choose restaurants based on reputation and atmosphere, not item count."
+      },
+      {
+        "title": "Myth: Cutting Items Will Upset Regulars",
+        "purpose": "Reduces the emotional cost of making cuts by reframing the risk.",
+        "explanation": "Most guests reorder from a small set of favorites and rarely notice items they never ordered."
+      },
+      {
+        "title": "Myth: Specialty Restaurants Leave Money on the Table",
+        "purpose": "Reframes focus as a revenue strategy, not a limitation.",
+        "explanation": "Focused concepts often command premium pricing and higher perceived quality."
+      },
+      {
+        "title": "Myth: A Large Menu Proves the Chef's Skill",
+        "purpose": "Addresses the ego and identity dimension that stalls menu decisions.",
+        "explanation": "Executing a small menu flawlessly requires more discipline and mastery than a sprawling one."
+      }
+    ],
+    "slideOutline": [
+      {
+        "position": 1,
+        "role": "hook",
+        "objective": "Challenge the assumption that a bigger menu is a better menu.",
+        "recommendedVisual": "text",
+        "listItemIndex": null
+      },
+      {
+        "position": 2,
+        "role": "problem",
+        "objective": "Establish why these myths persist and how much they cost operators.",
+        "recommendedVisual": "text",
+        "listItemIndex": null
+      },
+      {
+        "position": 3,
+        "role": "comparison",
+        "objective": "Bust myth 1: more options do not reliably increase per-head spending.",
+        "recommendedVisual": "comparison",
+        "listItemIndex": 1
+      },
+      {
+        "position": 4,
+        "role": "comparison",
+        "objective": "Bust myth 2: group diners choose venues on reputation, not item count.",
+        "recommendedVisual": "comparison",
+        "listItemIndex": 2
+      },
+      {
+        "position": 5,
+        "role": "comparison",
+        "objective": "Bust myth 3: regulars rarely notice the removal of items they never ordered.",
+        "recommendedVisual": "comparison",
+        "listItemIndex": 3
+      },
+      {
+        "position": 6,
+        "role": "comparison",
+        "objective": "Bust myth 4: focused menus can command premium pricing, not limit revenue.",
+        "recommendedVisual": "comparison",
+        "listItemIndex": 4
+      },
+      {
+        "position": 7,
+        "role": "comparison",
+        "objective": "Bust myth 5: a tight, flawlessly executed menu demonstrates more mastery than a sprawling one.",
+        "recommendedVisual": "comparison",
+        "listItemIndex": 5
+      },
+      {
+        "position": 8,
+        "role": "insight",
+        "objective": "Show the real operational benefits that emerge when menu scope is reduced.",
+        "recommendedVisual": "checklist",
+        "listItemIndex": null
+      },
+      {
+        "position": 9,
+        "role": "example",
+        "objective": "Illustrate with a concise real-world category example, such as ramen shops or steakhouses, where focus drives success.",
+        "recommendedVisual": "photo",
+        "listItemIndex": null
+      },
+      {
+        "position": 10,
+        "role": "framework",
+        "objective": "Give a one-question gut check operators can use to evaluate any item on their current menu.",
+        "recommendedVisual": "text",
+        "listItemIndex": null
+      },
+      {
+        "position": 11,
+        "role": "cta",
+        "objective": "Ask readers which myth they believed the longest, to generate comment engagement and shares.",
+        "recommendedVisual": "text",
+        "listItemIndex": null
+      }
+    ],
+    "layoutFamily": "comparison",
+    "visualDirection": "Bold two-column myth-versus-reality layout with a consistent color split, one side for the myth, one for the truth, across each item slide.",
+    "imageDirection": "Graphic-forward design with minimal photography, using iconography or bold type to represent each myth and its rebuttal.",
+    "claimRisk": "medium",
+    "researchMode": "claim_verification",
+    "evidenceRequirements": [
+      "Verify whether group dining venue selection studies exist",
+      "Check consumer behavior data on choice overload in food service contexts",
+      "Confirm whether focused restaurant concepts show measurably higher perceived quality or pricing power"
+    ],
+    "prohibitedClaims": [
+      "Large menus always reduce revenue",
+      "Every successful restaurant has a small menu",
+      "Focused menus are objectively superior in all market contexts",
+      "Removing items will never upset any guests"
+    ],
+    "ctaDirection": "Ask readers to comment with the myth they held longest and whether cutting items ever backfired for them.",
+    "scores": {
+      "relevance": 96,
+      "usefulness": 89,
+      "specificity": 85,
+      "visualPotential": 93,
+      "factualSafety": 75,
+      "originality": 84,
+      "overall": 88
+    },
+    "confidence": 0.86
+  }
+}
