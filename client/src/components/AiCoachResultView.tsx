@@ -2,31 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   flattenCoachScriptForCopy,
-  parseCoachHookVariations,
   parseProductionNotes,
+  spokenWhatToSay,
   type CoachHookVariation,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
 import { formatCoachHookTypeLabel } from "@shared/hookTypes";
 import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
-  ArrowLeft,
   Clapperboard,
   Clock,
   Copy,
   MapPin,
   BookmarkPlus,
-  Video,
   Music2,
-  HelpCircle,
   ChevronDown,
-  ChevronUp,
-  Lightbulb,
   Loader2,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { ReelPreviewPhone } from "@/components/ReelPreviewPhone";
 import { cn } from "@/lib/utils";
 import { stashBrollScriptForAfterAuth } from "@/lib/brollPendingScript";
 import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
@@ -34,7 +29,6 @@ import {
   CoachScriptSchedulePanel,
   type CoachScriptSchedulePanelProps,
 } from "@/components/CoachScriptSchedulePanel";
-import Tooltip from "@/components/Tooltip";
 import { InstagramAudioPreviewList } from "@/components/InstagramAudioPreviewList";
 import { AiCoachScriptHealthPanel } from "@/components/AiCoachScriptHealthPanel";
 import {
@@ -49,14 +43,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-function truncateWords(text: string, maxWords: number): string {
-  const trimmed = text.trim();
-  if (!trimmed) return "";
-  const words = trimmed.split(/\s+/);
-  if (words.length <= maxWords) return trimmed;
-  return `${words.slice(0, maxWords).join(" ")}…`;
-}
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type CoachResultScript = {
   id: number;
@@ -76,24 +69,6 @@ export type CoachResultScript = {
   /** Remake import async production layer. Null for sync Studio paths. */
   productionNotesStatus?: "pending" | "processing" | "completed" | "failed" | null;
 };
-
-const VISUAL_HOOK_TOOLTIP =
-  "Film this exact shot before you speak. What the viewer sees in the first second decides if they stay.";
-
-function VisualHookLabel() {
-  return (
-    <div className="flex items-center gap-1.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        Visual hook
-      </p>
-      <Tooltip content={VISUAL_HOOK_TOOLTIP}>
-        <span className="inline-flex cursor-help text-muted-foreground" aria-label="Visual hook help">
-          <HelpCircle className="h-3.5 w-3.5" />
-        </span>
-      </Tooltip>
-    </div>
-  );
-}
 
 function hookOptionReason(type: string): string {
   switch (type) {
@@ -120,22 +95,21 @@ function hookOptionReason(type: string): string {
   }
 }
 
-/** Compact 3-up picker from Script Studio mockup. Selecting updates hook above. */
 function HookOptionCard({
   variation,
-  score,
+  optionLabel,
   selected,
   onSelect,
 }: {
   variation: CoachHookVariation;
-  score: number;
+  optionLabel: string;
   selected: boolean;
   onSelect: () => void;
 }) {
   const typeLabel = formatCoachHookTypeLabel(variation.hookType);
   const preview =
-    variation.spokenHook.trim().length > 72
-      ? `${variation.spokenHook.trim().slice(0, 69)}...`
+    variation.spokenHook.trim().length > 90
+      ? `${variation.spokenHook.trim().slice(0, 87)}...`
       : variation.spokenHook.trim();
 
   return (
@@ -147,127 +121,46 @@ function HookOptionCard({
         onSelect();
       }}
       className={cn(
-        "relative w-full min-w-0 rounded-[11px] border bg-white p-3 text-left transition dark:bg-gray-900",
+        "relative w-full min-w-0 rounded-xl border bg-white p-3.5 text-left transition dark:bg-gray-900",
         selected
           ? "border-violet-500 shadow-[0_0_0_1px_rgba(124,58,237,0.9)]"
           : "border-gray-200 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-500"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-semibold text-muted-foreground">{optionLabel}</span>
         <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-extrabold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
           {typeLabel}
         </span>
-        <span className="shrink-0 text-[11px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-          {score}
-        </span>
       </div>
-      <h5 className="mt-2 text-xs font-semibold leading-snug text-gray-900 dark:text-gray-100">
+      <h5 className="mt-2 text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100">
         {preview || "Untitled hook"}
       </h5>
-      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
         {hookOptionReason(variation.hookType)}
       </p>
     </button>
   );
 }
 
-type HeitSectionProps = {
-  badge: string;
-  badgeClass: string;
+type EditSectionProps = {
   label: string;
-  subtitle: string;
-  cardClass: string;
-  labelClass?: string;
-  bodyClass?: string;
   value: string;
-  editMode: boolean;
   onChange: (value: string) => void;
-  mediumBody?: boolean;
-  score?: number | null;
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
-  active?: boolean;
 };
 
-function HeitSection({
-  badge,
-  badgeClass,
-  label,
-  subtitle,
-  cardClass,
-  labelClass,
-  bodyClass,
-  value,
-  editMode,
-  onChange,
-  mediumBody,
-  score,
-  collapsed,
-  onToggleCollapse,
-  active,
-}: HeitSectionProps) {
-  const scoreWarn = typeof score === "number" && score < 75;
+function EditSection({ label, value, onChange }: EditSectionProps) {
   return (
-    <section
-      className={cn(
-        `rounded-2xl border overflow-hidden ${cardClass}`,
-        active && "ring-1 ring-blue-400/40 border-blue-400/50"
-      )}
-    >
-      <button
-        type="button"
-        className="flex w-full items-start gap-2.5 px-5 py-4 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
-        onClick={onToggleCollapse}
-        aria-expanded={!collapsed}
-      >
-        <div
-          className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${badgeClass}`}
-        >
-          {badge}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className={`text-sm font-semibold ${labelClass ?? "text-gray-900 dark:text-gray-100"}`}>
-            {label}
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</p>
-        </div>
-        {typeof score === "number" ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0 pt-1">
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                scoreWarn ? "bg-amber-400" : "bg-emerald-400"
-              )}
-            />
-            {score}
-          </span>
-        ) : null}
-        {onToggleCollapse ? (
-          collapsed ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-          ) : (
-            <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-          )
-        ) : null}
-      </button>
-      {!collapsed ? (
-        <div className="px-5 pb-5">
-          {editMode ? (
-            <Textarea
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              className="min-h-[80px] resize-none bg-white dark:bg-gray-900 text-sm"
-            />
-          ) : (
-            <div
-              className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3.5 text-sm leading-relaxed whitespace-pre-line ${bodyClass ?? ""} ${mediumBody ? "font-medium" : ""} ${!value.trim() ? "text-muted-foreground italic" : ""}`}
-            >
-              {value.trim() ? value : "Missing. Use Refine with AI below to fill this section."}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </section>
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-[80px] resize-none bg-white dark:bg-gray-900 text-sm"
+      />
+    </div>
   );
 }
 
@@ -339,7 +232,6 @@ export function AiCoachResultView({
   onSaveToMyScripts,
   saveToMyScriptsPending,
   savedScriptId,
-  onOpenMyScripts,
   onFilmNow,
   filmNowPending,
   previewMode = false,
@@ -349,15 +241,10 @@ export function AiCoachResultView({
   const [, setLocation] = useLocation();
   const refineInputRef = useRef<HTMLInputElement>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [originalIdeaOpen, setOriginalIdeaOpen] = useState(true);
-  const [inspectorTab, setInspectorTab] = useState<"health" | "production">("health");
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    hook: true,
-    problem: false,
-    story: false,
-    takeaway: false,
-    cta: false,
-  });
+  const [originalIdeaOpen, setOriginalIdeaOpen] = useState(false);
+  const [filmHelpOpen, setFilmHelpOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [refineOpen, setRefineOpen] = useState(false);
   const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState<number | null>(null);
   const [hookOptionsOpen, setHookOptionsOpen] = useState(false);
   const lastAutoAppliedHookKeyRef = useRef<string | null>(null);
@@ -377,13 +264,7 @@ export function AiCoachResultView({
   const savedVisualBeat = production?.hookVisualBeat?.trim() ?? "";
   const hookOnScreenText = editMode ? editDraft.hookOnScreenText : savedOnScreenText;
   const hookVisualBeat = editMode ? editDraft.hookVisualBeat : savedVisualBeat;
-  const hookTypeLabel = production?.hookType
-    ? formatCoachHookTypeLabel(production.hookType)
-    : "";
 
-  const toggleSection = (key: string) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
   useEffect(() => {
     if (!hookVariations || hookVariations.length === 0) {
       setHookOptionsOpen(false);
@@ -395,7 +276,6 @@ export function AiCoachResultView({
     const key = hookVariations
       .map((v) => `${v.hookType}:${v.spokenHook}:${v.onScreenText}`)
       .join("|");
-    // Auto-apply first option once per generated set so Frame 0 matches the highlight.
     if (lastAutoAppliedHookKeyRef.current === key) return;
     lastAutoAppliedHookKeyRef.current = key;
     setSelectedHookOptionIndex(0);
@@ -431,6 +311,13 @@ export function AiCoachResultView({
     cta: result.cta,
   };
 
+  const whatToSay = spokenWhatToSay({
+    explain: editMode ? editDraft.explain : result.explain,
+    illustrate: editMode ? editDraft.illustrate : result.illustrate,
+    teach: editMode ? editDraft.teach : result.teach,
+    cta: editMode ? editDraft.cta : result.cta,
+  });
+
   const copyScript = async () => {
     const text = flattenCoachScriptForCopy({
       title: result.title,
@@ -461,655 +348,447 @@ export function AiCoachResultView({
     setLocation("/broll-library");
   };
 
+  const openHookOptions = () => {
+    if (hookVariations && hookVariations.length > 0) {
+      setHookOptionsOpen(true);
+      return;
+    }
+    onRequestHookVariations();
+  };
+
   return (
     <div className="min-h-full bg-[#fafafa] dark:bg-gray-950/40 -mx-2 sm:-mx-4 px-2 sm:px-4 py-6">
-      <div className="max-w-[1120px] mx-auto px-2 sm:px-4">
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
-            {!previewMode ? (
-              <button
-                type="button"
-                onClick={onReset}
-                className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                New script
-              </button>
-            ) : (
-              <div />
-            )}
-            {!previewMode ? (
-            <div className="flex gap-2 flex-wrap justify-end">
-              {onFilmNow ? (
-                <button
-                  type="button"
-                  onClick={onFilmNow}
-                  disabled={filmNowPending}
-                  className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-60"
-                >
-                  <Video className="h-4 w-4" />
-                  {filmNowPending ? "Opening teleprompter..." : "Film now"}
-                </button>
-              ) : null}
-              {scheduleSave || onSaveToMyScripts ? (
-                <button
-                  type="button"
-                  onClick={openScheduleSave}
-                  disabled={saveToMyScriptsPending}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border disabled:opacity-60",
-                    savedScriptId
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  )}
-                >
-                  <BookmarkPlus className="h-3.5 w-3.5" />
-                  {saveToMyScriptsPending
-                    ? "Saving..."
-                    : savedScriptId
-                      ? "Saved · My Scripts"
-                      : "Save to My Scripts"}
-                </button>
-              ) : null}
+      <div className="max-w-[720px] mx-auto px-2 sm:px-4">
+        <header className="mb-5">
+          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 leading-tight tracking-tight">
+            {result.title}
+          </h1>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {[platformLabel(result.platform), result.estimatedDuration].filter(Boolean).join(" · ")}
+          </p>
+        </header>
+
+        {originalIdea ? (
+          <div className="mb-5">
             <button
               type="button"
-              onClick={copyScript}
-              className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+              className="inline-flex max-w-full items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
+              onClick={() => setOriginalIdeaOpen((open) => !open)}
+              aria-expanded={originalIdeaOpen}
             >
-              <Copy className="h-3.5 w-3.5" />
-              Copy script
+              <span>Your idea</span>
+              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", originalIdeaOpen && "rotate-180")} />
             </button>
+            {originalIdeaOpen ? (
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                {originalIdea}
+              </p>
+            ) : (
+              <p className="mt-1 truncate text-sm text-muted-foreground">{originalIdea}</p>
+            )}
           </div>
-            ) : null}
-        </div>
+        ) : null}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-          <main className="min-w-0 space-y-4">
-            <header>
-              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 leading-tight tracking-tight">
-                {result.title}
-              </h1>
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-[11px] font-medium bg-gray-200/80 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2.5 py-0.5 rounded-full">
-                  {platformLabel(result.platform)}
-                </span>
-                {production?.funnelStage && (
-                  <span className="text-[11px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200 px-2.5 py-0.5 rounded-full uppercase">
-                    {production.funnelStage}
-                  </span>
-                )}
-                {hookTypeLabel ? (
-                  <span className="text-[11px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200 px-2.5 py-0.5 rounded-full">
-                    Hook: {hookTypeLabel}
-                  </span>
-                ) : null}
-                {result.estimatedDuration && (
-                  <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                    <Clock className="h-3.5 w-3.5" />
-                    {result.estimatedDuration}
-                  </span>
-                )}
-              </div>
-              {health ? (
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-[width]"
-                      style={{ width: `${health.readyPercent}%` }}
-                    />
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    Script ready · {health.readyPercent}%
-                  </span>
-                </div>
-              ) : null}
-            </header>
+        <section className="space-y-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Your script
+          </p>
 
-            {originalIdea ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/25 overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-950/40 transition-colors"
-                  onClick={() => setOriginalIdeaOpen((v) => !v)}
-                  aria-expanded={originalIdeaOpen}
-                >
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
-                    <Lightbulb className="h-4 w-4 shrink-0" />
-                    Original idea
-                  </span>
-                  {originalIdeaOpen ? (
-                    <ChevronUp className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
-                  )}
-                </button>
-                {originalIdeaOpen ? (
-                  <div className="px-4 pb-4">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                      {originalIdea}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="space-y-4">
-              <section
-                className={cn(
-                  "rounded-2xl border border-blue-200 bg-blue-50 border-l-[3px] border-l-blue-500 dark:bg-blue-950/30 dark:border-blue-800 dark:border-l-blue-500 overflow-hidden",
-                  openSections.hook && "ring-1 ring-blue-400/30"
-                )}
-              >
-                <button
-                  type="button"
-                  className="flex w-full items-start gap-2.5 px-5 py-4 text-left"
-                  onClick={() => toggleSection("hook")}
-                  aria-expanded={openSections.hook}
-                >
-                  <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
-                    1
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-                      {VIRAL_SCRIPT_SECTION_LABELS.hook}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Frame 0: visual + spoken + on-screen text.
-                    </p>
-                  </div>
-                  {sectionScores ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0 pt-1">
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full",
-                          sectionScores.hook < 75 ? "bg-amber-400" : "bg-emerald-400"
-                        )}
-                      />
-                      {sectionScores.hook}
-                    </span>
-                  ) : null}
-                  {openSections.hook ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                  )}
-                </button>
-
-                {openSections.hook ? (
-                <div className="px-5 pb-5">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px] gap-4 items-start">
-                  <div className="min-w-0">
-                    <div className="rounded-[14px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-                      <div className="px-4 py-3.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
-                        <div className="mb-2">
-                          <VisualHookLabel />
-                        </div>
-                        {editMode ? (
-                          <Textarea
-                            value={editDraft.hookVisualBeat}
-                            onChange={(e) =>
-                              onEditDraftChange({ ...editDraft, hookVisualBeat: e.target.value })
-                            }
-                            placeholder="What the viewer sees in frame 0 (mid-action, close-up, or result)."
-                            className="min-h-[52px] resize-none text-sm italic bg-white dark:bg-gray-900"
-                          />
-                        ) : isGeneratingProduction ? (
-                          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-                            <span>Generating production notes...</span>
-                          </div>
-                        ) : (
-                          <p
-                            className={`text-sm leading-relaxed ${hookVisualBeat ? "italic text-gray-700 dark:text-gray-300" : "text-muted-foreground italic"}`}
-                          >
-                            {hookVisualBeat ||
-                              "Add a frame 0 shot in Refine (mid-action, close-up, or end-result)."}
-                          </p>
-                        )}
-                      </div>
-                      <div className="px-4 py-3.5 border-b border-gray-200 dark:border-gray-700">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
-                          Spoken hook
-                        </p>
-                        {editMode ? (
-                          <Textarea
-                            value={editDraft.hook}
-                            onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })}
-                            className="min-h-[60px] resize-none bg-white dark:bg-gray-900 text-sm font-medium"
-                          />
-                        ) : (
-                          <p className="text-sm leading-relaxed font-medium text-gray-900 dark:text-gray-50">
-                            {result.hook}
-                          </p>
-                        )}
-                      </div>
-                      <div className="px-4 py-3.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
-                          On-screen text
-                        </p>
-                        {editMode ? (
-                          <Textarea
-                            value={editDraft.hookOnScreenText}
-                            onChange={(e) =>
-                              onEditDraftChange({
-                                ...editDraft,
-                                hookOnScreenText: e.target.value.toUpperCase(),
-                              })
-                            }
-                            placeholder="BOLD TEXT FOR MUTED VIEWERS"
-                            maxLength={60}
-                            className="min-h-[44px] resize-none bg-white dark:bg-gray-900 text-sm font-extrabold uppercase tracking-wide"
-                          />
-                        ) : isGeneratingProduction ? (
-                          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-                            <span>Generating production notes...</span>
-                          </div>
-                        ) : hookOnScreenText ? (
-                          <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900 dark:text-gray-50">
-                            {hookOnScreenText}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">
-                            No on-screen text yet. Regenerate or refine to add frame 0 text.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {!editMode ? (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                          onClick={() => {
-                            if (hookVariations && hookVariations.length > 0) {
-                              setHookOptionsOpen((open) => !open);
-                              return;
-                            }
-                            onRequestHookVariations();
-                          }}
-                          disabled={hookVariationsPending}
-                        >
-                          {hookVariationsPending
-                            ? "Generating..."
-                            : hookVariations && hookVariations.length > 0
-                              ? hookOptionsOpen
-                                ? "Hide hook options"
-                                : "View hook options"
-                              : "Compare 3 hook options"}
-                        </button>
-                      ) : null}
-                      <p className="text-[11px] text-muted-foreground min-w-0 flex-1">
-                        On-screen text complements spoken hook.
-                      </p>
-                    </div>
-
-                    {hookVariations && hookVariations.length > 0 && hookOptionsOpen ? (
-                      <div className="mt-3 grid grid-cols-3 gap-2.5">
-                        {hookVariations.map((variation, index) => (
-                          <HookOptionCard
-                            key={`${variation.hookType}-${index}`}
-                            variation={variation}
-                            score={94 - index * 3}
-                            selected={selectedHookOptionIndex === index}
-                            onSelect={() => {
-                              setSelectedHookOptionIndex(index);
-                              onApplyHookVariation(variation);
-                            }}
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {(() => {
-                    const frame0Text =
-                      hookOnScreenText.trim() ||
-                      truncateWords(editMode ? editDraft.hook : result.hook, 8).toUpperCase();
-                    return (
-                      <div className="flex flex-col items-center gap-1.5 sm:pt-1">
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Frame 0 preview
-                        </p>
-                        <ReelPreviewPhone
-                          key={frame0Text}
-                          onScreenText={frame0Text}
-                          compact
-                        />
-                      </div>
-                    );
-                  })()}
-                </div>
-                </div>
-                ) : null}
-              </section>
-
-              <HeitSection
-                badge="2"
-                badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label={VIRAL_SCRIPT_SECTION_LABELS.problem}
-                subtitle="Name the belief holding them back."
-                cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
-                value={editMode ? editDraft.explain : result.explain}
-                editMode={editMode}
-                onChange={(explain) => onEditDraftChange({ ...editDraft, explain })}
-                score={sectionScores?.problem ?? null}
-                collapsed={!openSections.problem}
-                onToggleCollapse={() => toggleSection("problem")}
-                active={openSections.problem}
-              />
-
-              <HeitSection
-                badge="3"
-                badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                label={VIRAL_SCRIPT_SECTION_LABELS.story}
-                subtitle="Make the idea concrete and believable."
-                cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
-                value={editMode ? editDraft.illustrate : result.illustrate}
-                editMode={editMode}
-                onChange={(illustrate) => onEditDraftChange({ ...editDraft, illustrate })}
-                score={sectionScores?.story ?? null}
-                collapsed={!openSections.story}
-                onToggleCollapse={() => toggleSection("story")}
-                active={openSections.story}
-              />
-
-              {editMode || result.teach.trim() ? (
-                <HeitSection
-                  badge="4"
-                  badgeClass="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                  label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
-                  subtitle="One clear thing the viewer should remember."
-                  cardClass="border-gray-200 bg-gray-50 border-l-[3px] border-l-gray-500 dark:bg-gray-900/40 dark:border-gray-700"
-                  value={editMode ? editDraft.teach : result.teach}
-                  editMode={editMode}
-                  onChange={(teach) => onEditDraftChange({ ...editDraft, teach })}
-                  mediumBody
-                  score={sectionScores?.takeaway ?? null}
-                  collapsed={!openSections.takeaway}
-                  onToggleCollapse={() => toggleSection("takeaway")}
-                  active={openSections.takeaway}
-                />
-              ) : null}
-
-              {editMode || result.cta.trim() ? (
-                <HeitSection
-                  badge="5"
-                  badgeClass="bg-orange-500 text-white"
-                  label={VIRAL_SCRIPT_SECTION_LABELS.cta}
-                  subtitle="Give the viewer one natural next step."
-                  cardClass="border-orange-200 bg-orange-50 border-l-[3px] border-l-orange-500 dark:bg-orange-950/30 dark:border-orange-800"
-                  labelClass="text-orange-700 dark:text-orange-300"
-                  value={editMode ? editDraft.cta : result.cta}
-                  editMode={editMode}
-                  onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
-                  mediumBody
-                  score={sectionScores?.cta ?? null}
-                  collapsed={!openSections.cta}
-                  onToggleCollapse={() => toggleSection("cta")}
-                  active={openSections.cta}
-                />
-              ) : null}
-            </div>
-
-            {!previewMode ? (
-              <>
-            <div className="pt-2 space-y-3">
-              <div className="flex gap-2 flex-wrap">
-                {editMode ? (
-                  <>
-                    <button
-                      type="button"
-                      className="text-sm font-medium px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60"
-                      onClick={onSaveEdits}
-                      disabled={savePending}
-                    >
-                      {savePending ? "Saving..." : "Save script"}
-                    </button>
-                    <button
-                      type="button"
-                      className="border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
-                      onClick={onCancelEdit}
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
-                      onClick={onToggleEdit}
-                    >
-                      Edit manually
-                    </button>
-                    <button
-                      type="button"
-                      className="border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
-                      onClick={() => {
-                        if (refineInput.trim()) {
-                          onRefine();
-                          return;
-                        }
-                        refineInputRef.current?.focus();
-                      }}
-                      disabled={refinePending}
-                    >
-                      Refine with AI
-                    </button>
-                  </>
-                )}
-              </div>
-              {!editMode && (
-                <div className="flex gap-2">
-                  <input
-                    ref={refineInputRef}
-                    value={refineInput}
-                    onChange={(e) => onRefineInputChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && refineInput.trim() && !refinePending) onRefine();
-                    }}
-                    placeholder='e.g. "Make the hook more contrarian"'
-                    disabled={refinePending}
-                    className="min-w-0 flex-1 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-900 placeholder:italic placeholder:text-gray-400 disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    onClick={onRefine}
-                    disabled={refinePending || !refineInput.trim()}
-                    className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-                  >
-                    {refinePending ? "Improving..." : "Improve"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-              <CoachScriptFeedback coachScriptId={result.id} />
-              </>
-            ) : null}
-          </main>
-
-          <aside className="space-y-4 lg:sticky lg:top-6">
-            <div className="grid grid-cols-2 gap-1 rounded-[10px] border border-gray-200 dark:border-gray-700 bg-gray-100/80 dark:bg-gray-900 p-1">
-              <button
-                type="button"
-                onClick={() => setInspectorTab("health")}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-xs font-bold",
-                  inspectorTab === "health"
-                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                    : "text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
-                )}
-              >
-                Script health
-              </button>
-              <button
-                type="button"
-                onClick={() => setInspectorTab("production")}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-xs font-bold",
-                  inspectorTab === "production"
-                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                    : "text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
-                )}
-              >
-                Production
-              </button>
-            </div>
-
-            {inspectorTab === "health" ? (
-              <AiCoachScriptHealthPanel
-                health={health}
-                weakest={weakest}
-                onFixWeakest={
-                  onFixWeakest
-                    ? () => {
-                        if (weakest) {
-                          const key =
-                            weakest.key === "problem"
-                              ? "problem"
-                              : weakest.key === "story"
-                                ? "story"
-                                : weakest.key === "takeaway"
-                                  ? "takeaway"
-                                  : weakest.key === "hook"
-                                    ? "hook"
-                                    : "cta";
-                          setOpenSections((prev) => ({ ...prev, [key]: true }));
-                          setInspectorTab("health");
-                        }
-                        onFixWeakest();
-                      }
-                    : undefined
-                }
-                fixPending={refinePending}
-                onEditManually={previewMode ? undefined : onToggleEdit}
-                onShorten={
-                  previewMode || !onRefineWithInstruction
-                    ? undefined
-                    : () =>
-                        onRefineWithInstruction(
-                          "Shorten the full script to about 30 seconds of spoken words. Keep HEIT structure. Cut filler only."
-                        )
-                }
-                onMakeViral={
-                  previewMode || !onRefineWithInstruction
-                    ? undefined
-                    : () =>
-                        onRefineWithInstruction(
-                          "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea and HEIT structure."
-                        )
-                }
-                onCopy={copyScript}
-                previewMode={previewMode}
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/80 px-5 py-5 dark:border-blue-900 dark:bg-blue-950/30">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              Hook
+            </p>
+            {editMode ? (
+              <Textarea
+                value={editDraft.hook}
+                onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })}
+                className="mt-3 min-h-[72px] resize-none bg-white dark:bg-gray-900 text-lg font-semibold leading-snug"
               />
             ) : (
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
-              <h2 className="text-sm font-bold mb-4">Production notes</h2>
-              {isGeneratingProduction ? (
-                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-                  <span>Generating production notes...</span>
-                </div>
-              ) : (
-                <>
-              {production?.setup && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5" />
-                    Setup
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{production.setup}</p>
-                </div>
-              )}
-              {result.estimatedDuration && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
-                    Duration
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{result.estimatedDuration}</p>
-                </div>
-              )}
-              {production?.voiceTone && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                    Delivery
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                    {truncateWords(production.voiceTone, 20)}
-                  </p>
-                </div>
-              )}
-              {!previewMode ? (
-                <div className="mb-4 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wide bg-violet-600 text-white px-2 py-0.5 rounded-full">
-                    Next step
-                  </span>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
-                    Generate B-roll
-                  </p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">
-                    Match stock clips to each beat so you can finish filming this Reel in SpyReels.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={goGenerateBroll}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
-                  >
-                    <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
-                    Generate B-roll
-                  </button>
-                </div>
-              ) : null}
-              {production?.instagramAudio && production.instagramAudio.length > 0 ? (
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Music2 className="h-3.5 w-3.5" />
-                    Instagram audio
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mb-2">
-                    Two picks. Play a 30s preview when Apple Music has a match. Confirm the exact sound in Instagram Reels.
-                  </p>
-                  <InstagramAudioPreviewList picks={production.instagramAudio.slice(0, 2)} />
-                </div>
-              ) : null}
-              {production?.funnelStage && (
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                    Funnel stage
-                  </p>
-                  <span className="text-[11px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200 px-2.5 py-0.5 rounded-full uppercase">
-                    {production.funnelStage}
-                  </span>
-                </div>
-              )}
-              {!production?.setup &&
-                !production?.voiceTone &&
-                !production?.instagramAudio?.length && (
-                <p className="text-sm text-muted-foreground">
-                  Production directions will appear here after generation.
-                </p>
-              )}
-                </>
-              )}
-              {!previewMode && onFilmNow ? (
+              <p className="mt-3 text-xl font-semibold leading-snug text-gray-900 dark:text-gray-50">
+                {result.hook}
+              </p>
+            )}
+          </div>
+
+          {editMode ? (
+            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white px-5 py-5 dark:border-gray-800 dark:bg-gray-900">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                What to say
+              </p>
+              <EditSection
+                label={VIRAL_SCRIPT_SECTION_LABELS.problem}
+                value={editDraft.explain}
+                onChange={(explain) => onEditDraftChange({ ...editDraft, explain })}
+              />
+              <EditSection
+                label={VIRAL_SCRIPT_SECTION_LABELS.story}
+                value={editDraft.illustrate}
+                onChange={(illustrate) => onEditDraftChange({ ...editDraft, illustrate })}
+              />
+              <EditSection
+                label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
+                value={editDraft.teach}
+                onChange={(teach) => onEditDraftChange({ ...editDraft, teach })}
+              />
+              <EditSection
+                label={VIRAL_SCRIPT_SECTION_LABELS.cta}
+                value={editDraft.cta}
+                onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
+              />
+            </div>
+          ) : (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                What to say
+              </p>
+              <p className="mt-3 whitespace-pre-line text-[15px] leading-7 text-gray-800 dark:text-gray-100">
+                {whatToSay || "This script is missing spoken lines. Use Refine to fill them in."}
+              </p>
+            </div>
+          )}
+
+          {hookOptionsOpen && hookVariations && hookVariations.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {hookVariations.map((variation, index) => (
+                <HookOptionCard
+                  key={`${variation.hookType}-${index}`}
+                  variation={variation}
+                  optionLabel={`Option ${index + 1}`}
+                  selected={selectedHookOptionIndex === index}
+                  onSelect={() => {
+                    setSelectedHookOptionIndex(index);
+                    onApplyHookVariation(variation);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              onClick={() => setFilmHelpOpen((open) => !open)}
+              aria-expanded={filmHelpOpen}
+            >
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                How to film this
+              </span>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", filmHelpOpen && "rotate-180")} />
+            </button>
+            {filmHelpOpen ? (
+              <div className="space-y-4 border-t border-gray-100 px-4 py-4 dark:border-gray-800">
+                {isGeneratingProduction ? (
+                  <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                    <span>Adding filming notes...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                        Visual opening
+                      </p>
+                      {editMode ? (
+                        <Textarea
+                          value={editDraft.hookVisualBeat}
+                          onChange={(e) =>
+                            onEditDraftChange({ ...editDraft, hookVisualBeat: e.target.value })
+                          }
+                          placeholder="What the viewer sees in the first second."
+                          className="min-h-[52px] resize-none text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          {hookVisualBeat || "No visual opening yet."}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                        On-screen text
+                      </p>
+                      {editMode ? (
+                        <Textarea
+                          value={editDraft.hookOnScreenText}
+                          onChange={(e) =>
+                            onEditDraftChange({
+                              ...editDraft,
+                              hookOnScreenText: e.target.value.toUpperCase(),
+                            })
+                          }
+                          placeholder="BOLD TEXT FOR MUTED VIEWERS"
+                          maxLength={60}
+                          className="min-h-[44px] resize-none text-sm font-semibold uppercase"
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          {hookOnScreenText || "No on-screen text yet."}
+                        </p>
+                      )}
+                    </div>
+                    {production?.setup ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          Setup
+                        </p>
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          {production.setup}
+                        </p>
+                      </div>
+                    ) : null}
+                    {result.estimatedDuration ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          Duration
+                        </p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300">{result.estimatedDuration}</p>
+                      </div>
+                    ) : null}
+                    {production?.voiceTone ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                          Delivery
+                        </p>
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          {production.voiceTone}
+                        </p>
+                      </div>
+                    ) : null}
+                    {!previewMode ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                          B-roll
+                        </p>
+                        <button
+                          type="button"
+                          onClick={goGenerateBroll}
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                        >
+                          <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
+                          Generate B-roll
+                        </button>
+                      </div>
+                    ) : null}
+                    {production?.instagramAudio && production.instagramAudio.length > 0 ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <Music2 className="h-3.5 w-3.5" />
+                          Audio
+                        </p>
+                        <InstagramAudioPreviewList picks={production.instagramAudio.slice(0, 2)} />
+                      </div>
+                    ) : null}
+                    {!production?.setup &&
+                    !production?.voiceTone &&
+                    !hookVisualBeat &&
+                    !hookOnScreenText &&
+                    !production?.instagramAudio?.length ? (
+                      <p className="text-sm text-muted-foreground">
+                        Filming notes will appear here after generation.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {!previewMode ? (
+          <div className="mt-8 space-y-4">
+            {editMode ? (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={onFilmNow}
-                  disabled={filmNowPending}
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                  onClick={onSaveEdits}
+                  disabled={savePending}
                 >
-                  <Video className="h-4 w-4" />
-                  {filmNowPending ? "Opening teleprompter..." : "Start filming"}
+                  {savePending ? "Saving..." : "Save script"}
                 </button>
-              ) : null}
-            </div>
+                <button
+                  type="button"
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
+                  onClick={onCancelEdit}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={copyScript}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 sm:w-auto"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy script
+                </button>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                  {onFilmNow ? (
+                    <button
+                      type="button"
+                      onClick={onFilmNow}
+                      disabled={filmNowPending}
+                      className="font-medium text-gray-700 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:text-white"
+                    >
+                      {filmNowPending ? "Opening teleprompter..." : "Film now"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={onToggleEdit}
+                    className="font-medium text-gray-700 hover:text-gray-950 dark:text-gray-200 dark:hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRefineOpen(true);
+                      window.setTimeout(() => refineInputRef.current?.focus(), 0);
+                    }}
+                    disabled={refinePending}
+                    className="font-medium text-gray-700 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:text-white"
+                  >
+                    Refine
+                  </button>
+                  {scheduleSave || onSaveToMyScripts ? (
+                    <button
+                      type="button"
+                      onClick={openScheduleSave}
+                      disabled={saveToMyScriptsPending}
+                      className="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:text-white"
+                    >
+                      <BookmarkPlus className="h-3.5 w-3.5" />
+                      {saveToMyScriptsPending
+                        ? "Saving..."
+                        : savedScriptId
+                          ? "Saved"
+                          : "Save"}
+                    </button>
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-gray-950 dark:text-gray-200 dark:hover:text-white"
+                      >
+                        More
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-52">
+                      <DropdownMenuItem
+                        onSelect={openHookOptions}
+                        disabled={hookVariationsPending}
+                      >
+                        {hookVariationsPending ? "Generating hook options..." : "Hook options"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setHealthOpen(true)}>
+                        Script health
+                      </DropdownMenuItem>
+                      {onRefineWithInstruction ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            onRefineWithInstruction(
+                              "Shorten the full script to about 30 seconds of spoken words. Keep the same idea. Cut filler only."
+                            )
+                          }
+                        >
+                          Shorten
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onRefineWithInstruction ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            onRefineWithInstruction(
+                              "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea."
+                            )
+                          }
+                        >
+                          Change tone
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onFixWeakest ? (
+                        <DropdownMenuItem onSelect={() => onFixWeakest()}>
+                          Fix weakest section
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={onReset}>New script</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
             )}
-          </aside>
-        </div>
+
+            {!editMode && refineOpen ? (
+              <div className="flex gap-2">
+                <input
+                  ref={refineInputRef}
+                  value={refineInput}
+                  onChange={(e) => onRefineInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && refineInput.trim() && !refinePending) onRefine();
+                  }}
+                  placeholder='e.g. "Make the hook more contrarian"'
+                  disabled={refinePending}
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm placeholder:italic placeholder:text-gray-400 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900"
+                />
+                <button
+                  type="button"
+                  onClick={onRefine}
+                  disabled={refinePending || !refineInput.trim()}
+                  className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {refinePending ? "Improving..." : "Improve"}
+                </button>
+              </div>
+            ) : null}
+
+            <CoachScriptFeedback coachScriptId={result.id} />
+          </div>
+        ) : null}
       </div>
+
+      <Sheet open={healthOpen} onOpenChange={setHealthOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto p-4 pt-10 sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Script health</SheetTitle>
+            <SheetDescription>Optional scores from the quality check.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <AiCoachScriptHealthPanel
+              health={health}
+              weakest={weakest}
+              onFixWeakest={onFixWeakest}
+              fixPending={refinePending}
+              onShorten={
+                previewMode || !onRefineWithInstruction
+                  ? undefined
+                  : () =>
+                      onRefineWithInstruction(
+                        "Shorten the full script to about 30 seconds of spoken words. Keep the same idea. Cut filler only."
+                      )
+              }
+              onMakeViral={
+                previewMode || !onRefineWithInstruction
+                  ? undefined
+                  : () =>
+                      onRefineWithInstruction(
+                        "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea."
+                      )
+              }
+              previewMode={previewMode}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {!previewMode && scheduleSave ? (
         <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>

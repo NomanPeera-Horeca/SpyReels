@@ -31,24 +31,68 @@ const PASTE_CONVERT_STEP_ORDER: CoachScriptProgressStepId[] = [
 export function defaultCoachScriptStepLabel(stepId: CoachScriptProgressStepId): string {
   switch (stepId) {
     case "read_profile":
-      return "Reading your niche and audience profile";
     case "audience_research":
-      return "Researching your audience on Reddit and Quora";
     case "research_grounding":
-      return "Researching real examples...";
+      return "Understanding your idea";
     case "find_viral":
-      return "Finding what's going viral in your niche";
     case "hook_angle":
-      return "Picking a scroll-stopping hook angle";
+      return "Finding the strongest angle";
     case "write_script":
-      return "Writing your viral script";
+      return "Writing your script";
     case "quality_check":
-      return "AI Coach Judge checking if this makes sense to viewers";
     case "production_notes":
-      return "Adding film-ready production notes";
+      return "Polishing the final version";
     default:
       return "Working on your script";
   }
+}
+
+const COACH_PROGRESS_DISPLAY_GROUPS: Array<{
+  id: string;
+  label: string;
+  stepIds: CoachScriptProgressStepId[];
+}> = [
+  {
+    id: "understand",
+    label: "Understanding your idea",
+    stepIds: ["read_profile", "audience_research", "research_grounding"],
+  },
+  {
+    id: "angle",
+    label: "Finding the strongest angle",
+    stepIds: ["find_viral", "hook_angle"],
+  },
+  {
+    id: "write",
+    label: "Writing your script",
+    stepIds: ["write_script"],
+  },
+  {
+    id: "polish",
+    label: "Polishing the final version",
+    stepIds: ["quality_check", "production_notes"],
+  },
+];
+
+export function collapseCoachProgressForDisplay(steps: AgentProgressStep[]): AgentProgressStep[] {
+  const ids = new Set(steps.map((step) => step.id));
+  const isFullPipeline = STEP_ORDER.every((id) => ids.has(id));
+  if (!isFullPipeline) return steps;
+
+  return COACH_PROGRESS_DISPLAY_GROUPS.map((group) => {
+    const members = group.stepIds
+      .map((id) => steps.find((step) => step.id === id))
+      .filter((step): step is AgentProgressStep => Boolean(step));
+    let status: AgentProgressStep["status"] = "pending";
+    if (members.some((step) => step.status === "active")) {
+      status = "active";
+    } else if (members.length > 0 && members.every((step) => step.status === "done")) {
+      status = "done";
+    } else if (members.some((step) => step.status === "done")) {
+      status = "active";
+    }
+    return { id: group.id, label: group.label, status };
+  });
 }
 
 export function buildCoachScriptProgressSteps(
@@ -85,27 +129,23 @@ export function buildPasteConvertProgressSteps(
   );
 }
 
-export function personalizedCoachScriptStepLabels(args: {
+export function personalizedCoachScriptStepLabels(_args: {
   niche: string;
   audience: string;
 }): Partial<Record<CoachScriptProgressStepId, string>> {
-  const nicheShort = args.niche.trim().slice(0, 48) || "your niche";
-  const audienceShort = args.audience.trim().slice(0, 48) || "your audience";
   return {
-    read_profile: `Reading ${nicheShort} and ${audienceShort}`,
-    audience_research: `Researching ${audienceShort} on Reddit and Quora`,
-    research_grounding: "Researching real examples...",
-    find_viral: `Finding what's going viral in ${nicheShort}`,
-    hook_angle: "Picking a scroll-stopping hook angle",
-    write_script: "Writing your viral script",
-    quality_check: "AI Coach Judge checking if this makes sense to viewers",
-    production_notes:
-      "Adding film-ready production notes (Instagram audio, B-roll, how to film)",
+    read_profile: "Understanding your idea",
+    audience_research: "Understanding your idea",
+    research_grounding: "Understanding your idea",
+    find_viral: "Finding the strongest angle",
+    hook_angle: "Finding the strongest angle",
+    write_script: "Writing your script",
+    quality_check: "Polishing the final version",
+    production_notes: "Polishing the final version",
   };
 }
 
-export const COACH_AGENT_FOOTER =
-  "You won't need to do this research manually again.";
+export const COACH_AGENT_FOOTER = "Usually about a minute.";
 
 export const PASTE_CONVERT_FOOTER =
   "Your spoken lines stay as pasted. We only fill filming directions Studio needs.";

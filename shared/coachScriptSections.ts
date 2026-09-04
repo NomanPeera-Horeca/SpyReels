@@ -110,6 +110,13 @@ export function combineBodyFromSections(sections: CoachScriptSections): string {
   return [sections.explain, sections.illustrate].filter(Boolean).join("\n\n");
 }
 
+export function spokenWhatToSay(sections: Pick<CoachScriptSections, "explain" | "illustrate" | "teach" | "cta">): string {
+  return [sections.explain, sections.illustrate, sections.teach, sections.cta]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function parseProductionNotes(raw: string | null | undefined): CoachProductionNotes | null {
   if (!raw?.trim()) return null;
   try {

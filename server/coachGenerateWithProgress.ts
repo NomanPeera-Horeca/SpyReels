@@ -75,8 +75,8 @@ export async function generateCoachScriptWithProgress(args: {
         niche: profile.niche,
         audience: profile.targetAudience,
       }),
-      find_viral: "Developing 3 strong creative directions",
-      hook_angle: "Comparing directions and choosing the strongest",
+      find_viral: "Finding the strongest angle",
+      hook_angle: "Finding the strongest angle",
     };
     initAgentProgress({
       flow: FLOW,
