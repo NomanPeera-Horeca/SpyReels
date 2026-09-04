@@ -6,7 +6,9 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
+import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
+import { CarouselStoryPremiumFamily } from "@/components/CarouselStoryPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
 import { CarouselSlideCtaBoldCenter } from "@/components/CarouselSlideCtaBoldCenter";
@@ -35,7 +37,7 @@ export type CarouselSlideLayoutProps = {
   editable?: boolean;
   /** Commit a slot edit; slotId matches template slot ids. */
   onSlotChange?: (slotId: string, value: string) => void;
-  /** Breakdown family metadata. Ignored by legacy layouts. */
+  /** Composition-aware family metadata. Ignored by legacy layouts. */
   composition?: CarouselSlideSpec["composition"];
 };
 
@@ -65,6 +67,9 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
 export function resolveCarouselSlideComponent(
   slide: Pick<CarouselSlideSpec, "layoutId" | "composition">
 ): ComponentType<CarouselSlideLayoutProps> {
+  if (isStoryNarrativeSlide(slide)) {
+    return CarouselStoryPremiumFamily;
+  }
   if (isBreakdownListicleSlide(slide)) {
     return CarouselBreakdownPremiumFamily;
   }
