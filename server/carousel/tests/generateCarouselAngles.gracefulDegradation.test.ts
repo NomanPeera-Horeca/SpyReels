@@ -110,7 +110,53 @@ function invalidBrief(title: string) {
   });
 }
 
-function llmResult(angles: unknown[]) {
+function compactCandidate(overrides: {
+  title: string;
+  angleType: "diagnostic" | "story" | "how_to";
+  scores?: {
+    relevance: number;
+    usefulness: number;
+    specificity: number;
+    visualPotential: number;
+    factualSafety: number;
+    originality: number;
+  };
+}) {
+  const contentFormat =
+    overrides.angleType === "story"
+      ? "story"
+      : overrides.angleType === "how_to"
+        ? "framework"
+        : "breakdown";
+  return {
+    kicker: "Diagnostic",
+    title: overrides.title,
+    description: "Show why cash runs out before profit.",
+    estimatedSlideCount: 6,
+    topic: "small business cash flow",
+    inferredAudience: "small business owners",
+    contentGoal: "education",
+    contentFormat,
+    angleType: overrides.angleType,
+    hook: "Profit on paper, empty in the bank.",
+    corePromise: "See the cash leaks before they compound.",
+    centralInsight: `${overrides.title} insight.`,
+    layoutFamily: contentFormat,
+    claimRisk: "medium",
+    researchMode: "claim_verification",
+    scores: overrides.scores ?? {
+      relevance: 80,
+      usefulness: 70,
+      specificity: 60,
+      visualPotential: 50,
+      factualSafety: 90,
+      originality: 40,
+    },
+    confidence: 0.8,
+  };
+}
+
+function llmResult(payload: Record<string, unknown>) {
   return {
     id: "msg_test",
     created: 0,
@@ -120,12 +166,20 @@ function llmResult(angles: unknown[]) {
         index: 0,
         message: {
           role: "assistant" as const,
-          content: JSON.stringify({ angles }),
+          content: JSON.stringify(payload),
         },
         finish_reason: "stop",
       },
     ],
   };
+}
+
+function anglesResult(angles: unknown[]) {
+  return llmResult({ angles });
+}
+
+function briefResult(brief: unknown) {
+  return llmResult({ brief });
 }
 
 function flattenLogCalls(spy: { mock: { calls: unknown[][] } }): string {
@@ -160,13 +214,15 @@ describe("generateCarouselAngles graceful degradation", () => {
   });
 
   it("auto mode returns one first-attempt valid brief without repair", async () => {
-    mockedInvokeLLM.mockResolvedValueOnce(
-      llmResult([
-        rawBrief({ title: "Cash is a system", angleType: "diagnostic" }),
-        invalidBrief("Broken story"),
-        invalidBrief("Broken how-to"),
-      ])
-    );
+    mockedInvokeLLM
+      .mockResolvedValueOnce(
+        anglesResult([
+          compactCandidate({ title: "Cash is a system", angleType: "diagnostic" }),
+        ])
+      )
+      .mockResolvedValueOnce(
+        briefResult(rawBrief({ title: "Cash is a system", angleType: "diagnostic" }))
+      );
 
     const briefs = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
@@ -175,7 +231,7 @@ describe("generateCarouselAngles graceful degradation", () => {
 
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.title).toBe("Cash is a system");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
     const payload = completionPayload();
     expect(payload.firstAttemptValidCount).toBe(1);
     expect(payload.repairAttemptValidCount).toBe(0);
@@ -183,22 +239,19 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(payload.requiredValidBriefs).toBe(1);
     expect(payload.repairRan).toBe(false);
     expect(payload.proceededWithGracefulDegradation).toBe(true);
+    expect(payload.angleGenerationMode).toBe("parallel_full_expansions");
   });
 
-  it("auto mode repairs only when the first attempt has zero valid briefs", async () => {
+  it("auto mode repairs only when an expansion first pass is invalid", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(
-        llmResult([
-          invalidBrief("Broken A"),
-          invalidBrief("Broken B"),
-          invalidBrief("Broken C"),
+        anglesResult([
+          compactCandidate({ title: "Cash is a system", angleType: "diagnostic" }),
         ])
       )
+      .mockResolvedValueOnce(briefResult(invalidBrief("Broken A")))
       .mockResolvedValueOnce(
-        llmResult([
-          rawBrief({ title: "Repaired cash plan", angleType: "diagnostic" }),
-          invalidBrief("Still broken"),
-        ])
+        briefResult(rawBrief({ title: "Repaired cash plan", angleType: "diagnostic" }))
       );
 
     const briefs = await generateCarouselAngles({
@@ -208,7 +261,7 @@ describe("generateCarouselAngles graceful degradation", () => {
 
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.title).toBe("Repaired cash plan");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
     const payload = completionPayload();
     expect(payload.firstAttemptValidCount).toBe(0);
     expect(payload.repairAttemptValidCount).toBe(1);
@@ -218,8 +271,13 @@ describe("generateCarouselAngles graceful degradation", () => {
 
   it("auto mode fails when first and repair both have zero valid briefs", async () => {
     mockedInvokeLLM
-      .mockResolvedValueOnce(llmResult([invalidBrief("Broken A")]))
-      .mockResolvedValueOnce(llmResult([invalidBrief("Broken B")]));
+      .mockResolvedValueOnce(
+        anglesResult([
+          compactCandidate({ title: "Broken A", angleType: "diagnostic" }),
+        ])
+      )
+      .mockResolvedValueOnce(briefResult(invalidBrief("Broken A")))
+      .mockResolvedValueOnce(briefResult(invalidBrief("Broken B")));
 
     await expect(
       generateCarouselAngles({
@@ -227,13 +285,13 @@ describe("generateCarouselAngles graceful degradation", () => {
         requiredValidBriefs: 1,
       })
     ).rejects.toThrow("Expected at least 1 carousel briefs, got 0.");
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(2);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(3);
   });
 
   it("review mode merges a preserved first brief with two distinct repaired briefs", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           rawBrief({
             title: "Cash is a system",
             angleType: "diagnostic",
@@ -244,7 +302,7 @@ describe("generateCarouselAngles graceful degradation", () => {
         ])
       )
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           rawBrief({
             title: "A cash story",
             angleType: "story",
@@ -291,7 +349,7 @@ describe("generateCarouselAngles graceful degradation", () => {
   it("review mode preserves the first-attempt valid brief", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           rawBrief({
             title: "Keep this first brief",
             angleType: "diagnostic",
@@ -300,7 +358,7 @@ describe("generateCarouselAngles graceful degradation", () => {
           invalidBrief("Broken extra"),
         ])
       )
-      .mockResolvedValueOnce(llmResult([invalidBrief("Repair failed")]));
+      .mockResolvedValueOnce(anglesResult([invalidBrief("Repair failed")]));
 
     const briefs = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
@@ -324,9 +382,9 @@ describe("generateCarouselAngles graceful degradation", () => {
       centralInsight: "Cash timing is the silent killer.",
     });
     mockedInvokeLLM
-      .mockResolvedValueOnce(llmResult([shared, invalidBrief("Broken extra")]))
+      .mockResolvedValueOnce(anglesResult([shared, invalidBrief("Broken extra")]))
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           shared,
           rawBrief({
             title: "A cash story",
@@ -350,46 +408,95 @@ describe("generateCarouselAngles graceful degradation", () => {
   });
 
   it("recommends the highest-scoring valid brief", async () => {
-    mockedInvokeLLM.mockResolvedValueOnce(
-      llmResult([
-        rawBrief({
-          title: "Low score plan",
-          angleType: "diagnostic",
-          scores: {
-            relevance: 20,
-            usefulness: 20,
-            specificity: 20,
-            visualPotential: 20,
-            factualSafety: 20,
-            originality: 20,
-          },
-        }),
-        rawBrief({
-          title: "Highest score plan",
-          angleType: "story",
-          scores: {
-            relevance: 95,
-            usefulness: 95,
-            specificity: 95,
-            visualPotential: 95,
-            factualSafety: 95,
-            originality: 95,
-          },
-        }),
-        rawBrief({
-          title: "Mid score plan",
-          angleType: "how_to",
-          scores: {
-            relevance: 40,
-            usefulness: 40,
-            specificity: 40,
-            visualPotential: 40,
-            factualSafety: 40,
-            originality: 40,
-          },
-        }),
-      ])
-    );
+    mockedInvokeLLM
+      .mockResolvedValueOnce(
+        anglesResult([
+          compactCandidate({
+            title: "Low score plan",
+            angleType: "diagnostic",
+            scores: {
+              relevance: 99,
+              usefulness: 99,
+              specificity: 99,
+              visualPotential: 99,
+              factualSafety: 99,
+              originality: 99,
+            },
+          }),
+          compactCandidate({
+            title: "Highest score plan",
+            angleType: "story",
+            scores: {
+              relevance: 10,
+              usefulness: 10,
+              specificity: 10,
+              visualPotential: 10,
+              factualSafety: 10,
+              originality: 10,
+            },
+          }),
+          compactCandidate({
+            title: "Mid score plan",
+            angleType: "how_to",
+            scores: {
+              relevance: 50,
+              usefulness: 50,
+              specificity: 50,
+              visualPotential: 50,
+              factualSafety: 50,
+              originality: 50,
+            },
+          }),
+        ])
+      )
+      .mockResolvedValueOnce(
+        briefResult(
+          rawBrief({
+            title: "Low score plan",
+            angleType: "diagnostic",
+            scores: {
+              relevance: 20,
+              usefulness: 20,
+              specificity: 20,
+              visualPotential: 20,
+              factualSafety: 20,
+              originality: 20,
+            },
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        briefResult(
+          rawBrief({
+            title: "Highest score plan",
+            angleType: "story",
+            scores: {
+              relevance: 95,
+              usefulness: 95,
+              specificity: 95,
+              visualPotential: 95,
+              factualSafety: 95,
+              originality: 95,
+            },
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        briefResult(
+          rawBrief({
+            title: "Mid score plan",
+            angleType: "how_to",
+            scores: {
+              relevance: 40,
+              usefulness: 40,
+              specificity: 40,
+              visualPotential: 40,
+              factualSafety: 40,
+              originality: 40,
+            },
+          })
+        )
+      );
 
     const briefs = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
@@ -400,7 +507,7 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(selectRecommendedCreativeBrief(briefs).brief?.title).toBe(
       "Highest score plan"
     );
-    expect(mockedInvokeLLM).toHaveBeenCalledTimes(1);
+    expect(mockedInvokeLLM).toHaveBeenCalledTimes(4);
   });
 
   it("still rejects semantically invalid briefs", async () => {
@@ -411,13 +518,24 @@ describe("generateCarouselAngles graceful degradation", () => {
     expect(validateCarouselBriefSemantics(CASH_LEAKS_REMAKE_64_BRIEF).length).toBeGreaterThan(
       0
     );
-    mockedInvokeLLM.mockResolvedValueOnce(
-      llmResult([
-        invalid,
-        CASH_LEAKS_REMAKE_64_BRIEF,
-        rawBrief({ title: "Valid cash plan", angleType: "diagnostic" }),
-      ])
-    );
+    mockedInvokeLLM
+      .mockResolvedValueOnce(
+        anglesResult([
+          compactCandidate({ title: "Invalid closer", angleType: "diagnostic" }),
+          compactCandidate({
+            title: CASH_LEAKS_REMAKE_64_BRIEF.title,
+            angleType: "story",
+          }),
+          compactCandidate({ title: "Valid cash plan", angleType: "how_to" }),
+        ])
+      )
+      .mockResolvedValueOnce(briefResult(invalid))
+      .mockResolvedValueOnce(briefResult(CASH_LEAKS_REMAKE_64_BRIEF))
+      .mockResolvedValueOnce(
+        briefResult(rawBrief({ title: "Valid cash plan", angleType: "diagnostic" }))
+      )
+      .mockResolvedValueOnce(briefResult(invalid))
+      .mockResolvedValueOnce(briefResult(CASH_LEAKS_REMAKE_64_BRIEF));
 
     const briefs = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
@@ -446,13 +564,13 @@ describe("generateCarouselAngles graceful degradation", () => {
   it("defaults to Review Plan repair when requiredValidBriefs is omitted", async () => {
     mockedInvokeLLM
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           rawBrief({ title: "Only first brief", angleType: "diagnostic" }),
           invalidBrief("Broken extra"),
         ])
       )
       .mockResolvedValueOnce(
-        llmResult([
+        anglesResult([
           rawBrief({
             title: "Repaired story",
             angleType: "story",
@@ -483,8 +601,8 @@ describe("generateCarouselAngles graceful degradation", () => {
 
   it("never makes a third LLM call", async () => {
     mockedInvokeLLM
-      .mockResolvedValueOnce(llmResult([invalidBrief("Broken A")]))
-      .mockResolvedValueOnce(llmResult([invalidBrief("Broken B")]));
+      .mockResolvedValueOnce(anglesResult([invalidBrief("Broken A")]))
+      .mockResolvedValueOnce(anglesResult([invalidBrief("Broken B")]));
 
     await expect(
       generateCarouselAngles({

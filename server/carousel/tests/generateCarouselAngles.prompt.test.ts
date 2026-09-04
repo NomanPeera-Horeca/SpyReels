@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCarouselAngleCandidatesUserPrompt,
+  buildCarouselAngleExpansionUserPrompt,
   buildCarouselAnglesJsonSchema,
   buildCarouselAnglesRepairNote,
   buildCarouselAnglesSystemPrompt,
@@ -224,5 +226,52 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(note).toContain("Preserve the explicit list contract: exactly 6 cash drains.");
     expect(note).toContain("Semantic issues to fix");
     expect(note).toContain("The brief changed the promised item type");
+  });
+
+  it("compact candidate prompt locks the list contract and omits outlines", () => {
+    const user = buildCarouselAngleCandidatesUserPrompt({
+      sourceContent: "The 6 Silent Cash Drains Killing Small Businesses",
+    });
+    expect(user).toContain("compact candidates only");
+    expect(user).toContain("Do not write keyPoints, slideOutline");
+    expect(user).toContain("EXPLICIT LIST CONTRACT");
+    expect(user).toContain("promised count 6");
+  });
+
+  it("full-brief expansion prompt develops one candidate without slim payload language", () => {
+    const user = buildCarouselAngleExpansionUserPrompt({
+      sourceContent: "How I lost my first company and rebuilt from scratch as a solo founder",
+      candidate: {
+        kicker: "Story",
+        title: "Rebuild after the crash",
+        description: "Turn a founder failure into a sequenced recovery story.",
+        estimatedSlideCount: 7,
+        topic: "founder recovery",
+        inferredAudience: "solo founders",
+        contentGoal: "engagement",
+        contentFormat: "story",
+        angleType: "story",
+        hook: "I lost the company. Then I started over.",
+        corePromise: "See the rebuild sequence, not the highlight reel.",
+        centralInsight: "The restart taught more than the first win.",
+        layoutFamily: "story",
+        claimRisk: "low",
+        researchMode: "none",
+        scores: {
+          relevance: 80,
+          usefulness: 70,
+          specificity: 70,
+          visualPotential: 70,
+          factualSafety: 80,
+          originality: 80,
+          overall: 75,
+        },
+        confidence: 0.8,
+      },
+    });
+    expect(user).toContain("Rebuild after the crash");
+    expect(user).toContain("complete production-ready creative brief");
+    expect(user).toContain("This is not a slim expansion payload.");
+    expect(user).not.toContain("Write ONLY the expansion fields");
   });
 });
