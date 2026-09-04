@@ -28,6 +28,7 @@ export type CarouselFrameworkPremiumFamilyProps = {
   editable?: boolean;
   onSlotChange?: (slotId: string, value: string) => void;
   composition?: unknown;
+  previousVariant?: FrameworkPremiumVariant | null;
 };
 
 type FrameworkProps = CarouselFrameworkPremiumFamilyProps & {
@@ -1682,6 +1683,7 @@ export function CarouselFrameworkPremiumFamily(
     frameworkPartCount: composition.frameworkPartCount,
     frameworkPartIndex: composition.frameworkPartIndex,
     imageUrl: props.imageUrl,
+    previousVariant: props.previousVariant,
   });
 
   return (

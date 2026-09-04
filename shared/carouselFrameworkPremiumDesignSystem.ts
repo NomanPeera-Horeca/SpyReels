@@ -85,7 +85,7 @@ export function resolveFrameworkPremiumVariant({
           previousVariant
         );
       }
-      return "manifesto";
+      return "centered_system";
     case "pillar_system":
       if (!multipart) return "manifesto";
       return frameworkPartIndex != null && frameworkPartIndex % 2 === 0
@@ -109,7 +109,7 @@ export function resolveFrameworkPremiumVariant({
     case "matrix_framework":
       return "quadrant_editorial";
     case "principle_focus":
-      return "manifesto";
+      return avoidRepeat("manifesto", "centered_system", previousVariant);
     case "example_application":
       return "model_plus_example";
     case "framework_summary":
@@ -117,4 +117,23 @@ export function resolveFrameworkPremiumVariant({
     case "framework_closing":
       return totalSlides % 2 === 0 ? "decision_close" : "framework_takeaway";
   }
+}
+
+/**
+ * Walk slides in order and thread previousVariant.
+ * Variant choice never changes part count or part index.
+ */
+export function resolveFrameworkPremiumVariants(
+  slides: FrameworkPremiumVariantInput[]
+): FrameworkPremiumVariant[] {
+  const resolved: FrameworkPremiumVariant[] = [];
+  for (const slide of slides) {
+    resolved.push(
+      resolveFrameworkPremiumVariant({
+        ...slide,
+        previousVariant: resolved.at(-1) ?? null,
+      })
+    );
+  }
+  return resolved;
 }
