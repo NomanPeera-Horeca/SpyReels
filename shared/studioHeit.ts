@@ -5,6 +5,7 @@ import { DEFAULT_COACH_HOOK_TYPE, type CoachHookType } from "@shared/hookTypes";
 import type { CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScriptModeLabel } from "@shared/coachScriptMode";
 import { COACH_ANALYSIS_RULES } from "@shared/coachAnalyze";
+import { creatorIdeaForKeywordRouting } from "@shared/coachIdeaGroundTruth";
 
 export function buildStudioDateContext(now = new Date()): string {
   const year = now.getFullYear();
@@ -49,7 +50,7 @@ Critical rules:
 export const COACH_EXPLICIT_ANGLE_RULES = `Explicit angle mode:
 - The raw idea or attached plan/spark note defines WHAT the video is about. Niche and audience define WHO it is for and HOW to speak.
 - If the idea names a product, SaaS, app, tool, or brand (examples: SpyReels, their own software), serve that marketing or product-story goal.
-- If the creator says not to name the tool on camera, use problem-first or curiosity content without the brand name.
+- Product naming is not all-or-nothing. "Do not mention X" means X must never appear. "Do not mention X until the final line/sentence" means X MUST appear, but only in the final spoken line.
 - Meta instructions (for example "for SpyReels", "promo for my tool") are ground truth even when the niche profile points elsewhere.
 - The explicit angle wins over default niche assumptions and over any source reel subject.`;
 
@@ -118,8 +119,15 @@ export function buildCoachPrompt(
     funnelStage?: string | null;
     contentFormat?: string | null;
     researchGroundingBlock?: string;
+    rawCreatorIdea?: string;
+    selectedStrategyBlock?: string;
+    creatorConstraintsBlock?: string;
   }
 ): string {
+  const rawIdea = (options?.rawCreatorIdea?.trim() || creatorIdeaForKeywordRouting(description)).trim();
+  const strategyBlock = options?.selectedStrategyBlock?.trim() ?? "";
+  const constraintsBlock = options?.creatorConstraintsBlock?.trim() ?? "";
+  const quotedIdea = rawIdea || description;
   const clarificationBlock =
     clarifications && clarifications.length > 0
       ? `\n\nAdditional context (treat as ground truth):\n${clarifications.map((c) => `Q: ${c.question}\nA: ${c.answer}`).join("\n\n")}`
@@ -142,7 +150,7 @@ export function buildCoachPrompt(
 
   const resolvedHookType = resolveCoachHookTypeForPrompt({
     contentFormat: options?.contentFormat,
-    description,
+    description: rawIdea || creatorIdeaForKeywordRouting(description),
   });
   const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing: you must output this exact hookType value).`;
 
@@ -150,9 +158,14 @@ export function buildCoachPrompt(
     ? "I section only. One story, analogy, or example. Concrete details must come from the Verified research block above (or stay hypothetical if that block has nothing usable)."
     : "I section only. One story, analogy, or example with concrete detail. Prefer hypothetical/relatable framing; do not invent specific stats or named entities as facts.";
 
+  const strategySection = strategyBlock
+    ? `\n\nINTERNAL SELECTED STRATEGY (framing only; never overrides the raw idea or creator constraints):\n${strategyBlock}`
+    : "";
+  const constraintsSection = constraintsBlock ? `\n\n${constraintsBlock}` : "";
+
   return `A content creator just shared this raw idea:
 
-"${description}"${clarificationBlock}${audienceBlock}${researchBlock}
+"${quotedIdea}"${constraintsSection}${strategySection}${clarificationBlock}${audienceBlock}${researchBlock}
 
 ${buildStudioDateContext()}
 
@@ -176,58 +189,40 @@ Produce a full HEIT script with production directions. Return ONLY valid JSON:
   "hookType": "${resolvedHookType}",
   "contentType": "testimonial | hot-take | story | behind-the-scenes | transformation | educational | trend | rant | announcement",
   "contentFormat": "talking-head | voiceover-broll | behind-the-scenes | tutorial-demo | trending-audio | faceless",
-  "formatLabel": "Human-readable label e.g. 'Talking Head', 'Day-in-the-Life'",
+  "formatLabel": "Talking Head",
   "platform": "instagram | tiktok | both",
-  "estimatedDuration": "e.g. 30-45 seconds",
+  "estimatedDuration": "30-45 seconds",
   "productionCoach": {
     "device": "iPhone | Android | GoPro",
-    "cameraSettings": "2-3 sentences specific to format and device",
-    "setup": "One sentence: exactly where to position camera for this format",
-    "musicMix": "One sentence: exact volume and when to duck or fade (e.g. 8-12% under voice, mute during hook)",
+    "cameraSettings": "2-3 sentences",
+    "setup": "camera position, one sentence",
+    "musicMix": "volume and ducking, one sentence",
     "instagramAudio": [
-      {
-        "title": "Exact track name as shown in Instagram Reels audio library",
-        "artist": "Artist or original sound creator name",
-        "searchHint": "Exact phrase the creator should paste into Instagram Reels audio search",
-        "matchReason": "One sentence: why this trending audio fits THIS script tone and niche",
-        "isTrending": true
-      },
-      {
-        "title": "Backup track name",
-        "artist": "Artist name",
-        "searchHint": "Backup search phrase",
-        "matchReason": "One sentence: when to use this instead",
-        "isTrending": false
-      }
+      { "title": "primary track", "artist": "artist", "searchHint": "Reels search phrase", "matchReason": "why it fits", "isTrending": true },
+      { "title": "backup track", "artist": "artist", "searchHint": "backup search", "matchReason": "when to use", "isTrending": false }
     ],
-    "music": "Legacy one-line summary only if needed; prefer instagramAudio picks above",
-    "voiceTone": "Delivery style in 15-20 words max. No long paragraphs.",
-    "bRoll": [
-      { "shot": "What to film", "example": "Where to find it or how to film it", "canUseStock": true }
-    ],
-    "hookVisualBeat": "Frame 0 visual: mid-action, close-up, or end-result shot (one concrete sentence)",
-    "textOverlay": "Same as hookOnScreenText — max 30 chars for frame 0",
-    "hookOnScreenText": "ALL CAPS, 5-8 words, max 30 characters, DIFFERENT words than spoken hook, frame 0 (first 0.5 sec)",
-    "frame0OnScreenText": "Same as hookOnScreenText",
-    "dualEncoding": "How on-screen text complements the spoken hook without copying it verbatim",
-    "pacingNotes": "Jump cuts every 2-4 sec, rhythmic not frantic, no filler, no dead air",
-    "loopClosingNote": "How the ending connects to the opening for seamless replay",
+    "music": "one-line fallback",
+    "voiceTone": "15-20 words",
+    "bRoll": [{ "shot": "what to film", "example": "how", "canUseStock": true }],
+    "hookVisualBeat": "frame 0 visual, one sentence",
+    "textOverlay": "max 30 chars",
+    "hookOnScreenText": "ALL CAPS, 5-8 words, max 30 chars, different from spoken hook",
+    "frame0OnScreenText": "same as hookOnScreenText",
+    "dualEncoding": "how text complements spoken hook",
+    "pacingNotes": "jump cuts every 2-4 sec",
+    "loopClosingNote": "how ending reconnects to the open",
     "soundOffSafe": true
   },
-  "title": "Short catchy working title",
+  "title": "short working title",
   "tone": "conversational | emotional | energetic | calm | authoritative | humorous",
-  "hook": "H section only. Spoken Layer 2. MAX 2 sentences. Open Loop A. Match hookType. Zero warm-up.",
-  "explain": "E section only. Name the problem. Show it is bigger than they think. Build tension. Do not solve yet.",
+  "hook": "H only. Max 2 sentences. Open Loop A. Match hookType. No warm-up.",
+  "explain": "E only. Name the problem and raise the stakes. Do not solve yet.",
   "illustrate": "${illustrateInstruction}",
-  "teach": "T section only. ONE clear takeaway or action. Not a list. Do not repeat the call to action.",
-  "cta": "OPTIONAL. Empty string when the Reel should end on teach. If present: one specific low-friction next step for a cold viewer (A+B: action + benefit). Prefer Save + Comment KEYWORD or Follow for X. Never invent personal names or insider nicknames. Never write vague lines like Save this before you X."
+  "teach": "T only. ONE takeaway. Not a list.",
+  "cta": "Optional. Empty string to end on teach. If present: one specific next step. No invented names."
 }
 
-Music rules for productionCoach.instagramAudio:
-- Give exactly 2 picks: one primary (isTrending: true) and one backup.
-- Use real songs or sounds commonly found in Instagram Reels for this niche in ${new Date().getFullYear()}.
-- Title and artist only in the UI. Keep matchReason short internally; creators know how to search in Reels.
-- Match audio energy to the script. talking-head: low-volume background. trending-audio: the sound IS the hook.`;
+instagramAudio: exactly 2 real ${new Date().getFullYear()} Reels tracks for this niche. Primary isTrending true. Match energy to the format.`;
 }
 
 /** Paste → Studio: keep spoken lines verbatim; generate only missing production fields. */

@@ -50,6 +50,7 @@ import { useAgentProgressPoll } from "@/hooks/useAgentProgressPoll";
 import {
   COACH_AGENT_FOOTER,
   buildCoachScriptProgressSteps,
+  collapseCoachProgressForDisplay,
 } from "@shared/coachAgentProgress";
 import type { AgentProgressStep } from "@shared/agentProgress";
 import { isSparkOrPlanPrefill, shouldSkipCoachAnalyze } from "@shared/coachAnalyze";
@@ -607,11 +608,8 @@ export default function AiCoach() {
   };
 
   const handleSaveToMyScripts = () => {
-    if (savedLibraryScriptId) {
-      handleOpenMyScripts();
-      return;
-    }
-    saveCoachScript(true);
+    if (!result || savedLibraryScriptId) return;
+    saveCoachScript(false);
   };
 
   const handleOpenMyScripts = () => {
@@ -906,11 +904,14 @@ export default function AiCoach() {
       phase === "generating" && generateMutation.isPending && !isRefining && !isHookVariations;
 
     if (showCoachProgress || phase === "analyzing") {
-      const steps = phase === "analyzing" ? analyzingSteps : coachProgressSteps;
+      const steps =
+        phase === "analyzing"
+          ? analyzingSteps
+          : collapseCoachProgressForDisplay(coachProgressSteps);
       const subheadline =
         phase === "analyzing"
           ? agentMessage ?? "Checking context before writing your script"
-          : `Tailored to your idea. Usually 20 to 40 seconds.`;
+          : "Usually about a minute.";
 
       return shellLayout(
         <AgentProgressPanel

@@ -6,6 +6,8 @@ import {
   type CoachScriptProgressStepId,
 } from "@shared/coachAgentProgress";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
+import { markCreatorIdeaGroundTruth } from "@shared/coachIdeaGroundTruth";
+import { formatSelectedCoachStrategy } from "@shared/coachStrategy";
 import { getOrFetchAudienceSignals } from "./audienceResearch/service";
 import {
   completeAgentProgress,
@@ -21,6 +23,10 @@ import {
   formatResearchGroundingForPrompt,
   getResearchGrounding,
 } from "./studioResearchGrounding";
+import {
+  developCoachStrategyDirections,
+  selectCoachStrategy,
+} from "./coachStrategyPlanner";
 
 const FLOW = "coach" as const;
 
@@ -64,44 +70,72 @@ export async function generateCoachScriptWithProgress(args: {
   try {
     setCoachStep(args.userId, "read_profile");
     const profile = await getCreatorCoachProfile(args.userId);
-    const labels = personalizedCoachScriptStepLabels({
-      niche: profile.niche,
-      audience: profile.targetAudience,
-    });
+    const labels = {
+      ...personalizedCoachScriptStepLabels({
+        niche: profile.niche,
+        audience: profile.targetAudience,
+      }),
+      find_viral: "Finding the strongest angle",
+      hook_angle: "Finding the strongest angle",
+    };
     initAgentProgress({
       flow: FLOW,
       userId: args.userId,
       steps: buildCoachScriptProgressSteps("audience_research", "read_profile", labels),
     });
 
-    let audienceResearchBlock = "";
-    const audienceSignalIds = args.audienceSignalIds ?? [];
-    if (audienceSignalIds.length > 0) {
-      const { getAudienceSignalsByIds } = await import("./audienceResearch/service");
-      const attachedSignals = await getAudienceSignalsByIds(args.workspaceId, audienceSignalIds);
-      audienceResearchBlock = formatAudienceSignalsForPrompt(attachedSignals);
-    } else {
-      const { signals } = await getOrFetchAudienceSignals({
-        workspaceId: args.workspaceId,
-        nicheSlug: profile.nicheSlug,
-        nicheLabel: profile.niche,
-        targetAudience: profile.targetAudience,
-      });
-      audienceResearchBlock = formatAudienceSignalsForPrompt(signals.slice(0, 5));
-    }
-
     setCoachStep(args.userId, "research_grounding", "audience_research");
-    const researchItems = await getResearchGrounding(args.description, profile.niche);
+    const audienceSignalIds = args.audienceSignalIds ?? [];
+    const researchStarted = Date.now();
+    const [audienceResearchBlock, researchItems] = await Promise.all([
+      (async () => {
+        if (audienceSignalIds.length > 0) {
+          const { getAudienceSignalsByIds } = await import("./audienceResearch/service");
+          const attachedSignals = await getAudienceSignalsByIds(args.workspaceId, audienceSignalIds);
+          return formatAudienceSignalsForPrompt(attachedSignals);
+        }
+        const { signals } = await getOrFetchAudienceSignals({
+          workspaceId: args.workspaceId,
+          nicheSlug: profile.nicheSlug,
+          nicheLabel: profile.niche,
+          targetAudience: profile.targetAudience,
+        });
+        return formatAudienceSignalsForPrompt(signals.slice(0, 5));
+      })(),
+      getResearchGrounding(args.description, profile.niche),
+    ]);
     const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
+    console.info("[CoachLatency] research_parallel", { ms: Date.now() - researchStarted });
 
     setCoachStep(args.userId, "find_viral", "research_grounding");
+    const plannerStarted = Date.now();
+    const strategyDraft = await developCoachStrategyDirections({
+      rawIdea: args.description,
+      niche: profile.niche,
+      targetAudience: profile.targetAudience,
+      brandDescription: profile.brandDescription,
+      clarifications: args.clarifications,
+      audienceResearchBlock,
+      researchGroundingBlock,
+    });
+    console.info("[CoachLatency] strategy_directions_ms", Date.now() - plannerStarted);
+
     setCoachStep(args.userId, "hook_angle", "find_viral");
+    const selectorStarted = Date.now();
+    const selectedStrategy = await selectCoachStrategy({
+      rawIdea: args.description,
+      draft: strategyDraft,
+    });
+    console.info("[CoachLatency] strategy_selector_ms", Date.now() - selectorStarted);
+    const strategyBlock = formatSelectedCoachStrategy(strategyDraft, selectedStrategy);
 
     const script = await generateCoachScriptForWorkspace({
       userId: args.userId,
       workspaceId: args.workspaceId,
       openId: args.openId,
-      description: args.description,
+      description: markCreatorIdeaGroundTruth(args.description),
+      rawCreatorIdea: args.description,
+      selectedStrategyBlock: strategyBlock,
       clarifications: args.clarifications,
       planCardId: args.planCardId,
       audienceSignalIds,

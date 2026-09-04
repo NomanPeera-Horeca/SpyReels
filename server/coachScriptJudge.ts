@@ -78,7 +78,7 @@ Niche: ${ctx.niche}
 Audience: ${ctx.targetAudience}
 Brand: ${ctx.brandDescription?.trim() || "(none)"}
 
-SOURCE IDEA / PROMPT
+CREATOR RAW IDEA (judge fidelity against this original request only)
 <<<${ctx.description.trim()}>>>
 
 CLARIFICATIONS
@@ -184,7 +184,7 @@ Never invent insider names or team nicknames in the CTA.`
 
 Creator niche: ${args.ctx.niche}
 Audience: ${args.ctx.targetAudience}
-Source idea:
+Creator raw idea (ground truth; ignore any internal strategy):
 <<<${args.ctx.description.trim()}>>>
 
 Judge issues:
