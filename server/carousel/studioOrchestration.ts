@@ -14,6 +14,10 @@ import {
   type NormalizedCarouselBrief,
   type NormalizedStoredCarouselBriefEntry,
 } from "@shared/carouselStudio";
+import {
+  selectRecommendedCreativeBriefWithFormat,
+  type CarouselStrategistFormatRecommendation,
+} from "@shared/carouselStrategistRecommendation";
 
 export type StudioRemakeHandoff = {
   creativeBrief?: CarouselCreativeBrief;
@@ -38,14 +42,22 @@ export function buildStudioRemakeHandoff(
   return { creativeBrief: selected };
 }
 
-export function planGenerateAngles(briefs: NormalizedCarouselBrief[]): {
+export function planGenerateAngles(
+  briefs: NormalizedCarouselBrief[],
+  formatRecommendation?: CarouselStrategistFormatRecommendation | null,
+  sourceContent?: string | null
+): {
   angles: NormalizedCarouselBrief[];
   recommendedBriefIndex: number | null;
   selectedAngleIndex: null;
   selected: NormalizedCarouselBrief | null;
   shouldFireRemake: false;
 } {
-  const { index, brief } = selectRecommendedCreativeBrief(briefs);
+  const { index, brief } = selectRecommendedCreativeBriefWithFormat({
+    briefs,
+    recommendation: formatRecommendation,
+    sourceContent,
+  });
   return {
     angles: briefs,
     recommendedBriefIndex: index,
@@ -55,7 +67,11 @@ export function planGenerateAngles(briefs: NormalizedCarouselBrief[]): {
   };
 }
 
-export function planGenerateFromInput(briefs: NormalizedCarouselBrief[]): {
+export function planGenerateFromInput(
+  briefs: NormalizedCarouselBrief[],
+  formatRecommendation?: CarouselStrategistFormatRecommendation | null,
+  sourceContent?: string | null
+): {
   angles: NormalizedCarouselBrief[];
   recommendedBriefIndex: number | null;
   selectedAngleIndex: number | null;
@@ -63,7 +79,11 @@ export function planGenerateFromInput(briefs: NormalizedCarouselBrief[]): {
   remakeHandoff: StudioRemakeHandoff | null;
   shouldFireRemake: true;
 } {
-  const { index, brief } = selectRecommendedCreativeBrief(briefs);
+  const { index, brief } = selectRecommendedCreativeBriefWithFormat({
+    briefs,
+    recommendation: formatRecommendation,
+    sourceContent,
+  });
   const entries = identityCarouselBriefEntries(briefs);
   const storedSelectedIndex =
     index == null ? null : originalIndexFromNormalizedIndex(entries, index);

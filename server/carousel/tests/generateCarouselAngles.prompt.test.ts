@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   INVENTED_LIST_REPAIR_CONTRACT,
+  buildCarouselAngleCandidatesJsonSchema,
   buildCarouselAngleCandidatesUserPrompt,
   buildCarouselAngleExpansionRepairNote,
   buildCarouselAngleExpansionUserPrompt,
@@ -203,6 +204,39 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("practical framework");
     expect(user).toContain("outline Leak/Problem N before Fix N");
     expect(user).toContain("exactly one intentional final closing");
+  });
+
+  it("teaches format fit for contrast, story, list, and framework without vs routing", () => {
+    const user = buildCarouselAnglesUserPrompt({
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+    });
+    const compact = buildCarouselAngleCandidatesUserPrompt({
+      sourceContent:
+        "Cheap restaurant equipment vs buying the right equipment the first time",
+    });
+    expect(user).toContain("include a comparison candidate");
+    expect(user).toContain("Score relevance as format fit");
+    expect(user).toContain("Do not force comparison just because two subjects appear");
+    expect(user).toContain("Do not treat a contrast word as automatic comparison");
+    expect(compact).toContain("include a comparison candidate");
+    expect(compact).toContain("Score relevance as format fit");
+    expect(user).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
+    expect(compact).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
+    expect(user).toContain("recommendedFormat");
+    expect(user).toContain("formatConfidence");
+    expect(compact).toContain("recommendedFormat");
+  });
+
+  it("asks the strategist schema for top-level recommendedFormat metadata", () => {
+    const schema = buildCarouselAnglesJsonSchema();
+    const compact = buildCarouselAngleCandidatesJsonSchema();
+    expect(schema.schema.required).toEqual(
+      expect.arrayContaining(["angles", "recommendedFormat", "formatConfidence"])
+    );
+    expect(compact.schema.required).toEqual(
+      expect.arrayContaining(["angles", "recommendedFormat", "formatConfidence"])
+    );
   });
 
   it("locks an explicit six-drain list contract in the planner prompt", () => {

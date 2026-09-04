@@ -30,7 +30,6 @@ import {
   expectedExplicitListicleSlideCount,
   normalizeGeneratedCarouselBrief,
   normalizeGeneratedCarouselBriefs,
-  rankCarouselCreativeBriefs,
   scoreCarouselCreativeBrief,
   selectSemanticallyValidCarouselBriefs,
   validateCarouselBriefSemantics,
@@ -44,6 +43,15 @@ import {
   type CarouselListContract,
   type CarouselResearchMode,
 } from "@shared/carouselStudio";
+import {
+  applyCarouselFormatRecommendation,
+  CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
+  CAROUSEL_FORMAT_RECOMMENDATION_GUIDANCE,
+  CAROUSEL_FORMAT_SELECTION_GUIDANCE,
+  firstValidCarouselFormatRecommendation,
+  normalizeCarouselFormatRecommendation,
+  type CarouselStrategistFormatRecommendation,
+} from "@shared/carouselStrategistRecommendation";
 import { invokeLLM } from "../_core/llm";
 import {
   logAngleGenerationCompleted,
@@ -88,6 +96,8 @@ export function resolveCompactCandidateModel(
 
 type BriefsLlmPayload = {
   angles?: unknown[];
+  recommendedFormat?: unknown;
+  formatConfidence?: unknown;
 };
 
 type FullBriefLlmPayload = {
@@ -426,8 +436,17 @@ export function buildCarouselAnglesJsonSchema(): {
             additionalProperties: false,
           },
         },
+        recommendedFormat: ENUM_STRING(
+          CAROUSEL_CONTENT_FORMATS,
+          "Single strongest contentFormat for the source's core idea. Must match an allowed layout family."
+        ),
+        formatConfidence: {
+          type: "number",
+          description:
+            "0-1 confidence in recommendedFormat. High only when the core idea clearly favors one format. Low when the source is open or mixed.",
+        },
       },
-      required: ["angles"],
+      required: ["angles", "recommendedFormat", "formatConfidence"],
       additionalProperties: false,
     },
   };
@@ -444,6 +463,7 @@ export function buildCarouselAnglesSystemPrompt(): string {
       "Brand voice may affect tone but never topic, industry, or audience.",
       "Return plans, not finished slide copy. No citations or invented sources.",
       "Do not create id or schemaVersion fields. Do not include an overall score.",
+      "Return top-level recommendedFormat and formatConfidence for the source's core idea.",
     ].join(" ")
   );
 }
@@ -510,7 +530,7 @@ export function buildCarouselAnglesUserPrompt(args: {
     "",
     `Propose exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} genuinely different content strategies for an Instagram carousel.`,
     "Do not write the same idea three times with different hooks.",
-    "The three candidates should normally represent meaningfully different strategies, such as diagnostic/breakdown, story, and practical framework, unless another combination fits the source better.",
+    CAROUSEL_FORMAT_SELECTION_GUIDANCE,
     "Decide the core promise and central insight before listing key points.",
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
@@ -535,6 +555,8 @@ export function buildCarouselAnglesUserPrompt(args: {
     `evidenceRequirements max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. prohibitedClaims max ${CAROUSEL_BRIEF_PROHIBITED_MAX}.`,
     "Each explanation and objective must be one concise sentence.",
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
+    CAROUSEL_FORMAT_RECOMMENDATION_GUIDANCE,
   ];
   if (brand) {
     lines.push("", `Brand voice guidance (tone only, not a topic override): ${brand}`);
@@ -720,8 +742,17 @@ export function buildCarouselAngleCandidatesJsonSchema(
             additionalProperties: false,
           },
         },
+        recommendedFormat: ENUM_STRING(
+          CAROUSEL_CONTENT_FORMATS,
+          "Single strongest contentFormat for the source's core idea."
+        ),
+        formatConfidence: {
+          type: "number",
+          description:
+            "0-1 confidence in recommendedFormat. High only when the core idea clearly favors one format.",
+        },
       },
-      required: ["angles"],
+      required: ["angles", "recommendedFormat", "formatConfidence"],
       additionalProperties: false,
     },
   };
@@ -771,6 +802,7 @@ export function buildCarouselAngleCandidatesSystemPrompt(): string {
       "Brand voice may affect tone but never topic, industry, or audience.",
       "Return structured output only. No citations or invented sources.",
       "Do not create id or schemaVersion fields. Do not include an overall score.",
+      "Return top-level recommendedFormat and formatConfidence for the source's core idea.",
     ].join(" ")
   );
 }
@@ -811,7 +843,7 @@ export function buildCarouselAngleCandidatesUserPrompt(args: {
     "These are compact candidates only, not complete briefs.",
     "Do not write keyPoints, slideOutline, visualDirection, imageDirection, evidenceRequirements, prohibitedClaims, audienceReasoning, or ctaDirection.",
     "Keep every string to one concise sentence. Do not write finished slide copy.",
-    "Candidates should differ by angle or framing, such as diagnostic, story, and practical framing, unless another mix fits the source better.",
+    CAROUSEL_FORMAT_SELECTION_GUIDANCE,
     "Do not change the source taxonomy or promised item count when an explicit list contract is present.",
     ...explicitCompactListContractPromptLines(listContract),
     ...(listContract ? [] : inventedListContractPromptLines()),
@@ -819,6 +851,8 @@ export function buildCarouselAngleCandidatesUserPrompt(args: {
     "Classify researchMode only. Do not perform research or add citations.",
     `estimatedSlideCount must be an integer from ${CAROUSEL_STUDIO_MIN_SLIDES} to ${CAROUSEL_STUDIO_MAX_SLIDES}.`,
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
+    CAROUSEL_FORMAT_RECOMMENDATION_GUIDANCE,
   ];
   if (brand) {
     lines.push("", `Brand voice guidance (tone only, not a topic override): ${brand}`);
@@ -869,6 +903,7 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
     `evidenceRequirements max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. prohibitedClaims max ${CAROUSEL_BRIEF_PROHIBITED_MAX}.`,
     "Each explanation and objective must be one concise sentence.",
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
     "",
     "Strategic candidate to develop:",
     JSON.stringify({
@@ -1263,6 +1298,15 @@ export function buildCarouselAngleExpansionRepairNote(
   return parts.join(" ");
 }
 
+function formatRecommendationFromPayload(
+  parsed: BriefsLlmPayload
+): CarouselStrategistFormatRecommendation | null {
+  return normalizeCarouselFormatRecommendation({
+    recommendedFormat: parsed.recommendedFormat,
+    formatConfidence: parsed.formatConfidence,
+  });
+}
+
 async function invokeCarouselAnglesOnce(args: {
   sourceContent: string;
   niche?: string | null;
@@ -1275,6 +1319,7 @@ async function invokeCarouselAnglesOnce(args: {
   rawCandidateCount: number;
   normalizedCandidateCount: number;
   listContract: CarouselListContract | null;
+  formatRecommendation: CarouselStrategistFormatRecommendation | null;
 }> {
   const schema = buildCarouselAnglesJsonSchema();
   const listContract = detectExplicitCarouselListContract(args.sourceContent);
@@ -1321,6 +1366,7 @@ async function invokeCarouselAnglesOnce(args: {
     rawCandidateCount: rawAngles.length,
     normalizedCandidateCount: normalized.length,
     listContract,
+    formatRecommendation: formatRecommendationFromPayload(parsed),
   };
 }
 
@@ -1434,6 +1480,7 @@ async function invokeCarouselAngleCandidatesOnce(args: {
   semanticIssues: string[];
   rawCandidateCount: number;
   listContract: CarouselListContract | null;
+  formatRecommendation: CarouselStrategistFormatRecommendation | null;
   telemetry: AngleCallTelemetry;
 }> {
   const listContract = detectExplicitCarouselListContract(args.sourceContent);
@@ -1478,6 +1525,7 @@ async function invokeCarouselAngleCandidatesOnce(args: {
     semanticIssues: compact.semanticIssues,
     rawCandidateCount: compact.rawCandidateCount,
     listContract,
+    formatRecommendation: formatRecommendationFromPayload(parsed),
     telemetry: {
       inputCharacterCount: system.length + user.length,
       inputTokens: tokens.inputTokens,
@@ -1685,6 +1733,11 @@ async function expandOneCandidateWithRepair(args: {
  * into a full brief concurrently. Rank only after developed full briefs exist.
  * Review Plan: one 3-brief call. At most one repair call.
  */
+export type CarouselAngleGenerationResult = {
+  briefs: CarouselCreativeBrief[];
+  formatRecommendation: CarouselStrategistFormatRecommendation | null;
+};
+
 export async function generateCarouselAngles(args: {
   sourceContent: string;
   niche?: string | null;
@@ -1694,7 +1747,7 @@ export async function generateCarouselAngles(args: {
   requiredValidBriefs?: CarouselAngleRequiredValidBriefs;
   compactModel?: string;
   expansionModel?: string;
-}): Promise<CarouselCreativeBrief[]> {
+}): Promise<CarouselAngleGenerationResult> {
   const sourceContent = args.sourceContent.trim();
   const niche = args.niche?.trim() || undefined;
   if (!sourceContent) {
@@ -1741,6 +1794,8 @@ export async function generateCarouselAngles(args: {
     let parallelExpansionWallClockMs: number | null = null;
     let compactRepairRan = false;
     let degradedToReviewPlanFallback = false;
+    let formatRecommendation: CarouselStrategistFormatRecommendation | null =
+      null;
     const targetCompactCandidateCount = CAROUSEL_STUDIO_ANGLE_COUNT;
     const targetFullBriefCount = CAROUSEL_STUDIO_ANGLE_COUNT;
 
@@ -1754,6 +1809,7 @@ export async function generateCarouselAngles(args: {
       });
       rawCandidateCount = compact.rawCandidateCount;
       compactCandidateCount = compact.candidates.length;
+      formatRecommendation = compact.formatRecommendation;
       compactMetrics = {
         inputCharacterCount: compact.telemetry.inputCharacterCount,
         inputTokens: compact.telemetry.inputTokens,
@@ -1819,7 +1875,12 @@ export async function generateCarouselAngles(args: {
             ...compact.semanticIssues,
             ...repairedCompact.semanticIssues,
           ],
+          formatRecommendation: firstValidCarouselFormatRecommendation(
+            compact.formatRecommendation,
+            repairedCompact.formatRecommendation
+          ),
         };
+        formatRecommendation = compact.formatRecommendation;
         rawCandidateCount = compact.rawCandidateCount;
         compactCandidateCount = compact.candidates.length;
       }
@@ -1843,6 +1904,10 @@ export async function generateCarouselAngles(args: {
           (rawCandidateCount ?? 0) + fallback.rawCandidateCount;
         normalizedCandidateCount = fallback.normalizedCandidateCount;
         merged = fallback.briefs;
+        formatRecommendation = firstValidCarouselFormatRecommendation(
+          formatRecommendation,
+          fallback.formatRecommendation
+        );
         loggedIssues.push(
           ...semanticIssuesByCandidate(
             "repair",
@@ -1930,6 +1995,7 @@ export async function generateCarouselAngles(args: {
 
       const firstValid = first.briefs;
       firstAttemptValidCount = firstValid.length;
+      formatRecommendation = first.formatRecommendation;
       loggedIssues.push(
         ...semanticIssuesByCandidate(
           "first",
@@ -1966,6 +2032,10 @@ export async function generateCarouselAngles(args: {
         });
         repairValid = repaired.briefs;
         repairAttemptValidCount = repairValid.length;
+        formatRecommendation = firstValidCarouselFormatRecommendation(
+          formatRecommendation,
+          repaired.formatRecommendation
+        );
         rawCandidateCount = first.rawCandidateCount + repaired.rawCandidateCount;
         normalizedCandidateCount =
           first.normalizedCandidateCount + repaired.normalizedCandidateCount;
@@ -1983,10 +2053,12 @@ export async function generateCarouselAngles(args: {
         : firstValid;
     }
 
-    const ranked = rankCarouselCreativeBriefs(merged).slice(
-      0,
-      CAROUSEL_STUDIO_ANGLE_COUNT
-    );
+    const listContract = detectExplicitCarouselListContract(sourceContent);
+    const ranked = applyCarouselFormatRecommendation(
+      merged,
+      formatRecommendation,
+      { listContract, sourceContent }
+    ).slice(0, CAROUSEL_STUDIO_ANGLE_COUNT);
     const briefs = reindexCarouselBriefs(ranked);
     mergedValidCount = merged.length;
     acceptedSemanticCandidateCount = briefs.length;
@@ -2036,7 +2108,7 @@ export async function generateCarouselAngles(args: {
       degradedToReviewPlanFallback,
     });
 
-    return briefs;
+    return { briefs, formatRecommendation };
   } catch (err) {
     logAngleGenerationFailed({
       correlationId,

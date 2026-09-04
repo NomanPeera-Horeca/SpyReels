@@ -85,7 +85,10 @@ describe("proposeStudioAngles observability", () => {
   });
 
   it("forwards requiredValidBriefs to generateCarouselAngles", async () => {
-    mockedGenerate.mockResolvedValueOnce([]);
+    mockedGenerate.mockResolvedValueOnce({
+      briefs: [],
+      formatRecommendation: null,
+    });
 
     await proposeStudioAngles({
       sourceContent: SECRET_SOURCE,
@@ -103,15 +106,18 @@ describe("proposeStudioAngles observability", () => {
   });
 
   it("returns generateCarouselAngles results unchanged on success", async () => {
-    const briefs = [{ title: "Kept brief" }] as never;
-    mockedGenerate.mockResolvedValueOnce(briefs);
+    const proposal = {
+      briefs: [{ title: "Kept brief" }],
+      formatRecommendation: null,
+    } as never;
+    mockedGenerate.mockResolvedValueOnce(proposal);
 
     const result = await proposeStudioAngles({
       sourceContent: SECRET_SOURCE,
       correlationId: "corr-ok",
     });
 
-    expect(result).toBe(briefs);
+    expect(result).toBe(proposal);
     expect(errorSpy).not.toHaveBeenCalled();
     expect(mockedGenerate).toHaveBeenCalledWith(
       expect.objectContaining({

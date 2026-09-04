@@ -137,7 +137,7 @@ describe("generateCarouselAngles parallel full expansion", () => {
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash story", "story") }))
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash how-to", "how_to") }));
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -202,7 +202,7 @@ describe("generateCarouselAngles parallel full expansion", () => {
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash story", "story") }))
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash how-to", "how_to") }));
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -240,7 +240,7 @@ describe("generateCarouselAngles parallel full expansion", () => {
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Diagnostic cash", "diagnostic") }))
       .mockResolvedValueOnce(llmResult({ brief: rawBrief("Cash story", "story") }));
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });
@@ -289,7 +289,7 @@ describe("generateCarouselAngles parallel full expansion", () => {
         })
       );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: "Why small businesses run out of cash.",
       requiredValidBriefs: 1,
     });

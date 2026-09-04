@@ -1,0 +1,1311 @@
+{
+  "generatedAt": "2026-09-04T23:14:08.566Z",
+  "rows": [
+    {
+      "id": "cmp-cheap-equipment",
+      "bucket": "comparison",
+      "prompt": "Cheap restaurant equipment vs buying the right equipment the first time",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.88,
+      "candidates": [
+        {
+          "title": "Cheap Restaurant Equipment vs. Buying Right the First Time",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 96,
+            "usefulness": 92,
+            "specificity": 85,
+            "visualPotential": 94,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "How to Decide: The Restaurant Equipment Buying Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 93,
+            "specificity": 88,
+            "visualPotential": 90,
+            "factualSafety": 85,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Mistakes Restaurant Owners Make When Buying Equipment",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 88,
+            "originality": 78,
+            "overall": 87
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Cheap Restaurant Equipment vs. Buying Right the First Time",
+      "durationMs": 50804,
+      "error": null
+    },
+    {
+      "id": "cmp-large-menu",
+      "bucket": "comparison",
+      "prompt": "Large restaurant menu vs focused restaurant menu",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.88,
+      "candidates": [
+        {
+          "title": "Large Menu vs. Focused Menu: Which Actually Wins?",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 92,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 87
+          }
+        },
+        {
+          "title": "How to Choose the Right Menu Size for Your Restaurant",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 94,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 93,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "The Biggest Myths About Restaurant Menu Size, Debunked",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 82,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 90,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 83
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Large Menu vs. Focused Menu: Which Actually Wins?",
+      "durationMs": 44807,
+      "error": null
+    },
+    {
+      "id": "cmp-repair-replace",
+      "bucket": "comparison",
+      "prompt": "Repair vs replace restaurant equipment",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.82,
+      "candidates": [
+        {
+          "title": "Repair vs. Replace: The Restaurant Equipment Decision",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 94,
+            "factualSafety": 72,
+            "originality": 80,
+            "overall": 88
+          }
+        },
+        {
+          "title": "The Restaurant Equipment Decision Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 94,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 90,
+            "factualSafety": 85,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Stop Costing Yourself Money on Restaurant Equipment Decisions",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 92,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 84,
+            "originality": 78,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Repair vs. Replace: The Restaurant Equipment Decision",
+      "durationMs": 47695,
+      "error": null
+    },
+    {
+      "id": "cmp-delivery",
+      "bucket": "comparison",
+      "prompt": "In-house delivery vs third-party delivery",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.88,
+      "candidates": [
+        {
+          "title": "In-House vs Third-Party Delivery: Which One Actually Works for Your Business?",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 91,
+            "specificity": 85,
+            "visualPotential": 93,
+            "factualSafety": 74,
+            "originality": 78,
+            "overall": 87
+          }
+        },
+        {
+          "title": "How to Choose Between In-House and Third-Party Delivery",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 90,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 87,
+            "factualSafety": 85,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "The Biggest Myths About In-House and Third-Party Delivery, Debunked",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 87,
+            "factualSafety": 74,
+            "originality": 82,
+            "overall": 85
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "In-House vs Third-Party Delivery: Which One Actually Works for Your Business?",
+      "durationMs": 43762,
+      "error": null
+    },
+    {
+      "id": "cmp-discounting",
+      "bucket": "comparison",
+      "prompt": "Discounting vs adding value",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.87,
+      "candidates": [
+        {
+          "title": "Discounting vs. Adding Value: Which One Actually Grows Your Business?",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 92,
+            "factualSafety": 82,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "How to Add Value Instead of Dropping Your Price",
+          "contentFormat": "roadmap",
+          "layoutFamily": "roadmap",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 93,
+            "originality": 74,
+            "overall": 87
+          }
+        },
+        {
+          "title": "Stop Discounting. Your Customers Are Not as Price-Sensitive as You Think.",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 90,
+            "specificity": 82,
+            "visualPotential": 85,
+            "factualSafety": 72,
+            "originality": 80,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Discounting vs. Adding Value: Which One Actually Grows Your Business?",
+      "durationMs": 46964,
+      "error": null
+    },
+    {
+      "id": "cmp-frozen-fresh",
+      "bucket": "comparison",
+      "prompt": "Frozen food vs fresh prep for margins",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.82,
+      "candidates": [
+        {
+          "title": "Frozen vs Fresh: Which One Actually Wins on Margins?",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 93,
+            "factualSafety": 74,
+            "originality": 82,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Frozen or Fresh? A Decision Framework for Every Menu Item",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 93,
+            "specificity": 88,
+            "visualPotential": 90,
+            "factualSafety": 85,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "The Real Cost Drivers Hiding in Fresh Prep",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 87,
+            "factualSafety": 74,
+            "originality": 80,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Frozen vs Fresh: Which One Actually Wins on Margins?",
+      "durationMs": 54512,
+      "error": null
+    },
+    {
+      "id": "story-stopped-cheap",
+      "bucket": "story",
+      "prompt": "Why I stopped buying the cheapest restaurant equipment",
+      "recommendedFormat": "story",
+      "formatConfidence": 0.72,
+      "candidates": [
+        {
+          "title": "Why I Stopped Buying the Cheapest Restaurant Equipment",
+          "contentFormat": "story",
+          "layoutFamily": "story",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 82,
+            "visualPotential": 78,
+            "factualSafety": 92,
+            "originality": 74,
+            "overall": 87
+          }
+        },
+        {
+          "title": "Cheap vs. Quality Restaurant Equipment: What the Price Tag Hides",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 94,
+            "factualSafety": 88,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Mistakes Restaurant Owners Make When Buying Equipment on a Budget",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 90,
+            "specificity": 86,
+            "visualPotential": 82,
+            "factualSafety": 92,
+            "originality": 78,
+            "overall": 88
+          }
+        }
+      ],
+      "finalRecommendedFormat": "story",
+      "finalRecommendedTitle": "Why I Stopped Buying the Cheapest Restaurant Equipment",
+      "durationMs": 44370,
+      "error": null
+    },
+    {
+      "id": "story-nearly-shut-down",
+      "bucket": "story",
+      "prompt": "The mistake that nearly shut down my restaurant",
+      "recommendedFormat": "story",
+      "formatConfidence": 0.82,
+      "candidates": [
+        {
+          "title": "The Mistake That Nearly Shut Down My Restaurant",
+          "contentFormat": "story",
+          "layoutFamily": "story",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 82,
+            "specificity": 78,
+            "visualPotential": 74,
+            "factualSafety": 93,
+            "originality": 80,
+            "overall": 85
+          }
+        },
+        {
+          "title": "The Restaurant Mistake Most Owners Never See Coming",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 88,
+            "specificity": 82,
+            "visualPotential": 78,
+            "factualSafety": 93,
+            "originality": 80,
+            "overall": 86
+          }
+        },
+        {
+          "title": "Why Playing It Safe Almost Killed My Restaurant",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 85,
+            "specificity": 82,
+            "visualPotential": 78,
+            "factualSafety": 80,
+            "originality": 84,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "story",
+      "finalRecommendedTitle": "The Mistake That Nearly Shut Down My Restaurant",
+      "durationMs": 42233,
+      "error": null
+    },
+    {
+      "id": "story-menu-change",
+      "bucket": "story",
+      "prompt": "How one menu change saved our kitchen",
+      "recommendedFormat": "story",
+      "formatConfidence": 0.82,
+      "candidates": [
+        {
+          "title": "How One Menu Change Saved Our Kitchen",
+          "contentFormat": "story",
+          "layoutFamily": "story",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 92,
+            "originality": 80,
+            "overall": 88
+          }
+        },
+        {
+          "title": "The Menu Audit That Saves Overloaded Kitchens",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 92,
+            "specificity": 87,
+            "visualPotential": 85,
+            "factualSafety": 74,
+            "originality": 80,
+            "overall": 85
+          }
+        },
+        {
+          "title": "Stop Hiring More Staff. Fix Your Menu First.",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 90,
+            "usefulness": 88,
+            "specificity": 82,
+            "visualPotential": 85,
+            "factualSafety": 72,
+            "originality": 86,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "story",
+      "finalRecommendedTitle": "How One Menu Change Saved Our Kitchen",
+      "durationMs": 44664,
+      "error": null
+    },
+    {
+      "id": "story-cut-menu",
+      "bucket": "story",
+      "prompt": "What happened after we cut 30% of the menu",
+      "recommendedFormat": "story",
+      "formatConfidence": 0.72,
+      "candidates": [
+        {
+          "title": "We Cut 30% of Our Menu and This Is What Happened",
+          "contentFormat": "story",
+          "layoutFamily": "story",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 85,
+            "specificity": 82,
+            "visualPotential": 78,
+            "factualSafety": 91,
+            "originality": 80,
+            "overall": 86
+          }
+        },
+        {
+          "title": "Before and After Cutting 30% of the Menu",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 92,
+            "factualSafety": 88,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Your Menu Is Too Long and It Is Costing You",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 80,
+            "factualSafety": 74,
+            "originality": 82,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "story",
+      "finalRecommendedTitle": "We Cut 30% of Our Menu and This Is What Happened",
+      "durationMs": 86443,
+      "error": null
+    },
+    {
+      "id": "brk-equipment-mistakes",
+      "bucket": "breakdown",
+      "prompt": "5 restaurant equipment mistakes",
+      "recommendedFormat": "breakdown",
+      "formatConfidence": 0.88,
+      "candidates": [
+        {
+          "title": "5 Restaurant Equipment Mistakes Costing You Money",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 96,
+            "usefulness": 91,
+            "specificity": 87,
+            "visualPotential": 85,
+            "factualSafety": 74,
+            "originality": 72,
+            "overall": 86
+          }
+        },
+        {
+          "title": "The 5 Equipment Mistakes Restaurants Keep Repeating (Despite Knowing Better)",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 93,
+            "usefulness": 88,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 74,
+            "originality": 80,
+            "overall": 85
+          }
+        },
+        {
+          "title": "Stop Making These 5 Equipment Mistakes (And Save Thousands)",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 94,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 74,
+            "originality": 72,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "breakdown",
+      "finalRecommendedTitle": "5 Restaurant Equipment Mistakes Costing You Money",
+      "durationMs": 36776,
+      "error": null
+    },
+    {
+      "id": "brk-pricing-mistakes",
+      "bucket": "breakdown",
+      "prompt": "7 menu pricing mistakes",
+      "recommendedFormat": "breakdown",
+      "formatConfidence": 0.93,
+      "candidates": [
+        {
+          "title": "7 Menu Pricing Mistakes Costing You Revenue",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 97,
+            "usefulness": 93,
+            "specificity": 91,
+            "visualPotential": 88,
+            "factualSafety": 74,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "The 7-Point Menu Pricing Audit",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 94,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 82,
+            "originality": 76,
+            "overall": 87
+          }
+        },
+        {
+          "title": "What Your Competitors Get Wrong About Menu Pricing",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 87,
+            "visualPotential": 85,
+            "factualSafety": 68,
+            "originality": 82,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "breakdown",
+      "finalRecommendedTitle": "7 Menu Pricing Mistakes Costing You Revenue",
+      "durationMs": 71112,
+      "error": null
+    },
+    {
+      "id": "brk-walk-in-signs",
+      "bucket": "breakdown",
+      "prompt": "4 signs your walk-in is failing",
+      "recommendedFormat": "breakdown",
+      "formatConfidence": 0.92,
+      "candidates": [
+        {
+          "title": "4 Signs Your Walk-In Is Failing",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 82,
+            "factualSafety": 93,
+            "originality": 76,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Diagnose Your Walk-In Before It Fails",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 82,
+            "factualSafety": 93,
+            "originality": 72,
+            "overall": 87
+          }
+        },
+        {
+          "title": "What Walk-In Closets Really Need (Hint: It's Not Size)",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 88,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 72,
+            "originality": 80,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "breakdown",
+      "finalRecommendedTitle": "4 Signs Your Walk-In Is Failing",
+      "durationMs": 51058,
+      "error": null
+    },
+    {
+      "id": "brk-labor-ways",
+      "bucket": "breakdown",
+      "prompt": "6 ways restaurants lose money on labor",
+      "recommendedFormat": "breakdown",
+      "formatConfidence": 0.92,
+      "candidates": [
+        {
+          "title": "6 Ways Restaurants Lose Money on Labor",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 97,
+            "usefulness": 93,
+            "specificity": 91,
+            "visualPotential": 88,
+            "factualSafety": 74,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Why your labor costs keep climbing even when staffing is stable",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 74,
+            "originality": 82,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "breakdown",
+      "finalRecommendedTitle": "6 Ways Restaurants Lose Money on Labor",
+      "durationMs": 66031,
+      "error": null
+    },
+    {
+      "id": "fw-add-menu-item",
+      "bucket": "framework",
+      "prompt": "A 4-part framework for deciding whether to add a menu item",
+      "recommendedFormat": "framework",
+      "formatConfidence": 0.92,
+      "candidates": [
+        {
+          "title": "Should You Add That Menu Item? 4 Questions to Decide",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 94,
+            "originality": 78,
+            "overall": 90
+          }
+        },
+        {
+          "title": "The 4-Part Menu Item Decision Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 97,
+            "usefulness": 93,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 92,
+            "originality": 78,
+            "overall": 90
+          }
+        },
+        {
+          "title": "Stop Adding Menu Items Until You Can Answer These 4 Things",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 87,
+            "factualSafety": 74,
+            "originality": 82,
+            "overall": 87
+          }
+        }
+      ],
+      "finalRecommendedFormat": "framework",
+      "finalRecommendedTitle": "Should You Add That Menu Item? 4 Questions to Decide",
+      "durationMs": 46294,
+      "error": null
+    },
+    {
+      "id": "fw-repair-or-replace",
+      "bucket": "framework",
+      "prompt": "The framework I use to decide repair or replace",
+      "recommendedFormat": "framework",
+      "formatConfidence": 0.85,
+      "candidates": [
+        {
+          "title": "The Repair vs. Replace Decision Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 90,
+            "factualSafety": 91,
+            "originality": 78,
+            "overall": 90
+          }
+        },
+        {
+          "title": "Stop Using Cost Alone to Decide Repair or Replace",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 82,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 84
+          }
+        },
+        {
+          "title": "Repair or Replace: How to Know Which Side Wins",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 94,
+            "factualSafety": 91,
+            "originality": 78,
+            "overall": 89
+          }
+        }
+      ],
+      "finalRecommendedFormat": "framework",
+      "finalRecommendedTitle": "The Repair vs. Replace Decision Framework",
+      "durationMs": 44969,
+      "error": null
+    },
+    {
+      "id": "fw-expansion",
+      "bucket": "framework",
+      "prompt": "A simple restaurant expansion decision framework",
+      "recommendedFormat": "framework",
+      "formatConfidence": 0.91,
+      "candidates": [
+        {
+          "title": "The Restaurant Expansion Decision Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 96,
+            "usefulness": 93,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 92,
+            "originality": 78,
+            "overall": 90
+          }
+        },
+        {
+          "title": "Is Your Restaurant Actually Ready to Expand?",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 94,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 82,
+            "factualSafety": 90,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Stop Expanding Just Because Your Restaurant Is Busy",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 91,
+            "usefulness": 88,
+            "specificity": 83,
+            "visualPotential": 79,
+            "factualSafety": 82,
+            "originality": 85,
+            "overall": 85
+          }
+        }
+      ],
+      "finalRecommendedFormat": "framework",
+      "finalRecommendedTitle": "The Restaurant Expansion Decision Framework",
+      "durationMs": 46115,
+      "error": null
+    },
+    {
+      "id": "amb-replace-fryer",
+      "bucket": "ambiguous",
+      "prompt": "Should I replace my fryer?",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.72,
+      "candidates": [
+        {
+          "title": "Repair vs. Replace: The Real Cost of Keeping Your Old Fryer",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 93,
+            "usefulness": 89,
+            "specificity": 84,
+            "visualPotential": 91,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 86
+          }
+        },
+        {
+          "title": "Signs Your Fryer Is Telling You to Replace It",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 90,
+            "specificity": 86,
+            "visualPotential": 84,
+            "factualSafety": 91,
+            "originality": 78,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Replace or Repair? How to Decide About Your Commercial Fryer",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 90,
+            "originality": 76,
+            "overall": 88
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Repair vs. Replace: The Real Cost of Keeping Your Old Fryer",
+      "durationMs": 51932,
+      "error": null
+    },
+    {
+      "id": "amb-simplify-menu",
+      "bucket": "ambiguous",
+      "prompt": "How to simplify a restaurant menu",
+      "recommendedFormat": "roadmap",
+      "formatConfidence": 0.72,
+      "candidates": [
+        {
+          "title": "How to Simplify Your Restaurant Menu (Without Losing Revenue)",
+          "contentFormat": "roadmap",
+          "layoutFamily": "roadmap",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 82,
+            "factualSafety": 90,
+            "originality": 74,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Signs Your Restaurant Menu Is Too Complicated",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 93,
+            "usefulness": 91,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 92,
+            "originality": 78,
+            "overall": 89
+          }
+        },
+        {
+          "title": "The Bigger Menu Is Not the Better Menu",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 85,
+            "specificity": 82,
+            "visualPotential": 80,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 82
+          }
+        }
+      ],
+      "finalRecommendedFormat": "roadmap",
+      "finalRecommendedTitle": "How to Simplify Your Restaurant Menu (Without Losing Revenue)",
+      "durationMs": 42497,
+      "error": null
+    },
+    {
+      "id": "amb-food-cost",
+      "bucket": "ambiguous",
+      "prompt": "The best way to reduce food cost",
+      "recommendedFormat": "framework",
+      "formatConfidence": 0.6,
+      "candidates": [
+        {
+          "title": "The Food Cost Reduction System That Actually Works",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 93,
+            "usefulness": 95,
+            "specificity": 88,
+            "visualPotential": 85,
+            "factualSafety": 87,
+            "originality": 74,
+            "overall": 89
+          }
+        },
+        {
+          "title": "The Biggest Food Cost Drains Hiding in Your Kitchen",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 85,
+            "visualPotential": 82,
+            "factualSafety": 90,
+            "originality": 74,
+            "overall": 87
+          }
+        },
+        {
+          "title": "The Popular Food Cost Advice That Is Making Things Worse",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 90,
+            "usefulness": 88,
+            "specificity": 82,
+            "visualPotential": 91,
+            "factualSafety": 74,
+            "originality": 85,
+            "overall": 85
+          }
+        }
+      ],
+      "finalRecommendedFormat": "framework",
+      "finalRecommendedTitle": "The Food Cost Reduction System That Actually Works",
+      "durationMs": 47931,
+      "error": null
+    },
+    {
+      "id": "adv-switched-android",
+      "bucket": "adversarial",
+      "prompt": "Why I switched from Android to iPhone after 10 years",
+      "recommendedFormat": "story",
+      "formatConfidence": 0.72,
+      "candidates": [
+        {
+          "title": "I Used Android for 10 Years. Here Is What Finally Made Me Switch.",
+          "contentFormat": "story",
+          "layoutFamily": "story",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 80,
+            "specificity": 78,
+            "visualPotential": 74,
+            "factualSafety": 92,
+            "originality": 72,
+            "overall": 84
+          }
+        },
+        {
+          "title": "Android vs iPhone: What 10 Years of Using Both Actually Taught Me",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 82,
+            "visualPotential": 92,
+            "factualSafety": 90,
+            "originality": 74,
+            "overall": 88
+          }
+        },
+        {
+          "title": "Everything I Believed About iPhone Was Wrong (An Android Loyalist Admits It)",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 82,
+            "specificity": 80,
+            "visualPotential": 85,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 82
+          }
+        }
+      ],
+      "finalRecommendedFormat": "story",
+      "finalRecommendedTitle": "I Used Android for 10 Years. Here Is What Finally Made Me Switch.",
+      "durationMs": 48651,
+      "error": null
+    },
+    {
+      "id": "adv-android-vs-iphone",
+      "bucket": "adversarial",
+      "prompt": "Android vs iPhone: which is better for creators?",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.85,
+      "candidates": [
+        {
+          "title": "Android vs iPhone for Creators: The Real Verdict",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 92,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 87
+          }
+        },
+        {
+          "title": "How to Pick Your Creator Phone Without the Hype",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 88,
+            "usefulness": 92,
+            "specificity": 84,
+            "visualPotential": 82,
+            "factualSafety": 90,
+            "originality": 78,
+            "overall": 87
+          }
+        },
+        {
+          "title": "The Biggest Lies Creators Believe About iPhone vs Android",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 85,
+            "specificity": 82,
+            "visualPotential": 88,
+            "factualSafety": 72,
+            "originality": 80,
+            "overall": 84
+          }
+        }
+      ],
+      "finalRecommendedFormat": "comparison",
+      "finalRecommendedTitle": "Android vs iPhone for Creators: The Real Verdict",
+      "durationMs": 47517,
+      "error": null
+    },
+    {
+      "id": "adv-five-reasons",
+      "bucket": "adversarial",
+      "prompt": "5 reasons Android is better than iPhone",
+      "recommendedFormat": "comparison",
+      "formatConfidence": 0.82,
+      "candidates": [
+        {
+          "title": "5 reasons Android beats iPhone in daily life",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 87,
+            "factualSafety": 70,
+            "originality": 72,
+            "overall": 84
+          }
+        },
+        {
+          "title": "5 reasons Android users never go back to iPhone",
+          "contentFormat": "breakdown",
+          "layoutFamily": "breakdown",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 85,
+            "specificity": 82,
+            "visualPotential": 88,
+            "factualSafety": 62,
+            "originality": 80,
+            "overall": 82
+          }
+        },
+        {
+          "title": "5 Reasons Android Beats iPhone (Specs, Price, Control)",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 88,
+            "specificity": 84,
+            "visualPotential": 92,
+            "factualSafety": 72,
+            "originality": 76,
+            "overall": 86
+          }
+        }
+      ],
+      "finalRecommendedFormat": "breakdown",
+      "finalRecommendedTitle": "5 reasons Android beats iPhone in daily life",
+      "durationMs": 47277,
+      "error": null
+    },
+    {
+      "id": "adv-framework-repair",
+      "bucket": "adversarial",
+      "prompt": "The framework I use to decide repair vs replace",
+      "recommendedFormat": "framework",
+      "formatConfidence": 0.87,
+      "candidates": [
+        {
+          "title": "My Repair vs. Replace Decision Framework",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 92,
+            "specificity": 88,
+            "visualPotential": 90,
+            "factualSafety": 94,
+            "originality": 82,
+            "overall": 91
+          }
+        },
+        {
+          "title": "Before You Spend Anything, Ask These Questions",
+          "contentFormat": "framework",
+          "layoutFamily": "framework",
+          "scores": {
+            "relevance": 92,
+            "usefulness": 91,
+            "specificity": 85,
+            "visualPotential": 83,
+            "factualSafety": 94,
+            "originality": 80,
+            "overall": 89
+          }
+        },
+        {
+          "title": "Repair vs. Replace: What Each Option Actually Costs You",
+          "contentFormat": "comparison",
+          "layoutFamily": "comparison",
+          "scores": {
+            "relevance": 95,
+            "usefulness": 90,
+            "specificity": 85,
+            "visualPotential": 92,
+            "factualSafety": 72,
+            "originality": 78,
+            "overall": 87
+          }
+        }
+      ],
+      "finalRecommendedFormat": "framework",
+      "finalRecommendedTitle": "My Repair vs. Replace Decision Framework",
+      "durationMs": 46229,
+      "error": null
+    }
+  ]
+}

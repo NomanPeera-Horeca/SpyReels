@@ -133,7 +133,7 @@ describe("generateCarouselAngles observability", () => {
       ])
     );
 
-    const briefs = await generateCarouselAngles({
+    const { briefs } = await generateCarouselAngles({
       sourceContent: SECRET_SOURCE,
       niche: "restaurant owners",
       brandVoice: "Direct and practical",
