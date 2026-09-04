@@ -56,6 +56,7 @@ function hasImage(imageUrl?: string | null): boolean {
 export function resolveStoryPremiumVariant({
   treatment,
   position,
+  totalSlides,
   imageUrl,
 }: StoryPremiumVariantInput): StoryPremiumVariant {
   const withImage = hasImage(imageUrl);
@@ -63,7 +64,7 @@ export function resolveStoryPremiumVariant({
   switch (treatment) {
     case "cinematic_cover":
       if (!withImage) return "cover_type";
-      return position % 2 === 0 ? "cover_editorial_frame" : "cover_full_bleed";
+      return totalSlides % 2 === 0 ? "cover_full_bleed" : "cover_editorial_frame";
     case "story_scene":
       if (!withImage) return "setup_left";
       if (position % 3 === 0) return "scene_caption_bottom";
