@@ -64,6 +64,21 @@ describe("premium carousel design system", () => {
     ).toBe("split_image_left");
   });
 
+  it("alternates comparison geometry from Planning IR list position", () => {
+    expect(
+      resolveBreakdownPremiumVariant({
+        treatment: "comparison_split",
+        listItemIndex: 1,
+      })
+    ).toBe("comparison_panels");
+    expect(
+      resolveBreakdownPremiumVariant({
+        treatment: "comparison_split",
+        listItemIndex: 2,
+      })
+    ).toBe("comparison_stack");
+  });
+
   it("varies checklist composition while preserving checklist semantics", () => {
     expect(
       resolveBreakdownPremiumVariant({

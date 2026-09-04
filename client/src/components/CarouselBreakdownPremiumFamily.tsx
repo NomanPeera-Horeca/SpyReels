@@ -181,7 +181,8 @@ function EditorialCover({
 }: PremiumProps) {
   const kicker = breakdownRegionCopy(values, "kicker");
   const headline = breakdownRegionCopy(values, "headline");
-  const body = breakdownRegionCopy(values, "body");
+  const body =
+    breakdownRegionCopy(values, "body") || breakdownRegionCopy(values, "support");
   const withImage = variant === "cover_editorial_image" && Boolean(imageUrl?.trim());
 
   return (
@@ -216,7 +217,7 @@ function EditorialCover({
           minWidth: 0,
           padding: withImage
             ? "1.8rem 1rem 2rem 1.55rem"
-            : "2rem 1.7rem 2.2rem",
+            : "2.35rem 1.7rem 2.45rem",
         }}
       >
         <Eyebrow
@@ -237,11 +238,11 @@ function EditorialCover({
             fontFamily: tokens.fontFamily.display,
             fontSize: withImage
               ? "clamp(1.9rem, 7.4vw, 2.42rem)"
-              : "clamp(2.35rem, 9.4vw, 3.05rem)",
+              : "clamp(2.05rem, 7.8vw, 2.4rem)",
             fontWeight: 780,
             lineHeight: 0.99,
             letterSpacing: "-0.052em",
-            maxWidth: withImage ? "11ch" : "13ch",
+            maxWidth: withImage ? "11ch" : "100%",
             overflowWrap: "break-word",
           }}
         />
@@ -579,11 +580,13 @@ function PremiumComparison({
   editable,
   onSlotChange,
   sequence,
+  variant,
 }: PremiumProps) {
   const headline = breakdownRegionCopy(values, "headline");
   const body = breakdownRegionCopy(values, "body");
   const left = breakdownRegionCopy(values, "left") || "This";
   const right = breakdownRegionCopy(values, "right") || "That";
+  const stacked = variant === "comparison_stack";
 
   return (
     <div
@@ -612,14 +615,14 @@ function PremiumComparison({
           position: "relative",
           zIndex: 2,
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "0.65rem",
+          gridTemplateColumns: stacked ? "1fr" : "1fr 1fr",
+          gap: stacked ? "0.5rem" : "0.65rem",
           margin: "1rem 0 0.8rem",
           flex: 1,
           alignItems: "stretch",
         }}
       >
-        {[{ id: "left", value: left, accent: false }, { id: "right", value: right, accent: true }].map((item, index) => (
+        {[{ id: "left", value: left, accent: false }, { id: "right", value: right, accent: true }].map((item) => (
           <div
             key={item.id}
             style={{
@@ -627,25 +630,11 @@ function PremiumComparison({
               position: "relative",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              padding: "1rem 0.75rem",
+              justifyContent: stacked ? "flex-start" : "center",
+              padding: stacked ? "0.95rem 1rem" : "1.05rem 0.8rem",
               overflow: "hidden",
             }}
           >
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: "0.65rem",
-                left: "0.7rem",
-                fontSize: "0.58rem",
-                fontWeight: 760,
-                letterSpacing: "0.12em",
-                color: item.accent ? tokens.colors.accent : tokens.colors.muted,
-              }}
-            >
-              {String(index + 1).padStart(2, "0")}
-            </span>
             <CarouselEditableText
               as="p"
               slotId={item.id}
@@ -656,11 +645,11 @@ function PremiumComparison({
               style={{
                 margin: 0,
                 fontFamily: tokens.fontFamily.display,
-                fontSize: "1rem",
+                fontSize: stacked ? "1.02rem" : "0.92rem",
                 fontWeight: 740,
                 lineHeight: 1.2,
                 letterSpacing: "-0.025em",
-                textAlign: "center",
+                textAlign: stacked ? "left" : "center",
               }}
             />
           </div>
@@ -677,6 +666,102 @@ function PremiumComparison({
           style={{ ...bodyStyle(tokens), position: "relative", zIndex: 2 }}
         />
       ) : null}
+      <Handle handle={handle} tokens={tokens} />
+    </div>
+  );
+}
+
+function PremiumDiagram({
+  tokens,
+  values,
+  handle,
+  editable,
+  onSlotChange,
+  sequence,
+}: PremiumProps) {
+  const headline = breakdownRegionCopy(values, "headline");
+  const body = breakdownRegionCopy(values, "body");
+  const support = breakdownRegionCopy(values, "support");
+  const steps = [support, body].filter((step) => step.length > 0);
+
+  if (steps.length === 0) {
+    return (
+      <EditorialText
+        tokens={tokens}
+        values={values}
+        handle={handle}
+        editable={editable}
+        onSlotChange={onSlotChange}
+        treatment="text_focus"
+        variant="text_editorial"
+        sequence={sequence}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        ...shell(tokens),
+        display: "flex",
+        flexDirection: "column",
+        padding: "1.7rem 1.4rem 1.9rem",
+      }}
+    >
+      <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
+      <div style={{ position: "relative", zIndex: 2 }}>
+        <Sequence sequence={sequence} tokens={tokens} />
+        <CarouselEditableText
+          as="h2"
+          slotId="headline"
+          value={headline}
+          editable={editable}
+          onCommit={onSlotChange}
+          multiline
+          style={{ ...headlineStyle(tokens), marginTop: "0.58rem", fontSize: "clamp(1.4rem, 5.3vw, 1.74rem)" }}
+        />
+      </div>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: steps.length === 1 ? "stretch" : "center",
+          gap: "0.55rem",
+          flex: 1,
+          marginTop: "0.95rem",
+        }}
+      >
+        {steps.map((step, index) => (
+          <div
+            key={`${step}-${index}`}
+            style={{
+              ...(index === 0 ? accentSurface(tokens) : surface(tokens)),
+              padding: steps.length === 1 ? "1.4rem 1.15rem" : "1.05rem 1rem",
+              flex: steps.length === 1 ? 1 : undefined,
+              display: steps.length === 1 ? "flex" : undefined,
+              alignItems: steps.length === 1 ? "center" : undefined,
+            }}
+          >
+            <CarouselEditableText
+              as="p"
+              slotId={index === 0 && support ? "support" : "body"}
+              value={step}
+              editable={editable}
+              onCommit={onSlotChange}
+              multiline
+              style={{
+                margin: 0,
+                fontSize: steps.length === 1 ? "1.02rem" : DESIGN.typography.body,
+                lineHeight: 1.4,
+                fontWeight: 650,
+                color: tokens.colors.foreground,
+              }}
+            />
+          </div>
+        ))}
+      </div>
       <Handle handle={handle} tokens={tokens} />
     </div>
   );
@@ -916,7 +1001,8 @@ function PremiumClosing({
   onSlotChange,
 }: PremiumProps) {
   const headline = breakdownRegionCopy(values, "headline");
-  const body = breakdownRegionCopy(values, "body");
+  const body =
+    breakdownRegionCopy(values, "body") || breakdownRegionCopy(values, "support");
   const cta = breakdownRegionCopy(values, "cta");
   return (
     <div
@@ -1026,6 +1112,7 @@ function premiumRenderer(treatment: BreakdownListicleTreatment): ((props: Premiu
     case "closing_focus":
       return PremiumClosing;
     case "diagram_focus":
+      return PremiumDiagram;
     case "timeline_flow":
       return null;
   }

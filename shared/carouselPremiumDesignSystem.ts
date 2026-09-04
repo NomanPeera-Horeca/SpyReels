@@ -16,6 +16,7 @@ export type BreakdownPremiumVariant =
   | "split_image_left"
   | "split_image_right"
   | "comparison_panels"
+  | "comparison_stack"
   | "diagram_process"
   | "timeline_editorial"
   | "checklist_grouped"
@@ -86,7 +87,9 @@ export function resolveBreakdownPremiumVariant({
         ? "split_image_left"
         : "split_image_right";
     case "comparison_split":
-      return "comparison_panels";
+      return (listItemIndex ?? 1) % 2 === 0
+        ? "comparison_stack"
+        : "comparison_panels";
     case "diagram_focus":
       return "diagram_process";
     case "timeline_flow":
