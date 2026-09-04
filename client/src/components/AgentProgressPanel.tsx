@@ -10,6 +10,15 @@ type Props = {
   badgeLabel?: string;
 };
 
+export function CoachQuietWait({ title }: { title: string }) {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center px-4 py-16 text-center">
+      <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" aria-hidden />
+      <h2 className="mt-4 text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+    </div>
+  );
+}
+
 export function AgentProgressPanel({
   steps,
   headline,
@@ -27,18 +36,10 @@ export function AgentProgressPanel({
 
   return (
     <div className="mx-auto w-full max-w-md px-4 py-16 sm:px-0">
-      <div className="mb-6 flex items-center justify-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/70 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-          </span>
-          {badgeLabel}
-        </span>
-      </div>
+      <p className="mb-6 text-center text-xs text-muted-foreground">{badgeLabel}</p>
 
-      <div className="mb-8 text-center">
-        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
+      <div className="mb-10 text-center">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{title}</h2>
         {subheadline ? (
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{subheadline}</p>
         ) : (
@@ -50,16 +51,14 @@ export function AgentProgressPanel({
         )}
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card p-5">
-        <ol className="space-y-3">
-          {steps.map((step) => (
-            <AgentProgressStepRow key={step.id} step={step} />
-          ))}
-        </ol>
-      </div>
+      <ol className="space-y-3.5">
+        {steps.map((step) => (
+          <AgentProgressStepRow key={step.id} step={step} />
+        ))}
+      </ol>
 
       {footer ? (
-        <p className="mt-5 text-center text-xs text-muted-foreground leading-relaxed">{footer}</p>
+        <p className="mt-8 text-center text-sm text-muted-foreground leading-relaxed">{footer}</p>
       ) : null}
     </div>
   );
@@ -70,10 +69,10 @@ function AgentProgressStepRow({ step }: { step: AgentProgressStep }) {
     <li className="flex items-start gap-3">
       <span
         className={cn(
-          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
-          step.status === "done" && "bg-emerald-500/15 text-emerald-500",
-          step.status === "active" && "bg-primary/15 text-primary",
-          step.status === "pending" && "bg-muted text-muted-foreground"
+          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+          step.status === "done" && "text-muted-foreground",
+          step.status === "active" && "text-violet-600 dark:text-violet-400",
+          step.status === "pending" && "text-muted-foreground/40"
         )}
       >
         {step.status === "done" ? (
@@ -81,15 +80,15 @@ function AgentProgressStepRow({ step }: { step: AgentProgressStep }) {
         ) : step.status === "active" ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
-          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+          <span className="h-1 w-1 rounded-full bg-muted-foreground/35" />
         )}
       </span>
       <span
         className={cn(
-          "text-sm leading-snug pt-1",
+          "pt-0.5 text-sm leading-snug",
           step.status === "done" && "text-muted-foreground",
           step.status === "active" && "font-medium text-foreground",
-          step.status === "pending" && "text-muted-foreground/60"
+          step.status === "pending" && "text-muted-foreground/55"
         )}
       >
         {step.label}

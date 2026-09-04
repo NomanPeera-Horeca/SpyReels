@@ -1,0 +1,48 @@
+{
+  "clarificationDesktop": {
+    "heading": true,
+    "understood": true,
+    "question": true,
+    "answerBox": true,
+    "typed": true,
+    "skip": true,
+    "write": true,
+    "confidence": false,
+    "blueCard": 0,
+    "writeWorked": true
+  },
+  "clarificationSkipWorked": true,
+  "clarificationMobile": {
+    "heading": true,
+    "question": true,
+    "answerBox": true,
+    "skip": true,
+    "write": true,
+    "confidence": false,
+    "overflow": 0
+  },
+  "hookDuringLoad": {
+    "originalHook": "Your kitchen probably does not need another employee.",
+    "hookDuringLoad": "Your kitchen probably does not need another employee.",
+    "unchanged": true,
+    "sheetOpen": true,
+    "loaderInSheet": true,
+    "scriptStillVisible": true,
+    "fullPageH2Wait": false
+  },
+  "hookAfterCloseDuringGenerate": {
+    "unchanged": true,
+    "scriptStillVisible": true
+  },
+  "hookSelection": {
+    "noAutoSelect": true,
+    "unchangedBeforeSelect": true,
+    "changedAfterOption2": true,
+    "hookAfterSelect": "The fastest way to speed up your kitchen is to fire dishes, not hire people."
+  },
+  "mobileHook": {
+    "sheetOpen": true,
+    "scriptVisible": true,
+    "overflow": 0
+  }
+}
