@@ -7,6 +7,12 @@ import type {
 } from "@shared/carouselTemplates";
 import { normalizeSlideImages } from "@shared/carouselTemplates";
 import { resolveCarouselSlideComponent } from "@/components/carouselLayoutRegistry";
+import { isFrameworkFamilySlide } from "@shared/carouselFrameworkFamily";
+import type { FrameworkTreatment } from "@shared/carouselFrameworkFamily";
+import {
+  resolveFrameworkPremiumVariants,
+  type FrameworkPremiumVariant,
+} from "@shared/carouselFrameworkPremiumDesignSystem";
 
 /** Per-slide slot overrides, keyed by CarouselSlideSpec.id */
 export type CarouselSlideValuesById = Record<string, CarouselSlotValues>;
@@ -137,6 +143,34 @@ export function CarouselRenderer({
       })()
     : undefined;
 
+  const previousFrameworkVariants: Array<FrameworkPremiumVariant | null> =
+    (() => {
+      const previous: Array<FrameworkPremiumVariant | null> = effectiveSlides.map(
+        () => null
+      );
+      const walkIndexes: number[] = [];
+      const walkInputs = effectiveSlides.flatMap((slide, index) => {
+        if (!isFrameworkFamilySlide(slide) || !slide.composition) return [];
+        walkIndexes.push(index);
+        return [
+          {
+            treatment: slide.composition.treatment as FrameworkTreatment,
+            position: slide.composition.position ?? index + 1,
+            totalSlides:
+              slide.composition.totalSlides ?? effectiveSlides.length,
+            archetype: slide.composition.archetype,
+            frameworkPartCount: slide.composition.frameworkPartCount,
+            frameworkPartIndex: slide.composition.frameworkPartIndex,
+          },
+        ];
+      });
+      const variants = resolveFrameworkPremiumVariants(walkInputs);
+      walkIndexes.forEach((slideIndex, walkIndex) => {
+        previous[slideIndex] = walkIndex === 0 ? null : variants[walkIndex - 1] ?? null;
+      });
+      return previous;
+    })();
+
   return (
     <div
       className={className}
@@ -149,7 +183,7 @@ export function CarouselRenderer({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {effectiveSlides.map((slide) => {
+      {effectiveSlides.map((slide, index) => {
         const Layout = resolveCarouselSlideComponent(slide);
         const values = resolveCarouselSlideValues(slide, slideValues?.[slide.id]);
         const { imageUrl, imageUrlsBySlot } = template.shareCoverImage
@@ -169,6 +203,7 @@ export function CarouselRenderer({
               imageUrlsBySlot={imageUrlsBySlot}
               editable={editable}
               composition={slide.composition}
+              previousVariant={previousFrameworkVariants[index]}
               onSlotChange={
                 onSlotChange
                   ? (slotId, value) => onSlotChange(slide.id, slotId, value)
