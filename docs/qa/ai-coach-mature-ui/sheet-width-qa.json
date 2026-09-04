@@ -1,0 +1,75 @@
+{
+  "loading390": {
+    "sheetWidth": 374,
+    "viewport": 390,
+    "title": "Hook options",
+    "titleFullyVisible": true,
+    "description": "Choose an opening. The rest of the script stays the same.",
+    "descriptionFullyVisible": true,
+    "overflow": 0,
+    "titleBox": {
+      "x": 409.27020263671875,
+      "y": 56,
+      "width": 309,
+      "height": 24
+    },
+    "closeBox": {
+      "x": 657.6102294921875,
+      "y": 16,
+      "width": 16,
+      "height": 16
+    },
+    "scriptBehind": true
+  },
+  "populated390": {
+    "sheetWidth": 374,
+    "viewport": 390,
+    "title": "Hook options",
+    "titleFullyVisible": true,
+    "description": "Choose an opening. The rest of the script stays the same.",
+    "descriptionFullyVisible": true,
+    "overflow": 0,
+    "titleBox": {
+      "x": 49,
+      "y": 56,
+      "width": 309,
+      "height": 24
+    },
+    "closeBox": {
+      "x": 33,
+      "y": 174,
+      "width": 341,
+      "height": 135.375
+    },
+    "scriptBehind": true,
+    "option1": true,
+    "option2": true,
+    "option3": true,
+    "selectWorked": true
+  },
+  "populated360": {
+    "sheetWidth": 344,
+    "viewport": 360,
+    "title": "Hook options",
+    "titleFullyVisible": true,
+    "description": "Choose an opening. The rest of the script stays the same.",
+    "descriptionFullyVisible": true,
+    "overflow": 0,
+    "titleBox": {
+      "x": 49,
+      "y": 56,
+      "width": 279,
+      "height": 24
+    },
+    "closeBox": {
+      "x": 33,
+      "y": 174,
+      "width": 311,
+      "height": 135.375
+    },
+    "scriptBehind": true,
+    "option1": true,
+    "option2": true,
+    "option3": true
+  }
+}

@@ -762,7 +762,10 @@ export function AiCoachResultView({
       </div>
 
       <Sheet open={hookOptionsOpen} onOpenChange={setHookOptionsOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto p-4 pt-10 sm:max-w-md">
+        <SheetContent
+          side="right"
+          className="!w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-4 pt-10 sm:!w-full sm:!max-w-md"
+        >
           <SheetHeader>
             <SheetTitle>Hook options</SheetTitle>
             <SheetDescription>Choose an opening. The rest of the script stays the same.</SheetDescription>
