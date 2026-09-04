@@ -44,6 +44,11 @@ import {
   type CarouselListContract,
   type CarouselResearchMode,
 } from "@shared/carouselStudio";
+import {
+  applyCarouselSourceFormatFitToBriefs,
+  CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
+  CAROUSEL_FORMAT_SELECTION_GUIDANCE,
+} from "@shared/carouselSourceFormatIntent";
 import { invokeLLM } from "../_core/llm";
 import {
   logAngleGenerationCompleted,
@@ -510,7 +515,7 @@ export function buildCarouselAnglesUserPrompt(args: {
     "",
     `Propose exactly ${CAROUSEL_STUDIO_ANGLE_COUNT} genuinely different content strategies for an Instagram carousel.`,
     "Do not write the same idea three times with different hooks.",
-    "The three candidates should normally represent meaningfully different strategies, such as diagnostic/breakdown, story, and practical framework, unless another combination fits the source better.",
+    CAROUSEL_FORMAT_SELECTION_GUIDANCE,
     "Decide the core promise and central insight before listing key points.",
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
@@ -535,6 +540,7 @@ export function buildCarouselAnglesUserPrompt(args: {
     `evidenceRequirements max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. prohibitedClaims max ${CAROUSEL_BRIEF_PROHIBITED_MAX}.`,
     "Each explanation and objective must be one concise sentence.",
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
   ];
   if (brand) {
     lines.push("", `Brand voice guidance (tone only, not a topic override): ${brand}`);
@@ -811,7 +817,7 @@ export function buildCarouselAngleCandidatesUserPrompt(args: {
     "These are compact candidates only, not complete briefs.",
     "Do not write keyPoints, slideOutline, visualDirection, imageDirection, evidenceRequirements, prohibitedClaims, audienceReasoning, or ctaDirection.",
     "Keep every string to one concise sentence. Do not write finished slide copy.",
-    "Candidates should differ by angle or framing, such as diagnostic, story, and practical framing, unless another mix fits the source better.",
+    CAROUSEL_FORMAT_SELECTION_GUIDANCE,
     "Do not change the source taxonomy or promised item count when an explicit list contract is present.",
     ...explicitCompactListContractPromptLines(listContract),
     ...(listContract ? [] : inventedListContractPromptLines()),
@@ -819,6 +825,7 @@ export function buildCarouselAngleCandidatesUserPrompt(args: {
     "Classify researchMode only. Do not perform research or add citations.",
     `estimatedSlideCount must be an integer from ${CAROUSEL_STUDIO_MIN_SLIDES} to ${CAROUSEL_STUDIO_MAX_SLIDES}.`,
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
   ];
   if (brand) {
     lines.push("", `Brand voice guidance (tone only, not a topic override): ${brand}`);
@@ -869,6 +876,7 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
     `evidenceRequirements max ${CAROUSEL_BRIEF_EVIDENCE_MAX}. prohibitedClaims max ${CAROUSEL_BRIEF_PROHIBITED_MAX}.`,
     "Each explanation and objective must be one concise sentence.",
     "Score relevance, usefulness, specificity, visualPotential, factualSafety, and originality from 0-100. Do not compute overall.",
+    CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE,
     "",
     "Strategic candidate to develop:",
     JSON.stringify({
@@ -1983,10 +1991,9 @@ export async function generateCarouselAngles(args: {
         : firstValid;
     }
 
-    const ranked = rankCarouselCreativeBriefs(merged).slice(
-      0,
-      CAROUSEL_STUDIO_ANGLE_COUNT
-    );
+    const ranked = rankCarouselCreativeBriefs(
+      applyCarouselSourceFormatFitToBriefs(merged, sourceContent)
+    ).slice(0, CAROUSEL_STUDIO_ANGLE_COUNT);
     const briefs = reindexCarouselBriefs(ranked);
     mergedValidCount = merged.length;
     acceptedSemanticCandidateCount = briefs.length;
