@@ -204,6 +204,182 @@ function containsTerm(haystack: string, term: string): boolean {
   return new RegExp(`\\b${escaped}\\b`, "i").test(haystack);
 }
 
+export function containsConstraintTerm(haystack: string, term: string): boolean {
+  return containsTerm(haystack, term);
+}
+
+const SPOKEN_SECTION_KEYS = ["hook", "explain", "illustrate", "teach", "cta"] as const;
+
+function cloneSpokenScript(script: CoachSpokenScript): CoachSpokenScript {
+  return {
+    hook: script.hook,
+    explain: script.explain,
+    illustrate: script.illustrate,
+    teach: script.teach,
+    cta: script.cta ?? "",
+  };
+}
+
+function joinSpokenSentences(sentences: string[]): string {
+  return sentences.map((part) => part.trim()).filter(Boolean).join(" ");
+}
+
+function stripTermFromSentence(sentence: string, term: string): string {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return normalizeConstraintText(
+    sentence.replace(new RegExp(`\\b${escaped}\\b`, "gi"), "").replace(/\s+([,.!?])/g, "$1")
+  );
+}
+
+function lastNonEmptySectionKey(script: CoachSpokenScript): (typeof SPOKEN_SECTION_KEYS)[number] | null {
+  let last: (typeof SPOKEN_SECTION_KEYS)[number] | null = null;
+  for (const key of SPOKEN_SECTION_KEYS) {
+    if (String(script[key] ?? "").trim()) last = key;
+  }
+  return last;
+}
+
+export function earlierSpokenBeforeFinalSentence(script: CoachSpokenScript): string {
+  const sections = spokenSections(script);
+  if (sections.length === 0) return "";
+  const lastSection = sections[sections.length - 1] ?? "";
+  const lastSentences = splitSpokenSentences(lastSection);
+  const earlierInLast = lastSentences.slice(0, -1).join(" ");
+  return [...sections.slice(0, -1), earlierInLast].filter(Boolean).join("\n");
+}
+
+export function findConflictingCreatorConstraints(
+  constraints: CoachCreatorConstraints
+): CoachConstraintViolation | null {
+  const ending = constraints.requiredEnding;
+  if (!ending) return null;
+  for (const delayed of constraints.delayedTerms) {
+    if (!containsTerm(ending, delayed.term)) {
+      return {
+        code: "conflicting_required_ending",
+        message: `The required ending cannot be combined with a delayed "${delayed.term}" instruction because that ending does not include ${delayed.term}.`,
+      };
+    }
+  }
+  return null;
+}
+
+function restoreRequiredOpening(script: CoachSpokenScript, opening: string): void {
+  const rest = splitSpokenSentences(script.hook).slice(1);
+  script.hook = joinSpokenSentences([opening, ...rest]);
+}
+
+function restoreRequiredEnding(script: CoachSpokenScript, ending: string): void {
+  const lastKey = lastNonEmptySectionKey(script);
+  if (!lastKey) {
+    script.cta = ending;
+    return;
+  }
+  const sentences = splitSpokenSentences(String(script[lastKey] ?? ""));
+  if (sentences.length === 0) {
+    script[lastKey] = ending;
+    return;
+  }
+  sentences[sentences.length - 1] = ending;
+  script[lastKey] = joinSpokenSentences(sentences);
+}
+
+function removeEarlyDelayedTerm(script: CoachSpokenScript, term: string): void {
+  const nonempty = SPOKEN_SECTION_KEYS.filter((key) => String(script[key] ?? "").trim());
+  for (let index = 0; index < nonempty.length; index++) {
+    const key = nonempty[index];
+    const isLastSection = index === nonempty.length - 1;
+    const sentences = splitSpokenSentences(String(script[key] ?? ""));
+    if (sentences.length === 0) continue;
+    const lastSentence = isLastSection ? sentences[sentences.length - 1] : null;
+    const early = isLastSection ? sentences.slice(0, -1) : sentences;
+    const keptEarly = early.filter((sentence) => !containsTerm(sentence, term));
+    if (keptEarly.length === 0 && early.length > 0 && !lastSentence) {
+      script[key] = stripTermFromSentence(early[0], term);
+      continue;
+    }
+    if (keptEarly.length === 0 && early.length > 0 && lastSentence) {
+      script[key] = lastSentence;
+      continue;
+    }
+    script[key] = joinSpokenSentences([...keptEarly, lastSentence].filter((part): part is string => Boolean(part)));
+  }
+}
+
+function ensureDelayedTermInFinalSentence(script: CoachSpokenScript, term: string): void {
+  if (containsTerm(lastSpokenSentenceFromScript(script), term)) return;
+  const closer = `That is ${term}.`;
+  const lastKey = lastNonEmptySectionKey(script) ?? "cta";
+  const current = String(script[lastKey] ?? "").trim();
+  script[lastKey] = current ? `${current} ${closer}` : closer;
+}
+
+export function applyDeterministicConstraintRepair(
+  script: CoachSpokenScript,
+  constraints: CoachCreatorConstraints
+): { ok: boolean; used: boolean; script: CoachSpokenScript; conflict: CoachConstraintViolation | null } {
+  const conflict = findConflictingCreatorConstraints(constraints);
+  if (conflict) {
+    return { ok: false, used: false, script: cloneSpokenScript(script), conflict };
+  }
+
+  const next = cloneSpokenScript(script);
+  if (constraints.requiredOpening) {
+    restoreRequiredOpening(next, constraints.requiredOpening);
+  }
+  if (constraints.requiredEnding) {
+    restoreRequiredEnding(next, constraints.requiredEnding);
+  }
+  for (const delayed of constraints.delayedTerms) {
+    removeEarlyDelayedTerm(next, delayed.term);
+    if (!constraints.requiredEnding) {
+      ensureDelayedTermInFinalSentence(next, delayed.term);
+    }
+  }
+
+  const validated = validateCoachScriptConstraints(next, constraints);
+  const used = JSON.stringify(next) !== JSON.stringify(cloneSpokenScript(script));
+  return {
+    ok: validated.ok,
+    used,
+    script: next,
+    conflict: null,
+  };
+}
+
+export function applyDeterministicConstraintRepairToGenerated(
+  generated: Record<string, unknown>,
+  constraints: CoachCreatorConstraints
+): {
+  ok: boolean;
+  used: boolean;
+  generated: Record<string, unknown>;
+  conflict: CoachConstraintViolation | null;
+} {
+  const repaired = applyDeterministicConstraintRepair(spokenScriptFromGenerated(generated), constraints);
+  if (!repaired.ok) {
+    return {
+      ok: false,
+      used: repaired.used,
+      generated,
+      conflict: repaired.conflict,
+    };
+  }
+  return {
+    ok: true,
+    used: repaired.used,
+    conflict: null,
+    generated: {
+      ...generated,
+      hook: repaired.script.hook,
+      explain: repaired.script.explain,
+      illustrate: repaired.script.illustrate,
+      teach: repaired.script.teach,
+      cta: repaired.script.cta ?? "",
+    },
+  };
+}
+
 function hasForbiddenPricingContent(spoken: string): boolean {
   if (/\bfinanc/i.test(spoken)) return true;
   if (/\bmonthly payment/i.test(spoken)) return true;
@@ -232,8 +408,8 @@ export function validateCoachScriptConstraints(
 ): { ok: boolean; violations: CoachConstraintViolation[] } {
   const violations: CoachConstraintViolation[] = [];
   const spoken = spokenSections(script).join("\n");
-  const finalLine = finalSpokenLine(script);
-  const earlier = earlierSpokenText(script);
+  const finalLine = lastSpokenSentenceFromScript(script);
+  const earlier = earlierSpokenBeforeFinalSentence(script);
 
   if (constraints.requiredOpening) {
     const expected = normalizeConstraintText(constraints.requiredOpening);
