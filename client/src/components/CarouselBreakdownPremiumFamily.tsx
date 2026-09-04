@@ -237,12 +237,12 @@ function EditorialCover({
             margin: kicker ? "0.9rem 0 0" : 0,
             fontFamily: tokens.fontFamily.display,
             fontSize: withImage
-              ? "clamp(1.9rem, 7.4vw, 2.42rem)"
+              ? "clamp(1.72rem, 6.6vw, 2.15rem)"
               : "clamp(2.05rem, 7.8vw, 2.4rem)",
             fontWeight: 780,
             lineHeight: 0.99,
             letterSpacing: "-0.052em",
-            maxWidth: withImage ? "11ch" : "100%",
+            maxWidth: withImage ? "13ch" : "100%",
             overflowWrap: "break-word",
           }}
         />
@@ -515,7 +515,14 @@ function PremiumSplit({
         editable={editable}
         onCommit={onSlotChange}
         multiline
-        style={{ ...headlineStyle(tokens), marginTop: sequence || kicker ? "0.78rem" : 0, fontSize: "clamp(1.35rem, 5.1vw, 1.72rem)" }}
+        style={{
+          ...headlineStyle(tokens),
+          marginTop: sequence || kicker ? "0.78rem" : 0,
+          fontSize: "clamp(1.2rem, 4.5vw, 1.46rem)",
+          overflowWrap: "normal",
+          wordBreak: "normal",
+          hyphens: "none",
+        }}
       />
       {body ? (
         <CarouselEditableText
@@ -562,7 +569,7 @@ function PremiumSplit({
       style={{
         ...shell(tokens),
         display: "grid",
-        gridTemplateColumns: "0.94fr 1.06fr",
+        gridTemplateColumns: imageFirst ? "0.96fr 1.04fr" : "1.08fr 0.92fr",
       }}
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
