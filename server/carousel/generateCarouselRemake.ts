@@ -43,6 +43,12 @@ import {
   canUseBreakdownListicleFamily,
 } from "@shared/carouselBreakdownFamily";
 import {
+  buildComparisonFamilySlides,
+  canUseComparisonFamily,
+  isComparisonFamilySlide,
+  textContextForComparisonImageSlot,
+} from "@shared/carouselComparisonFamily";
+import {
   buildStoryNarrativeSlides,
   canUseStoryNarrativeFamily,
 } from "@shared/carouselStoryFamily";
@@ -225,6 +231,21 @@ function textContextForImageSlot(
     (v) => typeof v === "string" && v.trim().length > 0
   );
   return first?.trim() ?? "";
+}
+
+function imageTextContextForSlide(
+  slide: CarouselSlideSpec,
+  slideVals: Record<string, string>,
+  imageSlotId: string
+): string {
+  if (
+    isComparisonFamilySlide(slide) &&
+    (slide.imageSlots?.length ?? 0) > 1
+  ) {
+    const sideCopy = textContextForComparisonImageSlot(slideVals, imageSlotId);
+    if (sideCopy) return sideCopy;
+  }
+  return textContextForImageSlot(slideVals, imageSlotId);
 }
 
 function slotSchemaDescription(slot: CarouselSlideSpec["slots"][number]): string {
@@ -1019,7 +1040,27 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      if (planningIR && canUseStoryNarrativeFamily(planningIR)) {
+      if (planningIR && canUseComparisonFamily(planningIR)) {
+        const visualDirection = await withGenerationStage(
+          telemetry,
+          "visual_direction",
+          () => generateCarouselVisualDirection(planningIR)
+        );
+        console.log(
+          `[carouselRemake] ${remakeId}: Visual Director source=${visualDirection.source} attempts=${visualDirection.attempts}`
+        );
+        if (visualDirection.source === "baseline_fallback") {
+          console.warn(
+            `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,
+            visualDirection.issues.slice(0, 5).join("; ")
+          );
+        }
+        effectiveSlides = buildComparisonFamilySlides({
+          template,
+          planningIR,
+          compositionIR: visualDirection.compositionIR,
+        });
+      } else if (planningIR && canUseStoryNarrativeFamily(planningIR)) {
         const visualDirection = await withGenerationStage(
           telemetry,
           "visual_direction",
@@ -1209,7 +1250,7 @@ export async function generateCarouselRemake(
             imageSlot.searchQueryHint,
             niche,
             undefined,
-            textContextForImageSlot(slideVals, imageSlot.id),
+            imageTextContextForSlide(slide, slideVals, imageSlot.id),
             {
               usedUrls: usedImageUrls,
               sourceImage,
@@ -1227,7 +1268,7 @@ export async function generateCarouselRemake(
             imageSlot.searchQueryHint,
             niche,
             undefined,
-            textContextForImageSlot(slideVals, imageSlot.id),
+            imageTextContextForSlide(slide, slideVals, imageSlot.id),
             {
               usedUrls: usedImageUrls,
               sourceImage,
@@ -1339,26 +1380,55 @@ export async function generateCarouselRemake(
     } else {
       for (let slideIndex = 0; slideIndex < effectiveSlides.length; slideIndex++) {
         const slide = effectiveSlides[slideIndex]!;
-        if (slide.imageSlots && slide.imageSlots.length > 0) {
-          // MVP: resolve only the first image slot per slide (legacy templates).
-          const imageSlot = slide.imageSlots[0];
-          const uploaded = uploadedImageUrls?.[slide.id];
-          const resolvedUrl = await resolveSlideImage(
-            imageSlot.searchQueryHint,
-            niche,
-            uploaded,
-            textContextForImageSlot(values[slide.id] ?? {}, imageSlot.id),
-            {
-              usedUrls: usedImageUrls,
-              sourceImage: sourceImageForSlideIndex(visionSourceStills, slideIndex),
-              slideId: slide.id,
-              imageSlotId: imageSlot.id,
-              telemetry,
-            }
-          );
-          if (resolvedUrl) {
-            imageUrls[slide.id] = resolvedUrl;
+        if (!slide.imageSlots?.length) continue;
+        const slideVals = values[slide.id] ?? {};
+        const uploaded = uploadedImageUrls?.[slide.id];
+        const sourceImage = sourceImageForSlideIndex(
+          visionSourceStills,
+          slideIndex
+        );
+
+        if (isComparisonFamilySlide(slide) && slide.imageSlots.length > 1) {
+          const bySlot: Record<string, string> = {};
+          for (const [slotIndex, imageSlot] of slide.imageSlots.entries()) {
+            const resolvedUrl = await resolveSlideImage(
+              imageSlot.searchQueryHint,
+              niche,
+              slotIndex === 0 ? uploaded : undefined,
+              imageTextContextForSlide(slide, slideVals, imageSlot.id),
+              {
+                usedUrls: usedImageUrls,
+                sourceImage,
+                slideId: slide.id,
+                imageSlotId: imageSlot.id,
+                telemetry,
+              }
+            );
+            if (resolvedUrl) bySlot[imageSlot.id] = resolvedUrl;
           }
+          if (Object.keys(bySlot).length > 0) {
+            imageUrls[slide.id] = bySlot;
+          }
+          continue;
+        }
+
+        // MVP: resolve only the first image slot per slide (legacy templates).
+        const imageSlot = slide.imageSlots[0]!;
+        const resolvedUrl = await resolveSlideImage(
+          imageSlot.searchQueryHint,
+          niche,
+          uploaded,
+          imageTextContextForSlide(slide, slideVals, imageSlot.id),
+          {
+            usedUrls: usedImageUrls,
+            sourceImage,
+            slideId: slide.id,
+            imageSlotId: imageSlot.id,
+            telemetry,
+          }
+        );
+        if (resolvedUrl) {
+          imageUrls[slide.id] = resolvedUrl;
         }
       }
 

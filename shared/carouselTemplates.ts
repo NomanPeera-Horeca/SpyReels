@@ -266,7 +266,14 @@ export type CarouselSlideSpec = {
    * Absent on legacy catalog templates. Renderer uses this to pick a treatment.
    */
   composition?: {
-    family: "breakdown_listicle" | "story_narrative";
+    family: "breakdown_listicle" | "story_narrative" | "comparison";
+    sequence?: {
+      kind: string;
+      index: number;
+      side?: "problem" | "solution";
+    } | null;
+    position?: number;
+    totalSlides?: number;
     archetype: string;
     treatment: string;
     semanticRole: string;
