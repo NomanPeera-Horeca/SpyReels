@@ -7,9 +7,11 @@ import type {
 } from "@shared/carouselTemplates";
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
 import { isComparisonFamilySlide } from "@shared/carouselComparisonFamily";
+import { isFrameworkFamilySlide } from "@shared/carouselFrameworkFamily";
 import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
 import { CarouselComparisonPremiumFamily } from "@/components/CarouselComparisonPremiumFamily";
+import { CarouselFrameworkPremiumFamily } from "@/components/CarouselFrameworkPremiumFamily";
 import { CarouselStoryPremiumFamily } from "@/components/CarouselStoryPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
@@ -74,6 +76,9 @@ export function resolveCarouselSlideComponent(
   }
   if (isStoryNarrativeSlide(slide)) {
     return CarouselStoryPremiumFamily;
+  }
+  if (isFrameworkFamilySlide(slide)) {
+    return CarouselFrameworkPremiumFamily;
   }
   if (isBreakdownListicleSlide(slide)) {
     return CarouselBreakdownPremiumFamily;
