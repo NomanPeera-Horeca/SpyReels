@@ -7,6 +7,7 @@ import {
 } from "@shared/coachAgentProgress";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
 import { markCreatorIdeaGroundTruth } from "@shared/coachIdeaGroundTruth";
+import { formatSelectedCoachStrategy } from "@shared/coachStrategy";
 import { getOrFetchAudienceSignals } from "./audienceResearch/service";
 import {
   completeAgentProgress,
@@ -22,6 +23,10 @@ import {
   formatResearchGroundingForPrompt,
   getResearchGrounding,
 } from "./studioResearchGrounding";
+import {
+  developCoachStrategyDirections,
+  selectCoachStrategy,
+} from "./coachStrategyPlanner";
 
 const FLOW = "coach" as const;
 
@@ -65,10 +70,14 @@ export async function generateCoachScriptWithProgress(args: {
   try {
     setCoachStep(args.userId, "read_profile");
     const profile = await getCreatorCoachProfile(args.userId);
-    const labels = personalizedCoachScriptStepLabels({
-      niche: profile.niche,
-      audience: profile.targetAudience,
-    });
+    const labels = {
+      ...personalizedCoachScriptStepLabels({
+        niche: profile.niche,
+        audience: profile.targetAudience,
+      }),
+      find_viral: "Developing 3 strong creative directions",
+      hook_angle: "Comparing directions and choosing the strongest",
+    };
     initAgentProgress({
       flow: FLOW,
       userId: args.userId,
@@ -96,9 +105,30 @@ export async function generateCoachScriptWithProgress(args: {
     const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
 
     setCoachStep(args.userId, "find_viral", "research_grounding");
-    setCoachStep(args.userId, "hook_angle", "find_viral");
+    const strategyDraft = await developCoachStrategyDirections({
+      rawIdea: args.description,
+      niche: profile.niche,
+      targetAudience: profile.targetAudience,
+      brandDescription: profile.brandDescription,
+      clarifications: args.clarifications,
+      audienceResearchBlock,
+      researchGroundingBlock,
+    });
 
-    const creatorGroundTruthDescription = markCreatorIdeaGroundTruth(args.description);
+    setCoachStep(args.userId, "hook_angle", "find_viral");
+    const selectedStrategy = await selectCoachStrategy({
+      rawIdea: args.description,
+      draft: strategyDraft,
+    });
+    const strategyBlock = formatSelectedCoachStrategy(strategyDraft, selectedStrategy);
+
+    const creatorGroundTruthDescription = [
+      markCreatorIdeaGroundTruth(args.description),
+      strategyBlock,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const script = await generateCoachScriptForWorkspace({
       userId: args.userId,
       workspaceId: args.workspaceId,
