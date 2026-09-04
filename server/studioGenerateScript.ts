@@ -21,6 +21,8 @@ import {
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
 import {
+  applyDeterministicConstraintRepair,
+  applyDeterministicConstraintRepairToGenerated,
   extractCoachCreatorConstraints,
   formatCoachCreatorConstraintsForPrompt,
   spokenScriptFromGenerated,
@@ -269,7 +271,11 @@ export async function generateCoachScriptForWorkspace(args: {
     creatorConstraints
   );
   if (!afterJudge.ok) {
-    generated = constrained.generated;
+    const judgedRepair = applyDeterministicConstraintRepairToGenerated(generated, creatorConstraints);
+    generated = judgedRepair.ok ? judgedRepair.generated : constrained.generated;
+    if (judgedRepair.ok) {
+      console.info("[CoachConstraints] judge_deterministic_fallback");
+    }
   }
   console.info("[CoachLatency] judge_ms", Date.now() - judgeStarted, {
     rewriteCount: judged.regenCount,
@@ -284,7 +290,66 @@ export async function generateCoachScriptForWorkspace(args: {
 
   args.onPhase?.("production_notes");
 
-  const finalized = await finalizeCoachGenerated(generated, scriptMode);
+  const finalizedCandidate = await finalizeCoachGenerated(generated, scriptMode);
+  const finalizedSpoken = spokenScriptFromGenerated({
+    ...finalizedCandidate.generated,
+    hook: finalizedCandidate.hook,
+    explain: finalizedCandidate.sections.explain,
+    illustrate: finalizedCandidate.sections.illustrate,
+    teach: finalizedCandidate.sections.teach,
+    cta: finalizedCandidate.sections.cta,
+  });
+  const finalizedCheck = validateCoachScriptConstraints(finalizedSpoken, creatorConstraints);
+  const finalizedRepaired = finalizedCheck.ok
+    ? null
+    : applyDeterministicConstraintRepair(finalizedSpoken, creatorConstraints);
+  const finalized = finalizedCheck.ok
+    ? finalizedCandidate
+    : finalizedRepaired?.ok
+      ? (() => {
+          const repairedSections = {
+            explain: finalizedRepaired.script.explain,
+            illustrate: finalizedRepaired.script.illustrate,
+            teach: finalizedRepaired.script.teach,
+            cta: finalizedRepaired.script.cta ?? "",
+          };
+          console.info("[CoachConstraints] finalize_deterministic_fallback", {
+            codes: finalizedCheck.violations.map((item) => item.code),
+          });
+          const repairedGenerated: Record<string, unknown> = {
+            ...finalizedCandidate.generated,
+            hook: finalizedRepaired.script.hook,
+            explain: repairedSections.explain,
+            illustrate: repairedSections.illustrate,
+            teach: repairedSections.teach,
+            cta: repairedSections.cta,
+          };
+          return {
+            generated: repairedGenerated,
+            sections: repairedSections,
+            hook: finalizedRepaired.script.hook,
+            estimatedDuration: durationLabelFromWordCount(
+              coachScriptWordCount(finalizedRepaired.script.hook, repairedSections),
+              scriptMode
+            ),
+          };
+        })()
+      : (() => {
+          const safeSections = sectionsFromGenerated(constrained.generated);
+          const safeHook = String(constrained.generated.hook ?? "");
+          console.info("[CoachConstraints] finalize_reverted", {
+            codes: finalizedCheck.violations.map((item) => item.code),
+          });
+          return {
+            generated: constrained.generated,
+            sections: safeSections,
+            hook: safeHook,
+            estimatedDuration: durationLabelFromWordCount(
+              coachScriptWordCount(safeHook, safeSections),
+              scriptMode
+            ),
+          };
+        })();
   const { generated: finalGenerated, sections, hook, estimatedDuration } = finalized;
   const productionCoach = normalizeProductionCoach(finalGenerated.productionCoach);
 
