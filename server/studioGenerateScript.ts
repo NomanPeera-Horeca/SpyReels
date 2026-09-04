@@ -198,6 +198,7 @@ export async function generateCoachScriptForWorkspace(args: {
     }
   }
 
+  const writerStarted = Date.now();
   const response = await invokeLLM({
     messages: [
       { role: "system", content: withAiFormattingRules(`${COACH_SYSTEM_PROMPT}\n\n${buildStudioDateContext()}`) },
@@ -236,6 +237,11 @@ export async function generateCoachScriptForWorkspace(args: {
     });
   }
 
+  console.info("[CoachLatency] writer_ms", Date.now() - writerStarted, {
+    promptTokens: response.usage?.prompt_tokens ?? null,
+    completionTokens: response.usage?.completion_tokens ?? null,
+  });
+
   const constrained = await enforceCoachScriptConstraints({
     generated,
     rawCreatorIdea,
@@ -245,6 +251,7 @@ export async function generateCoachScriptForWorkspace(args: {
   generated = constrained.generated;
 
   args.onPhase?.("quality_check");
+  const judgeStarted = Date.now();
   const judged = await judgeAndImproveCoachScript({
     generated,
     ctx: {
@@ -264,6 +271,10 @@ export async function generateCoachScriptForWorkspace(args: {
   if (!afterJudge.ok) {
     generated = constrained.generated;
   }
+  console.info("[CoachLatency] judge_ms", Date.now() - judgeStarted, {
+    rewriteCount: judged.regenCount,
+    verdictPass: judged.judge.verdictPass,
+  });
   if (!coachScriptIsComplete(generated)) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",

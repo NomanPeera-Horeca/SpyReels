@@ -47,11 +47,12 @@ describe("AI Coach pre-writing strategy", () => {
       brandDescription: "Practical operator education",
     });
 
-    expect(prompt).toContain("CREATIVE WHEN THE USER IS VAGUE. OBEDIENT WHEN THE USER IS SPECIFIC");
+    expect(prompt).toContain("CREATIVE WHEN VAGUE. OBEDIENT WHEN SPECIFIC");
     expect(prompt).toContain("EXACTLY 3");
-    expect(prompt).toContain("DO NOT write the Reel script");
-    expect(prompt).toContain("DO NOT generate B-roll");
+    expect(prompt).toContain("No script");
+    expect(prompt).toContain("B-roll");
     expect(prompt).toContain("Do not make it about pricing");
+    expect(prompt.length).toBeLessThan(2200);
   });
 
   it("requires the selector to compare all directions with intent fidelity as the hard gate", () => {
@@ -62,12 +63,14 @@ describe("AI Coach pre-writing strategy", () => {
       directions: validDraft.directions.map((direction) => ({ ...direction })),
     });
 
-    expect(prompt).toContain("Compare ALL THREE before choosing one");
-    expect(prompt).toContain("Intent fidelity is non-negotiable");
+    expect(prompt).toContain("Compare ALL THREE");
+    expect(prompt).toContain("Intent fidelity is the hard gate");
     expect(prompt).toContain("intentFidelity");
-    expect(prompt).toContain('"id": "A"');
-    expect(prompt).toContain('"id": "B"');
-    expect(prompt).toContain('"id": "C"');
+    expect(prompt).toContain('"id":"A"');
+    expect(prompt).toContain('"id":"B"');
+    expect(prompt).toContain('"id":"C"');
+    expect(prompt).not.toContain("AUDIENCE RESEARCH");
+    expect(prompt).not.toContain("VERIFIED TOPIC RESEARCH");
   });
 
   it("rejects incomplete or duplicate strategy sets", () => {

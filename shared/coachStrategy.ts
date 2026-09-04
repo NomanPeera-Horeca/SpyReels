@@ -186,7 +186,7 @@ export function enforceCoachStrategyIntentGate(
   };
 }
 
-function truncateBlock(value?: string, max = 5000): string {
+function truncateBlock(value?: string, max = 1200): string {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > max ? `${trimmed.slice(0, max)}\n[truncated]` : trimmed;
 }
@@ -206,58 +206,29 @@ export function buildCoachStrategyDirectionsPrompt(args: {
   const audienceResearch = truncateBlock(args.audienceResearchBlock) || "(none)";
   const researchGrounding = truncateBlock(args.researchGroundingBlock) || "(none)";
 
-  return `You are the pre-writing strategist for SpyReels AI Coach.
+  return `Pre-writing strategist for SpyReels AI Coach. Strategy only. No script, B-roll, or production notes.
 
-Your job is ONLY to understand the creator's intent and develop strategic directions BEFORE any script is written.
+CREATIVE WHEN VAGUE. OBEDIENT WHEN SPECIFIC.
+- Raw idea is ground truth for WHAT the video is about.
+- Preserve any product, claim, story, audience, position, format, tone, or exclusion the creator stated.
+- Niche, audience, and research may sharpen framing. They may never replace the topic.
+- Vague idea: fill missing strategy. Specific idea: keep the substance fixed and vary only framing, tension, promise, and route.
 
-Core principle: CREATIVE WHEN THE USER IS VAGUE. OBEDIENT WHEN THE USER IS SPECIFIC.
-- The creator's raw idea is ground truth for WHAT the content is about.
-- If the creator specifies a product, claim, story, audience, position, format, tone, or thing not to say, preserve it.
-- Niche, audience, research, and brand context may sharpen the framing but may never replace or redirect the creator's topic.
-- If the idea is vague, creatively fill the missing strategic gaps.
-- If the idea is specific, keep the substance fixed and vary only the strongest framing, tension, viewer promise, and narrative route.
-
-DO NOT write the Reel script.
-DO NOT generate B-roll, camera directions, music, editing notes, production notes, or full spoken lines.
-
-CREATOR RAW IDEA (GROUND TRUTH)
+CREATOR RAW IDEA
 <<<${args.rawIdea.trim()}>>>
 
-CREATOR PROFILE
+PROFILE
 Niche: ${args.niche}
-Target audience: ${args.targetAudience}
+Audience: ${args.targetAudience}
 Brand: ${args.brandDescription?.trim() || "(none)"}
+Clarifications: ${clarificationBlock}
+Audience research (supporting only): ${audienceResearch}
+Topic research (supporting only): ${researchGrounding}
 
-CLARIFICATIONS (GROUND TRUTH)
-${clarificationBlock}
+Return EXACTLY 3 strategically different directions A/B/C. Each must differ in tension, viewer promise, or narrative route, not wording. Keep every field to 1 sentence.
 
-AUDIENCE RESEARCH (supporting context only; never overrides the idea)
-${audienceResearch}
-
-VERIFIED TOPIC RESEARCH (supporting context only; never overrides the idea)
-${researchGrounding}
-
-First summarize the creator's actual intent in one sentence and extract any non-negotiable constraints. Then create EXACTLY 3 genuinely different strategic directions labeled A, B, and C.
-
-Each direction must differ in strategic framing, not merely wording. A useful direction answers: what tension do we lead with, what does the viewer expect to get, and what narrative route makes this worth watching?
-
-Return JSON only:
-{
-  "intentSummary": "one sentence stating exactly what the creator wants this content to do",
-  "creatorConstraints": ["specific facts, instructions, claims, exclusions, or boundaries that must not change"],
-  "directions": [
-    {
-      "id": "A",
-      "angle": "the strategic angle in 1-2 sentences",
-      "viewerPromise": "what the viewer expects to learn, feel, discover, or see",
-      "hookDirection": "the type of tension/open loop the later writer should use; not a finished hook line",
-      "narrativeShape": "the high-level progression from opening tension to payoff; not script copy",
-      "whyItCouldWin": "why this direction could outperform for this idea and audience"
-    },
-    { "id": "B", "angle": "...", "viewerPromise": "...", "hookDirection": "...", "narrativeShape": "...", "whyItCouldWin": "..." },
-    { "id": "C", "angle": "...", "viewerPromise": "...", "hookDirection": "...", "narrativeShape": "...", "whyItCouldWin": "..." }
-  ]
-}`;
+JSON only:
+{"intentSummary":"one sentence of actual creator intent","creatorConstraints":["non-negotiable facts or exclusions"],"directions":[{"id":"A","angle":"1 sentence","viewerPromise":"1 sentence","hookDirection":"tension type, not a finished hook","narrativeShape":"open to payoff in one sentence","whyItCouldWin":"1 sentence"},{"id":"B","angle":"...","viewerPromise":"...","hookDirection":"...","narrativeShape":"...","whyItCouldWin":"..."},{"id":"C","angle":"...","viewerPromise":"...","hookDirection":"...","narrativeShape":"...","whyItCouldWin":"..."}]}`;
 }
 
 export function buildCoachStrategySelectionPrompt(args: {
@@ -266,45 +237,23 @@ export function buildCoachStrategySelectionPrompt(args: {
   creatorConstraints: string[];
   directions: CoachStrategyDirection[];
 }): string {
-  return `You are the independent strategy selector for SpyReels AI Coach. Three directions were developed before script writing. Compare ALL THREE before choosing one.
-
-The creator's raw idea is the highest-priority ground truth. Intent fidelity is non-negotiable. A clever direction that drifts from the creator's topic must lose.
+  return `Compare ALL THREE directions. Pick the one that best obeys the creator and has the strongest creative potential. Intent fidelity is the hard gate. A clever off-topic direction must lose. Do not write the script.
 
 CREATOR RAW IDEA
 <<<${args.rawIdea.trim()}>>>
 
-UNDERSTOOD INTENT
-${args.intentSummary}
+INTENT: ${args.intentSummary}
+CONSTRAINTS:
+${args.creatorConstraints.length ? args.creatorConstraints.map((item) => `- ${item}`).join("\n") : "- (none)"}
 
-NON-NEGOTIABLE CREATOR CONSTRAINTS
-${args.creatorConstraints.length ? args.creatorConstraints.map((item) => `- ${item}`).join("\n") : "- (none explicitly stated)"}
+DIRECTIONS
+${JSON.stringify(args.directions)}
 
-CANDIDATE DIRECTIONS
-${JSON.stringify(args.directions, null, 2)}
+Score 1-10: intentFidelity, hookPotential, viewerClarity, originality, overall.
+Then develop the winner just enough for the writer: 2-sentence developedAngle, 1-sentence hookDirection, 3 short narrativePlan beats.
 
-Score A, B, and C independently from 1-10 on:
-1. intentFidelity — preserves exactly what the creator wants
-2. hookPotential — creates strong curiosity/tension without cheap clickbait
-3. viewerClarity — a cold viewer can quickly understand why to stay
-4. originality — feels specific and non-generic
-5. overall — weighted judgment, with intentFidelity as the hard gate
-
-Then choose the strongest direction and DEVELOP IT one level further into a writer-ready strategy. Do not write the script and do not add production directions.
-
-Return JSON only:
-{
-  "scores": [
-    { "id": "A", "intentFidelity": 1, "hookPotential": 1, "viewerClarity": 1, "originality": 1, "overall": 1 },
-    { "id": "B", "intentFidelity": 1, "hookPotential": 1, "viewerClarity": 1, "originality": 1, "overall": 1 },
-    { "id": "C", "intentFidelity": 1, "hookPotential": 1, "viewerClarity": 1, "originality": 1, "overall": 1 }
-  ],
-  "selectedId": "A | B | C",
-  "selectionReason": "why this direction wins after comparison",
-  "developedAngle": "the chosen angle sharpened into a precise writer brief",
-  "hookDirection": "the exact hook mechanism/tension to pursue, but not finished spoken copy",
-  "narrativePlan": ["opening tension", "development/story proof", "payoff/takeaway"],
-  "mustPreserve": ["creator intent and constraints the writer must not change"]
-}`;
+JSON only:
+{"scores":[{"id":"A","intentFidelity":1,"hookPotential":1,"viewerClarity":1,"originality":1,"overall":1},{"id":"B","intentFidelity":1,"hookPotential":1,"viewerClarity":1,"originality":1,"overall":1},{"id":"C","intentFidelity":1,"hookPotential":1,"viewerClarity":1,"originality":1,"overall":1}],"selectedId":"A","selectionReason":"1-2 sentences","developedAngle":"2 sentences","hookDirection":"1 sentence, not spoken copy","narrativePlan":["open","proof","payoff"],"mustPreserve":["creator constraints"]}`;
 }
 
 export function formatSelectedCoachStrategy(

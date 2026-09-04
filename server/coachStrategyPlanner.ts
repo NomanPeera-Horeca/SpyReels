@@ -53,6 +53,12 @@ export async function developCoachStrategyDirections(args: {
     invalidStrategyResponse("AI strategy planning returned incomplete directions. Please try again.");
   }
 
+  console.info("[CoachLatency] strategy_directions", {
+    promptTokens: response.usage?.prompt_tokens ?? null,
+    completionTokens: response.usage?.completion_tokens ?? null,
+    outputChars: raw.length,
+  });
+
   return draft;
 }
 
@@ -90,6 +96,12 @@ export async function selectCoachStrategy(args: {
     console.warn("[CoachStrategy] invalid selection payload", raw.slice(0, 900));
     invalidStrategyResponse("AI strategy selection returned an incomplete comparison. Please try again.");
   }
+
+  console.info("[CoachLatency] strategy_selector", {
+    promptTokens: response.usage?.prompt_tokens ?? null,
+    completionTokens: response.usage?.completion_tokens ?? null,
+    outputChars: raw.length,
+  });
 
   return selection;
 }
