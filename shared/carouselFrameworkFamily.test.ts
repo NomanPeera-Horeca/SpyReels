@@ -13,6 +13,8 @@ import {
   frameworkStepCount,
   hasStrongFrameworkSemantics,
   isFrameworkFamilySlide,
+  labelFrameworkParts,
+  resolveFrameworkPartStructure,
   resolveFrameworkRenderTreatment,
   resolveFrameworkTreatment,
   resolveFrameworkTreatments,
@@ -407,12 +409,12 @@ describe("Framework treatments", () => {
         semanticRole: "context",
         position: 2,
         totalSlides: 7,
-        frameworkStepCount: 3,
-        frameworkStepIndex: null,
+        frameworkPartCount: 3,
+        frameworkPartIndex: null,
         comparisonRoleCount: 0,
         hasExample: true,
       })
-    ).toBe("layered_model");
+    ).toBe("model_overview");
     expect(
       resolveFrameworkTreatment({
         archetype: "framework_grid",
@@ -511,8 +513,8 @@ describe("Framework treatments", () => {
         semanticRole: "framework_step",
         position: 3,
         totalSlides: 6,
-        frameworkStepCount: 3,
-        frameworkStepIndex: 1,
+        frameworkPartCount: 3,
+        frameworkPartIndex: 1,
         comparisonRoleCount: 0,
         hasExample: false,
       },
@@ -521,14 +523,14 @@ describe("Framework treatments", () => {
         semanticRole: "framework_step",
         position: 4,
         totalSlides: 6,
-        frameworkStepCount: 3,
-        frameworkStepIndex: 2,
+        frameworkPartCount: 3,
+        frameworkPartIndex: 2,
         comparisonRoleCount: 0,
         hasExample: false,
       },
     ]);
     expect(treatments[0]).toBe("pillar_system");
-    expect(treatments[1]).not.toBe(treatments[0]);
+    expect(treatments[1]).toBe("pillar_system");
   });
 
   it("keeps render treatment type-led when an image is missing", () => {
@@ -590,5 +592,276 @@ describe("Framework treatments", () => {
     });
     expect(slides[5]?.imageSlots?.map((slot) => slot.id)).toEqual(["photo"]);
     expect(slides[0]?.imageSlots).toBeUndefined();
+  });
+});
+
+function promptAPlanningIR(): CarouselPlanningIR {
+  return frameworkPlanningIR({
+    topic:
+      "The 4-part framework I use to decide whether a restaurant should add a new menu item",
+    beats: [
+      {
+        id: "beat_01",
+        position: 1,
+        role: "cover",
+        objective: "Name the model",
+        visualIntent: "text",
+        sequence: null,
+      },
+      {
+        id: "beat_02",
+        position: 2,
+        role: "framework_step",
+        objective: "Introduce the 4-part filter",
+        visualIntent: "diagram",
+        sequence: null,
+      },
+      {
+        id: "beat_03",
+        position: 3,
+        role: "list_item",
+        objective: "Operational Fit",
+        visualIntent: "checklist",
+        sequence: { kind: "list", index: 1 },
+      },
+      {
+        id: "beat_04",
+        position: 4,
+        role: "list_item",
+        objective: "Margin Viability",
+        visualIntent: "data",
+        sequence: { kind: "list", index: 2 },
+      },
+      {
+        id: "beat_05",
+        position: 5,
+        role: "list_item",
+        objective: "Menu Cohesion",
+        visualIntent: "comparison",
+        sequence: { kind: "list", index: 3 },
+      },
+      {
+        id: "beat_06",
+        position: 6,
+        role: "list_item",
+        objective: "Demand Signal",
+        visualIntent: "checklist",
+        sequence: { kind: "list", index: 4 },
+      },
+      {
+        id: "beat_07",
+        position: 7,
+        role: "closing",
+        objective: "Close on the decision",
+        visualIntent: "text",
+        sequence: null,
+      },
+    ],
+  });
+}
+
+function promptBPlanningIR(): CarouselPlanningIR {
+  return frameworkPlanningIR({
+    topic:
+      "A simple framework for deciding whether to repair or replace restaurant equipment",
+    strategy: {
+      ...frameworkPlanningIR().strategy,
+      angleType: "diagnostic",
+      preferredFamily: "framework",
+    },
+    beats: [
+      {
+        id: "beat_01",
+        position: 1,
+        role: "cover",
+        objective: "Open on equipment failure",
+        visualIntent: "photo",
+        sequence: null,
+      },
+      {
+        id: "beat_02",
+        position: 2,
+        role: "problem",
+        objective: "Name gut-feel cost",
+        visualIntent: "text",
+        sequence: null,
+      },
+      {
+        id: "beat_03",
+        position: 3,
+        role: "framework_step",
+        objective: "Introduce the decision model",
+        visualIntent: "diagram",
+        sequence: null,
+      },
+      {
+        id: "beat_04",
+        position: 4,
+        role: "insight",
+        objective: "Financial filters",
+        visualIntent: "comparison",
+        sequence: null,
+      },
+      {
+        id: "beat_05",
+        position: 5,
+        role: "insight",
+        objective: "Operational filters",
+        visualIntent: "checklist",
+        sequence: null,
+      },
+      {
+        id: "beat_06",
+        position: 6,
+        role: "example",
+        objective: "Apply the model",
+        visualIntent: "diagram",
+        sequence: null,
+      },
+      {
+        id: "beat_07",
+        position: 7,
+        role: "closing",
+        objective: "Save the model",
+        visualIntent: "text",
+        sequence: null,
+      },
+    ],
+  });
+}
+
+function slideCountOnlyPlanningIR(slideCount: 5 | 7): CarouselPlanningIR {
+  const roles =
+    slideCount === 7
+      ? ([
+          "cover",
+          "problem",
+          "insight",
+          "insight",
+          "insight",
+          "example",
+          "closing",
+        ] as const)
+      : (["cover", "problem", "insight", "example", "closing"] as const);
+  return frameworkPlanningIR({
+    beats: roles.map((role, index) => ({
+      id: `beat_${String(index + 1).padStart(2, "0")}`,
+      position: index + 1,
+      role,
+      objective: role,
+      visualIntent: "text" as const,
+      sequence: null,
+    })),
+  });
+}
+
+describe("Framework part structure", () => {
+  it("grounds 4 ordered list sequences as Framework parts", () => {
+    const ir = promptAPlanningIR();
+    const structure = resolveFrameworkPartStructure(ir);
+    expect(canUseFrameworkFamily(ir)).toBe(true);
+    expect(structure.source).toBe("ordered_parts");
+    expect(structure.partCount).toBe(4);
+    expect(structure.indexByBeatId).toEqual({
+      beat_03: 1,
+      beat_04: 2,
+      beat_05: 3,
+      beat_06: 4,
+    });
+  });
+
+  it("writes grounded part indexes onto Prompt A slides", () => {
+    const planningIR = promptAPlanningIR();
+    const compositionIR = compilePlanningIRToBaselineCompositionIR(planningIR);
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID)!;
+    const slides = buildFrameworkFamilySlides({
+      template,
+      planningIR,
+      compositionIR,
+    });
+    expect(slides.map((slide) => slide.composition?.frameworkPartCount)).toEqual([
+      4, 4, 4, 4, 4, 4, 4,
+    ]);
+    expect(slides.map((slide) => slide.composition?.frameworkPartIndex)).toEqual([
+      null,
+      null,
+      1,
+      2,
+      3,
+      4,
+      null,
+    ]);
+    expect(slides[2]?.composition?.frameworkPartSource).toBe("ordered_parts");
+    expect(slides[1]?.composition?.treatment).toBe("model_overview");
+    expect(
+      slides.slice(2, 6).every((slide) => slide.composition?.treatment === "pillar_system")
+    ).toBe(true);
+  });
+
+  it("does not invent 4 parts on a 7-slide Framework with no multipart structure", () => {
+    const ir = slideCountOnlyPlanningIR(7);
+    const structure = resolveFrameworkPartStructure(ir);
+    expect(structure.partCount).toBe(0);
+    expect(structure.source).toBe("none");
+    expect(Object.keys(structure.indexByBeatId)).toHaveLength(0);
+  });
+
+  it("does not invent 3 parts on a 5-slide Framework with no multipart structure", () => {
+    const ir = slideCountOnlyPlanningIR(5);
+    const structure = resolveFrameworkPartStructure(ir);
+    expect(structure.partCount).toBe(0);
+    expect(structure.source).toBe("none");
+  });
+
+  it("keeps Prompt B at partCount 0 and still routes Framework", () => {
+    const ir = promptBPlanningIR();
+    expect(canUseFrameworkFamily(ir)).toBe(true);
+    expect(canUseStoryNarrativeFamily(ir)).toBe(false);
+    expect(canUseComparisonFamily(ir)).toBe(false);
+    expect(canUseBreakdownListicleFamily(ir)).toBe(false);
+    const structure = resolveFrameworkPartStructure(ir);
+    expect(structure.partCount).toBe(0);
+    expect(structure.source).toBe("none");
+    const compositionIR = compilePlanningIRToBaselineCompositionIR(ir);
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(CAROUSEL_STUDIO_TEMPLATE_ID)!;
+    const slides = buildFrameworkFamilySlides({
+      template,
+      planningIR: ir,
+      compositionIR,
+    });
+    expect(slides.every(isFrameworkFamilySlide)).toBe(true);
+    expect(
+      slides.every((slide) => slide.composition?.frameworkPartCount === 0)
+    ).toBe(true);
+    expect(
+      slides.every((slide) => slide.composition?.frameworkPartIndex == null)
+    ).toBe(true);
+  });
+
+  it("does not let 4 newline phrases change grounded partCount", () => {
+    const labels = labelFrameworkParts(
+      0,
+      "Demand\nMargin\nOps\nFit"
+    );
+    expect(labels).toEqual([]);
+    expect(resolveFrameworkPartStructure(promptBPlanningIR()).partCount).toBe(0);
+  });
+
+  it("keeps grounded partCount when one copy label is missing", () => {
+    const labels = labelFrameworkParts(4, "Demand\nMargin\nOps");
+    expect(labels).toHaveLength(4);
+    expect(labels).toEqual(["Demand", "Margin", "Ops", null]);
+  });
+
+  it("keeps grounded partCount when copy is a single paragraph", () => {
+    const labels = labelFrameworkParts(
+      4,
+      "Uncovers hidden complexity before a dish reaches a single customer."
+    );
+    expect(labels).toHaveLength(4);
+    expect(labels[0]).toBe(
+      "Uncovers hidden complexity before a dish reaches a single customer."
+    );
+    expect(labels.slice(1)).toEqual([null, null, null]);
   });
 });

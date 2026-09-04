@@ -43,6 +43,19 @@ export const FRAMEWORK_TREATMENTS = [
 ] as const;
 export type FrameworkTreatment = (typeof FRAMEWORK_TREATMENTS)[number];
 
+export const FRAMEWORK_PART_SOURCES = [
+  "framework_steps",
+  "ordered_parts",
+  "none",
+] as const;
+export type FrameworkPartSource = (typeof FRAMEWORK_PART_SOURCES)[number];
+
+export type FrameworkPartStructure = {
+  source: FrameworkPartSource;
+  partCount: number;
+  indexByBeatId: Readonly<Record<string, number>>;
+};
+
 export type FrameworkComposition = {
   family: typeof FRAMEWORK_FAMILY;
   archetype: string;
@@ -52,8 +65,9 @@ export type FrameworkComposition = {
   sequence: CarouselPlanningSequence | null;
   position: number;
   totalSlides: number;
-  frameworkStepIndex: number | null;
-  frameworkStepCount: number;
+  frameworkPartCount: number;
+  frameworkPartIndex: number | null;
+  frameworkPartSource: FrameworkPartSource;
 };
 
 type SlideWithLooseComposition = {
@@ -75,12 +89,106 @@ export function frameworkStepIndex(
   planningIR: CarouselPlanningIR,
   beat: CarouselPlanningBeat
 ): number | null {
-  if (beat.role !== "framework_step") return null;
+  return resolveFrameworkPartStructure(planningIR).indexByBeatId[beat.id] ?? null;
+}
+
+function orderedListBeats(planningIR: CarouselPlanningIR): CarouselPlanningBeat[] {
+  return planningIR.beats.filter((beat) => {
+    const sequence = beat.sequence;
+    return (
+      sequence?.kind === "list" &&
+      Number.isInteger(sequence.index) &&
+      sequence.index >= 1
+    );
+  });
+}
+
+/**
+ * Grounded Framework parts from Planning IR only.
+ * Copy never participates. Slide count never participates.
+ *
+ * CASE A: 2+ framework_step beats → those beats are the parts.
+ * CASE B: open preferred Framework with 2+ list sequences → those
+ * ordered beats are the parts. List proves order, not a timeline.
+ * CASE C: otherwise no multipart structure.
+ */
+export function resolveFrameworkPartStructure(
+  planningIR: CarouselPlanningIR
+): FrameworkPartStructure {
   const steps = planningIR.beats.filter(
-    (candidate) => candidate.role === "framework_step"
+    (beat) => beat.role === "framework_step"
   );
-  const index = steps.findIndex((candidate) => candidate.id === beat.id);
-  return index >= 0 ? index + 1 : null;
+  if (steps.length >= 2) {
+    const indexByBeatId: Record<string, number> = {};
+    steps.forEach((beat, index) => {
+      indexByBeatId[beat.id] = index + 1;
+    });
+    return {
+      source: "framework_steps",
+      partCount: steps.length,
+      indexByBeatId,
+    };
+  }
+
+  const listed = orderedListBeats(planningIR);
+  if (
+    planningIR.contract.kind === "open" &&
+    planningIR.strategy.preferredFamily === "framework" &&
+    listed.length >= 2
+  ) {
+    const indexByBeatId: Record<string, number> = {};
+    const unique = [...new Set(listed.map((beat) => beat.sequence!.index))].sort(
+      (a, b) => a - b
+    );
+    listed.forEach((beat) => {
+      const rank = unique.indexOf(beat.sequence!.index);
+      indexByBeatId[beat.id] = rank >= 0 ? rank + 1 : beat.sequence!.index;
+    });
+    return {
+      source: "ordered_parts",
+      partCount: unique.length,
+      indexByBeatId,
+    };
+  }
+
+  return {
+    source: "none",
+    partCount: 0,
+    indexByBeatId: {},
+  };
+}
+
+export function frameworkPartIndex(
+  structure: FrameworkPartStructure,
+  beat: CarouselPlanningBeat
+): number | null {
+  return structure.indexByBeatId[beat.id] ?? null;
+}
+
+/** Text formatting only. Never used to decide part count. */
+export function splitFrameworkCopyLines(
+  text: string,
+  exclude?: string
+): string[] {
+  const skip = exclude?.trim() || "";
+  return text
+    .split(/\n|•|;/)
+    .map((line) => line.replace(/^\s*[-]\s*/, "").trim())
+    .filter((line) => line && line !== skip);
+}
+
+/**
+ * Labels for already-grounded parts. Copy cannot add or remove parts.
+ * A missing line stays null and the slot still exists.
+ */
+export function labelFrameworkParts(
+  partCount: number,
+  text: string,
+  exclude?: string
+): Array<string | null> {
+  const count = partCount >= 2 ? partCount : 0;
+  const lines = splitFrameworkCopyLines(text, exclude);
+  return Array.from({ length: count }, (_, index) => lines[index] ?? null);
 }
 
 function comparisonRoleCount(planningIR: CarouselPlanningIR): number {
@@ -134,9 +242,6 @@ function isDecisionStructure(args: {
   return args.comparisonRoleCount >= 2 && args.semanticRole === "insight";
 }
 
-function isOrderedStep(sequence?: CarouselPlanningSequence | null): boolean {
-  return sequence?.kind === "list";
-}
 
 /**
  * Convert semantic role + Composition IR + plan structure into a Framework
@@ -148,8 +253,11 @@ export function resolveFrameworkTreatment(args: {
   position: number;
   totalSlides: number;
   sequence?: CarouselPlanningSequence | null;
-  frameworkStepCount: number;
-  frameworkStepIndex: number | null;
+  frameworkStepCount?: number;
+  frameworkStepIndex?: number | null;
+  frameworkPartCount?: number;
+  frameworkPartIndex?: number | null;
+  frameworkPartSource?: FrameworkPartSource;
   comparisonRoleCount: number;
   hasExample: boolean;
 }): FrameworkTreatment {
@@ -159,8 +267,8 @@ export function resolveFrameworkTreatment(args: {
     position,
     totalSlides,
     sequence,
-    frameworkStepCount: stepCount,
-    frameworkStepIndex: stepIndex,
+    frameworkPartCount = args.frameworkStepCount ?? 0,
+    frameworkPartIndex = args.frameworkStepIndex ?? null,
     comparisonRoleCount: comparisons,
     hasExample,
   } = args;
@@ -178,29 +286,24 @@ export function resolveFrameworkTreatment(args: {
     return "decision_tree";
   }
 
-  if (semanticRole === "insight") {
-    if (archetype === "diagram_focus" && stepCount >= 3) return "cycle_model";
-    return "principle_focus";
-  }
+  if (semanticRole === "insight") return "principle_focus";
 
   if (semanticRole === "context") {
-    if (archetype === "diagram_focus" && stepCount >= 3) return "layered_model";
     return "model_overview";
   }
 
-  if (semanticRole === "transition") return "step_system";
+  if (semanticRole === "transition") {
+    return archetype === "timeline_flow" ? "step_system" : "principle_focus";
+  }
 
-  if (semanticRole === "framework_step") {
-    if (archetype === "timeline_flow" || isOrderedStep(sequence)) {
-      return "step_system";
+  const isGroundedPart = frameworkPartIndex != null && frameworkPartCount >= 2;
+
+  if (semanticRole === "framework_step" || isGroundedPart) {
+    if (archetype === "timeline_flow") return "step_system";
+    if (semanticRole === "framework_step" && !isGroundedPart) {
+      if (frameworkPartCount >= 2) return "model_overview";
+      return archetype === "diagram_focus" ? "model_overview" : "principle_focus";
     }
-    if (archetype === "diagram_focus") {
-      return stepIndex === 1 ? "model_overview" : "cycle_model";
-    }
-    if (archetype === "framework_grid") {
-      return isOrderedStep(sequence) ? "step_system" : "pillar_system";
-    }
-    if (stepIndex === 1 && position <= 3) return "model_overview";
     return "pillar_system";
   }
 
@@ -210,7 +313,7 @@ export function resolveFrameworkTreatment(args: {
   if (archetype === "closing_focus") return "framework_closing";
 
   if (hasExample && position >= totalSlides - 2) return "example_application";
-  if (stepCount >= 2 && position === 2) return "model_overview";
+  if (frameworkPartCount >= 2 && position === 2) return "model_overview";
   return "principle_focus";
 }
 
@@ -220,8 +323,11 @@ export type FrameworkTreatmentInput = {
   position: number;
   totalSlides: number;
   sequence?: CarouselPlanningSequence | null;
-  frameworkStepCount: number;
-  frameworkStepIndex: number | null;
+  frameworkStepCount?: number;
+  frameworkStepIndex?: number | null;
+  frameworkPartCount?: number;
+  frameworkPartIndex?: number | null;
+  frameworkPartSource?: FrameworkPartSource;
   comparisonRoleCount: number;
   hasExample: boolean;
 };
@@ -234,13 +340,13 @@ function rematchRepeatedTreatment(
     return treatment;
   }
   if (treatment === "pillar_system") {
-    return isOrderedStep(slide.sequence) ? "step_system" : "layered_model";
+    const partIndex = slide.frameworkPartIndex ?? slide.frameworkStepIndex ?? null;
+    if (partIndex != null) return "pillar_system";
+    return "principle_focus";
   }
   if (treatment === "step_system") return "pillar_system";
-  if (treatment === "model_overview") {
-    return slide.archetype === "diagram_focus" ? "cycle_model" : "pillar_system";
-  }
-  if (treatment === "cycle_model") return "layered_model";
+  if (treatment === "model_overview") return "principle_focus";
+  if (treatment === "cycle_model") return "principle_focus";
   if (treatment === "layered_model") return "principle_focus";
   if (treatment === "principle_focus") {
     return slide.semanticRole === "example"
@@ -267,6 +373,11 @@ export function resolveFrameworkTreatments(
     const previous = resolved[index - 1];
     const near = index >= 2 ? resolved[index - 2] : undefined;
     if (current !== previous && current !== near) continue;
+    const partIndex =
+      slides[index]?.frameworkPartIndex ?? slides[index]?.frameworkStepIndex ?? null;
+    if (partIndex != null && current === "pillar_system") {
+      continue;
+    }
     const rematched = rematchRepeatedTreatment(current, slides[index]!);
     if (rematched !== previous && rematched !== near) {
       resolved[index] = rematched;
@@ -280,10 +391,6 @@ export function resolveFrameworkTreatments(
   return resolved;
 }
 
-function hasImage(imageUrl?: string | null): boolean {
-  return typeof imageUrl === "string" && imageUrl.trim().length > 0;
-}
-
 /**
  * Renderer-side treatment guard. Framework stays type-led when a requested
  * image never arrives. Treatments themselves do not depend on photography.
@@ -292,7 +399,6 @@ export function resolveFrameworkRenderTreatment(args: {
   treatment: FrameworkTreatment;
   imageUrl?: string | null;
 }): FrameworkTreatment {
-  void hasImage(args.imageUrl);
   return args.treatment;
 }
 
@@ -446,7 +552,7 @@ export function buildFrameworkFamilySlides(args: {
     args.planningIR.beats.length,
     args.compositionIR.slides.length
   );
-  const stepCount = frameworkStepCount(args.planningIR);
+  const partStructure = resolveFrameworkPartStructure(args.planningIR);
   const comparisons = comparisonRoleCount(args.planningIR);
   const hasExample = hasExampleBeat(args.planningIR);
   const slides: CarouselSlideSpec[] = [];
@@ -460,8 +566,9 @@ export function buildFrameworkFamilySlides(args: {
         position: beat.position,
         totalSlides: count,
         sequence: beat.sequence,
-        frameworkStepCount: stepCount,
-        frameworkStepIndex: frameworkStepIndex(args.planningIR, beat),
+        frameworkPartCount: partStructure.partCount,
+        frameworkPartIndex: frameworkPartIndex(partStructure, beat),
+        frameworkPartSource: partStructure.source,
         comparisonRoleCount: comparisons,
         hasExample,
       };
@@ -481,8 +588,9 @@ export function buildFrameworkFamilySlides(args: {
       sequence: beat.sequence,
       position: beat.position,
       totalSlides: count,
-      frameworkStepIndex: frameworkStepIndex(args.planningIR, beat),
-      frameworkStepCount: stepCount,
+      frameworkPartCount: partStructure.partCount,
+      frameworkPartIndex: frameworkPartIndex(partStructure, beat),
+      frameworkPartSource: partStructure.source,
     };
 
     const slide = {

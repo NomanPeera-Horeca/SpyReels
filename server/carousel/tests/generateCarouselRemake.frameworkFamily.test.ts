@@ -178,6 +178,82 @@ describe("generateCarouselRemake Framework family wiring", () => {
     );
   });
 
+  it("routes the repair-or-replace Framework prompt without inventing parts", async () => {
+    const brief: CarouselCreativeBrief = {
+      ...frameworkBrief(),
+      id: "brief_framework_repair_or_replace",
+      title: "Repair or Replace? A Simple Framework for Restaurant Equipment",
+      description: "A model for deciding whether to repair or replace equipment.",
+      angleType: "diagnostic",
+      hook: "Repair or replace is a model, not a guess.",
+      corePromise: "Give owners a simple model for the next equipment call.",
+      keyPoints: [
+        { title: "Failure mode", purpose: "Name the failure", explanation: "Part or system?" },
+      ],
+      slideOutline: [
+        { position: 1, role: "hook", objective: "Open on equipment failure", recommendedVisual: "photo", listItemIndex: null },
+        { position: 2, role: "problem", objective: "Name gut-feel cost", recommendedVisual: "text", listItemIndex: null },
+        { position: 3, role: "framework", objective: "Introduce the decision model", recommendedVisual: "diagram", listItemIndex: null },
+        { position: 4, role: "insight", objective: "Financial filters", recommendedVisual: "text", listItemIndex: null },
+        { position: 5, role: "insight", objective: "Operational filters", recommendedVisual: "text", listItemIndex: null },
+        { position: 6, role: "example", objective: "Apply the model", recommendedVisual: "text", listItemIndex: null },
+        { position: 7, role: "cta", objective: "Close on the decision", recommendedVisual: "text", listItemIndex: null },
+      ],
+    };
+    const planningIR = compileCreativeBriefToPlanningIR({
+      brief,
+      sourceContent:
+        "A simple framework for deciding whether to repair or replace restaurant equipment",
+    });
+    expect(planningIR.strategy.preferredFamily).toBe("framework");
+    visualDirectionMock.mockResolvedValue({
+      compositionIR: compilePlanningIRToBaselineCompositionIR(planningIR),
+      source: "ai",
+      attempts: 1,
+      issues: [],
+    });
+    mockedInvokeLLM.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(
+              genericCopyPayload(
+                brief.slideOutline.map((_, index) =>
+                  `slide_${String(index + 1).padStart(2, "0")}`
+                )
+              )
+            ),
+          },
+        },
+      ],
+    });
+
+    await generateCarouselRemake(6904, CAROUSEL_STUDIO_TEMPLATE_ID, "infer from source", {
+      sourceContent:
+        "A simple framework for deciding whether to repair or replace restaurant equipment",
+      creativeBrief: brief,
+    });
+
+    const completed = persistUpdates.find((fields) => fields.status === "completed");
+    const slides = completed?.slideStructureJson as Array<{
+      composition?: {
+        family?: string;
+        frameworkPartCount?: number;
+        frameworkPartIndex?: number | null;
+      };
+    }>;
+    expect(slides.every(isFrameworkFamilySlide)).toBe(true);
+    expect(slides.some(isStoryNarrativeSlide)).toBe(false);
+    expect(slides.some(isComparisonFamilySlide)).toBe(false);
+    expect(slides.some(isBreakdownListicleSlide)).toBe(false);
+    expect(
+      slides.every((slide) => slide.composition?.frameworkPartCount === 0)
+    ).toBe(true);
+    expect(
+      slides.every((slide) => slide.composition?.frameworkPartIndex == null)
+    ).toBe(true);
+  });
+
   it("does not steal an open Story plan", async () => {
     const brief: CarouselCreativeBrief = {
       ...frameworkBrief(),
