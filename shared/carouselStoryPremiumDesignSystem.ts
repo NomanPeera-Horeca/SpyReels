@@ -66,7 +66,7 @@ export function resolveStoryPremiumVariant({
       if (!withImage) return "cover_type";
       return totalSlides % 2 === 0 ? "cover_full_bleed" : "cover_editorial_frame";
     case "story_scene":
-      if (!withImage) return "setup_left";
+      if (!withImage) return "scene_caption_bottom";
       if (position % 3 === 0) return "scene_caption_bottom";
       return position % 2 === 0 ? "scene_framed" : "scene_full_bleed";
     case "editorial_setup":

@@ -137,5 +137,11 @@ describe("Story narrative family", () => {
         imageUrl: "https://images.example.com/scene.jpg",
       })
     ).toBe("story_scene");
+    expect(
+      resolveStoryNarrativeRenderTreatment({
+        treatment: "story_scene",
+        semanticRole: "context",
+      })
+    ).toBe("story_scene");
   });
 });

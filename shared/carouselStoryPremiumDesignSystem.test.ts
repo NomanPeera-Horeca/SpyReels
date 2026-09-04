@@ -54,6 +54,16 @@ describe("premium Story design system", () => {
     ).toBe("split_image_right");
   });
 
+  it("keeps a missing-image scene as a caption still", () => {
+    expect(
+      resolveStoryPremiumVariant({
+        treatment: "story_scene",
+        position: 2,
+        totalSlides: 7,
+      })
+    ).toBe("scene_caption_bottom");
+  });
+
   it("varies image scenes without randomness", () => {
     expect(
       resolveStoryPremiumVariant({

@@ -382,7 +382,53 @@ function StoryScene(props: StoryProps) {
   const b = body(values);
   const withImage = Boolean(imageUrl?.trim());
 
-  if (!withImage) return <EditorialSetup {...props} />;
+  if (!withImage) {
+    return (
+      <div
+        style={{
+          ...shell(tokens),
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          padding: "2rem 1.45rem 2.2rem",
+          background: `linear-gradient(180deg, ${wash(tokens.colors.foreground, 0.06)} 0%, ${tokens.colors.background} 58%)`,
+        }}
+      >
+        <div style={{ position: "relative", zIndex: 2 }}>
+          <CarouselEditableText
+            as="h2"
+            slotId="headline"
+            value={h}
+            editable={editable}
+            onCommit={onSlotChange}
+            multiline
+            style={{
+              ...headlineStyle(tokens),
+              maxWidth: "14ch",
+              fontSize: "clamp(1.55rem, 6.2vw, 2.05rem)",
+            }}
+          />
+          {b ? (
+            <CarouselEditableText
+              as="p"
+              slotId="body"
+              value={b}
+              editable={editable}
+              onCommit={onSlotChange}
+              multiline
+              style={{
+                ...bodyStyle(tokens),
+                marginTop: "0.7rem",
+                maxWidth: "30ch",
+                fontSize: DESIGN.typography.caption,
+              }}
+            />
+          ) : null}
+        </div>
+        <Handle handle={handle} tokens={tokens} />
+      </div>
+    );
+  }
 
   if (variant === "scene_full_bleed") {
     return (
@@ -1110,6 +1156,10 @@ function InsightReveal({
   );
 }
 
+function looksLikeCtaHeadline(text: string): boolean {
+  return /^(save|share|comment|follow|drop)\b/i.test(text.trim());
+}
+
 function StoryClosing({
   tokens,
   values,
@@ -1117,8 +1167,11 @@ function StoryClosing({
   onSlotChange,
   handle,
 }: StoryProps) {
-  const h = headline(values);
-  const b = body(values);
+  const rawHeadline = headline(values);
+  const rawBody = body(values);
+  const promoteBody = looksLikeCtaHeadline(rawHeadline) && Boolean(rawBody);
+  const h = promoteBody ? rawBody : rawHeadline;
+  const b = promoteBody ? rawHeadline : rawBody;
   const action = cta(values);
   return (
     <div
@@ -1158,7 +1211,7 @@ function StoryClosing({
         </p>
         <CarouselEditableText
           as="h2"
-          slotId="headline"
+          slotId={promoteBody ? "body" : "headline"}
           value={h}
           editable={editable}
           onCommit={onSlotChange}
@@ -1172,7 +1225,7 @@ function StoryClosing({
         {b ? (
           <CarouselEditableText
             as="p"
-            slotId="body"
+            slotId={promoteBody ? "headline" : "body"}
             value={b}
             editable={editable}
             onCommit={onSlotChange}
@@ -1251,10 +1304,23 @@ export function CarouselStoryPremiumFamily(
     imageUrl: props.imageUrl,
   });
 
-  return renderForTreatment({
-    ...props,
-    composition,
-    treatment,
-    variant,
-  });
+  return (
+    <div
+      data-story-family="story_narrative"
+      data-story-premium="v1"
+      data-story-treatment={treatment}
+      data-story-variant={variant}
+      data-story-role={composition.semanticRole}
+      data-story-archetype={composition.archetype}
+      data-story-position={String(composition.position)}
+      style={{ width: "100%", maxWidth: "22.5rem" }}
+    >
+      {renderForTreatment({
+        ...props,
+        composition,
+        treatment,
+        variant,
+      })}
+    </div>
+  );
 }

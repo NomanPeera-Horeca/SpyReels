@@ -152,6 +152,7 @@ export function resolveStoryNarrativeRenderTreatment(args: {
   if (args.semanticRole === "insight" || args.semanticRole === "summary") {
     return "insight_reveal";
   }
+  if (args.treatment === "story_scene") return "story_scene";
   return "editorial_setup";
 }
 
