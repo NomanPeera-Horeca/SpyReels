@@ -20,6 +20,7 @@ import {
   coachScriptWordCount,
   durationLabelFromWordCount,
 } from "@shared/coachScriptLength";
+import { creatorIdeaForKeywordRouting } from "@shared/coachIdeaGroundTruth";
 import { coachScriptModeForPlanCard, inferCoachScriptMode, type CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
@@ -134,7 +135,8 @@ export async function generateCoachScriptForWorkspace(args: {
     args.description.includes("Creator goal (ground truth") ||
     args.description.includes("Creator's chosen angle");
   let scriptMode: CoachScriptMode =
-    args.scriptModeOverride ?? inferCoachScriptMode({ description: args.description });
+    args.scriptModeOverride ??
+    inferCoachScriptMode({ description: creatorIdeaForKeywordRouting(args.description) });
   let funnelStage: string | null = null;
 
   if (args.planCardId) {
@@ -152,7 +154,7 @@ export async function generateCoachScriptForWorkspace(args: {
       }
       funnelStage = planCard.funnelStage ?? null;
       scriptMode = coachScriptModeForPlanCard({
-        description: args.description,
+        description: creatorIdeaForKeywordRouting(args.description),
         contentFormat: planCard.contentFormat,
         funnelStage: planCard.funnelStage,
         sourceType: planCard.sourceType,

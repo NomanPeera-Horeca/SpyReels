@@ -5,6 +5,7 @@ import { DEFAULT_COACH_HOOK_TYPE, type CoachHookType } from "@shared/hookTypes";
 import type { CoachScriptMode } from "@shared/coachScriptMode";
 import { coachScriptModeLabel } from "@shared/coachScriptMode";
 import { COACH_ANALYSIS_RULES } from "@shared/coachAnalyze";
+import { creatorIdeaForKeywordRouting } from "@shared/coachIdeaGroundTruth";
 
 export function buildStudioDateContext(now = new Date()): string {
   const year = now.getFullYear();
@@ -142,7 +143,7 @@ export function buildCoachPrompt(
 
   const resolvedHookType = resolveCoachHookTypeForPrompt({
     contentFormat: options?.contentFormat,
-    description,
+    description: creatorIdeaForKeywordRouting(description),
   });
   const hookTypeLine = `Pre-selected hookType: "${resolvedHookType}" (hardcoded from format routing: you must output this exact hookType value).`;
 
