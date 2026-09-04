@@ -823,10 +823,10 @@ function inventedListContractPromptLines(): string[] {
 }
 
 export const ONE_CLOSING_EXPANSION_CONTRACT =
-  "slideOutline must contain exactly ONE final closing. Valid: insight then cta, or insight then takeaway. Invalid: takeaway then cta. The last slide is the one intentional ending. If you were planning both a takeaway and a CTA, use the penultimate position for a real content, story, or insight beat, and keep only the final slide as cta or takeaway. Do not add a second competing ending. Preserve estimatedSlideCount. Do not drop a slide to hide an extra closing.";
+  "slideOutline must contain exactly ONE final closing. takeaway and cta are both closing roles. Never include both. Valid last two roles: insight then cta, example then cta, or insight then takeaway. Invalid: takeaway then cta. If the last slide is cta, the penultimate role must be insight, example, problem, or framework, never takeaway. Preserve estimatedSlideCount. Do not drop a slide to hide an extra closing.";
 
 export const COMPETING_ENDINGS_REPAIR_CONTRACT =
-  "Exactly one closing. Do not return takeaway and cta as two final slides. Preserve the total slide count. Convert the extra closing into a substantive content, story, or insight beat. Keep only the last slide as cta or takeaway.";
+  "Exactly one closing. takeaway and cta cannot both appear. If the outline currently ends takeaway then cta, change the penultimate role from takeaway to insight or example and keep the last slide as cta. Preserve the total slide count. Do not keep a takeaway slide when a cta slide exists.";
 
 export function buildCarouselAnglesUserPrompt(args: {
   sourceContent: string;
@@ -944,7 +944,7 @@ export function buildCarouselAngleExpansionUserPrompt(args: {
     "Select useful, specific key points before any slide writing.",
     "Give every planned slide a distinct objective. Do not repeat the same slide objective.",
     "For numbered problem-solution formats: outline Leak/Problem N before Fix N, include every promised item, and do not summarize N plugs or fixes that were never introduced.",
-    "End with exactly one intentional final closing. The last slide role must be cta or takeaway. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway or soft close is valid. Do not add a second competing ending.",
+    "End with exactly one intentional final closing. The last slide role must be cta or takeaway, never both in the same outline. Choose the ending from contentGoal, audience, angleType, creator voice, ctaDirection, and funnel intent. A takeaway ending is valid only when there is no cta slide. Do not add a second competing ending.",
     ONE_CLOSING_EXPANSION_CONTRACT,
     "Avoid a generic Follow for more CTA. Write a specific ctaDirection.",
     "Avoid unsupported absolutes and sensational claims.",

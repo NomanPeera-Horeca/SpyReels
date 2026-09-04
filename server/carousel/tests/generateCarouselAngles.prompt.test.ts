@@ -428,9 +428,8 @@ describe("generateCarouselAngles dedicated compact and expansion prompts", () =>
     expect(user).toContain(ONE_CLOSING_EXPANSION_CONTRACT);
     expect(user).toContain("exactly ONE final closing");
     expect(user).toContain("Invalid: takeaway then cta");
-    expect(user).toContain(
-      "use the penultimate position for a real content, story, or insight beat"
-    );
+    expect(user).toContain("takeaway and cta are both closing roles");
+    expect(user).toContain("never takeaway");
   });
 
   it("puts the one-closing contract on every expansion format, including stories", () => {
@@ -449,6 +448,8 @@ describe("generateCarouselAngles dedicated compact and expansion prompts", () =>
     });
     expect(storyUser).toContain(ONE_CLOSING_EXPANSION_CONTRACT);
     expect(storyUser).toContain("exactly ONE final closing");
+    expect(storyUser).toContain("never both in the same outline");
+    expect(storyUser).toContain("A takeaway ending is valid only when there is no cta slide");
     expect(storyUser).not.toContain("EXPLICIT LIST CONTRACT");
   });
 
@@ -459,11 +460,10 @@ describe("generateCarouselAngles dedicated compact and expansion prompts", () =>
     );
     expect(note).toContain(COMPETING_ENDINGS_REPAIR_CONTRACT);
     expect(note).toContain("Exactly one closing.");
-    expect(note).toContain("Do not return takeaway and cta as two final slides.");
+    expect(note).toContain("takeaway and cta cannot both appear");
+    expect(note).toContain("change the penultimate role from takeaway to insight or example");
     expect(note).toContain("Preserve the total slide count.");
-    expect(note).toContain(
-      "Convert the extra closing into a substantive content, story, or insight beat."
-    );
+    expect(note).toContain("Do not keep a takeaway slide when a cta slide exists.");
     expect(note).toContain("Brief has multiple competing endings");
     expect(note).toContain("slideOutline length equal to the selected estimatedSlideCount (7)");
   });
