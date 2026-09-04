@@ -111,6 +111,90 @@ describe("AI Coach creator constraints", () => {
     expect(clean.ok).toBe(true);
   });
 
+  it("extracts and enforces an exact quoted opening", () => {
+    const idea =
+      'Open with "Your kitchen may not need another employee." Then explain the system.';
+    const constraints = extractCoachCreatorConstraints(idea);
+    expect(constraints.requiredOpening).toBe("Your kitchen may not need another employee.");
+
+    const pass = validateCoachScriptConstraints(
+      script({
+        hook: "Your kitchen may not need another employee.",
+        teach: "Audit the line first.",
+      }),
+      constraints
+    );
+    expect(pass.ok).toBe(true);
+
+    const fail = validateCoachScriptConstraints(
+      script({
+        hook: "Your kitchen probably does not need another hire.",
+        teach: "Audit the line first.",
+      }),
+      constraints
+    );
+    expect(fail.ok).toBe(false);
+    expect(fail.violations[0]?.code).toBe("required_opening_mismatch");
+  });
+
+  it("extracts and enforces an exact quoted ending", () => {
+    const idea = 'End with "Fix the system before you add payroll."';
+    const constraints = extractCoachCreatorConstraints(idea);
+    expect(constraints.requiredEnding).toBe("Fix the system before you add payroll.");
+
+    const pass = validateCoachScriptConstraints(
+      script({
+        hook: "Do not hire first.",
+        cta: "Fix the system before you add payroll.",
+      }),
+      constraints
+    );
+    expect(pass.ok).toBe(true);
+
+    const paraphrased = validateCoachScriptConstraints(
+      script({
+        hook: "Do not hire first.",
+        cta: "Fix operations before you grow the team.",
+      }),
+      constraints
+    );
+    expect(paraphrased.ok).toBe(false);
+    expect(paraphrased.violations[0]?.code).toBe("required_ending_mismatch");
+
+    const extraSentence = validateCoachScriptConstraints(
+      script({
+        hook: "Do not hire first.",
+        cta: "Fix the system before you add payroll. Comment SYSTEM for the checklist.",
+      }),
+      constraints
+    );
+    expect(extraSentence.ok).toBe(false);
+    expect(extraSentence.violations[0]?.code).toBe("required_ending_mismatch");
+  });
+
+  it("extracts explicit do-not-discuss exclusions", () => {
+    const constraints = extractCoachCreatorConstraints(
+      "Do not discuss wages or food cost. Do not talk about financing. Do not mention pricing. Do not discuss labor cost."
+    );
+    expect(constraints.forbiddenTopics).toEqual(
+      expect.arrayContaining(["wages", "food cost", "financing", "pricing", "labor cost"])
+    );
+  });
+
+  it("does not treat an ordinary quoted phrase as a required opening", () => {
+    const constraints = extractCoachCreatorConstraints(
+      'Tell owners the phrase "Your kitchen may not need another employee." can become a teaching moment.'
+    );
+    expect(constraints.requiredOpening).toBeNull();
+  });
+
+  it("keeps delayed SpyReels name out of forbidden topics", () => {
+    const constraints = extractCoachCreatorConstraints(SPYREELS_IDEA);
+    expect(constraints.delayedTerms.map((item) => item.term)).toEqual(["SpyReels"]);
+    expect(constraints.forbiddenTopics).not.toContain("SpyReels");
+    expect(constraints.forbiddenTerms).not.toContain("SpyReels");
+  });
+
   it("instructs the writer to preserve a contrarian stance", () => {
     const constraints = extractCoachCreatorConstraints(CONTRARIAN_IDEA);
     expect(constraints.stanceRequirements.join(" ")).toMatch(/stated opinion/i);

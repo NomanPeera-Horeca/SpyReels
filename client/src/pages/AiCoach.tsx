@@ -911,7 +911,7 @@ export default function AiCoach() {
       const subheadline =
         phase === "analyzing"
           ? agentMessage ?? "Checking context before writing your script"
-          : "Usually about a minute.";
+          : "Usually 1-2 minutes.";
 
       return shellLayout(
         <AgentProgressPanel
