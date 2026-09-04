@@ -7,7 +7,7 @@ import {
   type CoachHookVariation,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
-import { hookOptionsArrivalPlan } from "@shared/coachHookOptionsUi";
+import { hookOptionsArrivalPlan, hookOptionsSheetShowsLoader } from "@shared/coachHookOptionsUi";
 import { formatCoachHookTypeLabel } from "@shared/hookTypes";
 import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
@@ -270,9 +270,14 @@ export function AiCoachResultView({
 
   useEffect(() => {
     const plan = hookOptionsArrivalPlan(hookVariations);
-    setHookOptionsOpen(plan.openSheet);
     setSelectedHookOptionIndex(plan.selectedIndex);
   }, [hookVariations]);
+
+  useEffect(() => {
+    if (hookVariationsPending) {
+      setHookOptionsOpen(true);
+    }
+  }, [hookVariationsPending]);
 
   useEffect(() => {
     if (saveToMyScriptsPending) {
@@ -341,10 +346,9 @@ export function AiCoachResultView({
   };
 
   const openHookOptions = () => {
-    if (hookVariations && hookVariations.length > 0) {
-      setHookOptionsOpen(true);
-      return;
-    }
+    setHookOptionsOpen(true);
+    if (hookVariations && hookVariations.length > 0) return;
+    if (hookVariationsPending) return;
     onRequestHookVariations();
   };
 
@@ -687,11 +691,8 @@ export function AiCoachResultView({
                           Schedule
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem
-                        onSelect={openHookOptions}
-                        disabled={hookVariationsPending}
-                      >
-                        {hookVariationsPending ? "Generating hook options..." : "Hook options"}
+                      <DropdownMenuItem onSelect={openHookOptions}>
+                        Hook options
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => setHealthOpen(true)}>
                         Script health
@@ -767,7 +768,12 @@ export function AiCoachResultView({
             <SheetDescription>Choose an opening. The rest of the script stays the same.</SheetDescription>
           </SheetHeader>
           <div className="mt-4 grid grid-cols-1 gap-2.5">
-            {hookVariations && hookVariations.length > 0 ? (
+            {hookOptionsSheetShowsLoader(hookVariationsPending, hookVariations?.length ?? 0) ? (
+              <div className="flex flex-col items-center py-12 text-center">
+                <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" aria-hidden />
+                <p className="mt-3 text-sm text-muted-foreground">Finding new hooks</p>
+              </div>
+            ) : hookVariations && hookVariations.length > 0 ? (
               hookVariations.map((variation, index) => (
                 <HookOptionCard
                   key={`${variation.hookType}-${index}`}
@@ -781,9 +787,7 @@ export function AiCoachResultView({
                 />
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {hookVariationsPending ? "Generating hook options..." : "No hook options yet."}
-              </p>
+              <p className="text-sm text-muted-foreground">No hook options yet.</p>
             )}
           </div>
         </SheetContent>

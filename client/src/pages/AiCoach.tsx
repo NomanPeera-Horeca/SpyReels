@@ -714,8 +714,6 @@ export default function AiCoach() {
           setIsRouting(false);
           return;
         }
-        setPhase("generating");
-        setAgentMessage("Generating new hook ideas...");
         const loaded = await utils.studio.get.fetch({ id: scriptId });
         applyScriptResult(loaded);
         hookVariationsMutation.mutate({ id: scriptId });
@@ -897,36 +895,34 @@ export default function AiCoach() {
   if (phase === "analyzing" || phase === "generating") {
     const isRefining = refineMutation.isPending;
     const isHookVariations = hookVariationsMutation.isPending;
+    const hookLoadingOnResult = isHookVariations && Boolean(result);
     const showCoachProgress =
       phase === "generating" && generateMutation.isPending && !isRefining && !isHookVariations;
 
-    if (showCoachProgress || phase === "analyzing") {
-      const steps =
-        phase === "analyzing"
-          ? analyzingSteps
-          : collapseCoachProgressForDisplay(coachProgressSteps);
-      const subheadline =
-        phase === "analyzing"
-          ? agentMessage ?? "Checking context before writing your script"
-          : "Usually 1-2 minutes.";
+    if (!hookLoadingOnResult) {
+      if (showCoachProgress || phase === "analyzing") {
+        const steps =
+          phase === "analyzing"
+            ? analyzingSteps
+            : collapseCoachProgressForDisplay(coachProgressSteps);
+        const subheadline =
+          phase === "analyzing"
+            ? agentMessage ?? "Checking context before writing your script"
+            : "Usually 1-2 minutes.";
 
-      return shellLayout(
-        <AgentProgressPanel
-          steps={steps}
-          subheadline={subheadline}
-          footer={phase === "generating" ? COACH_AGENT_FOOTER : undefined}
-          badgeLabel={phase === "analyzing" ? "Understanding" : "Writing"}
-        />
-      );
+        return shellLayout(
+          <AgentProgressPanel
+            steps={steps}
+            subheadline={subheadline}
+            footer={phase === "generating" ? COACH_AGENT_FOOTER : undefined}
+            badgeLabel={phase === "analyzing" ? "Understanding" : "Writing"}
+          />
+        );
+      }
+
+      const statusTitle = isRefining ? "Refining your script" : "Working on your script";
+      return shellLayout(<CoachQuietWait title={statusTitle} />);
     }
-
-    const statusTitle = isRefining
-      ? "Refining your script"
-      : isHookVariations
-        ? "Finding new hooks"
-        : "Working on your script";
-
-    return shellLayout(<CoachQuietWait title={statusTitle} />);
   }
 
   if (phase === "clarifying" && analysis) {
@@ -990,11 +986,7 @@ export default function AiCoach() {
     return shellLayout(<CoachQuietWait title="Refining your script" />);
   }
 
-  if (hookVariationsMutation.isPending) {
-    return shellLayout(<CoachQuietWait title="Finding new hooks" />);
-  }
-
-  if (phase === "result" && result) {
+  if (result && (phase === "result" || hookVariationsMutation.isPending)) {
     return shellLayout(
       <AiCoachResultView
         result={result}

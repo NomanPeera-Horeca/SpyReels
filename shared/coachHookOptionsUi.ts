@@ -1,17 +1,21 @@
 export type HookOptionsArrivalPlan = {
-  openSheet: boolean;
   selectedIndex: number | null;
   autoApplyIndex: number | null;
 };
 
 /**
  * Hook options never change the current hook until the user clicks an option.
+ * Arrival also does not decide whether the sheet is open.
  */
 export function hookOptionsArrivalPlan(
-  variations: readonly unknown[] | null | undefined
+  _variations?: readonly unknown[] | null
 ): HookOptionsArrivalPlan {
-  if (!variations || variations.length === 0) {
-    return { openSheet: false, selectedIndex: null, autoApplyIndex: null };
-  }
-  return { openSheet: true, selectedIndex: null, autoApplyIndex: null };
+  return { selectedIndex: null, autoApplyIndex: null };
+}
+
+export function hookOptionsSheetShowsLoader(
+  pending: boolean,
+  variationCount: number
+): boolean {
+  return pending && variationCount < 1;
 }
