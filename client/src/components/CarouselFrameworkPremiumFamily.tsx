@@ -290,6 +290,153 @@ function FoundationBar({ tokens }: { tokens: CarouselDesignTokens }) {
   );
 }
 
+function PartIndexMark({
+  tokens,
+  current,
+  count,
+}: {
+  tokens: CarouselDesignTokens;
+  current?: number | null;
+  count: number;
+}) {
+  if (current == null || count < 2) return null;
+  return (
+    <p
+      style={{
+        margin: 0,
+        fontSize: DESIGN.typography.partLabel,
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        color: tokens.colors.accent,
+        fontWeight: 760,
+      }}
+    >
+      {current} of {count}
+    </p>
+  );
+}
+
+function ConnectedModel({
+  tokens,
+  count,
+  current,
+  labels,
+}: {
+  tokens: CarouselDesignTokens;
+  count: number;
+  current?: number | null;
+  labels?: Array<string | null>;
+}) {
+  if (count < 2) return null;
+  const named = labels?.some(Boolean) ?? false;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: "0.85rem",
+        width: "100%",
+        minHeight: DESIGN.geometry.modelBand,
+        padding: "1.45rem 1.05rem",
+        boxSizing: "border-box",
+        borderRadius: DESIGN.radius.surface,
+        border: `1px solid ${wash(tokens.colors.foreground, 0.12)}`,
+        background: wash(tokens.colors.accent, 0.06),
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          minHeight: DESIGN.geometry.nodeSizeActive,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            left: "1.1rem",
+            right: "1.1rem",
+            top: "50%",
+            height: DESIGN.geometry.nodeConnector,
+            marginTop: `calc(${DESIGN.geometry.nodeConnector} / -2)`,
+            borderRadius: DESIGN.radius.pill,
+            background: wash(tokens.colors.foreground, 0.26),
+          }}
+        />
+        {Array.from({ length: count }, (_, index) => {
+          const active = current != null && index + 1 === current;
+          const size = active
+            ? DESIGN.geometry.nodeSizeActive
+            : DESIGN.geometry.nodeSize;
+          return (
+            <span
+              key={`node-${index}`}
+              style={{
+                position: "relative",
+                zIndex: 1,
+                width: size,
+                height: size,
+                borderRadius: "999px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flex: "0 0 auto",
+                fontSize: active ? "1.05rem" : "0.92rem",
+                fontWeight: 760,
+                letterSpacing: "-0.03em",
+                color: active
+                  ? tokens.colors.background
+                  : tokens.colors.muted,
+                background: active
+                  ? tokens.colors.accent
+                  : tokens.colors.background,
+                boxShadow: active
+                  ? `0 0 0 6px ${wash(tokens.colors.accent, 0.22)}`
+                  : `inset 0 0 0 1.5px ${wash(tokens.colors.foreground, 0.28)}`,
+              }}
+            >
+              {index + 1}
+            </span>
+          );
+        })}
+      </div>
+      {named ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${count}, 1fr)`,
+            gap: "0.4rem",
+          }}
+        >
+          {(labels ?? []).map((line, index) => (
+            <p
+              key={`node-label-${index}`}
+              style={{
+                margin: 0,
+                fontSize: DESIGN.typography.partLabel,
+                lineHeight: 1.3,
+                letterSpacing: "0.02em",
+                textAlign: "center",
+                color:
+                  current === index + 1
+                    ? tokens.colors.foreground
+                    : tokens.colors.muted,
+              }}
+            >
+              {line ?? ""}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CoverEditorial({
   tokens,
   values,
@@ -579,6 +726,7 @@ function ConnectedNodes({
   const h = headline(values);
   const b = body(values);
   const count = groundedPartCount(composition);
+  const current = composition.frameworkPartIndex;
   const extra = labelsForGroundedParts(
     composition,
     supportCopy(values),
@@ -590,69 +738,52 @@ function ConnectedNodes({
         ...shell(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "1.55rem 1.4rem 1.75rem",
+        padding: "1.5rem 1.4rem 1.7rem",
       }}
     >
-      <div>
+      <PartIndexMark tokens={tokens} current={current} count={count} />
+      <CarouselEditableText
+        as="h2"
+        slotId="headline"
+        value={h}
+        editable={editable}
+        onCommit={onSlotChange}
+        multiline
+        style={{
+          ...headlineStyle(tokens),
+          maxWidth: "13ch",
+          marginTop: current != null && count >= 2 ? "0.55rem" : 0,
+        }}
+      />
+      {count >= 2 ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            margin: "1.05rem 0 0.7rem",
+          }}
+        >
+          <ConnectedModel
+            tokens={tokens}
+            count={count}
+            current={current}
+            labels={extra}
+          />
+        </div>
+      ) : null}
+      {count >= 2 ? <FoundationBar tokens={tokens} /> : null}
+      {b ? (
         <CarouselEditableText
-          as="h2"
-          slotId="headline"
-          value={h}
+          as="p"
+          slotId="body"
+          value={b}
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{ ...headlineStyle(tokens), maxWidth: "13ch" }}
+          style={{ ...bodyStyle(tokens), marginTop: "0.85rem", maxWidth: "30ch" }}
         />
-        {b ? (
-          <CarouselEditableText
-            as="p"
-            slotId="body"
-            value={b}
-            editable={editable}
-            onCommit={onSlotChange}
-            multiline
-            style={{ ...bodyStyle(tokens), marginTop: "0.85rem", maxWidth: "28ch" }}
-          />
-        ) : null}
-      </div>
-      <div>
-        {count >= 2 ? (
-          <SystemMarks
-            tokens={tokens}
-            count={count}
-            current={composition.frameworkPartIndex}
-          />
-        ) : null}
-        {count >= 2 && extra.some(Boolean) ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${count}, 1fr)`,
-              gap: "0.45rem",
-              marginTop: "0.75rem",
-            }}
-          >
-            {extra.map((line, index) => (
-              <p
-                key={`part-label-${index}`}
-                style={{
-                  margin: 0,
-                  fontSize: DESIGN.typography.partLabel,
-                  lineHeight: 1.35,
-                  letterSpacing: "0.02em",
-                  color:
-                    composition.frameworkPartIndex === index + 1
-                      ? tokens.colors.foreground
-                      : tokens.colors.muted,
-                }}
-              >
-                {line ?? ""}
-              </p>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
       <Handle handle={handle} tokens={tokens} />
     </div>
   );
@@ -684,6 +815,7 @@ function VerticalPillars({
         padding: "1.5rem 1.4rem 1.7rem",
       }}
     >
+      <PartIndexMark tokens={tokens} current={current} count={count} />
       <CarouselEditableText
         as="h2"
         slotId="headline"
@@ -691,7 +823,11 @@ function VerticalPillars({
         editable={editable}
         onCommit={onSlotChange}
         multiline
-        style={{ ...headlineStyle(tokens), maxWidth: "14ch" }}
+        style={{
+          ...headlineStyle(tokens),
+          maxWidth: "14ch",
+          marginTop: current != null && count >= 2 ? "0.55rem" : 0,
+        }}
       />
       {count >= 2 ? (
       <div
@@ -701,7 +837,7 @@ function VerticalPillars({
           gridTemplateColumns: `repeat(${count}, 1fr)`,
           alignItems: "end",
           gap: "0.55rem",
-          margin: "1.15rem 0 0.7rem",
+          margin: "1.05rem 0 0.7rem",
         }}
       >
         {Array.from({ length: count }, (_, index) => {
@@ -713,31 +849,40 @@ function VerticalPillars({
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "flex-end",
-                minHeight: "8.5rem",
+                minHeight: DESIGN.geometry.modelBand,
               }}
             >
-              {extra[index] ? (
-                <p
-                  style={{
-                    margin: "0 0 0.45rem",
-                    fontSize: DESIGN.typography.partLabel,
-                    lineHeight: 1.3,
-                    color: active
-                      ? tokens.colors.foreground
-                      : tokens.colors.muted,
-                  }}
-                >
-                  {extra[index]}
-                </p>
-              ) : null}
+              <p
+                style={{
+                  margin: "0 0 0.45rem",
+                  fontSize: DESIGN.typography.partLabel,
+                  lineHeight: 1.3,
+                  fontWeight: active ? 760 : 620,
+                  letterSpacing: "0.04em",
+                  color: active
+                    ? tokens.colors.foreground
+                    : tokens.colors.muted,
+                }}
+              >
+                {extra[index] ?? String(index + 1)}
+              </p>
               <div
                 aria-hidden
                 style={{
-                  height: active ? "6.1rem" : "3.35rem",
+                  boxSizing: "border-box",
+                  height: DESIGN.geometry.pillarHeight,
                   borderRadius: `${DESIGN.radius.compact} ${DESIGN.radius.compact} 0 0`,
                   background: active
                     ? tokens.colors.accent
                     : wash(tokens.colors.foreground, 0.1),
+                  boxShadow: active
+                    ? `inset 0 0 0 2px ${wash(tokens.colors.background, 0.18)}`
+                    : "none",
+                  border: `2px solid ${
+                    active
+                      ? tokens.colors.accent
+                      : wash(tokens.colors.foreground, 0.14)
+                  }`,
                 }}
               />
             </div>

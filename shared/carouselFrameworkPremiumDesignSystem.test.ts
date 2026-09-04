@@ -190,6 +190,37 @@ describe("premium Framework design system", () => {
     expect(variants).not.toContain("vertical_pillars");
   });
 
+  it("keeps Prompt A part slides as four views of one grounded model", () => {
+    const variants = resolveFrameworkPremiumVariants([
+      { treatment: "framework_cover", position: 1, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: null },
+      { treatment: "model_overview", position: 2, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: null },
+      { treatment: "pillar_system", position: 3, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: 1 },
+      { treatment: "pillar_system", position: 4, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: 2 },
+      { treatment: "pillar_system", position: 5, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: 3 },
+      { treatment: "pillar_system", position: 6, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: 4 },
+      { treatment: "framework_closing", position: 7, totalSlides: 7, frameworkPartCount: 4, frameworkPartIndex: null },
+    ]);
+    expect(variants).toEqual([
+      "cover_diagram",
+      "centered_system",
+      "vertical_pillars",
+      "connected_nodes",
+      "vertical_pillars",
+      "connected_nodes",
+      "framework_takeaway",
+    ]);
+  });
+
+  it("gives pillars equal height and connected nodes model-scale geometry", () => {
+    const { pillarHeight, nodeSize, nodeSizeActive } =
+      FRAMEWORK_PREMIUM_DESIGN_FOUNDATION.geometry;
+    expect(pillarHeight).toBe("6.1rem");
+    expect(Number.parseFloat(nodeSize)).toBeGreaterThanOrEqual(2.4);
+    expect(Number.parseFloat(nodeSizeActive)).toBeGreaterThanOrEqual(
+      Number.parseFloat(nodeSize)
+    );
+  });
+
   it("reuses the premium design foundation without cloning it", () => {
     expect(FRAMEWORK_PREMIUM_DESIGN_FOUNDATION.version).toBe(1);
     expect(FRAMEWORK_PREMIUM_DESIGN_FOUNDATION.frameworkVersion).toBe(1);

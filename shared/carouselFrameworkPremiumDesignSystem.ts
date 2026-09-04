@@ -28,6 +28,13 @@ export const FRAMEWORK_PREMIUM_DESIGN_FOUNDATION = {
     partLabel: "0.62rem",
     decision: "clamp(1.85rem, 7.4vw, 2.45rem)",
   },
+  geometry: {
+    pillarHeight: "6.1rem",
+    nodeSize: "2.55rem",
+    nodeSizeActive: "2.9rem",
+    nodeConnector: "0.2rem",
+    modelBand: "8.8rem",
+  },
 } as const;
 
 export type FrameworkPremiumVariantInput = {
