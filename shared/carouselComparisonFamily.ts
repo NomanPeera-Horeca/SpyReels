@@ -114,18 +114,23 @@ export function hasStrongComparisonSemantics(
 
 /**
  * Comparison is an open contrast execution family.
- * Enumerated list promises and Story / Breakdown strategies stay out.
+ * An explicit Comparison preference on an OPEN contract wins even when
+ * some beats are internally ordered as list sequences.
+ * Enumerated carousel contracts stay out in this patch.
  */
 export function canUseComparisonFamily(
   planningIR: CarouselPlanningIR | null | undefined
 ): boolean {
   if (!planningIR) return false;
+  if (planningIR.strategy.preferredFamily === "breakdown") return false;
+  if (
+    planningIR.strategy.preferredFamily === "comparison" &&
+    planningIR.contract.kind === "open"
+  ) {
+    return true;
+  }
   if (planningIR.contract.kind !== "open") return false;
   if (listSequenceCount(planningIR) > 0) return false;
-  if (planningIR.strategy.preferredFamily === "breakdown") return false;
-
-  if (planningIR.strategy.preferredFamily === "comparison") return true;
-
   if (planningIR.strategy.preferredFamily === "story") return false;
   if (planningIR.strategy.angleType === "story") return false;
   return hasStrongComparisonSemantics(planningIR);
