@@ -38,13 +38,11 @@ export type FrameworkPremiumVariantInput = {
   sequence?: CarouselPlanningSequence | null;
   frameworkStepCount?: number;
   frameworkStepIndex?: number | null;
+  frameworkPartCount?: number;
+  frameworkPartIndex?: number | null;
   imageUrl?: string | null;
   previousVariant?: FrameworkPremiumVariant | null;
 };
-
-function hasImage(imageUrl?: string | null): boolean {
-  return typeof imageUrl === "string" && imageUrl.trim().length > 0;
-}
 
 function avoidRepeat(
   candidate: FrameworkPremiumVariant,
@@ -65,40 +63,40 @@ export function resolveFrameworkPremiumVariant({
   position,
   totalSlides,
   archetype,
-  sequence,
   frameworkStepCount = 0,
-  imageUrl,
+  frameworkPartCount = frameworkStepCount,
+  frameworkPartIndex = null,
   previousVariant,
 }: FrameworkPremiumVariantInput): FrameworkPremiumVariant {
-  const withImage = hasImage(imageUrl);
-  const ordered = sequence?.kind === "list";
   const even = position % 2 === 0;
+  const multipart = frameworkPartCount >= 2;
 
   switch (treatment) {
     case "framework_cover":
-      if (withImage) {
-        return avoidRepeat("cover_editorial", "cover_diagram", previousVariant);
+      if (multipart) {
+        return avoidRepeat("cover_diagram", "cover_editorial", previousVariant);
+      }
+      return "cover_editorial";
+    case "model_overview":
+      if (multipart) {
+        return avoidRepeat(
+          "centered_system",
+          "connected_nodes",
+          previousVariant
+        );
+      }
+      return "manifesto";
+    case "pillar_system":
+      if (!multipart) return "manifesto";
+      return frameworkPartIndex != null && frameworkPartIndex % 2 === 0
+        ? "connected_nodes"
+        : "vertical_pillars";
+    case "step_system":
+      if (archetype === "timeline_flow") {
+        return avoidRepeat("stepped_path", "vertical_flow", previousVariant);
       }
       return avoidRepeat(
-        frameworkStepCount >= 3 || totalSlides >= 6
-          ? "cover_diagram"
-          : "cover_editorial",
-        "cover_editorial",
-        previousVariant
-      );
-    case "model_overview":
-      return avoidRepeat(
-        even || archetype === "diagram_focus"
-          ? "centered_system"
-          : "connected_nodes",
-        "connected_nodes",
-        previousVariant
-      );
-    case "pillar_system":
-      return "vertical_pillars";
-    case "step_system":
-      return avoidRepeat(
-        ordered || even ? "stepped_path" : "vertical_flow",
+        even ? "stepped_path" : "vertical_flow",
         "vertical_flow",
         previousVariant
       );

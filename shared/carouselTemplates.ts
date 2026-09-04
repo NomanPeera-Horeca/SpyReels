@@ -278,6 +278,9 @@ export type CarouselSlideSpec = {
     treatment: string;
     semanticRole: string;
     listItemIndex: number | null;
+    frameworkPartCount?: number;
+    frameworkPartIndex?: number | null;
+    frameworkPartSource?: "framework_steps" | "ordered_parts" | "none";
   };
 };
 

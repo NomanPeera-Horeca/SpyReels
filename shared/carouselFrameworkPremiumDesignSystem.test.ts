@@ -18,21 +18,29 @@ describe("premium Framework design system", () => {
     );
   });
 
-  it("uses a diagram cover for larger models and a type cover otherwise", () => {
+  it("uses a diagram cover only when Framework parts are grounded", () => {
     expect(
       resolveFrameworkPremiumVariant({
         treatment: "framework_cover",
         position: 1,
         totalSlides: 7,
-        frameworkStepCount: 4,
+        frameworkPartCount: 4,
       })
     ).toBe("cover_diagram");
     expect(
       resolveFrameworkPremiumVariant({
         treatment: "framework_cover",
         position: 1,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      })
+    ).toBe("cover_editorial");
+    expect(
+      resolveFrameworkPremiumVariant({
+        treatment: "framework_cover",
+        position: 1,
         totalSlides: 5,
-        frameworkStepCount: 2,
+        frameworkPartCount: 0,
       })
     ).toBe("cover_editorial");
   });
@@ -43,12 +51,14 @@ describe("premium Framework design system", () => {
       position: 2,
       totalSlides: 7,
       archetype: "diagram_focus",
+      frameworkPartCount: 4,
     });
     const second = resolveFrameworkPremiumVariant({
       treatment: "model_overview",
       position: 3,
       totalSlides: 7,
       archetype: "diagram_focus",
+      frameworkPartCount: 4,
       previousVariant: first,
     });
     expect(first).toBe("centered_system");
@@ -69,7 +79,7 @@ describe("premium Framework design system", () => {
         treatment: "framework_cover",
         position: 1,
         totalSlides: 5,
-        frameworkStepCount: 2,
+        frameworkPartCount: 0,
       })
     ).toBe("cover_editorial");
   });
@@ -103,6 +113,25 @@ describe("premium Framework design system", () => {
         totalSlides: 8,
       })
     ).toBe("decision_close");
+  });
+
+  it("does not draw multipart geometry without grounded parts", () => {
+    expect(
+      resolveFrameworkPremiumVariant({
+        treatment: "model_overview",
+        position: 3,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      })
+    ).toBe("manifesto");
+    expect(
+      resolveFrameworkPremiumVariant({
+        treatment: "pillar_system",
+        position: 4,
+        totalSlides: 7,
+        frameworkPartCount: 0,
+      })
+    ).toBe("manifesto");
   });
 
   it("reuses the premium design foundation without cloning it", () => {

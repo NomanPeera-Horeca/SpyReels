@@ -4,7 +4,9 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import {
+  labelFrameworkParts,
   resolveFrameworkRenderTreatment,
+  splitFrameworkCopyLines,
   type FrameworkComposition,
   type FrameworkTreatment,
 } from "@shared/carouselFrameworkFamily";
@@ -124,21 +126,27 @@ function rightCopy(values: CarouselSlotValues): string {
   return values.right?.trim() || "";
 }
 
-function partLines(text: string, exclude?: string): string[] {
-  const skip = exclude?.trim() || "";
-  return text
-    .split(/\n|•|;/)
-    .map((line) => line.replace(/^\s*[-]\s*/, "").trim())
-    .filter((line) => line && line !== skip)
-    .slice(0, 4);
+function groundedPartCount(composition: FrameworkComposition): number {
+  return composition.frameworkPartCount >= 2
+    ? composition.frameworkPartCount
+    : 0;
 }
 
-function markCount(composition: FrameworkComposition): number {
-  const count = composition.frameworkStepCount;
-  if (count >= 2 && count <= 5) return count;
-  if (composition.totalSlides >= 6) return 4;
-  if (composition.totalSlides >= 5) return 3;
-  return 0;
+function labelsForGroundedParts(
+  composition: FrameworkComposition,
+  text: string,
+  exclude?: string
+): Array<string | null> {
+  const labels = labelFrameworkParts(
+    composition.frameworkPartCount,
+    text,
+    exclude
+  );
+  const named = labels.filter((line) => Boolean(line)).length;
+  if (named < 2) {
+    return labels.map(() => null);
+  }
+  return labels;
 }
 
 function Handle({
@@ -292,7 +300,7 @@ function CoverEditorial({
   const h = headline(values);
   const b = body(values);
   const k = kicker(values);
-  const count = markCount(composition);
+  const count = groundedPartCount(composition);
   return (
     <div
       style={{
@@ -373,7 +381,7 @@ function CoverDiagram({
   const h = headline(values);
   const b = body(values);
   const k = kicker(values);
-  const count = Math.max(3, markCount(composition) || 3);
+  const count = groundedPartCount(composition);
   const photo = imageUrl?.trim() || "";
   return (
     <div
@@ -430,7 +438,8 @@ function CoverDiagram({
             boxShadow: `0 0 0 10px ${wash(tokens.colors.accent, 0.08)}`,
           }}
         />
-        {Array.from({ length: count }, (_, index) => {
+        {count >= 2
+          ? Array.from({ length: count }, (_, index) => {
           const angle = (-90 + (360 / count) * index) * (Math.PI / 180);
           const x = 50 + Math.cos(angle) * 38;
           const y = 50 + Math.sin(angle) * 34;
@@ -451,7 +460,8 @@ function CoverDiagram({
               }}
             />
           );
-        })}
+        })
+          : null}
       </div>
       {b ? (
         <CarouselEditableText
@@ -480,7 +490,7 @@ function CenteredSystem({
   const h = headline(values);
   const b = body(values);
   const k = kicker(values);
-  const count = markCount(composition);
+  const count = groundedPartCount(composition);
   return (
     <div
       style={{
@@ -525,7 +535,7 @@ function CenteredSystem({
         <SystemMarks
           tokens={tokens}
           count={count}
-          current={composition.frameworkStepIndex}
+          current={composition.frameworkPartIndex}
         />
       ) : (
         <div
@@ -567,8 +577,12 @@ function ConnectedNodes({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const extra = partLines(supportCopy(values), body(values));
-  const count = Math.max(markCount(composition), extra.length, 2);
+  const count = groundedPartCount(composition);
+  const extra = labelsForGroundedParts(
+    composition,
+    supportCopy(values),
+    body(values)
+  );
   return (
     <div
       style={{
@@ -602,35 +616,37 @@ function ConnectedNodes({
         ) : null}
       </div>
       <div>
-        <SystemMarks
-          tokens={tokens}
-          count={Math.min(count, 5)}
-          current={composition.frameworkStepIndex}
-        />
-        {extra.length > 0 ? (
+        {count >= 2 ? (
+          <SystemMarks
+            tokens={tokens}
+            count={count}
+            current={composition.frameworkPartIndex}
+          />
+        ) : null}
+        {count >= 2 && extra.some(Boolean) ? (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${Math.min(extra.length, 4)}, 1fr)`,
+              gridTemplateColumns: `repeat(${count}, 1fr)`,
               gap: "0.45rem",
               marginTop: "0.75rem",
             }}
           >
             {extra.map((line, index) => (
               <p
-                key={line}
+                key={`part-label-${index}`}
                 style={{
                   margin: 0,
                   fontSize: DESIGN.typography.partLabel,
                   lineHeight: 1.35,
                   letterSpacing: "0.02em",
                   color:
-                    composition.frameworkStepIndex === index + 1
+                    composition.frameworkPartIndex === index + 1
                       ? tokens.colors.foreground
                       : tokens.colors.muted,
                 }}
               >
-                {line}
+                {line ?? ""}
               </p>
             ))}
           </div>
@@ -651,9 +667,13 @@ function VerticalPillars({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const extra = partLines(supportCopy(values), body(values));
-  const count = Math.min(Math.max(markCount(composition), extra.length, 3), 4);
-  const current = composition.frameworkStepIndex;
+  const extra = labelsForGroundedParts(
+    composition,
+    supportCopy(values),
+    body(values)
+  );
+  const count = groundedPartCount(composition);
+  const current = composition.frameworkPartIndex;
   return (
     <div
       style={{
@@ -672,6 +692,7 @@ function VerticalPillars({
         multiline
         style={{ ...headlineStyle(tokens), maxWidth: "14ch" }}
       />
+      {count >= 2 ? (
       <div
         style={{
           flex: 1,
@@ -683,7 +704,7 @@ function VerticalPillars({
         }}
       >
         {Array.from({ length: count }, (_, index) => {
-          const active = current == null || current === index + 1;
+          const active = current != null && current === index + 1;
           return (
             <div
               key={`pillar-${index}`}
@@ -711,7 +732,7 @@ function VerticalPillars({
               <div
                 aria-hidden
                 style={{
-                  height: active ? "72%" : "42%",
+                  height: active ? "6.1rem" : "3.35rem",
                   borderRadius: `${DESIGN.radius.compact} ${DESIGN.radius.compact} 0 0`,
                   background: active
                     ? tokens.colors.accent
@@ -722,7 +743,8 @@ function VerticalPillars({
           );
         })}
       </div>
-      <FoundationBar tokens={tokens} />
+      ) : null}
+      {count >= 2 ? <FoundationBar tokens={tokens} /> : null}
       {b ? (
         <CarouselEditableText
           as="p"
@@ -749,8 +771,8 @@ function SteppedPath({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const count = Math.max(markCount(composition), 3);
-  const current = composition.frameworkStepIndex ?? Math.min(composition.position, count);
+  const count = groundedPartCount(composition);
+  const current = composition.frameworkPartIndex;
   return (
     <div
       style={{
@@ -762,6 +784,7 @@ function SteppedPath({
       }}
     >
       <div>
+        {count >= 2 && current != null ? (
         <p
           style={{
             margin: 0,
@@ -774,6 +797,7 @@ function SteppedPath({
         >
           {current} of {count}
         </p>
+        ) : null}
         <CarouselEditableText
           as="h2"
           slotId="headline"
@@ -852,8 +876,8 @@ function VerticalFlow({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const count = Math.max(markCount(composition), 3);
-  const current = composition.frameworkStepIndex ?? Math.min(composition.position, count);
+  const count = groundedPartCount(composition);
+  const current = composition.frameworkPartIndex;
   return (
     <div
       style={{
@@ -932,9 +956,13 @@ function StackedLayers({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const extra = partLines(supportCopy(values), body(values));
-  const count = Math.min(Math.max(markCount(composition), extra.length, 3), 4);
-  const current = composition.frameworkStepIndex ?? 1;
+  const extra = labelsForGroundedParts(
+    composition,
+    supportCopy(values),
+    body(values)
+  );
+  const count = groundedPartCount(composition);
+  const current = composition.frameworkPartIndex;
   return (
     <div
       style={{
@@ -1028,7 +1056,7 @@ function CircularFlow({
 }: FrameworkProps) {
   const h = headline(values);
   const b = body(values);
-  const count = Math.max(markCount(composition), 3);
+  const count = groundedPartCount(composition);
   return (
     <div
       style={{
@@ -1086,11 +1114,12 @@ function CircularFlow({
             background: tokens.colors.accent,
           }}
         />
-        {Array.from({ length: count }, (_, index) => {
+        {count >= 2
+          ? Array.from({ length: count }, (_, index) => {
           const angle = (-90 + (360 / count) * index) * (Math.PI / 180);
           const x = 50 + Math.cos(angle) * 37;
           const y = 50 + Math.sin(angle) * 37;
-          const active = composition.frameworkStepIndex === index + 1;
+          const active = composition.frameworkPartIndex === index + 1;
           return (
             <span
               key={`cycle-${index}`}
@@ -1109,7 +1138,8 @@ function CircularFlow({
               }}
             />
           );
-        })}
+        })
+          : null}
       </div>
       {b ? (
         <CarouselEditableText
@@ -1269,7 +1299,10 @@ function QuadrantEditorial({
   handle,
 }: FrameworkProps) {
   const h = headline(values);
-  const extra = partLines(supportCopy(values) || body(values), headline(values));
+  const extra = splitFrameworkCopyLines(
+    supportCopy(values) || body(values),
+    headline(values)
+  );
   const cells = [extra[0] || h, extra[1] || "", extra[2] || "", extra[3] || ""];
   return (
     <div
@@ -1427,7 +1460,7 @@ function ModelPlusExample({
   const h = headline(values);
   const b = body(values);
   const photo = imageUrl?.trim() || "";
-  const count = markCount(composition);
+  const count = groundedPartCount(composition);
   return (
     <div
       style={{
@@ -1451,7 +1484,7 @@ function ModelPlusExample({
           <SystemMarks
             tokens={tokens}
             count={count}
-            current={composition.frameworkStepIndex}
+            current={composition.frameworkPartIndex}
           />
         ) : (
           <div
@@ -1509,7 +1542,7 @@ function FrameworkTakeaway({
   const h = headline(values);
   const b = body(values);
   const action = cta(values);
-  const count = markCount(composition);
+  const count = groundedPartCount(composition);
   const decision = variant === "decision_close";
   return (
     <div
@@ -1646,8 +1679,8 @@ export function CarouselFrameworkPremiumFamily(
     totalSlides: composition.totalSlides,
     archetype: composition.archetype,
     sequence: composition.sequence,
-    frameworkStepCount: composition.frameworkStepCount,
-    frameworkStepIndex: composition.frameworkStepIndex,
+    frameworkPartCount: composition.frameworkPartCount,
+    frameworkPartIndex: composition.frameworkPartIndex,
     imageUrl: props.imageUrl,
   });
 
@@ -1660,6 +1693,13 @@ export function CarouselFrameworkPremiumFamily(
       data-framework-role={composition.semanticRole}
       data-framework-archetype={composition.archetype}
       data-framework-position={String(composition.position)}
+      data-framework-part-count={String(composition.frameworkPartCount)}
+      data-framework-part-index={
+        composition.frameworkPartIndex == null
+          ? ""
+          : String(composition.frameworkPartIndex)
+      }
+      data-framework-part-source={composition.frameworkPartSource}
       style={{ width: "22.5rem" }}
     >
       {renderForVariant({
