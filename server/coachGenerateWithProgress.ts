@@ -6,6 +6,7 @@ import {
   type CoachScriptProgressStepId,
 } from "@shared/coachAgentProgress";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
+import { markCreatorIdeaGroundTruth } from "@shared/coachIdeaGroundTruth";
 import { getOrFetchAudienceSignals } from "./audienceResearch/service";
 import {
   completeAgentProgress,
@@ -97,11 +98,12 @@ export async function generateCoachScriptWithProgress(args: {
     setCoachStep(args.userId, "find_viral", "research_grounding");
     setCoachStep(args.userId, "hook_angle", "find_viral");
 
+    const creatorGroundTruthDescription = markCreatorIdeaGroundTruth(args.description);
     const script = await generateCoachScriptForWorkspace({
       userId: args.userId,
       workspaceId: args.workspaceId,
       openId: args.openId,
-      description: args.description,
+      description: creatorGroundTruthDescription,
       clarifications: args.clarifications,
       planCardId: args.planCardId,
       audienceSignalIds,
