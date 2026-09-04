@@ -412,7 +412,7 @@ export default function OnboardingPage() {
       <OnboardingShell showSkip={false} step={null} variant={shellVariant}>
         <AgentProgressPanel
           steps={progressSteps}
-          subheadline={`Tailored for ${audience.trim().slice(0, 48) || "your audience"}. Usually 20 to 40 seconds.`}
+          subheadline={`Tailored for ${audience.trim().slice(0, 48) || "your audience"}. Usually about a minute.`}
           footer={ONBOARDING_AGENT_FOOTER}
           badgeLabel="Creating"
         />

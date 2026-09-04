@@ -264,6 +264,10 @@ export function AiCoachResultView({
   const savedVisualBeat = production?.hookVisualBeat?.trim() ?? "";
   const hookOnScreenText = editMode ? editDraft.hookOnScreenText : savedOnScreenText;
   const hookVisualBeat = editMode ? editDraft.hookVisualBeat : savedVisualBeat;
+  const bRollShots = (production?.bRoll ?? []).filter(
+    (shot) => typeof shot?.shot === "string" && shot.shot.trim()
+  );
+  const musicNote = production?.music?.trim() ?? "";
 
   useEffect(() => {
     if (!hookVariations || hookVariations.length === 0) {
@@ -558,19 +562,36 @@ export function AiCoachResultView({
                         </p>
                       </div>
                     ) : null}
-                    {!previewMode ? (
+                    {bRollShots.length > 0 || !previewMode ? (
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                           B-roll
                         </p>
-                        <button
-                          type="button"
-                          onClick={goGenerateBroll}
-                          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                        >
-                          <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
-                          Generate B-roll
-                        </button>
+                        {bRollShots.length > 0 ? (
+                          <ul className="mb-3 space-y-2">
+                            {bRollShots.map((shot, index) => (
+                              <li
+                                key={`${shot.shot}-${index}`}
+                                className="text-sm leading-relaxed text-gray-700 dark:text-gray-300"
+                              >
+                                {shot.shot}
+                                {shot.example?.trim() ? (
+                                  <span className="block text-muted-foreground">{shot.example}</span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {!previewMode ? (
+                          <button
+                            type="button"
+                            onClick={goGenerateBroll}
+                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                          >
+                            <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
+                            Generate B-roll
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                     {production?.instagramAudio && production.instagramAudio.length > 0 ? (
@@ -581,12 +602,24 @@ export function AiCoachResultView({
                         </p>
                         <InstagramAudioPreviewList picks={production.instagramAudio.slice(0, 2)} />
                       </div>
+                    ) : musicNote ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <Music2 className="h-3.5 w-3.5" />
+                          Music
+                        </p>
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                          {musicNote}
+                        </p>
+                      </div>
                     ) : null}
                     {!production?.setup &&
                     !production?.voiceTone &&
                     !hookVisualBeat &&
                     !hookOnScreenText &&
-                    !production?.instagramAudio?.length ? (
+                    !production?.instagramAudio?.length &&
+                    !musicNote &&
+                    bRollShots.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         Filming notes will appear here after generation.
                       </p>
