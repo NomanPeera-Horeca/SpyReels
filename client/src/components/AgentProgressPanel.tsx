@@ -10,6 +10,15 @@ type Props = {
   badgeLabel?: string;
 };
 
+export function CoachQuietWait({ title }: { title: string }) {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center px-4 py-16 text-center">
+      <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" aria-hidden />
+      <h2 className="mt-4 text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+    </div>
+  );
+}
+
 export function AgentProgressPanel({
   steps,
   headline,

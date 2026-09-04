@@ -1,0 +1,37 @@
+{
+  "founder": {
+    "interviewTitle": false,
+    "noahPerry": false,
+    "bookCall": false,
+    "notNow": false
+  },
+  "entryOverflow": 0,
+  "clarification": {
+    "heading": false,
+    "note": "Analyze did not ask a question; captured current wait instead",
+    "confidencePercent": false
+  },
+  "originalHook": "Your kitchen may not need another employee. The slowdown you are blaming on headcount is probably coming from somewhere else.",
+  "hookLoading": {
+    "findingNewHooks": true,
+    "oldCard": false
+  },
+  "hookUnchangedAfterGenerate": true,
+  "hookAfterGenerate": "Your kitchen may not need another employee. The slowdown you are blaming on headcount is probably coming from somewhere else.",
+  "noAutoSelect": true,
+  "hookUnchangedAfterClose": true,
+  "hookChangedAfterOption2": true,
+  "hookAfterOption2": "Hiring another cook is probably the worst thing you can do for your kitchen right now.",
+  "refineLoading": {
+    "refining": true,
+    "oldCard": false
+  },
+  "mobileFounder": {
+    "interviewTitle": false,
+    "noahPerry": false,
+    "bookCall": false,
+    "notNow": false
+  },
+  "mobileOverflowEntry": 0,
+  "mobileOverflowHook": 0
+}

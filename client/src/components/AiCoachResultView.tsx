@@ -7,6 +7,7 @@ import {
   type CoachHookVariation,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
+import { hookOptionsArrivalPlan } from "@shared/coachHookOptionsUi";
 import { formatCoachHookTypeLabel } from "@shared/hookTypes";
 import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
 import {
@@ -246,7 +247,6 @@ export function AiCoachResultView({
   const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState<number | null>(null);
   const [hookOptionsOpen, setHookOptionsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const lastAutoAppliedHookKeyRef = useRef<string | null>(null);
   const wasSavingRef = useRef(false);
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
@@ -269,21 +269,9 @@ export function AiCoachResultView({
   const musicNote = production?.music?.trim() ?? "";
 
   useEffect(() => {
-    if (!hookVariations || hookVariations.length === 0) {
-      setHookOptionsOpen(false);
-      setSelectedHookOptionIndex(null);
-      lastAutoAppliedHookKeyRef.current = null;
-      return;
-    }
-    setHookOptionsOpen(true);
-    const key = hookVariations
-      .map((v) => `${v.hookType}:${v.spokenHook}:${v.onScreenText}`)
-      .join("|");
-    if (lastAutoAppliedHookKeyRef.current === key) return;
-    lastAutoAppliedHookKeyRef.current = key;
-    setSelectedHookOptionIndex(0);
-    onApplyHookVariation(hookVariations[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const plan = hookOptionsArrivalPlan(hookVariations);
+    setHookOptionsOpen(plan.openSheet);
+    setSelectedHookOptionIndex(plan.selectedIndex);
   }, [hookVariations]);
 
   useEffect(() => {

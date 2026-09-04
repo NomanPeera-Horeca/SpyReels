@@ -24,10 +24,9 @@ import { toast } from "sonner";
 import { History, Loader2 } from "lucide-react";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { AiCoachResultView, type CoachResultScript } from "@/components/AiCoachResultView";
-import { AgentProgressPanel } from "@/components/AgentProgressPanel";
+import { AgentProgressPanel, CoachQuietWait } from "@/components/AgentProgressPanel";
 import { AiCoachCommandShell } from "@/components/AiCoachCommandShell";
 import { AiCoachHistoryPanel } from "@/components/AiCoachHistoryPanel";
-import { FounderInterviewBanner } from "@/components/FounderInterviewBanner";
 import { combineBodyFromSections, flattenCoachScriptForCopy, parseCoachHookVariations, parseProductionNotes, type CoachHookVariation } from "@shared/coachScriptSections";
 import {
   deriveSectionScores,
@@ -158,7 +157,6 @@ export default function AiCoach() {
 
   const planCards = planData?.cards ?? [];
   const recentScripts = historyData?.scripts ?? [];
-  const savedScriptsCount = savedScriptsList?.length ?? 0;
 
   const modeActions = useMemo(() => {
     if (!activeCapability) return [];
@@ -862,7 +860,6 @@ export default function AiCoach() {
           </Sheet>
         </div>
         {content}
-        <FounderInterviewBanner scriptsCount={savedScriptsCount} />
       </div>
     </div>
   );
@@ -924,61 +921,32 @@ export default function AiCoach() {
     }
 
     const statusTitle = isRefining
-      ? "Refining your script..."
+      ? "Refining your script"
       : isHookVariations
-        ? "Generating new hook ideas..."
-        : "Working on your script...";
+        ? "Finding new hooks"
+        : "Working on your script";
 
-    return shellLayout(
-      <div className="flex flex-col items-center justify-center px-4 py-16">
-        <div className="w-full max-w-2xl">
-          <div className="rounded-2xl border border-border bg-card p-8">
-            <div className="flex items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <div>
-                <p className="font-semibold">{statusTitle}</p>
-                <p className="text-sm text-muted-foreground">
-                  {agentMessage ?? "This usually takes a few seconds"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return shellLayout(<CoachQuietWait title={statusTitle} />);
   }
 
   if (phase === "clarifying" && analysis) {
     return shellLayout(
-      <div className="flex flex-col items-center justify-center px-4 py-10">
-        <div className="w-full max-w-2xl space-y-4">
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-800 dark:bg-blue-950/30">
-            <p className="mb-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
-              Here&apos;s what I understood
-            </p>
-            <p className="text-sm leading-relaxed text-blue-800 dark:text-blue-200">{analysis.understood}</p>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-blue-200 dark:bg-blue-900">
-                <div
-                  className="h-full rounded-full bg-blue-500"
-                  style={{ width: `${analysis.confidence}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
-                {analysis.confidence}% confident
-              </span>
-            </div>
-          </div>
+      <div className="mx-auto flex w-full max-w-md flex-col px-4 py-12 sm:px-0">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">One quick question</h2>
+        {analysis.understood ? (
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{analysis.understood}</p>
+        ) : null}
 
-          {analysis.factCheck?.warning ? (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-              {analysis.factCheck.warning}
-            </div>
-          ) : null}
+        {analysis.factCheck?.warning ? (
+          <p className="mt-4 text-sm leading-relaxed text-amber-800 dark:text-amber-200">
+            {analysis.factCheck.warning}
+          </p>
+        ) : null}
 
+        <div className="mt-8 space-y-6">
           {clarifications.map((c, i) => (
-            <div key={c.question} className="rounded-2xl border border-border bg-card p-5">
-              <p className="mb-2 text-sm font-semibold">{c.question}</p>
+            <div key={c.question}>
+              <p className="mb-2 text-sm font-medium text-foreground">{c.question}</p>
               <Textarea
                 value={c.answer}
                 onChange={(e) =>
@@ -992,31 +960,38 @@ export default function AiCoach() {
               />
             </div>
           ))}
+        </div>
 
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                setPhase("generating");
-                generateMutation.mutate(buildGenerateInput({ clarifications: [] }));
-              }}
-            >
-              Skip
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => {
-                setPhase("generating");
-                generateMutation.mutate(buildGenerateInput({ clarifications }));
-              }}
-            >
-              Write my viral script
-            </Button>
-          </div>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Button
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => {
+              setPhase("generating");
+              generateMutation.mutate(buildGenerateInput({ clarifications: [] }));
+            }}
+          >
+            Skip
+          </Button>
+          <Button
+            onClick={() => {
+              setPhase("generating");
+              generateMutation.mutate(buildGenerateInput({ clarifications }));
+            }}
+          >
+            Write script
+          </Button>
         </div>
       </div>
     );
+  }
+
+  if (refineMutation.isPending) {
+    return shellLayout(<CoachQuietWait title="Refining your script" />);
+  }
+
+  if (hookVariationsMutation.isPending) {
+    return shellLayout(<CoachQuietWait title="Finding new hooks" />);
   }
 
   if (phase === "result" && result) {
