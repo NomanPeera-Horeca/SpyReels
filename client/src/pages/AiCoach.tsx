@@ -608,11 +608,8 @@ export default function AiCoach() {
   };
 
   const handleSaveToMyScripts = () => {
-    if (savedLibraryScriptId) {
-      handleOpenMyScripts();
-      return;
-    }
-    saveCoachScript(true);
+    if (!result || savedLibraryScriptId) return;
+    saveCoachScript(false);
   };
 
   const handleOpenMyScripts = () => {

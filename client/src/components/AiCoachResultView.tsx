@@ -14,7 +14,7 @@ import {
   Clock,
   Copy,
   MapPin,
-  BookmarkPlus,
+  Check,
   Music2,
   ChevronDown,
   Loader2,
@@ -690,20 +690,22 @@ export function AiCoachResultView({
                   >
                     Refine
                   </button>
-                  {scheduleSave || onSaveToMyScripts ? (
-                    <button
-                      type="button"
-                      onClick={openScheduleSave}
-                      disabled={saveToMyScriptsPending}
-                      className="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:text-white"
-                    >
-                      <BookmarkPlus className="h-3.5 w-3.5" />
-                      {saveToMyScriptsPending
-                        ? "Saving..."
-                        : savedScriptId
-                          ? "Saved"
-                          : "Save"}
-                    </button>
+                  {onSaveToMyScripts ? (
+                    savedScriptId ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-500 dark:text-gray-400">
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                        Saved
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onSaveToMyScripts}
+                        disabled={saveToMyScriptsPending}
+                        className="font-medium text-gray-700 hover:text-gray-950 disabled:opacity-60 dark:text-gray-200 dark:hover:text-white"
+                      >
+                        {saveToMyScriptsPending ? "Saving..." : "Save"}
+                      </button>
+                    )
                   ) : null}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -716,6 +718,11 @@ export function AiCoachResultView({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-52">
+                      {scheduleSave ? (
+                        <DropdownMenuItem onSelect={openScheduleSave}>
+                          Schedule
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         onSelect={openHookOptions}
                         disabled={hookVariationsPending}
