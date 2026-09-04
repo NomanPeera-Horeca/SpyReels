@@ -43,6 +43,10 @@ import {
   canUseBreakdownListicleFamily,
 } from "@shared/carouselBreakdownFamily";
 import {
+  buildComparisonFamilySlides,
+  canUseComparisonFamily,
+} from "@shared/carouselComparisonFamily";
+import {
   buildStoryNarrativeSlides,
   canUseStoryNarrativeFamily,
 } from "@shared/carouselStoryFamily";
@@ -1019,7 +1023,27 @@ export async function generateCarouselRemake(
           ? analysis.resolvedImageUrls.filter(Boolean)
           : analysisImageUrls;
     } else if (creativeBrief && creativeBrief.slideOutline.length > 0) {
-      if (planningIR && canUseStoryNarrativeFamily(planningIR)) {
+      if (planningIR && canUseComparisonFamily(planningIR)) {
+        const visualDirection = await withGenerationStage(
+          telemetry,
+          "visual_direction",
+          () => generateCarouselVisualDirection(planningIR)
+        );
+        console.log(
+          `[carouselRemake] ${remakeId}: Visual Director source=${visualDirection.source} attempts=${visualDirection.attempts}`
+        );
+        if (visualDirection.source === "baseline_fallback") {
+          console.warn(
+            `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,
+            visualDirection.issues.slice(0, 5).join("; ")
+          );
+        }
+        effectiveSlides = buildComparisonFamilySlides({
+          template,
+          planningIR,
+          compositionIR: visualDirection.compositionIR,
+        });
+      } else if (planningIR && canUseStoryNarrativeFamily(planningIR)) {
         const visualDirection = await withGenerationStage(
           telemetry,
           "visual_direction",

@@ -6,8 +6,10 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
+import { isComparisonFamilySlide } from "@shared/carouselComparisonFamily";
 import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
+import { CarouselComparisonPremiumFamily } from "@/components/CarouselComparisonPremiumFamily";
 import { CarouselStoryPremiumFamily } from "@/components/CarouselStoryPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
@@ -67,6 +69,9 @@ export const CAROUSEL_LAYOUT_REGISTRY: Record<
 export function resolveCarouselSlideComponent(
   slide: Pick<CarouselSlideSpec, "layoutId" | "composition">
 ): ComponentType<CarouselSlideLayoutProps> {
+  if (isComparisonFamilySlide(slide)) {
+    return CarouselComparisonPremiumFamily;
+  }
   if (isStoryNarrativeSlide(slide)) {
     return CarouselStoryPremiumFamily;
   }
