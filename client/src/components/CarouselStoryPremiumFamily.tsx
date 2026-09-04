@@ -1313,7 +1313,7 @@ export function CarouselStoryPremiumFamily(
       data-story-role={composition.semanticRole}
       data-story-archetype={composition.archetype}
       data-story-position={String(composition.position)}
-      style={{ width: "100%", maxWidth: "22.5rem" }}
+      style={{ width: "22.5rem" }}
     >
       {renderForTreatment({
         ...props,
