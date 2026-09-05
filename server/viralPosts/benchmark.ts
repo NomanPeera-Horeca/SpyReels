@@ -407,7 +407,7 @@ function toBenchmarkCandidate(
     sourceUrl: evaluated.adapted.sourceUrl,
     creatorHandle: evaluated.adapted.creatorHandle,
     creatorName: evaluated.adapted.creatorName,
-    pillar: evaluated.adapted.contentPillar,
+    pillar: evaluated.adapted.contentPillar || "unknown",
     format: evaluated.adapted.format,
     hook: evaluated.adapted.hook,
     caption: evaluated.adapted.caption,
@@ -536,7 +536,11 @@ export async function benchmarkViralTodayPicks(args: {
       {
         adapted: candidate,
         row,
-        source: sourceForCandidate({ candidate, adapted: candidate, row, pooledKeys } as never),
+        source: sourceForCandidate({
+          adapted: candidate,
+          row,
+          pooledKeys,
+        }),
         scoreInput,
         scored,
         hidden: hidden.has(creatorKeyOf(candidate)),
