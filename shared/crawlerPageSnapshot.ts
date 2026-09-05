@@ -1,9 +1,11 @@
 import { getStaticPublicPageSeo } from "./publicPageMeta";
 
-/** Crawler-visible H1 + summary injected into HTML before React mounts (removed on client boot). */
+/** Crawler-visible content injected into HTML before React mounts (removed on client boot). */
 export type CrawlerPageSnapshot = {
   h1: string;
   summary?: string;
+  body?: string[];
+  links?: Array<{ href: string; label: string }>;
 };
 
 const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
@@ -18,9 +20,25 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
       "Free, Starter, Pro, and Business plans for Reels research, transcription, and AI scripts. No card required to start.",
   },
   "/features/viral-reel-finder": {
-    h1: "Viral Reel Finder for Instagram Creators",
+    h1: "Free Instagram Viral Reel Finder by Username",
     summary:
-      "Find top-performing Reels by views and engagement rate, transcribe hooks, and turn research into scripts.",
+      "Paste a public Instagram username to find an account's top-performing Reels, sort by views, engagement rate and outlier score, read hook transcripts, and remake winning ideas in your own voice.",
+    body: [
+      "SpyReels is an Instagram reel finder built for creator and competitor research. Instead of scrolling a profile in date order, you can review the public Reels from an account ranked by performance. This makes it easier to see which videos broke away from that creator's normal baseline and which hooks, formats and ideas are worth studying.",
+      "The key signal is outlier score. Raw views alone can be misleading because a large account may routinely get hundreds of thousands of views. SpyReels compares a Reel with that account's own typical performance so a smaller creator's unusually strong post can stand out. You can also sort by views and engagement rate when those signals are more useful for your research.",
+      "Each result is designed to move from research into action. Open a winning Reel, study the first few seconds, read the hook in text, then use SpyReels to turn the same underlying structure into a new script in your own voice. The goal is not to copy another creator word for word; it is to understand the pattern that worked and adapt it to your niche.",
+      "Use the free Reel Finder to research public Instagram creators, competitors, coaches, local businesses and niche accounts. You can start without a credit card, compare multiple accounts, and use the strongest findings as input for your own content plan.",
+    ],
+    links: [
+      { href: "/blog/guide-find-viral-reels-your-niche", label: "How to find viral Reels in your niche" },
+      { href: "/blog/guide-reverse-engineer-viral-reels", label: "How to reverse engineer viral Reels" },
+      { href: "/blog/guide-instagram-reels-hook-patterns-data", label: "Instagram Reels hook patterns study" },
+      { href: "/blog/guide-instagram-reels-content-analysis-2026", label: "Instagram Reels content analysis research" },
+      { href: "/free-tools/viral-hooks", label: "Free viral hook generator" },
+      { href: "/free-tools/ai-script-generator", label: "Free AI script generator" },
+      { href: "/free-tools", label: "All free creator tools" },
+      { href: "/pricing", label: "SpyReels pricing" },
+    ],
   },
   "/free-tools/tiktok-viral-video-finder": {
     h1: "TikTok Finder: any creator's most viral videos",
@@ -121,10 +139,17 @@ export function getStaticCrawlerSnapshot(pathname: string): CrawlerPageSnapshot 
 
 export function buildCrawlerSnapshotHtml(snapshot: CrawlerPageSnapshot): string {
   const h1 = escapeHtml(snapshot.h1);
-  const summary = snapshot.summary
-    ? `<p>${escapeHtml(snapshot.summary)}</p>`
+  const summary = snapshot.summary ? `<p>${escapeHtml(snapshot.summary)}</p>` : "";
+  const body = (snapshot.body ?? []).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  const links = snapshot.links?.length
+    ? `<nav aria-label="Related SpyReels pages"><ul>${snapshot.links
+        .map(
+          (link) =>
+            `<li><a href="${escapeHtmlAttribute(link.href)}">${escapeHtml(link.label)}</a></li>`
+        )
+        .join("")}</ul></nav>`
     : "";
-  return `<div id="seo-crawler-snapshot" hidden aria-hidden="true"><h1>${h1}</h1>${summary}</div>`;
+  return `<div id="seo-crawler-snapshot" hidden aria-hidden="true"><h1>${h1}</h1>${summary}${body}${links}</div>`;
 }
 
 function escapeHtml(value: string): string {
@@ -133,4 +158,8 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return escapeHtml(value).replace(/'/g, "&#39;");
 }
