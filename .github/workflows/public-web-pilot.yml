@@ -21,7 +21,7 @@ permissions:
 jobs:
   validate-public-web:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,6 +48,10 @@ jobs:
       - name: Install public web dependencies
         working-directory: public-web
         run: pnpm install --no-frozen-lockfile
+
+      - name: Install Chromium for browser QA
+        working-directory: public-web
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Typecheck public web
         working-directory: public-web
@@ -81,7 +85,7 @@ jobs:
 
           grep -q "Any Instagram account" /tmp/viral-reel-finder.html
           grep -q "Free Instagram Reel Finder" /tmp/viral-reel-finder.html
-          grep -q "Research first. Then turn the useful pattern into your own content" /tmp/viral-reel-finder.html
+          grep -q "Three steps from competitor account to a useful content direction" /tmp/viral-reel-finder.html
           grep -q "Questions about the Instagram Reel Finder" /tmp/viral-reel-finder.html
           grep -q 'href="https://spyreels.ai/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
           grep -q 'href="https://spyreels.ai/free-tools/tiktok-viral-video-finder"' /tmp/viral-reel-finder.html
@@ -108,7 +112,27 @@ jobs:
             exit 1
           fi
 
+          if grep -q "hero-demo-v1.mp4" /tmp/viral-reel-finder.html; then
+            echo "Do not reintroduce the generic talking-head video into this product-led page."
+            exit 1
+          fi
+
           echo "Raw HTML pilot checks passed."
+
+      - name: Browser-test the full Viral Reel Finder journey
+        working-directory: public-web
+        run: pnpm test:e2e
+
+      - name: Upload browser QA evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-browser-qa
+          path: |
+            public-web/test-results
+            public-web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Show server log on failure
         if: failure()
