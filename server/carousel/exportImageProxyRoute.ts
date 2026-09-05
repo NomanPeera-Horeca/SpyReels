@@ -1,5 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { sdk } from "../_core/sdk";
+import { localObjectStorageDir, resolveLocalObjectPath } from "../storage";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const MAX_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20_000;
@@ -93,6 +96,32 @@ export function registerCarouselExportImageProxy(app: Express): void {
 
       if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
         res.status(400).json({ error: "invalid_protocol" });
+        return;
+      }
+
+      const localDir = localObjectStorageDir();
+      if (localDir && parsed.pathname.startsWith("/local-uploads/")) {
+        const key = decodeURIComponent(
+          parsed.pathname.slice("/local-uploads/".length)
+        );
+        try {
+          const abs = resolveLocalObjectPath(key);
+          const bytes = await readFile(abs);
+          const ext = path.extname(abs).toLowerCase();
+          const contentType =
+            ext === ".png"
+              ? "image/png"
+              : ext === ".webp"
+                ? "image/webp"
+                : ext === ".gif"
+                  ? "image/gif"
+                  : "image/jpeg";
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Cache-Control", "private, max-age=300");
+          res.send(bytes);
+        } catch {
+          res.status(404).json({ error: "local_object_missing" });
+        }
         return;
       }
 

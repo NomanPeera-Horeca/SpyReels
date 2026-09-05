@@ -6,6 +6,8 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 const getS3Client = () => {
   const endpoint = process.env.CLOUDFLARE_R2_ENDPOINT;
@@ -36,6 +38,51 @@ const getBucket = () => {
 
 function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
+}
+
+/** Dev/test only. When set, object writes stay on local disk and never touch R2. */
+export function localObjectStorageDir(): string | null {
+  const dir = process.env.LOCAL_OBJECT_STORAGE_DIR?.trim();
+  return dir || null;
+}
+
+export function resolveLocalObjectPath(relKey: string): string {
+  const dir = localObjectStorageDir();
+  if (!dir) {
+    throw new Error("LOCAL_OBJECT_STORAGE_DIR is not set");
+  }
+  const key = normalizeKey(relKey);
+  if (!key || key.includes("\0") || key.split("/").some((part) => part === "..")) {
+    throw new Error("invalid object key");
+  }
+  const root = path.resolve(dir);
+  const abs = path.resolve(root, key);
+  if (abs !== root && !abs.startsWith(root + path.sep)) {
+    throw new Error("invalid object key");
+  }
+  return abs;
+}
+
+function localObjectPublicUrl(relKey: string): string {
+  const key = normalizeKey(relKey);
+  const origin = (
+    process.env.LOCAL_OBJECT_STORAGE_PUBLIC_ORIGIN ||
+    `http://127.0.0.1:${process.env.PORT || "3000"}`
+  ).replace(/\/+$/, "");
+  return `${origin}/local-uploads/${key}`;
+}
+
+async function localStoragePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  _contentType: string
+): Promise<{ key: string; url: string }> {
+  const key = normalizeKey(relKey);
+  const abs = resolveLocalObjectPath(key);
+  await mkdir(path.dirname(abs), { recursive: true });
+  const body = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  await writeFile(abs, body);
+  return { key, url: localObjectPublicUrl(key) };
 }
 
 let warnedMissingR2PublicUrl = false;
@@ -76,6 +123,9 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (localObjectStorageDir()) {
+    return localStoragePut(relKey, data, contentType);
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);
@@ -104,6 +154,9 @@ export async function storagePutFromFile(
   filePath: string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (localObjectStorageDir()) {
+    return localStoragePut(relKey, await readFile(filePath), contentType);
+  }
   const { createReadStream } = await import("node:fs");
   const { stat } = await import("node:fs/promises");
   const client = getS3Client();
@@ -138,6 +191,11 @@ export async function storagePutPresigned(
   contentType: string,
   expiresInSeconds = 3600
 ): Promise<{ key: string; uploadUrl: string; url: string }> {
+  if (localObjectStorageDir()) {
+    throw new Error(
+      "presigned uploads are disabled when LOCAL_OBJECT_STORAGE_DIR is set"
+    );
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);
@@ -161,6 +219,9 @@ export async function storagePutPresigned(
 }
 
 export async function storageReadBuffer(relKey: string): Promise<Buffer> {
+  if (localObjectStorageDir()) {
+    return readFile(resolveLocalObjectPath(relKey));
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);
@@ -174,6 +235,14 @@ export async function storageReadBuffer(relKey: string): Promise<Buffer> {
 
 /** @returns true if the object exists in the bucket, false if missing, throws on other S3 errors. */
 export async function storageHead(relKey: string): Promise<boolean> {
+  if (localObjectStorageDir()) {
+    try {
+      await readFile(resolveLocalObjectPath(relKey));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);
@@ -191,6 +260,10 @@ export async function storageHead(relKey: string): Promise<boolean> {
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
+  if (localObjectStorageDir()) {
+    const key = normalizeKey(relKey);
+    return { key, url: localObjectPublicUrl(key) };
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);
@@ -205,6 +278,15 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
 }
 
 export async function storageDelete(relKey: string): Promise<void> {
+  if (localObjectStorageDir()) {
+    try {
+      await unlink(resolveLocalObjectPath(relKey));
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code !== "ENOENT") throw err;
+    }
+    return;
+  }
   const client = getS3Client();
   const bucket = getBucket();
   const key = normalizeKey(relKey);

@@ -12,7 +12,7 @@ type CarouselImageInspectorProps = {
   frame: CarouselImageFrameOverride | undefined;
   regenerating?: boolean;
   onReplaceFile: (file: File) => void;
-  onRegenerate: () => void;
+  onRegenerate?: () => void;
   onFrameChange: (patch: CarouselImageFramePatch) => void;
 };
 
@@ -60,14 +60,16 @@ export function CarouselImageInspector({
           >
             Replace image
           </button>
-          <button
-            type="button"
-            className="btn small ghost"
-            disabled={regenerating}
-            onClick={onRegenerate}
-          >
-            {regenerating ? "Regenerating…" : "Regenerate with AI"}
-          </button>
+          {onRegenerate ? (
+            <button
+              type="button"
+              className="btn small ghost"
+              disabled={regenerating}
+              onClick={onRegenerate}
+            >
+              {regenerating ? "Regenerating…" : "Regenerate with AI"}
+            </button>
+          ) : null}
           <label className="text-inspector-field">
             Horizontal
             <input

@@ -344,16 +344,6 @@ export function CarouselStudioApp({
       toast(err.message || "Failed to save framing undo");
     },
   });
-  const regenerateSlideImageMutation = trpc.carouselRemake.regenerateSlideImage.useMutation({
-    onSuccess: (data) => {
-      setRemakeImageUrls(data.imageUrls);
-      void utils.carouselRemake.list.invalidate();
-      toast("Image regenerated.");
-    },
-    onError: (err) => {
-      toast(err.message || "Failed to regenerate image");
-    },
-  });
   const updateAspectRatioMutation = trpc.carouselRemake.updateAspectRatio.useMutation({
     onSuccess: (data) => {
       if (data.aspectRatio === "4:5" || data.aspectRatio === "1:1" || data.aspectRatio === "9:16") {
@@ -1051,6 +1041,7 @@ export function CarouselStudioApp({
   const handleReplaceImageFile = async (file: File) => {
     if (!imageSelection || remakeId == null) return;
     saveHistory();
+    setSaveQueued(true);
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -1076,17 +1067,9 @@ export function CarouselStudioApp({
       setRemakeImageUrls(result.imageUrls);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to replace image");
+    } finally {
+      setSaveQueued(false);
     }
-  };
-
-  const handleRegenerateImage = () => {
-    if (!imageSelection || remakeId == null) return;
-    saveHistory();
-    regenerateSlideImageMutation.mutate({
-      remakeId,
-      slideId: imageSelection.slideId,
-      slotId: imageSelection.slotId,
-    });
   };
 
   useEffect(() => {
@@ -2113,11 +2096,9 @@ export function CarouselStudioApp({
                               imageSelection.slotId
                             ]
                           }
-                          regenerating={regenerateSlideImageMutation.isPending}
                           onReplaceFile={(file) => {
                             void handleReplaceImageFile(file);
                           }}
-                          onRegenerate={handleRegenerateImage}
                           onFrameChange={(patch) =>
                             handleImageFrameChange(
                               imageSelection.slideId,

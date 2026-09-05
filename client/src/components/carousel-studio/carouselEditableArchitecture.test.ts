@@ -87,9 +87,18 @@ describe("carousel text inspector architecture", () => {
     expect(app).toContain("carouselRemake.uploadSlideImage");
     expect(app).toContain("carouselRemake.updateImageUrls");
     expect(app).toContain("carouselRemake.updateImageFrame");
-    expect(app).toContain("carouselRemake.regenerateSlideImage");
+    expect(app).not.toContain("carouselRemake.regenerateSlideImage");
+    expect(app).not.toContain("onRegenerate");
     expect(app).toContain("replaceImageUrls");
     expect(app).toContain("replaceImageFrames");
+    const inspector = read("CarouselImageInspector.tsx");
+    expect(inspector).toContain("onRegenerate?");
+    expect(inspector).toContain("Regenerate with AI");
+    const router = readFileSync(
+      join(here, "../../../../server/routers/carouselRemakeRouter.ts"),
+      "utf8"
+    );
+    expect(router).toContain("regenerateSlideImage:");
   });
 
   it("wraps image-bearing premium families with real image slots", () => {
