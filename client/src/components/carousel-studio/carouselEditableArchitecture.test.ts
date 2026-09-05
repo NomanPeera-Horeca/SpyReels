@@ -72,11 +72,16 @@ describe("carousel text inspector architecture", () => {
 
   it("does not reserve the inspector when nothing is selected", () => {
     const app = read("CarouselStudioApp.tsx");
-    expect(app).toContain("textSelection || imageSelection ? \" has-inspector\"");
+    expect(app).toContain(
+      "textSelection || imageSelection || designInspectorOpen"
+    );
     expect(app).toContain("textSelection && currentSlideSpec");
     expect(app).toContain("imageSelection && currentSlideSpec");
     expect(app).toContain("CarouselImageInspector");
+    expect(app).toContain("CarouselDesignInspector");
+    expect(app).toContain("carouselRemake.updateDesignOverride");
     expect(app).not.toContain("imageEditsV2");
+    expect(app).not.toContain("designEditsV2");
   });
 
   it("selects images by slot id and reuses the remake image URL map", () => {
@@ -105,6 +110,8 @@ describe("carousel text inspector architecture", () => {
     expect(router).toContain("regenerateSlideImage:");
     expect(router).toContain("manageSlides:");
     expect(router).toContain("replaceEditorState:");
+    expect(router).toContain("updateDesignOverride:");
+    expect(router).toContain("designOverrideJson: input.designOverride");
     expect(router).toContain("slideStructureJson: state.slideStructure");
     expect(router).toContain("slotValuesJson: state.slotValues");
     expect(router).toContain("slotStyleOverridesJson: state.slotStyles");

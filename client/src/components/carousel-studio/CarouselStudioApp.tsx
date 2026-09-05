@@ -46,6 +46,13 @@ import {
 } from "@shared/carouselImageFrame";
 import { CarouselTextInspector } from "./CarouselTextInspector";
 import { CarouselImageInspector } from "./CarouselImageInspector";
+import { CarouselDesignInspector } from "./CarouselDesignInspector";
+import {
+  applyCarouselDesignPatch,
+  storedDesignToTokenOverride,
+  type CarouselDesignOverridePatch,
+  type StoredCarouselDesignOverride,
+} from "@shared/carouselDesignOverride";
 import {
   buildTextSelection,
   type CarouselTextSelection,
@@ -85,41 +92,6 @@ import {
   CAROUSELS_PATH,
   buildCarouselEditHref,
 } from "./carouselsHub";
-
-type StoredDesignOverride = {
-  background: string;
-  foreground: string;
-  accent: string;
-  muted: string;
-  fontDisplay?: string;
-  fontBody?: string;
-};
-
-function toStudioDesignOverride(
-  stored: StoredDesignOverride | null | undefined,
-  aspectRatioOverride: string | null | undefined
-): Partial<CarouselDesignTokens> | undefined {
-  if (!stored && !aspectRatioOverride) return undefined;
-  const override: Partial<CarouselDesignTokens> = {};
-  if (stored) {
-    override.colors = {
-      background: stored.background,
-      foreground: stored.foreground,
-      accent: stored.accent,
-      muted: stored.muted,
-    };
-    if (stored.fontDisplay || stored.fontBody) {
-      override.fontFamily = {
-        display: stored.fontDisplay ?? "",
-        body: stored.fontBody ?? "",
-      };
-    }
-  }
-  if (aspectRatioOverride === "4:5" || aspectRatioOverride === "1:1" || aspectRatioOverride === "9:16") {
-    override.aspectRatio = aspectRatioOverride;
-  }
-  return override;
-}
 
 function pickStudioSlideTitle(slots: Record<string, string> | undefined): string {
   if (!slots) return "Untitled slide";
@@ -232,11 +204,12 @@ export function CarouselStudioApp({
     null
   );
   const [remakeDesignOverride, setRemakeDesignOverride] =
-    useState<StoredDesignOverride | null>(null);
+    useState<StoredCarouselDesignOverride | null>(null);
   const [remakeAspectRatio, setRemakeAspectRatio] = useState<
     CarouselDesignTokens["aspectRatio"]
   >("4:5");
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [designInspectorOpen, setDesignInspectorOpen] = useState(false);
   const [textSelection, setTextSelection] =
     useState<CarouselTextSelection | null>(null);
   const [imageSelection, setImageSelection] =
@@ -261,6 +234,9 @@ export function CarouselStudioApp({
   const [packageSuccessText, setPackageSuccessText] = useState("");
   const [downloadAgainLabel, setDownloadAgainLabel] = useState("Download again");
 
+  const pendingDesignSaveRef = useRef<StoredCarouselDesignOverride | null | undefined>(
+    undefined
+  );
   const exportStageRef = useRef<HTMLDivElement | null>(null);
   const lastResolvedUrlRef = useRef<string | null>(null);
   const resolveInFlightRef = useRef<Promise<{
@@ -272,12 +248,20 @@ export function CarouselStudioApp({
   const exportGenerationRef = useRef(0);
   const utils = trpc.useUtils();
   const applyReturnedEditorState = useCallback(
-    (data: CarouselEditorSlideState & { remakeId: number }) => {
+    (
+      data: CarouselEditorSlideState & {
+        remakeId: number;
+        designOverride?: StoredCarouselDesignOverride | null;
+      }
+    ) => {
       setRemakeSlideStructure(data.slideStructure);
       setRemakeSlotValues(data.slotValues);
       setRemakeSlotStyles(data.slotStyles);
       setRemakeImageUrls(data.imageUrls);
       setRemakeImageFrames(data.imageFrames);
+      if (data.designOverride !== undefined) {
+        setRemakeDesignOverride(data.designOverride);
+      }
       utils.carouselRemake.status.setData({ remakeId: data.remakeId }, (old) =>
         old
           ? {
@@ -287,6 +271,9 @@ export function CarouselStudioApp({
               slotStyleOverrides: data.slotStyles,
               imageUrls: data.imageUrls,
               imageFrameOverrides: data.imageFrames,
+              ...(data.designOverride !== undefined
+                ? { designOverride: data.designOverride }
+                : {}),
             }
           : old
       );
@@ -404,6 +391,19 @@ export function CarouselStudioApp({
       toast(err.message || "Failed to save format");
     },
   });
+  const updateDesignOverrideMutation =
+    trpc.carouselRemake.updateDesignOverride.useMutation({
+      onSuccess: (data) => {
+        setRemakeDesignOverride(data.designOverride);
+        utils.carouselRemake.status.setData({ remakeId: data.remakeId }, (old) =>
+          old ? { ...old, designOverride: data.designOverride } : old
+        );
+        void utils.carouselRemake.list.invalidate();
+      },
+      onError: (err) => {
+        toast(err.message || "Failed to save design");
+      },
+    });
   const remakeStatusQuery = trpc.carouselRemake.status.useQuery(
     { remakeId: remakeId ?? 0 },
     {
@@ -440,7 +440,7 @@ export function CarouselStudioApp({
     studioTemplate != null &&
     remakeId != null &&
     editorVisible;
-  const studioDesignOverride = toStudioDesignOverride(
+  const studioDesignOverride = storedDesignToTokenOverride(
     remakeDesignOverride,
     remakeAspectRatio
   );
@@ -461,6 +461,7 @@ export function CarouselStudioApp({
           slotStyles: remakeSlotStyles,
           imageUrls: remakeImageUrls,
           imageFrames: remakeImageFrames,
+          designOverride: remakeDesignOverride,
         }),
       ];
       if (next.length > 20) next.shift();
@@ -473,6 +474,7 @@ export function CarouselStudioApp({
     remakeSlotStyles,
     remakeImageUrls,
     remakeImageFrames,
+    remakeDesignOverride,
   ]);
 
   const strategies = liveAngles && liveAngles.length > 0 ? liveAngles : null;
@@ -846,9 +848,11 @@ export function CarouselStudioApp({
           ? (data.imageUrls as CarouselImageUrlMap)
           : null
       );
-      setRemakeDesignOverride(
-        (data.designOverride as StoredDesignOverride | null) ?? null
-      );
+      if (pendingDesignSaveRef.current === undefined) {
+        setRemakeDesignOverride(
+          (data.designOverride as StoredCarouselDesignOverride | null) ?? null
+        );
+      }
       if (
         data.aspectRatioOverride === "4:5" ||
         data.aspectRatioOverride === "1:1" ||
@@ -868,6 +872,7 @@ export function CarouselStudioApp({
         setCurrentSlide(0);
         setTextSelection(null);
         setImageSelection(null);
+        setDesignInspectorOpen(false);
         setHistory([]);
         setHasGeneratedCarousel(true);
         setIsOpeningLibrary(false);
@@ -989,6 +994,7 @@ export function CarouselStudioApp({
     frame: CarouselImageFramePatch;
   } | null>(null);
   const frameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const designSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushSlotSave = useCallback(() => {
     const pending = pendingSlotSaveRef.current;
@@ -1037,6 +1043,58 @@ export function CarouselStudioApp({
       frame: pending.frame,
     });
   }, [remakeId, updateImageFrameMutation]);
+
+  const flushDesignSave = useCallback(() => {
+    const pending = pendingDesignSaveRef.current;
+    pendingDesignSaveRef.current = undefined;
+    if (designSaveTimerRef.current) {
+      clearTimeout(designSaveTimerRef.current);
+      designSaveTimerRef.current = null;
+    }
+    if (pending === undefined || remakeId == null) return;
+    updateDesignOverrideMutation.mutate({
+      remakeId,
+      designOverride: pending,
+    });
+  }, [remakeId, updateDesignOverrideMutation]);
+
+  const cancelPendingDesignSave = useCallback(() => {
+    pendingDesignSaveRef.current = undefined;
+    if (designSaveTimerRef.current) {
+      clearTimeout(designSaveTimerRef.current);
+      designSaveTimerRef.current = null;
+    }
+  }, []);
+
+  const handleDesignChange = (patch: CarouselDesignOverridePatch) => {
+    if (!studioTemplate) return;
+    const next = applyCarouselDesignPatch(
+      remakeDesignOverride,
+      studioTemplate.design,
+      patch
+    );
+    if (!next) return;
+    saveHistory();
+    setRemakeDesignOverride(next);
+    pendingDesignSaveRef.current = next;
+    setSaveQueued(true);
+    if (designSaveTimerRef.current) clearTimeout(designSaveTimerRef.current);
+    designSaveTimerRef.current = setTimeout(() => {
+      setSaveQueued(false);
+      flushDesignSave();
+    }, 500);
+  };
+
+  const handleDesignReset = () => {
+    saveHistory();
+    cancelPendingDesignSave();
+    setRemakeDesignOverride(null);
+    if (remakeId == null) return;
+    updateDesignOverrideMutation.mutate({
+      remakeId,
+      designOverride: null,
+    });
+  };
 
   const handleSlotChange = (slideId: string, slotId: string, value: string) => {
     saveHistory();
@@ -1207,6 +1265,7 @@ export function CarouselStudioApp({
       flushSlotSave();
       flushStyleSave();
       flushFrameSave();
+      flushDesignSave();
     };
     window.addEventListener("beforeunload", onLeave);
     return () => {
@@ -1214,8 +1273,9 @@ export function CarouselStudioApp({
       flushSlotSave();
       flushStyleSave();
       flushFrameSave();
+      flushDesignSave();
     };
-  }, [flushSlotSave, flushStyleSave, flushFrameSave]);
+  }, [flushSlotSave, flushStyleSave, flushFrameSave, flushDesignSave]);
 
   useEffect(() => {
     setTextSelection(null);
@@ -1303,6 +1363,7 @@ export function CarouselStudioApp({
     replaceSlotStyleMutation.isPending ||
     manageSlidesMutation.isPending ||
     replaceEditorStateMutation.isPending ||
+    updateDesignOverrideMutation.isPending ||
     saveQueued;
   const saveFailed =
     updateSlotMutation.isError ||
@@ -1311,7 +1372,8 @@ export function CarouselStudioApp({
     updateSlotStyleMutation.isError ||
     replaceSlotStyleMutation.isError ||
     manageSlidesMutation.isError ||
-    replaceEditorStateMutation.isError;
+    replaceEditorStateMutation.isError ||
+    updateDesignOverrideMutation.isError;
   const saveStatus = savePending
     ? "Saving"
     : saveFailed
@@ -1356,6 +1418,19 @@ export function CarouselStudioApp({
               </div>
             </div>
             <div className="top-actions">
+              <button
+                type="button"
+                className={`btn small ghost${designInspectorOpen ? " active" : ""}`}
+                disabled={!editorVisible}
+                onClick={() => {
+                  if (!editorVisible) return;
+                  setTextSelection(null);
+                  setImageSelection(null);
+                  setDesignInspectorOpen((open) => !open);
+                }}
+              >
+                Design
+              </button>
               <button
                 type="button"
                 className="btn small ghost"
@@ -2003,7 +2078,9 @@ export function CarouselStudioApp({
                   <div id="editorStep">
                     <div
                       className={`editor-shell${
-                        textSelection || imageSelection ? " has-inspector" : ""
+                        textSelection || imageSelection || designInspectorOpen
+                          ? " has-inspector"
+                          : ""
                       }`}
                     >
                       <aside className="panel">
@@ -2081,6 +2158,7 @@ export function CarouselStudioApp({
                                   slotStyles?: CarouselSlotStyleMap;
                                   imageUrls?: CarouselImageUrlMap | null;
                                   imageFrames?: CarouselImageFrameMap;
+                                  designOverride?: StoredCarouselDesignOverride | null;
                                 } & CarouselSlideValuesById;
                                 const slotValues =
                                   parsed.slotValues ??
@@ -2092,12 +2170,18 @@ export function CarouselStudioApp({
                                   parsed.slideStructure ??
                                   remakeSlideStructure ??
                                   effectiveSlides;
+                                const restoredDesign =
+                                  "designOverride" in parsed
+                                    ? (parsed.designOverride ?? null)
+                                    : remakeDesignOverride;
                                 const activeId = effectiveSlides[currentSlide]?.id;
+                                cancelPendingDesignSave();
                                 setRemakeSlideStructure(slideStructure);
                                 setRemakeSlotValues(slotValues);
                                 setRemakeSlotStyles(slotStyles);
                                 setRemakeImageUrls(imageUrls);
                                 setRemakeImageFrames(imageFrames);
+                                setRemakeDesignOverride(restoredDesign);
                                 const restoredIndex = slideStructure.findIndex(
                                   (slide) => slide.id === activeId
                                 );
@@ -2119,6 +2203,7 @@ export function CarouselStudioApp({
                                     slotStyleOverrides: slotStyles,
                                     imageUrls: imageUrls ?? {},
                                     imageFrameOverrides: imageFrames,
+                                    designOverride: restoredDesign,
                                   });
                                 }
                               } catch {
@@ -2169,12 +2254,14 @@ export function CarouselStudioApp({
                                       : null
                                   }
                                   onSlotSelect={(slideId, slotId) => {
+                                    setDesignInspectorOpen(false);
                                     setImageSelection(null);
                                     setTextSelection(
                                       buildTextSelection(slideId, slotId)
                                     );
                                   }}
                                   onImageSelect={(slideId, slotId) => {
+                                    setDesignInspectorOpen(false);
                                     setTextSelection(null);
                                     setImageSelection({ slideId, slotId });
                                   }}
@@ -2189,7 +2276,14 @@ export function CarouselStudioApp({
                           ) : null}
                         </div>
                       </section>
-                      {textSelection && currentSlideSpec ? (
+                      {designInspectorOpen && studioTemplate ? (
+                        <CarouselDesignInspector
+                          template={studioTemplate.design}
+                          value={remakeDesignOverride}
+                          onChange={handleDesignChange}
+                          onReset={handleDesignReset}
+                        />
+                      ) : textSelection && currentSlideSpec ? (
                         <CarouselTextInspector
                           role={textSelection.role}
                           slotId={textSelection.slotId}

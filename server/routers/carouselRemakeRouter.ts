@@ -35,6 +35,10 @@ import {
   reorderCarouselSlides,
   type CarouselEditorSlideState,
 } from "@shared/carouselSlideManagement";
+import {
+  normalizeCarouselDesignOverride,
+  type StoredCarouselDesignOverride,
+} from "@shared/carouselDesignOverride";
 import { resolveSlideImage } from "../carousel/resolveSlideImage";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -169,6 +173,27 @@ const DESIGN_OVERRIDE_SCHEMA = z.object({
   fontDisplay: z.string().max(80).optional(),
   fontBody: z.string().max(80).optional(),
 });
+
+const STORED_DESIGN_UPDATE_SCHEMA = z
+  .object({
+    background: z.string().max(16),
+    foreground: z.string().max(16),
+    accent: z.string().max(16),
+    muted: z.string().max(16),
+    fontDisplay: z.string().max(128).optional(),
+    fontBody: z.string().max(128).optional(),
+  })
+  .transform((value, ctx): StoredCarouselDesignOverride => {
+    const parsed = normalizeCarouselDesignOverride(value);
+    if (!parsed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid design override",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
 
 const ASPECT_RATIO_SCHEMA = z.enum(["4:5", "1:1", "9:16"]);
 
@@ -1031,6 +1056,63 @@ export const carouselRemakeRouter = router({
     }),
 
   /**
+   * Persist global carousel design. Null clears the override back to the template.
+   * Auth + workspace ownership; does not mutate templates, slot styles, or generation.
+   */
+  updateDesignOverride: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        designOverride: STORED_DESIGN_UPDATE_SCHEMA.nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing design",
+        });
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({ designOverrideJson: input.designOverride })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return {
+        remakeId: input.remakeId,
+        designOverride: input.designOverride,
+      };
+    }),
+
+  /**
    * Content → carousel: paste / topic / URL → template remake with source-aware prompt.
    */
   generateFromContent: protectedProcedure
@@ -1618,6 +1700,7 @@ export const carouselRemakeRouter = router({
         slotStyleOverrides: z.record(z.string(), z.unknown()),
         imageUrls: z.record(z.string(), z.unknown()),
         imageFrameOverrides: z.record(z.string(), z.unknown()),
+        designOverride: STORED_DESIGN_UPDATE_SCHEMA.nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1638,7 +1721,12 @@ export const carouselRemakeRouter = router({
           imageUrls: normalizeOwnedImageUrlMap(input.imageUrls),
           imageFrames: normalizeCarouselImageFrameMap(input.imageFrameOverrides),
         });
-        return persistOwnedEditorState(db, input.remakeId, next);
+        return persistOwnedEditorState(
+          db,
+          input.remakeId,
+          next,
+          input.designOverride
+        );
       } catch (err) {
         throw slideManagementTrpcError(err);
       }
@@ -1805,8 +1893,14 @@ function editorStateFromRow(row: OwnedEditorRemakeRow): CarouselEditorSlideState
 async function persistOwnedEditorState(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   remakeId: number,
-  state: CarouselEditorSlideState
-): Promise<CarouselEditorSlideState & { remakeId: number }> {
+  state: CarouselEditorSlideState,
+  designOverride?: StoredCarouselDesignOverride | null
+): Promise<
+  CarouselEditorSlideState & {
+    remakeId: number;
+    designOverride?: StoredCarouselDesignOverride | null;
+  }
+> {
   await db.transaction(async (tx) => {
     await tx
       .update(carouselRemakes)
@@ -1816,10 +1910,17 @@ async function persistOwnedEditorState(
         slotStyleOverridesJson: state.slotStyles,
         imageUrlsJson: state.imageUrls,
         imageFrameOverridesJson: state.imageFrames,
+        ...(designOverride !== undefined
+          ? { designOverrideJson: designOverride }
+          : {}),
       })
       .where(eq(carouselRemakes.id, remakeId));
   });
-  return { remakeId, ...state };
+  return {
+    remakeId,
+    ...state,
+    ...(designOverride !== undefined ? { designOverride } : {}),
+  };
 }
 
 function slideManagementTrpcError(err: unknown): TRPCError {

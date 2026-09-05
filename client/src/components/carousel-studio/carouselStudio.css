@@ -59,6 +59,7 @@
   }
   .cs .btn.primary{background:linear-gradient(145deg,var(--purple),#6645ea);border-color:transparent;box-shadow:0 8px 30px rgba(124,92,255,.26)}
   .cs .btn.ghost{background:transparent}
+  .cs .btn.ghost.active{background:var(--panel-3);border-color:#3a3a49}
   .cs .btn.small{padding:7px 10px;font-size:12px}
   .cs .content{overflow:auto;padding:30px}
   .cs .page{max-width:1440px;margin:0 auto}
@@ -299,6 +300,12 @@
   .cs .text-inspector-align button{flex:1;border:1px solid var(--border);background:#121219;color:var(--muted);border-radius:8px;padding:7px 6px;text-transform:capitalize}
   .cs .text-inspector-align button.active{background:var(--panel-3);color:#fff}
   .cs .text-inspector-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted)}
+  .cs .design-inspector-section{display:flex;flex-direction:column;gap:10px}
+  .cs .design-inspector-section h4{margin:0;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .cs .design-inspector-color{display:flex;align-items:center;gap:8px}
+  .cs .design-inspector-color input[type="color"]{width:36px;height:36px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#0d0d12;cursor:pointer;flex:0 0 36px}
+  .cs .design-inspector-color input[type="text"]{flex:1}
+  .cs .design-inspector-reset{width:100%;margin-top:4px}
   .cs .studio-slide-stage [data-carousel-slot-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px;border-radius:2px}
   .cs .studio-slide-stage [data-carousel-image-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px}
   .cs .image-inspector-preview{width:100%;aspect-ratio:4/5;border-radius:10px;background:#0d0d12 center/cover no-repeat;border:1px solid var(--border)}

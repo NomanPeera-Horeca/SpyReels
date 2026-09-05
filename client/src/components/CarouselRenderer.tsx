@@ -7,6 +7,7 @@ import type {
 } from "@shared/carouselTemplates";
 import type { CarouselSlotStyleMap } from "@shared/carouselSlotStyle";
 import type { CarouselImageFrameMap } from "@shared/carouselImageFrame";
+import { mergeCarouselDesignTokens } from "@shared/carouselDesignOverride";
 import { CarouselEditorChromeContext } from "@/components/carouselEditorChrome";
 import { normalizeSlideImages } from "@shared/carouselTemplates";
 import { resolveCarouselSlideComponent } from "@/components/carouselLayoutRegistry";
@@ -184,9 +185,10 @@ export function CarouselRenderer({
   onImageSelect,
 }: CarouselRendererProps) {
   const effectiveSlides = slides ?? template.slides;
-  const effectiveTokens: CarouselDesignTokens = designOverride
-    ? { ...template.design, ...designOverride }
-    : template.design;
+  const effectiveTokens: CarouselDesignTokens = mergeCarouselDesignTokens(
+    template.design,
+    designOverride
+  );
 
   const sharedCoverUrl = template.shareCoverImage
     ? (() => {
