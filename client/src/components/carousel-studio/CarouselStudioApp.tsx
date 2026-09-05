@@ -26,6 +26,13 @@ import {
   type CarouselSlideSpec,
 } from "@shared/carouselTemplates";
 import {
+  deleteCarouselSlide,
+  duplicateCarouselSlide,
+  reorderCarouselSlides,
+  type CarouselEditorSlideState,
+} from "@shared/carouselSlideManagement";
+import { CarouselSlideRail } from "./CarouselSlideRail";
+import {
   normalizeCarouselSlotStyleMap,
   upsertCarouselSlotStyleMap,
   type CarouselSlotStyleMap,
@@ -264,6 +271,28 @@ export function CarouselStudioApp({
   }> | null>(null);
   const exportGenerationRef = useRef(0);
   const utils = trpc.useUtils();
+  const applyReturnedEditorState = useCallback(
+    (data: CarouselEditorSlideState & { remakeId: number }) => {
+      setRemakeSlideStructure(data.slideStructure);
+      setRemakeSlotValues(data.slotValues);
+      setRemakeSlotStyles(data.slotStyles);
+      setRemakeImageUrls(data.imageUrls);
+      setRemakeImageFrames(data.imageFrames);
+      utils.carouselRemake.status.setData({ remakeId: data.remakeId }, (old) =>
+        old
+          ? {
+              ...old,
+              slideStructure: data.slideStructure,
+              slotValues: data.slotValues,
+              slotStyleOverrides: data.slotStyles,
+              imageUrls: data.imageUrls,
+              imageFrameOverrides: data.imageFrames,
+            }
+          : old
+      );
+    },
+    [utils]
+  );
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
@@ -344,6 +373,26 @@ export function CarouselStudioApp({
       toast(err.message || "Failed to save framing undo");
     },
   });
+  const manageSlidesMutation = trpc.carouselRemake.manageSlides.useMutation({
+    onSuccess: (data) => {
+      applyReturnedEditorState(data);
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to update slides");
+      void utils.carouselRemake.status.invalidate();
+    },
+  });
+  const replaceEditorStateMutation = trpc.carouselRemake.replaceEditorState.useMutation({
+    onSuccess: (data) => {
+      applyReturnedEditorState(data);
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save undo");
+      void utils.carouselRemake.status.invalidate();
+    },
+  });
   const updateAspectRatioMutation = trpc.carouselRemake.updateAspectRatio.useMutation({
     onSuccess: (data) => {
       if (data.aspectRatio === "4:5" || data.aspectRatio === "1:1" || data.aspectRatio === "9:16") {
@@ -407,6 +456,7 @@ export function CarouselStudioApp({
       const next = [
         ...prev,
         JSON.stringify({
+          slideStructure: remakeSlideStructure ?? effectiveSlides,
           slotValues: displaySlideValues,
           slotStyles: remakeSlotStyles,
           imageUrls: remakeImageUrls,
@@ -416,7 +466,14 @@ export function CarouselStudioApp({
       if (next.length > 20) next.shift();
       return next;
     });
-  }, [displaySlideValues, remakeSlotStyles, remakeImageUrls, remakeImageFrames]);
+  }, [
+    displaySlideValues,
+    remakeSlideStructure,
+    effectiveSlides,
+    remakeSlotStyles,
+    remakeImageUrls,
+    remakeImageFrames,
+  ]);
 
   const strategies = liveAngles && liveAngles.length > 0 ? liveAngles : null;
   const selectedAngle =
@@ -1072,6 +1129,79 @@ export function CarouselStudioApp({
     }
   };
 
+  const currentEditorState = (): CarouselEditorSlideState => ({
+    slideStructure: effectiveSlides,
+    slotValues: displaySlideValues ?? {},
+    slotStyles: remakeSlotStyles,
+    imageUrls: remakeImageUrls ?? {},
+    imageFrames: remakeImageFrames,
+  });
+
+  const handleReorderSlides = (orderedSlideIds: string[]) => {
+    if (remakeId == null) return;
+    const activeId = effectiveSlides[currentSlide]?.id;
+    saveHistory();
+    const next = reorderCarouselSlides(currentEditorState(), orderedSlideIds);
+    setRemakeSlideStructure(next.slideStructure);
+    if (activeId) {
+      const idx = next.slideStructure.findIndex((slide) => slide.id === activeId);
+      if (idx >= 0) setCurrentSlide(idx);
+    }
+    manageSlidesMutation.mutate({
+      remakeId,
+      action: "reorder",
+      orderedSlideIds,
+    });
+  };
+
+  const handleDuplicateSlide = (slideId: string) => {
+    if (remakeId == null || manageSlidesMutation.isPending) return;
+    saveHistory();
+    const { state: next, newSlideId } = duplicateCarouselSlide(
+      currentEditorState(),
+      slideId
+    );
+    setRemakeSlideStructure(next.slideStructure);
+    setRemakeSlotValues(next.slotValues);
+    setRemakeSlotStyles(next.slotStyles);
+    setRemakeImageUrls(next.imageUrls);
+    setRemakeImageFrames(next.imageFrames);
+    const idx = next.slideStructure.findIndex((slide) => slide.id === newSlideId);
+    if (idx >= 0) setCurrentSlide(idx);
+    setTextSelection(null);
+    setImageSelection(null);
+    manageSlidesMutation.mutate({
+      remakeId,
+      action: "duplicate",
+      slideId,
+    });
+  };
+
+  const handleDeleteSlide = (slideId: string) => {
+    if (remakeId == null || manageSlidesMutation.isPending) return;
+    const activeId = effectiveSlides[currentSlide]?.id;
+    saveHistory();
+    const next = deleteCarouselSlide(currentEditorState(), slideId);
+    setRemakeSlideStructure(next.slideStructure);
+    setRemakeSlotValues(next.slotValues);
+    setRemakeSlotStyles(next.slotStyles);
+    setRemakeImageUrls(next.imageUrls);
+    setRemakeImageFrames(next.imageFrames);
+    if (activeId && activeId !== slideId) {
+      const idx = next.slideStructure.findIndex((slide) => slide.id === activeId);
+      setCurrentSlide(idx >= 0 ? idx : 0);
+    } else {
+      setCurrentSlide(Math.min(currentSlide, next.slideStructure.length - 1));
+    }
+    if (textSelection?.slideId === slideId) setTextSelection(null);
+    if (imageSelection?.slideId === slideId) setImageSelection(null);
+    manageSlidesMutation.mutate({
+      remakeId,
+      action: "delete",
+      slideId,
+    });
+  };
+
   useEffect(() => {
     const onLeave = () => {
       flushSlotSave();
@@ -1171,13 +1301,17 @@ export function CarouselStudioApp({
     replaceSlotMutation.isPending ||
     updateSlotStyleMutation.isPending ||
     replaceSlotStyleMutation.isPending ||
+    manageSlidesMutation.isPending ||
+    replaceEditorStateMutation.isPending ||
     saveQueued;
   const saveFailed =
     updateSlotMutation.isError ||
     updateAspectRatioMutation.isError ||
     replaceSlotMutation.isError ||
     updateSlotStyleMutation.isError ||
-    replaceSlotStyleMutation.isError;
+    replaceSlotStyleMutation.isError ||
+    manageSlidesMutation.isError ||
+    replaceEditorStateMutation.isError;
   const saveStatus = savePending
     ? "Saving"
     : saveFailed
@@ -1876,42 +2010,35 @@ export function CarouselStudioApp({
                         <div className="panel-head">
                           <h3>Slides</h3>
                         </div>
-                        <div className="thumbs">
-                          {studioTemplate &&
-                            effectiveSlides.map((slide, i) => (
-                              <div
-                                key={slide.id}
-                                className={`thumb${currentSlide === i ? " active" : ""}`}
-                                onClick={() => setCurrentSlide(i)}
-                              >
-                                <div className="thumb-num">{i + 1}</div>
-                                <div
-                                  className="thumb-preview"
-                                  style={{
-                                    aspectRatio:
-                                      remakeAspectRatio === "1:1"
-                                        ? "1 / 1"
-                                        : remakeAspectRatio === "9:16"
-                                          ? "9 / 16"
-                                          : "4 / 5",
-                                  }}
-                                >
-                                  <div className="thumb-preview-scale">
-                                    <CarouselRenderer
-                                      template={studioTemplate}
-                                      slides={[slide]}
-                                      slideValues={displaySlideValues}
-                                      designOverride={studioDesignOverride}
-                                      handle={studioHandle}
-                                      imageUrls={remakeImageUrls ?? undefined}
-                                      slotStyles={remakeSlotStyles}
-                                      imageFrames={remakeImageFrames}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
+                        {studioTemplate ? (
+                          <CarouselSlideRail
+                            slides={effectiveSlides}
+                            currentSlideId={currentSlideSpec?.id}
+                            aspectRatio={remakeAspectRatio}
+                            menuDisabled={manageSlidesMutation.isPending}
+                            onSelect={(slideId) => {
+                              const idx = effectiveSlides.findIndex(
+                                (slide) => slide.id === slideId
+                              );
+                              if (idx >= 0) setCurrentSlide(idx);
+                            }}
+                            onReorder={handleReorderSlides}
+                            onDuplicate={handleDuplicateSlide}
+                            onDelete={handleDeleteSlide}
+                            renderPreview={(slide) => (
+                              <CarouselRenderer
+                                template={studioTemplate}
+                                slides={[slide]}
+                                slideValues={displaySlideValues}
+                                designOverride={studioDesignOverride}
+                                handle={studioHandle}
+                                imageUrls={remakeImageUrls ?? undefined}
+                                slotStyles={remakeSlotStyles}
+                                imageFrames={remakeImageFrames}
+                              />
+                            )}
+                          />
+                        ) : null}
                       </aside>
 
                       <section className="panel canvas-panel">
@@ -1949,6 +2076,7 @@ export function CarouselStudioApp({
                               if (!old) return;
                               try {
                                 const parsed = JSON.parse(old) as {
+                                  slideStructure?: CarouselSlideSpec[];
                                   slotValues?: CarouselSlideValuesById;
                                   slotStyles?: CarouselSlotStyleMap;
                                   imageUrls?: CarouselImageUrlMap | null;
@@ -1960,25 +2088,36 @@ export function CarouselStudioApp({
                                 const slotStyles = parsed.slotStyles ?? {};
                                 const imageUrls = parsed.imageUrls ?? remakeImageUrls;
                                 const imageFrames = parsed.imageFrames ?? {};
+                                const slideStructure =
+                                  parsed.slideStructure ??
+                                  remakeSlideStructure ??
+                                  effectiveSlides;
+                                const activeId = effectiveSlides[currentSlide]?.id;
+                                setRemakeSlideStructure(slideStructure);
                                 setRemakeSlotValues(slotValues);
                                 setRemakeSlotStyles(slotStyles);
                                 setRemakeImageUrls(imageUrls);
                                 setRemakeImageFrames(imageFrames);
+                                const restoredIndex = slideStructure.findIndex(
+                                  (slide) => slide.id === activeId
+                                );
+                                setCurrentSlide(
+                                  restoredIndex >= 0
+                                    ? restoredIndex
+                                    : Math.min(
+                                        currentSlide,
+                                        Math.max(0, slideStructure.length - 1)
+                                      )
+                                );
+                                setTextSelection(null);
+                                setImageSelection(null);
                                 if (remakeId != null) {
-                                  replaceSlotMutation.mutate({
+                                  replaceEditorStateMutation.mutate({
                                     remakeId,
+                                    slideStructure,
                                     slotValues,
-                                  });
-                                  replaceSlotStyleMutation.mutate({
-                                    remakeId,
                                     slotStyleOverrides: slotStyles,
-                                  });
-                                  replaceImageUrlsMutation.mutate({
-                                    remakeId,
                                     imageUrls: imageUrls ?? {},
-                                  });
-                                  replaceImageFramesMutation.mutate({
-                                    remakeId,
                                     imageFrameOverrides: imageFrames,
                                   });
                                 }
