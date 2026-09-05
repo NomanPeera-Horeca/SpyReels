@@ -1,0 +1,234 @@
+.section {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 82px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.headingRow {
+  display: grid;
+  grid-template-columns: 1fr 0.62fr;
+  gap: 36px;
+  align-items: end;
+}
+
+.headingRow h2 {
+  max-width: 700px;
+  margin: 8px 0 0;
+  font-size: clamp(30px, 4.5vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+}
+
+.headingRow > p {
+  margin: 0;
+  color: #9696a4;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.eyebrow {
+  color: #a78bfa;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(167, 139, 250, 0.34);
+  background: rgba(124, 58, 237, 0.045);
+}
+
+.visual {
+  min-height: 220px;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.22), transparent 58%),
+    #0b0b11;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.copy {
+  padding: 20px;
+}
+
+.copy > span {
+  color: #8d8d9b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.copy h3 {
+  margin: 8px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.copy p {
+  min-height: 66px;
+  margin: 10px 0 0;
+  color: #9696a4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.copy b {
+  display: inline-block;
+  margin-top: 14px;
+  color: #bba8ff;
+  font-size: 12px;
+}
+
+.mockFinder,
+.mockScript,
+.mockHooks {
+  height: 180px;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 16px;
+  background: rgba(13, 13, 20, 0.84);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.28);
+}
+
+.mockFinder {
+  padding: 18px;
+}
+
+.mockTitle,
+.mockHookHeading {
+  color: #f6f4ff;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mockInput {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  color: #7f7f8d;
+  font-size: 11px;
+}
+
+.mockInput b {
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #6d28d9;
+  color: white;
+  font-size: 10px;
+}
+
+.mockTiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.mockTiles i {
+  aspect-ratio: 1.15 / 1;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.65)),
+    linear-gradient(135deg, #2b2345, #181820);
+}
+
+.mockScript {
+  padding: 18px;
+}
+
+.mockScript span {
+  color: #9f87ff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mockScript strong {
+  display: block;
+  margin-top: 8px;
+  color: white;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.mockScript div {
+  height: 8px;
+  margin-top: 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mockScript .shortLine {
+  width: 63%;
+}
+
+.mockHooks {
+  padding: 18px;
+}
+
+.mockHooks p {
+  margin: 11px 0 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #aaaab7;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .headingRow {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .copy p {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 64px 0;
+  }
+
+  .visual {
+    min-height: 190px;
+  }
+
+  .mockFinder,
+  .mockScript,
+  .mockHooks {
+    height: 150px;
+  }
+}
