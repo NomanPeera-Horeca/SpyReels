@@ -46,9 +46,10 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
   console.log(`Unique shallow creators: ${result.uniqueShallowCreators}`);
   console.log(`Creators selected for drilling: ${result.selectedCreators.length}`);
   console.log(`Creators actually drilled before fuse: ${result.drilledCreatorHandles.length}`);
-  console.log(`Six-month reels read from drilled creators: ${result.drilledReelsRead}`);
+  console.log(`90-day reels read from drilled creators: ${result.drilledReelsRead}`);
   console.log(`Strict viral candidates unlocked by drilling: ${result.drilledViralCandidates}`);
-  console.log(`Final unique candidate universe: ${result.adapted.length}`);
+  console.log(`Rejected by direct-pillar pool admission: ${result.poolAdmissionRejected}`);
+  console.log(`Final pool-admitted candidate universe: ${result.adapted.length}`);
 
   console.log("\nCREATORS SELECTED FOR DRILLING");
   console.log("------------------------------------------------------------");
@@ -62,7 +63,7 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
     }
   });
 
-  console.log("\nTOP CREATOR-DRILL CANDIDATES");
+  console.log("\nPOOL-ADMITTED CREATOR-DRILL CANDIDATES");
   console.log("------------------------------------------------------------");
   const drilled = result.adapted
     .filter((candidate) => candidate.rawProviderPayload?.retrievalDepth === "creator_drill")
@@ -74,11 +75,12 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
     .slice(0, 20);
 
   if (drilled.length === 0) {
-    console.log("No creator-drill candidates were unlocked.");
+    console.log("No creator-drill candidates passed direct-pillar pool admission.");
   } else {
     drilled.forEach((candidate, index) => {
+      const confidence = Number(candidate.pillarConfidence ?? 0);
       console.log(
-        `${index + 1}. ${candidate.creatorHandle || candidate.creatorName} | views=${candidate.views ?? 0} | followers=${candidate.creatorFollowers ?? 0} | reach=${(candidate.reachMultiplier ?? 0).toFixed(2)}x | trend=${candidate.trendStatus}`
+        `${index + 1}. ${candidate.creatorHandle || candidate.creatorName} | views=${candidate.views ?? 0} | followers=${candidate.creatorFollowers ?? 0} | reach=${(candidate.reachMultiplier ?? 0).toFixed(2)}x | pillarConf=${confidence.toFixed(2)} | trend=${candidate.trendStatus}`
       );
       console.log(`   ${short(candidate.hook || candidate.caption)}`);
       console.log(`   ${candidate.sourceUrl}`);
