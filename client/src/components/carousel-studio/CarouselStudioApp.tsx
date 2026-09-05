@@ -56,6 +56,10 @@ import {
 } from "./studioLibrary";
 import { formatStudioPackageSummary } from "./studioPackage";
 import { studioSidebarRoleLabel } from "./studioSidebarRole";
+import {
+  CAROUSEL_STUDIO_PATH,
+  parseStudioLaunchSearch,
+} from "./carouselsHub";
 
 type StoredDesignOverride = {
   background: string;
@@ -166,6 +170,8 @@ export function CarouselStudioApp() {
   );
 
   const [composerInput, setComposerInput] = useState("");
+  const composerInputRef = useRef("");
+  composerInputRef.current = composerInput;
   const [inputAspectRatio, setInputAspectRatio] = useState<
     CarouselDesignTokens["aspectRatio"]
   >("4:5");
@@ -447,7 +453,7 @@ export function CarouselStudioApp() {
       sourceReelId: string | null;
     } | null;
   } | null> => {
-    let content = composerInput.trim();
+    let content = composerInputRef.current.trim();
     if (!content) {
       toast("Enter a topic or paste a link first.");
       return null;
@@ -816,6 +822,27 @@ export function CarouselStudioApp() {
     },
     [clearStaleRemakeVisuals]
   );
+
+  const generateDirectRef = useRef(generateDirect);
+  generateDirectRef.current = generateDirect;
+  const openCompletedFromLibraryRef = useRef(openCompletedFromLibrary);
+  openCompletedFromLibraryRef.current = openCompletedFromLibrary;
+  const hubLaunchConsumedRef = useRef(false);
+
+  useEffect(() => {
+    if (hubLaunchConsumedRef.current) return;
+    const intent = parseStudioLaunchSearch(window.location.search);
+    if (intent.kind === "none") return;
+    hubLaunchConsumedRef.current = true;
+    window.history.replaceState(null, "", CAROUSEL_STUDIO_PATH);
+    if (intent.kind === "open_remake") {
+      openCompletedFromLibraryRef.current(intent.remakeId);
+      return;
+    }
+    composerInputRef.current = intent.content;
+    setComposerInput(intent.content);
+    void generateDirectRef.current();
+  }, []);
 
   const libraryCards = mapStudioLibraryRows(libraryQuery.data ?? []);
 
