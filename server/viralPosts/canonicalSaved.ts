@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
-import { viralPostCandidates } from "../../drizzle/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { reels, viralPostCandidates } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getPersonalWorkspaceId } from "../personalWorkspace";
 
@@ -8,7 +8,7 @@ import { getPersonalWorkspaceId } from "../personalWorkspace";
  *
  * New Viral saves use the real external identity (platform + sourceId),
  * not the internal viral_post_candidates id. When an IG/TikTok candidate
- * has a mirrored reels row, we also keep reelId/jobId populated so the
+ * has a mirror in THIS workspace, we also keep reelId/jobId populated so the
  * existing Saved Reels UI can render it without a separate migration.
  *
  * We intentionally do not bulk-backfill historical saves. If a matching
@@ -36,12 +36,17 @@ export async function saveViralCandidateCanonical(
   const workspaceId = await getPersonalWorkspaceId(userId);
   const platform = (candidate.platform || "instagram").trim().toLowerCase();
   const sourceId = candidate.sourceId.trim();
-  const mirroredReelId = candidate.mirroredReelId ?? null;
 
   if (!sourceId) throw new Error("Viral post candidate has no source id");
 
-  // Cheap lazy upgrade: if this mirrored reel was previously saved through
-  // the older reelId-only path, attach its canonical identity now.
+  const mirroredReelId = await resolveWorkspaceMirrorId({
+    workspaceId,
+    platform,
+    sourceId,
+    hintedReelId: candidate.mirroredReelId,
+  });
+
+  // Cheap lazy upgrade: only use a reelId that belongs to this workspace.
   if (mirroredReelId != null && mirroredReelId > 0) {
     await db.execute(sql`
       UPDATE saved_reels
@@ -102,7 +107,12 @@ export async function unsaveViralCandidateCanonical(
   const workspaceId = await getPersonalWorkspaceId(userId);
   const platform = (candidate.platform || "instagram").trim().toLowerCase();
   const sourceId = candidate.sourceId.trim();
-  const mirroredReelId = candidate.mirroredReelId ?? null;
+  const mirroredReelId = await resolveWorkspaceMirrorId({
+    workspaceId,
+    platform,
+    sourceId,
+    hintedReelId: candidate.mirroredReelId,
+  });
 
   if (mirroredReelId != null && mirroredReelId > 0) {
     await db.execute(sql`
@@ -124,4 +134,47 @@ export async function unsaveViralCandidateCanonical(
       AND platform = ${platform}
       AND sourceId = ${sourceId}
   `);
+}
+
+/**
+ * Resolve a mirror only inside the caller's workspace. A global candidate's
+ * mirroredReelId is a cache hint and may point to another workspace.
+ */
+async function resolveWorkspaceMirrorId(args: {
+  workspaceId: string;
+  platform: string;
+  sourceId: string;
+  hintedReelId: number | null;
+}): Promise<number | null> {
+  if (args.platform === "youtube") return null;
+  const db = await getDb();
+  if (!db) return null;
+
+  if (args.hintedReelId != null && args.hintedReelId > 0) {
+    const [hinted] = await db
+      .select({ id: reels.id })
+      .from(reels)
+      .where(
+        and(
+          eq(reels.id, args.hintedReelId),
+          eq(reels.workspaceId, args.workspaceId)
+        )
+      )
+      .limit(1);
+    if (hinted) return hinted.id;
+  }
+
+  const [local] = await db
+    .select({ id: reels.id })
+    .from(reels)
+    .where(
+      and(
+        eq(reels.workspaceId, args.workspaceId),
+        eq(reels.jobId, 0),
+        eq(reels.shortcode, args.sourceId)
+      )
+    )
+    .orderBy(desc(reels.id))
+    .limit(1);
+  return local?.id ?? null;
 }
