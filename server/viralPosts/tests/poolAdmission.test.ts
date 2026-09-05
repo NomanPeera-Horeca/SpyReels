@@ -7,6 +7,13 @@ function candidate(args: {
   source?: string;
   relevanceReason?: string;
   classificationConfidence?: number;
+  semantic?: {
+    domainRelevant: boolean;
+    primaryPillar: string | null;
+    secondaryPillar?: string | null;
+    confidence: number;
+    reason?: string;
+  };
 }): AdaptedCandidate {
   return {
     platform: "instagram",
@@ -44,6 +51,15 @@ function candidate(args: {
       ...(args.classificationConfidence == null
         ? {}
         : { classificationConfidence: args.classificationConfidence }),
+      ...(args.semantic
+        ? {
+            semanticDomainRelevant: args.semantic.domainRelevant,
+            semanticPrimaryPillar: args.semantic.primaryPillar,
+            semanticSecondaryPillar: args.semantic.secondaryPillar ?? null,
+            semanticPillarConfidence: args.semantic.confidence,
+            semanticPillarReason: args.semantic.reason ?? "Semantic classification",
+          }
+        : {}),
     },
   };
 }
@@ -77,6 +93,63 @@ describe("direct Instagram pool admission", () => {
     expect(decision.admit).toBe(true);
     expect(decision.classification.primaryPillar).toBe("restaurant operations");
     expect(decision.classification.confidence).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("uses semantic classification as authoritative when available", () => {
+    const decision = classifyCandidateForPoolAdmission({
+      pool,
+      candidate: candidate({
+        caption: "How we train restaurant staff before every shift",
+        semantic: {
+          domainRelevant: true,
+          primaryPillar: "restaurant operations",
+          confidence: 0.91,
+          reason: "Staff training and shift systems",
+        },
+      }),
+    });
+
+    expect(decision.admit).toBe(true);
+    expect(decision.classification.confidence).toBe(0.91);
+    expect(decision.classification.reason).toBe("Staff training and shift systems");
+  });
+
+  it("rejects a semantic pillar mismatch instead of forcing the Reel into the source pool", () => {
+    const decision = classifyCandidateForPoolAdmission({
+      pool,
+      candidate: candidate({
+        caption: "India's next big QSR opportunity might be hiding in plain sight",
+        semantic: {
+          domainRelevant: true,
+          primaryPillar: "restaurant profitability",
+          confidence: 0.9,
+          reason: "Restaurant market opportunity and economics",
+        },
+      }),
+    });
+
+    expect(decision.admit).toBe(false);
+    expect(decision.reason).toBe("semantic_pillar_mismatch");
+    expect(decision.classification.primaryPillar).toBe("restaurant profitability");
+    expect(decision.classification.confidence).toBe(0.9);
+  });
+
+  it("rejects semantically off-domain content even if a keyword fallback might match", () => {
+    const decision = classifyCandidateForPoolAdmission({
+      pool,
+      candidate: candidate({
+        caption: "Hospitality service inspiration",
+        semantic: {
+          domainRelevant: false,
+          primaryPillar: null,
+          confidence: 0.95,
+          reason: "Generic promotional content, not an operator lesson",
+        },
+      }),
+    });
+
+    expect(decision.admit).toBe(false);
+    expect(decision.reason).toBe("semantic_off_domain");
   });
 
   it("keeps transferable Featured behavior unchanged", () => {
