@@ -79,24 +79,24 @@ jobs:
         run: |
           curl --fail --silent http://127.0.0.1:3100/features/viral-reel-finder > /tmp/viral-reel-finder.html
 
-          grep -q "Find the Reels that are" /tmp/viral-reel-finder.html
-          grep -q "What is an Instagram reel spy tool" /tmp/viral-reel-finder.html
-          grep -q "How the Instagram reel finder works" /tmp/viral-reel-finder.html
-          grep -q "What you get back from every search" /tmp/viral-reel-finder.html
-          grep -q "Reel finder and reel spy tool questions people actually ask" /tmp/viral-reel-finder.html
+          grep -q "Any Instagram account" /tmp/viral-reel-finder.html
+          grep -q "Research first. Then turn the useful pattern into your own content" /tmp/viral-reel-finder.html
+          grep -q "Questions about the Instagram Reel Finder" /tmp/viral-reel-finder.html
           grep -q 'href="https://spyreels.ai/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
           grep -q 'href="https://spyreels.ai/free-tools/viral-hooks"' /tmp/viral-reel-finder.html
-          grep -q 'href="#try-finder"' /tmp/viral-reel-finder.html
           grep -q 'rel="canonical" href="https://spyreels.ai/features/viral-reel-finder"' /tmp/viral-reel-finder.html
           grep -q 'application/ld+json' /tmp/viral-reel-finder.html
-
-          if grep -q 'href="/research"' /tmp/viral-reel-finder.html; then
-            echo "Public landing CTAs must not dump logged-out visitors onto /research."
-            exit 1
-          fi
+          grep -q 'spyreels-logo.png' /tmp/viral-reel-finder.html
+          grep -q 'Company' /tmp/viral-reel-finder.html
+          grep -q 'Free Tools' /tmp/viral-reel-finder.html
 
           if grep -q "seo-crawler-snapshot" /tmp/viral-reel-finder.html; then
             echo "Legacy crawler snapshot must not exist in the Next.js pilot HTML."
+            exit 1
+          fi
+
+          if grep -qi "Outlier score" /tmp/viral-reel-finder.html; then
+            echo "The landing page must not present the removed outlier-score marketing UI."
             exit 1
           fi
 
