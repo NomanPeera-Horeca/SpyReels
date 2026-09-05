@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PublicSiteFooter } from "../../../components/PublicSiteFooter";
 import { PublicSiteHeader } from "../../../components/PublicSiteHeader";
+import { RelatedTools } from "./RelatedTools";
 import ViralFinderExperience from "./ViralFinderExperience";
 import styles from "./page.module.css";
 
@@ -53,8 +54,6 @@ const FAQ_ITEMS = [
 const RELATED_LINKS = [
   ["How to find viral Reels in your niche", "/blog/guide-find-viral-reels-your-niche"],
   ["How to reverse engineer viral Reels", "/blog/guide-reverse-engineer-viral-reels"],
-  ["Viral hook generator", "/free-tools/viral-hooks"],
-  ["AI script generator", "/free-tools/ai-script-generator"],
 ] as const;
 
 const breadcrumbJsonLd = {
@@ -111,7 +110,7 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>
             <span className={styles.eyebrowDot} aria-hidden />
-            Instagram Reel Finder
+            Free Instagram Reel Finder
           </div>
           <h1>
             Any Instagram account&apos;s viral Reels, <span className={styles.accent}>remade in your voice.</span>
@@ -166,6 +165,8 @@ export default function ViralReelFinderPilotPage() {
             ))}
           </div>
         </section>
+
+        <RelatedTools />
 
         <section className={`${styles.shell} ${styles.relatedStrip}`}>
           <div>
