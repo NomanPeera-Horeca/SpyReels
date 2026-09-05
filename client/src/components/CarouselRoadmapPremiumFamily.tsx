@@ -6,6 +6,7 @@ import type {
 import {
   labelRoadmapSteps,
   resolveRoadmapRenderTreatment,
+  roadmapTreatmentEyebrow,
   splitRoadmapCopyLines,
   type RoadmapComposition,
   type RoadmapTreatment,
@@ -393,6 +394,7 @@ function CoverEditorial({
   editable,
   onSlotChange,
   handle,
+  treatment,
 }: RoadmapProps) {
   const h = headline(values);
   const b = body(values);
@@ -403,49 +405,47 @@ function CoverEditorial({
         ...shell(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: "flex-start",
         padding: "1.7rem 1.55rem 1.85rem",
       }}
     >
-      <div>
-        <Eyebrow
-          value={k || "How to"}
-          tokens={tokens}
-          editable={editable}
-          onSlotChange={onSlotChange}
-        />
+      <Eyebrow
+        value={k || roadmapTreatmentEyebrow(treatment)}
+        tokens={tokens}
+        editable={editable}
+        onSlotChange={onSlotChange}
+      />
+      <CarouselEditableText
+        as="h2"
+        slotId="headline"
+        value={h}
+        editable={editable}
+        onCommit={onSlotChange}
+        multiline
+        style={{
+          ...headlineStyle(tokens),
+          marginTop: "0.85rem",
+          maxWidth: "12ch",
+          fontSize: "clamp(2rem, 8vw, 2.7rem)",
+        }}
+      />
+      {b ? (
         <CarouselEditableText
-          as="h2"
-          slotId="headline"
-          value={h}
+          as="p"
+          slotId="body"
+          value={b}
           editable={editable}
           onCommit={onSlotChange}
           multiline
           style={{
-            ...headlineStyle(tokens),
-            marginTop: "0.95rem",
-            maxWidth: "12ch",
-            fontSize: "clamp(2rem, 8vw, 2.7rem)",
+            ...bodyStyle(tokens),
+            marginTop: "1.15rem",
+            maxWidth: "28ch",
           }}
         />
-      </div>
-      <div>
+      ) : null}
+      <div style={{ marginTop: "1.35rem" }}>
         <NextArrow tokens={tokens} />
-        {b ? (
-          <CarouselEditableText
-            as="p"
-            slotId="body"
-            value={b}
-            editable={editable}
-            onCommit={onSlotChange}
-            multiline
-            style={{
-              ...bodyStyle(tokens),
-              marginTop: "1rem",
-              maxWidth: "28ch",
-            }}
-          />
-        ) : null}
       </div>
       <Handle handle={handle} tokens={tokens} />
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
@@ -991,6 +991,7 @@ function WorkedExample({
   editable,
   onSlotChange,
   handle,
+  treatment,
 }: RoadmapProps) {
   const h = headline(values);
   const b = body(values);
@@ -1014,7 +1015,7 @@ function WorkedExample({
           fontWeight: 760,
         }}
       >
-        In practice
+        {roadmapTreatmentEyebrow(treatment)}
       </p>
       <CarouselEditableText
         as="h2"
@@ -1071,6 +1072,7 @@ function Checkpoint({
   onSlotChange,
   handle,
   composition,
+  treatment,
 }: RoadmapProps) {
   const h = headline(values);
   const b = body(values);
@@ -1082,7 +1084,7 @@ function Checkpoint({
         ...shell(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: count >= 2 ? "space-between" : "flex-start",
         padding: "1.55rem 1.45rem 1.75rem",
       }}
     >
@@ -1097,7 +1099,7 @@ function Checkpoint({
             fontWeight: 760,
           }}
         >
-          Checkpoint
+          {roadmapTreatmentEyebrow(treatment)}
         </p>
         <CarouselEditableText
           as="h2"
@@ -1109,7 +1111,7 @@ function Checkpoint({
           style={{ ...headlineStyle(tokens), marginTop: "0.7rem", maxWidth: "13ch" }}
         />
       </div>
-      <div>
+      <div style={{ marginTop: count >= 2 ? 0 : "1.35rem" }}>
         {count >= 2 ? (
           <PathStations tokens={tokens} count={count} current={current} />
         ) : (
@@ -1143,6 +1145,7 @@ function Recap({
   onSlotChange,
   handle,
   composition,
+  treatment,
 }: RoadmapProps) {
   const h = headline(values);
   const b = body(values);
@@ -1158,7 +1161,7 @@ function Recap({
         ...shell(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: count >= 2 ? "space-between" : "flex-start",
         padding: "1.55rem 1.45rem 1.75rem",
         background: `linear-gradient(180deg, ${tokens.colors.background} 0%, ${wash(
           tokens.colors.accent,
@@ -1177,7 +1180,7 @@ function Recap({
             fontWeight: 760,
           }}
         >
-          Recap
+          {roadmapTreatmentEyebrow(treatment)}
         </p>
         <CarouselEditableText
           as="h2"
@@ -1194,7 +1197,7 @@ function Recap({
           }}
         />
       </div>
-      <div>
+      <div style={{ marginTop: count >= 2 ? 0 : "1.35rem" }}>
         {count >= 2 ? (
           <PathStations tokens={tokens} count={count} labels={labels} current={count} />
         ) : (
@@ -1228,6 +1231,7 @@ function DecisionClose({
   onSlotChange,
   handle,
   composition,
+  treatment,
 }: RoadmapProps) {
   const h = headline(values);
   const b = body(values);
@@ -1239,7 +1243,7 @@ function DecisionClose({
         ...shell(tokens),
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: count >= 2 ? "space-between" : "flex-start",
         padding: "1.65rem 1.45rem 1.8rem",
       }}
     >
@@ -1254,7 +1258,7 @@ function DecisionClose({
             fontWeight: 760,
           }}
         >
-          Next
+          {roadmapTreatmentEyebrow(treatment)}
         </p>
         <CarouselEditableText
           as="h2"
@@ -1271,7 +1275,7 @@ function DecisionClose({
           }}
         />
       </div>
-      <div>
+      <div style={{ marginTop: count >= 2 ? 0 : "1.35rem" }}>
         {count >= 2 ? (
           <div style={{ maxWidth: "12rem", marginBottom: "1rem" }}>
             <PathStations tokens={tokens} count={count} current={count} />
