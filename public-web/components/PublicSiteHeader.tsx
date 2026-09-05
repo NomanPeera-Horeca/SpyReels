@@ -13,6 +13,9 @@ const NAV_LINKS = [
   ["Earn 20%", `${APP_ORIGIN}/affiliate`],
 ] as const;
 
+const LOGIN_URL = `${APP_ORIGIN}/?auth=login&returnTo=${encodeURIComponent("/research")}`;
+const SIGNUP_URL = `${APP_ORIGIN}/?auth=signup&returnTo=${encodeURIComponent("/research")}`;
+
 export function PublicSiteHeader() {
   return (
     <header className={styles.header}>
@@ -31,12 +34,8 @@ export function PublicSiteHeader() {
         </nav>
 
         <div className={styles.actions}>
-          <a className={styles.login} href={`${APP_ORIGIN}/`}>
-            Log In
-          </a>
-          <a className={styles.start} href="#live-demo">
-            Start Free
-          </a>
+          <a className={styles.login} href={LOGIN_URL}>Log In</a>
+          <a className={styles.start} href={SIGNUP_URL}>Start Free</a>
         </div>
       </div>
     </header>
