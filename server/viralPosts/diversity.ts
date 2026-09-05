@@ -18,6 +18,13 @@ export type DiversityCandidate = {
   platform?: string | null;
 };
 
+/**
+ * Daily picks are recommendations, not a quota. A conservative floor prevents
+ * the selector from padding a short strong feed with obviously weaker items.
+ * Keep this overridable in tests and future ranking experiments.
+ */
+export const DAILY_PICK_MIN_FINAL_SCORE = 0.45;
+
 function normalizeText(s: string): string {
   return s
     .toLowerCase()
@@ -37,20 +44,31 @@ function nearDuplicate(a: string, b: string): boolean {
 }
 
 /**
- * Deterministic diversity selection for 5–7 daily recommendations.
+ * Deterministic diversity selection for daily recommendations.
  * Same inputs always produce the same ranked output.
+ *
+ * The quality floor is intentionally applied before all fill passes: if only
+ * three candidates are strong enough, return three and let the pool refresh
+ * rather than weakening the product just to hit the nominal 5-item minimum.
  */
 export function selectDiverseFeed(
   candidates: DiversityCandidate[],
-  opts?: { min?: number; max?: number }
+  opts?: { min?: number; max?: number; minFinalScore?: number }
 ): DiversityCandidate[] {
   const min = opts?.min ?? VIRAL_DAILY_FEED_MIN;
   const max = opts?.max ?? VIRAL_DAILY_FEED_MAX;
+  const minFinalScore = opts?.minFinalScore ?? DAILY_PICK_MIN_FINAL_SCORE;
 
-  const sorted = [...candidates].sort((a, b) => {
-    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
-    return a.sourceId.localeCompare(b.sourceId);
-  });
+  const sorted = candidates
+    .filter(
+      (candidate) =>
+        Number.isFinite(candidate.finalScore) &&
+        candidate.finalScore >= minFinalScore
+    )
+    .sort((a, b) => {
+      if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+      return a.sourceId.localeCompare(b.sourceId);
+    });
 
   const selected: DiversityCandidate[] = [];
   const usedSources = new Set<string>();
@@ -69,7 +87,7 @@ export function selectDiverseFeed(
 
     const creatorCount = creatorCounts.get(c.creatorKey) ?? 0;
     if (creatorCount >= 2) continue;
-    // Prefer at most one per creator unless we are below min
+    // Prefer at most one per creator unless we are below min.
     if (creatorCount >= 1 && selected.length >= min) continue;
 
     const dup = selected.some(
@@ -107,7 +125,8 @@ export function selectDiverseFeed(
     if (c.platform) platforms.add(c.platform);
   }
 
-  // Second pass: fill to min with relaxed creator rules. Still prefer fresh only.
+  // Second pass: fill to min with relaxed creator rules, but never below the
+  // quality floor because sorted already contains eligible candidates only.
   if (selected.length < min) {
     for (const c of sorted) {
       if (selected.length >= min) break;
@@ -125,9 +144,8 @@ export function selectDiverseFeed(
     }
   }
 
-  // Last resort: allow recently shown only when the pool cannot fill with fresh
-  // candidates at all. Prefer a shorter fresh feed over padding with yesterday's
-  // top picks, so this pass only runs when we still have zero selections.
+  // Last resort: allow recently shown only when there are no fresh eligible
+  // candidates at all. We still do not cross the quality floor.
   if (selected.length === 0) {
     for (const c of sorted) {
       if (selected.length >= min) break;
