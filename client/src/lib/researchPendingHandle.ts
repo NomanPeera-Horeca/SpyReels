@@ -5,6 +5,36 @@ export const RESEARCH_PENDING_PLATFORM_KEY = "spyreels:research_pending_platform
 
 export type ResearchPendingPlatform = "instagram" | "tiktok" | "youtube";
 
+export function safeAuthReturnTo(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) return undefined;
+  return trimmed;
+}
+
+export function parseLandingAuthQuery(search: string): {
+  auth: "login" | "signup" | null;
+  returnTo?: string;
+  researchHandle?: string;
+} {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const authRaw = params.get("auth");
+  const auth = authRaw === "login" || authRaw === "signup" ? authRaw : null;
+  const handle = params.get("researchHandle")?.trim().replace(/^@+/, "").toLowerCase() ?? "";
+  return {
+    auth,
+    returnTo: safeAuthReturnTo(params.get("returnTo")),
+    researchHandle: handle && /^[a-z0-9._]{1,30}$/i.test(handle) ? handle : undefined,
+  };
+}
+
+export function applyLandingAuthHandoff(search: string): ReturnType<typeof parseLandingAuthQuery> {
+  const parsed = parseLandingAuthQuery(search);
+  if (parsed.researchHandle) {
+    stashResearchHandleForAfterAuth(parsed.researchHandle, true, "instagram");
+  }
+  return parsed;
+}
+
 export function stashResearchHandleForAfterAuth(
   handle: string,
   autostart = true,

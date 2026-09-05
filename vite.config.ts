@@ -8,6 +8,10 @@ import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 import { parseDiscoveryV1Enabled } from "./shared/discoveryFeatureFlag";
+import {
+  SPA_NAVIGATE_FALLBACK,
+  SPA_NAVIGATE_FALLBACK_DENYLIST,
+} from "./shared/spaNavigateFallback";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -199,12 +203,8 @@ const plugins = [
       ],
     },
     workbox: {
-      navigateFallback: "/index.html",
-      navigateFallbackDenylist: [
-        /^\/api\//,
-        /^\/_next\//,
-        /^\/features\/viral-reel-finder\/?$/,
-      ],
+      navigateFallback: SPA_NAVIGATE_FALLBACK,
+      navigateFallbackDenylist: SPA_NAVIGATE_FALLBACK_DENYLIST,
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         {

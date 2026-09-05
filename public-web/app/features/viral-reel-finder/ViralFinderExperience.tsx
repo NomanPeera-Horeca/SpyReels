@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
+import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import interactionStyles from "./interaction.module.css";
 import styles from "./page.module.css";
 
@@ -77,12 +78,37 @@ function appOrigin(): string {
   return "https://spyreels.ai";
 }
 
-function handoffToResearch(handle: string) {
+function handoffToResearch(handle: string, source: "form" | "selected_reel") {
+  trackPublicWeb("viral_finder_research_cta_clicked", { handle, source });
+  trackPublicWeb("viral_finder_app_handoff", {
+    handle,
+    source,
+    return_to: "/research",
+    auth: "signup",
+  });
   const url = new URL(`${appOrigin()}/`);
   url.searchParams.set("auth", "signup");
   url.searchParams.set("returnTo", "/research");
   url.searchParams.set("researchHandle", handle);
   window.location.assign(url.toString());
+}
+
+function revealSelectedNextStep() {
+  const panel = document.getElementById("selected-reel-next");
+  if (!panel) return;
+
+  const headerHeight = document.querySelector("header")?.getBoundingClientRect().height ?? 64;
+  const top = panel.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+  window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+
+  window.setTimeout(() => {
+    const rect = panel.getBoundingClientRect();
+    const header = document.querySelector("header")?.getBoundingClientRect().height ?? 64;
+    const hidden = rect.top > window.innerHeight * 0.72 || rect.bottom < header + 24;
+    if (hidden) {
+      window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    }
+  }, 320);
 }
 
 export default function ViralFinderExperience() {
@@ -138,7 +164,14 @@ export default function ViralFinderExperience() {
         }
         return body;
       })
-      .then((body) => setProfile(body))
+      .then((body) => {
+        setProfile(body);
+        trackPublicWeb("viral_finder_profile_searched", {
+          handle: body.username,
+          found: true,
+          is_private: body.isPrivate,
+        });
+      })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setProfile(null);
@@ -203,6 +236,7 @@ export default function ViralFinderExperience() {
   function chooseDemo(handle: string) {
     setInput(handle);
     setActiveHandle(handle);
+    trackPublicWeb("viral_finder_demo_handle_selected", { handle });
     window.requestAnimationFrame(() => {
       document.getElementById("live-demo")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -235,17 +269,24 @@ export default function ViralFinderExperience() {
       setProfileError("SpyReels can research public Instagram accounts. This account is private.");
       return;
     }
-    handoffToResearch(matchingProfile.username);
+    handoffToResearch(matchingProfile.username, "form");
   }
 
   function selectReel(reel: DemoReel) {
     setSelectedReel(reel);
     setPreviewStep("hook");
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        document.getElementById("selected-reel-next")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
+    trackPublicWeb("viral_finder_reel_selected", {
+      handle: selectedOwner,
+      reel_id: reel.id,
     });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(revealSelectedNextStep);
+    });
+  }
+
+  function changeSort(next: SortMode) {
+    setSortMode(next);
+    trackPublicWeb("viral_finder_sort_changed", { sort: next, handle: selectedOwner });
   }
 
   const submitLabel = isDemoInput
@@ -313,10 +354,24 @@ export default function ViralFinderExperience() {
           </article>
         ) : null}
 
+        {matchingProfile && !isDemoInput ? (
+          <p className={styles.profileHint} data-testid="profile-found-hint">
+            We found @{matchingProfile.username}. Explore the example Reels below, then research this account in SpyReels.
+          </p>
+        ) : null}
+
         <div className={styles.tryRow}>
           <span>Try the interactive example:</span>
           {DEMO_HANDLES.map((handle) => (
-            <button type="button" onClick={() => chooseDemo(handle)} key={handle}>@{handle}</button>
+            <button
+              type="button"
+              className={activeHandle === handle ? interactionStyles.demoHandleActive : undefined}
+              aria-pressed={activeHandle === handle}
+              onClick={() => chooseDemo(handle)}
+              key={handle}
+            >
+              @{handle}
+            </button>
           ))}
         </div>
       </div>
@@ -329,8 +384,8 @@ export default function ViralFinderExperience() {
             <span>{demo ? `${demo.totalReelCount} Reels available` : loading ? "Loading account" : "Account unavailable"}</span>
           </div>
           <div className={styles.sortTabs} aria-label="Sort example Reels">
-            <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("views")}>Views</button>
-            <button className={sortMode === "engagement" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("engagement")}>Engagement</button>
+            <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" aria-pressed={sortMode === "views"} onClick={() => changeSort("views")}>Views</button>
+            <button className={sortMode === "engagement" ? styles.activeSort : undefined} type="button" aria-pressed={sortMode === "engagement"} onClick={() => changeSort("engagement")}>Engagement</button>
           </div>
         </div>
 
@@ -351,6 +406,7 @@ export default function ViralFinderExperience() {
                     <button
                       className={styles.reelSelect}
                       type="button"
+                      data-testid="reel-card"
                       aria-pressed={selected}
                       onClick={() => selectReel(reel)}
                     >
@@ -368,7 +424,7 @@ export default function ViralFinderExperience() {
                         <small>Opening hook</small>
                         <p>{hookPreview(reel.caption)}</p>
                         <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                        <b>{selected ? "Selected — explore below ↓" : "See what SpyReels does next →"}</b>
+                        <b>{selected ? "Selected. Explore below" : "See what SpyReels does next"}</b>
                       </div>
                     </button>
                   </article>
@@ -379,7 +435,7 @@ export default function ViralFinderExperience() {
             {sortedReels.length > 4 ? (
               <div className={`${styles.previewFooter} ${interactionStyles.previewFooterSingle}`}>
                 <button type="button" className={styles.textButton} onClick={() => setShowAll((value) => !value)}>
-                  {showAll ? "Show fewer Reels" : `Show all ${Math.min(8, sortedReels.length)} Reels`}
+                  {showAll ? "Show fewer Reels" : `Show all ${sortedReels.length} Reels`}
                 </button>
               </div>
             ) : null}
@@ -412,7 +468,7 @@ export default function ViralFinderExperience() {
               ))}
             </div>
 
-            <div className={interactionStyles.stepDetail}>
+            <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step={previewStep}>
               {previewStep === "hook" ? (
                 <>
                   <small>Start with the actual Reel</small>
@@ -434,7 +490,7 @@ export default function ViralFinderExperience() {
               )}
             </div>
 
-            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner)}>
+            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner, "selected_reel")}>
               Research @{selectedOwner} in SpyReels
             </button>
             <span className={interactionStyles.actionHint}>Opens Research with @{selectedOwner} selected.</span>

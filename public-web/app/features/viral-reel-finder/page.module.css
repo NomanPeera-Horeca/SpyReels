@@ -252,6 +252,13 @@
   color: #d7d7de;
 }
 
+.profileHint {
+  margin: 10px 4px 0;
+  color: #c4b5fd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .profileAction {
   color: #a78bfa;
   font-size: 12px;
@@ -474,10 +481,11 @@
 }
 
 .nextStepMedia {
-  min-height: 300px;
+  min-height: 0;
+  aspect-ratio: 9 / 12;
   border-radius: 16px;
   background-size: cover;
-  background-position: center;
+  background-position: center 18%;
 }
 
 .nextStepCopy {
@@ -793,7 +801,9 @@
   }
 
   .nextStepMedia {
-    min-height: 380px;
+    aspect-ratio: 16 / 10;
+    max-height: 220px;
+    background-position: center 12%;
   }
 
   .visualSection,

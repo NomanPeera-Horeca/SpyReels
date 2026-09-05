@@ -32,8 +32,14 @@
 }
 
 .selectedReelCard {
-  border-color: rgba(167, 139, 250, 0.72) !important;
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.24), 0 16px 44px rgba(0, 0, 0, 0.2);
+  border-color: #a78bfa !important;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.7), 0 16px 44px rgba(124, 58, 237, 0.18);
+}
+
+.demoHandleActive {
+  color: #f4f1ff !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .stepTabs {
