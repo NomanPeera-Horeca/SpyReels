@@ -57,6 +57,7 @@ import {
   buildTextSelection,
   type CarouselTextSelection,
 } from "./textInspectorModel";
+import type { CarouselSlotRewriteAction } from "@shared/carouselSlotRewrite";
 import type { CarouselImageSelection } from "@/components/carouselEditorChrome";
 import {
   CarouselRenderer,
@@ -212,6 +213,8 @@ export function CarouselStudioApp({
   const [designInspectorOpen, setDesignInspectorOpen] = useState(false);
   const [textSelection, setTextSelection] =
     useState<CarouselTextSelection | null>(null);
+  const [aiAlternatives, setAiAlternatives] = useState<string[]>([]);
+  const [aiRewriteError, setAiRewriteError] = useState<string | null>(null);
   const [imageSelection, setImageSelection] =
     useState<CarouselImageSelection | null>(null);
   const [remakeSlotStyles, setRemakeSlotStyles] =
@@ -296,6 +299,11 @@ export function CarouselStudioApp({
       toast(err.message || "Failed to save text edit");
     },
   });
+  const rewriteSlotMutation = trpc.carouselRemake.rewriteSlot.useMutation();
+  const aiTextEditingQuery = trpc.carouselRemake.aiTextEditingAvailable.useQuery(
+    undefined,
+    { enabled: remakeId != null }
+  );
   const replaceSlotMutation = trpc.carouselRemake.replaceSlotValues.useMutation({
     onSuccess: () => {
       void utils.carouselRemake.list.invalidate();
@@ -1115,6 +1123,49 @@ export function CarouselStudioApp({
       setSaveQueued(false);
       flushSlotSave();
     }, 500);
+  };
+
+  useEffect(() => {
+    setAiAlternatives([]);
+    setAiRewriteError(null);
+  }, [textSelection?.slideId, textSelection?.slotId]);
+
+  const handleAiSlotRewrite = async (action: CarouselSlotRewriteAction) => {
+    if (!textSelection || remakeId == null || rewriteSlotMutation.isPending) {
+      return;
+    }
+    setAiRewriteError(null);
+    if (action !== "alternatives") setAiAlternatives([]);
+    try {
+      const result = await rewriteSlotMutation.mutateAsync({
+        remakeId,
+        slideId: textSelection.slideId,
+        slotId: textSelection.slotId,
+        action,
+      });
+      if ("alternatives" in result && result.alternatives) {
+        setAiAlternatives(result.alternatives);
+        return;
+      }
+      if (!("text" in result) || !result.text.trim()) {
+        setAiRewriteError("Could not improve that text. Try again.");
+        return;
+      }
+      handleSlotChange(textSelection.slideId, textSelection.slotId, result.text);
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not rewrite that text. Try again.";
+      setAiRewriteError(message);
+    }
+  };
+
+  const handleApplyAiAlternative = (text: string) => {
+    if (!textSelection || !text.trim()) return;
+    handleSlotChange(textSelection.slideId, textSelection.slotId, text);
+    setAiAlternatives([]);
+    setAiRewriteError(null);
   };
 
   const handleSlotStyleChange = (
@@ -2311,6 +2362,15 @@ export function CarouselStudioApp({
                               patch
                             )
                           }
+                          aiEnabled={aiTextEditingQuery.data?.enabled === true}
+                          aiBusy={rewriteSlotMutation.isPending}
+                          aiError={aiRewriteError}
+                          alternatives={aiAlternatives}
+                          onAiAction={(action) => {
+                            void handleAiSlotRewrite(action);
+                          }}
+                          onApplyAlternative={handleApplyAiAlternative}
+                          onCancelAlternatives={() => setAiAlternatives([])}
                         />
                       ) : imageSelection && currentSlideSpec ? (
                         <CarouselImageInspector

@@ -20,7 +20,8 @@ export function errorContextForOperation(operation?: string): IdeaScriptErrorCon
   if (
     operation === "angle_generation" ||
     operation === "copy_generation" ||
-    operation === "carousel_visual_direction"
+    operation === "carousel_visual_direction" ||
+    operation === "slot_text_rewrite"
   ) {
     return "carousel";
   }
