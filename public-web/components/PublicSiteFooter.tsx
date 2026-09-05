@@ -29,6 +29,12 @@ const COLUMNS = [
       ["All Free Tools", "/free-tools"],
       ["Viral Hooks", "/free-tools/viral-hooks"],
       ["AI Script Generator", "/free-tools/ai-script-generator"],
+      ["TikTok Script Generator", "/free-tools/tiktok-script-generator"],
+      ["Instagram Reels Script Generator", "/free-tools/instagram-reels-script-generator"],
+      ["Instagram Transcript Generator", "/free-tools/instagram-transcript-generator"],
+      ["TikTok Transcript Generator", "/free-tools/tiktok-transcript-generator"],
+      ["YouTube Shorts Transcript", "/free-tools/youtube-shorts-transcript"],
+      ["YouTube Transcript Generator", "/free-tools/youtube-transcript-generator"],
       ["B-Roll Generator", "/free-tools/broll-generator"],
       ["TikTok Viral Video Finder", "/free-tools/tiktok-viral-video-finder"],
       ["YouTube Shorts Viral Finder", "/free-tools/youtube-shorts-viral-finder"],
@@ -61,7 +67,7 @@ export function PublicSiteFooter() {
               <span>SpyReels</span>
             </a>
             <p className={styles.footerCopy}>
-              Research what&apos;s working, plan content, and turn strong Reel ideas into scripts in your own voice.
+              Research what&apos;s working, plan a month of content, and script Reels in your own voice, all in one place built for creators who want to grow faster.
             </p>
           </div>
 
