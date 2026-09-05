@@ -203,7 +203,9 @@ export default function ViralFinderExperience() {
   function chooseDemo(handle: string) {
     setInput(handle);
     setActiveHandle(handle);
-    setTimeout(() => document.getElementById("live-demo")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    window.requestAnimationFrame(() => {
+      document.getElementById("live-demo")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function requestProfileNow(handle: string) {
@@ -239,10 +241,11 @@ export default function ViralFinderExperience() {
   function selectReel(reel: DemoReel) {
     setSelectedReel(reel);
     setPreviewStep("hook");
-    window.setTimeout(
-      () => document.getElementById("selected-reel-next")?.scrollIntoView({ behavior: "smooth", block: "center" }),
-      0
-    );
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById("selected-reel-next")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
   }
 
   const submitLabel = isDemoInput
@@ -338,28 +341,39 @@ export default function ViralFinderExperience() {
         ) : (
           <>
             <div className={styles.previewGrid}>
-              {visibleReels.map((reel) => (
-                <article className={styles.previewCard} key={reel.id}>
-                  <button className={styles.reelSelect} type="button" onClick={() => selectReel(reel)}>
-                    <div
-                      className={styles.previewArt}
-                      style={{
-                        backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.9)), url(${JSON.stringify(reel.thumbnailUrl).slice(1, -1)})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }}
+              {visibleReels.map((reel) => {
+                const selected = selectedReel?.id === reel.id;
+                return (
+                  <article
+                    className={`${styles.previewCard} ${selected ? interactionStyles.selectedReelCard : ""}`}
+                    key={reel.id}
+                  >
+                    <button
+                      className={styles.reelSelect}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => selectReel(reel)}
                     >
-                      <strong>{formatNumber(reel.viewCount)} views</strong>
-                    </div>
-                    <div className={styles.previewBody}>
-                      <small>Opening hook</small>
-                      <p>{hookPreview(reel.caption)}</p>
-                      <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                      <b>See what SpyReels does next →</b>
-                    </div>
-                  </button>
-                </article>
-              ))}
+                      <div
+                        className={styles.previewArt}
+                        style={{
+                          backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.9)), url(${JSON.stringify(reel.thumbnailUrl).slice(1, -1)})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }}
+                      >
+                        <strong>{formatNumber(reel.viewCount)} views</strong>
+                      </div>
+                      <div className={styles.previewBody}>
+                        <small>Opening hook</small>
+                        <p>{hookPreview(reel.caption)}</p>
+                        <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
+                        <b>{selected ? "Selected — explore below ↓" : "See what SpyReels does next →"}</b>
+                      </div>
+                    </button>
+                  </article>
+                );
+              })}
             </div>
 
             {sortedReels.length > 4 ? (
