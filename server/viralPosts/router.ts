@@ -15,6 +15,7 @@ import {
   saveViralCandidateCanonical,
   unsaveViralCandidateCanonical,
 } from "./canonicalSaved";
+import { browseViralPosts } from "./browseService";
 import * as repo from "./repository";
 import {
   getFeedHistory,
@@ -98,6 +99,10 @@ export const viralPostsRouter = router({
         limit: input.limit,
       });
     }),
+
+  browse: viralPostsProcedure.query(async ({ ctx }) => {
+    return browseViralPosts(ctx.user.id);
+  }),
 
   search: viralPostsProcedure
     .input(
