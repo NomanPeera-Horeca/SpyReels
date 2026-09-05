@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Menu, Sparkles, ArrowRight } from "lucide-react";
 import { usePostHog } from "@posthog/react";
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
@@ -34,6 +34,24 @@ const PUBLIC_NAV_LINKS = [
   },
 ];
 
+function safeReturnTo(value: string | null): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) return undefined;
+  return trimmed;
+}
+
+function stashResearchHandleFromQuery(raw: string | null): void {
+  const handle = raw?.trim().replace(/^@+/, "").toLowerCase();
+  if (!handle || !/^[a-z0-9._]{1,30}$/i.test(handle)) return;
+  try {
+    sessionStorage.setItem("spyreels:research_pending_handle", handle);
+    sessionStorage.setItem("spyreels:research_autostart", "1");
+    sessionStorage.setItem("spyreels:research_pending_platform", "instagram");
+  } catch {
+    // Session storage is a best-effort enhancement.
+  }
+}
+
 export function PublicHeader({
   onBeforeAuthOpen,
   authReturnTo,
@@ -43,12 +61,40 @@ export function PublicHeader({
   /** Post-auth redirect path. Defaults to current pathname when set as a route. */
   authReturnTo?: string;
 } = {}) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const posthog = usePostHog();
   const [pathname] = useLocation();
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [queryReturnTo, setQueryReturnTo] = useState<string | undefined>(undefined);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const requestedMode = url.searchParams.get("auth");
+    if (requestedMode !== "login" && requestedMode !== "signup") return;
+
+    const requestedReturnTo = safeReturnTo(url.searchParams.get("returnTo"));
+    stashResearchHandleFromQuery(url.searchParams.get("researchHandle"));
+
+    if (requestedReturnTo) setQueryReturnTo(requestedReturnTo);
+    setAuthMode(requestedMode);
+
+    if (user) {
+      window.location.href = requestedReturnTo || "/";
+      return;
+    }
+
+    onBeforeAuthOpen?.();
+    setAuthOpen(true);
+
+    url.searchParams.delete("auth");
+    url.searchParams.delete("returnTo");
+    url.searchParams.delete("researchHandle");
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }, [loading, onBeforeAuthOpen, user]);
 
   const handleStart = (mode: "login" | "signup") => {
     posthog?.capture("public_header_cta_clicked", { path: pathname, mode });
@@ -63,6 +109,7 @@ export function PublicHeader({
 
   const resolvedReturnTo =
     authReturnTo ||
+    queryReturnTo ||
     (pathname.startsWith("/") && !pathname.startsWith("//")
       ? pathname
       : undefined);
