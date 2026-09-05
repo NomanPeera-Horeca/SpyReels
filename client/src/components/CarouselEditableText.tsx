@@ -25,6 +25,11 @@ export type CarouselEditableTextProps = {
   onCommit?: (slotId: string, value: string) => void;
   /** If true, Enter inserts a newline; commit on blur only. */
   multiline?: boolean;
+  /**
+   * Visual fragment of a shared slot. Click selects the real slotId.
+   * Does not inline-edit, so a split line cannot overwrite the full slot.
+   */
+  selectOnly?: boolean;
 };
 
 /** Pick the first non-empty slot among preferred ids (for layouts with fallback keys). */
@@ -61,6 +66,7 @@ export function CarouselEditableText({
   editable = false,
   onCommit,
   multiline = false,
+  selectOnly = false,
 }: CarouselEditableTextProps) {
   const chrome = useCarouselEditorChrome();
   const [editing, setEditing] = useState(false);
@@ -139,12 +145,16 @@ export function CarouselEditableText({
         title="Click to select. Double-click to type on the slide."
         onClick={(event: MouseEvent) => {
           if (chrome?.selectionEnabled) {
-            if (selected) {
+            if (selected && !selectOnly) {
               event.stopPropagation();
               setEditing(true);
               return;
             }
             selectSlot(event);
+            return;
+          }
+          if (selectOnly) {
+            event.stopPropagation();
             return;
           }
           event.stopPropagation();
@@ -153,7 +163,7 @@ export function CarouselEditableText({
         onDoubleClick={(event: MouseEvent) => {
           event.stopPropagation();
           chrome?.onSelectSlot?.(slotId);
-          setEditing(true);
+          if (!selectOnly) setEditing(true);
         }}
       >
         {displayValue}

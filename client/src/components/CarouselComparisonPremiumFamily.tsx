@@ -1125,7 +1125,13 @@ function TradeoffMatrix({
         </div>
       )}
       {density === "statement" && statementLine ? (
-        <p
+        <CarouselEditableText
+          as="p"
+          slotId={support ? "support" : "body"}
+          value={statementLine}
+          editable={editable}
+          selectOnly
+          onCommit={onSlotChange}
           style={{
             margin: "1.2rem 0 0",
             fontFamily: tokens.fontFamily.display,
@@ -1135,9 +1141,7 @@ function TradeoffMatrix({
             lineHeight: 1.12,
             maxWidth: "16ch",
           }}
-        >
-          {statementLine}
-        </p>
+        />
       ) : null}
       {density !== "statement"
         ? lines.map((line, index) => (
@@ -1149,7 +1153,13 @@ function TradeoffMatrix({
                 borderTop: `1px solid ${wash(tokens.colors.foreground, 0.1)}`,
               }}
             >
-              <p
+              <CarouselEditableText
+                as="p"
+                slotId={support ? "support" : "body"}
+                value={line}
+                editable={editable}
+                selectOnly
+                onCommit={onSlotChange}
                 style={{
                   margin: 0,
                   fontFamily: tokens.fontFamily.display,
@@ -1163,13 +1173,11 @@ function TradeoffMatrix({
                   letterSpacing: "-0.025em",
                   lineHeight: 1.18,
                 }}
-              >
-                {line}
-              </p>
+              />
             </div>
           ))
         : null}
-      {support ? (
+      {support && lines.length === 0 ? (
         <CarouselEditableText
           as="p"
           slotId="support"
@@ -1177,7 +1185,13 @@ function TradeoffMatrix({
           editable={editable}
           onCommit={onSlotChange}
           multiline
-          style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}
+          style={{
+            margin: "1.2rem 0 0",
+            fontFamily: tokens.fontFamily.display,
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            lineHeight: 1.18,
+          }}
         />
       ) : null}
       <Handle handle={handle} tokens={tokens} />

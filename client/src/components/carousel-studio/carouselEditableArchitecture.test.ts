@@ -47,6 +47,18 @@ describe("carousel text inspector architecture", () => {
     }
   });
 
+  it("selects split visible lines through the real underlying slot", () => {
+    const breakdown = read("../CarouselBreakdownPremiumFamily.tsx");
+    const roadmap = read("../CarouselRoadmapPremiumFamily.tsx");
+    const comparison = read("../CarouselComparisonPremiumFamily.tsx");
+    expect(breakdown).toContain("selectOnly");
+    expect(breakdown).toContain('slotId={support ? "support" : "body"}');
+    expect(roadmap).toContain("selectOnly");
+    expect(roadmap).toContain('slotId="body"');
+    expect(roadmap).not.toContain("editable && index === 0");
+    expect(comparison).toContain("selectOnly");
+  });
+
   it("does not reserve the inspector when nothing is selected", () => {
     const app = read("CarouselStudioApp.tsx");
     expect(app).toContain("textSelection ? \" has-inspector\"");
