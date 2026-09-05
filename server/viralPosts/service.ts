@@ -18,8 +18,13 @@ import { runDiscoveryPipeline } from "../discovery/pipeline";
 import {
   adaptabilityScoreForCandidate,
   adaptDiscoveryResult,
+  inferFormatFromCopy,
   type AdaptedCandidate,
 } from "./candidateAdapter";
+import {
+  relevanceScoreForCandidate,
+  remakeabilityScoreForCandidate,
+} from "./rankingSignals";
 import {
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
@@ -44,7 +49,7 @@ import {
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import * as repo from "./repository";
-import { scoreCandidate } from "./scoring";
+import { scoreCandidate, TODAY_PICKS_SCORE_WEIGHTS } from "./scoring";
 
 const searchCache = new Map<
   string,
@@ -227,6 +232,31 @@ async function loadUserProfile(userId: number): Promise<{
   };
 }
 
+function todayPicksScoreInput(candidate: AdaptedCandidate) {
+  const classification = classifyCandidatePillars({
+    caption: candidate.caption,
+    hook: candidate.hook,
+    hashtags: candidate.hashtags,
+    activePillars: candidate.contentPillar ? [candidate.contentPillar] : undefined,
+    fallbackNiche: candidate.contentPillar,
+  });
+  return {
+    views: candidate.views,
+    likes: candidate.likes,
+    comments: candidate.comments,
+    shares: candidate.shares,
+    saves: candidate.saves,
+    creatorFollowers: candidate.creatorFollowers,
+    publishedAt: candidate.publishedAt,
+    relevanceScore: relevanceScoreForCandidate({
+      candidate,
+      pillarConfidence: classification.confidence,
+      activePillar: candidate.contentPillar,
+    }),
+    adaptabilityScore: remakeabilityScoreForCandidate(candidate),
+  };
+}
+
 function scoreAndSelect(
   adapted: AdaptedCandidate[],
   rows: ViralPostCandidate[],
@@ -237,23 +267,18 @@ function scoreAndSelect(
   }
 ) {
   const bySource = new Map(rows.map((r) => [r.sourceId, r]));
-  const poolInputs = adapted.map((a) => ({
-    views: a.views,
-    likes: a.likes,
-    comments: a.comments,
-    shares: a.shares,
-    saves: a.saves,
-    creatorFollowers: a.creatorFollowers,
-    publishedAt: a.publishedAt,
-    relevanceScore: a.relevanceHint,
-    adaptabilityScore: adaptabilityScoreForCandidate(a),
-  }));
+  const poolInputs = adapted.map((a) => todayPicksScoreInput(a));
 
   const diversityInput = adapted
     .map((a, idx) => {
       const row = bySource.get(a.sourceId);
       if (!row) return null;
-      const scored = scoreCandidate(poolInputs[idx], poolInputs);
+      const scored = scoreCandidate(
+        poolInputs[idx],
+        poolInputs,
+        undefined,
+        TODAY_PICKS_SCORE_WEIGHTS
+      );
       return {
         adapted: a,
         row,
@@ -458,7 +483,7 @@ export async function getOrCreateDailyFeed(args: {
         relevanceScore: p.scored.finalScore * 100,
         relevanceLabel: p.adapted.relevanceLabel,
         relevanceReason: p.adapted.relevanceReason,
-        adaptabilityScore: adaptabilityScoreForCandidate(p.adapted),
+        adaptabilityScore: remakeabilityScoreForCandidate(p.adapted),
         finalScore: p.scored.finalScore,
       }))
     );
@@ -841,7 +866,7 @@ async function tryUpgradeRefreshingFeed(args: {
       relevanceScore: p.scored.finalScore * 100,
       relevanceLabel: p.adapted.relevanceLabel,
       relevanceReason: p.adapted.relevanceReason,
-      adaptabilityScore: adaptabilityScoreForCandidate(p.adapted),
+      adaptabilityScore: remakeabilityScoreForCandidate(p.adapted),
       finalScore: p.scored.finalScore,
     }))
   );
@@ -969,6 +994,8 @@ function candidateRowToAdapted(
     candidate.platform === "tiktok" || candidate.platform === "youtube"
       ? candidate.platform
       : "instagram";
+  const hook = deriveHook(candidate.caption);
+  const format = inferFormatFromCopy({ caption: candidate.caption, hook });
   return {
     platform,
     sourceId: candidate.sourceId,
@@ -1000,12 +1027,21 @@ function candidateRowToAdapted(
     viewsPerHour:
       candidate.viewsPerHour != null ? Number(candidate.viewsPerHour) : null,
     trendStatus: (candidate.trendStatus as AdaptedCandidate["trendStatus"]) || "unknown",
-    relevanceHint: 70,
+    relevanceHint: relevanceScoreForCandidate({
+      candidate: {
+        caption: candidate.caption,
+        hook,
+        hashtags: candidate.hashtags ?? [],
+        contentPillar: classification.primaryPillar || extras.contentPillar,
+      },
+      pillarConfidence: classification.confidence,
+      activePillar: classification.primaryPillar || extras.contentPillar,
+    }),
     contentPillar: classification.primaryPillar || extras.contentPillar,
     relevanceLabel: extras.relevanceLabel,
     relevanceReason: extras.relevanceReason,
-    hook: deriveHook(candidate.caption),
-    format: null,
+    hook,
+    format,
     hashtagKey: (candidate.hashtags ?? [])[0] || null,
     rawProviderPayload: {},
   };

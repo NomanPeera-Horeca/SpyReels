@@ -47,23 +47,40 @@ function extractHashtags(caption: string): string[] {
   return [...new Set(matches.map((h) => h.slice(1).toLowerCase()))].slice(0, 20);
 }
 
-function deriveHook(caption: string): string | null {
+export function deriveHook(caption: string): string | null {
   const cleaned = caption.replace(/\s+/g, " ").trim();
   if (!cleaned) return null;
   const firstLine = cleaned.split(/[.!?\n]/)[0]?.trim() || cleaned;
   return firstLine.slice(0, 160) || null;
 }
 
-function inferFormat(caption: string): string | null {
-  const c = caption.toLowerCase();
-  if (/\b(\d+)\s*(ways|tips|things|mistakes|reasons)\b/.test(c)) {
+/**
+ * Deterministic creative-pattern guess from caption/hook text.
+ * Returns null when there is no usable copy, so remake scoring does not
+ * treat empty rows as talking-head by default.
+ */
+export function inferFormat(text: string | null | undefined): string | null {
+  const c = (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!c) return null;
+  if (
+    /\b(\d+)\s*(ways|tips|things|mistakes|reasons|steps)\b/.test(c) ||
+    /\b(\d+)\s+\w{1,16}\s+(ways|tips|things|mistakes|reasons|steps)\b/.test(c)
+  ) {
     return "list";
   }
   if (/\b(myth|vs\.?|versus|stop believing)\b/.test(c)) return "myth-vs-fact";
   if (/\b(before|after)\b/.test(c)) return "before-after";
-  if (/\b(how to|tutorial|step)\b/.test(c)) return "tutorial";
+  if (/\b(how to|tutorial|step(?:s| by step)?)\b/.test(c)) return "tutorial";
   if (/\bi (learned|stopped|realized|used to)\b/.test(c)) return "story";
+  if (/\b(stop doing|instead of)\b/.test(c)) return "talking-head";
   return "talking-head";
+}
+
+export function inferFormatFromCopy(args: {
+  caption?: string | null;
+  hook?: string | null;
+}): string | null {
+  return inferFormat([args.hook, args.caption].filter(Boolean).join(" "));
 }
 
 function adaptabilityFromFormat(format: string | null): number {

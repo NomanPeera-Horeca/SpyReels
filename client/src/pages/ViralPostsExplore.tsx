@@ -41,6 +41,9 @@ export default function ViralPostsExplore() {
   const [hiddenCreatorKeys, setHiddenCreatorKeys] = useState<Set<string>>(
     () => new Set()
   );
+  const [dismissedPostIds, setDismissedPostIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [savedOverrides, setSavedOverrides] = useState<Record<string, boolean>>(
     {}
   );
@@ -91,6 +94,7 @@ export default function ViralPostsExplore() {
           : { ...post, saved: savedOverrides[post.id] }
       )
       .filter((post) => {
+        if (dismissedPostIds.has(post.id)) return false;
         const key = creatorKey(post);
         if (key && hiddenCreatorKeys.has(key)) return false;
 
@@ -126,6 +130,7 @@ export default function ViralPostsExplore() {
     filters.platforms.youtube,
     quickFilter,
     hiddenCreatorKeys,
+    dismissedPostIds,
     savedOverrides,
   ]);
 
@@ -193,6 +198,7 @@ export default function ViralPostsExplore() {
 
   const handleNotRelevant = useCallback(
     async (post: ViralPost) => {
+      setDismissedPostIds((prev) => new Set(prev).add(post.id));
       try {
         await feedbackMutation.mutateAsync({
           postId: post.id,
@@ -204,6 +210,11 @@ export default function ViralPostsExplore() {
         ]);
         toast.success("Recommendation feedback saved");
       } catch (err) {
+        setDismissedPostIds((prev) => {
+          const next = new Set(prev);
+          next.delete(post.id);
+          return next;
+        });
         toast.error(err instanceof Error ? err.message : "Could not save feedback");
       }
     },
