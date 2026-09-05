@@ -114,6 +114,28 @@ describe("semantic restaurant pool relevance", () => {
     );
   });
 
+  it("does not admit a candidate to the source pool from secondary-pillar metadata", () => {
+    const reel = candidate("equipment", "Choosing a high-capacity prep machine for faster service");
+    const routed = routeSemanticPoolCandidates({
+      sourcePillar: "restaurant operations",
+      candidates: [reel],
+      verdicts: [
+        verdict({
+          sourceId: "equipment",
+          primaryPillar: "kitchen buildouts",
+          secondaryPillar: "restaurant operations",
+          confidence: 0.9,
+          reason: "Primarily an equipment selection and capacity decision",
+        }),
+      ],
+    });
+
+    expect(routed.currentPool).toHaveLength(0);
+    expect(routed.rerouted).toHaveLength(1);
+    expect(routed.rerouted[0]?.targetPillar).toBe("kitchen buildouts");
+    expect(routed.rerouted[0]?.verdict.secondaryPillar).toBe("restaurant operations");
+  });
+
   it("rejects missing and low-confidence semantic verdicts rather than polluting a pool", () => {
     const missing = candidate("missing", "Some viral Reel");
     const low = candidate("low", "Some ambiguous restaurant Reel");
