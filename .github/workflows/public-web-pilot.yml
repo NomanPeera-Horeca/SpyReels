@@ -13,6 +13,8 @@ on:
       - "shared/publicRouteOwnership.test.ts"
       - "shared/spaNavigateFallback.ts"
       - "shared/spaNavigateFallback.test.ts"
+      - "shared/publicWebIndexing.ts"
+      - "shared/publicWebIndexing.test.ts"
       - "client/src/lib/researchPendingHandle.ts"
       - "client/src/lib/researchPendingHandle.test.ts"
       - "vite.config.ts"
@@ -43,7 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test route ownership and pilot proxy guards
-        run: pnpm vitest run shared/publicRouteOwnership.test.ts shared/spaNavigateFallback.test.ts server/_core/publicWebPilotProxy.test.ts client/src/lib/researchPendingHandle.test.ts
+        run: pnpm vitest run shared/publicRouteOwnership.test.ts shared/spaNavigateFallback.test.ts shared/publicWebIndexing.test.ts server/_core/publicWebPilotProxy.test.ts client/src/lib/researchPendingHandle.test.ts
 
       - name: Typecheck existing SpyReels integration
         env:

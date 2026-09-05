@@ -28,4 +28,12 @@ test.describe("Viral Reel Finder raw HTML", () => {
     expect(html).not.toContain("<video");
     expect(html).toContain("noindex");
   });
+
+  test("preview and localhost robots stay closed", async ({ request }) => {
+    const response = await request.get("/robots.txt");
+    expect(response.ok()).toBeTruthy();
+    const body = await response.text();
+    expect(body).toMatch(/Disallow:\s*\/\s*$/m);
+    expect(body).not.toMatch(/Allow:\s*\/features\/viral-reel-finder/i);
+  });
 });

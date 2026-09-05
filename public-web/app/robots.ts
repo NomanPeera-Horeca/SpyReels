@@ -1,12 +1,15 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
+import { publicWebIndexingPolicy, publicWebRobotsTxtRules } from "../../shared/publicWebIndexing";
 
-export default function robots(): MetadataRoute.Robots {
-  // This runtime is intentionally isolated during the architecture pilot.
-  // Production robots.txt remains owned by the existing Express server.
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const headerStore = await headers();
   return {
-    rules: {
-      userAgent: "*",
-      disallow: "/",
-    },
+    rules: publicWebRobotsTxtRules(
+      publicWebIndexingPolicy({
+        host: headerStore.get("host"),
+        forwardedHost: headerStore.get("x-forwarded-host"),
+      })
+    ),
   };
 }
