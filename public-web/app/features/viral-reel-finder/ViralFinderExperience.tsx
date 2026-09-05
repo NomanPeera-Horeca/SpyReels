@@ -190,7 +190,7 @@ export default function ViralFinderExperience() {
     setDemoError(null);
     setSelectedReel(null);
     setShowAll(false);
-    setPreviewStep("hook");
+    setShowSpyReelsNext(false);
 
     fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(activeHandle)}`, {
       signal: controller.signal,
@@ -294,7 +294,7 @@ export default function ViralFinderExperience() {
     : matchingProfile?.isPrivate
       ? "Private account"
       : matchingProfile
-        ? `Research @${matchingProfile.username}`
+        ? `See @${matchingProfile.username}'s Reels`
         : profileLoading
           ? "Checking…"
           : "Find account";
@@ -356,7 +356,7 @@ export default function ViralFinderExperience() {
 
         {matchingProfile && !isDemoInput ? (
           <p className={styles.profileHint} data-testid="profile-found-hint">
-            We found @{matchingProfile.username}. Explore the example Reels below, then research this account in SpyReels.
+            We found @{matchingProfile.username}. Example Reels are below. Continue in SpyReels to rank this account.
           </p>
         ) : null}
 
@@ -424,7 +424,7 @@ export default function ViralFinderExperience() {
                         <small>Opening hook</small>
                         <p>{hookPreview(reel.caption)}</p>
                         <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                        <b>{selected ? "Selected. Explore below" : "See what SpyReels does next"}</b>
+                        <b>{selected ? "Selected" : "Open this Reel"}</b>
                       </div>
                     </button>
                   </article>
@@ -444,56 +444,38 @@ export default function ViralFinderExperience() {
       </section>
 
       {selectedReel ? (
-        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="What SpyReels does after Reel research">
+        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="Selected Reel">
           <div className={styles.nextStepMedia} style={{ backgroundImage: `url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})` }} />
           <div className={styles.nextStepCopy}>
-            <small>What happens after you choose a Reel</small>
-            <h2>See the path before you sign in.</h2>
-            <p>SpyReels keeps this Reel as research context and gives you a clear path from the original post to your own content workflow.</p>
+            <small>This Reel</small>
+            <h2>{hookPreview(selectedReel.caption)}</h2>
+            <p>
+              {formatNumber(selectedReel.viewCount)} views
+              {selectedReel.engagementRate > 0 ? ` · ${selectedReel.engagementRate.toFixed(1)}% engagement` : ""}
+            </p>
 
-            <div className={interactionStyles.stepTabs} aria-label="Preview the SpyReels workflow">
-              {([
-                ["hook", "1. Hook"],
-                ["transcript", "2. Transcript"],
-                ["create", "3. Create"],
-              ] as const).map(([step, label]) => (
-                <button
-                  key={step}
-                  type="button"
-                  className={`${interactionStyles.stepTab} ${previewStep === step ? interactionStyles.stepTabActive : ""}`}
-                  onClick={() => setPreviewStep(step)}
-                >
-                  {label}
+            {!showSpyReelsNext ? (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                data-testid="reveal-spyreels-next"
+                onClick={() => setShowSpyReelsNext(true)}
+              >
+                What SpyReels can do next
+              </button>
+            ) : (
+              <>
+                <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step="next">
+                  <small>Inside SpyReels</small>
+                  <strong>Transcribe this Reel, then write your own version.</strong>
+                  <p>SpyReels keeps this post as research context so you can study the spoken content and turn the useful idea into an original script.</p>
+                </div>
+                <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner, "selected_reel")}>
+                  Continue @{selectedOwner} in SpyReels
                 </button>
-              ))}
-            </div>
-
-            <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step={previewStep}>
-              {previewStep === "hook" ? (
-                <>
-                  <small>Start with the actual Reel</small>
-                  <strong>{hookPreview(selectedReel.caption)}</strong>
-                  <p>Keep the source visible while you study the opening, topic and structure that made you stop.</p>
-                </>
-              ) : previewStep === "transcript" ? (
-                <>
-                  <small>Next inside SpyReels</small>
-                  <strong>Turn the Reel into text you can inspect.</strong>
-                  <p>SpyReels can transcribe the Reel so the spoken content becomes research context you can read, study and carry forward.</p>
-                </>
-              ) : (
-                <>
-                  <small>Then make it yours</small>
-                  <strong>Use the research as context for an original script.</strong>
-                  <p>Move the useful idea into your own script workflow, choose your angle and develop a version for your audience instead of copying the original.</p>
-                </>
-              )}
-            </div>
-
-            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner, "selected_reel")}>
-              Research @{selectedOwner} in SpyReels
-            </button>
-            <span className={interactionStyles.actionHint}>Opens Research with @{selectedOwner} selected.</span>
+                <span className={interactionStyles.actionHint}>Opens Research with @{selectedOwner} selected.</span>
+              </>
+            )}
           </div>
         </section>
       ) : null}
