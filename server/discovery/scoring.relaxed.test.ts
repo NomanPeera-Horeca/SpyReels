@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { scoreReel, scoreReelRelaxed, type ParsedReel } from "./scoring";
+import {
+  MIN_REACH_MULTIPLIER,
+  MIN_VIEWS,
+  scoreReel,
+  scoreReelRelaxed,
+  scoreViralMetrics,
+  type ParsedReel,
+} from "./scoring";
 
 function baseOwner(followers: number): ParsedReel["owner"] {
   return {
@@ -37,6 +44,28 @@ describe("scoreReelRelaxed", () => {
     expect(scored).not.toBeNull();
     expect(scored!.tier).toBe(1);
     expect(scored!.reachMultiplier).toBe(0);
+  });
+
+  it("shares the same strict math for TikTok search without minting an Instagram URL", () => {
+    const metrics = scoreViralMetrics({
+      views: 24_000,
+      likes: 1_200,
+      comments: 80,
+      followers: 4_000,
+    });
+    const instagram = scoreReel({
+      ...reel(24_000, 4_000),
+      likes: 1_200,
+      comments: 80,
+    });
+    expect(metrics?.tier).toBe(instagram?.tier);
+    expect(metrics?.viralScore).toBe(instagram?.viralScore);
+    expect(instagram?.reelUrl).toContain("instagram.com/reel/");
+    expect(MIN_VIEWS).toBe(5_000);
+    expect(MIN_REACH_MULTIPLIER).toBe(3);
+    expect(
+      scoreViralMetrics({ views: 24_000, likes: 1_200, comments: 80, followers: 0 })
+    ).toBeNull();
   });
 
   it("still uses strict thresholds when followers exist", () => {

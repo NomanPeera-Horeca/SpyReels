@@ -56,6 +56,14 @@ export const VIRAL_POOL_DEFAULTS = {
   seedDailyCallBudget: 30,
   /** Approximate SC calls charged per seed handle scrape. */
   seedScCallsPerHandle: 3,
+  /** TikTok pool search: keyword queries in the first production experiment. */
+  tiktokPoolMaxKeywordQueries: 4,
+  /** TikTok pool search: optional Top queries. */
+  tiktokPoolMaxTopQueries: 2,
+  /** Hard ceiling for TikTok search calls. Does not consume the full 30-call seed budget. */
+  tiktokPoolMaxSearchCalls: 6,
+  /** Skip seed-handle scraping when search already admitted at least this many current-pool rows. */
+  tiktokPoolMinSearchAdmittedToSkipSeeds: 5,
 } as const;
 
 /** Pillar key for platform seed pools (one pool per niche+platform). */

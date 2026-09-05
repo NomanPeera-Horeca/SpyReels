@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AdaptedCandidate } from "../candidateAdapter";
 import {
+  SEMANTIC_POOL_PROMPT,
   normalizeSemanticPoolVerdict,
   routeSemanticPoolCandidates,
   type SemanticPoolVerdict,
@@ -149,6 +150,39 @@ describe("semantic restaurant pool relevance", () => {
     expect(routed.rejected.map((x) => x.reason).sort()).toEqual([
       "low_confidence",
       "missing_verdict",
+    ]);
+  });
+
+  it("classifies short-form content across Instagram, TikTok, and YouTube without a second judge", () => {
+    expect(SEMANTIC_POOL_PROMPT).toContain("Instagram Reels");
+    expect(SEMANTIC_POOL_PROMPT).toContain("TikTok videos");
+    expect(SEMANTIC_POOL_PROMPT).toContain("YouTube Shorts");
+    expect(SEMANTIC_POOL_PROMPT).toContain("Recipe tutorials");
+    expect(SEMANTIC_POOL_PROMPT).toContain("primary pillar is the video's canonical pool");
+
+    const tiktok = candidate("tt-ops", "How we train restaurant staff before every shift");
+    tiktok.platform = "tiktok";
+    tiktok.sourceUrl = "https://www.tiktok.com/@ops/video/tt-ops";
+    const youtube = candidate("yt-ops", "Restaurant inventory SOP that prevents stockouts");
+    youtube.platform = "youtube";
+    youtube.sourceUrl = "https://www.youtube.com/shorts/yt-ops";
+    const instagram = candidate("ig-ops", "How we train restaurant staff before every shift");
+
+    const routed = routeSemanticPoolCandidates({
+      sourcePillar: "restaurant operations",
+      candidates: [tiktok, youtube, instagram],
+      verdicts: [
+        verdict({ sourceId: "tt-ops", primaryPillar: "restaurant operations" }),
+        verdict({ sourceId: "yt-ops", primaryPillar: "restaurant operations" }),
+        verdict({ sourceId: "ig-ops", primaryPillar: "restaurant operations" }),
+      ],
+    });
+
+    expect(routed.currentPool).toHaveLength(3);
+    expect(routed.currentPool.map((row) => row.platform).sort()).toEqual([
+      "instagram",
+      "tiktok",
+      "youtube",
     ]);
   });
 

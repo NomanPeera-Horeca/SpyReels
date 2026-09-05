@@ -40,9 +40,9 @@ export type SemanticPoolClassificationResult = {
   haikuCalls: number;
 };
 
-const SEMANTIC_POOL_PROMPT = `You classify already-viral Instagram Reels for SpyReels restaurant and hospitality business inspiration pools.
+export const SEMANTIC_POOL_PROMPT = `You classify already-viral short-form videos for SpyReels restaurant and hospitality business inspiration pools. Videos may be Instagram Reels, TikTok videos, or YouTube Shorts.
 
-Your job is semantic relevance, not virality. Decide what the Reel is actually ABOUT and whether a restaurant or hospitality OPERATOR could use the business idea.
+Your job is semantic relevance, not virality. Decide what the video is actually ABOUT and whether a restaurant or hospitality OPERATOR could use the business idea.
 
 Return ONLY valid JSON in this exact shape:
 {
@@ -67,18 +67,18 @@ Allowed pillars, exact strings only:
 - hospitality leadership
 
 RULES:
-1. Judge the meaning of the Reel, not isolated keyword matches.
+1. Judge the meaning of the video, not isolated keyword matches. Do not treat platform, format, or hashtags as a substitute for the actual lesson.
 2. domainRelevant=true only when the content is useful to a restaurant/hospitality operator as BUSINESS, MANAGEMENT, GROWTH, MARKETING, MENU, KITCHEN, EQUIPMENT, PROFITABILITY, or LEADERSHIP inspiration.
 3. Recipe tutorials, cooking demonstrations, food porn, dish preparation, restaurant reviews, consumer food content, and entertainment are NOT business/operator content by themselves. Mark them domainRelevant=false unless the actual angle explicitly teaches an operator decision or lesson such as economics, menu strategy, workflow, equipment selection, equipment capacity, equipment cost, staffing, systems, marketing, throughput, or another business decision. Merely showing or using commercial equipment while making food is NOT enough.
 4. QSR/franchise/restaurant market opportunities, unit economics, margins, revenue models, pricing economics, expansion economics, and business opportunities normally map to restaurant profitability.
 5. Menu pricing, food cost decisions, menu design, upselling, item mix, specials strategy, and menu optimization map to menu engineering. A recipe alone does not.
 6. Staff, hiring, training, scheduling, SOPs, service systems, workflows, inventory operations, manager systems, and execution map to restaurant operations.
-7. Equipment, refrigeration, hoods, leases, fit-outs, construction, kitchen layout, and buildout decisions map to kitchen buildouts ONLY when the Reel teaches an operator-facing decision or lesson such as choosing/sizing equipment, capacity, throughput, labor savings, installation, utilities, layout, procurement, cost, or workflow design. A cooking demo that simply happens to use equipment is not kitchen buildouts.
+7. Equipment, refrigeration, hoods, leases, fit-outs, construction, kitchen layout, and buildout decisions map to kitchen buildouts ONLY when the video teaches an operator-facing decision or lesson such as choosing/sizing equipment, capacity, throughput, labor savings, installation, utilities, layout, procurement, cost, or workflow design. A cooking demo that simply happens to use equipment is not kitchen buildouts.
 8. Ads, content, promotions, loyalty, customer acquisition, positioning, social media, and restaurant brand growth map to restaurant marketing.
 9. Owner/founder leadership, culture, management philosophy, team leadership, and hospitality leadership map to hospitality leadership.
-10. Hotel/hospitality content can be domainRelevant when the underlying operator lesson transfers to hospitality businesses. Do not label generic hotel promotion or inspirational guest-service copy as restaurant operations unless the Reel actually teaches an operational system or practice.
+10. Hotel/hospitality content can be domainRelevant when the underlying operator lesson transfers to hospitality businesses. Do not label generic hotel promotion or inspirational guest-service copy as restaurant operations unless the video actually teaches an operational system or practice.
 11. Unrelated education, universities, general entrepreneurship, unrelated trades, lifestyle, motivation, and generic founder content are domainRelevant=false unless the specific lesson clearly applies to restaurant/hospitality operators.
-12. primaryPillar must be the single best allowed pillar when domainRelevant=true. secondaryPillar is optional metadata only and should be used only for a genuinely strong second fit. The primary pillar is the Reel's canonical pool. Do not use secondaryPillar merely to make the Reel eligible for another pool.
+12. primaryPillar must be the single best allowed pillar when domainRelevant=true. secondaryPillar is optional metadata only and should be used only for a genuinely strong second fit. The primary pillar is the video's canonical pool. Do not use secondaryPillar merely to make the video eligible for another pool.
 13. confidence is 0 to 1 and measures semantic confidence in the pillar assignment, not virality or production quality.
 14. If domainRelevant=false, primaryPillar and secondaryPillar must be null.
 15. Preserve the exact sourceId values supplied. Return exactly one entry per input candidate.
@@ -142,7 +142,8 @@ async function classifyBatch(
     .map((candidate) => {
       const caption = (candidate.caption || "").replace(/\s+/g, " ").trim().slice(0, 520);
       const hook = (candidate.hook || "").replace(/\s+/g, " ").trim().slice(0, 180);
-      return `- sourceId: ${candidate.sourceId}\n  creator: ${candidate.creatorHandle || candidate.creatorName}\n  hook: ${hook || "(none)"}\n  caption: ${caption || "(none)"}`;
+      const platform = candidate.platform || "unknown";
+      return `- sourceId: ${candidate.sourceId}\n  platform: ${platform}\n  creator: ${candidate.creatorHandle || candidate.creatorName}\n  hook: ${hook || "(none)"}\n  caption: ${caption || "(none)"}`;
     })
     .join("\n\n");
 
@@ -154,7 +155,7 @@ async function classifyBatch(
     messages: [
       {
         role: "user",
-        content: `Broad niche: ${niche}\n\nAlready-viral Reels to classify:\n${candidateLines}\n\nReturn semantic classification JSON for every sourceId.`,
+        content: `Broad niche: ${niche}\n\nAlready-viral short-form videos to classify:\n${candidateLines}\n\nReturn semantic classification JSON for every sourceId.`,
       },
     ],
   });

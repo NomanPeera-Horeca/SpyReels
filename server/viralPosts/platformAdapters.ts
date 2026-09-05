@@ -56,7 +56,7 @@ export function adaptTikTokVideos(
 ): AdaptedCandidate[] {
   const now = opts.now ?? new Date();
   const niche = opts.niche.trim() || "your niche";
-  const followers =
+  const sharedFollowers =
     opts.creatorFollowers != null &&
     Number.isFinite(opts.creatorFollowers) &&
     opts.creatorFollowers > 0
@@ -88,6 +88,18 @@ export function adaptTikTokVideos(
         typeof video.shareCount === "number" && Number.isFinite(video.shareCount)
           ? video.shareCount
           : null;
+      const saves =
+        video.saveCount != null &&
+        Number.isFinite(video.saveCount) &&
+        video.saveCount > 0
+          ? video.saveCount
+          : null;
+      const followers =
+        video.creatorFollowerCount != null &&
+        Number.isFinite(video.creatorFollowerCount) &&
+        video.creatorFollowerCount > 0
+          ? video.creatorFollowerCount
+          : sharedFollowers;
 
       const ageHours = ageHoursFromPublished(publishedAt, now);
       const reachMultiplier = computeReachMultiplier(views, followers);
@@ -96,7 +108,7 @@ export function adaptTikTokVideos(
         likes,
         comments,
         shares,
-        saves: null,
+        saves,
       });
       const viewsPerHour = computeViewsPerHour(views, ageHours);
       const trendStatus = classifyTrendStatus({
@@ -133,7 +145,7 @@ export function adaptTikTokVideos(
         likes,
         comments,
         shares,
-        saves: null,
+        saves,
         reachMultiplier,
         engagementRate,
         viewsPerHour,

@@ -43,52 +43,128 @@ export function viralTierForScore(score: number): ViralTier {
   return "Trending";
 }
 
-export function computeViralScore(reel: ParsedReel): number {
-  const reachMultiplier = reel.views / reel.owner.followers;
-  const engagementRate = (reel.likes + reel.comments) / reel.views;
+export type ViralMetricsInput = {
+  views: number;
+  likes: number;
+  comments: number;
+  followers: number;
+  isPrivate?: boolean;
+};
+
+export type ViralMetricsScore = {
+  viralScore: number;
+  viralTier: ViralTier;
+  reachMultiplier: number;
+  engagementRate: number;
+  tier: 1 | 2;
+};
+
+export function computeViralScoreFromMetrics(input: ViralMetricsInput): number {
+  const reachMultiplier = input.views / input.followers;
+  const engagementRate = (input.likes + input.comments) / input.views;
   return reachMultiplier * engagementRate * 100;
 }
 
-export function passesPrivacyAndFollowers(reel: ParsedReel): boolean {
-  return !reel.owner.isPrivate && reel.owner.followers > 0;
+export function computeViralScore(reel: ParsedReel): number {
+  return computeViralScoreFromMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+  });
 }
 
-export function passesTier1Thresholds(reel: ParsedReel): boolean {
-  const reach = reel.views / reel.owner.followers;
+export function passesPrivacyAndFollowersFromMetrics(input: ViralMetricsInput): boolean {
+  return input.isPrivate !== true && input.followers > 0 && input.views > 0;
+}
+
+export function passesPrivacyAndFollowers(reel: ParsedReel): boolean {
+  return passesPrivacyAndFollowersFromMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+    isPrivate: reel.owner.isPrivate,
+  });
+}
+
+export function passesTier1ThresholdsFromMetrics(input: ViralMetricsInput): boolean {
+  const reach = input.views / input.followers;
   return (
     reach >= MIN_REACH_MULTIPLIER &&
-    reel.views >= MIN_VIEWS &&
-    computeViralScore(reel) >= MIN_VIRAL_SCORE
+    input.views >= MIN_VIEWS &&
+    computeViralScoreFromMetrics(input) >= MIN_VIRAL_SCORE
   );
 }
 
-export function passesTier2Thresholds(reel: ParsedReel): boolean {
-  const reach = reel.views / reel.owner.followers;
-  return reach >= TIER2_MIN_REACH_MULTIPLIER && reel.views >= TIER2_MIN_VIEWS;
+export function passesTier1Thresholds(reel: ParsedReel): boolean {
+  return passesTier1ThresholdsFromMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+  });
 }
 
-export function classifyTier(reel: ParsedReel): 1 | 2 | null {
-  if (!passesPrivacyAndFollowers(reel)) return null;
-  if (passesTier1Thresholds(reel)) return 1;
-  if (passesTier2Thresholds(reel)) return 2;
+export function passesTier2ThresholdsFromMetrics(input: ViralMetricsInput): boolean {
+  const reach = input.views / input.followers;
+  return reach >= TIER2_MIN_REACH_MULTIPLIER && input.views >= TIER2_MIN_VIEWS;
+}
+
+export function passesTier2Thresholds(reel: ParsedReel): boolean {
+  return passesTier2ThresholdsFromMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+  });
+}
+
+export function classifyTierFromMetrics(input: ViralMetricsInput): 1 | 2 | null {
+  if (!passesPrivacyAndFollowersFromMetrics(input)) return null;
+  if (passesTier1ThresholdsFromMetrics(input)) return 1;
+  if (passesTier2ThresholdsFromMetrics(input)) return 2;
   return null;
 }
 
-export function scoreReel(reel: ParsedReel): ScoredReel | null {
-  const tier = classifyTier(reel);
+export function classifyTier(reel: ParsedReel): 1 | 2 | null {
+  return classifyTierFromMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+    isPrivate: reel.owner.isPrivate,
+  });
+}
+
+export function scoreViralMetrics(input: ViralMetricsInput): ViralMetricsScore | null {
+  const tier = classifyTierFromMetrics(input);
   if (tier === null) return null;
-
-  const reachMultiplier = reel.views / reel.owner.followers;
-  const engagementRate = (reel.likes + reel.comments) / reel.views;
+  const reachMultiplier = input.views / input.followers;
+  const engagementRate = (input.likes + input.comments) / input.views;
   const viralScore = reachMultiplier * engagementRate * 100;
-
   return {
-    ...reel,
     tier,
     reachMultiplier,
     engagementRate,
     viralScore,
     viralTier: viralTierForScore(viralScore),
+  };
+}
+
+export function scoreReel(reel: ParsedReel): ScoredReel | null {
+  const scored = scoreViralMetrics({
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    followers: reel.owner.followers,
+    isPrivate: reel.owner.isPrivate,
+  });
+  if (!scored) return null;
+
+  return {
+    ...reel,
+    ...scored,
     reelUrl: `https://www.instagram.com/reel/${reel.shortcode}/`,
   };
 }

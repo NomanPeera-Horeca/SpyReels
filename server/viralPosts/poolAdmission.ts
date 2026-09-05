@@ -35,6 +35,13 @@ function isDirectInstagramDiscoveryCandidate(candidate: AdaptedCandidate): boole
   return providerSource(candidate) === "instagram_pool_discovery";
 }
 
+function isSemanticDiscoveryCandidate(candidate: AdaptedCandidate): boolean {
+  const source = providerSource(candidate);
+  return (
+    source === "instagram_pool_discovery" || source === "tiktok_pool_discovery"
+  );
+}
+
 function semanticDirectClassification(candidate: AdaptedCandidate): {
   domainRelevant: boolean;
   primaryPillar: string | null;
@@ -42,7 +49,7 @@ function semanticDirectClassification(candidate: AdaptedCandidate): {
   confidence: number;
   reason: string;
 } | null {
-  if (!isDirectInstagramDiscoveryCandidate(candidate)) return null;
+  if (!isSemanticDiscoveryCandidate(candidate)) return null;
   const raw = candidate.rawProviderPayload || {};
   if (!("semanticDomainRelevant" in raw)) return null;
 
@@ -107,9 +114,7 @@ export function classifyCandidateForPoolAdmission(args: {
       };
     }
 
-    const matchesPool =
-      semantic.primaryPillar === assignPillar ||
-      semantic.secondaryPillar === assignPillar;
+    const matchesPool = semantic.primaryPillar === assignPillar;
     if (!matchesPool || semantic.confidence < MIN_SEMANTIC_POOL_CONFIDENCE) {
       return {
         admit: false,
@@ -119,6 +124,20 @@ export function classifyCandidateForPoolAdmission(args: {
     }
 
     return { admit: true, classification, reason: "admitted" };
+  }
+
+  if (providerSource(candidate) === "tiktok_pool_discovery") {
+    const classification: PillarClassification = {
+      primaryPillar: assignPillar,
+      secondaryPillar: null,
+      confidence: 0,
+      reason: "TikTok search row missing semantic classification; not linked to pool",
+    };
+    return {
+      admit: false,
+      classification,
+      reason: "semantic_off_domain",
+    };
   }
 
   const classification = classifyCandidatePillars({

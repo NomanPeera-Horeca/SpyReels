@@ -168,6 +168,36 @@ describe("direct Instagram pool admission", () => {
     expect(decision.classification.confidence).toBeLessThan(0.5);
   });
 
+  it("admits TikTok search rows only when the semantic primary pillar matches the pool", () => {
+    const decision = classifyCandidateForPoolAdmission({
+      pool: { ...pool, platform: "tiktok" },
+      candidate: candidate({
+        caption: "How we train restaurant staff before every shift",
+        source: "tiktok_pool_discovery",
+        semantic: {
+          domainRelevant: true,
+          primaryPillar: "restaurant operations",
+          confidence: 0.9,
+          reason: "Staff training",
+        },
+      }),
+    });
+    expect(decision.admit).toBe(true);
+    expect(decision.classification.primaryPillar).toBe("restaurant operations");
+  });
+
+  it("rejects TikTok search rows that are missing a semantic verdict", () => {
+    const decision = classifyCandidateForPoolAdmission({
+      pool: { ...pool, platform: "tiktok" },
+      candidate: candidate({
+        caption: "How we train restaurant staff before every shift",
+        source: "tiktok_pool_discovery",
+      }),
+    });
+    expect(decision.admit).toBe(false);
+    expect(decision.reason).toBe("semantic_off_domain");
+  });
+
   it("preserves the legacy fallback for non-Instagram-discovery provider rows", () => {
     const decision = classifyCandidateForPoolAdmission({
       pool,

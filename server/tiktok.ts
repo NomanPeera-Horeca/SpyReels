@@ -141,6 +141,10 @@ export interface TikTokVideoData {
   durationSec: number;
   postedAt: Date;
   ownerUsername: string;
+  /** Present on keyword/Top search when the provider includes author stats. */
+  creatorFollowerCount?: number | null;
+  /** Present on keyword/Top search when the provider includes collect_count. */
+  saveCount?: number | null;
   /** ScrapeCreators `is_top` (0|1). Pinned; may appear out of chrono order. */
   isTop?: boolean;
   /** True when collected only to reach MIN_SPY_DISPLAY_REELS (older than spy window). */
@@ -472,6 +476,142 @@ function parseTikTokVideo(
     ownerUsername,
     isTop: toFiniteNumber(item?.is_top) === 1,
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function optionalPositiveMetric(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function firstSearchArray(data: unknown, keys: string[]): unknown[] {
+  const root = asRecord(data);
+  for (const key of keys) {
+    if (Array.isArray(root[key])) return root[key] as unknown[];
+  }
+  const nested = asRecord(root.data);
+  for (const key of keys) {
+    if (Array.isArray(nested[key])) return nested[key] as unknown[];
+  }
+  return [];
+}
+
+/**
+ * Normalize ScrapeCreators TikTok keyword (`aweme_info`) and Top search rows.
+ * Does not invent views, followers, or saves when the provider omitted them.
+ */
+export function parseTikTokSearchVideo(raw: unknown): TikTokVideoData | null {
+  const wrapper = asRecord(raw);
+  const item = asRecord(wrapper.aweme_info ?? wrapper.awemeInfo ?? wrapper);
+  const awemeId = String(item.aweme_id ?? item.awemeId ?? item.id ?? "").trim();
+  if (!awemeId) return null;
+
+  const author = asRecord(item.author);
+  const stats = asRecord(item.statistics ?? item.stats);
+  const ownerUsername = String(
+    author.unique_id ?? author.uniqueId ?? author.username ?? ""
+  ).replace(/^@/, "");
+  const postedAtSeconds = toFiniteNumber(item.create_time ?? item.createTime);
+  const postedAt =
+    postedAtSeconds > 0 ? new Date(postedAtSeconds * 1000) : new Date(0);
+  if (Number.isNaN(postedAt.getTime()) || postedAt.getTime() <= 0) {
+    return null;
+  }
+
+  const views = optionalPositiveMetric(stats.play_count ?? stats.playCount ?? stats.view_count);
+  const likes = optionalPositiveMetric(stats.digg_count ?? stats.like_count ?? stats.likes);
+  const comments = optionalPositiveMetric(stats.comment_count ?? stats.comments);
+  const shares = optionalPositiveMetric(stats.share_count ?? stats.shares);
+  const saves = optionalPositiveMetric(stats.collect_count ?? stats.save_count ?? stats.saves);
+  const followers = optionalPositiveMetric(
+    author.follower_count ??
+      author.followerCount ??
+      asRecord(author.stats).followerCount ??
+      asRecord(author.stats).follower_count
+  );
+
+  const video = item.video;
+  return {
+    awemeId,
+    caption: String(item.desc ?? item.caption ?? item.title ?? ""),
+    viewCount: views ?? 0,
+    likeCount: likes ?? 0,
+    commentCount: comments ?? 0,
+    shareCount: shares ?? 0,
+    saveCount: saves,
+    creatorFollowerCount: followers,
+    thumbnailUrl: extractTikTokCoverUrl(video),
+    videoUrl: extractTikTokPlayUrl(video),
+    videoPageUrl: String(
+      item.share_url ??
+        item.url ??
+        (ownerUsername
+          ? `https://www.tiktok.com/@${ownerUsername}/video/${awemeId}`
+          : `https://www.tiktok.com/video/${awemeId}`)
+    ),
+    durationSec: toFiniteNumber(asRecord(video).duration) / 1000,
+    postedAt,
+    ownerUsername,
+  };
+}
+
+export type TikTokSearchResult = {
+  videos: TikTokVideoData[];
+  rawCount: number;
+};
+
+async function searchTikTokPath(
+  path: string,
+  query: Record<string, string | undefined>,
+  rowKeys: string[]
+): Promise<TikTokSearchResult> {
+  const { status, data } = await scGet(path, query);
+  if (status < 200 || status >= 300) {
+    throw new Error(`TikTok search ${path} failed: HTTP ${status}`);
+  }
+  const rows = firstSearchArray(data, rowKeys);
+  const videos = rows
+    .map((row) => parseTikTokSearchVideo(row))
+    .filter((video): video is TikTokVideoData => video !== null);
+  return { videos, rawCount: rows.length };
+}
+
+export async function searchTikTokKeyword(
+  query: string,
+  opts?: { datePosted?: string; sortBy?: string; region?: string }
+): Promise<TikTokSearchResult> {
+  return searchTikTokPath(
+    "/v1/tiktok/search/keyword",
+    {
+      query,
+      date_posted: opts?.datePosted || "last-3-months",
+      sort_by: opts?.sortBy || "relevance",
+      region: opts?.region || "US",
+      trim: "false",
+    },
+    ["search_item_list", "items", "videos", "results"]
+  );
+}
+
+export async function searchTikTokTop(
+  query: string,
+  opts?: { publishTime?: string; sortBy?: string; region?: string }
+): Promise<TikTokSearchResult> {
+  return searchTikTokPath(
+    "/v1/tiktok/search/top",
+    {
+      query,
+      publish_time: opts?.publishTime || "last-3-months",
+      sort_by: opts?.sortBy || "relevance",
+      region: opts?.region || "US",
+    },
+    ["items", "search_item_list", "videos", "results"]
+  );
 }
 
 async function fetchTikTokVideosPage(

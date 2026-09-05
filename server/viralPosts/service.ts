@@ -1051,6 +1051,9 @@ async function ensureUserViralPools(args: {
     }
   }
   if (isViralPostsTiktokEnabled) {
+    for (const pillar of args.pillars.slice(0, 6)) {
+      specs.push({ niche: args.niche, pillar, platform: "tiktok" });
+    }
     specs.push({
       niche: args.niche,
       pillar: VIRAL_SEED_POOL_PILLAR,
