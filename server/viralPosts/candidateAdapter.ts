@@ -42,7 +42,7 @@ export type AdaptedCandidate = {
   rawProviderPayload: Record<string, unknown>;
 };
 
-function extractHashtags(caption: string): string[] {
+export function extractHashtags(caption: string): string[] {
   const matches = caption.match(/#[a-zA-Z0-9_]+/g) || [];
   return [...new Set(matches.map((h) => h.slice(1).toLowerCase()))].slice(0, 20);
 }
