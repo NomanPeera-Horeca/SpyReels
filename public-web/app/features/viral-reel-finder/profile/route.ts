@@ -40,12 +40,16 @@ export async function GET(request: NextRequest) {
 
   const input = encodeURIComponent(JSON.stringify({ json: { handle } }));
   const upstreamUrl = `${appOrigin()}/api/trpc/featured.publicProfilePreview?input=${input}`;
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const realIp = request.headers.get("x-real-ip");
 
   try {
     const upstream = await fetch(upstreamUrl, {
       method: "GET",
       headers: {
         accept: "application/json",
+        ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}),
+        ...(realIp ? { "x-real-ip": realIp } : {}),
         "user-agent": "SpyReels-Public-Web/1.0",
       },
       cache: "no-store",
