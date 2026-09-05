@@ -51,8 +51,12 @@ export function resolveLocalObjectPath(relKey: string): string {
   if (!dir) {
     throw new Error("LOCAL_OBJECT_STORAGE_DIR is not set");
   }
-  const key = normalizeKey(relKey);
-  if (!key || key.includes("\0") || key.split("/").some((part) => part === "..")) {
+  const key = normalizeKey(relKey).replace(/\\/g, "/");
+  if (
+    !key ||
+    key.includes("\0") ||
+    key.split("/").some((part) => part === ".." || part === "")
+  ) {
     throw new Error("invalid object key");
   }
   const root = path.resolve(dir);
