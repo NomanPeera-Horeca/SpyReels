@@ -121,6 +121,11 @@ export type InvokeParams = {
   repairIteration?: number;
   /** Explicit telemetry context. ALS is only a fallback. */
   telemetry?: GenerationTelemetryContext;
+  /**
+   * Optional total deadline for this invokeLLM call, including SDK work,
+   * app retries, and model fallback. Used by studio.analyze only.
+   */
+  timeoutMs?: number;
 };
 
 export type ToolCall = {
@@ -327,6 +332,60 @@ const assertApiKey = () => {
   }
 };
 
+function llmDeadlineExceededError(): Error {
+  return new Error("The AI request timed out.");
+}
+
+function createInvokeDeadline(timeoutMs: number | undefined) {
+  if (timeoutMs == null || timeoutMs <= 0) return null;
+
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  timer.unref?.();
+
+  return {
+    timeoutMs,
+    signal: controller.signal,
+    remainingMs() {
+      return Math.max(0, timeoutMs - (Date.now() - startedAt));
+    },
+    expired() {
+      return controller.signal.aborted || timeoutMs - (Date.now() - startedAt) <= 0;
+    },
+    clear() {
+      clearTimeout(timer);
+    },
+  };
+}
+
+async function sleepWithinDeadline(
+  delayMs: number,
+  deadline: ReturnType<typeof createInvokeDeadline>
+): Promise<void> {
+  if (!deadline) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return;
+  }
+  const waitMs = Math.min(delayMs, deadline.remainingMs());
+  if (waitMs <= 0 || deadline.expired()) {
+    throw llmDeadlineExceededError();
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      deadline.signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, waitMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(llmDeadlineExceededError());
+    };
+    deadline.signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 const normalizeResponseFormat = ({
   responseFormat,
   response_format,
@@ -385,8 +444,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     temperature,
     maxTokens: maxTokensParam,
     max_tokens: max_tokensParam,
+    timeoutMs,
   } = params;
 
+  const deadline = createInvokeDeadline(timeoutMs);
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const systemMessages = messages.filter(m => m.role === "system");
@@ -515,7 +576,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     }
   };
 
+  try {
   modelLoop: for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex++) {
+    if (deadline?.expired()) {
+      lastError = llmDeadlineExceededError();
+      break;
+    }
     const currentModel = modelsToTry[modelIndex]!;
     if (modelIndex > 0) {
       console.warn(`[invokeLLM] retrying with fallback model ${currentModel}`);
@@ -523,22 +589,36 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (deadline?.expired()) {
+        lastError = llmDeadlineExceededError();
+        break modelLoop;
+      }
       const attemptStarted = performance.now();
       logAngleInvoke("physical_started", {
         actualModel: currentModel,
         attemptNumber: attempt + 1,
       });
       try {
-        response = await client.messages.create({
-          model: currentModel,
-          max_tokens: maxTokensResolved,
-          ...(typeof temperature === "number" ? { temperature } : {}),
-          ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
-          messages: normalizedMessages,
-          ...(forcedSchemaTool
-            ? { tools: [forcedSchemaTool], tool_choice: forcedToolChoice }
-            : {}),
-        });
+        const requestOptions = deadline
+          ? {
+              signal: deadline.signal,
+              timeout: Math.max(1, deadline.remainingMs()),
+              maxRetries: 0,
+            }
+          : undefined;
+        response = await client.messages.create(
+          {
+            model: currentModel,
+            max_tokens: maxTokensResolved,
+            ...(typeof temperature === "number" ? { temperature } : {}),
+            ...(finalSystemPrompt ? { system: finalSystemPrompt } : {}),
+            messages: normalizedMessages,
+            ...(forcedSchemaTool
+              ? { tools: [forcedSchemaTool], tool_choice: forcedToolChoice }
+              : {}),
+          },
+          requestOptions
+        );
         const physicalDurationMs = performance.now() - attemptStarted;
         recordPhysical({
           model: response.model || currentModel,
@@ -556,21 +636,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         });
         break modelLoop;
       } catch (err) {
-        lastError = err;
+        lastError = deadline?.expired() ? llmDeadlineExceededError() : err;
         const physicalDurationMs = performance.now() - attemptStarted;
         recordPhysical({
           model: currentModel,
           attemptNumber: attempt + 1,
           durationMs: physicalDurationMs,
           success: false,
-          error: err,
+          error: lastError,
           fallbackOccurred: modelIndex > 0,
         });
-        const extracted = extractProviderErrorFields(err);
-        const status = (err as { status?: number })?.status;
+        const extracted = extractProviderErrorFields(lastError);
+        const status = (lastError as { status?: number })?.status;
         console.error(
           `[invokeLLM] attempt ${attempt + 1}/3 failed`,
-          { status, model: currentModel, message: err instanceof Error ? err.message : String(err) }
+          { status, model: currentModel, message: lastError instanceof Error ? lastError.message : String(lastError) }
         );
         logAngleInvoke("physical_failed", {
           actualModel: currentModel,
@@ -581,7 +661,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
           errorMessage: extracted.errorMessage,
         });
 
-        if (!isRetryableLlmError(err)) {
+        if (deadline?.expired()) {
           recordLogical({ success: false, actualModel: null });
           logAngleInvoke("logical_failed", {
             actualModel: null,
@@ -590,15 +670,36 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
             providerRequestId: extracted.providerRequestId,
             errorMessage: extracted.errorMessage,
           });
-          throw asUserFacingLlmError(err, errorContextForOperation(operation));
+          throw asUserFacingLlmError(lastError, errorContextForOperation(operation));
+        }
+
+        if (!isRetryableLlmError(lastError)) {
+          recordLogical({ success: false, actualModel: null });
+          logAngleInvoke("logical_failed", {
+            actualModel: null,
+            durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
+            httpStatus: extracted.statusCode,
+            providerRequestId: extracted.providerRequestId,
+            errorMessage: extracted.errorMessage,
+          });
+          throw asUserFacingLlmError(lastError, errorContextForOperation(operation));
         }
 
         if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt] ?? 6000));
+          try {
+            await sleepWithinDeadline(retryDelaysMs[attempt] ?? 6000, deadline);
+          } catch (sleepErr) {
+            lastError = sleepErr;
+            recordLogical({ success: false, actualModel: null });
+            throw asUserFacingLlmError(sleepErr, errorContextForOperation(operation));
+          }
           continue;
         }
       }
     }
+  }
+  } finally {
+    deadline?.clear();
   }
 
   if (!response) {

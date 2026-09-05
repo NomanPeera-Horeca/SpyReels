@@ -2,7 +2,6 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
-  buildAnalysisPrompt,
   buildCoachPrompt,
   buildHookVariationsPrompt,
   buildPlanGenerationPrompt,
@@ -10,10 +9,7 @@ import {
   buildStudioDateContext,
   COACH_SYSTEM_PROMPT,
 } from "@shared/studioHeit";
-import {
-  detectsClearCreativeFormat,
-  filterCoachClarificationQuestions,
-} from "@shared/coachAnalyze";
+import { analyzeCoachIdea } from "../studioAnalyze";
 import {
   buildProductionNotesJson,
   coachScriptIsComplete,
@@ -739,54 +735,12 @@ export const studioRouter = router({
     .input(z.object({ description: z.string().min(10).max(8000) }))
     .mutation(async ({ ctx, input }) => {
       const profile = await getCreatorCoachProfile(ctx.user.id);
-
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: withAiFormattingRules("You are a precise content strategist. Return only valid JSON."),
-          },
-          {
-            role: "user",
-            content: buildAnalysisPrompt(
-              input.description,
-              profile.niche,
-              profile.targetAudience,
-              profile.brandDescription
-            ),
-          },
-        ],
-        maxTokens: 1024,
-        response_format: { type: "json_object" },
+      return analyzeCoachIdea({
+        description: input.description,
+        niche: profile.niche,
+        targetAudience: profile.targetAudience,
+        brandDescription: profile.brandDescription,
       });
-
-      const raw = String(response.choices[0]?.message?.content ?? "{}");
-      const analysis = parseJsonFromLlm<Record<string, unknown>>(raw, {});
-      const fc = (analysis.factCheck as Record<string, unknown>) ?? {};
-
-      let confidence = typeof analysis.confidence === "number" ? analysis.confidence : 90;
-      let questions = Array.isArray(analysis.questions)
-        ? analysis.questions.map(String).slice(0, 2)
-        : [];
-
-      questions = filterCoachClarificationQuestions(input.description, questions);
-      if (detectsClearCreativeFormat(input.description) && questions.length === 0) {
-        confidence = Math.max(confidence, 88);
-      }
-
-      return {
-        confidence,
-        understood: String(analysis.understood ?? ""),
-        gaps: Array.isArray(analysis.gaps) ? analysis.gaps.map(String) : [],
-        questions,
-        factCheck: {
-          hasClaim: Boolean(fc.hasClaim),
-          status: String(fc.status ?? "unverified"),
-          claimSummary: fc.claimSummary ? String(fc.claimSummary) : null,
-          warning: fc.warning ? String(fc.warning) : null,
-          safeAngle: fc.safeAngle ? String(fc.safeAngle) : null,
-        },
-      };
     }),
 
   generate: protectedProcedure
