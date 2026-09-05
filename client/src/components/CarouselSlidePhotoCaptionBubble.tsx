@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import {
   CarouselEditableText,
   pickCarouselSlot,
@@ -47,9 +48,6 @@ export function CarouselSlidePhotoCaptionBubble({
         position: "relative",
         aspectRatio: ASPECT_RATIO_CSS[tokens.aspectRatio],
         backgroundColor: tokens.colors.muted,
-        backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
         borderRadius: tokens.radiusPx ?? 0,
         width: "100%",
         maxWidth: "22.5rem",
@@ -57,6 +55,9 @@ export function CarouselSlidePhotoCaptionBubble({
         overflow: "hidden",
       }}
     >
+      {imageUrl ? (
+        <CarouselEditableImage slotId="photo" src={imageUrl} fill />
+      ) : null}
       <div
         style={{
           position: "absolute",

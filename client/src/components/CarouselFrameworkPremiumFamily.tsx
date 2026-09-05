@@ -16,6 +16,7 @@ import {
   type FrameworkPremiumVariant,
 } from "@shared/carouselFrameworkPremiumDesignSystem";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselFrameworkPremiumFamilyProps = {
@@ -82,15 +83,6 @@ function bodyStyle(tokens: CarouselDesignTokens): CSSProperties {
     fontSize: DESIGN.typography.frameworkBody,
     lineHeight: 1.5,
     color: tokens.colors.muted,
-  };
-}
-
-function imageStyle(imageUrl: string): CSSProperties {
-  return {
-    backgroundImage: `url(${imageUrl})`,
-    backgroundPosition: "center",
-    backgroundSize: "cover",
-    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -602,24 +594,40 @@ function CoverDiagram({
           margin: "1.1rem 0 0.9rem",
         }}
       >
-        <span
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            width: "4.4rem",
-            height: "4.4rem",
-            marginLeft: "-2.2rem",
-            marginTop: "-2.2rem",
-            borderRadius: "999px",
-            border: `2px solid ${tokens.colors.accent}`,
-            background: photo
-              ? undefined
-              : wash(tokens.colors.accent, 0.12),
-            ...(photo ? imageStyle(photo) : {}),
-            boxShadow: `0 0 0 10px ${wash(tokens.colors.accent, 0.08)}`,
-          }}
-        />
+        {photo ? (
+          <CarouselEditableImage
+            slotId="photo"
+            src={photo}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: "4.4rem",
+              height: "4.4rem",
+              marginLeft: "-2.2rem",
+              marginTop: "-2.2rem",
+              borderRadius: "999px",
+              border: `2px solid ${tokens.colors.accent}`,
+              boxShadow: `0 0 0 10px ${wash(tokens.colors.accent, 0.08)}`,
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: "4.4rem",
+              height: "4.4rem",
+              marginLeft: "-2.2rem",
+              marginTop: "-2.2rem",
+              borderRadius: "999px",
+              border: `2px solid ${tokens.colors.accent}`,
+              background: wash(tokens.colors.accent, 0.12),
+              boxShadow: `0 0 0 10px ${wash(tokens.colors.accent, 0.08)}`,
+            }}
+          />
+        )}
         {count >= 2
           ? Array.from({ length: count }, (_, index) => {
           const angle = (-90 + (360 / count) * index) * (Math.PI / 180);
@@ -1715,11 +1723,12 @@ function ModelPlusExample({
         )}
       </div>
       {photo ? (
-        <div
+        <CarouselEditableImage
+          slotId="photo"
+          src={photo}
           style={{
             height: "6.4rem",
             borderRadius: DESIGN.radius.media,
-            ...imageStyle(photo),
           }}
         />
       ) : null}

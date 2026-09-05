@@ -34,8 +34,13 @@ describe("carousel text inspector architecture", () => {
     expect(css).toContain(
       '.cs .studio-slide-stage [data-carousel-slot-selected="true"]'
     );
+    expect(css).toContain(
+      '.cs .studio-slide-stage [data-carousel-image-selected="true"]'
+    );
     expect(css).not.toContain(".cs .export-stage [data-carousel-slot-selected");
     expect(css).not.toContain(".cs .social-slide-fill [data-carousel-slot-selected");
+    expect(css).not.toContain(".cs .export-stage [data-carousel-image-selected");
+    expect(css).not.toContain(".cs .social-slide-fill [data-carousel-image-selected");
     expect(css).toContain(".cs .editor-shell.has-inspector");
   });
 
@@ -67,7 +72,49 @@ describe("carousel text inspector architecture", () => {
 
   it("does not reserve the inspector when nothing is selected", () => {
     const app = read("CarouselStudioApp.tsx");
-    expect(app).toContain("textSelection ? \" has-inspector\"");
+    expect(app).toContain("textSelection || imageSelection ? \" has-inspector\"");
     expect(app).toContain("textSelection && currentSlideSpec");
+    expect(app).toContain("imageSelection && currentSlideSpec");
+    expect(app).toContain("CarouselImageInspector");
+    expect(app).not.toContain("imageEditsV2");
+  });
+
+  it("selects images by slot id and reuses the remake image URL map", () => {
+    const app = read("CarouselStudioApp.tsx");
+    const image = read("../CarouselEditableImage.tsx");
+    expect(image).toContain("data-carousel-image-slot-id");
+    expect(image).toContain("onSelectImage");
+    expect(app).toContain("carouselRemake.uploadSlideImage");
+    expect(app).toContain("carouselRemake.updateImageUrls");
+    expect(app).toContain("carouselRemake.updateImageFrame");
+    expect(app).not.toContain("carouselRemake.regenerateSlideImage");
+    expect(app).not.toContain("onRegenerate");
+    expect(app).toContain("replaceImageUrls");
+    expect(app).toContain("replaceImageFrames");
+    const inspector = read("CarouselImageInspector.tsx");
+    expect(inspector).toContain("onRegenerate?");
+    expect(inspector).toContain("Regenerate with AI");
+    const router = readFileSync(
+      join(here, "../../../../server/routers/carouselRemakeRouter.ts"),
+      "utf8"
+    );
+    expect(router).toContain("regenerateSlideImage:");
+  });
+
+  it("wraps image-bearing premium families with real image slots", () => {
+    const familyFiles = [
+      "../CarouselStoryPremiumFamily.tsx",
+      "../CarouselComparisonPremiumFamily.tsx",
+      "../CarouselFrameworkPremiumFamily.tsx",
+      "../CarouselRoadmapPremiumFamily.tsx",
+      "../CarouselBreakdownPremiumFamily.tsx",
+    ];
+    for (const file of familyFiles) {
+      const source = read(file);
+      expect(source).toContain("CarouselEditableImage");
+      expect(source).toContain('slotId="photo"');
+    }
+    const comparison = read("../CarouselComparisonPremiumFamily.tsx");
+    expect(comparison).toContain('slotId="photo_b"');
   });
 });

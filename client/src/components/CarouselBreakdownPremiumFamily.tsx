@@ -19,6 +19,7 @@ import {
   type CarouselBreakdownListicleFamilyProps,
 } from "@/components/CarouselBreakdownListicleFamily";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 type PremiumProps = CarouselBreakdownListicleFamilyProps & {
@@ -273,17 +274,14 @@ function EditorialCover({
         ) : null}
       </div>
       {withImage ? (
-        <div
-          aria-hidden
+        <CarouselEditableImage
+          slotId="photo"
+          src={imageUrl!}
           style={{
             position: "relative",
             zIndex: 1,
             margin: "1rem 0.95rem 1rem 0",
             borderRadius: DESIGN.radius.media,
-            overflow: "hidden",
-            backgroundImage: `url(${imageUrl})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
             boxShadow: `0 1rem 2.5rem ${wash(tokens.colors.foreground, 0.14)}`,
           }}
         >
@@ -291,6 +289,7 @@ function EditorialCover({
             style={{
               position: "absolute",
               inset: 0,
+              pointerEvents: "none",
               background: `linear-gradient(180deg, transparent 58%, ${wash(
                 tokens.colors.background,
                 0.28
@@ -306,9 +305,10 @@ function EditorialCover({
               height: "0.28rem",
               borderRadius: DESIGN.radius.pill,
               background: tokens.colors.accent,
+              pointerEvents: "none",
             }}
           />
-        </div>
+        </CarouselEditableImage>
       ) : null}
       <Handle handle={handle} tokens={tokens} />
     </div>
@@ -539,18 +539,15 @@ function PremiumSplit({
   );
 
   const media = (
-    <div
-      aria-hidden
+    <CarouselEditableImage
+      slotId="photo"
+      src={imageUrl!}
       style={{
         position: "relative",
         zIndex: 2,
         margin: imageFirst ? "1rem 0 1rem 1rem" : "1rem 1rem 1rem 0",
         borderRadius: DESIGN.radius.media,
-        backgroundImage: `url(${imageUrl})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
         boxShadow: `0 0.8rem 2rem ${wash(tokens.colors.foreground, 0.13)}`,
-        overflow: "hidden",
       }}
     >
       <div
@@ -559,9 +556,10 @@ function PremiumSplit({
           inset: 0,
           border: `1px solid ${wash(tokens.colors.accent, 0.34)}`,
           borderRadius: DESIGN.radius.media,
+          pointerEvents: "none",
         }}
       />
-    </div>
+    </CarouselEditableImage>
   );
 
   return (

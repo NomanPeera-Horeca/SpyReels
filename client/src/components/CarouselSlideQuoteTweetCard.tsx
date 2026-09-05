@@ -2,6 +2,7 @@ import type {
   CarouselDesignTokens,
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideQuoteTweetCardProps = {
@@ -88,20 +89,29 @@ export function CarouselSlideQuoteTweetCard({
           width: "100%",
         }}
       >
-        <div
-          style={{
-            width: "2.65rem",
-            height: "2.65rem",
-            borderRadius: "9999px",
-            flexShrink: 0,
-            backgroundColor: tokens.colors.muted,
-            backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            overflow: "hidden",
-          }}
-          aria-hidden={!imageUrl}
-        />
+        {imageUrl ? (
+          <CarouselEditableImage
+            slotId="avatar"
+            src={imageUrl}
+            style={{
+              width: "2.65rem",
+              height: "2.65rem",
+              borderRadius: "9999px",
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "2.65rem",
+              height: "2.65rem",
+              borderRadius: "9999px",
+              flexShrink: 0,
+              backgroundColor: tokens.colors.muted,
+            }}
+            aria-hidden
+          />
+        )}
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "0.1rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.28rem" }}>
             {editable || nameOverride ? (
