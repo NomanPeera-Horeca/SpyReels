@@ -41,6 +41,8 @@ jobs:
         run: pnpm vitest run shared/publicRouteOwnership.test.ts server/_core/publicWebPilotProxy.test.ts
 
       - name: Typecheck existing SpyReels integration
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm exec tsc --noEmit
 
       - name: Install public web dependencies
