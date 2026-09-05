@@ -1,0 +1,90 @@
+name: Public Web Pilot
+
+on:
+  push:
+    branches:
+      - feature/public-web-architecture-v2
+    paths:
+      - "public-web/**"
+      - "shared/publicRouteOwnership.ts"
+      - "shared/publicRouteOwnership.test.ts"
+      - ".github/workflows/public-web-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: public-web/package.json
+
+      - name: Install public web dependencies
+        working-directory: public-web
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Typecheck public web
+        working-directory: public-web
+        run: pnpm check
+
+      - name: Build public web
+        working-directory: public-web
+        run: pnpm build
+
+      - name: Start public web
+        working-directory: public-web
+        run: |
+          pnpm start > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health endpoint
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: Validate raw Viral Reel Finder HTML
+        run: |
+          curl --fail --silent http://127.0.0.1:3100/features/viral-reel-finder > /tmp/viral-reel-finder.html
+
+          grep -q "Any Instagram account" /tmp/viral-reel-finder.html
+          grep -q "What is an Instagram reel spy tool" /tmp/viral-reel-finder.html
+          grep -q "How the Instagram reel finder works" /tmp/viral-reel-finder.html
+          grep -q "What you get back from every search" /tmp/viral-reel-finder.html
+          grep -q "Reel finder and reel spy tool questions people actually ask" /tmp/viral-reel-finder.html
+          grep -q 'href="/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
+          grep -q 'href="/free-tools/viral-hooks"' /tmp/viral-reel-finder.html
+          grep -q 'rel="canonical" href="https://spyreels.ai/features/viral-reel-finder"' /tmp/viral-reel-finder.html
+          grep -q 'application/ld+json' /tmp/viral-reel-finder.html
+
+          if grep -q "seo-crawler-snapshot" /tmp/viral-reel-finder.html; then
+            echo "Legacy crawler snapshot must not exist in the Next.js pilot HTML."
+            exit 1
+          fi
+
+          echo "Raw HTML pilot checks passed."
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
