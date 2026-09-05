@@ -60,7 +60,7 @@ const MAX_SEED_NICHES = 5;
 const MAX_SIMILAR_CREATORS = 8;
 const MAX_REELS_PER_CREATOR = 2;
 const MAX_SIMILAR_REELS = 12;
-const MAX_REELS_READ_PER_CREATOR = 8;
+const MAX_REELS_READ_PER_CREATOR = 30;
 
 function normalizeHandle(value: string | null | undefined): string | null {
   const normalized = (value || "").replace(/^@/, "").trim().toLowerCase();
@@ -189,9 +189,35 @@ async function resolveSeedNicheSlugs(args: {
   const db = await getDb();
   if (!db) return orderedUnique(args.nicheSlugs, MAX_SEED_NICHES);
 
-  const slugs: string[] = orderedUnique(args.nicheSlugs, MAX_SEED_NICHES);
-  if (slugs.length >= MAX_SEED_NICHES) return slugs;
+  const handleSlugs: string[] = [];
+  const handles = orderedUnique(
+    args.seedHandles.map((handle) => normalizeHandle(handle)),
+    20
+  );
+  if (handles.length > 0) {
+    const rows = await db
+      .select({
+        slug: niches.slug,
+        isPrimary: featuredAccountNiches.isPrimary,
+        sortOrder: niches.sortOrder,
+      })
+      .from(featuredAccounts)
+      .innerJoin(
+        featuredAccountNiches,
+        eq(featuredAccountNiches.accountId, featuredAccounts.id)
+      )
+      .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
+      .where(
+        and(
+          inArray(featuredAccounts.handle, handles),
+          eq(featuredAccounts.isActive, true)
+        )
+      )
+      .orderBy(desc(featuredAccountNiches.isPrimary), asc(niches.sortOrder));
+    handleSlugs.push(...rows.map((row) => row.slug));
+  }
 
+  const nameSlugs: string[] = [];
   const nicheNames = orderedUnique(args.nicheNames, MAX_SEED_NICHES);
   if (nicheNames.length > 0) {
     const rows = await db
@@ -199,39 +225,16 @@ async function resolveSeedNicheSlugs(args: {
       .from(niches)
       .where(inArray(niches.name, nicheNames))
       .orderBy(asc(niches.sortOrder));
-    slugs.push(...rows.map((row) => row.slug));
+    nameSlugs.push(...rows.map((row) => row.slug));
   }
 
-  if (slugs.length < MAX_SEED_NICHES) {
-    const handles = orderedUnique(
-      args.seedHandles.map((handle) => normalizeHandle(handle)),
-      20
-    );
-    if (handles.length > 0) {
-      const rows = await db
-        .select({
-          slug: niches.slug,
-          isPrimary: featuredAccountNiches.isPrimary,
-          sortOrder: niches.sortOrder,
-        })
-        .from(featuredAccounts)
-        .innerJoin(
-          featuredAccountNiches,
-          eq(featuredAccountNiches.accountId, featuredAccounts.id)
-        )
-        .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
-        .where(
-          and(
-            inArray(featuredAccounts.handle, handles),
-            eq(featuredAccounts.isActive, true)
-          )
-        )
-        .orderBy(desc(featuredAccountNiches.isPrimary), asc(niches.sortOrder));
-      slugs.push(...rows.map((row) => row.slug));
-    }
-  }
-
-  return orderedUnique(slugs, MAX_SEED_NICHES);
+  // Explicit creator behavior is strongest. The caller orders cached scrape
+  // classifications ahead of older onboarding niche preferences. Radar names
+  // are the final fallback when neither produces a catalog slug.
+  return orderedUnique(
+    [...handleSlugs, ...args.nicheSlugs, ...nameSlugs],
+    MAX_SEED_NICHES
+  );
 }
 
 async function loadRelatedCreators(args: {
