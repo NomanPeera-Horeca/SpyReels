@@ -268,6 +268,7 @@ function adaptPublicMetadata(args: {
     }),
     relevanceHint: args.relevanceHint,
     contentPillar: classification.primaryPillar,
+    pillarConfidence: classification.confidence,
     relevanceLabel: args.relevanceLabel,
     relevanceReason: args.relevanceReason,
     hook,

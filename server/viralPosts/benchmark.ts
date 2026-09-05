@@ -253,16 +253,20 @@ function candidateRowToAdapted(
   candidate: ViralPostCandidate,
   extras: {
     contentPillar: string;
+    pillarConfidence?: number | null;
     relevanceLabel: string;
     relevanceReason: string;
   }
 ): AdaptedCandidate {
-  const classification = classifyCandidatePillars({
-    caption: candidate.caption,
-    hashtags: candidate.hashtags ?? [],
-    activePillars: [extras.contentPillar],
-    fallbackNiche: extras.contentPillar,
-  });
+  const pillarConfidence =
+    extras.pillarConfidence != null && Number.isFinite(extras.pillarConfidence)
+      ? extras.pillarConfidence
+      : classifyCandidatePillars({
+          caption: candidate.caption,
+          hashtags: candidate.hashtags ?? [],
+          activePillars: [extras.contentPillar],
+          fallbackNiche: extras.contentPillar,
+        }).confidence;
   const platform =
     candidate.platform === "tiktok" || candidate.platform === "youtube"
       ? candidate.platform
@@ -302,12 +306,13 @@ function candidateRowToAdapted(
         caption: candidate.caption,
         hook,
         hashtags: candidate.hashtags ?? [],
-        contentPillar: classification.primaryPillar || extras.contentPillar,
+        contentPillar: extras.contentPillar,
       },
-      pillarConfidence: classification.confidence,
-      activePillar: classification.primaryPillar || extras.contentPillar,
+      pillarConfidence,
+      activePillar: extras.contentPillar,
     }),
-    contentPillar: classification.primaryPillar || extras.contentPillar,
+    contentPillar: extras.contentPillar,
+    pillarConfidence,
     relevanceLabel: extras.relevanceLabel,
     relevanceReason: extras.relevanceReason,
     hook,
@@ -353,16 +358,20 @@ function todayScoreInput(
   candidate: AdaptedCandidate,
   personalization?: ViralPersonalizationSignals
 ): ScoredCandidateInput {
-  const classification = classifyCandidatePillars({
-    caption: candidate.caption,
-    hook: candidate.hook,
-    hashtags: candidate.hashtags,
-    activePillars: candidate.contentPillar ? [candidate.contentPillar] : undefined,
-    fallbackNiche: candidate.contentPillar,
-  });
+  const storedConfidence = candidate.pillarConfidence;
+  const pillarConfidence =
+    storedConfidence != null && Number.isFinite(storedConfidence)
+      ? storedConfidence
+      : classifyCandidatePillars({
+          caption: candidate.caption,
+          hook: candidate.hook,
+          hashtags: candidate.hashtags,
+          activePillars: candidate.contentPillar ? [candidate.contentPillar] : undefined,
+          fallbackNiche: candidate.contentPillar,
+        }).confidence;
   const baseRelevance = relevanceScoreForCandidate({
     candidate,
-    pillarConfidence: classification.confidence,
+    pillarConfidence,
     activePillar: candidate.contentPillar,
   });
   const personalBoost = personalization
@@ -451,6 +460,7 @@ export async function benchmarkViralTodayPicks(args: {
   const adapted: AdaptedCandidate[] = poolRows.map((poolRow) =>
     candidateRowToAdapted(poolRow.candidate, {
       contentPillar: poolRow.primaryPillar,
+      pillarConfidence: poolRow.pillarConfidence,
       relevanceLabel: `Matches ${poolRow.primaryPillar}`,
       relevanceReason:
         poolRow.pillarReason ||

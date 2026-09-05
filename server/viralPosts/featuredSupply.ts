@@ -199,6 +199,7 @@ function adaptFeaturedRow(args: {
     trendStatus,
     relevanceHint: related ? 72 : 48,
     contentPillar: pillar,
+    pillarConfidence: classification.confidence,
     relevanceLabel: related ? `Related to ${pillar}` : `Transferable format for ${pillar}`,
     relevanceReason: related
       ? `Featured catalog match: ${classification.reason}`

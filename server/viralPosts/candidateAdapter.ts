@@ -34,6 +34,8 @@ export type AdaptedCandidate = {
   trendStatus: ViralTrendStatus;
   relevanceHint: number;
   contentPillar: string | null;
+  /** Stored pool/personal classification confidence when already known. */
+  pillarConfidence?: number | null;
   relevanceLabel: string;
   relevanceReason: string;
   hook: string | null;
