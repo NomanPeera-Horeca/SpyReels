@@ -6,14 +6,21 @@ export const VIRAL_POOL_DEFAULTS = {
   refreshSkipProfileDrilling: true,
   /** Calls intentionally reserved from the 35-call Instagram pool budget for selective creator drilling. */
   instagramPoolDrillReserveCalls: 18,
-  /** Maximum promising hashtag-discovered creators considered for deeper history inspection. */
-  instagramPoolMaxCreatorsToDrill: 6,
-  /** Six-month creator history used by the existing Instagram scraper. */
-  instagramPoolDrillTimeframeDays: 180,
-  /** Bound per-creator Reel reads so one account cannot consume the whole refresh by itself. */
-  instagramPoolDrillMaxReels: 60,
-  /** Keep only the strongest strict viral candidates from each drilled creator. */
-  instagramPoolDrillKeepPerCreator: 12,
+  /**
+   * Breadth-first first pass: consider more hashtag-discovered creators instead
+   * of spending the whole drill reserve on a few deep accounts.
+   */
+  instagramPoolMaxCreatorsToDrill: 8,
+  /** Align creator history with the same 90-day recommendation reservoir used by Today. */
+  instagramPoolDrillTimeframeDays: 90,
+  /**
+   * First-pass Reel cap per creator. One recent slice is enough to establish
+   * whether the account produces usable viral supply; deeper history can be a
+   * later targeted optimization if benchmarks show it is needed.
+   */
+  instagramPoolDrillMaxReels: 12,
+  /** Keep a small set of strong rows per creator; Today diversity will narrow further. */
+  instagramPoolDrillKeepPerCreator: 6,
   /** Stop early once this many scored candidates exist. */
   refreshEarlyStopCandidates: 40,
   /** Per-pool daily ScrapeCreators budget. */
