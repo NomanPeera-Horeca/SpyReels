@@ -3,6 +3,12 @@ import {
   discoverInstagramPoolCandidates,
   type InstagramPoolDiscoveryResult,
 } from "../server/viralPosts/instagramPoolDiscovery";
+import {
+  SEMANTIC_POOL_MODEL,
+  type SemanticPoolRejected,
+  type SemanticPoolReroute,
+} from "../server/viralPosts/semanticPoolRelevance";
+import type { AdaptedCandidate } from "../server/viralPosts/candidateAdapter";
 
 function argValue(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -15,12 +21,105 @@ function argValue(name: string): string | null {
 function short(value: string | null | undefined, max = 100): string {
   const text = (value || "").replace(/\s+/g, " ").trim();
   if (!text) return "(no caption)";
-  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+  return text.length <= max ? text : `${text.slice(0, max - 1)}...`;
+}
+
+function printSemanticRow(
+  index: number,
+  candidate: AdaptedCandidate,
+  extras: {
+    domainRelevant?: boolean | null;
+    primaryPillar?: string | null;
+    secondaryPillar?: string | null;
+    confidence?: number | null;
+    reason?: string | null;
+  }
+): void {
+  const domain =
+    extras.domainRelevant === true
+      ? "yes"
+      : extras.domainRelevant === false
+        ? "no"
+        : "unknown";
+  const confidence =
+    extras.confidence == null ? "n/a" : extras.confidence.toFixed(2);
+  console.log(
+    `${index + 1}. ${candidate.creatorHandle || candidate.creatorName} | sourceId=${candidate.sourceId}`
+  );
+  console.log(`   caption/hook: ${short(candidate.hook || candidate.caption, 160)}`);
+  console.log(`   domain relevant: ${domain}`);
+  console.log(`   primary pillar: ${extras.primaryPillar || "(none)"}`);
+  console.log(`   secondary pillar: ${extras.secondaryPillar || "(none)"}`);
+  console.log(`   confidence: ${confidence}`);
+  console.log(`   reason: ${short(extras.reason, 180)}`);
+  console.log(
+    `   views=${candidate.views ?? 0} | followers=${candidate.creatorFollowers ?? 0} | reach=${(candidate.reachMultiplier ?? 0).toFixed(2)}x`
+  );
+  console.log(`   ${candidate.sourceUrl}`);
+}
+
+function printRejected(rows: SemanticPoolRejected[]): void {
+  if (rows.length === 0) {
+    console.log("None.");
+    return;
+  }
+  rows.forEach((row, index) => {
+    printSemanticRow(index, row.candidate, {
+      domainRelevant: row.verdict?.domainRelevant ?? null,
+      primaryPillar: row.verdict?.primaryPillar ?? null,
+      secondaryPillar: row.verdict?.secondaryPillar ?? null,
+      confidence: row.verdict?.confidence ?? null,
+      reason: row.verdict?.reason || row.reason,
+    });
+  });
+}
+
+function printRerouted(rows: SemanticPoolReroute[]): void {
+  if (rows.length === 0) {
+    console.log("None.");
+    return;
+  }
+  rows.forEach((row, index) => {
+    printSemanticRow(index, row.candidate, {
+      domainRelevant: row.verdict.domainRelevant,
+      primaryPillar: row.verdict.primaryPillar,
+      secondaryPillar: row.verdict.secondaryPillar,
+      confidence: row.verdict.confidence,
+      reason: `${row.verdict.reason} -> ${row.targetPillar}`,
+    });
+  });
+}
+
+function printAdmitted(rows: AdaptedCandidate[]): void {
+  if (rows.length === 0) {
+    console.log("None.");
+    return;
+  }
+  rows.forEach((candidate, index) => {
+    const raw = candidate.rawProviderPayload || {};
+    printSemanticRow(index, candidate, {
+      domainRelevant: raw.semanticDomainRelevant === true,
+      primaryPillar:
+        (typeof raw.semanticPrimaryPillar === "string" && raw.semanticPrimaryPillar) ||
+        candidate.contentPillar,
+      secondaryPillar:
+        typeof raw.semanticSecondaryPillar === "string"
+          ? raw.semanticSecondaryPillar
+          : null,
+      confidence:
+        typeof raw.semanticPillarConfidence === "number"
+          ? raw.semanticPillarConfidence
+          : candidate.pillarConfidence,
+      reason:
+        (typeof raw.semanticPillarReason === "string" && raw.semanticPillarReason) ||
+        candidate.relevanceReason,
+    });
+  });
 }
 
 function printResult(result: InstagramPoolDiscoveryResult): void {
   console.log("\n============================================================");
-  console.log("SPYREELS — INSTAGRAM RETRIEVAL DEPTH BENCHMARK");
+  console.log("SPYREELS INSTAGRAM RETRIEVAL DEPTH BENCHMARK");
   console.log("============================================================");
   console.log(`Description: ${result.description}`);
   console.log(`Routed niche: ${result.routedNiche}`);
@@ -37,6 +136,8 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
   console.log(`Selective drill calls: ${result.drillScCalls}`);
   console.log(`TOTAL SC CALLS: ${result.totalScCalls}`);
   console.log(`Estimated cost: $${result.costEstimateUsd.toFixed(4)}`);
+  console.log(`Semantic model: ${SEMANTIC_POOL_MODEL}`);
+  console.log(`Semantic Haiku calls: ${result.semanticHaikuCalls}`);
 
   console.log("\nDISCOVERY DEPTH");
   console.log("------------------------------------------------------------");
@@ -47,9 +148,10 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
   console.log(`Creators selected for drilling: ${result.selectedCreators.length}`);
   console.log(`Creators actually drilled before fuse: ${result.drilledCreatorHandles.length}`);
   console.log(`90-day reels read from drilled creators: ${result.drilledReelsRead}`);
-  console.log(`Strict viral candidates unlocked by drilling: ${result.drilledViralCandidates}`);
-  console.log(`Rejected by direct-pillar pool admission: ${result.poolAdmissionRejected}`);
-  console.log(`Final pool-admitted candidate universe: ${result.adapted.length}`);
+  console.log(`STRICT VIRAL CANDIDATES: ${result.drilledViralCandidates}`);
+  console.log(`SEMANTICALLY REJECTED: ${result.semanticRejected}`);
+  console.log(`REROUTED TO SIBLING PILLARS: ${result.semanticRerouted}`);
+  console.log(`CURRENT-POOL ADMITTED: ${result.adapted.length}`);
 
   console.log("\nCREATORS SELECTED FOR DRILLING");
   console.log("------------------------------------------------------------");
@@ -63,29 +165,42 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
     }
   });
 
-  console.log("\nPOOL-ADMITTED CREATOR-DRILL CANDIDATES");
+  console.log("\nSTRICT VIRAL CANDIDATES");
   console.log("------------------------------------------------------------");
-  const drilled = result.adapted
-    .filter((candidate) => candidate.rawProviderPayload?.retrievalDepth === "creator_drill")
-    .sort((a, b) => {
-      const reachDiff = (b.reachMultiplier ?? 0) - (a.reachMultiplier ?? 0);
-      if (reachDiff !== 0) return reachDiff;
-      return (b.views ?? 0) - (a.views ?? 0);
-    })
-    .slice(0, 20);
-
-  if (drilled.length === 0) {
-    console.log("No creator-drill candidates passed direct-pillar pool admission.");
+  const strictViral = [
+    ...result.adapted,
+    ...result.reroutedCandidates.map((row) => row.candidate),
+    ...result.semanticRejectedCandidates.map((row) => row.candidate),
+  ];
+  const seen = new Set<string>();
+  const uniqueStrict = strictViral.filter((candidate) => {
+    if (seen.has(candidate.sourceId)) return false;
+    seen.add(candidate.sourceId);
+    return true;
+  });
+  if (uniqueStrict.length === 0) {
+    console.log("None.");
   } else {
-    drilled.forEach((candidate, index) => {
-      const confidence = Number(candidate.pillarConfidence ?? 0);
+    uniqueStrict.forEach((candidate, index) => {
       console.log(
-        `${index + 1}. ${candidate.creatorHandle || candidate.creatorName} | views=${candidate.views ?? 0} | followers=${candidate.creatorFollowers ?? 0} | reach=${(candidate.reachMultiplier ?? 0).toFixed(2)}x | pillarConf=${confidence.toFixed(2)} | trend=${candidate.trendStatus}`
+        `${index + 1}. ${candidate.creatorHandle || candidate.creatorName} | sourceId=${candidate.sourceId} | views=${candidate.views ?? 0} | followers=${candidate.creatorFollowers ?? 0} | reach=${(candidate.reachMultiplier ?? 0).toFixed(2)}x`
       );
-      console.log(`   ${short(candidate.hook || candidate.caption)}`);
+      console.log(`   ${short(candidate.hook || candidate.caption, 160)}`);
       console.log(`   ${candidate.sourceUrl}`);
     });
   }
+
+  console.log("\nSEMANTICALLY REJECTED");
+  console.log("------------------------------------------------------------");
+  printRejected(result.semanticRejectedCandidates);
+
+  console.log("\nREROUTED TO SIBLING PILLARS");
+  console.log("------------------------------------------------------------");
+  printRerouted(result.reroutedCandidates);
+
+  console.log("\nCURRENT-POOL ADMITTED");
+  console.log("------------------------------------------------------------");
+  printAdmitted(result.adapted);
   console.log("============================================================\n");
 }
 

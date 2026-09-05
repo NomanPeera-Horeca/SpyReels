@@ -20,6 +20,12 @@ import {
 } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS, VIRAL_POOL_DEFAULTS } from "./constants";
 import { classifyCandidateForPoolAdmission } from "./poolAdmission";
+import {
+  classifySemanticPoolRelevance,
+  routeSemanticPoolCandidates,
+  type SemanticPoolRejected,
+  type SemanticPoolReroute,
+} from "./semanticPoolRelevance";
 
 export type InstagramHashtagCreatorSeed = {
   handle: string;
@@ -71,6 +77,11 @@ export type InstagramPoolDiscoveryResult = {
   drilledReelsRead: number;
   drilledViralCandidates: number;
   poolAdmissionRejected: number;
+  semanticHaikuCalls: number;
+  semanticRejected: number;
+  semanticRerouted: number;
+  reroutedCandidates: SemanticPoolReroute[];
+  semanticRejectedCandidates: SemanticPoolRejected[];
 };
 
 const RESTAURANT_PILLARS = new Set<string>(DEFAULT_CONTENT_PILLARS);
@@ -482,6 +493,121 @@ function dedupeDiscoveryReels(
   return [...byShortcode.values()];
 }
 
+export type InstagramPoolAdmissionResult = {
+  adapted: AdaptedCandidate[];
+  reroutedCandidates: SemanticPoolReroute[];
+  semanticRejectedCandidates: SemanticPoolRejected[];
+  semanticHaikuCalls: number;
+  semanticRejected: number;
+  semanticRerouted: number;
+  poolAdmissionRejected: number;
+};
+
+function emptySemanticAdmission(
+  adapted: AdaptedCandidate[],
+  poolAdmissionRejected: number
+): InstagramPoolAdmissionResult {
+  return {
+    adapted,
+    reroutedCandidates: [],
+    semanticRejectedCandidates: [],
+    semanticHaikuCalls: 0,
+    semanticRejected: 0,
+    semanticRerouted: 0,
+    poolAdmissionRejected,
+  };
+}
+
+/**
+ * Final restaurant-family gate after strict scoreReel() + adapt.
+ * Semantic classification uses Haiku only. It does not call ScrapeCreators.
+ * Fail closed: if the judge is unavailable, do not fall back to keywords.
+ */
+export async function applyInstagramPoolAdmission(args: {
+  niche: string;
+  poolNiche: string;
+  pillar: string;
+  candidates: AdaptedCandidate[];
+}): Promise<InstagramPoolAdmissionResult> {
+  if (RESTAURANT_PILLARS.has(args.pillar)) {
+    try {
+      const classified = await classifySemanticPoolRelevance({
+        niche: args.niche,
+        candidates: args.candidates,
+      });
+      const routed = routeSemanticPoolCandidates({
+        sourcePillar: args.pillar,
+        candidates: args.candidates,
+        verdicts: classified.verdicts,
+      });
+      return {
+        adapted: routed.currentPool,
+        reroutedCandidates: routed.rerouted,
+        semanticRejectedCandidates: routed.rejected,
+        semanticHaikuCalls: classified.haikuCalls,
+        semanticRejected: routed.rejected.length,
+        semanticRerouted: routed.rerouted.length,
+        poolAdmissionRejected: 0,
+      };
+    } catch (err) {
+      console.error("[viralPosts.pool] instagram_semantic_classification_failed", {
+        pillar: args.pillar,
+        niche: args.niche,
+        candidateCount: args.candidates.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return {
+        adapted: [],
+        reroutedCandidates: [],
+        semanticRejectedCandidates: args.candidates.map((candidate) => ({
+          candidate,
+          verdict: null,
+          reason: "missing_verdict",
+        })),
+        semanticHaikuCalls: 0,
+        semanticRejected: args.candidates.length,
+        semanticRerouted: 0,
+        poolAdmissionRejected: 0,
+      };
+    }
+  }
+
+  const adapted: AdaptedCandidate[] = [];
+  let poolAdmissionRejected = 0;
+  for (const candidate of args.candidates) {
+    const decision = classifyCandidateForPoolAdmission({
+      pool: {
+        platform: "instagram",
+        niche: args.poolNiche,
+        pillar: args.pillar,
+      },
+      candidate,
+    });
+    if (!decision.admit) {
+      poolAdmissionRejected++;
+      console.info("[viralPosts.pool] instagram_pool_admission_rejected", {
+        pillar: args.pillar,
+        sourceId: candidate.sourceId,
+        creatorHandle: candidate.creatorHandle,
+        confidence: decision.classification.confidence,
+        reason: decision.classification.reason,
+      });
+      continue;
+    }
+    adapted.push({
+      ...candidate,
+      contentPillar: decision.classification.primaryPillar,
+      pillarConfidence: decision.classification.confidence,
+      rawProviderPayload: {
+        ...candidate.rawProviderPayload,
+        poolAdmissionConfidence: decision.classification.confidence,
+        poolAdmissionReason: decision.classification.reason,
+      },
+    });
+  }
+  return emptySemanticAdmission(adapted, poolAdmissionRejected);
+}
+
 /**
  * Deep Instagram retrieval for one Viral Posts pool without increasing the
  * existing provider call ceiling. The shared discovery pipeline is first used
@@ -662,43 +788,17 @@ export async function discoverInstagramPoolCandidates(args: {
     })
   );
 
-  const adapted: AdaptedCandidate[] = [];
-  let poolAdmissionRejected = 0;
-  for (const candidate of adaptedBeforeAdmission) {
-    const decision = classifyCandidateForPoolAdmission({
-      pool: {
-        platform: "instagram",
-        niche: args.niche,
-        pillar: args.pillar,
-      },
-      candidate,
-    });
-    if (!decision.admit) {
-      poolAdmissionRejected++;
-      console.info("[viralPosts.pool] instagram_pool_admission_rejected", {
-        pillar: args.pillar,
-        sourceId: candidate.sourceId,
-        creatorHandle: candidate.creatorHandle,
-        confidence: decision.classification.confidence,
-        reason: decision.classification.reason,
-      });
-      continue;
-    }
-    adapted.push({
-      ...candidate,
-      contentPillar: decision.classification.primaryPillar,
-      pillarConfidence: decision.classification.confidence,
-      rawProviderPayload: {
-        ...candidate.rawProviderPayload,
-        poolAdmissionConfidence: decision.classification.confidence,
-        poolAdmissionReason: decision.classification.reason,
-      },
-    });
-  }
+  const admission = await applyInstagramPoolAdmission({
+    niche: routeProbe.routedNiche || args.niche,
+    poolNiche: args.niche,
+    pillar: args.pillar,
+    candidates: adaptedBeforeAdmission,
+  });
 
   console.info("[viralPosts.pool] instagram_retrieval_depth", {
     pillar: args.pillar,
     niche: args.niche,
+    routedNiche: routeProbe.routedNiche,
     hashtags: routeProbe.hashtagsUsed,
     hashtagFailures: [...hashtagFailures],
     routeProbeScCalls: routeProbe.scCallCount,
@@ -718,12 +818,16 @@ export async function discoverInstagramPoolCandidates(args: {
     drilledCreators: drilledCreatorHandles,
     drilledReelsRead,
     drilledViralCandidates: drilled.length,
-    poolAdmissionRejected,
-    finalUniqueCandidates: adapted.length,
+    semanticHaikuCalls: admission.semanticHaikuCalls,
+    semanticRejected: admission.semanticRejected,
+    semanticRerouted: admission.semanticRerouted,
+    poolAdmissionRejected: admission.poolAdmissionRejected,
+    currentPoolAdmitted: admission.adapted.length,
+    finalUniqueCandidates: admission.adapted.length,
   });
 
   return {
-    adapted,
+    adapted: admission.adapted,
     description,
     routedNiche: routeProbe.routedNiche,
     hashtagsUsed: routeProbe.hashtagsUsed,
@@ -742,6 +846,11 @@ export async function discoverInstagramPoolCandidates(args: {
     drilledCreatorHandles,
     drilledReelsRead,
     drilledViralCandidates: drilled.length,
-    poolAdmissionRejected,
+    poolAdmissionRejected: admission.poolAdmissionRejected,
+    semanticHaikuCalls: admission.semanticHaikuCalls,
+    semanticRejected: admission.semanticRejected,
+    semanticRerouted: admission.semanticRerouted,
+    reroutedCandidates: admission.reroutedCandidates,
+    semanticRejectedCandidates: admission.semanticRejectedCandidates,
   };
 }

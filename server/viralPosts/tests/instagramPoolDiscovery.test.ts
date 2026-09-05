@@ -1,11 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DiscoveryResult } from "../../discovery/pipeline";
+import type { AdaptedCandidate } from "../candidateAdapter";
 import {
+  applyInstagramPoolAdmission,
   buildInstagramPoolDiscoveryDescription,
   instagramCreatorSeedTopicSignal,
   selectInstagramCreatorsForDrilling,
   type InstagramHashtagCreatorSeed,
 } from "../instagramPoolDiscovery";
+import {
+  routeSemanticPoolCandidates,
+  type SemanticPoolVerdict,
+} from "../semanticPoolRelevance";
+
+const mockClassifySemantic = vi.hoisted(() => vi.fn());
+
+vi.mock("../semanticPoolRelevance", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../semanticPoolRelevance")>();
+  return {
+    ...actual,
+    classifySemanticPoolRelevance: (...args: unknown[]) =>
+      mockClassifySemantic(...args),
+  };
+});
 
 function reel(args: {
   shortcode: string;
@@ -160,5 +177,260 @@ describe("Instagram Viral pool selective drilling", () => {
 
     expect(restaurant).toBeGreaterThan(generic);
     expect(generic).toBe(0);
+  });
+});
+
+function adapted(args: {
+  sourceId: string;
+  caption: string;
+  handle?: string;
+}): AdaptedCandidate {
+  return {
+    platform: "instagram",
+    sourceId: args.sourceId,
+    sourceUrl: `https://www.instagram.com/reel/${args.sourceId}/`,
+    creatorId: args.handle ?? "creator",
+    creatorName: args.handle ?? "Creator",
+    creatorHandle: `@${args.handle ?? "creator"}`,
+    creatorAvatarUrl: null,
+    creatorFollowers: 10_000,
+    thumbnailUrl: null,
+    videoUrl: null,
+    caption: args.caption,
+    transcript: null,
+    hashtags: [],
+    publishedAt: new Date("2026-09-01T00:00:00.000Z"),
+    views: 100_000,
+    likes: 5_000,
+    comments: 100,
+    shares: null,
+    saves: null,
+    reachMultiplier: 10,
+    engagementRate: 0.05,
+    viewsPerHour: 1_000,
+    trendStatus: "proven-format",
+    relevanceHint: 50,
+    contentPillar: null,
+    relevanceLabel: "Direct",
+    relevanceReason: "",
+    hook: args.caption,
+    format: "talking-head",
+    hashtagKey: null,
+    rawProviderPayload: { source: "instagram_pool_discovery" },
+  };
+}
+
+function verdict(
+  args: Partial<SemanticPoolVerdict> & { sourceId: string }
+): SemanticPoolVerdict {
+  return {
+    sourceId: args.sourceId,
+    domainRelevant: args.domainRelevant ?? true,
+    primaryPillar: args.primaryPillar ?? "restaurant operations",
+    secondaryPillar: args.secondaryPillar ?? null,
+    confidence: args.confidence ?? 0.9,
+    reason: args.reason ?? "Strong semantic fit",
+  };
+}
+
+describe("Instagram semantic pool admission wiring", () => {
+  beforeEach(() => {
+    mockClassifySemantic.mockReset();
+  });
+
+  it("rejects a recipe tutorial from restaurant operations", async () => {
+    const recipe = adapted({
+      sourceId: "pico",
+      caption: "Pico de Gallo in under 20 seconds",
+      handle: "the_latin_foodie",
+    });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [
+        verdict({
+          sourceId: "pico",
+          domainRelevant: false,
+          primaryPillar: null,
+          reason: "Recipe tutorial, not restaurant operator content",
+        }),
+      ],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [recipe],
+    });
+
+    expect(result.adapted).toHaveLength(0);
+    expect(result.semanticRejected).toBe(1);
+    expect(result.semanticRerouted).toBe(0);
+    expect(result.semanticHaikuCalls).toBe(1);
+    expect(result.semanticRejectedCandidates[0]?.reason).toBe("off_domain");
+  });
+
+  it("reroutes a QSR opportunity to restaurant profitability", async () => {
+    const qsr = adapted({
+      sourceId: "qsr",
+      caption: "India's next big QSR opportunity might be hiding in plain sight",
+      handle: "all_about_restaurants",
+    });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [
+        verdict({
+          sourceId: "qsr",
+          primaryPillar: "restaurant profitability",
+          reason: "Restaurant market opportunity and economics",
+        }),
+      ],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [qsr],
+    });
+
+    expect(result.adapted).toHaveLength(0);
+    expect(result.semanticRerouted).toBe(1);
+    expect(result.reroutedCandidates[0]?.targetPillar).toBe(
+      "restaurant profitability"
+    );
+    expect(result.reroutedCandidates[0]?.candidate.sourceId).toBe("qsr");
+    expect(result.reroutedCandidates[0]?.candidate.contentPillar).toBe(
+      "restaurant profitability"
+    );
+  });
+
+  it("keeps a real staff training Reel in restaurant operations", async () => {
+    const ops = adapted({
+      sourceId: "sop",
+      caption: "How we train restaurant staff before every shift",
+      handle: "ops_owner",
+    });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [verdict({ sourceId: "sop" })],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [ops],
+    });
+
+    expect(result.adapted).toHaveLength(1);
+    expect(result.adapted[0]?.contentPillar).toBe("restaurant operations");
+    expect(result.semanticRerouted).toBe(0);
+    expect(result.semanticRejected).toBe(0);
+  });
+
+  it("rejects generic unrelated content instead of keyword matching", async () => {
+    const promo = adapted({
+      sourceId: "uni",
+      caption: "University hospitality promo",
+      handle: "vemosa_skills",
+    });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [
+        verdict({
+          sourceId: "uni",
+          domainRelevant: false,
+          primaryPillar: null,
+          reason: "University promo, not an operator lesson",
+        }),
+      ],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [promo],
+    });
+
+    expect(result.adapted).toHaveLength(0);
+    expect(result.semanticRejected).toBe(1);
+  });
+
+  it("fails closed when semantic classification throws and does not keyword-admit", async () => {
+    const recipe = adapted({
+      sourceId: "pico",
+      caption: "Pico de Gallo in under 20 seconds",
+    });
+    mockClassifySemantic.mockRejectedValue(new Error("haiku unavailable"));
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [recipe],
+    });
+
+    expect(result.adapted).toHaveLength(0);
+    expect(result.reroutedCandidates).toHaveLength(0);
+    expect(result.semanticRejected).toBe(1);
+    expect(result.semanticHaikuCalls).toBe(0);
+    expect(result.semanticRejectedCandidates[0]?.reason).toBe("missing_verdict");
+  });
+
+  it("fails closed when the semantic judge returns no verdict", async () => {
+    const reel = adapted({
+      sourceId: "missing",
+      caption: "Some viral Reel",
+    });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [reel],
+    });
+
+    expect(result.adapted).toHaveLength(0);
+    expect(result.semanticRejectedCandidates[0]?.reason).toBe("missing_verdict");
+  });
+
+  it("does not spend extra ScrapeCreators budget during semantic routing", async () => {
+    mockClassifySemantic.mockResolvedValue({ verdicts: [], haikuCalls: 1 });
+    await applyInstagramPoolAdmission({
+      niche: "restaurant operations",
+      poolNiche: "Business & Entrepreneurship",
+      pillar: "restaurant operations",
+      candidates: [adapted({ sourceId: "a", caption: "Staff SOP training" })],
+    });
+    expect(mockClassifySemantic).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockClassifySemantic.mock.calls[0])).not.toContain(
+      "scrapeReels"
+    );
+  });
+
+  it("keeps the same routing helper as production semantic classification", () => {
+    const routed = routeSemanticPoolCandidates({
+      sourcePillar: "restaurant operations",
+      candidates: [
+        adapted({
+          sourceId: "qsr",
+          caption: "India's next big QSR opportunity might be hiding in plain sight",
+        }),
+      ],
+      verdicts: [
+        verdict({
+          sourceId: "qsr",
+          primaryPillar: "restaurant profitability",
+        }),
+      ],
+    });
+    expect(routed.currentPool).toHaveLength(0);
+    expect(routed.rerouted[0]?.targetPillar).toBe("restaurant profitability");
   });
 });

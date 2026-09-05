@@ -3,7 +3,7 @@ import type { ViralPostPool } from "../../drizzle/schema";
 import { scrapeTikTokVideos } from "../tiktok";
 import { scrapeYouTubeShorts } from "../youtube";
 import type { AdaptedCandidate } from "./candidateAdapter";
-import { VIRAL_POOL_DEFAULTS, VIRAL_SEED_POOL_PILLAR } from "./constants";
+import { VIRAL_POOL_DEFAULTS } from "./constants";
 import {
   isViralPostsLive,
   isViralPostsPoolRefresherEnabled,
@@ -11,7 +11,8 @@ import {
 } from "./featureFlag";
 import { loadFeaturedTransferableCandidates } from "./featuredSupply";
 import { discoverInstagramPoolCandidates } from "./instagramPoolDiscovery";
-import { classifyCandidatePillars } from "./pillarClassify";
+import { classifyCandidateForPoolAdmission } from "./poolAdmission";
+import type { SemanticPoolReroute } from "./semanticPoolRelevance";
 import {
   adaptTikTokVideos,
   adaptYouTubeShorts,
@@ -42,8 +43,62 @@ function workerOwnerId(): string {
   return `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function isFeaturedCatalogCandidate(candidate: AdaptedCandidate): boolean {
-  return candidate.rawProviderPayload?.source === "featured_catalog";
+export function groupSemanticReroutes(
+  reroutes: SemanticPoolReroute[]
+): Map<string, AdaptedCandidate[]> {
+  const byPillar = new Map<string, AdaptedCandidate[]>();
+  for (const row of reroutes) {
+    const existing = byPillar.get(row.targetPillar) ?? [];
+    existing.push(row.candidate);
+    byPillar.set(row.targetPillar, existing);
+  }
+  return byPillar;
+}
+
+export function buildAdmittedPoolLinks(args: {
+  pool: Pick<ViralPostPool, "platform" | "niche" | "pillar">;
+  adapted: AdaptedCandidate[];
+  candidateIdsBySource: Map<string, number>;
+}): Array<{
+  candidateId: number;
+  classification: ReturnType<
+    typeof classifyCandidateForPoolAdmission
+  >["classification"];
+}> {
+  const links: Array<{
+    candidateId: number;
+    classification: ReturnType<
+      typeof classifyCandidateForPoolAdmission
+    >["classification"];
+  }> = [];
+
+  for (const candidate of args.adapted) {
+    const candidateId = args.candidateIdsBySource.get(candidate.sourceId);
+    if (candidateId == null) continue;
+    const decision = classifyCandidateForPoolAdmission({
+      pool: {
+        platform: args.pool.platform,
+        niche: args.pool.niche,
+        pillar: args.pool.pillar,
+      },
+      candidate,
+    });
+    if (!decision.admit) {
+      console.info("[viralPosts.pool] pool_link_rejected", {
+        platform: args.pool.platform,
+        pillar: args.pool.pillar,
+        sourceId: candidate.sourceId,
+        reason: decision.reason,
+        confidence: decision.classification.confidence,
+      });
+      continue;
+    }
+    links.push({
+      candidateId,
+      classification: decision.classification,
+    });
+  }
+  return links;
 }
 
 /**
@@ -59,42 +114,11 @@ async function linkAdaptedToPool(args: {
   if (adapted.length === 0) return 0;
 
   const upserted = await repo.upsertCandidates(adapted);
-  const bySource = new Map(upserted.map((c) => [c.sourceId, c]));
-  const assignPillar =
-    pool.pillar === VIRAL_SEED_POOL_PILLAR ? pool.niche : pool.pillar;
-
-  const links = adapted
-    .map((a) => {
-      const row = bySource.get(a.sourceId);
-      if (!row) return null;
-      const classification = classifyCandidatePillars({
-        caption: a.caption,
-        hook: a.hook,
-        hashtags: a.hashtags,
-        activePillars: [assignPillar],
-        fallbackNiche: pool.niche,
-      });
-      if (classification.confidence < 0.5) {
-        classification.primaryPillar = assignPillar;
-        if (isFeaturedCatalogCandidate(a)) {
-          // Transferable Featured rows belong in this recommendation pool, but
-          // they must not masquerade as an exact niche/pillar match.
-          const rawConfidence = Number(
-            a.rawProviderPayload?.classificationConfidence ?? classification.confidence
-          );
-          classification.confidence = Number.isFinite(rawConfidence)
-            ? Math.max(0.35, Math.min(0.49, rawConfidence))
-            : 0.35;
-          classification.reason =
-            a.relevanceReason || `Transferable Featured format for ${assignPillar}`;
-        } else {
-          classification.reason = `Assigned to pool ${pool.platform}/${assignPillar}`;
-          classification.confidence = 0.55;
-        }
-      }
-      return { candidateId: row.id, classification };
-    })
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  const links = buildAdmittedPoolLinks({
+    pool,
+    adapted,
+    candidateIdsBySource: new Map(upserted.map((c) => [c.sourceId, c.id])),
+  });
 
   await poolRepo.linkCandidatesToPool({ poolId: pool.id, links });
 
@@ -123,6 +147,43 @@ async function linkAdaptedToPool(args: {
   );
 
   return links.length;
+}
+
+/**
+ * Link semantically rerouted Instagram candidates into the correct sibling
+ * pool. The source refresh already spent the provider budget; the sibling
+ * receives inventory only and is not marked as independently refreshed.
+ */
+export async function persistSemanticReroutes(args: {
+  sourcePool: ViralPostPool;
+  reroutes: SemanticPoolReroute[];
+}): Promise<number> {
+  if (args.reroutes.length === 0) return 0;
+  let linkedTotal = 0;
+  for (const [targetPillar, candidates] of groupSemanticReroutes(args.reroutes)) {
+    const sibling = await poolRepo.ensurePool({
+      niche: args.sourcePool.niche,
+      pillar: targetPillar,
+      platform: "instagram",
+      language: args.sourcePool.language,
+      region: args.sourcePool.region,
+    });
+    const linked = await linkAdaptedToPool({
+      pool: sibling,
+      adapted: candidates,
+    });
+    linkedTotal += linked;
+    console.info("[viralPosts.pool] instagram_semantic_reroute", {
+      sourcePoolId: args.sourcePool.id,
+      sourcePillar: args.sourcePool.pillar,
+      targetPoolId: sibling.id,
+      targetPillar,
+      linked,
+      providerCalls: 0,
+      siblingRefreshMarked: false,
+    });
+  }
+  return linkedTotal;
 }
 
 async function persistAdaptedToPool(args: {
@@ -196,10 +257,15 @@ async function refreshInstagramPool(
     scCalls: result.totalScCalls,
     costEstimateUsd: result.costEstimateUsd,
   });
+  const reroutedCandidateCount = await persistSemanticReroutes({
+    sourcePool: pool,
+    reroutes: result.reroutedCandidates,
+  });
   const featuredCandidateCount = await hydrateFeaturedSupply(pool);
   console.info("[viralPosts.pool] instagram_supply_mix", {
     poolId: pool.id,
     providerCandidates: providerCandidateCount,
+    reroutedCandidates: reroutedCandidateCount,
     featuredCandidates: featuredCandidateCount,
     providerCalls: result.totalScCalls,
     shallowCalls: result.shallowScCalls,
