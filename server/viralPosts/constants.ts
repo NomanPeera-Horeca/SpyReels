@@ -10,8 +10,15 @@ export const VIRAL_POOL_DEFAULTS = {
   dailyCallBudget: 60,
   /** Minimum fresh candidates before skipping a refresh. */
   minFreshCandidates: 40,
-  /** Candidate freshness window for assembly (hours). */
+  /** Short freshness window used only to decide whether a pool needs new discovery. */
   freshCandidateMaxAgeHours: 72,
+  /**
+   * Recommendation reservoir window. Proven candidates can stay eligible for
+   * Today’s Picks / browse for 90 days even while refresh continues every few days.
+   */
+  assemblyCandidateMaxAgeHours: 90 * 24,
+  /** Exact videos already shown in Today’s Picks stay suppressed for 90 days. */
+  todayPicksRepeatSuppressionDays: 90,
   /** Max candidates loaded from pool for scoring. */
   assemblyCandidateLimit: 120,
   /** How long to wait for a concurrent assembler (ms). */
