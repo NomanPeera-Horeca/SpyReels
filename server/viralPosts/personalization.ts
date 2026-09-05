@@ -26,12 +26,18 @@ import {
   computeReachMultiplier,
   computeViewsPerHour,
 } from "./scoring";
+import {
+  loadSimilarCreatorSupply,
+  type SimilarFeaturedReelSupply,
+} from "./similarCreatorSupply";
 
 export type ViralPersonalizationSignals = {
   /** Explicitly chosen/researched/collected creators: strongest creator affinity. */
   strongCreatorHandles: Set<string>;
   /** Creators surfaced highly in Creator Discovery, but not explicitly chosen. */
   radarCreatorHandles: Set<string>;
+  /** Adjacent Featured creators inferred from known niche/creator signals. */
+  similarCreatorHandles: Set<string>;
   /** Creative formats inferred from reels the user intentionally collected. */
   preferredFormats: Map<string, number>;
   /** Bounded topical affinity terms from Collected + Creator Discovery context. */
@@ -51,6 +57,9 @@ export type ViralPersonalizationContext = {
     radarSearchesRead: number;
     radarCreatorsRead: number;
     radarCandidates: number;
+    similarNicheSlugs: number;
+    similarCreatorsRead: number;
+    similarCandidates: number;
   };
 };
 
@@ -123,6 +132,7 @@ function createEmptySignals(): ViralPersonalizationSignals {
   return {
     strongCreatorHandles: new Set<string>(),
     radarCreatorHandles: new Set<string>(),
+    similarCreatorHandles: new Set<string>(),
     preferredFormats: new Map<string, number>(),
     topicTerms: new Map<string, number>(),
     collectedSourceKeys: new Set<string>(),
@@ -350,6 +360,35 @@ function radarCandidate(args: {
   });
 }
 
+function similarFeaturedCandidate(
+  reel: SimilarFeaturedReelSupply,
+  args: { pillars: string[]; niche: string; now: Date }
+): AdaptedCandidate {
+  const remakeHint = reel.remakeabilityScore ?? 55;
+  return adaptPublicMetadata({
+    platform: "instagram",
+    sourceId: reel.sourceId,
+    sourceUrl: reel.sourceUrl,
+    creatorHandle: reel.creatorHandle,
+    creatorName: reel.creatorName,
+    creatorAvatarUrl: reel.creatorAvatarUrl,
+    creatorFollowers: reel.creatorFollowers,
+    thumbnailUrl: reel.thumbnailUrl,
+    videoUrl: reel.videoUrl,
+    caption: reel.caption,
+    publishedAt: reel.publishedAt,
+    views: reel.views,
+    likes: reel.likes,
+    comments: reel.comments,
+    activePillars: args.pillars,
+    fallbackNiche: args.niche,
+    relevanceLabel: "Similar creator",
+    relevanceReason: `A strong, remakeable reel from another Featured creator in ${reel.nicheName}.`,
+    relevanceHint: Math.min(85, Math.max(55, 55 + remakeHint * 0.25 + (reel.viralFlag ? 8 : 0))),
+    now: args.now,
+  });
+}
+
 async function loadRecentRadarSearches(userId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -398,6 +437,8 @@ export function personalizationRelevanceBoost(
     boost += 18;
   } else if (handle && signals.radarCreatorHandles.has(handle)) {
     boost += 7;
+  } else if (handle && signals.similarCreatorHandles.has(handle)) {
+    boost += 5;
   }
 
   if (signals.collectedSourceKeys.has(canonicalCandidateKey(candidate))) {
@@ -470,9 +511,11 @@ export async function loadViralPersonalizationContext(args: {
 
   let radarCreatorsRead = 0;
   const radarCandidates: AdaptedCandidate[] = [];
+  const radarNicheNames: string[] = [];
   for (const search of radarSearches) {
     const result = search.resultJson;
     if (!result) continue;
+    if (result.routedNiche?.trim()) radarNicheNames.push(result.routedNiche.trim());
     for (const creator of result.rankedCreators.slice(0, MAX_RADAR_CREATORS_PER_SEARCH)) {
       if (!creator.peerKeep) continue;
       radarCreatorsRead += 1;
@@ -496,9 +539,70 @@ export async function loadViralPersonalizationContext(args: {
     }
   }
 
+  const classifiedNicheSlugs = scrapeJobs
+    .filter(
+      (job) =>
+        job.status === "completed" &&
+        !job.isDemo &&
+        Boolean(job.classifiedNicheSlug?.trim())
+    )
+    .map((job) => job.classifiedNicheSlug!.trim());
+
+  let similarNicheSlugs = 0;
+  let similarCreatorsRead = 0;
+  const similarCandidates: AdaptedCandidate[] = [];
+  try {
+    const similar = await loadSimilarCreatorSupply({
+      nicheSlugs: [
+        ...(onboarding?.selectedNicheSlugs ?? []),
+        ...classifiedNicheSlugs,
+      ],
+      nicheNames: radarNicheNames,
+      seedHandles: [...signals.strongCreatorHandles],
+      excludeHandles: [
+        ...signals.strongCreatorHandles,
+        ...signals.radarCreatorHandles,
+      ],
+      maxAgeHours: VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours,
+      now,
+    });
+    similarNicheSlugs = similar.nicheSlugs.length;
+    similarCreatorsRead = similar.creators.length;
+
+    for (const creator of similar.creators) {
+      const handle = normalizeHandle(creator.handle);
+      if (
+        handle &&
+        !signals.strongCreatorHandles.has(handle) &&
+        !signals.radarCreatorHandles.has(handle)
+      ) {
+        signals.similarCreatorHandles.add(handle);
+      }
+    }
+    for (const reel of similar.reels) {
+      similarCandidates.push(
+        similarFeaturedCandidate(reel, {
+          pillars: args.pillars,
+          niche: args.niche,
+          now,
+        })
+      );
+    }
+  } catch (err) {
+    // Similar-creator expansion is optional; the existing private signals and
+    // shared pools remain sufficient to assemble a feed if catalog lookup fails.
+    console.warn("[viralPosts.personalization] similar_creator_supply_failed", {
+      userId: args.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   const personalByKey = new Map<string, AdaptedCandidate>();
-  // Collected wins when the same public reel was also surfaced by Radar because
-  // collecting is the stronger explicit user action.
+  // Similar-creator discovery is the weakest relationship, Radar is stronger,
+  // and an explicit Collected action wins when the same public reel overlaps.
+  for (const candidate of similarCandidates) {
+    personalByKey.set(canonicalCandidateKey(candidate), candidate);
+  }
   for (const candidate of radarCandidates) {
     personalByKey.set(canonicalCandidateKey(candidate), candidate);
   }
@@ -516,6 +620,9 @@ export async function loadViralPersonalizationContext(args: {
       radarSearchesRead: radarSearches.length,
       radarCreatorsRead,
       radarCandidates: radarCandidates.length,
+      similarNicheSlugs,
+      similarCreatorsRead,
+      similarCandidates: similarCandidates.length,
     },
   };
 }
