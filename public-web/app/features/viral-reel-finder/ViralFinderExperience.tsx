@@ -10,6 +10,7 @@ const DEMO_HANDLES = ["garyvee", "humphreytalks", "russellbrunson", "codiesanche
 const DEMO_HANDLE_SET = new Set<string>(DEMO_HANDLES);
 
 type SortMode = "views" | "engagement";
+type PreviewStep = "hook" | "transcript" | "create";
 
 type DemoReel = {
   id: number;
@@ -119,7 +120,7 @@ export default function ViralFinderExperience() {
   const [sortMode, setSortMode] = useState<SortMode>("views");
   const [showAll, setShowAll] = useState(false);
   const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
-  const [showSpyReelsNext, setShowSpyReelsNext] = useState(false);
+  const [previewStep, setPreviewStep] = useState<PreviewStep>("hook");
 
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
@@ -189,7 +190,7 @@ export default function ViralFinderExperience() {
     setDemoError(null);
     setSelectedReel(null);
     setShowAll(false);
-    setShowSpyReelsNext(false);
+    setPreviewStep("hook");
 
     fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(activeHandle)}`, {
       signal: controller.signal,
@@ -231,10 +232,6 @@ export default function ViralFinderExperience() {
   const matchingProfile =
     profile && profile.username.toLowerCase() === normalizedInput ? profile : null;
   const selectedOwner = demo?.handle ?? activeHandle;
-  const continueHandle =
-    matchingProfile && !isDemoInput && !matchingProfile.isPrivate
-      ? matchingProfile.username
-      : selectedOwner;
 
   function chooseDemo(handle: string) {
     setInput(handle);
@@ -277,7 +274,7 @@ export default function ViralFinderExperience() {
 
   function selectReel(reel: DemoReel) {
     setSelectedReel(reel);
-    setShowSpyReelsNext(false);
+    setPreviewStep("hook");
     trackPublicWeb("viral_finder_reel_selected", {
       handle: selectedOwner,
       reel_id: reel.id,
@@ -427,7 +424,7 @@ export default function ViralFinderExperience() {
                         <small>Opening hook</small>
                         <p>{hookPreview(reel.caption)}</p>
                         <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                        <b>{selected ? "Selected" : "Open this Reel"}</b>
+                        <b>{selected ? "Selected. Explore below" : "See what SpyReels does next"}</b>
                       </div>
                     </button>
                   </article>
@@ -447,40 +444,56 @@ export default function ViralFinderExperience() {
       </section>
 
       {selectedReel ? (
-        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="Selected Reel">
+        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="What SpyReels does after Reel research">
           <div className={styles.nextStepMedia} style={{ backgroundImage: `url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})` }} />
           <div className={styles.nextStepCopy}>
-            <small>This Reel</small>
-            <h2>{hookPreview(selectedReel.caption)}</h2>
-            <p>
-              {formatNumber(selectedReel.viewCount)} views
-              {selectedReel.engagementRate > 0 ? ` · ${selectedReel.engagementRate.toFixed(1)}% engagement` : ""}
-            </p>
+            <small>What happens after you choose a Reel</small>
+            <h2>See the path before you sign in.</h2>
+            <p>SpyReels keeps this Reel as research context and gives you a clear path from the original post to your own content workflow.</p>
 
-            {!showSpyReelsNext ? (
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                data-testid="reveal-spyreels-next"
-                onClick={() => setShowSpyReelsNext(true)}
-              >
-                What SpyReels can do next
-              </button>
-            ) : (
-              <>
-                <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step="next">
-                  <small>Inside SpyReels</small>
-                  <strong>Transcribe this Reel, then write your own version.</strong>
-                  <p>SpyReels keeps this post as research context so you can study the spoken content and turn the useful idea into an original script.</p>
-                </div>
-                <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(continueHandle, "selected_reel")}>
-                  {continueHandle === selectedOwner
-                    ? `Continue @${continueHandle} in SpyReels`
-                    : `See @${continueHandle}'s Reels`}
+            <div className={interactionStyles.stepTabs} aria-label="Preview the SpyReels workflow">
+              {([
+                ["hook", "1. Hook"],
+                ["transcript", "2. Transcript"],
+                ["create", "3. Create"],
+              ] as const).map(([step, label]) => (
+                <button
+                  key={step}
+                  type="button"
+                  className={`${interactionStyles.stepTab} ${previewStep === step ? interactionStyles.stepTabActive : ""}`}
+                  onClick={() => setPreviewStep(step)}
+                >
+                  {label}
                 </button>
-                <span className={interactionStyles.actionHint}>Opens Research with @{continueHandle} selected.</span>
-              </>
-            )}
+              ))}
+            </div>
+
+            <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step={previewStep}>
+              {previewStep === "hook" ? (
+                <>
+                  <small>Start with the actual Reel</small>
+                  <strong>{hookPreview(selectedReel.caption)}</strong>
+                  <p>Keep the source visible while you study the opening, topic and structure that made you stop.</p>
+                </>
+              ) : previewStep === "transcript" ? (
+                <>
+                  <small>Next inside SpyReels</small>
+                  <strong>Turn the Reel into text you can inspect.</strong>
+                  <p>SpyReels can transcribe the Reel so the spoken content becomes research context you can read, study and carry forward.</p>
+                </>
+              ) : (
+                <>
+                  <small>Then make it yours</small>
+                  <strong>Use the research as context for an original script.</strong>
+                  <p>Move the useful idea into your own script workflow, choose your angle and develop a version for your audience instead of copying the original.</p>
+                </>
+              )}
+            </div>
+
+            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner, "selected_reel")}>
+              Research @{selectedOwner} in SpyReels
+            </button>
+            <span className={interactionStyles.actionHint}>Opens Research with @{selectedOwner} selected.</span>
           </div>
         </section>
       ) : null}
