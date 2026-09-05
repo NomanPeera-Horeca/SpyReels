@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   VIRAL_REEL_FINDER_DEMO_PATH,
   VIRAL_REEL_FINDER_PILOT_PATH,
+  VIRAL_REEL_FINDER_PROFILE_PATH,
   getPublicWebPilotConfig,
   isPublicWebPilotRequest,
 } from "./publicWebPilotProxy";
@@ -21,7 +22,7 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_PILOT_PATH, "GET", flagOnly)).toBe(false);
   });
 
-  it("only opts the Viral Reel Finder, its demo route, and Next assets into the pilot", () => {
+  it("only opts the Viral Reel Finder, its public data routes, and Next assets into the pilot", () => {
     const config = getPublicWebPilotConfig({
       SPYREELS_PUBLIC_WEB_PILOT: "true",
       SPYREELS_PUBLIC_WEB_ORIGIN: "http://127.0.0.1:3100/",
@@ -31,6 +32,8 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_PILOT_PATH}/`, "HEAD", config)).toBe(true);
     expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_DEMO_PATH, "GET", config)).toBe(true);
     expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_DEMO_PATH}/`, "HEAD", config)).toBe(true);
+    expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_PROFILE_PATH, "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_PROFILE_PATH}/`, "HEAD", config)).toBe(true);
     expect(isPublicWebPilotRequest("/_next/static/chunks/app.js", "GET", config)).toBe(true);
 
     expect(isPublicWebPilotRequest("/", "GET", config)).toBe(false);
@@ -40,6 +43,7 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_PILOT_PATH}/other`, "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_PILOT_PATH, "POST", config)).toBe(false);
     expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_DEMO_PATH, "POST", config)).toBe(false);
+    expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_PROFILE_PATH, "POST", config)).toBe(false);
   });
 
   it("normalizes the upstream origin and timeout", () => {
