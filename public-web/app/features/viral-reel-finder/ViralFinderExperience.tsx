@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
+import interactionStyles from "./interaction.module.css";
 import styles from "./page.module.css";
 
 const DEMO_HANDLES = ["garyvee", "humphreytalks", "russellbrunson", "codiesanchez"] as const;
 const DEMO_HANDLE_SET = new Set<string>(DEMO_HANDLES);
 
 type SortMode = "views" | "engagement";
+type PreviewStep = "hook" | "transcript" | "create";
 
 type DemoReel = {
   id: number;
@@ -63,7 +65,7 @@ function formatNumber(value: number): string {
 function hookPreview(caption: string): string {
   const cleaned = (caption || "").replace(/\s+/g, " ").trim();
   if (!cleaned) return "Open this Reel to study the hook";
-  return cleaned.length > 92 ? `${cleaned.slice(0, 89)}...` : cleaned;
+  return cleaned.length > 110 ? `${cleaned.slice(0, 107)}...` : cleaned;
 }
 
 function appOrigin(): string {
@@ -92,6 +94,7 @@ export default function ViralFinderExperience() {
   const [sortMode, setSortMode] = useState<SortMode>("views");
   const [showAll, setShowAll] = useState(false);
   const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
+  const [previewStep, setPreviewStep] = useState<PreviewStep>("hook");
 
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
@@ -102,14 +105,18 @@ export default function ViralFinderExperience() {
     const normalized = normalizeHandle(input);
     setProfile(null);
     setProfileError(null);
-    if (normalized.length < 2) {
+
+    if (normalized.length < 2 || DEMO_HANDLE_SET.has(normalized)) {
       setDebouncedHandle("");
+      setProfileLoading(false);
       return;
     }
     if (!validHandle(normalized)) {
+      setDebouncedHandle("");
       setProfileError("Instagram usernames can only contain letters, numbers, periods and underscores.");
       return;
     }
+
     const timer = window.setTimeout(() => setDebouncedHandle(normalized), 700);
     return () => window.clearTimeout(timer);
   }, [input]);
@@ -150,6 +157,7 @@ export default function ViralFinderExperience() {
     setDemoError(null);
     setSelectedReel(null);
     setShowAll(false);
+    setPreviewStep("hook");
 
     fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(activeHandle)}`, {
       signal: controller.signal,
@@ -186,11 +194,24 @@ export default function ViralFinderExperience() {
   }, [demo, sortMode]);
 
   const visibleReels = showAll ? sortedReels : sortedReels.slice(0, 4);
+  const normalizedInput = normalizeHandle(input);
+  const isDemoInput = DEMO_HANDLE_SET.has(normalizedInput);
+  const matchingProfile =
+    profile && profile.username.toLowerCase() === normalizedInput ? profile : null;
+  const selectedOwner = demo?.handle ?? activeHandle;
 
   function chooseDemo(handle: string) {
     setInput(handle);
     setActiveHandle(handle);
     setTimeout(() => document.getElementById("live-demo")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
+  function requestProfileNow(handle: string) {
+    setProfile(null);
+    setProfileError(null);
+    setProfileLoading(true);
+    setDebouncedHandle("");
+    window.setTimeout(() => setDebouncedHandle(handle), 0);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -204,15 +225,42 @@ export default function ViralFinderExperience() {
       chooseDemo(handle);
       return;
     }
-    handoffToResearch(profile?.username === handle ? profile.username : handle);
+    if (!matchingProfile) {
+      requestProfileNow(handle);
+      return;
+    }
+    if (matchingProfile.isPrivate) {
+      setProfileError("SpyReels can research public Instagram accounts. This account is private.");
+      return;
+    }
+    handoffToResearch(matchingProfile.username);
   }
+
+  function selectReel(reel: DemoReel) {
+    setSelectedReel(reel);
+    setPreviewStep("hook");
+    window.setTimeout(
+      () => document.getElementById("selected-reel-next")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      0
+    );
+  }
+
+  const submitLabel = isDemoInput
+    ? `View @${normalizedInput} Reels`
+    : matchingProfile?.isPrivate
+      ? "Private account"
+      : matchingProfile
+        ? `Research @${matchingProfile.username}`
+        : profileLoading
+          ? "Checking…"
+          : "Find account";
 
   return (
     <div id="live-demo" className={styles.experience}>
       <div className={styles.finderIsland}>
         <form className={styles.finderForm} onSubmit={submit}>
           <span className={styles.platformMark} aria-hidden>
-            <InstagramMark className={styles.instagramMark} />
+            <InstagramMark />
           </span>
           <label className={styles.srOnly} htmlFor="viral-finder-handle">Instagram username or profile link</label>
           <input
@@ -223,70 +271,76 @@ export default function ViralFinderExperience() {
             placeholder="@username or instagram.com/username"
             autoComplete="off"
           />
-          <button className={styles.primaryButton} type="submit">
-            {profileLoading ? "Checking…" : profile ? `Research @${profile.username}` : "Find Viral Reels"}
+          <button
+            className={styles.primaryButton}
+            type="submit"
+            disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
+          >
+            {submitLabel}
           </button>
         </form>
 
         {profileLoading ? <div className={styles.profileLoading}>Looking up Instagram profile…</div> : null}
         {profileError && !profileLoading ? <p className={styles.formError}>{profileError}</p> : null}
 
-        {profile ? (
-          <button className={styles.profileCard} type="button" onClick={() => handoffToResearch(profile.username)}>
+        {matchingProfile ? (
+          <article className={`${styles.profileCard} ${interactionStyles.profileConfirmed}`}>
             <span className={styles.profileAvatarWrap}>
-              {profile.profilePicUrl ? (
-                <img className={styles.profileAvatar} src={profile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
+              {matchingProfile.profilePicUrl ? (
+                <img className={styles.profileAvatar} src={matchingProfile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
               ) : (
                 <span className={styles.profileAvatarFallback}>@</span>
               )}
             </span>
             <span className={styles.profileText}>
               <span className={styles.profileNameRow}>
-                <strong>@{profile.username}</strong>
-                {profile.isVerified ? <span className={styles.verified}>✓</span> : null}
-                {profile.isPrivate ? <span className={styles.privateBadge}>Private</span> : null}
+                <strong>@{matchingProfile.username}</strong>
+                {matchingProfile.isVerified ? <span className={styles.verified}>✓</span> : null}
+                {matchingProfile.isPrivate ? <span className={styles.privateBadge}>Private</span> : null}
               </span>
-              {profile.fullName ? <span>{profile.fullName}</span> : null}
-              {profile.biography ? <span className={styles.profileBio}>{profile.biography}</span> : null}
+              {matchingProfile.fullName ? <span>{matchingProfile.fullName}</span> : null}
+              {matchingProfile.biography ? <span className={styles.profileBio}>{matchingProfile.biography}</span> : null}
               <span className={styles.profileStats}>
-                <b>{formatNumber(profile.postCount)}</b> posts · <b>{formatNumber(profile.followerCount)}</b> followers · <b>{formatNumber(profile.followingCount)}</b> following
+                <b>{formatNumber(matchingProfile.postCount)}</b> posts · <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
               </span>
             </span>
-            <span className={styles.profileAction}>Research this account →</span>
-          </button>
+            <span className={interactionStyles.profilePlatform}>
+              <InstagramMark /> Instagram profile
+            </span>
+          </article>
         ) : null}
 
         <div className={styles.tryRow}>
-          <span>Try a live demo:</span>
+          <span>Try the interactive example:</span>
           {DEMO_HANDLES.map((handle) => (
             <button type="button" onClick={() => chooseDemo(handle)} key={handle}>@{handle}</button>
           ))}
         </div>
       </div>
 
-      <section className={styles.preview} aria-label="Live Viral Reel Finder product preview">
+      <section className={styles.preview} aria-label="Interactive Viral Reel Finder product example">
         <div className={styles.previewHeader}>
           <div>
-            <small>Live product preview</small>
+            <small>Interactive example</small>
             <strong>@{demo?.handle ?? activeHandle}</strong>
             <span>{demo ? `${demo.totalReelCount} Reels available` : loading ? "Loading account" : "Account unavailable"}</span>
           </div>
-          <div className={styles.sortTabs} aria-label="Sort demo Reels">
+          <div className={styles.sortTabs} aria-label="Sort example Reels">
             <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("views")}>Views</button>
             <button className={sortMode === "engagement" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("engagement")}>Engagement</button>
           </div>
         </div>
 
         {loading ? (
-          <div className={styles.demoState}>Loading real Reel data…</div>
+          <div className={styles.demoState}>Loading Reel data…</div>
         ) : demoError || !demo ? (
-          <div className={styles.demoState}>The live demo is unavailable right now.</div>
+          <div className={styles.demoState}>The interactive example is unavailable right now.</div>
         ) : (
           <>
             <div className={styles.previewGrid}>
               {visibleReels.map((reel) => (
                 <article className={styles.previewCard} key={reel.id}>
-                  <button className={styles.reelSelect} type="button" onClick={() => setSelectedReel(reel)}>
+                  <button className={styles.reelSelect} type="button" onClick={() => selectReel(reel)}>
                     <div
                       className={styles.previewArt}
                       style={{
@@ -301,40 +355,75 @@ export default function ViralFinderExperience() {
                       <small>Opening hook</small>
                       <p>{hookPreview(reel.caption)}</p>
                       <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                      <b>See what happens next →</b>
+                      <b>See what SpyReels does next →</b>
                     </div>
                   </button>
                 </article>
               ))}
             </div>
 
-            <div className={styles.previewFooter}>
-              <button type="button" className={styles.textButton} onClick={() => setShowAll((value) => !value)}>
-                {showAll ? "Show fewer Reels" : `Show all ${Math.min(8, sortedReels.length)} demo Reels`}
-              </button>
-              <button type="button" className={styles.secondaryButton} onClick={() => handoffToResearch(profile?.username ?? activeHandle)}>
-                Research my own account
-              </button>
-            </div>
+            {sortedReels.length > 4 ? (
+              <div className={`${styles.previewFooter} ${interactionStyles.previewFooterSingle}`}>
+                <button type="button" className={styles.textButton} onClick={() => setShowAll((value) => !value)}>
+                  {showAll ? "Show fewer Reels" : `Show all ${Math.min(8, sortedReels.length)} Reels`}
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </section>
 
       {selectedReel ? (
-        <section className={styles.nextStepPanel} aria-label="What SpyReels does after Reel research">
+        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="What SpyReels does after Reel research">
           <div className={styles.nextStepMedia} style={{ backgroundImage: `url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})` }} />
           <div className={styles.nextStepCopy}>
-            <small>What happens after you find a strong Reel</small>
-            <h2>Turn the research into something you can actually create.</h2>
-            <p>SpyReels keeps the Reel as research context, then lets you study the hook, transcribe it, and carry the useful idea into your own script workflow.</p>
-            <div className={styles.nextStepChips}>
-              <span>1. Study the hook</span>
-              <span>2. Transcribe the Reel</span>
-              <span>3. Build your own script</span>
+            <small>What happens after you choose a Reel</small>
+            <h2>See the path before you sign in.</h2>
+            <p>SpyReels keeps this Reel as research context and gives you a clear path from the original post to your own content workflow.</p>
+
+            <div className={interactionStyles.stepTabs} aria-label="Preview the SpyReels workflow">
+              {([
+                ["hook", "1. Hook"],
+                ["transcript", "2. Transcript"],
+                ["create", "3. Create"],
+              ] as const).map(([step, label]) => (
+                <button
+                  key={step}
+                  type="button"
+                  className={`${interactionStyles.stepTab} ${previewStep === step ? interactionStyles.stepTabActive : ""}`}
+                  onClick={() => setPreviewStep(step)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(profile?.username ?? activeHandle)}>
-              Continue in SpyReels
+
+            <div className={interactionStyles.stepDetail}>
+              {previewStep === "hook" ? (
+                <>
+                  <small>Start with the actual Reel</small>
+                  <strong>{hookPreview(selectedReel.caption)}</strong>
+                  <p>Keep the source visible while you study the opening, topic and structure that made you stop.</p>
+                </>
+              ) : previewStep === "transcript" ? (
+                <>
+                  <small>Next inside SpyReels</small>
+                  <strong>Turn the Reel into text you can inspect.</strong>
+                  <p>SpyReels can transcribe the Reel so the spoken content becomes research context you can read, study and carry forward.</p>
+                </>
+              ) : (
+                <>
+                  <small>Then make it yours</small>
+                  <strong>Use the research as context for an original script.</strong>
+                  <p>Move the useful idea into your own script workflow, choose your angle and develop a version for your audience instead of copying the original.</p>
+                </>
+              )}
+            </div>
+
+            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(selectedOwner)}>
+              Research @{selectedOwner} in SpyReels
             </button>
+            <span className={interactionStyles.actionHint}>Opens Research with @{selectedOwner} selected.</span>
           </div>
         </section>
       ) : null}
