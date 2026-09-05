@@ -8,10 +8,24 @@ import {
   selectRecommendedCreativeBrief,
 } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import type { CarouselImageUrlMap, CarouselSlideSpec } from "@shared/carouselTemplates";
+import {
+  isComparisonFamilySlide,
+  textContextForComparisonImageSlot,
+} from "@shared/carouselComparisonFamily";
 import {
   normalizeCarouselSlotStyleMap,
   upsertCarouselSlotStyleMap,
 } from "@shared/carouselSlotStyle";
+import {
+  normalizeCarouselImageFrameMap,
+  upsertCarouselImageFrameMap,
+} from "@shared/carouselImageFrame";
+import {
+  fanOutCarouselCoverUrl,
+  upsertCarouselImageUrlMap,
+} from "@shared/carouselImageUrls";
+import { resolveSlideImage } from "../carousel/resolveSlideImage";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -472,6 +486,7 @@ export const carouselRemakeRouter = router({
         slideStructure: row.slideStructureJson ?? null,
         designOverride: row.designOverrideJson ?? null,
         slotStyleOverrides: row.slotStyleOverridesJson ?? null,
+        imageFrameOverrides: row.imageFrameOverridesJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
         angleOptions: row.angleOptionsJson == null ? null : briefs,
@@ -1172,6 +1187,8 @@ export const carouselRemakeRouter = router({
         .select({
           id: carouselRemakes.id,
           status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          slideStructureJson: carouselRemakes.slideStructureJson,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
         })
         .from(carouselRemakes)
@@ -1197,29 +1214,311 @@ export const carouselRemakeRouter = router({
 
       const current =
         row.imageUrlsJson && typeof row.imageUrlsJson === "object"
-          ? ({ ...(row.imageUrlsJson as Record<string, unknown>) } as Record<
-              string,
-              string | Record<string, string>
-            >)
+          ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
           : {};
+      const next = applyOwnedImageUrl(
+        current,
+        input.slideId,
+        input.url,
+        input.slotId,
+        shareCoverSlideIdsForTemplate(row.templateId, row.slideStructureJson)
+      );
 
-      if (input.slotId) {
-        const existing = current[input.slideId];
-        if (typeof existing === "string" || !existing) {
-          current[input.slideId] = { [input.slotId]: input.url };
-        } else {
-          current[input.slideId] = { ...existing, [input.slotId]: input.url };
-        }
-      } else {
-        current[input.slideId] = input.url;
+      await db
+        .update(carouselRemakes)
+        .set({ imageUrlsJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, imageUrls: next };
+    }),
+
+  /**
+   * Replace the full image URL map after undo.
+   */
+  replaceImageUrls: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        imageUrls: z.record(z.string(), z.union([
+          z.string(),
+          z.record(z.string(), z.string()),
+        ])),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before changing images",
+        });
       }
 
       await db
         .update(carouselRemakes)
-        .set({ imageUrlsJson: current })
+        .set({ imageUrlsJson: input.imageUrls })
         .where(eq(carouselRemakes.id, input.remakeId));
 
-      return { remakeId: input.remakeId, imageUrls: current };
+      return { remakeId: input.remakeId, imageUrls: input.imageUrls };
+    }),
+
+  /**
+   * Merge one crop/position/zoom override into imageFrameOverridesJson.
+   */
+  updateImageFrame: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+        frame: z.object({
+          posX: z.number().min(0).max(100).optional(),
+          posY: z.number().min(0).max(100).optional(),
+          zoom: z.number().min(1).max(2).optional(),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          imageFrameOverridesJson: carouselRemakes.imageFrameOverridesJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing images",
+        });
+      }
+
+      const current = normalizeCarouselImageFrameMap(row.imageFrameOverridesJson);
+      const next = upsertCarouselImageFrameMap(
+        current,
+        input.slideId,
+        input.slotId,
+        input.frame
+      );
+
+      await db
+        .update(carouselRemakes)
+        .set({ imageFrameOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { imageFrameOverrides: next };
+    }),
+
+  /**
+   * Replace the full image-frame map after undo.
+   */
+  replaceImageFrames: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        imageFrameOverrides: z.record(z.string(), z.record(z.string(), z.unknown())),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing images",
+        });
+      }
+
+      const next = normalizeCarouselImageFrameMap(input.imageFrameOverrides);
+      await db
+        .update(carouselRemakes)
+        .set({ imageFrameOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { imageFrameOverrides: next };
+    }),
+
+  /**
+   * Regenerate only the selected image slot via the existing resolveSlideImage path.
+   * Does not rewrite copy, strategy, or other image slots.
+   */
+  regenerateSlideImage: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          niche: carouselRemakes.niche,
+          slotValuesJson: carouselRemakes.slotValuesJson,
+          slideStructureJson: carouselRemakes.slideStructureJson,
+          imageUrlsJson: carouselRemakes.imageUrlsJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before regenerating images",
+        });
+      }
+
+      const template = CAROUSEL_TEMPLATES_BY_ID.get(row.templateId);
+      const slides = slidesForRemake(template?.slides, row.slideStructureJson);
+      const slide = slides.find((item) => item.id === input.slideId);
+      const imageSlot = slide?.imageSlots?.find((slot) => slot.id === input.slotId);
+      if (!slide || !imageSlot) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That slide has no matching image slot",
+        });
+      }
+
+      const slideValues =
+        row.slotValuesJson && typeof row.slotValuesJson === "object"
+          ? ((row.slotValuesJson as Record<string, Record<string, string>>)[
+              input.slideId
+            ] ?? {})
+          : {};
+      const textContext = imageTextContextForOwnedSlot(
+        slide,
+        slideValues,
+        input.slotId
+      );
+      const url = await resolveSlideImage(
+        imageSlot.searchQueryHint ?? "",
+        row.niche,
+        undefined,
+        textContext,
+        {
+          slideId: input.slideId,
+          imageSlotId: input.slotId,
+        }
+      );
+      if (!url) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Image generation did not return a URL",
+        });
+      }
+
+      const current =
+        row.imageUrlsJson && typeof row.imageUrlsJson === "object"
+          ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
+          : {};
+      const next = applyOwnedImageUrl(
+        current,
+        input.slideId,
+        url,
+        input.slotId,
+        shareCoverSlideIdsForTemplate(row.templateId, row.slideStructureJson)
+      );
+
+      await db
+        .update(carouselRemakes)
+        .set({ imageUrlsJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, imageUrls: next, url };
     }),
 
   /**
@@ -1265,3 +1564,56 @@ export const carouselRemakeRouter = router({
       return { remakeId: input.remakeId, deleted: true as const };
     }),
 });
+
+function slidesForRemake(
+  templateSlides: CarouselSlideSpec[] | undefined,
+  stored: unknown
+): CarouselSlideSpec[] {
+  if (Array.isArray(stored) && stored.length > 0) {
+    return stored as CarouselSlideSpec[];
+  }
+  return templateSlides ?? [];
+}
+
+function shareCoverSlideIdsForTemplate(
+  templateId: string,
+  storedStructure: unknown
+): string[] | undefined {
+  const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId);
+  if (!template?.shareCoverImage) return undefined;
+  return slidesForRemake(template.slides, storedStructure)
+    .filter((slide) => (slide.imageSlots?.length ?? 0) > 0)
+    .map((slide) => slide.id);
+}
+
+function applyOwnedImageUrl(
+  current: CarouselImageUrlMap,
+  slideId: string,
+  url: string,
+  slotId: string | undefined,
+  sharedSlideIds: string[] | undefined
+): CarouselImageUrlMap {
+  if (sharedSlideIds && sharedSlideIds.length > 0) {
+    return fanOutCarouselCoverUrl(current, url, sharedSlideIds);
+  }
+  return upsertCarouselImageUrlMap(current, slideId, url, slotId);
+}
+
+function imageTextContextForOwnedSlot(
+  slide: CarouselSlideSpec,
+  slideVals: Record<string, string>,
+  imageSlotId: string
+): string {
+  if (isComparisonFamilySlide(slide) && (slide.imageSlots?.length ?? 0) > 1) {
+    const sideCopy = textContextForComparisonImageSlot(slideVals, imageSlotId);
+    if (sideCopy) return sideCopy;
+  }
+  const preferred = [
+    slideVals.headline,
+    slideVals.title,
+    slideVals.body,
+    slideVals.support,
+    slideVals.subhead,
+  ];
+  return preferred.filter((value) => value?.trim()).join(" / ");
+}

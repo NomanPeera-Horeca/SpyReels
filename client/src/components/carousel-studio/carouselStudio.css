@@ -300,6 +300,8 @@
   .cs .text-inspector-align button.active{background:var(--panel-3);color:#fff}
   .cs .text-inspector-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted)}
   .cs .studio-slide-stage [data-carousel-slot-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px;border-radius:2px}
+  .cs .studio-slide-stage [data-carousel-image-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px}
+  .cs .image-inspector-preview{width:100%;aspect-ratio:4/5;border-radius:10px;background:#0d0d12 center/cover no-repeat;border:1px solid var(--border)}
   .cs .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;min-height:0;overflow:hidden}
   .cs .panel-head{padding:12px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
   .cs .panel-head h3{font-size:13px;margin:0}

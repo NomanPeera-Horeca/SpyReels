@@ -20,6 +20,7 @@ import {
 } from "@shared/carouselStudio";
 import {
   CAROUSEL_TEMPLATES_BY_ID,
+  normalizeSlideImages,
   type CarouselDesignTokens,
   type CarouselImageUrlMap,
   type CarouselSlideSpec,
@@ -30,11 +31,19 @@ import {
   type CarouselSlotStyleMap,
   type CarouselSlotStylePatch,
 } from "@shared/carouselSlotStyle";
+import {
+  normalizeCarouselImageFrameMap,
+  upsertCarouselImageFrameMap,
+  type CarouselImageFrameMap,
+  type CarouselImageFramePatch,
+} from "@shared/carouselImageFrame";
 import { CarouselTextInspector } from "./CarouselTextInspector";
+import { CarouselImageInspector } from "./CarouselImageInspector";
 import {
   buildTextSelection,
   type CarouselTextSelection,
 } from "./textInspectorModel";
+import type { CarouselImageSelection } from "@/components/carouselEditorChrome";
 import {
   CarouselRenderer,
   mergeCarouselSlideValues,
@@ -223,8 +232,12 @@ export function CarouselStudioApp({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [textSelection, setTextSelection] =
     useState<CarouselTextSelection | null>(null);
+  const [imageSelection, setImageSelection] =
+    useState<CarouselImageSelection | null>(null);
   const [remakeSlotStyles, setRemakeSlotStyles] =
     useState<CarouselSlotStyleMap>({});
+  const [remakeImageFrames, setRemakeImageFrames] =
+    useState<CarouselImageFrameMap>({});
   const [history, setHistory] = useState<string[]>([]);
   const [saveQueued, setSaveQueued] = useState(false);
   const [hasGeneratedCarousel, setHasGeneratedCarousel] = useState(false);
@@ -289,6 +302,56 @@ export function CarouselStudioApp({
     },
     onError: (err) => {
       toast(err.message || "Failed to save style undo");
+    },
+  });
+  const uploadSlideImageMutation = trpc.carouselRemake.uploadSlideImage.useMutation({
+    onError: (err) => {
+      toast(err.message || "Failed to upload image");
+    },
+  });
+  const updateImageUrlsMutation = trpc.carouselRemake.updateImageUrls.useMutation({
+    onSuccess: (data) => {
+      setRemakeImageUrls(data.imageUrls);
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save image");
+    },
+  });
+  const replaceImageUrlsMutation = trpc.carouselRemake.replaceImageUrls.useMutation({
+    onSuccess: (data) => {
+      setRemakeImageUrls(data.imageUrls);
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save image undo");
+    },
+  });
+  const updateImageFrameMutation = trpc.carouselRemake.updateImageFrame.useMutation({
+    onSuccess: () => {
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save image framing");
+    },
+  });
+  const replaceImageFramesMutation = trpc.carouselRemake.replaceImageFrames.useMutation({
+    onSuccess: (data) => {
+      setRemakeImageFrames(data.imageFrameOverrides);
+      void utils.carouselRemake.list.invalidate();
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to save framing undo");
+    },
+  });
+  const regenerateSlideImageMutation = trpc.carouselRemake.regenerateSlideImage.useMutation({
+    onSuccess: (data) => {
+      setRemakeImageUrls(data.imageUrls);
+      void utils.carouselRemake.list.invalidate();
+      toast("Image regenerated.");
+    },
+    onError: (err) => {
+      toast(err.message || "Failed to regenerate image");
     },
   });
   const updateAspectRatioMutation = trpc.carouselRemake.updateAspectRatio.useMutation({
@@ -356,12 +419,14 @@ export function CarouselStudioApp({
         JSON.stringify({
           slotValues: displaySlideValues,
           slotStyles: remakeSlotStyles,
+          imageUrls: remakeImageUrls,
+          imageFrames: remakeImageFrames,
         }),
       ];
       if (next.length > 20) next.shift();
       return next;
     });
-  }, [displaySlideValues, remakeSlotStyles]);
+  }, [displaySlideValues, remakeSlotStyles, remakeImageUrls, remakeImageFrames]);
 
   const strategies = liveAngles && liveAngles.length > 0 ? liveAngles : null;
   const selectedAngle =
@@ -750,8 +815,12 @@ export function CarouselStudioApp({
         setRemakeSlotStyles(
           normalizeCarouselSlotStyleMap(data.slotStyleOverrides)
         );
+        setRemakeImageFrames(
+          normalizeCarouselImageFrameMap(data.imageFrameOverrides)
+        );
         setCurrentSlide(0);
         setTextSelection(null);
+        setImageSelection(null);
         setHistory([]);
         setHasGeneratedCarousel(true);
         setIsOpeningLibrary(false);
@@ -867,6 +936,12 @@ export function CarouselStudioApp({
     style: CarouselSlotStylePatch;
   } | null>(null);
   const styleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFrameSaveRef = useRef<{
+    slideId: string;
+    slotId: string;
+    frame: CarouselImageFramePatch;
+  } | null>(null);
+  const frameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushSlotSave = useCallback(() => {
     const pending = pendingSlotSaveRef.current;
@@ -899,6 +974,22 @@ export function CarouselStudioApp({
       style: pending.style,
     });
   }, [remakeId, updateSlotStyleMutation]);
+
+  const flushFrameSave = useCallback(() => {
+    const pending = pendingFrameSaveRef.current;
+    pendingFrameSaveRef.current = null;
+    if (frameSaveTimerRef.current) {
+      clearTimeout(frameSaveTimerRef.current);
+      frameSaveTimerRef.current = null;
+    }
+    if (!pending || remakeId == null) return;
+    updateImageFrameMutation.mutate({
+      remakeId,
+      slideId: pending.slideId,
+      slotId: pending.slotId,
+      frame: pending.frame,
+    });
+  }, [remakeId, updateImageFrameMutation]);
 
   const handleSlotChange = (slideId: string, slotId: string, value: string) => {
     saveHistory();
@@ -939,21 +1030,83 @@ export function CarouselStudioApp({
     }, 500);
   };
 
+  const handleImageFrameChange = (
+    slideId: string,
+    slotId: string,
+    patch: CarouselImageFramePatch
+  ) => {
+    saveHistory();
+    setRemakeImageFrames((prev) =>
+      upsertCarouselImageFrameMap(prev, slideId, slotId, patch)
+    );
+    pendingFrameSaveRef.current = { slideId, slotId, frame: patch };
+    setSaveQueued(true);
+    if (frameSaveTimerRef.current) clearTimeout(frameSaveTimerRef.current);
+    frameSaveTimerRef.current = setTimeout(() => {
+      setSaveQueued(false);
+      flushFrameSave();
+    }, 500);
+  };
+
+  const handleReplaceImageFile = async (file: File) => {
+    if (!imageSelection || remakeId == null) return;
+    saveHistory();
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(new Error("Could not read image"));
+        reader.readAsDataURL(file);
+      });
+      const base64 = dataUrl.split(",")[1] ?? "";
+      if (!base64) {
+        toast("Could not read that image.");
+        return;
+      }
+      const { url } = await uploadSlideImageMutation.mutateAsync({
+        base64,
+        contentType: file.type || "image/jpeg",
+      });
+      const result = await updateImageUrlsMutation.mutateAsync({
+        remakeId,
+        slideId: imageSelection.slideId,
+        slotId: imageSelection.slotId,
+        url,
+      });
+      setRemakeImageUrls(result.imageUrls);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to replace image");
+    }
+  };
+
+  const handleRegenerateImage = () => {
+    if (!imageSelection || remakeId == null) return;
+    saveHistory();
+    regenerateSlideImageMutation.mutate({
+      remakeId,
+      slideId: imageSelection.slideId,
+      slotId: imageSelection.slotId,
+    });
+  };
+
   useEffect(() => {
     const onLeave = () => {
       flushSlotSave();
       flushStyleSave();
+      flushFrameSave();
     };
     window.addEventListener("beforeunload", onLeave);
     return () => {
       window.removeEventListener("beforeunload", onLeave);
       flushSlotSave();
       flushStyleSave();
+      flushFrameSave();
     };
-  }, [flushSlotSave, flushStyleSave]);
+  }, [flushSlotSave, flushStyleSave, flushFrameSave]);
 
   useEffect(() => {
     setTextSelection(null);
+    setImageSelection(null);
   }, [currentSlide]);
 
   const applyPlatform = (next: Platform) => {
@@ -1733,7 +1886,7 @@ export function CarouselStudioApp({
                   <div id="editorStep">
                     <div
                       className={`editor-shell${
-                        textSelection ? " has-inspector" : ""
+                        textSelection || imageSelection ? " has-inspector" : ""
                       }`}
                     >
                       <aside className="panel">
@@ -1769,6 +1922,7 @@ export function CarouselStudioApp({
                                       handle={studioHandle}
                                       imageUrls={remakeImageUrls ?? undefined}
                                       slotStyles={remakeSlotStyles}
+                                      imageFrames={remakeImageFrames}
                                     />
                                   </div>
                                 </div>
@@ -1814,13 +1968,19 @@ export function CarouselStudioApp({
                                 const parsed = JSON.parse(old) as {
                                   slotValues?: CarouselSlideValuesById;
                                   slotStyles?: CarouselSlotStyleMap;
+                                  imageUrls?: CarouselImageUrlMap | null;
+                                  imageFrames?: CarouselImageFrameMap;
                                 } & CarouselSlideValuesById;
                                 const slotValues =
                                   parsed.slotValues ??
                                   (parsed as CarouselSlideValuesById);
                                 const slotStyles = parsed.slotStyles ?? {};
+                                const imageUrls = parsed.imageUrls ?? remakeImageUrls;
+                                const imageFrames = parsed.imageFrames ?? {};
                                 setRemakeSlotValues(slotValues);
                                 setRemakeSlotStyles(slotStyles);
+                                setRemakeImageUrls(imageUrls);
+                                setRemakeImageFrames(imageFrames);
                                 if (remakeId != null) {
                                   replaceSlotMutation.mutate({
                                     remakeId,
@@ -1829,6 +1989,14 @@ export function CarouselStudioApp({
                                   replaceSlotStyleMutation.mutate({
                                     remakeId,
                                     slotStyleOverrides: slotStyles,
+                                  });
+                                  replaceImageUrlsMutation.mutate({
+                                    remakeId,
+                                    imageUrls: imageUrls ?? {},
+                                  });
+                                  replaceImageFramesMutation.mutate({
+                                    remakeId,
+                                    imageFrameOverrides: imageFrames,
                                   });
                                 }
                               } catch {
@@ -1841,7 +2009,10 @@ export function CarouselStudioApp({
                         </div>
                         <div
                           className="canvas-area"
-                          onClick={() => setTextSelection(null)}
+                          onClick={() => {
+                            setTextSelection(null);
+                            setImageSelection(null);
+                          }}
                         >
                           {studioTemplate && currentSlideSpec ? (
                             <div
@@ -1862,17 +2033,29 @@ export function CarouselStudioApp({
                                   handle={studioHandle}
                                   imageUrls={remakeImageUrls ?? undefined}
                                   slotStyles={remakeSlotStyles}
+                                  imageFrames={remakeImageFrames}
                                   selectedSlotId={
                                     textSelection?.slideId ===
                                     currentSlideSpec.id
                                       ? textSelection.slotId
                                       : null
                                   }
-                                  onSlotSelect={(slideId, slotId) =>
+                                  selectedImageSlotId={
+                                    imageSelection?.slideId ===
+                                    currentSlideSpec.id
+                                      ? imageSelection.slotId
+                                      : null
+                                  }
+                                  onSlotSelect={(slideId, slotId) => {
+                                    setImageSelection(null);
                                     setTextSelection(
                                       buildTextSelection(slideId, slotId)
-                                    )
-                                  }
+                                    );
+                                  }}
+                                  onImageSelect={(slideId, slotId) => {
+                                    setTextSelection(null);
+                                    setImageSelection({ slideId, slotId });
+                                  }}
                                   editable
                                   onSlotChange={handleSlotChange}
                                 />
@@ -1913,6 +2096,36 @@ export function CarouselStudioApp({
                             )
                           }
                         />
+                      ) : imageSelection && currentSlideSpec ? (
+                        <CarouselImageInspector
+                          slotId={imageSelection.slotId}
+                          imageUrl={
+                            normalizeSlideImages(
+                              remakeImageUrls?.[imageSelection.slideId]
+                            ).imageUrlsBySlot?.[imageSelection.slotId] ??
+                            normalizeSlideImages(
+                              remakeImageUrls?.[imageSelection.slideId]
+                            ).imageUrl ??
+                            ""
+                          }
+                          frame={
+                            remakeImageFrames[imageSelection.slideId]?.[
+                              imageSelection.slotId
+                            ]
+                          }
+                          regenerating={regenerateSlideImageMutation.isPending}
+                          onReplaceFile={(file) => {
+                            void handleReplaceImageFile(file);
+                          }}
+                          onRegenerate={handleRegenerateImage}
+                          onFrameChange={(patch) =>
+                            handleImageFrameChange(
+                              imageSelection.slideId,
+                              imageSelection.slotId,
+                              patch
+                            )
+                          }
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -1932,6 +2145,7 @@ export function CarouselStudioApp({
           designOverride={studioDesignOverride}
           imageUrls={remakeImageUrls ?? undefined}
           slotStyles={remakeSlotStyles}
+          imageFrames={remakeImageFrames}
           handle={studioHandle}
           displayName={user?.name}
           currentSlide={currentSlide}
@@ -2018,6 +2232,7 @@ export function CarouselStudioApp({
             handle={studioHandle}
             imageUrls={remakeImageUrls ?? undefined}
             slotStyles={remakeSlotStyles}
+            imageFrames={remakeImageFrames}
           />
         </div>
       ) : null}

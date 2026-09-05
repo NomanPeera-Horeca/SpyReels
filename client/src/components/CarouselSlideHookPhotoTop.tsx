@@ -3,6 +3,7 @@ import type {
   CarouselSlotValues,
 } from "@shared/carouselTemplates";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselSlideHookPhotoTopProps = {
@@ -63,19 +64,30 @@ export function CarouselSlideHookPhotoTop({
     >
       <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
 
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          width: "100%",
-          height: "55%",
-          flexShrink: 0,
-          backgroundColor: tokens.colors.muted,
-          backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      />
+      {imageUrl ? (
+        <CarouselEditableImage
+          slotId="photo"
+          src={imageUrl}
+          style={{
+            position: "relative",
+            zIndex: 1,
+            width: "100%",
+            height: "55%",
+            flexShrink: 0,
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            width: "100%",
+            height: "55%",
+            flexShrink: 0,
+            backgroundColor: tokens.colors.muted,
+          }}
+        />
+      )}
 
       <div
         style={{
