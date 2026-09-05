@@ -10,6 +10,7 @@ function emptySignals(): ViralPersonalizationSignals {
   return {
     strongCreatorHandles: new Set(),
     radarCreatorHandles: new Set(),
+    similarCreatorHandles: new Set(),
     preferredFormats: new Map(),
     topicTerms: new Map(),
     collectedSourceKeys: new Set(),
@@ -60,7 +61,10 @@ describe("viralPosts personalization", () => {
     expect(personalizationRelevanceBoost(candidate(), emptySignals())).toBe(0);
   });
 
-  it("gives explicit creator and Collected affinity more weight than passive Radar", () => {
+  it("keeps similar creator affinity weaker than Radar and explicit creator affinity", () => {
+    const similar = emptySignals();
+    similar.similarCreatorHandles.add("pricingcreator");
+
     const passive = emptySignals();
     passive.radarCreatorHandles.add("pricingcreator");
 
@@ -68,10 +72,12 @@ describe("viralPosts personalization", () => {
     explicit.strongCreatorHandles.add("pricingcreator");
     explicit.collectedSourceKeys.add("instagram:abc123");
 
+    const similarBoost = personalizationRelevanceBoost(candidate(), similar);
     const passiveBoost = personalizationRelevanceBoost(candidate(), passive);
     const explicitBoost = personalizationRelevanceBoost(candidate(), explicit);
 
-    expect(passiveBoost).toBeGreaterThan(0);
+    expect(similarBoost).toBeGreaterThan(0);
+    expect(passiveBoost).toBeGreaterThan(similarBoost);
     expect(explicitBoost).toBeGreaterThan(passiveBoost);
   });
 
