@@ -1,9 +1,8 @@
 import { hostname } from "os";
 import type { ViralPostPool } from "../../drizzle/schema";
-import { runDiscoveryPipeline } from "../discovery/pipeline";
 import { scrapeTikTokVideos } from "../tiktok";
 import { scrapeYouTubeShorts } from "../youtube";
-import { adaptDiscoveryResult, type AdaptedCandidate } from "./candidateAdapter";
+import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS, VIRAL_SEED_POOL_PILLAR } from "./constants";
 import {
   isViralPostsLive,
@@ -11,6 +10,7 @@ import {
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
 import { loadFeaturedTransferableCandidates } from "./featuredSupply";
+import { discoverInstagramPoolCandidates } from "./instagramPoolDiscovery";
 import { classifyCandidatePillars } from "./pillarClassify";
 import {
   adaptTikTokVideos,
@@ -185,22 +185,15 @@ async function refreshInstagramPool(
   featuredCandidateCount: number;
   costEstimateUsd?: number;
 }> {
-  const description = `Find Instagram Reels about ${pool.pillar} for creators in the ${pool.niche} niche. Prefer practical, remakeable talking-head and educational formats.`;
-  const result = await runDiscoveryPipeline(description, undefined, {
-    skipMediaMirroring: true,
+  const result = await discoverInstagramPoolCandidates({
+    niche: pool.niche,
+    pillar: pool.pillar,
     maxScCalls,
-    skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-    skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-    // Intentionally no hashtag early-stop here. The discovery pipeline generates
-    // narrow tags first and wider/adjacent tags second; stopping at 40 could
-    // prevent Viral Posts from ever searching the wider set. maxScCalls remains
-    // the hard provider-cost ceiling for this refresh.
   });
-  const providerAdapted = adaptDiscoveryResult(result);
   const providerCandidateCount = await persistAdaptedToPool({
     pool,
-    adapted: providerAdapted,
-    scCalls: result.scCallCount || 0,
+    adapted: result.adapted,
+    scCalls: result.totalScCalls,
     costEstimateUsd: result.costEstimateUsd,
   });
   const featuredCandidateCount = await hydrateFeaturedSupply(pool);
@@ -208,10 +201,19 @@ async function refreshInstagramPool(
     poolId: pool.id,
     providerCandidates: providerCandidateCount,
     featuredCandidates: featuredCandidateCount,
-    providerCalls: result.scCallCount || 0,
+    providerCalls: result.totalScCalls,
+    shallowCalls: result.shallowScCalls,
+    drillCalls: result.drillScCalls,
+    hashtags: result.hashtagsUsed,
+    shallowCandidates: result.shallowCandidateCount,
+    uniqueShallowCreators: result.uniqueShallowCreators,
+    selectedCreators: result.selectedCreators.map((creator) => creator.handle),
+    drilledCreators: result.drilledCreatorHandles,
+    drilledReelsRead: result.drilledReelsRead,
+    drilledViralCandidates: result.drilledViralCandidates,
   });
   return {
-    scCalls: result.scCallCount || 0,
+    scCalls: result.totalScCalls,
     candidateCount: providerCandidateCount + featuredCandidateCount,
     featuredCandidateCount,
     costEstimateUsd: result.costEstimateUsd,
