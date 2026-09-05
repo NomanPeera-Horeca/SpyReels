@@ -22,6 +22,33 @@ export type ScoredCandidateInput = {
   adaptabilityScore: number;
 };
 
+export type ScoreWeights = {
+  velocity: number;
+  reach: number;
+  engagement: number;
+  freshness: number;
+  relevance: number;
+  adaptability: number;
+};
+
+export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = {
+  velocity: 0.3,
+  reach: 0.2,
+  engagement: 0.15,
+  freshness: 0.15,
+  relevance: 0.15,
+  adaptability: 0.05,
+};
+
+export const TODAY_PICKS_SCORE_WEIGHTS: ScoreWeights = {
+  velocity: 0.18,
+  reach: 0.12,
+  engagement: 0.12,
+  freshness: 0.1,
+  relevance: 0.28,
+  adaptability: 0.2,
+};
+
 export type ScoredMetrics = {
   reachMultiplier: number | null;
   engagementRate: number | null;
@@ -68,10 +95,6 @@ export function computeReachMultiplier(
   return views / followers;
 }
 
-/**
- * Engagement with optional share/save weighting.
- * When shares/saves are unavailable, they are omitted (not treated as zero).
- */
 export function computeEngagementRate(input: {
   views: number | null;
   likes: number | null;
@@ -109,8 +132,7 @@ export function computeViewsPerHour(
 ): number | null {
   if (views == null || !Number.isFinite(views) || views < 0) return null;
   if (ageHours == null || !Number.isFinite(ageHours)) return null;
-  const denom = Math.max(ageHours, 1);
-  return views / denom;
+  return views / Math.max(ageHours, 1);
 }
 
 export function freshnessScoreFromAge(ageHours: number | null): number {
@@ -123,9 +145,6 @@ export function freshnessScoreFromAge(ageHours: number | null): number {
   return 0.1;
 }
 
-/**
- * Transparent trend labels. Prefer unknown when data is insufficient.
- */
 export function classifyTrendStatus(input: {
   reachMultiplier: number | null;
   viewsPerHour: number | null;
@@ -140,87 +159,53 @@ export function classifyTrendStatus(input: {
     Number.isFinite(ageHours) &&
     viewsPerHour != null &&
     Number.isFinite(viewsPerHour);
-
   if (!hasCore) return "unknown";
-
-  // Saturated: older, still huge absolute views, slower velocity
-  if (ageHours! >= 72 && views! >= 500_000 && viewsPerHour! < 2_000) {
-    return "saturated";
-  }
-
-  // Breaking out: young + strong velocity and/or extreme reach
+  if (ageHours! >= 72 && views! >= 500_000 && viewsPerHour! < 2_000) return "saturated";
   if (
     ageHours! <= 24 &&
     ((viewsPerHour! >= 8_000 && views! >= 20_000) ||
       (reachMultiplier != null && reachMultiplier >= 15 && views! >= 10_000))
-  ) {
-    return "breaking-out";
-  }
-
-  // Rising fast: recent + solid velocity
-  if (ageHours! <= 48 && viewsPerHour! >= 3_000 && views! >= 8_000) {
-    return "rising-fast";
-  }
-
-  // Proven: older but still performing with healthy reach
+  ) return "breaking-out";
+  if (ageHours! <= 48 && viewsPerHour! >= 3_000 && views! >= 8_000) return "rising-fast";
   if (
     ageHours! >= 48 &&
     views! >= 80_000 &&
     (reachMultiplier == null || reachMultiplier >= 3)
-  ) {
-    return "proven-format";
-  }
-
-  if (reachMultiplier != null && reachMultiplier >= 5 && views! >= 5_000) {
-    return "rising-fast";
-  }
-
+  ) return "proven-format";
+  if (reachMultiplier != null && reachMultiplier >= 5 && views! >= 5_000) return "rising-fast";
   return "unknown";
 }
 
 export function scoreCandidate(
   input: ScoredCandidateInput,
   pool: ScoredCandidateInput[],
-  now = new Date()
+  now = new Date(),
+  weights: ScoreWeights = DEFAULT_SCORE_WEIGHTS
 ): ScoredMetrics {
   const ageHours = ageHoursFromPublished(input.publishedAt, now);
-  const reachMultiplier = computeReachMultiplier(
-    input.views,
-    input.creatorFollowers
-  );
+  const reachMultiplier = computeReachMultiplier(input.views, input.creatorFollowers);
   const engagementRate = computeEngagementRate(input);
   const viewsPerHour = computeViewsPerHour(input.views, ageHours);
   const freshnessScore = freshnessScoreFromAge(ageHours);
-
-  const poolReach = pool.map((p) =>
-    computeReachMultiplier(p.views, p.creatorFollowers)
-  );
+  const poolReach = pool.map((p) => computeReachMultiplier(p.views, p.creatorFollowers));
   const poolEng = pool.map((p) => computeEngagementRate(p));
-  const poolVel = pool.map((p) =>
-    computeViewsPerHour(p.views, ageHoursFromPublished(p.publishedAt, now))
-  );
-
+  const poolVel = pool.map((p) => computeViewsPerHour(p.views, ageHoursFromPublished(p.publishedAt, now)));
   const nVel = normalizeInPool(viewsPerHour, poolVel);
   const nReach = normalizeInPool(reachMultiplier, poolReach);
   const nEng = normalizeInPool(engagementRate, poolEng);
   const nFresh = clamp01(freshnessScore);
   const nRel = clamp01(input.relevanceScore / 100);
   const nAdapt = clamp01(input.adaptabilityScore / 100);
-
   const hasFollowers = input.creatorFollowers != null && input.creatorFollowers > 0;
-  // Redistribute reach weight when followers unavailable
-  const wVel = 0.3;
-  const wReach = hasFollowers ? 0.2 : 0;
-  const wEng = 0.15;
-  const wFresh = 0.15;
-  const wRel = 0.15 + (hasFollowers ? 0 : 0.1);
-  const wAdapt = 0.05 + (hasFollowers ? 0 : 0.1);
-
+  const missingReachWeight = hasFollowers ? 0 : weights.reach;
+  const wReach = hasFollowers ? weights.reach : 0;
+  const wRel = weights.relevance + missingReachWeight * 0.5;
+  const wAdapt = weights.adaptability + missingReachWeight * 0.5;
   const finalScore =
-    wVel * nVel +
+    weights.velocity * nVel +
     wReach * nReach +
-    wEng * nEng +
-    wFresh * nFresh +
+    weights.engagement * nEng +
+    weights.freshness * nFresh +
     wRel * nRel +
     wAdapt * nAdapt;
 
@@ -231,12 +216,7 @@ export function scoreCandidate(
     ageHours,
     freshnessScore,
     finalScore,
-    trendStatus: classifyTrendStatus({
-      reachMultiplier,
-      viewsPerHour,
-      ageHours,
-      views: input.views,
-    }),
+    trendStatus: classifyTrendStatus({ reachMultiplier, viewsPerHour, ageHours, views: input.views }),
     availability: {
       hasFollowers,
       hasViews: input.views != null,
