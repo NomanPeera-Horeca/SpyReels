@@ -56,7 +56,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/features/viral-reel-finder");
 });
 
-test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
+test("visitor can understand and interact with the Reel Finder before signup", async ({ page }, testInfo) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Any Instagram account's viral Reels");
   await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
   await expect(page.locator("video")).toHaveCount(0);
@@ -69,8 +69,16 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   const firstReel = page.getByRole("button", { name: /See what SpyReels does next/ }).first();
   await expect(firstReel).toBeVisible();
   await firstReel.click();
-  await expect(page.getByRole("heading", { name: "See the path before you sign in." })).toBeVisible();
+
+  const nextStepHeading = page.getByRole("heading", { name: "See the path before you sign in." });
+  await expect(nextStepHeading).toBeVisible();
   await expect(page.getByText("Selected — explore below ↓")).toBeVisible();
+  await expect.poll(async () =>
+    nextStepHeading.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.top < window.innerHeight && rect.bottom > 0;
+    })
+  ).toBe(true);
 
   await page.getByRole("button", { name: "2. Transcript" }).click();
   await expect(page.getByText("Turn the Reel into text you can inspect.")).toBeVisible();
@@ -99,6 +107,11 @@ test("visitor can understand and interact with the Reel Finder before signup", a
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(2);
+
+  await testInfo.attach("final-page", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
 });
 
 test("research CTA hands the selected Instagram account to the real app", async ({ page }) => {
