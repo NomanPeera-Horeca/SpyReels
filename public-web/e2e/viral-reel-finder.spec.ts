@@ -12,6 +12,15 @@ async function reelOrder(page: Page): Promise<string[]> {
   );
 }
 
+async function searchAccount(page: Page, handle: string) {
+  const form = page.locator("form[data-finder-ready='true']");
+  await expect(form).toBeVisible();
+  const handleInput = page.getByLabel("Instagram username or profile link");
+  await handleInput.fill(handle);
+  await expect(handleInput).toHaveValue(handle);
+  await form.locator('button[type="submit"]').click();
+}
+
 test.beforeEach(async ({ page }) => {
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
@@ -28,7 +37,17 @@ test.beforeEach(async ({ page }) => {
     failedRequests,
   };
   await page.goto("/features/viral-reel-finder", { waitUntil: "networkidle" });
-  await waitForDemoReady(page);
+});
+
+test("first paint asks for one account before showing Reels", async ({ page }) => {
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Any Instagram account's viral Reels");
+  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "@garyvee", exact: true })).toBeVisible();
+  await expect(page.getByTestId("reel-card")).toHaveCount(0);
+  await expect(page.getByText("Interactive example", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Research @noman_peera" })).toHaveCount(0);
 });
 
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
@@ -37,17 +56,18 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
   await expect(page.getByText("Paste a public Instagram handle")).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
-  await expect(page.getByText("Interactive example", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("reel-card")).toHaveCount(0);
   await expect(page.locator("video")).toHaveCount(0);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(2);
 
-  const handleInput = page.getByLabel("Instagram username or profile link");
-  await handleInput.fill("noman_peera");
-  await expect(page.getByText("@noman_peera", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Research @noman_peera" })).toBeVisible();
+  await searchAccount(page, "noman_peera");
+  await expect(page.getByText("@noman_peera", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
+  await expect(page.getByTestId("research-found-account")).toHaveText("Research @noman_peera in SpyReels");
   await expect(page.getByTestId("profile-found-hint")).toContainText("We found @noman_peera");
+  await expect(page.getByTestId("reel-card")).toHaveCount(0);
   const avatar = page.locator("article").filter({ hasText: "@noman_peera" }).locator("img").first();
   await expect(avatar).toBeVisible();
   await expect(avatar).toHaveCSS("object-fit", "cover");
@@ -82,9 +102,12 @@ test("visitor can understand and interact with the Reel Finder before signup", a
 
   await first.click();
   await expect(first).toHaveAttribute("aria-pressed", "true");
-  await expect(first.getByText("Selected. Explore below")).toBeVisible();
-  const nextStep = page.getByRole("heading", { name: "See the path before you sign in." });
+  await expect(first.getByText("Selected", { exact: true })).toBeVisible();
+  const nextStep = page.getByRole("region", { name: "Selected Reel" });
   await expect(nextStep).toBeVisible();
+  await expect(nextStep.getByText("This Reel")).toBeVisible();
+  await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
+  await expect(nextStep.getByRole("button", { name: /Continue @|Research @/ })).toHaveCount(0);
   await expect.poll(async () =>
     nextStep.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -95,26 +118,21 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   if (visibleBefore > 1) {
     await middle.click();
     await expect(middle).toHaveAttribute("aria-pressed", "true");
-    await expect(middle.getByText("Selected. Explore below")).toBeVisible();
+    await expect(middle.getByText("Selected", { exact: true })).toBeVisible();
+    await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
   }
   if (visibleBefore > 2) {
     await last.click();
     await expect(last).toHaveAttribute("aria-pressed", "true");
-    await expect(last.getByText("Selected. Explore below")).toBeVisible();
+    await expect(last.getByText("Selected", { exact: true })).toBeVisible();
   }
 
+  await page.getByTestId("reveal-spyreels-next").click();
   const stepDetail = page.getByTestId("workflow-step-detail");
-  await expect(stepDetail).toHaveAttribute("data-step", "hook");
-  await expect(stepDetail.getByText("Start with the actual Reel")).toBeVisible();
-
-  await page.getByRole("button", { name: "2. Transcript", exact: true }).click();
-  await expect(stepDetail).toHaveAttribute("data-step", "transcript");
-  await expect(stepDetail.getByText("Turn the Reel into text you can inspect.")).toBeVisible();
-  await expect(stepDetail.getByText("Start with the actual Reel")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "3. Create", exact: true }).click();
-  await expect(stepDetail).toHaveAttribute("data-step", "create");
-  await expect(stepDetail.getByText("Use the research as context for an original script.")).toBeVisible();
+  await expect(stepDetail).toHaveAttribute("data-step", "next");
+  await expect(stepDetail.getByText("Transcribe this Reel, then write your own version.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Continue @/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "What SpyReels can do next" })).toHaveCount(0);
 
   const showAll = page.getByRole("button", { name: /Show all \d+ Reels/ });
   if (demo.reels.length > 4) {
@@ -151,10 +169,10 @@ test("research CTA hands the selected Instagram account to the real app", async 
     await route.fulfill({ status: 200, contentType: "text/html", body: "<html><body>handoff</body></html>" });
   });
 
-  const handleInput = page.getByLabel("Instagram username or profile link");
-  await handleInput.fill("noman_peera");
-  const researchButton = page.getByRole("button", { name: "Research @noman_peera" });
-  await expect(researchButton).toBeVisible();
+  await searchAccount(page, "noman_peera");
+  const researchButton = page.getByTestId("research-found-account");
+  await expect(researchButton).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
   await researchButton.click();
 
   await expect(page).toHaveURL(/https:\/\/spyreels\.ai\/\?/);

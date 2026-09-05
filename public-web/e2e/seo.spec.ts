@@ -17,6 +17,10 @@ test.describe("Viral Reel Finder raw HTML", () => {
     expect(html).toContain("Three steps from competitor account");
     expect(html).toContain("Questions about the Instagram Reel Finder");
     expect(html).toContain("https://spyreels.ai/free-tools/tiktok-viral-video-finder");
+    expect(html).toContain("https://spyreels.ai/free-tools/instagram-reels-script-generator");
+    expect(html).toContain("https://spyreels.ai/free-tools/viral-hooks");
+    expect(html).toContain("Explore more tools");
+    expect(html).toContain("How it works");
     expect(html).toContain("https://spyreels.ai/blog/guide-find-viral-reels-your-niche");
     expect(html).toContain("https://spyreels.ai/blog/guide-reverse-engineer-viral-reels");
     expect(html).toContain("application/ld+json");

@@ -40,7 +40,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What does SpyReels do after I find a strong Reel?",
-    a: "You can study the opening hook, transcribe the Reel, keep it as research context, and move the useful idea into your own script and production workflow instead of simply copying the original post.",
+    a: "This page shows the opening and the performance numbers. If you continue in SpyReels, you can transcribe the Reel and use that research as context for an original script.",
   },
   {
     q: "Is there a free version?",
@@ -110,10 +110,10 @@ export default function ViralReelFinderPilotPage() {
             Free Instagram Reel Finder
           </div>
           <h1>
-            Any Instagram account&apos;s viral Reels, <span className={styles.accent}>remade in your voice.</span>
+            Any Instagram account&apos;s viral Reels, <span className={styles.accent}>ranked by what worked.</span>
           </h1>
           <p className={styles.heroLead}>
-            Paste a public Instagram handle. SpyReels identifies the account, shows the strongest Reels you can study, and connects the research to your own content workflow.
+            Paste a public Instagram handle. See the Reels that performed best. Then decide if you want SpyReels to do more.
           </p>
           <ViralFinderExperience />
         </section>
@@ -160,10 +160,10 @@ export default function ViralReelFinderPilotPage() {
         </section>
 
         <section className={`${styles.shell} ${styles.finalCta}`}>
-          <span className={styles.sectionEyebrow}>Try the product first</span>
-          <h2>Start with one creator you already follow.</h2>
-          <p>Find the account above, explore the interaction, and see exactly what happens before you decide to continue.</p>
-          <a className={styles.primaryLink} href="#live-demo">Try the interactive demo</a>
+          <span className={styles.sectionEyebrow}>One next step</span>
+          <h2>Enter a handle you care about.</h2>
+          <p>Rank example Reels here. Rank your own account in SpyReels.</p>
+          <a className={styles.primaryLink} href="#live-demo">Find an account</a>
         </section>
       </main>
 
