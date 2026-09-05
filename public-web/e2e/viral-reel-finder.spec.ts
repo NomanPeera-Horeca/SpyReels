@@ -82,9 +82,12 @@ test("visitor can understand and interact with the Reel Finder before signup", a
 
   await first.click();
   await expect(first).toHaveAttribute("aria-pressed", "true");
-  await expect(first.getByText("Selected. Explore below")).toBeVisible();
-  const nextStep = page.getByRole("heading", { name: "See the path before you sign in." });
+  await expect(first.getByText("Selected", { exact: true })).toBeVisible();
+  const nextStep = page.getByRole("region", { name: "Selected Reel" });
   await expect(nextStep).toBeVisible();
+  await expect(nextStep.getByText("This Reel")).toBeVisible();
+  await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
+  await expect(nextStep.getByRole("button", { name: /Continue @/ })).toHaveCount(0);
   await expect.poll(async () =>
     nextStep.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -95,26 +98,21 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   if (visibleBefore > 1) {
     await middle.click();
     await expect(middle).toHaveAttribute("aria-pressed", "true");
-    await expect(middle.getByText("Selected. Explore below")).toBeVisible();
+    await expect(middle.getByText("Selected", { exact: true })).toBeVisible();
+    await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
   }
   if (visibleBefore > 2) {
     await last.click();
     await expect(last).toHaveAttribute("aria-pressed", "true");
-    await expect(last.getByText("Selected. Explore below")).toBeVisible();
+    await expect(last.getByText("Selected", { exact: true })).toBeVisible();
   }
 
+  await page.getByTestId("reveal-spyreels-next").click();
   const stepDetail = page.getByTestId("workflow-step-detail");
-  await expect(stepDetail).toHaveAttribute("data-step", "hook");
-  await expect(stepDetail.getByText("Start with the actual Reel")).toBeVisible();
-
-  await page.getByRole("button", { name: "2. Transcript", exact: true }).click();
-  await expect(stepDetail).toHaveAttribute("data-step", "transcript");
-  await expect(stepDetail.getByText("Turn the Reel into text you can inspect.")).toBeVisible();
-  await expect(stepDetail.getByText("Start with the actual Reel")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "3. Create", exact: true }).click();
-  await expect(stepDetail).toHaveAttribute("data-step", "create");
-  await expect(stepDetail.getByText("Use the research as context for an original script.")).toBeVisible();
+  await expect(stepDetail).toHaveAttribute("data-step", "next");
+  await expect(stepDetail.getByText("Transcribe this Reel, then write your own version.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Continue @/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "What SpyReels can do next" })).toHaveCount(0);
 
   const showAll = page.getByRole("button", { name: /Show all \d+ Reels/ });
   if (demo.reels.length > 4) {
