@@ -236,11 +236,17 @@ function PathStations({
   count,
   current,
   labels,
+  labelSlotId,
+  editable,
+  onSlotChange,
 }: {
   tokens: CarouselDesignTokens;
   count: number;
   current?: number | null;
   labels?: Array<string | null>;
+  labelSlotId?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 }) {
   if (count < 2) return null;
   const named = labels?.some(Boolean) ?? false;
@@ -333,8 +339,14 @@ function PathStations({
           }}
         >
           {(labels ?? []).map((line, index) => (
-            <p
+            <CarouselEditableText
               key={`station-label-${index}`}
+              as="p"
+              slotId={labelSlotId ?? "body"}
+              value={line ?? ""}
+              editable={Boolean(editable && labelSlotId && line)}
+              selectOnly
+              onCommit={onSlotChange}
               style={{
                 margin: 0,
                 fontSize: DESIGN.typography.stepLabel,
@@ -346,9 +358,7 @@ function PathStations({
                     ? tokens.colors.foreground
                     : tokens.colors.muted,
               }}
-            >
-              {line ?? ""}
-            </p>
+            />
           ))}
         </div>
       ) : null}
@@ -572,6 +582,9 @@ function RouteMap({
             tokens={tokens}
             count={count}
             labels={labels}
+            labelSlotId={supportCopy(values) ? "support" : "body"}
+            editable={editable}
+            onSlotChange={onSlotChange}
           />
         </div>
       ) : (
@@ -838,9 +851,10 @@ function ActionChecklist({
             />
             <CarouselEditableText
               as="p"
-              slotId={index === 0 ? "body" : "support"}
+              slotId="body"
               value={line}
-              editable={editable && index === 0}
+              editable={editable}
+              selectOnly
               onCommit={onSlotChange}
               multiline
               style={{
@@ -1199,7 +1213,15 @@ function Recap({
       </div>
       <div style={{ marginTop: count >= 2 ? 0 : "1.35rem" }}>
         {count >= 2 ? (
-          <PathStations tokens={tokens} count={count} labels={labels} current={count} />
+          <PathStations
+            tokens={tokens}
+            count={count}
+            labels={labels}
+            current={count}
+            labelSlotId={supportCopy(values) ? "support" : "body"}
+            editable={editable}
+            onSlotChange={onSlotChange}
+          />
         ) : (
           <NextArrow tokens={tokens} />
         )}

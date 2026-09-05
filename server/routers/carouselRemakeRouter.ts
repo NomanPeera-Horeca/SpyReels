@@ -8,6 +8,10 @@ import {
   selectRecommendedCreativeBrief,
 } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import {
+  normalizeCarouselSlotStyleMap,
+  upsertCarouselSlotStyleMap,
+} from "@shared/carouselSlotStyle";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -467,6 +471,7 @@ export const carouselRemakeRouter = router({
         slotValues: row.slotValuesJson ?? null,
         slideStructure: row.slideStructureJson ?? null,
         designOverride: row.designOverrideJson ?? null,
+        slotStyleOverrides: row.slotStyleOverridesJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
         angleOptions: row.angleOptionsJson == null ? null : briefs,
@@ -748,6 +753,190 @@ export const carouselRemakeRouter = router({
         .where(eq(carouselRemakes.id, input.remakeId));
 
       return { slotValues: next };
+    }),
+
+  /**
+   * Replace the full slotValuesJson map after undo.
+   * Auth + workspace ownership; no LLM / image work.
+   */
+  replaceSlotValues: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slotValues: z.record(z.string(), z.record(z.string(), z.string().max(4000))),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing slide text",
+        });
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({
+          slotValuesJson: input.slotValues as Record<
+            string,
+            Record<string, string>
+          >,
+        })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { slotValues: input.slotValues };
+    }),
+
+  /**
+   * Merge one typography override into slotStyleOverridesJson.
+   * Auth + workspace ownership; no LLM / image work.
+   */
+  updateSlotStyle: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+        style: z.object({
+          fontFamily: z.string().max(128).nullable().optional(),
+          fontSizePx: z.number().int().min(12).max(56).nullable().optional(),
+          fontWeight: z.number().int().nullable().optional(),
+          textAlign: z.enum(["left", "center", "right"]).nullable().optional(),
+          color: z.string().max(16).nullable().optional(),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          slotStyleOverridesJson: carouselRemakes.slotStyleOverridesJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing slide style",
+        });
+      }
+
+      const current = normalizeCarouselSlotStyleMap(row.slotStyleOverridesJson);
+      const next = upsertCarouselSlotStyleMap(
+        current,
+        input.slideId,
+        input.slotId,
+        input.style
+      );
+
+      await db
+        .update(carouselRemakes)
+        .set({ slotStyleOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { slotStyleOverrides: next };
+    }),
+
+  /**
+   * Replace the full typography map after undo.
+   */
+  replaceSlotStyles: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slotStyleOverrides: z.record(z.string(), z.record(z.string(), z.unknown())),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing slide style",
+        });
+      }
+
+      const next = normalizeCarouselSlotStyleMap(input.slotStyleOverrides);
+      await db
+        .update(carouselRemakes)
+        .set({ slotStyleOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { slotStyleOverrides: next };
     }),
 
   /**

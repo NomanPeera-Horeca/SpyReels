@@ -119,6 +119,19 @@ function supportCopy(values: CarouselSlotValues): string {
   return values.support?.trim() || values.subhead?.trim() || "";
 }
 
+function partLabelSlotId(values: CarouselSlotValues): string {
+  if (values.support?.trim()) return "support";
+  if (values.subhead?.trim()) return "subhead";
+  return "support";
+}
+
+function quadrantSourceSlotId(values: CarouselSlotValues): string {
+  if (values.support?.trim()) return "support";
+  if (values.subhead?.trim()) return "subhead";
+  if (values.body?.trim()) return "body";
+  return "body";
+}
+
 function leftCopy(values: CarouselSlotValues): string {
   return values.left?.trim() || "";
 }
@@ -321,11 +334,17 @@ function ConnectedModel({
   count,
   current,
   labels,
+  labelSlotId,
+  editable,
+  onSlotChange,
 }: {
   tokens: CarouselDesignTokens;
   count: number;
   current?: number | null;
   labels?: Array<string | null>;
+  labelSlotId?: string;
+  editable?: boolean;
+  onSlotChange?: (slotId: string, value: string) => void;
 }) {
   if (count < 2) return null;
   const named = labels?.some(Boolean) ?? false;
@@ -413,24 +432,39 @@ function ConnectedModel({
             gap: "0.4rem",
           }}
         >
-          {(labels ?? []).map((line, index) => (
-            <p
-              key={`node-label-${index}`}
-              style={{
-                margin: 0,
-                fontSize: DESIGN.typography.partLabel,
-                lineHeight: 1.3,
-                letterSpacing: "0.02em",
-                textAlign: "center",
-                color:
-                  current === index + 1
-                    ? tokens.colors.foreground
-                    : tokens.colors.muted,
-              }}
-            >
-              {line ?? ""}
-            </p>
-          ))}
+          {(labels ?? []).map((line, index) =>
+            line ? (
+              <CarouselEditableText
+                key={`node-label-${index}`}
+                as="p"
+                slotId={labelSlotId ?? "support"}
+                value={line}
+                editable={Boolean(editable && labelSlotId)}
+                selectOnly
+                onCommit={onSlotChange}
+                style={{
+                  margin: 0,
+                  fontSize: DESIGN.typography.partLabel,
+                  lineHeight: 1.3,
+                  letterSpacing: "0.02em",
+                  textAlign: "center",
+                  color:
+                    current === index + 1
+                      ? tokens.colors.foreground
+                      : tokens.colors.muted,
+                }}
+              />
+            ) : (
+              <p
+                key={`node-label-${index}`}
+                style={{
+                  margin: 0,
+                  fontSize: DESIGN.typography.partLabel,
+                  lineHeight: 1.3,
+                }}
+              />
+            )
+          )}
         </div>
       ) : null}
     </div>
@@ -463,7 +497,7 @@ function CoverEditorial({
         <Eyebrow
           value={k || "Framework"}
           tokens={tokens}
-          editable={editable}
+          editable={Boolean(k) && editable}
           onSlotChange={onSlotChange}
         />
         <CarouselEditableText
@@ -543,7 +577,7 @@ function CoverDiagram({
       <Eyebrow
         value={k || "Model"}
         tokens={tokens}
-        editable={editable}
+        editable={Boolean(k) && editable}
         onSlotChange={onSlotChange}
       />
       <CarouselEditableText
@@ -769,6 +803,9 @@ function ConnectedNodes({
             count={count}
             current={current}
             labels={extra}
+            labelSlotId={partLabelSlotId(values)}
+            editable={editable}
+            onSlotChange={onSlotChange}
           />
         </div>
       ) : null}
@@ -852,20 +889,41 @@ function VerticalPillars({
                 minHeight: DESIGN.geometry.modelBand,
               }}
             >
-              <p
-                style={{
-                  margin: "0 0 0.45rem",
-                  fontSize: DESIGN.typography.partLabel,
-                  lineHeight: 1.3,
-                  fontWeight: active ? 760 : 620,
-                  letterSpacing: "0.04em",
-                  color: active
-                    ? tokens.colors.foreground
-                    : tokens.colors.muted,
-                }}
-              >
-                {extra[index] ?? String(index + 1)}
-              </p>
+              {extra[index] ? (
+                <CarouselEditableText
+                  as="p"
+                  slotId={partLabelSlotId(values)}
+                  value={extra[index] ?? ""}
+                  editable={editable}
+                  selectOnly
+                  onCommit={onSlotChange}
+                  style={{
+                    margin: "0 0 0.45rem",
+                    fontSize: DESIGN.typography.partLabel,
+                    lineHeight: 1.3,
+                    fontWeight: active ? 760 : 620,
+                    letterSpacing: "0.04em",
+                    color: active
+                      ? tokens.colors.foreground
+                      : tokens.colors.muted,
+                  }}
+                />
+              ) : (
+                <p
+                  style={{
+                    margin: "0 0 0.45rem",
+                    fontSize: DESIGN.typography.partLabel,
+                    lineHeight: 1.3,
+                    fontWeight: active ? 760 : 620,
+                    letterSpacing: "0.04em",
+                    color: active
+                      ? tokens.colors.foreground
+                      : tokens.colors.muted,
+                  }}
+                >
+                  {String(index + 1)}
+                </p>
+              )}
               <div
                 aria-hidden
                 style={{
@@ -1174,14 +1232,18 @@ function StackedLayers({
                   }}
                 />
               ) : extra[index] ? (
-                <span
+                <CarouselEditableText
+                  as="span"
+                  slotId={partLabelSlotId(values)}
+                  value={extra[index] ?? ""}
+                  editable={editable}
+                  selectOnly
+                  onCommit={onSlotChange}
                   style={{
                     fontSize: DESIGN.typography.partLabel,
                     color: tokens.colors.muted,
                   }}
-                >
-                  {extra[index]}
-                </span>
+                />
               ) : null}
             </div>
           );
@@ -1423,7 +1485,7 @@ function DecisionSplit({
         >
           <CarouselEditableText
             as="p"
-            slotId={right ? "right" : "support"}
+            slotId={right ? "right" : partLabelSlotId(values)}
             value={right || supportCopy(values)}
             editable={editable}
             onCommit={onSlotChange}
@@ -1515,7 +1577,19 @@ function QuadrantEditorial({
             }}
           >
             {cell ? (
-              <p
+              <CarouselEditableText
+                as="p"
+                slotId={
+                  extra[index]
+                    ? quadrantSourceSlotId(values)
+                    : values.headline?.trim()
+                      ? "headline"
+                      : "title"
+                }
+                value={cell}
+                editable={editable}
+                selectOnly
+                onCommit={onSlotChange}
                 style={{
                   margin: 0,
                   fontSize: "0.78rem",
@@ -1525,9 +1599,7 @@ function QuadrantEditorial({
                       ? tokens.colors.foreground
                       : tokens.colors.muted,
                 }}
-              >
-                {cell}
-              </p>
+              />
             ) : null}
           </div>
         ))}

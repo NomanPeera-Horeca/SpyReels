@@ -7,6 +7,11 @@ import {
   type MouseEvent,
 } from "react";
 import type { CarouselSlotValues } from "@shared/carouselTemplates";
+import {
+  applyCarouselSlotStyleOverride,
+  inferCarouselSlotRole,
+} from "@shared/carouselSlotStyle";
+import { useCarouselEditorChrome } from "@/components/carouselEditorChrome";
 
 export type CarouselEditableTextTag = "p" | "h2" | "h3" | "span" | "div";
 
@@ -20,6 +25,11 @@ export type CarouselEditableTextProps = {
   onCommit?: (slotId: string, value: string) => void;
   /** If true, Enter inserts a newline; commit on blur only. */
   multiline?: boolean;
+  /**
+   * Visual fragment of a shared slot. Click selects the real slotId.
+   * Does not inline-edit, so a split line cannot overwrite the full slot.
+   */
+  selectOnly?: boolean;
 };
 
 /** Pick the first non-empty slot among preferred ids (for layouts with fallback keys). */
@@ -56,12 +66,22 @@ export function CarouselEditableText({
   editable = false,
   onCommit,
   multiline = false,
+  selectOnly = false,
 }: CarouselEditableTextProps) {
+  const chrome = useCarouselEditorChrome();
   const [editing, setEditing] = useState(false);
   /** Local display so commit updates DOM before parent state catches up (PNG capture). */
   const [displayValue, setDisplayValue] = useState(value);
   const ref = useRef<HTMLElement | null>(null);
   const skipCommitRef = useRef(false);
+  const selected = Boolean(
+    chrome?.selectionEnabled && chrome.selectedSlotId === slotId
+  );
+  const role = inferCarouselSlotRole(slotId);
+  const mergedStyle = applyCarouselSlotStyleOverride(
+    style as Record<string, unknown> | undefined,
+    chrome?.styles?.[slotId]
+  ) as CSSProperties;
 
   useEffect(() => {
     setDisplayValue(value);
@@ -98,9 +118,14 @@ export function CarouselEditableText({
     setEditing(false);
   }
 
+  function selectSlot(event: MouseEvent) {
+    event.stopPropagation();
+    chrome?.onSelectSlot?.(slotId);
+  }
+
   if (!editable) {
     return (
-      <Tag className={className} style={style}>
+      <Tag className={className} style={mergedStyle} data-carousel-slot-id={slotId}>
         {value}
       </Tag>
     );
@@ -111,22 +136,34 @@ export function CarouselEditableText({
       <Tag
         className={className}
         data-carousel-slot-id={slotId}
+        data-carousel-slot-role={role}
+        data-carousel-slot-selected={selected ? "true" : undefined}
         style={{
-          ...style,
+          ...mergedStyle,
           cursor: "text",
-          outline: "1px solid transparent",
-          outlineOffset: "2px",
         }}
-        title="Click to edit"
-        onClick={(e: MouseEvent) => {
-          e.stopPropagation();
+        title="Click to select. Double-click to type on the slide."
+        onClick={(event: MouseEvent) => {
+          if (chrome?.selectionEnabled) {
+            if (selected && !selectOnly) {
+              event.stopPropagation();
+              setEditing(true);
+              return;
+            }
+            selectSlot(event);
+            return;
+          }
+          if (selectOnly) {
+            event.stopPropagation();
+            return;
+          }
+          event.stopPropagation();
           setEditing(true);
         }}
-        onMouseEnter={(e: MouseEvent<HTMLElement>) => {
-          e.currentTarget.style.outline = "1px dashed rgba(255,255,255,0.4)";
-        }}
-        onMouseLeave={(e: MouseEvent<HTMLElement>) => {
-          e.currentTarget.style.outline = "1px solid transparent";
+        onDoubleClick={(event: MouseEvent) => {
+          event.stopPropagation();
+          chrome?.onSelectSlot?.(slotId);
+          if (!selectOnly) setEditing(true);
         }}
       >
         {displayValue}
@@ -141,15 +178,15 @@ export function CarouselEditableText({
       contentEditable
       suppressContentEditableWarning
       data-carousel-slot-id={slotId}
+      data-carousel-slot-role={role}
+      data-carousel-slot-selected={selected ? "true" : undefined}
       data-carousel-editing="true"
       style={{
-        ...style,
+        ...mergedStyle,
         cursor: "text",
-        outline: "1px dashed rgba(232,165,75,0.85)",
-        outlineOffset: "2px",
         minWidth: "1ch",
         caretColor: "currentColor",
-        whiteSpace: multiline ? "pre-wrap" : style?.whiteSpace,
+        whiteSpace: multiline ? "pre-wrap" : mergedStyle?.whiteSpace,
       }}
       onBlur={() => {
         if (skipCommitRef.current) {
