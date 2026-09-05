@@ -168,6 +168,8 @@ describe("generateCarouselRemake creative brief handoff", () => {
     expect(remake).toContain("canUseComparisonFamily");
     expect(remake).toContain("buildFrameworkFamilySlides");
     expect(remake).toContain("canUseFrameworkFamily");
+    expect(remake).toContain("buildRoadmapFamilySlides");
+    expect(remake).toContain("canUseRoadmapFamily");
     const gateAt = remake.indexOf("planningIRCopyGenerationGate");
     const copyAt = remake.indexOf('progressStage: "writing_copy"');
     expect(gateAt).toBeGreaterThan(-1);

@@ -18,6 +18,7 @@ export const CAROUSEL_FORMAT_SELECTION_GUIDANCE = [
   "When the core idea is a personal narrative (why I switched, what happened after, a sequenced transformation), prefer story. Do not force comparison just because two subjects appear.",
   "When the source is an explicit numbered list (N mistakes, reasons, signs, or ways), prefer breakdown.",
   "When the source asks for a named process or decision framework, prefer framework.",
+  "When the core idea is a procedural, ordered execution path or a what-to-do-next sequence, consider roadmap.",
   "Do not treat a contrast word as automatic comparison if the source is actually a story, numbered list, or framework.",
 ].join(" ");
 
@@ -29,6 +30,7 @@ export const CAROUSEL_FORMAT_FIT_SCORING_GUIDANCE = [
   "If the core idea is a personal narrative, keep story relevance high.",
   "If the source is an explicit numbered list, keep breakdown relevance high.",
   "If the source asks for a named framework, keep framework relevance high.",
+  "If the core idea is a procedural execution path, keep roadmap relevance high.",
 ].join(" ");
 
 export const CAROUSEL_FORMAT_RECOMMENDATION_GUIDANCE = [

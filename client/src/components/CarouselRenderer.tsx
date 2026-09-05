@@ -13,6 +13,12 @@ import {
   resolveFrameworkPremiumVariants,
   type FrameworkPremiumVariant,
 } from "@shared/carouselFrameworkPremiumDesignSystem";
+import { isRoadmapFamilySlide } from "@shared/carouselRoadmapFamily";
+import type { RoadmapTreatment } from "@shared/carouselRoadmapFamily";
+import {
+  resolvePreviousRoadmapVariants,
+  type RoadmapPremiumVariant,
+} from "@shared/carouselRoadmapPremiumDesignSystem";
 
 /** Per-slide slot overrides, keyed by CarouselSlideSpec.id */
 export type CarouselSlideValuesById = Record<string, CarouselSlotValues>;
@@ -100,6 +106,39 @@ export function resolveCarouselSlideValues(
   return values;
 }
 
+/** previousVariant history uses the same imageUrl each slide actually renders. */
+export function previousRoadmapVariantsForSlides(
+  slides: CarouselSlideSpec[],
+  imageUrls?: CarouselImageUrlMap,
+  sharedCoverUrl?: string
+): Array<RoadmapPremiumVariant | null> {
+  const previous: Array<RoadmapPremiumVariant | null> = slides.map(() => null);
+  const walkIndexes: number[] = [];
+  const walkInputs = slides.flatMap((slide, index) => {
+    if (!isRoadmapFamilySlide(slide) || !slide.composition) return [];
+    walkIndexes.push(index);
+    const { imageUrl } = sharedCoverUrl
+      ? { imageUrl: sharedCoverUrl }
+      : normalizeSlideImages(imageUrls?.[slide.id]);
+    return [
+      {
+        treatment: slide.composition.treatment as RoadmapTreatment,
+        position: slide.composition.position ?? index + 1,
+        totalSlides: slide.composition.totalSlides ?? slides.length,
+        archetype: slide.composition.archetype,
+        roadmapStepCount: slide.composition.roadmapStepCount,
+        roadmapStepIndex: slide.composition.roadmapStepIndex,
+        imageUrl,
+      },
+    ];
+  });
+  const previousWalk = resolvePreviousRoadmapVariants(walkInputs);
+  walkIndexes.forEach((slideIndex, walkIndex) => {
+    previous[slideIndex] = previousWalk[walkIndex] ?? null;
+  });
+  return previous;
+}
+
 function firstUrlFromMap(map: CarouselImageUrlMap | undefined): string | undefined {
   if (!map) return undefined;
   const first = Object.values(map)[0];
@@ -171,6 +210,12 @@ export function CarouselRenderer({
       return previous;
     })();
 
+  const previousRoadmapVariants = previousRoadmapVariantsForSlides(
+    effectiveSlides,
+    imageUrls,
+    template.shareCoverImage ? sharedCoverUrl : undefined
+  );
+
   return (
     <div
       className={className}
@@ -204,6 +249,7 @@ export function CarouselRenderer({
               editable={editable}
               composition={slide.composition}
               previousVariant={previousFrameworkVariants[index]}
+              previousRoadmapVariant={previousRoadmapVariants[index]}
               onSlotChange={
                 onSlotChange
                   ? (slotId, value) => onSlotChange(slide.id, slotId, value)

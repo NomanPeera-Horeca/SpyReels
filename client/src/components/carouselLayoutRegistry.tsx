@@ -8,11 +8,14 @@ import type {
 import { isBreakdownListicleSlide } from "@shared/carouselBreakdownFamily";
 import { isComparisonFamilySlide } from "@shared/carouselComparisonFamily";
 import { isFrameworkFamilySlide } from "@shared/carouselFrameworkFamily";
+import { isRoadmapFamilySlide } from "@shared/carouselRoadmapFamily";
 import { isStoryNarrativeSlide } from "@shared/carouselStoryFamily";
 import { CarouselBreakdownPremiumFamily } from "@/components/CarouselBreakdownPremiumFamily";
 import { CarouselComparisonPremiumFamily } from "@/components/CarouselComparisonPremiumFamily";
 import { CarouselFrameworkPremiumFamily } from "@/components/CarouselFrameworkPremiumFamily";
 import type { FrameworkPremiumVariant } from "@shared/carouselFrameworkPremiumDesignSystem";
+import type { RoadmapPremiumVariant } from "@shared/carouselRoadmapPremiumDesignSystem";
+import { CarouselRoadmapPremiumFamily } from "@/components/CarouselRoadmapPremiumFamily";
 import { CarouselStoryPremiumFamily } from "@/components/CarouselStoryPremiumFamily";
 import { CarouselSlideHookBoldCenter } from "@/components/CarouselSlideHookBoldCenter";
 import { CarouselSlideListItemNumbered } from "@/components/CarouselSlideListItemNumbered";
@@ -46,6 +49,8 @@ export type CarouselSlideLayoutProps = {
   composition?: CarouselSlideSpec["composition"];
   /** Framework-only previous slide variant. Other families ignore it. */
   previousVariant?: FrameworkPremiumVariant | null;
+  /** Roadmap-only previous slide variant. Other families ignore it. */
+  previousRoadmapVariant?: RoadmapPremiumVariant | null;
 };
 
 /**
@@ -82,6 +87,9 @@ export function resolveCarouselSlideComponent(
   }
   if (isFrameworkFamilySlide(slide)) {
     return CarouselFrameworkPremiumFamily;
+  }
+  if (isRoadmapFamilySlide(slide)) {
+    return CarouselRoadmapPremiumFamily;
   }
   if (isBreakdownListicleSlide(slide)) {
     return CarouselBreakdownPremiumFamily;
