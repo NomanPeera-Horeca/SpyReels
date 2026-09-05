@@ -19,6 +19,7 @@ import {
   type AdaptedCandidate,
 } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS, VIRAL_POOL_DEFAULTS } from "./constants";
+import { classifyCandidateForPoolAdmission } from "./poolAdmission";
 
 export type InstagramHashtagCreatorSeed = {
   handle: string;
@@ -69,6 +70,7 @@ export type InstagramPoolDiscoveryResult = {
   drilledCreatorHandles: string[];
   drilledReelsRead: number;
   drilledViralCandidates: number;
+  poolAdmissionRejected: number;
 };
 
 const RESTAURANT_PILLARS = new Set<string>(DEFAULT_CONTENT_PILLARS);
@@ -476,8 +478,6 @@ function dedupeDiscoveryReels(
 ): DiscoveryResult["viralReels"] {
   const byShortcode = new Map<string, DiscoveryResult["viralReels"][number]>();
   for (const reel of shallow) byShortcode.set(reel.shortcode, reel);
-  // Drilled rows win because profile scraping gives us a richer creator context
-  // and a deeper history than the one-page hashtag hit.
   for (const reel of drilled) byShortcode.set(reel.shortcode, reel);
   return [...byShortcode.values()];
 }
@@ -498,9 +498,6 @@ export async function discoverInstagramPoolCandidates(args: {
   const maxScCalls = Math.max(1, args.maxScCalls);
   const description = buildInstagramPoolDiscoveryDescription(args);
 
-  // There is no hashtag-generation-only mode on the shared pipeline today.
-  // A one-call probe gets us the routed niche + full generated hashtag list.
-  // The raw creator-seed searches below are still bounded by the same overall fuse.
   const routeProbe = await runDiscoveryPipeline(description, undefined, {
     skipMediaMirroring: true,
     maxScCalls: 1,
@@ -650,17 +647,54 @@ export async function discoverInstagramPoolCandidates(args: {
     scCallCount: totalScCalls,
     costEstimateUsd: totalScCalls * usdPerCredit,
   };
-  const adapted = adaptDiscoveryResult(combinedResult).map((candidate) => ({
-    ...candidate,
-    rawProviderPayload: {
-      ...candidate.rawProviderPayload,
-      source: "instagram_pool_discovery",
-      retrievalDepth:
-        drilled.some((reel) => reel.shortcode === candidate.sourceId)
-          ? "creator_drill"
-          : "hashtag",
-    },
-  }));
+
+  const adaptedBeforeAdmission = adaptDiscoveryResult(combinedResult).map(
+    (candidate) => ({
+      ...candidate,
+      rawProviderPayload: {
+        ...candidate.rawProviderPayload,
+        source: "instagram_pool_discovery",
+        retrievalDepth:
+          drilled.some((reel) => reel.shortcode === candidate.sourceId)
+            ? "creator_drill"
+            : "hashtag",
+      },
+    })
+  );
+
+  const adapted: AdaptedCandidate[] = [];
+  let poolAdmissionRejected = 0;
+  for (const candidate of adaptedBeforeAdmission) {
+    const decision = classifyCandidateForPoolAdmission({
+      pool: {
+        platform: "instagram",
+        niche: args.niche,
+        pillar: args.pillar,
+      },
+      candidate,
+    });
+    if (!decision.admit) {
+      poolAdmissionRejected++;
+      console.info("[viralPosts.pool] instagram_pool_admission_rejected", {
+        pillar: args.pillar,
+        sourceId: candidate.sourceId,
+        creatorHandle: candidate.creatorHandle,
+        confidence: decision.classification.confidence,
+        reason: decision.classification.reason,
+      });
+      continue;
+    }
+    adapted.push({
+      ...candidate,
+      contentPillar: decision.classification.primaryPillar,
+      pillarConfidence: decision.classification.confidence,
+      rawProviderPayload: {
+        ...candidate.rawProviderPayload,
+        poolAdmissionConfidence: decision.classification.confidence,
+        poolAdmissionReason: decision.classification.reason,
+      },
+    });
+  }
 
   console.info("[viralPosts.pool] instagram_retrieval_depth", {
     pillar: args.pillar,
@@ -684,6 +718,7 @@ export async function discoverInstagramPoolCandidates(args: {
     drilledCreators: drilledCreatorHandles,
     drilledReelsRead,
     drilledViralCandidates: drilled.length,
+    poolAdmissionRejected,
     finalUniqueCandidates: adapted.length,
   });
 
@@ -707,5 +742,6 @@ export async function discoverInstagramPoolCandidates(args: {
     drilledCreatorHandles,
     drilledReelsRead,
     drilledViralCandidates: drilled.length,
+    poolAdmissionRejected,
   };
 }
