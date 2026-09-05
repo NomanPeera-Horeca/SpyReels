@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import FinderHandoffForm from "./FinderHandoffForm";
+import ViralFinderExperience from "./ViralFinderExperience";
 import styles from "./page.module.css";
 
 const SITE_URL = "https://spyreels.ai";
@@ -37,7 +37,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Is there a free reel spy tool?",
-    a: "Yes. SpyReels has a free tier and does not ask for a credit card. You can run searches, see an account's Reels ranked by performance and read hook transcripts before paying anything.",
+    a: "Yes. SpyReels has a free tier and does not ask for a credit card. You can run searches, see an account's Reels ranked by performance and continue the research into script creation before deciding whether you need a paid plan.",
   },
   {
     q: "Is there a way to find a specific reel on Instagram?",
@@ -45,11 +45,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "What is the best Instagram reel spy tool?",
-    a: "It depends what you need. SpyReels is built to continue past research: a Reel it surfaces can be transcribed and then used as the starting point for a new script and production plan in your own voice.",
+    a: "The best tool depends on the workflow you need. SpyReels is designed to connect Reel research with the next step: choosing a strong idea, developing a script in your own voice, and continuing into the creation workflow.",
   },
   {
     q: "How do I find viral Reels for free?",
-    a: "Paste a public handle into a free reel spy tool and sort by outlier score rather than raw views. Read the first three seconds of the top five Reels and note what they have in common. That repeated pattern is the useful research signal.",
+    a: "Paste a public handle into a reel finder and compare the strongest posts against that account's normal performance. Look for repeated hooks, formats and topics across several outliers instead of copying one video in isolation.",
   },
 ] as const;
 
@@ -57,7 +57,7 @@ const HOW_IT_WORKS = [
   [
     "01",
     "Paste a public handle.",
-    "Start with any public creator or competitor account. The live product can research the handle and bring its public Reel catalogue into one place.",
+    "Start with a public creator or competitor account. The preview above uses curated SpyReels data, while the full Research tool can continue with your own handle.",
   ],
   [
     "02",
@@ -67,7 +67,7 @@ const HOW_IT_WORKS = [
   [
     "03",
     "Turn research into your own version.",
-    "Study the winning hook and structure, then continue into SpyReels to create a new script and production plan in your own voice.",
+    "Study the winning hook and structure, then continue into SpyReels to create a new script and production direction in your own voice.",
   ],
 ] as const;
 
@@ -84,8 +84,8 @@ const OUTPUTS = [
   ],
   [
     "03",
-    "The hook in text",
-    "Reading the opening lines across several winners makes it faster to compare the first three seconds without repeatedly scrubbing through every video.",
+    "The opening hook in context",
+    "Reading the opening language across several winners makes it faster to compare the first few seconds and spot repeated patterns.",
   ],
   [
     "04",
@@ -101,13 +101,11 @@ const AUDIENCES = [
   ["Faceless pages", "Spot formats and opening patterns that repeat across a niche before you choose what to adapt for your own audience."],
 ] as const;
 
-const COMPARISON_ROWS = [
-  ["Free tier without a credit card", "Yes", "Card required for trial", "Not stated on site"],
-  ["Ranks an account's Reels by performance", "Yes", "Yes", "Yes"],
-  ["Outlier score vs the account's own baseline", "Yes", "Partial", "No"],
-  ["Hook transcript in text", "Yes", "Partial", "No"],
-  ["Continues from research into a new script", "Yes", "No", "No"],
-  ["TikTok and YouTube Shorts research too", "Yes", "Partial", "Instagram only"],
+const RESEARCH_WORKFLOW = [
+  ["Find", "Bring a creator's public Reels into one research view."],
+  ["Rank", "Compare by views, engagement and performance against the account's own baseline."],
+  ["Study", "Look across several winners for repeated hooks, topics and structures."],
+  ["Create", "Carry the useful pattern into a new script and production direction in your own voice."],
 ] as const;
 
 const RELATED_LINKS = [
@@ -158,27 +156,20 @@ const faqJsonLd = {
   })),
 };
 
+function jsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 export default function ViralReelFinderPilotPage() {
   return (
     <div className={styles.page}>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(softwareJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }} />
 
       <header className={styles.header}>
         <div className={`${styles.shell} ${styles.headerInner}`}>
-          <a className={styles.brand} href="/">
-            SpyReels
-          </a>
+          <a className={styles.brand} href="/">SpyReels</a>
           <nav className={styles.nav} aria-label="Viral Reel Finder page navigation">
             <a href="#how-it-works">How it works</a>
             <a href="#what-you-get">What you get</a>
@@ -186,18 +177,14 @@ export default function ViralReelFinderPilotPage() {
             <a href="#faq">FAQ</a>
             <a href="/pricing">Pricing</a>
           </nav>
-          <a className={styles.headerCta} href="/research">
-            Start free
-          </a>
+          <a className={styles.headerCta} href="/research">Start free</a>
         </div>
       </header>
 
       <section className={`${styles.shell} ${styles.hero}`}>
         <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
-          <a href="/">Home</a>
-          <span aria-hidden>/</span>
-          <a href="/free-tools">Free Tools</a>
-          <span aria-hidden>/</span>
+          <a href="/">Home</a><span aria-hidden>/</span>
+          <a href="/free-tools">Free Tools</a><span aria-hidden>/</span>
           <span>Viral Reel Finder</span>
         </nav>
         <div className={styles.eyebrow}>
@@ -211,37 +198,7 @@ export default function ViralReelFinderPilotPage() {
           Paste a public handle. A free reel finder that sorts by views, engagement and outlier score
           so you can study the strongest posts before creating your own version.
         </p>
-        <FinderHandoffForm />
-      </section>
-
-      <section className={`${styles.shell} ${styles.preview}`} aria-label="Example Reel Finder results">
-        <div className={styles.previewHeader}>
-          <span>Results preview</span>
-          <span className={styles.statsNote}>Server-rendered example · live research opens in SpyReels</span>
-        </div>
-        <div className={styles.previewGrid}>
-          {[
-            ["8.6x median", "A hook that breaks the account's normal baseline"],
-            ["5.1x median", "A repeatable format with unusually strong distribution"],
-            ["3.7x median", "A simple opening pattern worth comparing with other winners"],
-            ["2.9x median", "A strong Reel whose structure can become a new creative direction"],
-          ].map(([score, hook]) => (
-            <article className={styles.previewCard} key={score}>
-              <div className={styles.previewArt}>
-                <strong>{score}</strong>
-              </div>
-              <div className={styles.previewBody}>
-                <p>{hook}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-        <div className={styles.previewFooter}>
-          <span>The live product ranks public Reels and lets you continue from research into creation.</span>
-          <a className={styles.secondaryButton} href="/research">
-            Open research
-          </a>
-        </div>
+        <ViralFinderExperience />
       </section>
 
       <main className={`${styles.shell} ${styles.content}`}>
@@ -254,14 +211,8 @@ export default function ViralReelFinderPilotPage() {
             performance so the unusual winners are easier to identify and study.
           </p>
           <ul className={styles.bullets}>
-            <li>
-              <strong>Ranked, not chronological.</strong> Research should surface an account&apos;s strongest
-              work, not merely its most recent uploads.
-            </li>
-            <li>
-              <strong>Relative performance, not raw views alone.</strong> An unusually strong Reel on a
-              smaller account can be a more useful research signal than an ordinary Reel on a huge one.
-            </li>
+            <li><strong>Ranked, not chronological.</strong> Research should surface an account&apos;s strongest work, not merely its most recent uploads.</li>
+            <li><strong>Relative performance, not raw views alone.</strong> An unusually strong Reel on a smaller account can be a more useful research signal than an ordinary Reel on a huge one.</li>
           </ul>
         </section>
 
@@ -274,9 +225,7 @@ export default function ViralReelFinderPilotPage() {
           <div className={styles.cards3}>
             {HOW_IT_WORKS.map(([num, title, body]) => (
               <article className={styles.infoCard} key={num}>
-                <small>{num}</small>
-                <h3>{title}</h3>
-                <p>{body}</p>
+                <small>{num}</small><h3>{title}</h3><p>{body}</p>
               </article>
             ))}
           </div>
@@ -291,45 +240,24 @@ export default function ViralReelFinderPilotPage() {
           <div className={styles.cards2}>
             {OUTPUTS.map(([num, title, body]) => (
               <article className={styles.infoCard} key={num}>
-                <small>{num}</small>
-                <h3>{title}</h3>
-                <p>{body}</p>
+                <small>{num}</small><h3>{title}</h3><p>{body}</p>
               </article>
             ))}
           </div>
         </section>
 
         <section id="compare" className={styles.section}>
-          <h2>SpyReels vs Meedro vs ViralFindr</h2>
+          <h2>Compare reel research workflows</h2>
           <p className={styles.sectionLead}>
-            All three products are used for Reel research. The main SpyReels distinction is the path
-            from finding a strong post into developing a new script and production direction.
+            Reel research products change quickly, so feature-count comparisons can become stale. A more useful comparison is whether the workflow stops at finding a post or helps you turn the research into original content.
           </p>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Feature</th>
-                  <th className={styles.tableHighlight}>SpyReels</th>
-                  <th>Meedro</th>
-                  <th>ViralFindr</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON_ROWS.map(([feature, spy, meedro, viralfindr]) => (
-                  <tr key={feature}>
-                    <td>{feature}</td>
-                    <td className={styles.tableHighlight}>{spy}</td>
-                    <td>{meedro}</td>
-                    <td>{viralfindr}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className={styles.cards4}>
+            {RESEARCH_WORKFLOW.map(([title, body]) => (
+              <article className={styles.infoCard} key={title}><h3>{title}</h3><p>{body}</p></article>
+            ))}
           </div>
-          <p className={styles.statsNote}>
-            Comparison copy is carried forward from the existing SpyReels landing page and should be
-            re-verified against each competitor before this pilot is promoted to production ownership.
+          <p className={styles.sectionLead} style={{ fontSize: 14 }}>
+            If you are comparing SpyReels with tools such as Meedro or ViralFindr, compare the current workflow you actually need rather than relying on a static checklist that may be outdated.
           </p>
         </section>
 
@@ -337,10 +265,7 @@ export default function ViralReelFinderPilotPage() {
           <h2>Who uses this free Instagram reel finder</h2>
           <div className={styles.cards4}>
             {AUDIENCES.map(([title, body]) => (
-              <article className={styles.infoCard} key={title}>
-                <h3>{title}</h3>
-                <p>{body}</p>
-              </article>
+              <article className={styles.infoCard} key={title}><h3>{title}</h3><p>{body}</p></article>
             ))}
           </div>
         </section>
@@ -349,10 +274,7 @@ export default function ViralReelFinderPilotPage() {
           <h2>Reel finder and reel spy tool questions people actually ask</h2>
           <div className={styles.faqList}>
             {FAQ_ITEMS.map((item) => (
-              <article className={styles.faqItem} key={item.q}>
-                <h3>{item.q}</h3>
-                <p>{item.a}</p>
-              </article>
+              <article className={styles.faqItem} key={item.q}><h3>{item.q}</h3><p>{item.a}</p></article>
             ))}
           </div>
         </section>
@@ -360,16 +282,10 @@ export default function ViralReelFinderPilotPage() {
         <section className={styles.section}>
           <h2>Continue your Reel research</h2>
           <p className={styles.sectionLead}>
-            These related pages connect the Viral Reel Finder to the broader SpyReels research and
-            creation cluster. They are ordinary HTML links in the first response, not JavaScript-only
-            navigation.
+            These related pages connect the Viral Reel Finder to the broader SpyReels research and creation cluster.
           </p>
           <nav className={styles.relatedLinks} aria-label="Related SpyReels resources">
-            {RELATED_LINKS.map(([label, href]) => (
-              <a href={href} key={href}>
-                {label}
-              </a>
-            ))}
+            {RELATED_LINKS.map(([label, href]) => <a href={href} key={href}>{label}</a>)}
           </nav>
         </section>
       </main>
@@ -377,21 +293,16 @@ export default function ViralReelFinderPilotPage() {
       <section className={`${styles.shell} ${styles.finalCta}`}>
         <h2>Try it on one account</h2>
         <p>
-          Start with a public Instagram account, find the posts that broke away from its normal
-          baseline, and use those findings as better input for your next piece of content.
+          Start with a public Instagram account, find the posts that broke away from its normal baseline,
+          and use those findings as better input for your next piece of content.
         </p>
-        <a className={styles.headerCta} href="/research">
-          Start free
-        </a>
+        <a className={styles.headerCta} href="/research">Start free</a>
       </section>
 
       <footer className={styles.footer}>
         <div className={`${styles.shell} ${styles.footerInner}`}>
           <span>© SpyReels</span>
-          <span>
-            <a href="/pricing">Pricing</a> · <a href="/blog">Blog</a> · <a href="/privacy">Privacy</a> ·{" "}
-            <a href="/terms">Terms</a>
-          </span>
+          <span><a href="/pricing">Pricing</a> · <a href="/blog">Blog</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></span>
         </div>
       </footer>
     </div>
