@@ -214,6 +214,9 @@ export function CarouselStudioApp({
   const [textSelection, setTextSelection] =
     useState<CarouselTextSelection | null>(null);
   const [aiAlternatives, setAiAlternatives] = useState<string[]>([]);
+  const [aiPreviewText, setAiPreviewText] = useState<string | null>(null);
+  const [aiPreviewAction, setAiPreviewAction] =
+    useState<CarouselSlotRewriteAction | null>(null);
   const [aiRewriteError, setAiRewriteError] = useState<string | null>(null);
   const [imageSelection, setImageSelection] =
     useState<CarouselImageSelection | null>(null);
@@ -1127,6 +1130,8 @@ export function CarouselStudioApp({
 
   useEffect(() => {
     setAiAlternatives([]);
+    setAiPreviewText(null);
+    setAiPreviewAction(null);
     setAiRewriteError(null);
   }, [textSelection?.slideId, textSelection?.slotId]);
 
@@ -1135,7 +1140,12 @@ export function CarouselStudioApp({
       return;
     }
     setAiRewriteError(null);
-    if (action !== "alternatives") setAiAlternatives([]);
+    setAiPreviewAction(action);
+    if (action === "alternatives") {
+      setAiPreviewText(null);
+    } else {
+      setAiAlternatives([]);
+    }
     try {
       const result = await rewriteSlotMutation.mutateAsync({
         remakeId,
@@ -1145,13 +1155,14 @@ export function CarouselStudioApp({
       });
       if ("alternatives" in result && result.alternatives) {
         setAiAlternatives(result.alternatives);
+        setAiPreviewText(null);
         return;
       }
       if (!("text" in result) || !result.text.trim()) {
         setAiRewriteError("Could not improve that text. Try again.");
         return;
       }
-      handleSlotChange(textSelection.slideId, textSelection.slotId, result.text);
+      setAiPreviewText(result.text);
     } catch (err) {
       const message =
         err instanceof Error && err.message
@@ -1165,6 +1176,19 @@ export function CarouselStudioApp({
     if (!textSelection || !text.trim()) return;
     handleSlotChange(textSelection.slideId, textSelection.slotId, text);
     setAiAlternatives([]);
+    setAiPreviewText(null);
+    setAiPreviewAction(null);
+    setAiRewriteError(null);
+  };
+
+  const handleUseAiPreview = () => {
+    if (!textSelection || !aiPreviewText?.trim()) return;
+    handleApplyAiAlternative(aiPreviewText);
+  };
+
+  const handleCancelAiPreview = () => {
+    setAiPreviewText(null);
+    setAiPreviewAction(null);
     setAiRewriteError(null);
   };
 
@@ -2366,11 +2390,20 @@ export function CarouselStudioApp({
                           aiBusy={rewriteSlotMutation.isPending}
                           aiError={aiRewriteError}
                           alternatives={aiAlternatives}
+                          previewText={aiPreviewText}
+                          previewAction={aiPreviewAction}
                           onAiAction={(action) => {
                             void handleAiSlotRewrite(action);
                           }}
                           onApplyAlternative={handleApplyAiAlternative}
                           onCancelAlternatives={() => setAiAlternatives([])}
+                          onUsePreview={handleUseAiPreview}
+                          onTryAgain={() => {
+                            if (aiPreviewAction) {
+                              void handleAiSlotRewrite(aiPreviewAction);
+                            }
+                          }}
+                          onCancelPreview={handleCancelAiPreview}
                         />
                       ) : imageSelection && currentSlideSpec ? (
                         <CarouselImageInspector

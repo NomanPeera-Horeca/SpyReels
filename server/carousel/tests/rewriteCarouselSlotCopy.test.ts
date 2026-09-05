@@ -62,11 +62,11 @@ describe("rewriteCarouselSlotCopy", () => {
 
   it("uses Haiku for this small rewrite and returns validated text", async () => {
     invokeLLM.mockResolvedValueOnce(
-      llmJson({ text: "Your menu price is quietly eating profit" })
+      llmJson({ text: "Your menu price is eating profit" })
     );
     const result = await rewriteCarouselSlotCopy("make_punchier", context);
     expect(result).toEqual({
-      text: "Your menu price is quietly eating profit",
+      text: "Your menu price is eating profit",
     });
     expect(invokeLLM).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -75,6 +75,9 @@ describe("rewriteCarouselSlotCopy", () => {
       })
     );
     expect(CAROUSEL_SLOT_REWRITE_MODEL).toBe("claude-haiku-4-5-20251001");
+    const userContent = String(invokeLLM.mock.calls[0]?.[0]?.messages?.[1]?.content ?? "");
+    expect(userContent).toContain("price / pricing");
+    expect(userContent).toContain("subjectAnchorsYouMustKeep");
   });
 
   it("retries once when the first result overflows the slot budget", async () => {
@@ -138,5 +141,71 @@ describe("rewriteCarouselSlotCopy", () => {
     expect("text" in result && result.text.length < context.slot.currentText.length).toBe(
       true
     );
+  });
+
+  it("rejects a longer weaker punchier line after retry", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(
+        llmJson({ text: "I wasn't nearly as prepared as I thought." })
+      )
+      .mockResolvedValueOnce(
+        llmJson({ text: "I wasn't nearly as prepared as I thought." })
+      );
+    const story = {
+      ...context,
+      niche: "creators",
+      brief: {
+        ...context.brief!,
+        topic: "A first-year opening night story",
+      },
+      slot: {
+        ...context.slot,
+        currentText: "I thought I was ready. I wasn't.",
+        budget: { min: 8, max: 48 },
+      },
+    };
+    await expect(rewriteCarouselSlotCopy("make_punchier", story)).rejects.toMatchObject({
+      code: "NOT_PUNCHIER",
+    });
+  });
+
+  it("rejects a catchy rewrite that drops the pricing subject", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(llmJson({ text: "Cut the menu, keep the profit" }))
+      .mockResolvedValueOnce(llmJson({ text: "Trim the menu, keep the profit" }));
+    await expect(rewriteCarouselSlotCopy("make_punchier", context)).rejects.toMatchObject({
+      code: "TOPIC_DRIFT",
+    });
+  });
+
+  it("retries alternatives that repeat the current line", async () => {
+    invokeLLM
+      .mockResolvedValueOnce(
+        llmJson({
+          alternatives: [
+            "Your menu price is costing you profit",
+            "Stop guessing your menu prices",
+            "Your prices are costing profit",
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        llmJson({
+          alternatives: [
+            "Menu prices are leaking profit",
+            "Stop guessing your menu prices",
+            "Your prices are costing profit",
+          ],
+        })
+      );
+    const result = await rewriteCarouselSlotCopy("alternatives", context);
+    expect(result).toEqual({
+      alternatives: [
+        "Menu prices are leaking profit",
+        "Stop guessing your menu prices",
+        "Your prices are costing profit",
+      ],
+    });
+    expect(invokeLLM).toHaveBeenCalledTimes(2);
   });
 });

@@ -4,6 +4,9 @@ import {
   buildCarouselSlotRewriteContext,
   extractCarouselRewriteFacts,
   isCarouselSlotRewriteAction,
+  isNearDuplicateCarouselRewrite,
+  isPunchierCarouselRewrite,
+  preservesCarouselSubjectAnchors,
   validateCarouselSlotRewriteAlternatives,
   validateCarouselSlotRewriteText,
 } from "./carouselSlotRewrite";
@@ -255,21 +258,196 @@ describe("carousel slot rewrite validation", () => {
 
   it("accepts shorter copy that keeps the original number", () => {
     expect(
-      validateCarouselSlotRewriteText("Do not cut 12% yet", context, {
+      validateCarouselSlotRewriteText("Hold the 12% food-cost check", context, {
         requireShorterThan: context.slot.currentText,
       })
-    ).toEqual({ ok: true, text: "Do not cut 12% yet" });
+    ).toEqual({ ok: true, text: "Hold the 12% food-cost check" });
   });
 
   it("requires exactly 3 valid alternatives", () => {
     const ok = validateCarouselSlotRewriteAlternatives(
-      ["Keep the 12% check", "Price after 12%", "12% cuts hide cost"],
+      [
+        "Keep the 12% food-cost check",
+        "Run the 12% food-cost math",
+        "12% cuts hide food cost",
+      ],
       context
     );
     expect(ok.ok).toBe(true);
     expect(
       validateCarouselSlotRewriteAlternatives(["only one"], context).ok
     ).toBe(false);
+  });
+
+  it("rejects the current line and near-duplicate alternatives", () => {
+    expect(
+      validateCarouselSlotRewriteAlternatives(
+        [
+          "Cut 12% without a food-cost check",
+          "Price after 12%",
+          "12% cuts hide cost",
+        ],
+        context
+      ).ok
+    ).toBe(false);
+    expect(
+      validateCarouselSlotRewriteAlternatives(
+        [
+          "Keep the 12% food-cost check",
+          "Keep that 12% food-cost check",
+          "12% cuts hide food cost",
+        ],
+        context
+      ).ok
+    ).toBe(false);
+  });
+
+  it("rejects a longer, weaker punchier rewrite", () => {
+    expect(
+      validateCarouselSlotRewriteText(
+        "I wasn't nearly as prepared as I thought.",
+        {
+          slot: {
+            id: "headline",
+            role: "headline",
+            label: "Headline",
+            budget: { min: 8, max: 60 },
+            currentText: "I thought I was ready. I wasn't.",
+          },
+          factsToPreserve: [],
+        },
+        { action: "make_punchier" }
+      )
+    ).toEqual({ ok: false, reason: "not_punchier" });
+    expect(
+      isPunchierCarouselRewrite(
+        "I thought I was ready. I wasn't.",
+        "I wasn't nearly as prepared as I thought.",
+        "headline"
+      )
+    ).toBe(false);
+    expect(
+      isNearDuplicateCarouselRewrite(
+        "I thought I was ready. I wasn't.",
+        "I thought I was ready. I wasn't."
+      )
+    ).toBe(true);
+    expect(
+      isPunchierCarouselRewrite("PRICING", "PRICE LEAK", "kicker")
+    ).toBe(true);
+  });
+
+  it("rejects punchier copy that drifts off a restaurant pricing topic", () => {
+    const pricing = {
+      slot: {
+        id: "headline",
+        role: "headline",
+        label: "Headline",
+        budget: { min: 8, max: 60 },
+        currentText: "Your menu price is costing you profit",
+      },
+      factsToPreserve: [],
+    };
+    expect(
+      validateCarouselSlotRewriteText(
+        "Creators should post more this week",
+        pricing,
+        {
+          action: "make_punchier",
+          topic: "5 pricing mistakes restaurant owners make",
+        }
+      )
+    ).toEqual({ ok: false, reason: "topic_drift" });
+    expect(
+      validateCarouselSlotRewriteText(
+        "Cut the menu, keep the profit",
+        pricing,
+        { action: "make_punchier" }
+      )
+    ).toEqual({ ok: false, reason: "topic_drift" });
+    expect(
+      preservesCarouselSubjectAnchors(
+        "Your menu price is costing you profit",
+        "Your prices are eating your profit"
+      )
+    ).toBe(true);
+    expect(
+      validateCarouselSlotRewriteText(
+        "Your prices are eating your profit",
+        pricing,
+        { action: "make_punchier" }
+      ).ok
+    ).toBe(true);
+  });
+
+  it("keeps labor-cost, food-cost, equipment, and delivery-fee subjects", () => {
+    expect(
+      preservesCarouselSubjectAnchors(
+        "Why restaurant labor costs keep rising",
+        "Hire cheaper people this week"
+      )
+    ).toBe(false);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "Why restaurant labor costs keep rising",
+        "Payroll is eating the week"
+      )
+    ).toBe(true);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "Cut 12% without a food-cost check",
+        "Cut 12% without a check"
+      )
+    ).toBe(false);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "The cheapest fridge costs more",
+        "Buy cheaper kitchen tools"
+      )
+    ).toBe(false);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "The cheapest fridge costs more",
+        "Cheap equipment costs more later"
+      )
+    ).toBe(true);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "The delivery fee is killing you",
+        "Apps are eating your week"
+      )
+    ).toBe(false);
+    expect(
+      preservesCarouselSubjectAnchors(
+        "The delivery fee is killing you",
+        "Delivery fees eat the ticket"
+      )
+    ).toBe(true);
+  });
+
+  it("lets generic story copy stay creative when no subject family is present", () => {
+    expect(
+      preservesCarouselSubjectAnchors(
+        "I thought I was ready. I wasn't.",
+        "Ready was a lie."
+      )
+    ).toBe(true);
+    expect(
+      validateCarouselSlotRewriteText(
+        "Ready was a lie.",
+        {
+          slot: {
+            id: "headline",
+            role: "headline",
+            label: "Headline",
+            budget: { min: 8, max: 48 },
+            currentText: "I thought I was ready. I wasn't.",
+          },
+          factsToPreserve: [],
+        },
+        { action: "make_punchier" }
+      ).ok
+    ).toBe(true);
   });
 
   it("allowlists only the five AI actions", () => {

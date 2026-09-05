@@ -33,6 +33,15 @@ describe("carousel text inspector architecture", () => {
     const inspector = read("CarouselTextInspector.tsx");
     expect(inspector).toContain("Give me 3 alternatives");
     expect(inspector).toContain("Make punchier");
+    expect(inspector).toContain("Use this");
+    expect(inspector).toContain("Try again");
+    expect(inspector).toContain("Making this punchier...");
+    expect(inspector).toContain("Shortening...");
+    expect(inspector).not.toContain("Working...");
+    expect(app).toContain("setAiPreviewText");
+    expect(app).not.toContain(
+      "handleSlotChange(textSelection.slideId, textSelection.slotId, result.text)"
+    );
     const router = readFileSync(
       join(here, "../../../../server/routers/carouselRemakeRouter.ts"),
       "utf8"

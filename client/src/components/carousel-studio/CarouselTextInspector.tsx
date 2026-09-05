@@ -22,9 +22,14 @@ type CarouselTextInspectorProps = {
   aiBusy?: boolean;
   aiError?: string | null;
   alternatives?: string[];
+  previewText?: string | null;
+  previewAction?: CarouselSlotRewriteAction | null;
   onAiAction?: (action: CarouselSlotRewriteAction) => void;
   onApplyAlternative?: (text: string) => void;
   onCancelAlternatives?: () => void;
+  onUsePreview?: () => void;
+  onTryAgain?: () => void;
+  onCancelPreview?: () => void;
 };
 
 const ALIGN_OPTIONS: CarouselSlotTextAlign[] = ["left", "center", "right"];
@@ -39,6 +44,14 @@ const SINGLE_AI_ACTIONS: Array<{
   { action: "rewrite", label: "Rewrite" },
 ];
 
+const AI_STATUS: Record<CarouselSlotRewriteAction, string> = {
+  make_punchier: "Making this punchier...",
+  make_shorter: "Shortening...",
+  make_clearer: "Making this clearer...",
+  rewrite: "Rewriting...",
+  alternatives: "Finding alternatives...",
+};
+
 export function CarouselTextInspector({
   role,
   slotId,
@@ -50,9 +63,14 @@ export function CarouselTextInspector({
   aiBusy = false,
   aiError = null,
   alternatives = [],
+  previewText = null,
+  previewAction = null,
   onAiAction,
   onApplyAlternative,
   onCancelAlternatives,
+  onUsePreview,
+  onTryAgain,
+  onCancelPreview,
 }: CarouselTextInspectorProps) {
   const label = slotLabelForRole(role);
   const fontValue = style?.fontFamily ?? "";
@@ -205,13 +223,36 @@ export function CarouselTextInspector({
             </button>
             {aiBusy ? (
               <p className="text-inspector-ai-status" role="status">
-                Working...
+                {previewAction
+                  ? AI_STATUS[previewAction]
+                  : "Rewriting..."}
               </p>
             ) : null}
             {aiError ? (
               <p className="text-inspector-ai-error" role="alert">
                 {aiError}
               </p>
+            ) : null}
+            {previewText ? (
+              <div className="text-inspector-ai-preview">
+                <p>{previewText}</p>
+                <div className="text-inspector-ai-preview-actions">
+                  <button type="button" disabled={aiBusy} onClick={onUsePreview}>
+                    Use this
+                  </button>
+                  <button type="button" disabled={aiBusy} onClick={onTryAgain}>
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    className="text-inspector-ai-cancel"
+                    disabled={aiBusy}
+                    onClick={onCancelPreview}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : null}
             {alternatives.length > 0 ? (
               <div className="text-inspector-ai-choices">
