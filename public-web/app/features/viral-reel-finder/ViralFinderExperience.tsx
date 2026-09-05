@@ -6,8 +6,7 @@ import styles from "./page.module.css";
 const DEMO_HANDLES = ["garyvee", "humphreytalks", "russellbrunson", "codiesanchez"] as const;
 const DEMO_HANDLE_SET = new Set<string>(DEMO_HANDLES);
 
-type SortMode = "outlier" | "views" | "engagement";
-type ConversionIntent = "research" | "remake";
+type SortMode = "views" | "engagement";
 
 type DemoReel = {
   id: number;
@@ -27,6 +26,22 @@ type DemoPayload = {
   reels: DemoReel[];
 };
 
+type FoundProfile = {
+  found: true;
+  username: string;
+  fullName: string;
+  biography: string;
+  profilePicUrl: string;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  isVerified: boolean;
+  isPrivate: boolean;
+  category: string;
+};
+
+type ProfilePayload = FoundProfile | { found: false; error?: string };
+
 function normalizeHandle(raw: string): string {
   const trimmed = raw.trim();
   const fromUrl = trimmed.match(/instagram\.com\/([^/?#\s]+)/i);
@@ -39,23 +54,9 @@ function validHandle(handle: string): boolean {
 
 function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}K`;
-  }
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}K`;
   return Math.round(value).toLocaleString();
-}
-
-function outlierMultiple(viewCount: number, median: number): number {
-  if (!median || median <= 0 || !viewCount) return 0;
-  return viewCount / median;
-}
-
-function formatOutlier(value: number): string {
-  if (!Number.isFinite(value) || value < 1) return "";
-  return `${value >= 10 ? Math.round(value) : value.toFixed(1).replace(/\.0$/, "")}x median`;
 }
 
 function hookPreview(caption: string): string {
@@ -73,27 +74,15 @@ function appOrigin(): string {
   return "https://spyreels.ai";
 }
 
-function stashResearchHandle(handle?: string) {
-  if (!handle) return;
+function handoffToResearch(handle: string) {
   try {
     sessionStorage.setItem("spyreels:research_pending_handle", handle);
     sessionStorage.setItem("spyreels:research_autostart", "1");
     sessionStorage.setItem("spyreels:research_pending_platform", "instagram");
   } catch {
-    // Storage is an enhancement only. Auth still works if the browser blocks it.
+    // Best-effort handoff. Production runs this page on the same spyreels.ai origin.
   }
-}
-
-function googleAuthUrl(returnTo = "/research"): string {
-  const state = btoa(
-    JSON.stringify({
-      v: 1,
-      utm: {},
-      returnTo,
-      firstReferrer: null,
-    })
-  );
-  return `${appOrigin()}/api/auth/google?state=${encodeURIComponent(state)}`;
+  window.location.assign(`${appOrigin()}/research`);
 }
 
 export default function ViralFinderExperience() {
@@ -101,19 +90,68 @@ export default function ViralFinderExperience() {
   const [activeHandle, setActiveHandle] = useState<string>(DEMO_HANDLES[0]);
   const [demo, setDemo] = useState<DemoPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("outlier");
+  const [demoError, setDemoError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("views");
   const [showAll, setShowAll] = useState(false);
-  const [selectedReelId, setSelectedReelId] = useState<number | null>(null);
-  const [conversionIntent, setConversionIntent] = useState<ConversionIntent | null>(null);
-  const [pendingHandle, setPendingHandle] = useState<string | null>(null);
+  const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
+
+  const [debouncedHandle, setDebouncedHandle] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profile, setProfile] = useState<FoundProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const normalized = normalizeHandle(input);
+    setProfile(null);
+    setProfileError(null);
+    if (normalized.length < 2) {
+      setDebouncedHandle("");
+      return;
+    }
+    if (!validHandle(normalized)) {
+      setProfileError("Instagram usernames can only contain letters, numbers, periods and underscores.");
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedHandle(normalized), 700);
+    return () => window.clearTimeout(timer);
+  }, [input]);
+
+  useEffect(() => {
+    if (!debouncedHandle) return;
+    const controller = new AbortController();
+    setProfileLoading(true);
+    setProfileError(null);
+
+    fetch(`/features/viral-reel-finder/profile?handle=${encodeURIComponent(debouncedHandle)}`, {
+      signal: controller.signal,
+      headers: { accept: "application/json" },
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as ProfilePayload;
+        if (!response.ok || body.found !== true) {
+          throw new Error("error" in body && body.error ? body.error : "We could not find that Instagram account.");
+        }
+        return body;
+      })
+      .then((body) => setProfile(body))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setProfile(null);
+        setProfileError(error instanceof Error ? error.message : "We could not find that Instagram account.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setProfileLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [debouncedHandle]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setError(null);
+    setDemoError(null);
+    setSelectedReel(null);
     setShowAll(false);
-    setSelectedReelId(null);
 
     fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(activeHandle)}`, {
       signal: controller.signal,
@@ -127,10 +165,10 @@ export default function ViralFinderExperience() {
         return body;
       })
       .then((body) => setDemo(body))
-      .catch((err: unknown) => {
+      .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setDemo(null);
-        setError(err instanceof Error ? err.message : "The demo catalog is unavailable right now.");
+        setDemoError(error instanceof Error ? error.message : "The demo catalog is unavailable right now.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -141,79 +179,42 @@ export default function ViralFinderExperience() {
 
   const sortedReels = useMemo(() => {
     const copy = [...(demo?.reels ?? [])];
-    if (sortMode === "views") {
-      copy.sort((a, b) => b.viewCount - a.viewCount);
-    } else if (sortMode === "engagement") {
+    if (sortMode === "engagement") {
       copy.sort((a, b) => b.engagementRate - a.engagementRate);
     } else {
-      copy.sort((a, b) => {
-        const delta =
-          outlierMultiple(b.viewCount, demo?.medianViewCount ?? 0) -
-          outlierMultiple(a.viewCount, demo?.medianViewCount ?? 0);
-        return delta || b.viewCount - a.viewCount;
-      });
+      copy.sort((a, b) => b.viewCount - a.viewCount);
     }
     return copy;
   }, [demo, sortMode]);
-
-  const selectedReel = useMemo(() => {
-    if (!sortedReels.length) return null;
-    return sortedReels.find((reel) => reel.id === selectedReelId) ?? sortedReels[0];
-  }, [selectedReelId, sortedReels]);
 
   const visibleReels = showAll ? sortedReels : sortedReels.slice(0, 4);
 
   function chooseDemo(handle: string) {
     setInput(handle);
     setActiveHandle(handle);
-    setTimeout(
-      () => document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      0
-    );
-  }
-
-  function openConversion(intent: ConversionIntent, handle?: string) {
-    const normalized = handle ? normalizeHandle(handle) : demo?.handle ?? activeHandle;
-    if (normalized && validHandle(normalized)) stashResearchHandle(normalized);
-    setPendingHandle(normalized || null);
-    setConversionIntent(intent);
+    setTimeout(() => document.getElementById("live-demo")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const handle = normalizeHandle(input);
     if (!handle || !validHandle(handle)) {
-      setError("Enter a valid Instagram username or profile link.");
+      setProfileError("Enter a valid Instagram username or profile link.");
       return;
     }
     if (DEMO_HANDLE_SET.has(handle)) {
       chooseDemo(handle);
       return;
     }
-    openConversion("research", handle);
-  }
-
-  function selectForRemake(reel: DemoReel) {
-    setSelectedReelId(reel.id);
-    setTimeout(
-      () => document.getElementById("remake-preview")?.scrollIntoView({ behavior: "smooth", block: "center" }),
-      0
-    );
-  }
-
-  function continueFree() {
-    stashResearchHandle(pendingHandle ?? demo?.handle ?? activeHandle);
-    window.location.assign(googleAuthUrl("/research"));
+    handoffToResearch(profile?.username === handle ? profile.username : handle);
   }
 
   return (
-    <>
-      <div id="try-finder" className={styles.finderIsland}>
+    <div id="live-demo" className={styles.experience}>
+      <div className={styles.finderIsland}>
         <form className={styles.finderForm} onSubmit={submit}>
           <span className={styles.platformMark} aria-hidden>◎</span>
-          <label className={styles.srOnly} htmlFor="viral-finder-handle">
-            Instagram username or profile link
-          </label>
+          <label className={styles.srOnly} htmlFor="viral-finder-handle">Instagram username or profile link</label>
           <input
             id="viral-finder-handle"
             className={styles.finderInput}
@@ -222,194 +223,121 @@ export default function ViralFinderExperience() {
             placeholder="@username or instagram.com/username"
             autoComplete="off"
           />
-          <button className={styles.primaryButton} type="submit">Find Viral Reels</button>
+          <button className={styles.primaryButton} type="submit">
+            {profileLoading ? "Checking…" : profile ? `Research @${profile.username}` : "Find Viral Reels"}
+          </button>
         </form>
-        <div className={styles.finderMeta}>
-          <p className={styles.tryHandles}>
-            Try{" "}
-            {DEMO_HANDLES.map((handle, index) => (
-              <span key={handle}>
-                {index > 0 ? " · " : null}
-                <button type="button" onClick={() => chooseDemo(handle)}>@{handle}</button>
+
+        {profileLoading ? <div className={styles.profileLoading}>Looking up Instagram profile…</div> : null}
+        {profileError && !profileLoading ? <p className={styles.formError}>{profileError}</p> : null}
+
+        {profile ? (
+          <button className={styles.profileCard} type="button" onClick={() => handoffToResearch(profile.username)}>
+            <span className={styles.profileAvatarWrap}>
+              {profile.profilePicUrl ? (
+                <img className={styles.profileAvatar} src={profile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className={styles.profileAvatarFallback}>@</span>
+              )}
+            </span>
+            <span className={styles.profileText}>
+              <span className={styles.profileNameRow}>
+                <strong>@{profile.username}</strong>
+                {profile.isVerified ? <span className={styles.verified}>✓</span> : null}
+                {profile.isPrivate ? <span className={styles.privateBadge}>Private</span> : null}
               </span>
-            ))}
-          </p>
-          <span className={styles.freeNote}>Free demo · real curated data · no card</span>
+              {profile.fullName ? <span>{profile.fullName}</span> : null}
+              {profile.biography ? <span className={styles.profileBio}>{profile.biography}</span> : null}
+              <span className={styles.profileStats}>
+                <b>{formatNumber(profile.postCount)}</b> posts · <b>{formatNumber(profile.followerCount)}</b> followers · <b>{formatNumber(profile.followingCount)}</b> following
+              </span>
+            </span>
+            <span className={styles.profileAction}>Research this account →</span>
+          </button>
+        ) : null}
+
+        <div className={styles.tryRow}>
+          <span>Try a live demo:</span>
+          {DEMO_HANDLES.map((handle) => (
+            <button type="button" onClick={() => chooseDemo(handle)} key={handle}>@{handle}</button>
+          ))}
         </div>
-        {error && !demo ? <p className={styles.formError}>{error}</p> : null}
       </div>
 
-      <section id="results" className={styles.preview} aria-label="Viral Reel Finder results preview">
+      <section className={styles.preview} aria-label="Live Viral Reel Finder product preview">
         <div className={styles.previewHeader}>
           <div>
-            <span className={styles.previewKicker}>Live product preview</span>
+            <small>Live product preview</small>
             <strong>@{demo?.handle ?? activeHandle}</strong>
-            <span className={styles.statsNote}>
-              {demo
-                ? `${demo.totalReelCount} Reels · median ${formatNumber(demo.medianViewCount)} views`
-                : loading
-                  ? "Loading catalog"
-                  : "Catalog unavailable"}
-            </span>
+            <span>{demo ? `${demo.totalReelCount} Reels available` : loading ? "Loading account" : "Account unavailable"}</span>
           </div>
-          <div className={styles.sortGroup} aria-label="Sort demo Reels">
-            {(["outlier", "views", "engagement"] as SortMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={sortMode === mode ? styles.sortActive : styles.sortButton}
-                onClick={() => setSortMode(mode)}
-              >
-                {mode === "outlier" ? "Outlier score" : mode}
-              </button>
-            ))}
+          <div className={styles.sortTabs} aria-label="Sort demo Reels">
+            <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("views")}>Views</button>
+            <button className={sortMode === "engagement" ? styles.activeSort : undefined} type="button" onClick={() => setSortMode("engagement")}>Engagement</button>
           </div>
         </div>
 
         {loading ? (
-          <div className={styles.previewState}>Loading top Reels…</div>
-        ) : error && !demo ? (
-          <div className={styles.previewState}>
-            The live demo is unavailable right now. Try again in a moment.
-          </div>
+          <div className={styles.demoState}>Loading real Reel data…</div>
+        ) : demoError || !demo ? (
+          <div className={styles.demoState}>The live demo is unavailable right now.</div>
         ) : (
-          <div className={styles.previewGrid}>
-            {visibleReels.map((reel) => {
-              const multiple = formatOutlier(outlierMultiple(reel.viewCount, demo?.medianViewCount ?? 0));
-              return (
+          <>
+            <div className={styles.previewGrid}>
+              {visibleReels.map((reel) => (
                 <article className={styles.previewCard} key={reel.id}>
-                  <div
-                    className={styles.previewArt}
-                    style={{
-                      backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.88)), url(${JSON.stringify(reel.thumbnailUrl).slice(1, -1)})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  >
-                    {multiple ? <span className={styles.outlierBadge}>{multiple}</span> : null}
-                    <strong>{formatNumber(reel.viewCount)} views</strong>
-                  </div>
-                  <div className={styles.previewBody}>
-                    <span className={styles.statsNote}>Hook · first seconds</span>
-                    <p>{hookPreview(reel.caption)}</p>
-                    <div className={styles.cardActionRow}>
-                      <span className={styles.statsNote}>
-                        {reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% eng.` : "eng. n/a"}
-                      </span>
-                      <button type="button" onClick={() => selectForRemake(reel)}>See remake flow →</button>
+                  <button className={styles.reelSelect} type="button" onClick={() => setSelectedReel(reel)}>
+                    <div
+                      className={styles.previewArt}
+                      style={{
+                        backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.9)), url(${JSON.stringify(reel.thumbnailUrl).slice(1, -1)})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }}
+                    >
+                      <strong>{formatNumber(reel.viewCount)} views</strong>
                     </div>
-                  </div>
+                    <div className={styles.previewBody}>
+                      <small>Opening hook</small>
+                      <p>{hookPreview(reel.caption)}</p>
+                      <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
+                      <b>See what happens next →</b>
+                    </div>
+                  </button>
                 </article>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
 
-        {!loading && sortedReels.length > 4 ? (
-          <div className={styles.previewFooter}>
-            <button className={styles.textButton} type="button" onClick={() => setShowAll((value) => !value)}>
-              {showAll ? "Show fewer demo Reels" : `Show all ${sortedReels.length} demo Reels`}
-            </button>
-            <button className={styles.secondaryButton} type="button" onClick={() => openConversion("research")}>
-              Research my own account
-            </button>
-          </div>
-        ) : null}
+            <div className={styles.previewFooter}>
+              <button type="button" className={styles.textButton} onClick={() => setShowAll((value) => !value)}>
+                {showAll ? "Show fewer Reels" : `Show all ${Math.min(8, sortedReels.length)} demo Reels`}
+              </button>
+              <button type="button" className={styles.secondaryButton} onClick={() => handoffToResearch(profile?.username ?? activeHandle)}>
+                Research my own account
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       {selectedReel ? (
-        <section id="remake-preview" className={styles.remakeStage} aria-label="How SpyReels turns research into a new script">
-          <div className={styles.remakeIntro}>
-            <span className={styles.previewKicker}>What happens next</span>
-            <h2>From a winning Reel to your own ready-to-film direction.</h2>
-            <p>Click any Reel above. SpyReels carries the useful pattern forward instead of dropping you on another marketing page.</p>
-          </div>
-
-          <div className={styles.remakeVisual}>
-            <div className={styles.selectedReel}>
-              <div
-                className={styles.selectedReelArt}
-                style={{
-                  backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.9)), url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
-              >
-                <span className={styles.outlierBadge}>
-                  {formatOutlier(outlierMultiple(selectedReel.viewCount, demo?.medianViewCount ?? 0)) || "Top Reel"}
-                </span>
-                <strong>{formatNumber(selectedReel.viewCount)} views</strong>
-              </div>
-              <p>{hookPreview(selectedReel.caption)}</p>
+        <section className={styles.nextStepPanel} aria-label="What SpyReels does after Reel research">
+          <div className={styles.nextStepMedia} style={{ backgroundImage: `url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})` }} />
+          <div className={styles.nextStepCopy}>
+            <small>What happens after you find a strong Reel</small>
+            <h2>Turn the research into something you can actually create.</h2>
+            <p>SpyReels keeps the Reel as research context, then lets you study the hook, transcribe it, and carry the useful idea into your own script workflow.</p>
+            <div className={styles.nextStepChips}>
+              <span>1. Study the hook</span>
+              <span>2. Transcribe the Reel</span>
+              <span>3. Build your own script</span>
             </div>
-
-            <div className={styles.flowArrow} aria-hidden>→</div>
-
-            <div className={styles.outputMock}>
-              <div className={styles.outputTopbar}>
-                <span>SpyReels remake workflow</span>
-                <span className={styles.liveDot}>●</span>
-              </div>
-              <div className={styles.outputSteps}>
-                <div>
-                  <small>01 · Understand</small>
-                  <strong>Why this Reel beat the account baseline</strong>
-                  <p>Outlier score, hook and repeated pattern stay visible together.</p>
-                </div>
-                <div>
-                  <small>02 · Reframe</small>
-                  <strong>Keep the pattern. Change the angle and language.</strong>
-                  <p>Turn the research into an original direction for your niche and audience.</p>
-                </div>
-                <div>
-                  <small>03 · Create</small>
-                  <strong>Move into script + production guidance</strong>
-                  <p>Continue with what to say, what to show and how to structure the Reel.</p>
-                </div>
-              </div>
-              <button className={styles.primaryButton} type="button" onClick={() => openConversion("remake")}>
-                Create my version free
-              </button>
-            </div>
+            <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(profile?.username ?? activeHandle)}>
+              Continue in SpyReels
+            </button>
           </div>
         </section>
       ) : null}
-
-      {conversionIntent ? (
-        <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setConversionIntent(null)}>
-          <div
-            className={styles.conversionModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="conversion-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button className={styles.modalClose} type="button" onClick={() => setConversionIntent(null)} aria-label="Close">×</button>
-            <span className={styles.previewKicker}>{conversionIntent === "remake" ? "Continue the remake" : "Unlock your own research"}</span>
-            <h2 id="conversion-title">
-              {conversionIntent === "remake"
-                ? "Take this Reel into your own content workflow."
-                : pendingHandle
-                  ? `Research @${pendingHandle} in SpyReels.`
-                  : "Research any public creator in SpyReels."}
-            </h2>
-            <p>
-              Create a free account, then continue directly into the Research tool. No generic marketing-page detour.
-            </p>
-            <div className={styles.modalBenefits}>
-              <span>✓ Rank public Reels by performance</span>
-              <span>✓ Continue winners into your own script direction</span>
-              <span>✓ No credit card to start</span>
-            </div>
-            <button className={styles.modalPrimary} type="button" onClick={continueFree}>
-              Continue free with Google →
-            </button>
-            <button className={styles.modalSecondary} type="button" onClick={() => setConversionIntent(null)}>
-              Keep exploring the demo
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </>
+    </div>
   );
 }
