@@ -9,6 +9,10 @@
   box-sizing: border-box;
 }
 
+html {
+  background: #111116;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -20,20 +24,27 @@ a {
   color: inherit;
 }
 
-main {
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.foundationMain {
   width: min(760px, calc(100% - 32px));
   margin: 0 auto;
   padding: 72px 0;
 }
 
-.card {
+.foundationCard {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.04);
   padding: 24px;
 }
 
-.eyebrow {
+.foundationEyebrow {
   margin: 0 0 12px;
   color: #a78bfa;
   font-size: 12px;
@@ -42,18 +53,18 @@ main {
   text-transform: uppercase;
 }
 
-h1 {
+.foundationCard h1 {
   margin: 0;
   font-size: clamp(32px, 7vw, 56px);
   line-height: 1.05;
 }
 
-p,
-li {
+.foundationCard p,
+.foundationCard li {
   color: #b8b8c2;
   line-height: 1.65;
 }
 
-code {
+.foundationCard code {
   color: #ddd6fe;
 }
