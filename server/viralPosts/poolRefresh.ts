@@ -131,7 +131,10 @@ async function refreshInstagramPool(
     maxScCalls,
     skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
     skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-    earlyStopCandidateCount: VIRAL_POOL_DEFAULTS.refreshEarlyStopCandidates,
+    // Intentionally no hashtag early-stop here. The discovery pipeline generates
+    // narrow tags first and wider/adjacent tags second; stopping at 40 could
+    // prevent Viral Posts from ever searching the wider set. maxScCalls remains
+    // the hard provider-cost ceiling for this refresh.
   });
   const adapted = adaptDiscoveryResult(result);
   const candidateCount = await persistAdaptedToPool({
@@ -165,6 +168,11 @@ async function refreshSeedPlatformPool(
     limit: maxHandles,
   });
   if (seeds.length === 0) {
+    console.info("[viralPosts.pool] seed_supply_empty", {
+      poolId: pool.id,
+      platform,
+      niche: pool.niche,
+    });
     await persistAdaptedToPool({ pool, adapted: [], scCalls: 0 });
     return { scCalls: 0, candidateCount: 0 };
   }
