@@ -129,6 +129,11 @@ export async function listPoolsNeedingRefresh(limit = 8): Promise<ViralPostPool[
   return out;
 }
 
+/**
+ * Short-window inventory check used only to decide whether a pool needs new
+ * discovery. This deliberately stays separate from the longer recommendation
+ * reservoir used by Today’s Picks.
+ */
 export async function countFreshPoolCandidates(
   poolId: number,
   maxAgeHours = VIRAL_POOL_DEFAULTS.freshCandidateMaxAgeHours
@@ -243,6 +248,10 @@ export async function linkCandidatesToPool(args: {
   }
 }
 
+/**
+ * Load the reusable recommendation reservoir. By default, candidates stay
+ * eligible for 90 days; refresh logic still uses its own short freshness clock.
+ */
 export async function loadPoolCandidatesForAssembly(args: {
   poolIds: number[];
   limit?: number;
@@ -261,7 +270,7 @@ export async function loadPoolCandidatesForAssembly(args: {
   const limit = args.limit ?? VIRAL_POOL_DEFAULTS.assemblyCandidateLimit;
   const since = new Date(
     Date.now() -
-      (args.maxAgeHours ?? VIRAL_POOL_DEFAULTS.freshCandidateMaxAgeHours) *
+      (args.maxAgeHours ?? VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours) *
         60 *
         60 *
         1000
