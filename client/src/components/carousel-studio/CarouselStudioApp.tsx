@@ -979,9 +979,24 @@ export function CarouselStudioApp({
             {isOpeningLibrary && !hasGeneratedCarousel && (
               <div className="page">
                 <div className="progress-box">
-                  <div className="eyebrow">Library</div>
-                  <h2>Opening carousel</h2>
-                  <p className="sub">Loading your saved slides...</p>
+                  <div className="eyebrow">
+                    {remakeStatusQuery.data?.status === "processing" ||
+                    remakeStatusQuery.data?.status === "pending"
+                      ? "Spyreels AI is working"
+                      : "Library"}
+                  </div>
+                  <h2>
+                    {remakeStatusQuery.data?.status === "processing" ||
+                    remakeStatusQuery.data?.status === "pending"
+                      ? "Building your carousel"
+                      : "Opening carousel"}
+                  </h2>
+                  <p className="sub">
+                    {remakeStatusQuery.data?.status === "processing" ||
+                    remakeStatusQuery.data?.status === "pending"
+                      ? "Starting generation..."
+                      : "Loading your saved slides..."}
+                  </p>
                 </div>
               </div>
             )}

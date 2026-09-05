@@ -9,7 +9,6 @@ import {
 } from "@shared/carouselTemplates";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { CarouselLibraryCard } from "@/components/CarouselLibraryCard";
-import { CarouselPreviewDialog } from "@/components/CarouselPreviewDialog";
 import { ContentToCarouselPanel } from "@/components/ContentToCarouselPanel";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import {
@@ -31,9 +30,9 @@ import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarous
 export default function CarouselLibrary() {
   const [, setLocation] = useLocation();
   useCarouselDocumentTitle(CAROUSEL_LIBRARY_DOCUMENT_TITLE);
-  const [previewTemplate, setPreviewTemplate] =
-    useState<CarouselTemplate | null>(null);
-  const [openRemakeId, setOpenRemakeId] = useState<number | null>(null);
+  const [startingTemplateId, setStartingTemplateId] = useState<string | null>(
+    null
+  );
   const [remakePendingDelete, setRemakePendingDelete] = useState<{
     id: number;
     name: string;
@@ -45,12 +44,8 @@ export default function CarouselLibrary() {
   const hasRemakes = remakes.length > 0;
 
   const deleteMutation = trpc.carouselRemake.delete.useMutation({
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       void utils.carouselRemake.list.invalidate();
-      if (openRemakeId === variables.remakeId) {
-        setPreviewTemplate(null);
-        setOpenRemakeId(null);
-      }
       setRemakePendingDelete(null);
       toast.success("Carousel deleted");
     },
@@ -67,9 +62,22 @@ export default function CarouselLibrary() {
     []
   );
 
+  const startTemplateMutation = trpc.carouselRemake.start.useMutation({
+    onSuccess: (data) => {
+      void utils.carouselRemake.list.invalidate();
+      toast.success("Carousel remake started");
+      setLocation(buildCarouselEditHref(data.remakeId));
+    },
+    onError: (err) => {
+      setStartingTemplateId(null);
+      toast.error(err.message || "Failed to start remake");
+    },
+  });
+
   function openTemplateRemake(template: CarouselTemplate) {
-    setOpenRemakeId(null);
-    setPreviewTemplate(template);
+    if (startTemplateMutation.isPending) return;
+    setStartingTemplateId(template.id);
+    startTemplateMutation.mutate({ templateId: template.id });
   }
 
   function openSavedRemake(remakeId: number, templateId: string) {
@@ -85,11 +93,6 @@ export default function CarouselLibrary() {
       return;
     }
     setLocation(buildCarouselEditHref(remakeId));
-  }
-
-  function closePreview() {
-    setPreviewTemplate(null);
-    setOpenRemakeId(null);
   }
 
   function handleConfirmDelete() {
@@ -163,7 +166,6 @@ export default function CarouselLibrary() {
                   postDate={remake.postDate}
                   thumbnailUrl={remake.thumbnailUrl}
                   slideImageUrls={remake.slideImageUrls}
-                  isActive={openRemakeId === remake.id}
                   disabled={!template}
                   onClick={() => openSavedRemake(remake.id, remake.templateId)}
                   onDeleteRequest={() =>
@@ -194,24 +196,13 @@ export default function CarouselLibrary() {
               <CarouselLibraryCard
                 key={template.id}
                 template={template}
-                isActive={
-                  previewTemplate?.id === template.id && openRemakeId == null
-                }
+                isActive={startingTemplateId === template.id}
                 onClick={() => openTemplateRemake(template)}
               />
             ))}
           </div>
         )}
       </section>
-
-      <CarouselPreviewDialog
-        open={previewTemplate != null}
-        onOpenChange={(open) => {
-          if (!open) closePreview();
-        }}
-        template={previewTemplate}
-        initialRemakeId={openRemakeId}
-      />
 
       <AlertDialog
         open={remakePendingDelete !== null}

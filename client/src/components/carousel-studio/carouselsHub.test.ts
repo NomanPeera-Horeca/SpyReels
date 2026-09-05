@@ -45,6 +45,16 @@ describe("carousels hub navigation", () => {
     expect(studioApp).toContain("buildCarouselEditHref");
   });
 
+  it("sends Library template remakes into the focused editor, not the old preview dialog", () => {
+    const library = readFileSync(
+      join(here, "../../pages/CarouselLibrary.tsx"),
+      "utf8"
+    );
+    expect(library).toContain("carouselRemake.start");
+    expect(library).toContain("buildCarouselEditHref");
+    expect(library).not.toContain("CarouselPreviewDialog");
+  });
+
   it("registers Carousels-owned routes and keeps old URLs as redirects", () => {
     const app = readFileSync(join(here, "../../App.tsx"), "utf8");
     expect(app).toContain(`path="${CAROUSELS_PATH}"`);
