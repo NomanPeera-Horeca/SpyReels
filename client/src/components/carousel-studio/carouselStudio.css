@@ -286,6 +286,20 @@
   .cs .content.editor-content #createPage,
   .cs .content.editor-content #editorStep{flex:1;min-height:0;height:100%;display:flex;flex-direction:column;max-width:none}
   .cs .editor-shell{display:grid;grid-template-columns:168px minmax(0,1fr);gap:12px;flex:1;min-height:0;height:100%}
+  .cs .editor-shell.has-inspector{grid-template-columns:168px minmax(0,1fr) 280px}
+  .cs .text-inspector{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
+  .cs .text-inspector-role{font-size:11px;color:var(--muted)}
+  .cs .text-inspector-body{padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .cs .text-inspector-field{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted)}
+  .cs .text-inspector-field textarea,
+  .cs .text-inspector-field input,
+  .cs .text-inspector-field select{width:100%;background:#0d0d12;color:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 10px;outline:none;font:inherit}
+  .cs .text-inspector-field textarea{min-height:72px;resize:vertical;line-height:1.45}
+  .cs .text-inspector-align{display:flex;gap:6px}
+  .cs .text-inspector-align button{flex:1;border:1px solid var(--border);background:#121219;color:var(--muted);border-radius:8px;padding:7px 6px;text-transform:capitalize}
+  .cs .text-inspector-align button.active{background:var(--panel-3);color:#fff}
+  .cs .text-inspector-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted)}
+  .cs .studio-slide-stage [data-carousel-slot-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px;border-radius:2px}
   .cs .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;min-height:0;overflow:hidden}
   .cs .panel-head{padding:12px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
   .cs .panel-head h3{font-size:13px;margin:0}
@@ -401,6 +415,7 @@
     .cs .bottom-bar{left:76px}
     .cs .app.editor-app{grid-template-columns:1fr}
     .cs .editor-shell{grid-template-columns:148px minmax(0,1fr)}
+    .cs .editor-shell.has-inspector{grid-template-columns:148px minmax(0,1fr) 240px}
     .cs .canvas-area{padding:12px 16px}
     .cs .source-grid{grid-template-columns:1fr}
     .cs .analysis-grid{grid-template-columns:1fr}
@@ -413,6 +428,7 @@
     .cs h1{font-size:36px}
     .cs .recent-grid, .cs .strategy-grid, .cs .stat-grid, .cs .tabs, .cs .preserve-grid, .cs .small-grid, .cs .source-grid, .cs .review-alt-grid, .cs .review-facts, .cs .review-structure{grid-template-columns:1fr}
     .cs .editor-shell{grid-template-columns:1fr;height:auto}
+    .cs .editor-shell.has-inspector{grid-template-columns:1fr}
     .cs .content.editor-content{overflow:auto}
     .cs .canvas-area{padding:16px;min-height:70vh}
     .cs .panel{min-height:auto}

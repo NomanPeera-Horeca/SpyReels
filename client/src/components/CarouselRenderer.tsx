@@ -5,6 +5,8 @@ import type {
   CarouselDesignTokens,
   CarouselImageUrlMap,
 } from "@shared/carouselTemplates";
+import type { CarouselSlotStyleMap } from "@shared/carouselSlotStyle";
+import { CarouselEditorChromeContext } from "@/components/carouselEditorChrome";
 import { normalizeSlideImages } from "@shared/carouselTemplates";
 import { resolveCarouselSlideComponent } from "@/components/carouselLayoutRegistry";
 import { isFrameworkFamilySlide } from "@shared/carouselFrameworkFamily";
@@ -41,6 +43,12 @@ export type CarouselRendererProps = {
   editable?: boolean;
   /** Commit a text slot edit into remake values. */
   onSlotChange?: (slideId: string, slotId: string, value: string) => void;
+  /** Per-slot typography overrides. Missing remakes stay on layout defaults. */
+  slotStyles?: CarouselSlotStyleMap | null;
+  /** Currently selected text slot. Editor-only. */
+  selectedSlotId?: string | null;
+  /** Click a text slot to select it. Editor-only. */
+  onSlotSelect?: (slideId: string, slotId: string) => void;
 };
 
 /** Parse remake slotValuesJson (object or JSON string) into a slide-id map. */
@@ -161,6 +169,9 @@ export function CarouselRenderer({
   onDownloadSlide,
   editable,
   onSlotChange,
+  slotStyles,
+  selectedSlotId,
+  onSlotSelect,
 }: CarouselRendererProps) {
   const effectiveSlides = slides ?? template.slides;
   const effectiveTokens: CarouselDesignTokens = designOverride
@@ -240,6 +251,17 @@ export function CarouselRenderer({
             data-carousel-slide-id={slide.id}
             style={{ flex: "0 0 auto", position: "relative" }}
           >
+            <CarouselEditorChromeContext.Provider
+              value={{
+                slideId: slide.id,
+                selectedSlotId: selectedSlotId ?? null,
+                selectionEnabled: Boolean(editable && onSlotSelect),
+                styles: slotStyles?.[slide.id],
+                onSelectSlot: onSlotSelect
+                  ? (slotId) => onSlotSelect(slide.id, slotId)
+                  : undefined,
+              }}
+            >
             <Layout
               tokens={effectiveTokens}
               values={values}
@@ -256,6 +278,7 @@ export function CarouselRenderer({
                   : undefined
               }
             />
+            </CarouselEditorChromeContext.Provider>
             {onDownloadSlide ? (
               <button
                 type="button"
