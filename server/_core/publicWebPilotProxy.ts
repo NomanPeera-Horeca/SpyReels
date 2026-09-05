@@ -4,6 +4,7 @@ import https from "node:https";
 
 export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
 export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
+export const VIRAL_REEL_FINDER_PROFILE_PATH = "/features/viral-reel-finder/profile";
 const NEXT_ASSET_PREFIX = "/_next/";
 
 const HOP_BY_HOP_HEADERS = new Set([
@@ -53,6 +54,7 @@ export function isPublicWebPilotRequest(
   return (
     path === VIRAL_REEL_FINDER_PILOT_PATH ||
     path === VIRAL_REEL_FINDER_DEMO_PATH ||
+    path === VIRAL_REEL_FINDER_PROFILE_PATH ||
     pathname.startsWith(NEXT_ASSET_PREFIX)
   );
 }
@@ -91,7 +93,6 @@ function proxyRequest(
     return;
   }
 
-  // Guard against accidentally pointing the proxy back at the same public host.
   const requestHost = (req.headers["x-forwarded-host"] || req.headers.host || "")
     .toString()
     .split(",")[0]
@@ -120,8 +121,6 @@ function proxyRequest(
       headers,
     },
     (upstreamResponse) => {
-      // The pilot page fails open to the existing Vite renderer. This means a
-      // public-web outage does not take the current production landing page down.
       if (
         normalizedPath(req.path) === VIRAL_REEL_FINDER_PILOT_PATH &&
         (upstreamResponse.statusCode ?? 500) >= 500
@@ -166,7 +165,7 @@ function proxyRequest(
  *   SPYREELS_PUBLIC_WEB_PILOT=true
  *   SPYREELS_PUBLIC_WEB_ORIGIN=http(s)://<public-web-service>
  *
- * Only the Viral Reel Finder page, its demo-data route, and its Next.js assets
+ * Only the Viral Reel Finder page, its demo/profile routes, and its Next.js assets
  * are proxied during the pilot.
  */
 export function registerPublicWebPilotProxy(
