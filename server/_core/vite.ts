@@ -6,6 +6,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { enrichSpaHtmlForPublicPath } from "../blogPageHtml";
 import { getBlogPostBySlug } from "../db";
+import { registerPublicWebPilotProxy } from "./publicWebPilotProxy";
 
 /** PostHog replay loads CSS/JS from our origin inside an iframe on these hosts. */
 const POSTHOG_REPLAY_ORIGINS = new Set([
@@ -39,6 +40,10 @@ function postHogReplayAssetCorsMiddleware(
 }
 
 export async function setupVite(app: Express, server: Server) {
+  // Register the reversible public-web pilot BEFORE Vite gets a chance to
+  // satisfy public routes. Disabled by default unless both pilot env vars exist.
+  registerPublicWebPilotProxy(app);
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -87,6 +92,10 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
+  // Same handoff in production: the pilot proxy is registered before static
+  // files and the SPA fallback, so only explicitly opted-in routes can move.
+  registerPublicWebPilotProxy(app);
+
   const distPath =
     process.env.NODE_ENV === "development"
       ? path.resolve(import.meta.dirname, "../..", "dist", "public")
