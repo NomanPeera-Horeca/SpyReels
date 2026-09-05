@@ -7,6 +7,7 @@ import {
   type ViralBenchmarkCandidate,
   type ViralBenchmarkSource,
 } from "../server/viralPosts/benchmark";
+import { loadTransferableFeaturedBenchmarkSupply } from "../server/viralPosts/benchmarkTransferableSupply";
 
 type Args = {
   userId: number | null;
@@ -111,9 +112,22 @@ async function main() {
   const args = parseArgs();
   const userId = await resolveUserId(args);
   const report = await benchmarkViralTodayPicks({ userId });
+  const transferableFeatured = await loadTransferableFeaturedBenchmarkSupply({
+    niche: report.niche,
+    pillars: report.pillars,
+  });
 
   if (args.json) {
-    console.log(JSON.stringify(report, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ...report,
+          transferableFeaturedAvailable: transferableFeatured,
+        },
+        null,
+        2
+      )
+    );
     return;
   }
 
@@ -142,6 +156,27 @@ async function main() {
     `${pad("Personal added after dedupe", 26)} ${report.funnel.personalCandidatesAddedAfterCanonicalDedupe}`
   );
   console.log(`${pad("Canonical universe", 26)} ${report.funnel.canonicalUniverse}`);
+
+  console.log("\nTRANSFERABLE FEATURED CATALOG — AVAILABLE NOW");
+  console.log("------------------------------------------------------------");
+  console.log(
+    `Unique available: ${transferableFeatured.totalUnique} (diagnostic only; these are not automatically added to this benchmark ranking)`
+  );
+  for (const pillar of report.pillars) {
+    console.log(
+      `${pad(pillar, 30)} ${transferableFeatured.matchesByPillar[pillar] ?? 0}`
+    );
+  }
+  if (transferableFeatured.examples.length > 0) {
+    console.log("Examples:");
+    for (const example of transferableFeatured.examples) {
+      console.log(
+        `- ${example.creatorHandle || "unknown creator"} | ${example.pillar} | ${example.format || "unknown"} | views=${example.views ?? "unknown"}`
+      );
+      console.log(`  ${short(example.hook)}`);
+      console.log(`  ${example.sourceUrl}`);
+    }
+  }
 
   console.log("\nFILTER / RANKING FUNNEL");
   console.log("------------------------------------------------------------");
