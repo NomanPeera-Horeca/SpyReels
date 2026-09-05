@@ -273,8 +273,6 @@ function adaptPublicMetadata(args: {
     hook,
     format: inferFormatFromCopy({ caption, hook }),
     hashtagKey: hashtags[0] || null,
-    // This object is stored globally if the canonical candidate is new. Keep it
-    // deliberately free of user/workspace ids or private relationship details.
     rawProviderPayload: { source: "existing_public_metadata" },
   };
 }
@@ -403,6 +401,24 @@ async function loadRecentRadarSearches(userId: number) {
     .limit(MAX_RADAR_SEARCHES);
 }
 
+async function safePersonalSource<T>(args: {
+  userId: number;
+  source: string;
+  fallback: T;
+  load: () => Promise<T>;
+}): Promise<T> {
+  try {
+    return await args.load();
+  } catch (err) {
+    console.warn("[viralPosts.personalization] source_failed", {
+      userId: args.userId,
+      source: args.source,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return args.fallback;
+  }
+}
+
 function addExplicitCreatorSignals(
   signals: ViralPersonalizationSignals,
   onboardingHandles: string[] | null | undefined,
@@ -471,12 +487,42 @@ export async function loadViralPersonalizationContext(args: {
 }): Promise<ViralPersonalizationContext> {
   const now = args.now ?? new Date();
   const signals = createEmptySignals();
-  const workspaceId = await getPersonalWorkspaceId(args.userId);
+
+  const workspaceId = await safePersonalSource<number | null>({
+    userId: args.userId,
+    source: "workspace",
+    fallback: null,
+    load: () => getPersonalWorkspaceId(args.userId),
+  });
   const [onboarding, collectedAll, scrapeJobs, radarSearches] = await Promise.all([
-    getOnboardingState(args.userId),
-    getCollectedReelsByWorkspace(workspaceId),
-    getScrapeJobsByWorkspace(workspaceId),
-    loadRecentRadarSearches(args.userId),
+    safePersonalSource({
+      userId: args.userId,
+      source: "onboarding",
+      fallback: null,
+      load: () => getOnboardingState(args.userId),
+    }),
+    workspaceId == null
+      ? Promise.resolve([] as CollectedReel[])
+      : safePersonalSource({
+          userId: args.userId,
+          source: "collected",
+          fallback: [] as CollectedReel[],
+          load: () => getCollectedReelsByWorkspace(workspaceId),
+        }),
+    workspaceId == null
+      ? Promise.resolve([] as ScrapeJob[])
+      : safePersonalSource({
+          userId: args.userId,
+          source: "scrape_jobs",
+          fallback: [] as ScrapeJob[],
+          load: () => getScrapeJobsByWorkspace(workspaceId),
+        }),
+    safePersonalSource({
+      userId: args.userId,
+      source: "creator_radar",
+      fallback: [] as Awaited<ReturnType<typeof loadRecentRadarSearches>>,
+      load: () => loadRecentRadarSearches(args.userId),
+    }),
   ]);
 
   addExplicitCreatorSignals(
@@ -589,8 +635,6 @@ export async function loadViralPersonalizationContext(args: {
       );
     }
   } catch (err) {
-    // Similar-creator expansion is optional; the existing private signals and
-    // shared pools remain sufficient to assemble a feed if catalog lookup fails.
     console.warn("[viralPosts.personalization] similar_creator_supply_failed", {
       userId: args.userId,
       error: err instanceof Error ? err.message : String(err),
@@ -598,8 +642,6 @@ export async function loadViralPersonalizationContext(args: {
   }
 
   const personalByKey = new Map<string, AdaptedCandidate>();
-  // Similar-creator discovery is the weakest relationship, Radar is stronger,
-  // and an explicit Collected action wins when the same public reel overlaps.
   for (const candidate of similarCandidates) {
     personalByKey.set(canonicalCandidateKey(candidate), candidate);
   }
