@@ -2,7 +2,7 @@
 
 export function InstagramMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="none">
+    <svg viewBox="0 0 24 24" width="22" height="22" className={className} aria-hidden fill="none">
       <rect
         x="3.5"
         y="3.5"
