@@ -75,6 +75,7 @@ import {
   type ThemePreference,
   useTheme,
 } from "@/contexts/ThemeContext";
+import { isCarouselsNavActive } from "@/components/carousel-studio/carouselsHub";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
@@ -101,6 +102,8 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   // "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
   "/studio": "AI Coach for viral Reel scripts",
+  "/carousels":
+    "Create a carousel or reopen recent work",
   "/carousel-library":
     "Browse proven viral carousel templates and remake them for your niche",
   "/broll-library":
@@ -140,7 +143,7 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-        { icon: Images, label: "Carousel Library", path: "/carousel-library", badge: "new" },
+        { icon: Images, label: "Carousels", path: "/carousels", badge: "new" },
         { icon: Clapperboard, label: "B-Roll Library", path: "/broll-library", badge: "new" },
         { icon: FileText, label: "My Scripts", path: "/scripts" },
         { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
@@ -199,6 +202,9 @@ function isSidebarPathActive(location: string, path: string): boolean {
   }
   if (path === "/scripts") {
     return location === "/scripts" || location.startsWith("/scripts/");
+  }
+  if (path === "/carousels") {
+    return isCarouselsNavActive(location);
   }
   if (path === "/admin") {
     return location === "/admin" || location.startsWith("/admin/");
