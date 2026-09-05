@@ -24,6 +24,13 @@ export type DiversityCandidate = {
  */
 export const DAILY_PICK_MIN_FINAL_SCORE = 0.45;
 
+/**
+ * Platform variety is a tie-breaker, not a quota. We only defer an otherwise
+ * eligible same-platform candidate when another platform is close enough in
+ * score that choosing variety does not materially lower recommendation quality.
+ */
+export const PLATFORM_DIVERSITY_MAX_SCORE_GAP = 0.025;
+
 function normalizeText(s: string): string {
   return s
     .toLowerCase()
@@ -40,6 +47,35 @@ function nearDuplicate(a: string, b: string): boolean {
   if (na.length >= 48 && nb.includes(na.slice(0, 48))) return true;
   if (nb.length >= 48 && na.includes(nb.slice(0, 48))) return true;
   return false;
+}
+
+function isCloseEligibleAltPlatform(args: {
+  current: DiversityCandidate;
+  candidate: DiversityCandidate;
+  selected: DiversityCandidate[];
+  usedSources: Set<string>;
+  creatorCounts: Map<string, number>;
+  platforms: Set<string>;
+  selectedLength: number;
+  min: number;
+}): boolean {
+  const { current, candidate, selected, usedSources, creatorCounts, platforms } = args;
+  if (!candidate.platform || platforms.has(candidate.platform)) return false;
+  if (candidate.finalScore < current.finalScore - PLATFORM_DIVERSITY_MAX_SCORE_GAP) {
+    return false;
+  }
+  if (candidate.hidden || candidate.recentlyDismissed || candidate.recentlyShown) {
+    return false;
+  }
+  if (usedSources.has(candidate.sourceId)) return false;
+  const creatorCount = creatorCounts.get(candidate.creatorKey) ?? 0;
+  if (creatorCount >= 2) return false;
+  if (creatorCount >= 1 && args.selectedLength >= args.min) return false;
+  return !selected.some(
+    (existing) =>
+      nearDuplicate(existing.caption || existing.hook, candidate.caption || candidate.hook) ||
+      nearDuplicate(existing.hook, candidate.hook)
+  );
 }
 
 /**
@@ -100,16 +136,19 @@ export function selectDiverseFeed(
       c.platform &&
       platforms.has(c.platform)
     ) {
-      const hasAltPlatform = sorted.some(
-        (alt) =>
-          alt.platform &&
-          !platforms.has(alt.platform) &&
-          !usedSources.has(alt.sourceId) &&
-          !alt.hidden &&
-          !alt.recentlyDismissed &&
-          !alt.recentlyShown
+      const hasCloseAltPlatform = sorted.some((alt) =>
+        isCloseEligibleAltPlatform({
+          current: c,
+          candidate: alt,
+          selected,
+          usedSources,
+          creatorCounts,
+          platforms,
+          selectedLength: selected.length,
+          min,
+        })
       );
-      if (hasAltPlatform) continue;
+      if (hasCloseAltPlatform) continue;
     }
 
     selected.push(c);
