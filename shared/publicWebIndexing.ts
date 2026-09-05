@@ -1,14 +1,19 @@
 export type PublicWebIndexingPolicy = {
   index: boolean;
   follow: boolean;
-  reason: "approved-production-host" | "preview-or-unapproved-host";
+  reason: "approved-production-host" | "preview-or-unapproved-host" | "indexing-flag-disabled";
   host: string;
 };
 
 export type PublicWebIndexingRequest = {
   host?: string | null;
   forwardedHost?: string | null;
+  indexingEnabled?: boolean;
 };
+
+export function publicWebIndexingEnabled(env: NodeJS.Dict<string> = process.env): boolean {
+  return env.SPYREELS_PUBLIC_WEB_INDEXING_ENABLED === "true";
+}
 
 const APPROVED_PRODUCTION_HOSTS = new Set(["spyreels.ai", "www.spyreels.ai"]);
 
@@ -28,8 +33,8 @@ export function resolvePublicWebRequestHost(input: PublicWebIndexingRequest = {}
 }
 
 /**
- * Indexing is host-derived so launch does not depend on editing robots.txt.
- * Preview and localhost stay noindex. Real spyreels.ai ownership becomes index/follow.
+ * Indexing requires both an approved production host and an explicit server-side
+ * approval flag. A forwarded host alone must never make a preview indexable.
  * Prefer x-forwarded-host because Express sets Host to the Next service and forwards
  * the visitor host when the production app proxies this renderer.
  */
@@ -37,8 +42,12 @@ export function publicWebIndexingPolicy(
   input: PublicWebIndexingRequest = {}
 ): PublicWebIndexingPolicy {
   const host = resolvePublicWebRequestHost(input);
-  if (APPROVED_PRODUCTION_HOSTS.has(host)) {
+  const approvedHost = APPROVED_PRODUCTION_HOSTS.has(host);
+  if (approvedHost && input.indexingEnabled === true) {
     return { index: true, follow: true, reason: "approved-production-host", host };
+  }
+  if (approvedHost) {
+    return { index: false, follow: false, reason: "indexing-flag-disabled", host };
   }
   return { index: false, follow: false, reason: "preview-or-unapproved-host", host };
 }

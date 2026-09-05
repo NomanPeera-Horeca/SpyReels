@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import {
+  publicWebIndexingEnabled,
   publicWebIndexingPolicy,
   publicWebRobotsMetadata,
 } from "../../shared/publicWebIndexing";
@@ -16,6 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
       publicWebIndexingPolicy({
         host: headerStore.get("host"),
         forwardedHost: headerStore.get("x-forwarded-host"),
+        indexingEnabled: publicWebIndexingEnabled(),
       })
     ),
   };
