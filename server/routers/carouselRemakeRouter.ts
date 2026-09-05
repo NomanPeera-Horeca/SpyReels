@@ -8,10 +8,38 @@ import {
   selectRecommendedCreativeBrief,
 } from "@shared/carouselStudio";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import type { CarouselImageUrlMap, CarouselSlideSpec } from "@shared/carouselTemplates";
+import {
+  isComparisonFamilySlide,
+  textContextForComparisonImageSlot,
+} from "@shared/carouselComparisonFamily";
 import {
   normalizeCarouselSlotStyleMap,
   upsertCarouselSlotStyleMap,
 } from "@shared/carouselSlotStyle";
+import {
+  normalizeCarouselImageFrameMap,
+  upsertCarouselImageFrameMap,
+} from "@shared/carouselImageFrame";
+import {
+  fanOutCarouselCoverUrl,
+  upsertCarouselImageUrlMap,
+} from "@shared/carouselImageUrls";
+import {
+  CAROUSEL_EDITOR_MAX_SLIDES,
+  CAROUSEL_EDITOR_MIN_SLIDES,
+  CarouselSlideManagementError,
+  deleteCarouselSlide,
+  duplicateCarouselSlide,
+  finalizeEditorSlideState,
+  reorderCarouselSlides,
+  type CarouselEditorSlideState,
+} from "@shared/carouselSlideManagement";
+import {
+  normalizeCarouselDesignOverride,
+  type StoredCarouselDesignOverride,
+} from "@shared/carouselDesignOverride";
+import { resolveSlideImage } from "../carousel/resolveSlideImage";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -146,12 +174,45 @@ const DESIGN_OVERRIDE_SCHEMA = z.object({
   fontBody: z.string().max(80).optional(),
 });
 
+const STORED_DESIGN_UPDATE_SCHEMA = z
+  .object({
+    background: z.string().max(16),
+    foreground: z.string().max(16),
+    accent: z.string().max(16),
+    muted: z.string().max(16),
+    fontDisplay: z.string().max(128).optional(),
+    fontBody: z.string().max(128).optional(),
+  })
+  .transform((value, ctx): StoredCarouselDesignOverride => {
+    const parsed = normalizeCarouselDesignOverride(value);
+    if (!parsed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid design override",
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
 const ASPECT_RATIO_SCHEMA = z.enum(["4:5", "1:1", "9:16"]);
 
 const SLIDE_COUNT_SCHEMA = z.union([
   z.literal("auto"),
   z.number().int().min(3).max(20),
 ]);
+
+const editorSlideSpecSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    role: z.string().min(1).max(64),
+    viralWhy: z.string().max(4000).optional().default(""),
+    layoutId: z.string().min(1).max(128),
+    slots: z.array(z.record(z.string(), z.unknown())).max(32),
+    imageSlots: z.array(z.record(z.string(), z.unknown())).max(8).optional(),
+    composition: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
 
 const CONTENT_STYLE_SCHEMA = z.enum(["photo", "bold", "notebook", "stat"]);
 
@@ -472,6 +533,7 @@ export const carouselRemakeRouter = router({
         slideStructure: row.slideStructureJson ?? null,
         designOverride: row.designOverrideJson ?? null,
         slotStyleOverrides: row.slotStyleOverridesJson ?? null,
+        imageFrameOverrides: row.imageFrameOverridesJson ?? null,
         aspectRatioOverride: row.aspectRatioOverride ?? null,
         imageUrls: row.imageUrlsJson ?? null,
         angleOptions: row.angleOptionsJson == null ? null : briefs,
@@ -994,6 +1056,63 @@ export const carouselRemakeRouter = router({
     }),
 
   /**
+   * Persist global carousel design. Null clears the override back to the template.
+   * Auth + workspace ownership; does not mutate templates, slot styles, or generation.
+   */
+  updateDesignOverride: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        designOverride: STORED_DESIGN_UPDATE_SCHEMA.nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing design",
+        });
+      }
+
+      await db
+        .update(carouselRemakes)
+        .set({ designOverrideJson: input.designOverride })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return {
+        remakeId: input.remakeId,
+        designOverride: input.designOverride,
+      };
+    }),
+
+  /**
    * Content → carousel: paste / topic / URL → template remake with source-aware prompt.
    */
   generateFromContent: protectedProcedure
@@ -1172,6 +1291,8 @@ export const carouselRemakeRouter = router({
         .select({
           id: carouselRemakes.id,
           status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          slideStructureJson: carouselRemakes.slideStructureJson,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
         })
         .from(carouselRemakes)
@@ -1197,29 +1318,418 @@ export const carouselRemakeRouter = router({
 
       const current =
         row.imageUrlsJson && typeof row.imageUrlsJson === "object"
-          ? ({ ...(row.imageUrlsJson as Record<string, unknown>) } as Record<
-              string,
-              string | Record<string, string>
-            >)
+          ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
           : {};
+      const next = applyOwnedImageUrl(
+        current,
+        input.slideId,
+        input.url,
+        input.slotId,
+        shareCoverSlideIdsForTemplate(row.templateId, row.slideStructureJson)
+      );
 
-      if (input.slotId) {
-        const existing = current[input.slideId];
-        if (typeof existing === "string" || !existing) {
-          current[input.slideId] = { [input.slotId]: input.url };
-        } else {
-          current[input.slideId] = { ...existing, [input.slotId]: input.url };
-        }
-      } else {
-        current[input.slideId] = input.url;
+      await db
+        .update(carouselRemakes)
+        .set({ imageUrlsJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, imageUrls: next };
+    }),
+
+  /**
+   * Replace the full image URL map after undo.
+   */
+  replaceImageUrls: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        imageUrls: z.record(z.string(), z.union([
+          z.string(),
+          z.record(z.string(), z.string()),
+        ])),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before changing images",
+        });
       }
 
       await db
         .update(carouselRemakes)
-        .set({ imageUrlsJson: current })
+        .set({ imageUrlsJson: input.imageUrls })
         .where(eq(carouselRemakes.id, input.remakeId));
 
-      return { remakeId: input.remakeId, imageUrls: current };
+      return { remakeId: input.remakeId, imageUrls: input.imageUrls };
+    }),
+
+  /**
+   * Merge one crop/position/zoom override into imageFrameOverridesJson.
+   */
+  updateImageFrame: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+        frame: z.object({
+          posX: z.number().min(0).max(100).optional(),
+          posY: z.number().min(0).max(100).optional(),
+          zoom: z.number().min(1).max(2).optional(),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          imageFrameOverridesJson: carouselRemakes.imageFrameOverridesJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing images",
+        });
+      }
+
+      const current = normalizeCarouselImageFrameMap(row.imageFrameOverridesJson);
+      const next = upsertCarouselImageFrameMap(
+        current,
+        input.slideId,
+        input.slotId,
+        input.frame
+      );
+
+      await db
+        .update(carouselRemakes)
+        .set({ imageFrameOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { imageFrameOverrides: next };
+    }),
+
+  /**
+   * Replace the full image-frame map after undo.
+   */
+  replaceImageFrames: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        imageFrameOverrides: z.record(z.string(), z.record(z.string(), z.unknown())),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing images",
+        });
+      }
+
+      const next = normalizeCarouselImageFrameMap(input.imageFrameOverrides);
+      await db
+        .update(carouselRemakes)
+        .set({ imageFrameOverridesJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { imageFrameOverrides: next };
+    }),
+
+  /**
+   * Regenerate only the selected image slot via the existing resolveSlideImage path.
+   * Does not rewrite copy, strategy, or other image slots.
+   */
+  regenerateSlideImage: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          niche: carouselRemakes.niche,
+          slotValuesJson: carouselRemakes.slotValuesJson,
+          slideStructureJson: carouselRemakes.slideStructureJson,
+          imageUrlsJson: carouselRemakes.imageUrlsJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before regenerating images",
+        });
+      }
+
+      const template = CAROUSEL_TEMPLATES_BY_ID.get(row.templateId);
+      const slides = slidesForRemake(template?.slides, row.slideStructureJson);
+      const slide = slides.find((item) => item.id === input.slideId);
+      const imageSlot = slide?.imageSlots?.find((slot) => slot.id === input.slotId);
+      if (!slide || !imageSlot) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That slide has no matching image slot",
+        });
+      }
+
+      const slideValues =
+        row.slotValuesJson && typeof row.slotValuesJson === "object"
+          ? ((row.slotValuesJson as Record<string, Record<string, string>>)[
+              input.slideId
+            ] ?? {})
+          : {};
+      const textContext = imageTextContextForOwnedSlot(
+        slide,
+        slideValues,
+        input.slotId
+      );
+      const url = await resolveSlideImage(
+        imageSlot.searchQueryHint ?? "",
+        row.niche,
+        undefined,
+        textContext,
+        {
+          slideId: input.slideId,
+          imageSlotId: input.slotId,
+        }
+      );
+      if (!url) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Image generation did not return a URL",
+        });
+      }
+
+      const current =
+        row.imageUrlsJson && typeof row.imageUrlsJson === "object"
+          ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
+          : {};
+      const next = applyOwnedImageUrl(
+        current,
+        input.slideId,
+        url,
+        input.slotId,
+        shareCoverSlideIdsForTemplate(row.templateId, row.slideStructureJson)
+      );
+
+      await db
+        .update(carouselRemakes)
+        .set({ imageUrlsJson: next })
+        .where(eq(carouselRemakes.id, input.remakeId));
+
+      return { remakeId: input.remakeId, imageUrls: next, url };
+    }),
+
+  /**
+   * Reorder, duplicate, or delete one slide on a completed remake.
+   * One UPDATE writes structure + all per-slide maps together.
+   * Does not mutate templates, generate images, or delete R2 objects.
+   */
+  manageSlides: protectedProcedure
+    .input(
+      z.discriminatedUnion("action", [
+        z.object({
+          remakeId: z.number().int().positive(),
+          action: z.literal("reorder"),
+          orderedSlideIds: z
+            .array(z.string().min(1).max(128))
+            .min(CAROUSEL_EDITOR_MIN_SLIDES)
+            .max(CAROUSEL_EDITOR_MAX_SLIDES),
+        }),
+        z.object({
+          remakeId: z.number().int().positive(),
+          action: z.literal("duplicate"),
+          slideId: z.string().min(1).max(128),
+        }),
+        z.object({
+          remakeId: z.number().int().positive(),
+          action: z.literal("delete"),
+          slideId: z.string().min(1).max(128),
+        }),
+      ])
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const row = await loadOwnedCompletedRemakeEditorRow(db, ctx.workspaceId, input.remakeId);
+      const current = editorStateFromRow(row);
+      try {
+        if (input.action === "reorder") {
+          const next = reorderCarouselSlides(current, input.orderedSlideIds);
+          return persistOwnedEditorState(db, input.remakeId, next);
+        }
+        if (input.action === "duplicate") {
+          const { state, newSlideId } = duplicateCarouselSlide(current, input.slideId);
+          const saved = await persistOwnedEditorState(db, input.remakeId, state);
+          return { ...saved, newSlideId };
+        }
+        const next = deleteCarouselSlide(current, input.slideId);
+        return persistOwnedEditorState(db, input.remakeId, next);
+      } catch (err) {
+        throw slideManagementTrpcError(err);
+      }
+    }),
+
+  /**
+   * Replace structure + all per-slide editor maps after undo.
+   * Auth + workspace ownership; no LLM / image work / template writes.
+   */
+  replaceEditorState: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideStructure: z
+          .array(editorSlideSpecSchema)
+          .min(CAROUSEL_EDITOR_MIN_SLIDES)
+          .max(CAROUSEL_EDITOR_MAX_SLIDES),
+        slotValues: z.record(
+          z.string(),
+          z.record(z.string(), z.string().max(4000))
+        ),
+        slotStyleOverrides: z.record(z.string(), z.unknown()),
+        imageUrls: z.record(z.string(), z.unknown()),
+        imageFrameOverrides: z.record(z.string(), z.unknown()),
+        designOverride: STORED_DESIGN_UPDATE_SCHEMA.nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      await loadOwnedCompletedRemakeEditorRow(db, ctx.workspaceId, input.remakeId);
+      try {
+        const next = finalizeEditorSlideState({
+          slideStructure: input.slideStructure as CarouselSlideSpec[],
+          slotValues: input.slotValues,
+          slotStyles: normalizeCarouselSlotStyleMap(input.slotStyleOverrides),
+          imageUrls: normalizeOwnedImageUrlMap(input.imageUrls),
+          imageFrames: normalizeCarouselImageFrameMap(input.imageFrameOverrides),
+        });
+        return persistOwnedEditorState(
+          db,
+          input.remakeId,
+          next,
+          input.designOverride
+        );
+      } catch (err) {
+        throw slideManagementTrpcError(err);
+      }
     }),
 
   /**
@@ -1265,3 +1775,196 @@ export const carouselRemakeRouter = router({
       return { remakeId: input.remakeId, deleted: true as const };
     }),
 });
+
+function slidesForRemake(
+  templateSlides: CarouselSlideSpec[] | undefined,
+  stored: unknown
+): CarouselSlideSpec[] {
+  if (Array.isArray(stored) && stored.length > 0) {
+    return stored as CarouselSlideSpec[];
+  }
+  return templateSlides ?? [];
+}
+
+function shareCoverSlideIdsForTemplate(
+  templateId: string,
+  storedStructure: unknown
+): string[] | undefined {
+  const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId);
+  if (!template?.shareCoverImage) return undefined;
+  return slidesForRemake(template.slides, storedStructure)
+    .filter((slide) => (slide.imageSlots?.length ?? 0) > 0)
+    .map((slide) => slide.id);
+}
+
+function applyOwnedImageUrl(
+  current: CarouselImageUrlMap,
+  slideId: string,
+  url: string,
+  slotId: string | undefined,
+  sharedSlideIds: string[] | undefined
+): CarouselImageUrlMap {
+  if (sharedSlideIds && sharedSlideIds.length > 0) {
+    return fanOutCarouselCoverUrl(current, url, sharedSlideIds);
+  }
+  return upsertCarouselImageUrlMap(current, slideId, url, slotId);
+}
+
+function imageTextContextForOwnedSlot(
+  slide: CarouselSlideSpec,
+  slideVals: Record<string, string>,
+  imageSlotId: string
+): string {
+  if (isComparisonFamilySlide(slide) && (slide.imageSlots?.length ?? 0) > 1) {
+    const sideCopy = textContextForComparisonImageSlot(slideVals, imageSlotId);
+    if (sideCopy) return sideCopy;
+  }
+  const preferred = [
+    slideVals.headline,
+    slideVals.title,
+    slideVals.body,
+    slideVals.support,
+    slideVals.subhead,
+  ];
+  return preferred.filter((value) => value?.trim()).join(" / ");
+}
+
+type OwnedEditorRemakeRow = {
+  id: number;
+  status: string;
+  templateId: string;
+  slideStructureJson: unknown;
+  slotValuesJson: unknown;
+  slotStyleOverridesJson: unknown;
+  imageUrlsJson: unknown;
+  imageFrameOverridesJson: unknown;
+};
+
+async function loadOwnedCompletedRemakeEditorRow(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  workspaceId: string,
+  remakeId: number
+): Promise<OwnedEditorRemakeRow> {
+  const rows = await db
+    .select({
+      id: carouselRemakes.id,
+      status: carouselRemakes.status,
+      templateId: carouselRemakes.templateId,
+      slideStructureJson: carouselRemakes.slideStructureJson,
+      slotValuesJson: carouselRemakes.slotValuesJson,
+      slotStyleOverridesJson: carouselRemakes.slotStyleOverridesJson,
+      imageUrlsJson: carouselRemakes.imageUrlsJson,
+      imageFrameOverridesJson: carouselRemakes.imageFrameOverridesJson,
+    })
+    .from(carouselRemakes)
+    .where(
+      and(
+        eq(carouselRemakes.id, remakeId),
+        eq(carouselRemakes.workspaceId, workspaceId),
+        isNull(carouselRemakes.deletedAt)
+      )
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+  }
+  if (row.status !== "completed") {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Remake must be completed before changing slides",
+    });
+  }
+  return row;
+}
+
+function editorStateFromRow(row: OwnedEditorRemakeRow): CarouselEditorSlideState {
+  const template = CAROUSEL_TEMPLATES_BY_ID.get(row.templateId);
+  return {
+    slideStructure: slidesForRemake(template?.slides, row.slideStructureJson),
+    slotValues: asSlotValueMap(row.slotValuesJson),
+    slotStyles: normalizeCarouselSlotStyleMap(row.slotStyleOverridesJson),
+    imageUrls: normalizeOwnedImageUrlMap(row.imageUrlsJson),
+    imageFrames: normalizeCarouselImageFrameMap(row.imageFrameOverridesJson),
+  };
+}
+
+async function persistOwnedEditorState(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  remakeId: number,
+  state: CarouselEditorSlideState,
+  designOverride?: StoredCarouselDesignOverride | null
+): Promise<
+  CarouselEditorSlideState & {
+    remakeId: number;
+    designOverride?: StoredCarouselDesignOverride | null;
+  }
+> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(carouselRemakes)
+      .set({
+        slideStructureJson: state.slideStructure,
+        slotValuesJson: state.slotValues,
+        slotStyleOverridesJson: state.slotStyles,
+        imageUrlsJson: state.imageUrls,
+        imageFrameOverridesJson: state.imageFrames,
+        ...(designOverride !== undefined
+          ? { designOverrideJson: designOverride }
+          : {}),
+      })
+      .where(eq(carouselRemakes.id, remakeId));
+  });
+  return {
+    remakeId,
+    ...state,
+    ...(designOverride !== undefined ? { designOverride } : {}),
+  };
+}
+
+function slideManagementTrpcError(err: unknown): TRPCError {
+  if (err instanceof CarouselSlideManagementError) {
+    return new TRPCError({ code: "BAD_REQUEST", message: err.message });
+  }
+  if (err instanceof TRPCError) return err;
+  return new TRPCError({
+    code: "BAD_REQUEST",
+    message: "Could not update slides",
+  });
+}
+
+function asSlotValueMap(raw: unknown): Record<string, Record<string, string>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, Record<string, string>> = {};
+  for (const [slideId, slots] of Object.entries(raw as Record<string, unknown>)) {
+    if (!slideId || !slots || typeof slots !== "object" || Array.isArray(slots)) {
+      continue;
+    }
+    const next: Record<string, string> = {};
+    for (const [slotId, value] of Object.entries(slots as Record<string, unknown>)) {
+      if (typeof value === "string") next[slotId] = value;
+    }
+    out[slideId] = next;
+  }
+  return out;
+}
+
+function normalizeOwnedImageUrlMap(raw: unknown): CarouselImageUrlMap {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: CarouselImageUrlMap = {};
+  for (const [slideId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!slideId) continue;
+    if (typeof value === "string" && value.length > 0) {
+      out[slideId] = value;
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const slots: Record<string, string> = {};
+    for (const [slotId, url] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof url === "string" && url.length > 0) slots[slotId] = url;
+    }
+    if (Object.keys(slots).length > 0) out[slideId] = slots;
+  }
+  return out;
+}

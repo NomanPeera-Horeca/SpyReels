@@ -6,6 +6,8 @@ import type {
   CarouselImageUrlMap,
 } from "@shared/carouselTemplates";
 import type { CarouselSlotStyleMap } from "@shared/carouselSlotStyle";
+import type { CarouselImageFrameMap } from "@shared/carouselImageFrame";
+import { mergeCarouselDesignTokens } from "@shared/carouselDesignOverride";
 import { CarouselEditorChromeContext } from "@/components/carouselEditorChrome";
 import { normalizeSlideImages } from "@shared/carouselTemplates";
 import { resolveCarouselSlideComponent } from "@/components/carouselLayoutRegistry";
@@ -49,6 +51,12 @@ export type CarouselRendererProps = {
   selectedSlotId?: string | null;
   /** Click a text slot to select it. Editor-only. */
   onSlotSelect?: (slideId: string, slotId: string) => void;
+  /** Per-image-slot crop/position/zoom. Missing remakes stay on layout defaults. */
+  imageFrames?: CarouselImageFrameMap | null;
+  /** Currently selected image slot. Editor-only. */
+  selectedImageSlotId?: string | null;
+  /** Click an image slot to select it. Editor-only. */
+  onImageSelect?: (slideId: string, slotId: string) => void;
 };
 
 /** Parse remake slotValuesJson (object or JSON string) into a slide-id map. */
@@ -172,11 +180,15 @@ export function CarouselRenderer({
   slotStyles,
   selectedSlotId,
   onSlotSelect,
+  imageFrames,
+  selectedImageSlotId,
+  onImageSelect,
 }: CarouselRendererProps) {
   const effectiveSlides = slides ?? template.slides;
-  const effectiveTokens: CarouselDesignTokens = designOverride
-    ? { ...template.design, ...designOverride }
-    : template.design;
+  const effectiveTokens: CarouselDesignTokens = mergeCarouselDesignTokens(
+    template.design,
+    designOverride
+  );
 
   const sharedCoverUrl = template.shareCoverImage
     ? (() => {
@@ -255,10 +267,17 @@ export function CarouselRenderer({
               value={{
                 slideId: slide.id,
                 selectedSlotId: selectedSlotId ?? null,
-                selectionEnabled: Boolean(editable && onSlotSelect),
+                selectedImageSlotId: selectedImageSlotId ?? null,
+                selectionEnabled: Boolean(
+                  editable && (onSlotSelect || onImageSelect)
+                ),
                 styles: slotStyles?.[slide.id],
+                imageFrames: imageFrames?.[slide.id],
                 onSelectSlot: onSlotSelect
                   ? (slotId) => onSlotSelect(slide.id, slotId)
+                  : undefined,
+                onSelectImage: onImageSelect
+                  ? (slotId) => onImageSelect(slide.id, slotId)
                   : undefined,
               }}
             >

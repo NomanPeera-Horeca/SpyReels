@@ -2017,6 +2017,12 @@ export const carouselRemakes = mysqlTable(
      * Null / missing means layout defaults (old remakes unchanged).
      */
     slotStyleOverridesJson: json("slotStyleOverridesJson"),
+    /**
+     * Optional per-image-slot crop/position/zoom.
+     * Shape: { [slideId]: { [imageSlotId]: { posX, posY, zoom } } }.
+     * Null / missing means layout defaults (old remakes unchanged).
+     */
+    imageFrameOverridesJson: json("imageFrameOverridesJson"),
     /** Optional per-remake aspect ratio override (e.g. "4:5", "9:16"). */
     aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
     /** Resolved slide photo URLs keyed by slide id. */

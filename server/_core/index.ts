@@ -16,6 +16,7 @@ import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
+import { localObjectStorageDir } from "../storage";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -254,6 +255,11 @@ async function startServer() {
 
   registerPublicScriptShareRoutes(app);
   registerCarouselExportImageProxy(app);
+
+  const localUploadsDir = localObjectStorageDir();
+  if (localUploadsDir) {
+    app.use("/local-uploads", express.static(localUploadsDir));
+  }
 
   // tRPC API
   app.use(

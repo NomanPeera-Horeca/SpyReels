@@ -59,6 +59,7 @@
   }
   .cs .btn.primary{background:linear-gradient(145deg,var(--purple),#6645ea);border-color:transparent;box-shadow:0 8px 30px rgba(124,92,255,.26)}
   .cs .btn.ghost{background:transparent}
+  .cs .btn.ghost.active{background:var(--panel-3);border-color:#3a3a49}
   .cs .btn.small{padding:7px 10px;font-size:12px}
   .cs .content{overflow:auto;padding:30px}
   .cs .page{max-width:1440px;margin:0 auto}
@@ -285,8 +286,8 @@
   .cs .content.editor-content{padding:10px 12px 12px;overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column}
   .cs .content.editor-content #createPage,
   .cs .content.editor-content #editorStep{flex:1;min-height:0;height:100%;display:flex;flex-direction:column;max-width:none}
-  .cs .editor-shell{display:grid;grid-template-columns:168px minmax(0,1fr);gap:12px;flex:1;min-height:0;height:100%}
-  .cs .editor-shell.has-inspector{grid-template-columns:168px minmax(0,1fr) 280px}
+  .cs .editor-shell{display:grid;grid-template-columns:196px minmax(0,1fr);gap:12px;flex:1;min-height:0;height:100%}
+  .cs .editor-shell.has-inspector{grid-template-columns:196px minmax(0,1fr) 280px}
   .cs .text-inspector{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
   .cs .text-inspector-role{font-size:11px;color:var(--muted)}
   .cs .text-inspector-body{padding:12px;overflow:auto;display:flex;flex-direction:column;gap:12px}
@@ -299,16 +300,45 @@
   .cs .text-inspector-align button{flex:1;border:1px solid var(--border);background:#121219;color:var(--muted);border-radius:8px;padding:7px 6px;text-transform:capitalize}
   .cs .text-inspector-align button.active{background:var(--panel-3);color:#fff}
   .cs .text-inspector-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted)}
+  .cs .design-inspector-section{display:flex;flex-direction:column;gap:10px}
+  .cs .design-inspector-section h4{margin:0;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .cs .design-inspector-color{display:flex;align-items:center;gap:8px}
+  .cs .design-inspector-color input[type="color"]{width:36px;height:36px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#0d0d12;cursor:pointer;flex:0 0 36px}
+  .cs .design-inspector-color input[type="text"]{flex:1}
+  .cs .design-inspector-reset{width:100%;margin-top:4px}
   .cs .studio-slide-stage [data-carousel-slot-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px;border-radius:2px}
+  .cs .studio-slide-stage [data-carousel-image-selected="true"]{outline:1.5px solid rgba(124,92,255,.72);outline-offset:3px}
+  .cs .image-inspector-preview{width:100%;aspect-ratio:4/5;border-radius:10px;background:#0d0d12 center/cover no-repeat;border:1px solid var(--border)}
   .cs .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;min-height:0;overflow:hidden}
   .cs .panel-head{padding:12px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
   .cs .panel-head h3{font-size:13px;margin:0}
   .cs .thumbs{padding:10px;overflow:auto;height:calc(100% - 44px)}
-  .cs .thumb{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;padding:6px;background:#0d0d12;display:flex;gap:6px;align-items:center}
+  .cs .thumb{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;padding:6px;background:#0d0d12;display:flex;gap:5px;align-items:center;position:relative;cursor:pointer}
   .cs .thumb.active{border-color:var(--purple);box-shadow:0 0 0 2px rgba(124,92,255,.12)}
-  .cs .thumb-num{font-size:10px;color:var(--muted);width:14px}
-  .cs .thumb-preview{width:118px;aspect-ratio:4/5;border-radius:7px;overflow:hidden;position:relative;background:#0d0d12;pointer-events:none;flex:1}
-  .cs .thumb-preview-scale{width:360px;transform:scale(calc(118 / 360));transform-origin:top left;pointer-events:none}
+  .cs .thumb.dragging{opacity:.42}
+  .cs .thumb.drop-before::before,
+  .cs .thumbs.drop-end::after{content:"";position:absolute;left:8px;right:8px;height:2px;background:var(--purple);border-radius:2px;pointer-events:none}
+  .cs .thumb.drop-before::before{top:-5px}
+  .cs .thumbs.drop-end{position:relative}
+  .cs .thumbs.drop-end::after{bottom:4px}
+  .cs .thumb-handle{flex:0 0 16px;width:16px;height:28px;padding:0;border:0;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:grab}
+  .cs .thumb-handle:active{cursor:grabbing}
+  .cs .thumb-handle:disabled{opacity:.4;cursor:default}
+  .cs .thumb-num{font-size:10px;color:var(--muted);width:14px;flex:0 0 14px}
+  .cs .thumb-preview{width:110px;aspect-ratio:4/5;border-radius:7px;overflow:hidden;position:relative;background:#0d0d12;pointer-events:none;flex:1}
+  .cs .thumb-preview-scale{width:360px;transform:scale(calc(110 / 360));transform-origin:top left;pointer-events:none}
+  .cs .thumb-menu{position:relative;flex:0 0 22px;align-self:flex-start}
+  .cs .thumb-menu-btn{width:22px;height:22px;border-radius:7px;border:1px solid transparent;background:transparent;color:var(--muted);display:grid;place-items:center;opacity:0}
+  .cs .thumb:hover .thumb-menu-btn,
+  .cs .thumb.active .thumb-menu-btn,
+  .cs .thumb.menu-open .thumb-menu-btn{opacity:1}
+  .cs .thumb-menu-btn:hover,
+  .cs .thumb.menu-open .thumb-menu-btn{border-color:var(--border);background:#15151c;color:#fff}
+  .cs .thumb-menu-pop{position:absolute;top:24px;right:0;z-index:8;min-width:118px;padding:4px;border:1px solid var(--border);border-radius:10px;background:#121219;box-shadow:0 10px 24px rgba(0,0,0,.35);display:flex;flex-direction:column}
+  .cs .thumb-menu-pop button{border:0;background:transparent;color:#fff;text-align:left;padding:7px 8px;border-radius:7px;font-size:12px}
+  .cs .thumb-menu-pop button:hover:not(:disabled){background:var(--panel-3)}
+  .cs .thumb-menu-pop button.danger{color:#f5b4b4}
+  .cs .thumb-menu-pop button:disabled{opacity:.45;cursor:not-allowed}
   .cs .icon-btn{width:24px;height:24px;border-radius:7px;border:1px solid var(--border);background:#15151c;color:var(--muted)}
   .cs .canvas-panel{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
   .cs .canvas-toolbar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;flex:0 0 auto}

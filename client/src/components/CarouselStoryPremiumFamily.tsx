@@ -14,6 +14,7 @@ import {
   type StoryPremiumVariant,
 } from "@shared/carouselStoryPremiumDesignSystem";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselStoryPremiumFamilyProps = {
@@ -79,15 +80,6 @@ function bodyStyle(tokens: CarouselDesignTokens): CSSProperties {
     fontSize: DESIGN.typography.storyBody,
     lineHeight: 1.52,
     color: tokens.colors.muted,
-  };
-}
-
-function imageStyle(imageUrl: string): CSSProperties {
-  return {
-    backgroundImage: `url(${imageUrl})`,
-    backgroundPosition: "center",
-    backgroundSize: "cover",
-    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -190,12 +182,14 @@ function CinematicCover({
 
   if (withImage && variant === "cover_full_bleed") {
     return (
-      <div style={{ ...shell(tokens), ...imageStyle(imageUrl!) }}>
+      <div style={shell(tokens)}>
+        <CarouselEditableImage slotId="photo" src={imageUrl!} fill />
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
+            pointerEvents: "none",
             background:
               "linear-gradient(180deg, rgba(8,10,16,0.12) 18%, rgba(8,10,16,0.36) 48%, rgba(8,10,16,0.92) 100%)",
           }}
@@ -267,10 +261,10 @@ function CinematicCover({
           gap: "1rem",
         }}
       >
-        <div
-          aria-hidden
+        <CarouselEditableImage
+          slotId="photo"
+          src={imageUrl!}
           style={{
-            ...imageStyle(imageUrl!),
             borderRadius: DESIGN.radius.media,
             minHeight: 0,
             boxShadow: `0 1.2rem 2.8rem ${wash(tokens.colors.foreground, 0.13)}`,
@@ -432,12 +426,14 @@ function StoryScene(props: StoryProps) {
 
   if (variant === "scene_full_bleed") {
     return (
-      <div style={{ ...shell(tokens), ...imageStyle(imageUrl!) }}>
+      <div style={shell(tokens)}>
+        <CarouselEditableImage slotId="photo" src={imageUrl!} fill />
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
+            pointerEvents: "none",
             background:
               "linear-gradient(180deg, rgba(8,10,16,0.06) 20%, rgba(8,10,16,0.18) 50%, rgba(8,10,16,0.86) 100%)",
           }}
@@ -499,10 +495,10 @@ function StoryScene(props: StoryProps) {
           gap: "0.75rem",
         }}
       >
-        <div
-          aria-hidden
+        <CarouselEditableImage
+          slotId="photo"
+          src={imageUrl!}
           style={{
-            ...imageStyle(imageUrl!),
             borderRadius: DESIGN.radius.media,
             minHeight: 0,
           }}
@@ -547,10 +543,10 @@ function StoryScene(props: StoryProps) {
         padding: "1.05rem 1.05rem 1.7rem",
       }}
     >
-      <div
-        aria-hidden
+      <CarouselEditableImage
+        slotId="photo"
+        src={imageUrl!}
         style={{
-          ...imageStyle(imageUrl!),
           flex: 1,
           minHeight: 0,
           borderRadius: DESIGN.radius.media,
@@ -871,10 +867,10 @@ function ImageTextSplit(props: StoryProps) {
   );
 
   const image = (
-    <div
-      aria-hidden
+    <CarouselEditableImage
+      slotId="photo"
+      src={imageUrl}
       style={{
-        ...imageStyle(imageUrl),
         margin: "0.9rem",
         borderRadius: DESIGN.radius.media,
         minWidth: 0,
@@ -907,22 +903,25 @@ function TurningPoint(props: StoryProps) {
     <div
       style={{
         ...shell(tokens),
-        ...(withImage ? imageStyle(imageUrl!) : {}),
         display: "flex",
         alignItems: "center",
         padding: "1.55rem",
       }}
     >
       {withImage ? (
+        <>
+        <CarouselEditableImage slotId="photo" src={imageUrl!} fill />
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
+            pointerEvents: "none",
             background:
               "linear-gradient(90deg, rgba(8,10,16,0.92) 0%, rgba(8,10,16,0.68) 58%, rgba(8,10,16,0.26) 100%)",
           }}
         />
+        </>
       ) : (
         <>
           <div

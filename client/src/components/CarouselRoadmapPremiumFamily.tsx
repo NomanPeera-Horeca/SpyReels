@@ -17,6 +17,7 @@ import {
   type RoadmapPremiumVariant,
 } from "@shared/carouselRoadmapPremiumDesignSystem";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselRoadmapPremiumFamilyProps = {
@@ -83,15 +84,6 @@ function bodyStyle(tokens: CarouselDesignTokens): CSSProperties {
     fontSize: DESIGN.typography.roadmapBody,
     lineHeight: 1.5,
     color: tokens.colors.muted,
-  };
-}
-
-function imageStyle(imageUrl: string): CSSProperties {
-  return {
-    backgroundImage: `url(${imageUrl})`,
-    backgroundPosition: "center",
-    backgroundSize: "cover",
-    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -711,38 +703,68 @@ function StepPhotoSplit({
         padding: 0,
       }}
     >
-      <div
-        style={{
-          height: "42%",
-          ...(photo
-            ? imageStyle(photo)
-            : { background: wash(tokens.colors.accent, 0.16) }),
-          position: "relative",
-        }}
-      >
-        {current != null && count >= 2 ? (
-          <span
-            style={{
-              position: "absolute",
-              left: "1.2rem",
-              bottom: "1rem",
-              minWidth: "2.6rem",
-              height: "2.6rem",
-              padding: "0 0.7rem",
-              borderRadius: DESIGN.radius.pill,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: tokens.colors.background,
-              color: tokens.colors.accent,
-              fontWeight: 780,
-              letterSpacing: "-0.04em",
-            }}
-          >
-            {String(current).padStart(2, "0")}
-          </span>
-        ) : null}
-      </div>
+      {photo ? (
+        <CarouselEditableImage
+          slotId="photo"
+          src={photo}
+          style={{ height: "42%", position: "relative" }}
+        >
+          {current != null && count >= 2 ? (
+            <span
+              style={{
+                position: "absolute",
+                left: "1.2rem",
+                bottom: "1rem",
+                minWidth: "2.6rem",
+                height: "2.6rem",
+                padding: "0 0.7rem",
+                borderRadius: DESIGN.radius.pill,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: tokens.colors.background,
+                color: tokens.colors.accent,
+                fontWeight: 780,
+                letterSpacing: "-0.04em",
+                pointerEvents: "none",
+              }}
+            >
+              {String(current).padStart(2, "0")}
+            </span>
+          ) : null}
+        </CarouselEditableImage>
+      ) : (
+        <div
+          style={{
+            height: "42%",
+            background: wash(tokens.colors.accent, 0.16),
+            position: "relative",
+          }}
+        >
+          {current != null && count >= 2 ? (
+            <span
+              style={{
+                position: "absolute",
+                left: "1.2rem",
+                bottom: "1rem",
+                minWidth: "2.6rem",
+                height: "2.6rem",
+                padding: "0 0.7rem",
+                borderRadius: DESIGN.radius.pill,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: tokens.colors.background,
+                color: tokens.colors.accent,
+                fontWeight: 780,
+                letterSpacing: "-0.04em",
+              }}
+            >
+              {String(current).padStart(2, "0")}
+            </span>
+          ) : null}
+        </div>
+      )}
       <div
         style={{
           flex: 1,
@@ -1041,13 +1063,14 @@ function WorkedExample({
         style={{ ...headlineStyle(tokens), marginTop: "0.65rem", maxWidth: "14ch" }}
       />
       {photo ? (
-        <div
+        <CarouselEditableImage
+          slotId="photo"
+          src={photo}
           style={{
             flex: 1,
             minHeight: "7.5rem",
             margin: "1rem 0 0.9rem",
             borderRadius: DESIGN.radius.media,
-            ...imageStyle(photo),
           }}
         />
       ) : (

@@ -16,6 +16,7 @@ import {
   type ComparisonPremiumVariant,
 } from "@shared/carouselComparisonPremiumDesignSystem";
 import { CarouselDecorationLayer } from "@/components/CarouselDecorationLayer";
+import { CarouselEditableImage } from "@/components/CarouselEditableImage";
 import { CarouselEditableText } from "@/components/CarouselEditableText";
 
 export type CarouselComparisonPremiumFamilyProps = {
@@ -81,15 +82,6 @@ function bodyStyle(tokens: CarouselDesignTokens): CSSProperties {
     fontSize: DESIGN.typography.comparisonBody,
     lineHeight: 1.48,
     color: tokens.colors.muted,
-  };
-}
-
-function imageStyle(imageUrl: string): CSSProperties {
-  return {
-    backgroundImage: `url(${imageUrl})`,
-    backgroundPosition: "center",
-    backgroundSize: "cover",
-    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -272,14 +264,16 @@ function ContrastCover({
             gridTemplateColumns: "1fr 1fr",
           }}
         >
-          <div aria-hidden style={imageStyle(imageUrl!)} />
-          <div
-            aria-hidden
-            style={{
-              ...(photoB ? imageStyle(photoB) : { background: tokens.colors.foreground }),
-              filter: photoB ? "saturate(0.82)" : undefined,
-            }}
-          />
+          <CarouselEditableImage slotId="photo" src={imageUrl!} />
+          {photoB ? (
+            <CarouselEditableImage
+              slotId="photo_b"
+              src={photoB}
+              style={{ filter: "saturate(0.82)" }}
+            />
+          ) : (
+            <div aria-hidden style={{ background: tokens.colors.foreground }} />
+          )}
         </div>
         <div
           aria-hidden
@@ -378,12 +372,14 @@ function ContrastCover({
 
   if (withImage) {
     return (
-      <div style={{ ...shell(tokens), ...imageStyle(imageUrl!) }}>
+      <div style={shell(tokens)}>
+        <CarouselEditableImage slotId="photo" src={imageUrl!} fill />
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
+            pointerEvents: "none",
             background:
               "linear-gradient(180deg, rgba(8,10,16,0.08) 20%, rgba(8,10,16,0.88) 100%)",
           }}
@@ -596,10 +592,10 @@ function SideBySide({
           }}
         >
           {imageUrl ? (
-            <div
-              aria-hidden
+            <CarouselEditableImage
+              slotId="photo"
+              src={imageUrl}
               style={{
-                ...imageStyle(imageUrl),
                 height: "6.4rem",
                 marginBottom: "0.75rem",
                 borderRadius: ruled ? 0 : DESIGN.radius.compact,
@@ -632,10 +628,10 @@ function SideBySide({
           }}
         >
           {photoB ? (
-            <div
-              aria-hidden
+            <CarouselEditableImage
+              slotId="photo_b"
+              src={photoB}
               style={{
-                ...imageStyle(photoB),
                 height: "6.4rem",
                 marginBottom: "0.75rem",
                 borderRadius: ruled ? 0 : DESIGN.radius.compact,
@@ -714,10 +710,10 @@ function AsymmetricComparison({
       }}
     >
       {imageUrl ? (
-        <div
-          aria-hidden
+        <CarouselEditableImage
+          slotId="photo"
+          src={imageUrl}
           style={{
-            ...imageStyle(imageUrl),
             height: "7.4rem",
             borderRadius: DESIGN.radius.media,
             marginBottom: "1rem",
@@ -923,18 +919,16 @@ function BeforeAfter({
           gridTemplateRows: stacked ? "1fr 1fr" : "1fr",
         }}
       >
-        <div
-          aria-hidden
-          style={{
-            ...(imageUrl ? imageStyle(imageUrl) : { background: wash(tokens.colors.foreground, 0.08) }),
-          }}
-        />
-        <div
-          aria-hidden
-          style={{
-            ...(photoB ? imageStyle(photoB) : { background: tokens.colors.foreground }),
-          }}
-        />
+        {imageUrl ? (
+          <CarouselEditableImage slotId="photo" src={imageUrl} />
+        ) : (
+          <div aria-hidden style={{ background: wash(tokens.colors.foreground, 0.08) }} />
+        )}
+        {photoB ? (
+          <CarouselEditableImage slotId="photo_b" src={photoB} />
+        ) : (
+          <div aria-hidden style={{ background: tokens.colors.foreground }} />
+        )}
       </div>
       <div
         aria-hidden
@@ -1459,7 +1453,6 @@ function WinnerReveal({
     <div
       style={{
         ...shell(tokens),
-        ...(withImage ? imageStyle(imageUrl!) : {}),
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
@@ -1467,15 +1460,19 @@ function WinnerReveal({
       }}
     >
       {withImage ? (
+        <>
+        <CarouselEditableImage slotId="photo" src={imageUrl!} fill />
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
+            pointerEvents: "none",
             background:
               "linear-gradient(180deg, rgba(8,10,16,0.08) 18%, rgba(8,10,16,0.9) 100%)",
           }}
         />
+        </>
       ) : (
         <CarouselDecorationLayer type={tokens.decoration} color={tokens.colors.accent} />
       )}
