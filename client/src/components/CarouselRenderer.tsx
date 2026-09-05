@@ -13,6 +13,12 @@ import {
   resolveFrameworkPremiumVariants,
   type FrameworkPremiumVariant,
 } from "@shared/carouselFrameworkPremiumDesignSystem";
+import { isRoadmapFamilySlide } from "@shared/carouselRoadmapFamily";
+import type { RoadmapTreatment } from "@shared/carouselRoadmapFamily";
+import {
+  resolveRoadmapPremiumVariants,
+  type RoadmapPremiumVariant,
+} from "@shared/carouselRoadmapPremiumDesignSystem";
 
 /** Per-slide slot overrides, keyed by CarouselSlideSpec.id */
 export type CarouselSlideValuesById = Record<string, CarouselSlotValues>;
@@ -171,6 +177,34 @@ export function CarouselRenderer({
       return previous;
     })();
 
+  const previousRoadmapVariants: Array<RoadmapPremiumVariant | null> =
+    (() => {
+      const previous: Array<RoadmapPremiumVariant | null> = effectiveSlides.map(
+        () => null
+      );
+      const walkIndexes: number[] = [];
+      const walkInputs = effectiveSlides.flatMap((slide, index) => {
+        if (!isRoadmapFamilySlide(slide) || !slide.composition) return [];
+        walkIndexes.push(index);
+        return [
+          {
+            treatment: slide.composition.treatment as RoadmapTreatment,
+            position: slide.composition.position ?? index + 1,
+            totalSlides:
+              slide.composition.totalSlides ?? effectiveSlides.length,
+            archetype: slide.composition.archetype,
+            roadmapStepCount: slide.composition.roadmapStepCount,
+            roadmapStepIndex: slide.composition.roadmapStepIndex,
+          },
+        ];
+      });
+      const variants = resolveRoadmapPremiumVariants(walkInputs);
+      walkIndexes.forEach((slideIndex, walkIndex) => {
+        previous[slideIndex] = walkIndex === 0 ? null : variants[walkIndex - 1] ?? null;
+      });
+      return previous;
+    })();
+
   return (
     <div
       className={className}
@@ -204,6 +238,7 @@ export function CarouselRenderer({
               editable={editable}
               composition={slide.composition}
               previousVariant={previousFrameworkVariants[index]}
+              previousRoadmapVariant={previousRoadmapVariants[index]}
               onSlotChange={
                 onSlotChange
                   ? (slotId, value) => onSlotChange(slide.id, slotId, value)
