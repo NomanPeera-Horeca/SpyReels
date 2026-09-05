@@ -51,12 +51,18 @@ describe("carousel text inspector architecture", () => {
     const breakdown = read("../CarouselBreakdownPremiumFamily.tsx");
     const roadmap = read("../CarouselRoadmapPremiumFamily.tsx");
     const comparison = read("../CarouselComparisonPremiumFamily.tsx");
+    const framework = read("../CarouselFrameworkPremiumFamily.tsx");
     expect(breakdown).toContain("selectOnly");
     expect(breakdown).toContain('slotId={support ? "support" : "body"}');
     expect(roadmap).toContain("selectOnly");
     expect(roadmap).toContain('slotId="body"');
     expect(roadmap).not.toContain("editable && index === 0");
     expect(comparison).toContain("selectOnly");
+    expect(framework).toContain("selectOnly");
+    expect(framework).toContain("partLabelSlotId");
+    expect(framework).toContain("quadrantSourceSlotId");
+    expect(framework).not.toContain("{line ?? \"\"}");
+    expect(framework).not.toContain("{extra[index] ?? String(index + 1)}");
   });
 
   it("does not reserve the inspector when nothing is selected", () => {
