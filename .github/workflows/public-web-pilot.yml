@@ -80,6 +80,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3100/features/viral-reel-finder > /tmp/viral-reel-finder.html
 
           grep -q "Any Instagram account" /tmp/viral-reel-finder.html
+          grep -q "Instagram Reel Finder" /tmp/viral-reel-finder.html
           grep -q "Research first. Then turn the useful pattern into your own content" /tmp/viral-reel-finder.html
           grep -q "Questions about the Instagram Reel Finder" /tmp/viral-reel-finder.html
           grep -q 'href="https://spyreels.ai/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
@@ -97,6 +98,16 @@ jobs:
 
           if grep -qi "Outlier score" /tmp/viral-reel-finder.html; then
             echo "The landing page must not present the removed outlier-score marketing UI."
+            exit 1
+          fi
+
+          if grep -qi "Free Instagram Reel Finder" /tmp/viral-reel-finder.html; then
+            echo "Do not reintroduce loud free-tier messaging in the Viral Finder hero."
+            exit 1
+          fi
+
+          if grep -qi "Research my own account" /tmp/viral-reel-finder.html; then
+            echo "Do not reintroduce the ambiguous demo-account research CTA."
             exit 1
           fi
 
