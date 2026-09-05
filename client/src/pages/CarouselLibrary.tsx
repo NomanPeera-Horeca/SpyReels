@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import {
   CAROUSEL_TEMPLATES,
   CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselSlideSpec,
   type CarouselTemplate,
 } from "@shared/carouselTemplates";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { CarouselLibraryCard } from "@/components/CarouselLibraryCard";
-import { ContentToCarouselPanel } from "@/components/ContentToCarouselPanel";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import {
   AlertDialog,
@@ -89,15 +89,6 @@ export default function CarouselLibrary() {
     setLocation(buildCarouselEditHref(remakeId));
   }
 
-  function openContentRemake(remakeId: number, templateId: string) {
-    const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId) ?? null;
-    if (!template) {
-      toast.error("Generated template is unavailable");
-      return;
-    }
-    setLocation(buildCarouselEditHref(remakeId));
-  }
-
   function handleConfirmDelete() {
     if (!remakePendingDelete || deleteMutation.isPending) return;
     deleteMutation.mutate({ remakeId: remakePendingDelete.id });
@@ -120,7 +111,7 @@ export default function CarouselLibrary() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Library</h1>
             <p className="text-sm text-muted-foreground">
-              Turn content into carousels, or remake proven templates for your niche
+              Reopen saved carousels, or remake a proven template
             </p>
           </div>
         </div>
@@ -128,25 +119,9 @@ export default function CarouselLibrary() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Content to Carousel
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Paste a post, topic, or URL. Generate slides, then swap backgrounds.
-          </p>
-        </div>
-        <ContentToCarouselPanel
-          onStarted={({ remakeId, templateId }) =>
-            openContentRemake(remakeId, templateId)
-          }
-        />
-      </section>
-
-      <section className="space-y-3">
-        <div>
           <h2 className="text-lg font-semibold text-foreground">Your Carousels</h2>
           <p className="text-sm text-muted-foreground">
-            Reopen remakes you have already generated
+            Work you have already generated
           </p>
         </div>
 
@@ -159,8 +134,7 @@ export default function CarouselLibrary() {
               No saved carousels yet
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pick a template below and remake it for your niche. Your remakes
-              will show up here so you can reopen, edit, and download anytime.
+              Create a carousel from Carousels. Saved work will show up here.
             </p>
           </div>
         ) : (
@@ -171,13 +145,20 @@ export default function CarouselLibrary() {
               return (
                 <RemakeHistoryCard
                   key={remake.id}
-                  templateName={templateName}
+                  templateName={
+                    remake.title?.trim() || templateName
+                  }
                   niche={remake.niche}
                   status={remake.status}
                   createdAt={remake.createdAt}
                   postDate={remake.postDate}
                   thumbnailUrl={remake.thumbnailUrl}
                   slideImageUrls={remake.slideImageUrls}
+                  previewTemplate={template}
+                  previewSlides={remake.slideStructure as CarouselSlideSpec[] | null}
+                  previewSlideValues={remake.slotValues}
+                  previewImageUrls={remake.imageUrls}
+                  previewAspect={remake.aspectRatioOverride}
                   disabled={!template}
                   onClick={() => openSavedRemake(remake.id, remake.templateId)}
                   onDeleteRequest={() =>
@@ -194,7 +175,7 @@ export default function CarouselLibrary() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Templates</h2>
           <p className="text-sm text-muted-foreground">
-            Choose a proven carousel to remake
+            Remake a proven structure for your niche
           </p>
         </div>
 

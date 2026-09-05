@@ -56,9 +56,23 @@ describe("carousel social preview", () => {
   it("sizes the editor slide from the canvas, not a small fixed preview", () => {
     const css = readFileSync(join(here, "carouselStudio.css"), "utf8");
     expect(css).toContain("studio-slide-fit");
-    expect(css).toContain("58vh");
+    expect(css).toContain("64vh");
     expect(css).not.toContain("min(46vh,470px)");
+    expect(css).not.toContain("padding:12px 80px 16px 16px");
     expect(css).toContain("social-preview-modal.instagram");
+    expect(css).toContain("social-slide-fill");
+    expect(css).toContain("max-width:none!important");
     expect(css).toContain("li-nav-btn");
+  });
+
+  it("fills the social preview frame instead of leaving a 360px side strip", () => {
+    const preview = readFileSync(join(here, "CarouselSocialPreview.tsx"), "utf8");
+    const css = readFileSync(join(here, "carouselStudio.css"), "utf8");
+    expect(preview).toContain("social-slide-fill");
+    expect(preview).toContain('platform === "linkedin" ? "1 / 1" : "4 / 5"');
+    expect(css).toContain(".cs .social-preview-modal.linkedin{width:min(540px,94vw)}");
+    expect(css).toContain("[data-carousel-slide-id] > * > *");
+    expect(css).toContain("flex:0 0 100%!important");
+    expect(css).not.toContain(".cs .export-stage [data-carousel-slide-id] > * > *");
   });
 });

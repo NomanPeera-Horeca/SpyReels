@@ -61,17 +61,21 @@ export function CarouselSocialPreview({
   const positionLabel =
     slides.length === 0 ? "0 / 0" : `${safeIndex + 1} / ${slides.length}`;
 
+  const frameAspect = platform === "linkedin" ? "1 / 1" : "4 / 5";
+
   function renderSlide() {
     if (!slide) return null;
     return (
-      <CarouselRenderer
-        template={template}
-        slides={[slide]}
-        slideValues={slideValues ?? undefined}
-        designOverride={designOverride}
-        handle={handle}
-        imageUrls={imageUrls}
-      />
+      <div className="social-slide-fill" style={{ aspectRatio: frameAspect }}>
+        <CarouselRenderer
+          template={template}
+          slides={[slide]}
+          slideValues={slideValues ?? undefined}
+          designOverride={designOverride}
+          handle={handle}
+          imageUrls={imageUrls}
+        />
+      </div>
     );
   }
 

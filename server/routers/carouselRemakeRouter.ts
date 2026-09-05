@@ -555,6 +555,13 @@ export const carouselRemakeRouter = router({
               string,
               string | Record<string, string>
             > | null,
+            slotValues: (slotValuesJson ?? null) as Record<
+              string,
+              Record<string, string>
+            > | null,
+            slideStructure: Array.isArray(slideStructureJson)
+              ? slideStructureJson
+              : null,
           };
         }
       );

@@ -1,7 +1,10 @@
 import { FormEvent, useState } from "react";
 import { Images, LayoutGrid } from "lucide-react";
 import { useLocation } from "wouter";
-import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import {
+  CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselSlideSpec,
+} from "@shared/carouselTemplates";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,6 +119,11 @@ export default function Carousels() {
                   postDate={remake.postDate}
                   thumbnailUrl={remake.thumbnailUrl}
                   slideImageUrls={remake.slideImageUrls}
+                  previewTemplate={template}
+                  previewSlides={remake.slideStructure as CarouselSlideSpec[] | null}
+                  previewSlideValues={remake.slotValues}
+                  previewImageUrls={remake.imageUrls}
+                  previewAspect={remake.aspectRatioOverride}
                   onClick={() => setLocation(buildCarouselEditHref(remake.id))}
                 />
               );

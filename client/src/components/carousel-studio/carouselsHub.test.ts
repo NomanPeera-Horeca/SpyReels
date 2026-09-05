@@ -54,6 +54,10 @@ describe("carousels hub navigation", () => {
     expect(library).toContain("carouselRemake.start");
     expect(library).toContain("buildCarouselEditHref");
     expect(library).not.toContain("CarouselPreviewDialog");
+    expect(library).not.toContain("ContentToCarouselPanel");
+    expect(library).not.toContain("Content to Carousel");
+    expect(library).toContain("Your Carousels");
+    expect(library).toContain("Templates");
     expect(library).toContain("Back to Carousels");
     expect(library).toContain("CAROUSELS_PATH");
   });
