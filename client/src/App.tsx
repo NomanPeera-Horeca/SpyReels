@@ -312,7 +312,7 @@ function Router() {
             return null;
           }}
         </Route>
-        {/* Admin-only Carousel Studio: full-bleed, no DashboardLayout. URL-only, no sidebar link. */}
+        {/* Authenticated Carousel Studio beta: full-bleed, no DashboardLayout. URL-only, no sidebar link. */}
         <Route path="/carousel-studio">
           <OnboardingGate>
             <CarouselStudio />

@@ -1,6 +1,7 @@
 /**
- * Carousel Studio admin endpoints: generate 3 creative briefs, recommend by score,
- * then fire the existing remake worker. Optional plan-review path returns briefs first.
+ * Carousel Studio endpoints for authenticated users with a workspace:
+ * generate 3 creative briefs, recommend by score, then fire the existing remake worker.
+ * Optional plan-review path returns briefs first.
  * Remix/source-carousel analysis is intentionally not implemented in this phase.
  */
 import { TRPCError } from "@trpc/server";
@@ -26,7 +27,7 @@ import {
   plannedSlideCountFromBrief,
 } from "../carousel/studioOrchestration";
 import { carouselRemakes } from "../../drizzle/schema";
-import { adminPanelProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { proposeStudioAngles } from "../carousel/proposeStudioAngles";
 import {
@@ -183,7 +184,7 @@ async function resolveStudioSourceText(args: {
 }
 
 export const carouselStudioRouter = router({
-  resolveSource: adminPanelProcedure
+  resolveSource: protectedProcedure
     .input(z.object({ content: z.string().min(1).max(2048) }))
     .mutation(async ({ ctx, input }) => {
       return resolveStudioSourceText({
@@ -193,7 +194,7 @@ export const carouselStudioRouter = router({
       });
     }),
 
-  generateAngles: adminPanelProcedure
+  generateAngles: protectedProcedure
     .input(STUDIO_GENERATE_ANGLES_INPUT)
     .mutation(async ({ ctx, input }) => {
       const telemetry = createGenerationTelemetryContext({
@@ -300,7 +301,7 @@ export const carouselStudioRouter = router({
       };
     }),
 
-  generateFromInput: adminPanelProcedure
+  generateFromInput: protectedProcedure
     .input(STUDIO_GENERATE_ANGLES_INPUT)
     .mutation(async ({ ctx, input }) => {
       const telemetry = createGenerationTelemetryContext({
@@ -432,7 +433,7 @@ export const carouselStudioRouter = router({
       }
     }),
 
-  generateCarousel: adminPanelProcedure
+  generateCarousel: protectedProcedure
     .input(
       z.object({
         remakeId: z.number().int().positive(),
