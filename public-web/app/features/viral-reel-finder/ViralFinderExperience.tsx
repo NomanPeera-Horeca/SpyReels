@@ -75,14 +75,11 @@ function appOrigin(): string {
 }
 
 function handoffToResearch(handle: string) {
-  try {
-    sessionStorage.setItem("spyreels:research_pending_handle", handle);
-    sessionStorage.setItem("spyreels:research_autostart", "1");
-    sessionStorage.setItem("spyreels:research_pending_platform", "instagram");
-  } catch {
-    // Best-effort handoff. Production runs this page on the same spyreels.ai origin.
-  }
-  window.location.assign(`${appOrigin()}/research`);
+  const url = new URL(`${appOrigin()}/`);
+  url.searchParams.set("auth", "signup");
+  url.searchParams.set("returnTo", "/research");
+  url.searchParams.set("researchHandle", handle);
+  window.location.assign(url.toString());
 }
 
 export default function ViralFinderExperience() {
