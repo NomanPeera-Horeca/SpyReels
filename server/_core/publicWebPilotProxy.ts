@@ -3,6 +3,7 @@ import http from "node:http";
 import https from "node:https";
 
 export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
+export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
 const NEXT_ASSET_PREFIX = "/_next/";
 
 const HOP_BY_HOP_HEADERS = new Set([
@@ -49,7 +50,11 @@ export function isPublicWebPilotRequest(
   if (method !== "GET" && method !== "HEAD") return false;
 
   const path = normalizedPath(pathname);
-  return path === VIRAL_REEL_FINDER_PILOT_PATH || pathname.startsWith(NEXT_ASSET_PREFIX);
+  return (
+    path === VIRAL_REEL_FINDER_PILOT_PATH ||
+    path === VIRAL_REEL_FINDER_DEMO_PATH ||
+    pathname.startsWith(NEXT_ASSET_PREFIX)
+  );
 }
 
 function copyUpstreamHeaders(upstream: http.IncomingMessage, res: Response): void {
@@ -161,7 +166,8 @@ function proxyRequest(
  *   SPYREELS_PUBLIC_WEB_PILOT=true
  *   SPYREELS_PUBLIC_WEB_ORIGIN=http(s)://<public-web-service>
  *
- * Only the Viral Reel Finder and its Next.js /_next assets are proxied.
+ * Only the Viral Reel Finder page, its demo-data route, and its Next.js assets
+ * are proxied during the pilot.
  */
 export function registerPublicWebPilotProxy(
   app: Express,
