@@ -30,7 +30,7 @@ import {
   VIRAL_POOL_DEFAULTS,
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
-import { selectDiverseFeed } from "./diversity";
+import { DAILY_PICK_MIN_FINAL_SCORE, selectDiverseFeed } from "./diversity";
 import {
   isAnyViralPostsPlatformEnabled,
   isViralPostsInstagramEnabled,
@@ -306,7 +306,11 @@ function scoreAndSelect(
   // Persist scored trend onto in-memory view (DB already has adapter trend)
   const selected = selectDiverseFeed(
     diversityInput.map((d) => d.diversity),
-    { min: VIRAL_DAILY_FEED_MIN, max: VIRAL_DAILY_FEED_MAX }
+    {
+      min: VIRAL_DAILY_FEED_MIN,
+      max: VIRAL_DAILY_FEED_MAX,
+      minFinalScore: DAILY_PICK_MIN_FINAL_SCORE,
+    }
   );
 
   const byId = new Map(diversityInput.map((d) => [d.row.id, d]));
