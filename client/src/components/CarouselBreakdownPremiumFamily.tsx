@@ -878,9 +878,20 @@ function PremiumChecklist({
             >
               ✓
             </span>
-            <p style={{ margin: 0, fontSize: "0.86rem", lineHeight: 1.36, fontWeight: index === 0 && cards ? 700 : 600 }}>
-              {row}
-            </p>
+            <CarouselEditableText
+              as="p"
+              slotId={support ? "support" : "body"}
+              value={row}
+              editable={editable}
+              selectOnly
+              onCommit={onSlotChange}
+              style={{
+                margin: 0,
+                fontSize: "0.86rem",
+                lineHeight: 1.36,
+                fontWeight: index === 0 && cards ? 700 : 600,
+              }}
+            />
           </div>
         ))}
       </div>
@@ -938,7 +949,13 @@ function PremiumData({
       >
         {hero ? (
           extracted ? (
-            <p
+            <CarouselEditableText
+              as="p"
+              slotId="support"
+              value={hero}
+              editable={editable}
+              selectOnly
+              onCommit={onSlotChange}
               style={{
                 margin: 0,
                 fontFamily: tokens.fontFamily.display,
@@ -949,9 +966,7 @@ function PremiumData({
                 color: tokens.colors.accent,
                 overflowWrap: "break-word",
               }}
-            >
-              {hero}
-            </p>
+            />
           ) : (
             <CarouselEditableText
               as="p"

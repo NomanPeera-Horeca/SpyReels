@@ -2011,6 +2011,12 @@ export const carouselRemakes = mysqlTable(
     slideStructureJson: json("slideStructureJson"),
     /** Optional per-remake color/font override. */
     designOverrideJson: json("designOverrideJson"),
+    /**
+     * Optional per-slot typography overrides.
+     * Shape: { [slideId]: { [slotId]: { fontFamily, fontSizePx, fontWeight, textAlign, color } } }.
+     * Null / missing means layout defaults (old remakes unchanged).
+     */
+    slotStyleOverridesJson: json("slotStyleOverridesJson"),
     /** Optional per-remake aspect ratio override (e.g. "4:5", "9:16"). */
     aspectRatioOverride: varchar("aspectRatioOverride", { length: 8 }),
     /** Resolved slide photo URLs keyed by slide id. */

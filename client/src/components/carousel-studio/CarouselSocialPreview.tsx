@@ -14,6 +14,7 @@ import type {
   CarouselTemplate,
 } from "@shared/carouselTemplates";
 import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
+import type { CarouselSlotStyleMap } from "@shared/carouselSlotStyle";
 import type { Platform } from "./mockData";
 import {
   previewCaptionFromSlots,
@@ -30,6 +31,7 @@ type CarouselSocialPreviewProps = {
   slideValues?: CarouselSlideValuesById | null;
   designOverride?: Partial<CarouselDesignTokens>;
   imageUrls?: CarouselImageUrlMap;
+  slotStyles?: CarouselSlotStyleMap | null;
   handle?: string;
   displayName?: string | null;
   currentSlide: number;
@@ -44,6 +46,7 @@ export function CarouselSocialPreview({
   slideValues,
   designOverride,
   imageUrls,
+  slotStyles,
   handle,
   displayName,
   currentSlide,
@@ -74,6 +77,7 @@ export function CarouselSocialPreview({
           designOverride={designOverride}
           handle={handle}
           imageUrls={imageUrls}
+          slotStyles={slotStyles}
         />
       </div>
     );
