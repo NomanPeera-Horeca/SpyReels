@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Calendar, Trash2 } from "lucide-react";
+import { CarouselRenderer } from "@/components/CarouselRenderer";
+import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
+import type {
+  CarouselImageUrlMap,
+  CarouselSlideSpec,
+  CarouselTemplate,
+} from "@shared/carouselTemplates";
 import { cn } from "@/lib/utils";
 
 const HOVER_ADVANCE_MS = 900;
@@ -30,6 +37,11 @@ export type RemakeHistoryCardProps = {
   thumbnailUrl: string | null;
   /** Ordered per-slide image URLs for hover preview. */
   slideImageUrls: string[];
+  previewTemplate?: CarouselTemplate | null;
+  previewSlides?: CarouselSlideSpec[] | null;
+  previewSlideValues?: CarouselSlideValuesById | null;
+  previewImageUrls?: CarouselImageUrlMap | null;
+  previewAspect?: string | null;
   isActive?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -49,6 +61,11 @@ export function RemakeHistoryCard({
   postDate,
   thumbnailUrl,
   slideImageUrls,
+  previewTemplate,
+  previewSlides,
+  previewSlideValues,
+  previewImageUrls,
+  previewAspect,
   isActive,
   disabled,
   onClick,
@@ -67,6 +84,11 @@ export function RemakeHistoryCard({
   const slideCount = previewUrls.length;
   const activeIndex = Math.min(slideIndex, Math.max(slideCount - 1, 0));
   const activeUrl = previewUrls[activeIndex] ?? null;
+  const liveSlide =
+    previewSlides && previewSlides.length > 0
+      ? previewSlides[0]
+      : previewTemplate?.slides[0] ?? null;
+  const canRenderLiveSlide = Boolean(previewTemplate && liveSlide);
   const isFailed = status === "failed";
 
   useEffect(() => {
@@ -115,15 +137,31 @@ export function RemakeHistoryCard({
       )}
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
-        {activeUrl ? (
+        {canRenderLiveSlide && previewTemplate && liveSlide ? (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden [&>div]:h-full [&>div]:w-full [&>div]:p-0 [&_[data-carousel-slide-id]]:h-full [&_[data-carousel-slide-id]]:w-full [&_[data-carousel-slide-id]>*]:!h-full [&_[data-carousel-slide-id]>*]:!w-full [&_[data-carousel-slide-id]>*]:!max-w-none">
+            <CarouselRenderer
+              template={previewTemplate}
+              slides={[liveSlide]}
+              slideValues={previewSlideValues ?? undefined}
+              designOverride={
+                previewAspect === "4:5" ||
+                previewAspect === "1:1" ||
+                previewAspect === "9:16"
+                  ? { aspectRatio: previewAspect }
+                  : undefined
+              }
+              imageUrls={previewImageUrls ?? undefined}
+            />
+          </div>
+        ) : activeUrl ? (
           <img
             src={activeUrl}
             alt=""
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-muted-foreground">
-            {templateName}
+          <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-muted-foreground">
+            No slide preview yet
           </div>
         )}
         {isFailed ? (

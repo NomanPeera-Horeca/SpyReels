@@ -1,28 +1,52 @@
-/** Dashboard Carousels hub: paths, recent list, and Studio launch URLs. */
+/** Dashboard Carousels hub: paths, recent list, and editor launch URLs. */
 
 export const CAROUSELS_PATH = "/carousels";
+export const CAROUSELS_LIBRARY_PATH = "/carousels/library";
+export const CAROUSELS_NEW_PATH = "/carousels/new";
 export const CAROUSEL_LIBRARY_PATH = "/carousel-library";
 export const CAROUSEL_STUDIO_PATH = "/carousel-studio";
 export const CAROUSELS_RECENT_LIMIT = 6;
 export const CAROUSELS_SIDEBAR_LABEL = "Carousels";
 
+export function buildCarouselEditHref(remakeId: number): string {
+  return `${CAROUSELS_PATH}/${remakeId}/edit`;
+}
+
+export function buildCarouselGenerateHref(content: string): string {
+  const params = new URLSearchParams();
+  params.set("content", content.trim());
+  return `${CAROUSELS_NEW_PATH}?${params.toString()}`;
+}
+
+export function buildStudioGenerateHref(content: string): string {
+  return buildCarouselGenerateHref(content);
+}
+
+export function buildStudioRemakeHref(remakeId: number): string {
+  return buildCarouselEditHref(remakeId);
+}
+
+export function parseCarouselEditRemakeId(pathname: string): number | null {
+  const path = pathname.split("?")[0];
+  const match = path.match(/^\/carousels\/(\d+)\/edit$/);
+  if (!match) return null;
+  const remakeId = Number(match[1]);
+  if (!Number.isInteger(remakeId) || remakeId <= 0) return null;
+  return remakeId;
+}
+
 export function isCarouselsNavActive(location: string): boolean {
   const path = location.split("?")[0];
   return (
     path === CAROUSELS_PATH ||
+    path === CAROUSELS_LIBRARY_PATH ||
+    path === CAROUSELS_NEW_PATH ||
     path === CAROUSEL_LIBRARY_PATH ||
+    path === CAROUSEL_STUDIO_PATH ||
+    parseCarouselEditRemakeId(path) != null ||
+    path.startsWith(`${CAROUSELS_LIBRARY_PATH}/`) ||
     path.startsWith(`${CAROUSEL_LIBRARY_PATH}/`)
   );
-}
-
-export function buildStudioGenerateHref(content: string): string {
-  const params = new URLSearchParams();
-  params.set("content", content.trim());
-  return `${CAROUSEL_STUDIO_PATH}?${params.toString()}`;
-}
-
-export function buildStudioRemakeHref(remakeId: number): string {
-  return `${CAROUSEL_STUDIO_PATH}?remakeId=${remakeId}`;
 }
 
 export type StudioLaunchIntent =
@@ -45,9 +69,23 @@ export function parseStudioLaunchSearch(search: string): StudioLaunchIntent {
   return { kind: "none" };
 }
 
+export function legacyStudioRedirectPath(search: string): string {
+  const intent = parseStudioLaunchSearch(search);
+  if (intent.kind === "open_remake") return buildCarouselEditHref(intent.remakeId);
+  if (intent.kind === "generate") return buildCarouselGenerateHref(intent.content);
+  return CAROUSELS_PATH;
+}
+
 export function pickRecentCarousels<T extends { status: string }>(
   rows: T[],
   limit = CAROUSELS_RECENT_LIMIT
 ): T[] {
   return rows.filter((row) => row.status === "completed").slice(0, limit);
+}
+
+/** Keep Recent Carousels compact when the list is sparse. Do not stretch one card. */
+export function recentCarouselsGridClass(count: number): string {
+  if (count <= 1) return "grid w-[210px] max-w-full grid-cols-1 gap-3";
+  if (count <= 3) return "grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3";
+  return "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4";
 }

@@ -19,16 +19,11 @@ describe("STUDIO_LIBRARY_LIST_QUERY", () => {
     });
   });
 
-  it("is the input Studio Library sends to carouselRemake.list", () => {
+  it("is unused by the focused editor, which no longer hosts Library", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const studioApp = readFileSync(join(here, "CarouselStudioApp.tsx"), "utf8");
-    expect(studioApp).toContain("STUDIO_LIBRARY_LIST_QUERY");
-    expect(studioApp).toMatch(
-      /carouselRemake\.list\.useQuery\(\s*STUDIO_LIBRARY_LIST_QUERY/
-    );
-    expect(studioApp).not.toMatch(
-      /carouselRemake\.list\.useQuery\(\s*\{\s*limit:\s*50\s*\}/
-    );
+    expect(studioApp).not.toContain("STUDIO_LIBRARY_LIST_QUERY");
+    expect(studioApp).not.toContain("StudioLibraryPage");
   });
 });
 

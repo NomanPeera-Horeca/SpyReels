@@ -90,7 +90,9 @@ const ThirtyDayPlan = lazyWithRetry(() => import("./pages/ThirtyDayPlan"));
 const AiCoach = lazyWithRetry(() => import("./pages/AiCoach"));
 const CarouselLibrary = lazyWithRetry(() => import("./pages/CarouselLibrary"));
 const Carousels = lazyWithRetry(() => import("./pages/Carousels"));
-/** Authenticated Carousel Studio. Full-bleed, no DashboardLayout. */
+/** Focused Carousel editor. Full-bleed, no DashboardLayout. */
+const CarouselEditor = lazyWithRetry(() => import("./pages/CarouselEditor"));
+/** Legacy /carousel-studio redirect into the Carousels product. */
 const CarouselStudio = lazyWithRetry(() => import("./pages/CarouselStudio"));
 const BrollLibrary = lazyWithRetry(() => import("./pages/BrollLibrary"));
 const PasteScript = lazyWithRetry(() => import("./pages/PasteScript"));
@@ -191,8 +193,11 @@ function DesktopDashboardRouter() {
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
+          <Route path="/carousels/library" component={CarouselLibrary} />
           <Route path="/carousels" component={Carousels} />
-          <Route path="/carousel-library" component={CarouselLibrary} />
+          <Route path="/carousel-library">
+            <Redirect to="/carousels/library" />
+          </Route>
           <Route path="/broll-library" component={BrollLibrary} />
           <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
           <Route path="/paste" component={PasteScript} />
@@ -314,7 +319,18 @@ function Router() {
             return null;
           }}
         </Route>
-        {/* Authenticated Carousel Studio beta: full-bleed, no DashboardLayout. URL-only, no sidebar link. */}
+        {/* Focused Carousel editor: full-bleed, belongs to /carousels. */}
+        <Route path="/carousels/new">
+          <OnboardingGate>
+            <CarouselEditor />
+          </OnboardingGate>
+        </Route>
+        <Route path="/carousels/:remakeId/edit">
+          <OnboardingGate>
+            <CarouselEditor />
+          </OnboardingGate>
+        </Route>
+        {/* Legacy Studio URL: redirect into the Carousels product. */}
         <Route path="/carousel-studio">
           <OnboardingGate>
             <CarouselStudio />

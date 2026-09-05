@@ -104,8 +104,10 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/studio": "AI Coach for viral Reel scripts",
   "/carousels":
     "Create a carousel or reopen recent work",
+  "/carousels/library":
+    "Browse and reopen carousels you have already generated",
   "/carousel-library":
-    "Browse proven viral carousel templates and remake them for your niche",
+    "Browse and reopen carousels you have already generated",
   "/broll-library":
     "Match Pexels stock video B-roll to your Reel scripts by beat",
   "/saved": "Reels you bookmarked for later",

@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import { Images, LayoutGrid } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   CAROUSEL_TEMPLATES,
   CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselSlideSpec,
   type CarouselTemplate,
 } from "@shared/carouselTemplates";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { CarouselLibraryCard } from "@/components/CarouselLibraryCard";
-import { CarouselPreviewDialog } from "@/components/CarouselPreviewDialog";
-import { ContentToCarouselPanel } from "@/components/ContentToCarouselPanel";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import {
   AlertDialog,
@@ -23,11 +23,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import {
+  CAROUSELS_PATH,
+  buildCarouselEditHref,
+} from "@/components/carousel-studio/carouselsHub";
+import { CAROUSEL_LIBRARY_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
+import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
 
 export default function CarouselLibrary() {
-  const [previewTemplate, setPreviewTemplate] =
-    useState<CarouselTemplate | null>(null);
-  const [openRemakeId, setOpenRemakeId] = useState<number | null>(null);
+  const [, setLocation] = useLocation();
+  useCarouselDocumentTitle(CAROUSEL_LIBRARY_DOCUMENT_TITLE);
+  const [startingTemplateId, setStartingTemplateId] = useState<string | null>(
+    null
+  );
   const [remakePendingDelete, setRemakePendingDelete] = useState<{
     id: number;
     name: string;
@@ -39,12 +47,8 @@ export default function CarouselLibrary() {
   const hasRemakes = remakes.length > 0;
 
   const deleteMutation = trpc.carouselRemake.delete.useMutation({
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       void utils.carouselRemake.list.invalidate();
-      if (openRemakeId === variables.remakeId) {
-        setPreviewTemplate(null);
-        setOpenRemakeId(null);
-      }
       setRemakePendingDelete(null);
       toast.success("Carousel deleted");
     },
@@ -61,32 +65,28 @@ export default function CarouselLibrary() {
     []
   );
 
+  const startTemplateMutation = trpc.carouselRemake.start.useMutation({
+    onSuccess: (data) => {
+      void utils.carouselRemake.list.invalidate();
+      toast.success("Carousel remake started");
+      setLocation(buildCarouselEditHref(data.remakeId));
+    },
+    onError: (err) => {
+      setStartingTemplateId(null);
+      toast.error(err.message || "Failed to start remake");
+    },
+  });
+
   function openTemplateRemake(template: CarouselTemplate) {
-    setOpenRemakeId(null);
-    setPreviewTemplate(template);
+    if (startTemplateMutation.isPending) return;
+    setStartingTemplateId(template.id);
+    startTemplateMutation.mutate({ templateId: template.id });
   }
 
   function openSavedRemake(remakeId: number, templateId: string) {
     const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId) ?? null;
     if (!template) return;
-    setPreviewTemplate(template);
-    setOpenRemakeId(remakeId);
-  }
-
-  function openContentRemake(remakeId: number, templateId: string) {
-    const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId) ?? null;
-    if (!template) {
-      toast.error("Generated template is unavailable");
-      return;
-    }
-    void utils.carouselRemake.list.invalidate();
-    setPreviewTemplate(template);
-    setOpenRemakeId(remakeId);
-  }
-
-  function closePreview() {
-    setPreviewTemplate(null);
-    setOpenRemakeId(null);
+    setLocation(buildCarouselEditHref(remakeId));
   }
 
   function handleConfirmDelete() {
@@ -96,39 +96,32 @@ export default function CarouselLibrary() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-          <Images className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Carousel Library</h1>
-          <p className="text-sm text-muted-foreground">
-            Turn content into carousels, or remake proven templates for your niche
-          </p>
+      <div className="space-y-4">
+        <button
+          type="button"
+          className="text-sm font-medium text-primary hover:underline"
+          onClick={() => setLocation(CAROUSELS_PATH)}
+        >
+          ← Back to Carousels
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Images className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Library</h1>
+            <p className="text-sm text-muted-foreground">
+              Reopen saved carousels, or remake a proven template
+            </p>
+          </div>
         </div>
       </div>
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Content to Carousel
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Paste a post, topic, or URL. Generate slides, then swap backgrounds.
-          </p>
-        </div>
-        <ContentToCarouselPanel
-          onStarted={({ remakeId, templateId }) =>
-            openContentRemake(remakeId, templateId)
-          }
-        />
-      </section>
-
-      <section className="space-y-3">
-        <div>
           <h2 className="text-lg font-semibold text-foreground">Your Carousels</h2>
           <p className="text-sm text-muted-foreground">
-            Reopen remakes you have already generated
+            Work you have already generated
           </p>
         </div>
 
@@ -141,8 +134,7 @@ export default function CarouselLibrary() {
               No saved carousels yet
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pick a template below and remake it for your niche. Your remakes
-              will show up here so you can reopen, edit, and download anytime.
+              Create a carousel from Carousels. Saved work will show up here.
             </p>
           </div>
         ) : (
@@ -153,14 +145,20 @@ export default function CarouselLibrary() {
               return (
                 <RemakeHistoryCard
                   key={remake.id}
-                  templateName={templateName}
+                  templateName={
+                    remake.title?.trim() || templateName
+                  }
                   niche={remake.niche}
                   status={remake.status}
                   createdAt={remake.createdAt}
                   postDate={remake.postDate}
                   thumbnailUrl={remake.thumbnailUrl}
                   slideImageUrls={remake.slideImageUrls}
-                  isActive={openRemakeId === remake.id}
+                  previewTemplate={template}
+                  previewSlides={remake.slideStructure as CarouselSlideSpec[] | null}
+                  previewSlideValues={remake.slotValues}
+                  previewImageUrls={remake.imageUrls}
+                  previewAspect={remake.aspectRatioOverride}
                   disabled={!template}
                   onClick={() => openSavedRemake(remake.id, remake.templateId)}
                   onDeleteRequest={() =>
@@ -177,7 +175,7 @@ export default function CarouselLibrary() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Templates</h2>
           <p className="text-sm text-muted-foreground">
-            Choose a proven carousel to remake
+            Remake a proven structure for your niche
           </p>
         </div>
 
@@ -191,24 +189,13 @@ export default function CarouselLibrary() {
               <CarouselLibraryCard
                 key={template.id}
                 template={template}
-                isActive={
-                  previewTemplate?.id === template.id && openRemakeId == null
-                }
+                isActive={startingTemplateId === template.id}
                 onClick={() => openTemplateRemake(template)}
               />
             ))}
           </div>
         )}
       </section>
-
-      <CarouselPreviewDialog
-        open={previewTemplate != null}
-        onOpenChange={(open) => {
-          if (!open) closePreview();
-        }}
-        template={previewTemplate}
-        initialRemakeId={openRemakeId}
-      />
 
       <AlertDialog
         open={remakePendingDelete !== null}

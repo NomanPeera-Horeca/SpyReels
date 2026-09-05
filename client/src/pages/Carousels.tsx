@@ -1,22 +1,29 @@
 import { FormEvent, useState } from "react";
 import { Images, LayoutGrid } from "lucide-react";
 import { useLocation } from "wouter";
-import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
+import {
+  CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselSlideSpec,
+} from "@shared/carouselTemplates";
 import { RemakeHistoryCard } from "@/components/RemakeHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  CAROUSEL_LIBRARY_PATH,
+  CAROUSELS_LIBRARY_PATH,
   CAROUSELS_RECENT_LIMIT,
-  buildStudioGenerateHref,
-  buildStudioRemakeHref,
+  buildCarouselEditHref,
+  buildCarouselGenerateHref,
   pickRecentCarousels,
+  recentCarouselsGridClass,
 } from "@/components/carousel-studio/carouselsHub";
+import { CAROUSELS_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
+import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
 import { trpc } from "@/lib/trpc";
 
 export default function Carousels() {
   const [, setLocation] = useLocation();
   const [idea, setIdea] = useState("");
+  useCarouselDocumentTitle(CAROUSELS_DOCUMENT_TITLE);
   const remakesQuery = trpc.carouselRemake.list.useQuery({
     limit: 20,
     sort: "newest",
@@ -27,7 +34,7 @@ export default function Carousels() {
   function handleGenerate(event: FormEvent) {
     event.preventDefault();
     if (!canGenerate) return;
-    setLocation(buildStudioGenerateHref(idea));
+    setLocation(buildCarouselGenerateHref(idea));
   }
 
   return (
@@ -70,11 +77,11 @@ export default function Carousels() {
             </p>
           </div>
           <a
-            href={CAROUSEL_LIBRARY_PATH}
+            href={CAROUSELS_LIBRARY_PATH}
             className="shrink-0 text-sm font-medium text-primary hover:underline"
             onClick={(event) => {
               event.preventDefault();
-              setLocation(CAROUSEL_LIBRARY_PATH);
+              setLocation(CAROUSELS_LIBRARY_PATH);
             }}
           >
             View all →
@@ -94,7 +101,7 @@ export default function Carousels() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className={recentCarouselsGridClass(recent.length)}>
             {recent.map((remake) => {
               const template = CAROUSEL_TEMPLATES_BY_ID.get(remake.templateId);
               const title =
@@ -112,7 +119,12 @@ export default function Carousels() {
                   postDate={remake.postDate}
                   thumbnailUrl={remake.thumbnailUrl}
                   slideImageUrls={remake.slideImageUrls}
-                  onClick={() => setLocation(buildStudioRemakeHref(remake.id))}
+                  previewTemplate={template}
+                  previewSlides={remake.slideStructure as CarouselSlideSpec[] | null}
+                  previewSlideValues={remake.slotValues}
+                  previewImageUrls={remake.imageUrls}
+                  previewAspect={remake.aspectRatioOverride}
+                  onClick={() => setLocation(buildCarouselEditHref(remake.id))}
                 />
               );
             })}
