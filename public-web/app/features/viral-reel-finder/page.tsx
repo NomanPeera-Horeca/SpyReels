@@ -11,9 +11,6 @@ const TITLE = "Instagram Reel Spy Tool - Find Any Account's Viral Reels Free";
 const DESCRIPTION =
   "Search any Instagram creator's Reels, compare the strongest posts by views and engagement, then carry the useful ideas into your own script workflow.";
 
-const PRODUCT_VIDEO_URL =
-  "https://pub-059f1c24b0b4430da6a57824dd88b55e.r2.dev/landing/hero-demo-v1.mp4";
-
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
@@ -119,24 +116,6 @@ export default function ViralReelFinderPilotPage() {
             Paste a public Instagram handle. SpyReels identifies the account, shows the strongest Reels you can study, and connects the research to your own content workflow.
           </p>
           <ViralFinderExperience />
-        </section>
-
-        <section className={`${styles.shell} ${styles.visualSection}`}>
-          <div className={styles.sectionCopy}>
-            <span className={styles.sectionEyebrow}>See the product</span>
-            <h2>Research first. Then turn the useful pattern into your own content.</h2>
-            <p>
-              The Reel Finder is the first step, not a dead end. SpyReels connects research with transcription, content planning, AI Coach and the rest of the creation workflow.
-            </p>
-            <div className={styles.workflowLine}>
-              <span>Find</span><b>→</b><span>Study</span><b>→</b><span>Transcribe</span><b>→</b><span>Create</span>
-            </div>
-          </div>
-          <div className={styles.videoFrame}>
-            <video autoPlay muted loop playsInline preload="metadata" aria-label="SpyReels product workflow demo">
-              <source src={PRODUCT_VIDEO_URL} type="video/mp4" />
-            </video>
-          </div>
         </section>
 
         <section className={`${styles.shell} ${styles.simpleSteps}`} id="how-it-works">
