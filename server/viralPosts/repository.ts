@@ -13,6 +13,7 @@ import {
 import { getDb } from "../db";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import type { ViralFeedbackType } from "@shared/viralPosts";
+import { VIRAL_POOL_DEFAULTS } from "./constants";
 
 const DB_OP_TIMEOUT_MS = 20_000;
 const DB_DEBUG = process.env.VIRAL_POSTS_DB_DEBUG === "true";
@@ -97,7 +98,7 @@ export async function upsertCandidates(
       viewsPerHour: c.viewsPerHour != null ? String(c.viewsPerHour) : null,
       trendStatus: c.trendStatus,
       rawProviderPayload: c.rawProviderPayload,
-      // Freshness for the 72h assembly window. Bumped on re-confirm below.
+      // Last time this candidate was discovered/re-confirmed by a provider.
       discoveredAt: new Date(),
       refreshedAt: new Date(),
     };
@@ -137,7 +138,7 @@ export async function upsertCandidates(
               viewsPerHour: row.viewsPerHour,
               trendStatus: row.trendStatus,
               rawProviderPayload: row.rawProviderPayload,
-              // Re-confirm keeps candidates inside the 72h assembly window.
+              // Re-confirming refreshes reservoir recency without creating a new identity.
               discoveredAt: new Date(),
               refreshedAt: new Date(),
             },
@@ -517,9 +518,14 @@ export async function getRecentlyDismissedCandidateIds(
   return new Set(rows.map((r) => r.candidateId));
 }
 
+/**
+ * Exact candidate IDs previously placed in this user's automatic Viral Posts
+ * daily feed. This suppression affects recommendation selection only; it does
+ * not remove the reel from Saved, Collected, Creator Radar, or explicit search.
+ */
 export async function getRecentlyShownCandidateIds(
   userId: number,
-  days = 7
+  days = VIRAL_POOL_DEFAULTS.todayPicksRepeatSuppressionDays
 ): Promise<Set<number>> {
   const db = await getDb();
   if (!db) return new Set();
