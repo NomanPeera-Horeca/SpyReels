@@ -11,6 +11,7 @@ import {
   buildCarouselEditHref,
   buildCarouselGenerateHref,
   pickRecentCarousels,
+  recentCarouselsGridClass,
 } from "@/components/carousel-studio/carouselsHub";
 import { CAROUSELS_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
 import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
@@ -97,7 +98,7 @@ export default function Carousels() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className={recentCarouselsGridClass(recent.length)}>
             {recent.map((remake) => {
               const template = CAROUSEL_TEMPLATES_BY_ID.get(remake.templateId);
               const title =

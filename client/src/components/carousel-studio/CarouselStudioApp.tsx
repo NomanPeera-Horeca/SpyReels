@@ -975,7 +975,7 @@ export function CarouselStudioApp({
             </div>
           </header>
 
-          <section className="content">
+          <section className={createStep === "editor" ? "content editor-content" : "content"}>
             {isOpeningLibrary && !hasGeneratedCarousel && (
               <div className="page">
                 <div className="progress-box">
@@ -1678,17 +1678,27 @@ export function CarouselStudioApp({
                         </div>
                         <div className="canvas-area">
                           {studioTemplate && currentSlideSpec ? (
-                            <div className="studio-slide-stage">
-                              <CarouselRenderer
-                                template={studioTemplate}
-                                slides={[currentSlideSpec]}
-                                slideValues={displaySlideValues}
-                                designOverride={studioDesignOverride}
-                                handle={studioHandle}
-                                imageUrls={remakeImageUrls ?? undefined}
-                                editable
-                                onSlotChange={handleSlotChange}
-                              />
+                            <div
+                              className={`studio-slide-fit ratio-${
+                                remakeAspectRatio === "1:1"
+                                  ? "1-1"
+                                  : remakeAspectRatio === "9:16"
+                                    ? "9-16"
+                                    : "4-5"
+                              }`}
+                            >
+                              <div className="studio-slide-stage">
+                                <CarouselRenderer
+                                  template={studioTemplate}
+                                  slides={[currentSlideSpec]}
+                                  slideValues={displaySlideValues}
+                                  designOverride={studioDesignOverride}
+                                  handle={studioHandle}
+                                  imageUrls={remakeImageUrls ?? undefined}
+                                  editable
+                                  onSlotChange={handleSlotChange}
+                                />
+                              </div>
                               <div className="studio-slide-meta">
                                 {currentSlide + 1} / {effectiveSlides.length}
                               </div>

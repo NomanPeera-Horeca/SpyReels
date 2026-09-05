@@ -23,7 +23,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { buildCarouselEditHref } from "@/components/carousel-studio/carouselsHub";
+import {
+  CAROUSELS_PATH,
+  buildCarouselEditHref,
+} from "@/components/carousel-studio/carouselsHub";
 import { CAROUSEL_LIBRARY_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
 import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
 
@@ -102,15 +105,24 @@ export default function CarouselLibrary() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-          <Images className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Carousel Library</h1>
-          <p className="text-sm text-muted-foreground">
-            Turn content into carousels, or remake proven templates for your niche
-          </p>
+      <div className="space-y-4">
+        <button
+          type="button"
+          className="text-sm font-medium text-primary hover:underline"
+          onClick={() => setLocation(CAROUSELS_PATH)}
+        >
+          ← Back to Carousels
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Images className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Library</h1>
+            <p className="text-sm text-muted-foreground">
+              Turn content into carousels, or remake proven templates for your niche
+            </p>
+          </div>
         </div>
       </div>
 

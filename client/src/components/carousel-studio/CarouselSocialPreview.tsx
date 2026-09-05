@@ -1,3 +1,11 @@
+import {
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  MessageCircle,
+  Send,
+} from "lucide-react";
 import { CarouselRenderer } from "@/components/CarouselRenderer";
 import type {
   CarouselDesignTokens,
@@ -50,6 +58,22 @@ export function CarouselSocialPreview({
   const initial = previewInitial(name);
   const canPrev = safeIndex > 0;
   const canNext = safeIndex < slides.length - 1;
+  const positionLabel =
+    slides.length === 0 ? "0 / 0" : `${safeIndex + 1} / ${slides.length}`;
+
+  function renderSlide() {
+    if (!slide) return null;
+    return (
+      <CarouselRenderer
+        template={template}
+        slides={[slide]}
+        slideValues={slideValues ?? undefined}
+        designOverride={designOverride}
+        handle={handle}
+        imageUrls={imageUrls}
+      />
+    );
+  }
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={socialPreviewTitle(platform)}>
@@ -67,43 +91,32 @@ export function CarouselSocialPreview({
                 <div className="li-avatar" aria-hidden>
                   {initial}
                 </div>
-                <div>
+                <div className="li-identity">
                   <strong>{name}</strong>
-                  <span>Carousel document</span>
+                  <span>Document carousel</span>
                 </div>
               </div>
               {caption ? <p className="li-caption">{caption}</p> : null}
-              <div className="li-slide-frame">
-                {slide ? (
-                  <CarouselRenderer
-                    template={template}
-                    slides={[slide]}
-                    slideValues={slideValues ?? undefined}
-                    designOverride={designOverride}
-                    handle={handle}
-                    imageUrls={imageUrls}
-                  />
-                ) : null}
-              </div>
-              <div className="social-preview-nav">
+              <div className="li-slide-frame">{renderSlide()}</div>
+              <div className="li-nav">
                 <button
                   type="button"
-                  className="btn small ghost"
+                  className="li-nav-btn"
                   disabled={!canPrev}
+                  aria-label="Previous slide"
                   onClick={() => onSlideChange(safeIndex - 1)}
                 >
-                  Previous
+                  <ChevronLeft size={18} strokeWidth={2.2} />
                 </button>
-                <span>
-                  {slides.length === 0 ? "0 / 0" : `${safeIndex + 1} / ${slides.length}`}
-                </span>
+                <span className="li-nav-pos">{positionLabel}</span>
                 <button
                   type="button"
-                  className="btn small ghost"
+                  className="li-nav-btn"
                   disabled={!canNext}
+                  aria-label="Next slide"
                   onClick={() => onSlideChange(safeIndex + 1)}
                 >
-                  Next
+                  <ChevronRight size={18} strokeWidth={2.2} />
                 </button>
               </div>
             </div>
@@ -116,16 +129,7 @@ export function CarouselSocialPreview({
                 <strong>{handleLabel}</strong>
               </div>
               <div className="ig-slide-frame">
-                {slide ? (
-                  <CarouselRenderer
-                    template={template}
-                    slides={[slide]}
-                    slideValues={slideValues ?? undefined}
-                    designOverride={designOverride}
-                    handle={handle}
-                    imageUrls={imageUrls}
-                  />
-                ) : null}
+                {renderSlide()}
                 {canPrev ? (
                   <button
                     type="button"
@@ -133,7 +137,7 @@ export function CarouselSocialPreview({
                     aria-label="Previous slide"
                     onClick={() => onSlideChange(safeIndex - 1)}
                   >
-                    ‹
+                    <ChevronLeft size={18} strokeWidth={2.4} />
                   </button>
                 ) : null}
                 {canNext ? (
@@ -143,30 +147,33 @@ export function CarouselSocialPreview({
                     aria-label="Next slide"
                     onClick={() => onSlideChange(safeIndex + 1)}
                   >
-                    ›
+                    <ChevronRight size={18} strokeWidth={2.4} />
                   </button>
                 ) : null}
               </div>
-              <div className="ig-dots" aria-label="Carousel position">
-                {slides.map((item, index) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={index === safeIndex ? "active" : ""}
-                    aria-label={`Slide ${index + 1}`}
-                    onClick={() => onSlideChange(index)}
-                  />
-                ))}
-              </div>
-              <div className="ig-actions" aria-hidden>
-                <span>Like</span>
-                <span>Comment</span>
-                <span>Share</span>
-                <span className="ig-save">Save</span>
+              <div className="ig-meta">
+                <div className="ig-actions" aria-hidden>
+                  <Heart size={22} strokeWidth={2} />
+                  <MessageCircle size={22} strokeWidth={2} />
+                  <Send size={22} strokeWidth={2} />
+                  <Bookmark size={22} strokeWidth={2} className="ig-save" />
+                </div>
+                <div className="ig-dots" aria-label="Carousel position">
+                  {slides.map((item, index) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={index === safeIndex ? "active" : ""}
+                      aria-label={`Slide ${index + 1} of ${slides.length}`}
+                      onClick={() => onSlideChange(index)}
+                    />
+                  ))}
+                </div>
               </div>
               {caption ? (
                 <p className="ig-caption">
-                  <strong>{handleLabel}</strong> {caption}
+                  <strong>{handleLabel}</strong>
+                  <span>{caption}</span>
                 </p>
               ) : null}
             </div>

@@ -16,6 +16,7 @@ import {
   parseCarouselEditRemakeId,
   parseStudioLaunchSearch,
   pickRecentCarousels,
+  recentCarouselsGridClass,
 } from "./carouselsHub";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,8 @@ describe("carousels hub navigation", () => {
     expect(library).toContain("carouselRemake.start");
     expect(library).toContain("buildCarouselEditHref");
     expect(library).not.toContain("CarouselPreviewDialog");
+    expect(library).toContain("Back to Carousels");
+    expect(library).toContain("CAROUSELS_PATH");
   });
 
   it("registers Carousels-owned routes and keeps old URLs as redirects", () => {
@@ -112,5 +115,13 @@ describe("carousels hub navigation", () => {
       { id: 3, status: "completed" },
     ];
     expect(pickRecentCarousels(rows, 6).map((row) => row.id)).toEqual([1, 3]);
+  });
+
+  it("keeps a sparse Recent Carousels row compact", () => {
+    expect(recentCarouselsGridClass(1)).toContain("w-[210px]");
+    expect(recentCarouselsGridClass(2)).toContain("max-w-2xl");
+    expect(recentCarouselsGridClass(3)).toContain("sm:grid-cols-3");
+    expect(recentCarouselsGridClass(4)).toContain("md:grid-cols-4");
+    expect(recentCarouselsGridClass(6)).toContain("md:grid-cols-4");
   });
 });

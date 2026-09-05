@@ -82,3 +82,10 @@ export function pickRecentCarousels<T extends { status: string }>(
 ): T[] {
   return rows.filter((row) => row.status === "completed").slice(0, limit);
 }
+
+/** Keep Recent Carousels compact when the list is sparse. Do not stretch one card. */
+export function recentCarouselsGridClass(count: number): string {
+  if (count <= 1) return "grid w-[210px] max-w-full grid-cols-1 gap-3";
+  if (count <= 3) return "grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3";
+  return "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4";
+}
