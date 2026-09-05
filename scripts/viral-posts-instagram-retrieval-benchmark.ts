@@ -31,14 +31,18 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
 
   console.log("\nCALL ALLOCATION");
   console.log("------------------------------------------------------------");
-  console.log(`Shallow hashtag calls: ${result.shallowScCalls}`);
+  console.log(`Route/hashtag-generation probe calls: ${result.routeProbeScCalls}`);
+  console.log(`Raw hashtag creator-search calls: ${result.rawHashtagScCalls}`);
+  console.log(`Total shallow discovery calls: ${result.shallowScCalls}`);
   console.log(`Selective drill calls: ${result.drillScCalls}`);
   console.log(`TOTAL SC CALLS: ${result.totalScCalls}`);
   console.log(`Estimated cost: $${result.costEstimateUsd.toFixed(4)}`);
 
   console.log("\nDISCOVERY DEPTH");
   console.log("------------------------------------------------------------");
-  console.log(`Shallow viral candidates: ${result.shallowCandidateCount}`);
+  console.log(`Metric-bearing shallow viral candidates: ${result.shallowCandidateCount}`);
+  console.log(`Raw hashtag posts read: ${result.rawHashtagPosts}`);
+  console.log(`Metricless creator seeds: ${result.metriclessCreatorSeeds}`);
   console.log(`Unique shallow creators: ${result.uniqueShallowCreators}`);
   console.log(`Creators selected for drilling: ${result.selectedCreators.length}`);
   console.log(`Creators actually drilled before fuse: ${result.drilledCreatorHandles.length}`);
@@ -51,8 +55,11 @@ function printResult(result: InstagramPoolDiscoveryResult): void {
   result.selectedCreators.forEach((creator, index) => {
     const drilled = result.drilledCreatorHandles.includes(creator.handle) ? "DRILLED" : "NOT REACHED";
     console.log(
-      `${index + 1}. @${creator.handle} | ${drilled} | hashtag reels=${creator.hashtagReelCount} | tier1=${creator.tier1Count} | best viral=${creator.bestViralScore.toFixed(2)} | best views=${creator.bestViews}`
+      `${index + 1}. @${creator.handle} | ${drilled} | seed=${creator.seedMode} | topic=${creator.topicSignalScore} | hashtag posts=${creator.hashtagReelCount} | hashtags=${creator.matchedHashtags.map((tag) => `#${tag}`).join(",") || "(scored only)"} | tier1=${creator.tier1Count} | best viral=${creator.bestViralScore.toFixed(2)} | best views=${creator.bestViews}`
     );
+    if (creator.sampleCaption) {
+      console.log(`   seed caption: ${short(creator.sampleCaption, 140)}`);
+    }
   });
 
   console.log("\nTOP CREATOR-DRILL CANDIDATES");
