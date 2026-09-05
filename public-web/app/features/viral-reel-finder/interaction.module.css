@@ -2,7 +2,7 @@
   cursor: default;
 }
 
-.profileConfirmed:hover {
+.profileConfirmed.profileConfirmed:hover {
   border-color: rgba(167, 139, 250, 0.24);
   background: rgba(124, 58, 237, 0.06);
 }
@@ -19,6 +19,12 @@
 .profilePlatform svg {
   width: 16px;
   height: 16px;
+}
+
+.searchButton:disabled {
+  cursor: default;
+  opacity: 0.58;
+  box-shadow: none;
 }
 
 .previewFooterSingle {
