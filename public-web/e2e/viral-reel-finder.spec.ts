@@ -59,16 +59,18 @@ test.beforeEach(async ({ page }) => {
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Any Instagram account's viral Reels");
   await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
+  await expect(page.locator("video")).toHaveCount(0);
 
   const handleInput = page.getByLabel("Instagram username or profile link");
   await handleInput.fill("noman_peera");
   await expect(page.getByText("@noman_peera", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Instagram profile", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Research @noman_peera" })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: /See what SpyReels does next/ }).first()).toBeVisible();
-  await page.getByRole("button", { name: /See what SpyReels does next/ }).first().click();
+  const firstReel = page.getByRole("button", { name: /See what SpyReels does next/ }).first();
+  await expect(firstReel).toBeVisible();
+  await firstReel.click();
   await expect(page.getByRole("heading", { name: "See the path before you sign in." })).toBeVisible();
+  await expect(page.getByText("Selected — explore below ↓")).toBeVisible();
 
   await page.getByRole("button", { name: "2. Transcript" }).click();
   await expect(page.getByText("Turn the Reel into text you can inspect.")).toBeVisible();
@@ -77,7 +79,7 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   await expect(page.getByText("Use the research as context for an original script.")).toBeVisible();
 
   await page.getByRole("button", { name: /Show all 8 Reels/ }).click();
-  await expect(page.getByRole("button", { name: /See what SpyReels does next/ })).toHaveCount(8);
+  await expect(page.locator("button[aria-pressed]")).toHaveCount(8);
 
   await page.getByRole("button", { name: "Engagement" }).click();
   await expect(page.getByText("12.5% engagement")).toBeVisible();
