@@ -200,7 +200,11 @@ const plugins = [
     },
     workbox: {
       navigateFallback: "/index.html",
-      navigateFallbackDenylist: [/^\/api\//],
+      navigateFallbackDenylist: [
+        /^\/api\//,
+        /^\/_next\//,
+        /^\/features\/viral-reel-finder\/?$/,
+      ],
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         {
