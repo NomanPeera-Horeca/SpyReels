@@ -24,6 +24,7 @@ vi.mock("../../db", () => ({
 }));
 
 import { carouselStudioRouter } from "../../routers/carouselStudioRouter";
+import { studioSidebarRoleLabel } from "../../../client/src/components/carousel-studio/studioSidebarRole";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -92,6 +93,10 @@ describe("Carousel Studio access source contract", () => {
     "utf8"
   );
   const adminRouter = readFileSync(join(here, "../../routers.ts"), "utf8");
+  const studioApp = readFileSync(
+    join(here, "../../../client/src/components/carousel-studio/CarouselStudioApp.tsx"),
+    "utf8"
+  );
 
   it("uses protectedProcedure on Studio endpoints, not adminPanelProcedure", () => {
     expect(studioRouter).toContain("import { protectedProcedure, router }");
@@ -139,6 +144,24 @@ describe("Carousel Studio access source contract", () => {
   it("does not weaken other adminPanelProcedure routes", () => {
     expect(adminRouter).toContain("adminPanelProcedure");
     expect(adminRouter).toMatch(/ping:\s*adminPanelProcedure/);
+  });
+
+  it("does not hardcode Admin in the Studio sidebar", () => {
+    expect(studioApp).not.toMatch(/<small>\s*Admin\s*<\/small>/);
+    expect(studioApp).toContain("studioSidebarRoleLabel");
+    expect(studioApp).toContain("user?.role");
+  });
+});
+
+describe("Carousel Studio sidebar role label", () => {
+  it("shows Member for a normal user", () => {
+    expect(studioSidebarRoleLabel("user")).toBe("Member");
+    expect(studioSidebarRoleLabel(null)).toBe("Member");
+    expect(studioSidebarRoleLabel(undefined)).toBe("Member");
+  });
+
+  it("shows Admin for an admin user", () => {
+    expect(studioSidebarRoleLabel("admin")).toBe("Admin");
   });
 });
 

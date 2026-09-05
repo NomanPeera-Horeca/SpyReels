@@ -36,6 +36,7 @@ import {
   exportErrorMessage,
   slugifyCarouselName,
 } from "@/lib/carouselExport";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
 import { StudioLibraryPage } from "./StudioLibraryPage";
@@ -54,6 +55,7 @@ import {
   mapStudioLibraryRows,
 } from "./studioLibrary";
 import { formatStudioPackageSummary } from "./studioPackage";
+import { studioSidebarRoleLabel } from "./studioSidebarRole";
 
 type StoredDesignOverride = {
   background: string;
@@ -145,6 +147,7 @@ const PAGE_TITLES: Record<NavPage, string> = {
 };
 
 export function CarouselStudioApp() {
+  const { user } = useAuth();
   const { toastMsg, toast } = useToast();
 
   const [navPage, setNavPage] = useState<NavPage>("create");
@@ -966,7 +969,7 @@ export function CarouselStudioApp() {
               <div className="avatar">NP</div>
               <div>
                 <strong>Noman</strong>
-                <small>Admin</small>
+                <small>{studioSidebarRoleLabel(user?.role)}</small>
               </div>
             </div>
           </div>
