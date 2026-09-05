@@ -488,7 +488,7 @@ export async function loadViralPersonalizationContext(args: {
   const now = args.now ?? new Date();
   const signals = createEmptySignals();
 
-  const workspaceId = await safePersonalSource<number | null>({
+  const workspaceId = await safePersonalSource<string | null>({
     userId: args.userId,
     source: "workspace",
     fallback: null,
