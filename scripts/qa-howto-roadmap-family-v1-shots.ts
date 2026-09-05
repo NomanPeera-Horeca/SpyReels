@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import sharp from "sharp";
+import { CAROUSEL_STOCK_PREVIEW } from "../shared/carouselTemplates";
 
 const BASE = process.env.QA_BASE_URL ?? "http://127.0.0.1:3001";
 const SETS = [
@@ -80,10 +81,51 @@ async function capture(query: string, dumpPath: string, outDir: string) {
   console.log(`[qa] ${query}: captured ${count} slides in ${outDir}`);
 }
 
+function writePhotoSplitDump() {
+  const source = JSON.parse(
+    readFileSync(
+      resolve(
+        "docs/qa/carousel-howto-roadmap-family-v1/menu-simplification/remake-dump.json"
+      ),
+      "utf8"
+    )
+  );
+  const slides = source.slideStructureJson ?? [];
+  const photoSlide = slides.find(
+    (slide: { composition?: { archetype?: string; treatment?: string } }) =>
+      slide.composition?.archetype === "text_visual_split" &&
+      slide.composition?.treatment === "step_focus"
+  );
+  if (!photoSlide?.id) {
+    throw new Error("No text_visual_split step_focus slide for photo-split QA");
+  }
+  source.imageUrlsJson = {
+    ...(source.imageUrlsJson ?? {}),
+    [photoSlide.id]: CAROUSEL_STOCK_PREVIEW.cafeCreator,
+  };
+  source.selectedBrief = {
+    ...(source.selectedBrief ?? {}),
+    title: "Roadmap step_photo_split fixture",
+  };
+  const outDir = resolve(
+    "docs/qa/carousel-howto-roadmap-family-v1/step-photo-split"
+  );
+  mkdirSync(outDir, { recursive: true });
+  const dumpPath = resolve(outDir, "remake-dump.json");
+  writeFileSync(dumpPath, `${JSON.stringify(source, null, 2)}\n`);
+  return {
+    query: "photosplit",
+    dump: dumpPath,
+    out: outDir,
+  };
+}
+
 async function main() {
   for (const set of SETS) {
     await capture(set.query, resolve(set.dump), resolve(set.out));
   }
+  const photo = writePhotoSplitDump();
+  await capture(photo.query, photo.dump, photo.out);
 }
 
 main().catch((err) => {

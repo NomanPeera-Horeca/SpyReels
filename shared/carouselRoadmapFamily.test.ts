@@ -17,6 +17,7 @@ import {
   resolveRoadmapStepStructure,
   resolveRoadmapTreatment,
   resolveRoadmapTreatments,
+  roadmapTreatmentEyebrow,
   type RoadmapTreatment,
 } from "./carouselRoadmapFamily";
 import { resolveRoadmapPremiumVariants } from "./carouselRoadmapPremiumDesignSystem";
@@ -441,6 +442,63 @@ describe("Roadmap eligibility", () => {
 });
 
 describe("Roadmap step structure", () => {
+  it("rejects two beats that share the same list index", () => {
+    const ir = roadmapPlanningIR({
+      beats: [
+        {
+          id: "beat_01",
+          position: 1,
+          role: "cover",
+          objective: "Open",
+          visualIntent: "text",
+          sequence: null,
+        },
+        {
+          id: "beat_02",
+          position: 2,
+          role: "list_item",
+          objective: "First mention",
+          visualIntent: "text",
+          sequence: { kind: "list", index: 1 },
+        },
+        {
+          id: "beat_03",
+          position: 3,
+          role: "list_item",
+          objective: "Same index again",
+          visualIntent: "text",
+          sequence: { kind: "list", index: 1 },
+        },
+        {
+          id: "beat_04",
+          position: 4,
+          role: "closing",
+          objective: "Close",
+          visualIntent: "text",
+          sequence: null,
+        },
+      ],
+    });
+    const structure = resolveRoadmapStepStructure(ir);
+    expect(structure.source).toBe("none");
+    expect(structure.stepCount).toBe(0);
+    expect(structure.indexByBeatId).toEqual({});
+    const slides = buildRoadmapFamilySlides({
+      template: template(),
+      planningIR: ir,
+      compositionIR: compilePlanningIRToBaselineCompositionIR(ir),
+    });
+    expect(
+      slides.every((slide) => slide.composition?.roadmapStepCount === 0)
+    ).toBe(true);
+    expect(
+      slides.every((slide) => slide.composition?.roadmapStepIndex == null)
+    ).toBe(true);
+    expect(
+      slides.every((slide) => slide.composition?.roadmapStepSource === "none")
+    ).toBe(true);
+  });
+
   it("grounds 4 ordered list sequences as steps 1 through 4", () => {
     const ir = roadmapPlanningIR();
     const structure = resolveRoadmapStepStructure(ir);
@@ -657,6 +715,71 @@ describe("Roadmap treatments", () => {
         totalSlides: 7,
       })
     ).toBe("howto_closing");
+  });
+
+  it("keeps two context slides as route_overview", () => {
+    expect(
+      resolveRoadmapTreatments([
+        {
+          archetype: "text_focus",
+          semanticRole: "context",
+          position: 2,
+          totalSlides: 6,
+        },
+        {
+          archetype: "diagram_focus",
+          semanticRole: "context",
+          position: 3,
+          totalSlides: 6,
+        },
+      ])
+    ).toEqual(["route_overview", "route_overview"]);
+  });
+
+  it("keeps two insight slides as progress_checkpoint", () => {
+    expect(
+      resolveRoadmapTreatments([
+        {
+          archetype: "text_focus",
+          semanticRole: "insight",
+          position: 4,
+          totalSlides: 7,
+        },
+        {
+          archetype: "text_focus",
+          semanticRole: "insight",
+          position: 5,
+          totalSlides: 7,
+        },
+      ])
+    ).toEqual(["progress_checkpoint", "progress_checkpoint"]);
+  });
+
+  it("does not turn action_checklist into worked_example for adjacency", () => {
+    expect(
+      resolveRoadmapTreatments([
+        {
+          archetype: "checklist_stack",
+          semanticRole: "insight",
+          position: 3,
+          totalSlides: 6,
+        },
+        {
+          archetype: "checklist_stack",
+          semanticRole: "insight",
+          position: 4,
+          totalSlides: 6,
+        },
+      ])
+    ).toEqual(["action_checklist", "action_checklist"]);
+  });
+
+  it("labels reusable geometry from treatment semantics", () => {
+    expect(roadmapTreatmentEyebrow("route_overview")).toBe("Route");
+    expect(roadmapTreatmentEyebrow("progress_checkpoint")).toBe("Checkpoint");
+    expect(roadmapTreatmentEyebrow("howto_summary")).toBe("Recap");
+    expect(roadmapTreatmentEyebrow("howto_closing")).toBe("Next");
+    expect(roadmapTreatmentEyebrow("worked_example")).toBe("In practice");
   });
 
   it("keeps grounded step_focus when rematching adjacent duplicates", () => {

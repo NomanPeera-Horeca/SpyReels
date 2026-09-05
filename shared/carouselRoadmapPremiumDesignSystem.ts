@@ -68,7 +68,7 @@ function avoidRepeat(
 export function resolveRoadmapPremiumVariant({
   treatment,
   position,
-  totalSlides,
+  totalSlides: _totalSlides,
   archetype,
   roadmapStepCount = 0,
   roadmapStepIndex = null,
@@ -112,7 +112,7 @@ export function resolveRoadmapPremiumVariant({
     case "howto_summary":
       return avoidRepeat("recap", "checkpoint", previousVariant);
     case "howto_closing":
-      return totalSlides % 2 === 0 ? "decision_close" : "recap";
+      return "decision_close";
   }
 }
 
@@ -133,4 +133,17 @@ export function resolveRoadmapPremiumVariants(
     );
   }
   return resolved;
+}
+
+/**
+ * previousVariant for each slide is the variant the previous slide
+ * actually resolved, including image-aware choices.
+ */
+export function resolvePreviousRoadmapVariants(
+  slides: RoadmapPremiumVariantInput[]
+): Array<RoadmapPremiumVariant | null> {
+  const variants = resolveRoadmapPremiumVariants(slides);
+  return slides.map((_, index) =>
+    index === 0 ? null : variants[index - 1] ?? null
+  );
 }

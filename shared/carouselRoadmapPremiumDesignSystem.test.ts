@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { CAROUSEL_STOCK_PREVIEW } from "./carouselTemplates";
 import {
   ROADMAP_PREMIUM_DESIGN_FOUNDATION,
+  resolvePreviousRoadmapVariants,
   resolveRoadmapPremiumVariant,
   resolveRoadmapPremiumVariants,
 } from "./carouselRoadmapPremiumDesignSystem";
@@ -133,7 +135,50 @@ describe("premium Roadmap design system", () => {
       "step_focus",
       "progress_path",
     ]);
-    expect(variants[6]).toBe("recap");
+    expect(variants[6]).toBe("decision_close");
+  });
+
+  it("closes on decision_close regardless of slide-count parity", () => {
+    expect(
+      resolveRoadmapPremiumVariant({
+        treatment: "howto_closing",
+        position: 7,
+        totalSlides: 7,
+        roadmapStepCount: 4,
+      })
+    ).toBe("decision_close");
+    expect(
+      resolveRoadmapPremiumVariant({
+        treatment: "howto_closing",
+        position: 6,
+        totalSlides: 6,
+        roadmapStepCount: 0,
+      })
+    ).toBe("decision_close");
+  });
+
+  it("passes the rendered photo-split variant as the next slide previousVariant", () => {
+    const previous = resolvePreviousRoadmapVariants([
+      {
+        treatment: "step_focus",
+        position: 3,
+        totalSlides: 5,
+        archetype: "text_visual_split",
+        roadmapStepCount: 4,
+        roadmapStepIndex: 1,
+        imageUrl: CAROUSEL_STOCK_PREVIEW.cafeCreator,
+      },
+      {
+        treatment: "step_focus",
+        position: 4,
+        totalSlides: 5,
+        archetype: "text_focus",
+        roadmapStepCount: 4,
+        roadmapStepIndex: 2,
+      },
+    ]);
+    expect(previous[0]).toBeNull();
+    expect(previous[1]).toBe("step_photo_split");
   });
 
   it("gives non-step Roadmap editorial action rhythm", () => {
@@ -153,7 +198,7 @@ describe("premium Roadmap design system", () => {
       "action_checklist",
       "worked_example",
       "checkpoint",
-      "recap",
+      "decision_close",
     ]);
     expect(variants).not.toContain("cover_path");
     expect(variants).not.toContain("route_map");

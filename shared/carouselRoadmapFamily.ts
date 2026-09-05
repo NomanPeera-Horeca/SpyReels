@@ -88,9 +88,10 @@ function orderedListBeats(planningIR: CarouselPlanningIR): CarouselPlanningBeat[
  * Grounded Roadmap steps from Planning IR only.
  * Copy never participates. Slide count never participates.
  *
- * CASE A: preferredFamily is roadmap AND 2+ ordered list sequences exist.
- * List proves order. Because the family is already roadmap, those grounded
- * ordered items may be visualized as execution steps.
+ * CASE A: preferredFamily is roadmap AND 2+ UNIQUE ordered list indexes exist.
+ * List proves order. Duplicate indexes do not count as a path.
+ * Because the family is already roadmap, those grounded ordered items may
+ * be visualized as execution steps.
  *
  * CASE B: otherwise no step structure. Do not infer steps from
  * totalSlides, copy, headline numbering, paragraphs, variants, labels,
@@ -100,14 +101,14 @@ export function resolveRoadmapStepStructure(
   planningIR: CarouselPlanningIR
 ): RoadmapStepStructure {
   const listed = orderedListBeats(planningIR);
+  const unique = [...new Set(listed.map((beat) => beat.sequence!.index))].sort(
+    (a, b) => a - b
+  );
   if (
     planningIR.strategy.preferredFamily === "roadmap" &&
-    listed.length >= 2
+    unique.length >= 2
   ) {
     const indexByBeatId: Record<string, number> = {};
-    const unique = [...new Set(listed.map((beat) => beat.sequence!.index))].sort(
-      (a, b) => a - b
-    );
     listed.forEach((beat) => {
       const rank = unique.indexOf(beat.sequence!.index);
       indexByBeatId[beat.id] = rank >= 0 ? rank + 1 : beat.sequence!.index;
@@ -230,6 +231,35 @@ export function resolveRoadmapTreatment(args: {
   return "route_overview";
 }
 
+/**
+ * Static UI eyebrow for a treatment. Variant geometry may be reused;
+ * the visible label always comes from treatment semantics, never copy.
+ */
+export function roadmapTreatmentEyebrow(
+  treatment: RoadmapTreatment
+): string {
+  switch (treatment) {
+    case "howto_cover":
+      return "How to";
+    case "route_overview":
+      return "Route";
+    case "step_focus":
+      return "Step";
+    case "action_checklist":
+      return "Do this";
+    case "obstacle_fix":
+      return "Fix";
+    case "worked_example":
+      return "In practice";
+    case "progress_checkpoint":
+      return "Checkpoint";
+    case "howto_summary":
+      return "Recap";
+    case "howto_closing":
+      return "Next";
+  }
+}
+
 export type RoadmapTreatmentInput = {
   archetype: string;
   semanticRole: CarouselPlanningBeatRole | string;
@@ -241,55 +271,15 @@ export type RoadmapTreatmentInput = {
   roadmapStepSource?: RoadmapStepSource;
 };
 
-function rematchRepeatedTreatment(
-  treatment: RoadmapTreatment,
-  slide: RoadmapTreatmentInput
-): RoadmapTreatment {
-  if (treatment === "howto_cover" || treatment === "howto_closing") {
-    return treatment;
-  }
-  if (treatment === "step_focus") {
-    const stepIndex = slide.roadmapStepIndex ?? null;
-    if (stepIndex != null) return "step_focus";
-    return "progress_checkpoint";
-  }
-  if (treatment === "route_overview") return "progress_checkpoint";
-  if (treatment === "progress_checkpoint") return "action_checklist";
-  if (treatment === "action_checklist") return "worked_example";
-  if (treatment === "obstacle_fix") return "progress_checkpoint";
-  if (treatment === "worked_example") return "progress_checkpoint";
-  if (treatment === "howto_summary") return "progress_checkpoint";
-  return treatment;
-}
-
 /**
- * Walk the carousel and rematch adjacent / near-adjacent duplicates.
- * Grounded step slides keep step_focus. Geometry changes stay deterministic.
+ * Deterministic treatment per slide. Kept as a batch API.
+ * Does not rematch for visual rhythm. Adjacent duplicates stay valid
+ * when semantic role + archetype + grounded steps resolve the same way.
  */
 export function resolveRoadmapTreatments(
   slides: RoadmapTreatmentInput[]
 ): RoadmapTreatment[] {
-  const resolved = slides.map((slide) => resolveRoadmapTreatment(slide));
-  for (let index = 1; index < resolved.length; index += 1) {
-    const current = resolved[index]!;
-    const previous = resolved[index - 1];
-    const near = index >= 2 ? resolved[index - 2] : undefined;
-    if (current !== previous && current !== near) continue;
-    const stepIndex = slides[index]?.roadmapStepIndex ?? null;
-    if (stepIndex != null && current === "step_focus") {
-      continue;
-    }
-    const rematched = rematchRepeatedTreatment(current, slides[index]!);
-    if (rematched !== previous && rematched !== near) {
-      resolved[index] = rematched;
-      continue;
-    }
-    const second = rematchRepeatedTreatment(rematched, slides[index]!);
-    if (second !== previous && second !== near) {
-      resolved[index] = second;
-    }
-  }
-  return resolved;
+  return slides.map((slide) => resolveRoadmapTreatment(slide));
 }
 
 /** Renderer-side treatment guard. Treatments do not depend on photography. */
