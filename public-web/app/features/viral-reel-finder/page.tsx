@@ -53,8 +53,8 @@ const FAQ_ITEMS = [
 const RELATED_LINKS = [
   ["How to find viral Reels in your niche", "/blog/guide-find-viral-reels-your-niche"],
   ["How to reverse engineer viral Reels", "/blog/guide-reverse-engineer-viral-reels"],
-  ["Free viral hook generator", "/free-tools/viral-hooks"],
-  ["Free AI script generator", "/free-tools/ai-script-generator"],
+  ["Viral hook generator", "/free-tools/viral-hooks"],
+  ["AI script generator", "/free-tools/ai-script-generator"],
 ] as const;
 
 const breadcrumbJsonLd = {
@@ -111,7 +111,7 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>
             <span className={styles.eyebrowDot} aria-hidden />
-            Free Instagram Reel Finder
+            Instagram Reel Finder
           </div>
           <h1>
             Any Instagram account&apos;s viral Reels, <span className={styles.accent}>remade in your voice.</span>
@@ -182,8 +182,8 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.finalCta}`}>
           <span className={styles.sectionEyebrow}>Try the product first</span>
           <h2>Start with one creator you already follow.</h2>
-          <p>Find the account above, see the live product preview, and decide if the workflow is useful before you sign up.</p>
-          <a className={styles.primaryLink} href="#live-demo">Try the live demo</a>
+          <p>Find the account above, explore the interaction, and see exactly what happens before you decide to continue.</p>
+          <a className={styles.primaryLink} href="#live-demo">Try the interactive demo</a>
         </section>
       </main>
 
