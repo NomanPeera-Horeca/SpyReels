@@ -6,8 +6,12 @@ on:
       - feature/public-web-architecture-v2
     paths:
       - "public-web/**"
+      - "server/_core/publicWebPilotProxy.ts"
+      - "server/_core/publicWebPilotProxy.test.ts"
+      - "server/_core/vite.ts"
       - "shared/publicRouteOwnership.ts"
       - "shared/publicRouteOwnership.test.ts"
+      - ".env.example"
       - ".github/workflows/public-web-pilot.yml"
   workflow_dispatch:
 
@@ -17,7 +21,7 @@ permissions:
 jobs:
   validate-public-web:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +33,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Install SpyReels dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test route ownership and pilot proxy guards
+        run: pnpm vitest run shared/publicRouteOwnership.test.ts server/_core/publicWebPilotProxy.test.ts
+
+      - name: Typecheck existing SpyReels integration
+        run: pnpm exec tsc --noEmit
 
       - name: Install public web dependencies
         working-directory: public-web
