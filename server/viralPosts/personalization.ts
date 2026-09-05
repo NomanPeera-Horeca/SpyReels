@@ -554,8 +554,8 @@ export async function loadViralPersonalizationContext(args: {
   try {
     const similar = await loadSimilarCreatorSupply({
       nicheSlugs: [
-        ...(onboarding?.selectedNicheSlugs ?? []),
         ...classifiedNicheSlugs,
+        ...(onboarding?.selectedNicheSlugs ?? []),
       ],
       nicheNames: radarNicheNames,
       seedHandles: [...signals.strongCreatorHandles],
