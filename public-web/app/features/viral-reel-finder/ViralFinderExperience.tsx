@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
 import styles from "./page.module.css";
 
 const DEMO_HANDLES = ["garyvee", "humphreytalks", "russellbrunson", "codiesanchez"] as const;
@@ -210,7 +211,9 @@ export default function ViralFinderExperience() {
     <div id="live-demo" className={styles.experience}>
       <div className={styles.finderIsland}>
         <form className={styles.finderForm} onSubmit={submit}>
-          <span className={styles.platformMark} aria-hidden>◎</span>
+          <span className={styles.platformMark} aria-hidden>
+            <InstagramMark className={styles.instagramMark} />
+          </span>
           <label className={styles.srOnly} htmlFor="viral-finder-handle">Instagram username or profile link</label>
           <input
             id="viral-finder-handle"
