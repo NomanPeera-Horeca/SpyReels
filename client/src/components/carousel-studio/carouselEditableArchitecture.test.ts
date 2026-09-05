@@ -91,6 +91,10 @@ describe("carousel text inspector architecture", () => {
     expect(app).not.toContain("onRegenerate");
     expect(app).toContain("replaceImageUrls");
     expect(app).toContain("replaceImageFrames");
+    expect(app).toContain("carouselRemake.manageSlides");
+    expect(app).toContain("carouselRemake.replaceEditorState");
+    expect(app).toContain("CarouselSlideRail");
+    expect(app).not.toContain("slideEditsV2");
     const inspector = read("CarouselImageInspector.tsx");
     expect(inspector).toContain("onRegenerate?");
     expect(inspector).toContain("Regenerate with AI");
@@ -99,6 +103,14 @@ describe("carousel text inspector architecture", () => {
       "utf8"
     );
     expect(router).toContain("regenerateSlideImage:");
+    expect(router).toContain("manageSlides:");
+    expect(router).toContain("replaceEditorState:");
+    expect(router).toContain("slideStructureJson: state.slideStructure");
+    expect(router).toContain("slotValuesJson: state.slotValues");
+    expect(router).toContain("slotStyleOverridesJson: state.slotStyles");
+    expect(router).toContain("imageUrlsJson: state.imageUrls");
+    expect(router).toContain("imageFrameOverridesJson: state.imageFrames");
+    expect(router).toContain("Does not mutate templates");
   });
 
   it("wraps image-bearing premium families with real image slots", () => {
