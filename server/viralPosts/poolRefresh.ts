@@ -10,6 +10,7 @@ import {
   isViralPostsPoolRefresherEnabled,
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
+import { loadFeaturedTransferableCandidates } from "./featuredSupply";
 import { classifyCandidatePillars } from "./pillarClassify";
 import {
   adaptTikTokVideos,
@@ -41,23 +42,21 @@ function workerOwnerId(): string {
   return `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function persistAdaptedToPool(args: {
+function isFeaturedCatalogCandidate(candidate: AdaptedCandidate): boolean {
+  return candidate.rawProviderPayload?.source === "featured_catalog";
+}
+
+/**
+ * Canonical persistence/linking shared by live provider supply and the existing
+ * zero-provider-call Featured catalog. This does not spend budget or mark a
+ * provider refresh complete; callers own those lifecycle decisions.
+ */
+async function linkAdaptedToPool(args: {
   pool: ViralPostPool;
   adapted: AdaptedCandidate[];
-  scCalls: number;
-  costEstimateUsd?: number;
 }): Promise<number> {
-  const { pool, adapted, scCalls, costEstimateUsd } = args;
-  if (adapted.length === 0) {
-    await poolRepo.addBudgetUsage(pool.id, scCalls);
-    await poolRepo.markPoolRefreshed({
-      poolId: pool.id,
-      status: "refreshed",
-      scCalls,
-      candidateCount: 0,
-    });
-    return 0;
-  }
+  const { pool, adapted } = args;
+  if (adapted.length === 0) return 0;
 
   const upserted = await repo.upsertCandidates(adapted);
   const bySource = new Map(upserted.map((c) => [c.sourceId, c]));
@@ -77,21 +76,27 @@ async function persistAdaptedToPool(args: {
       });
       if (classification.confidence < 0.5) {
         classification.primaryPillar = assignPillar;
-        classification.reason = `Assigned to pool ${pool.platform}/${assignPillar}`;
-        classification.confidence = 0.55;
+        if (isFeaturedCatalogCandidate(a)) {
+          // Transferable Featured rows belong in this recommendation pool, but
+          // they must not masquerade as an exact niche/pillar match.
+          const rawConfidence = Number(
+            a.rawProviderPayload?.classificationConfidence ?? classification.confidence
+          );
+          classification.confidence = Number.isFinite(rawConfidence)
+            ? Math.max(0.35, Math.min(0.49, rawConfidence))
+            : 0.35;
+          classification.reason =
+            a.relevanceReason || `Transferable Featured format for ${assignPillar}`;
+        } else {
+          classification.reason = `Assigned to pool ${pool.platform}/${assignPillar}`;
+          classification.confidence = 0.55;
+        }
       }
       return { candidateId: row.id, classification };
     })
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   await poolRepo.linkCandidatesToPool({ poolId: pool.id, links });
-  await poolRepo.addBudgetUsage(pool.id, scCalls);
-  await poolRepo.markPoolRefreshed({
-    poolId: pool.id,
-    status: "refreshed",
-    scCalls,
-    candidateCount: links.length,
-  });
 
   scheduleThumbnailMirroring(
     upserted.map((c) => ({
@@ -117,14 +122,69 @@ async function persistAdaptedToPool(args: {
     }
   );
 
-  void costEstimateUsd;
   return links.length;
+}
+
+async function persistAdaptedToPool(args: {
+  pool: ViralPostPool;
+  adapted: AdaptedCandidate[];
+  scCalls: number;
+  costEstimateUsd?: number;
+}): Promise<number> {
+  const { pool, adapted, scCalls, costEstimateUsd } = args;
+  const linked = await linkAdaptedToPool({ pool, adapted });
+  await poolRepo.addBudgetUsage(pool.id, scCalls);
+  await poolRepo.markPoolRefreshed({
+    poolId: pool.id,
+    status: "refreshed",
+    scCalls,
+    candidateCount: linked,
+  });
+  void costEstimateUsd;
+  return linked;
+}
+
+/**
+ * Pull strong, production-feasible rows from the existing global Featured
+ * catalog into the same canonical Viral candidate/pool store. Zero provider
+ * calls and no separate recommendation system.
+ */
+async function hydrateFeaturedSupply(pool: ViralPostPool): Promise<number> {
+  if (pool.platform !== "instagram") return 0;
+  try {
+    const adapted = await loadFeaturedTransferableCandidates({
+      pillar: pool.pillar,
+      niche: pool.niche,
+      limit: 12,
+    });
+    const linked = await linkAdaptedToPool({ pool, adapted });
+    console.info("[viralPosts.pool] featured_supply", {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      candidates: adapted.length,
+      linked,
+      providerCalls: 0,
+    });
+    return linked;
+  } catch (err) {
+    // Catalog enrichment must never take down live/provider refresh.
+    console.warn("[viralPosts.pool] featured_supply_failed", {
+      poolId: pool.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
 }
 
 async function refreshInstagramPool(
   pool: ViralPostPool,
   maxScCalls: number
-): Promise<{ scCalls: number; candidateCount: number; costEstimateUsd?: number }> {
+): Promise<{
+  scCalls: number;
+  candidateCount: number;
+  featuredCandidateCount: number;
+  costEstimateUsd?: number;
+}> {
   const description = `Find Instagram Reels about ${pool.pillar} for creators in the ${pool.niche} niche. Prefer practical, remakeable talking-head and educational formats.`;
   const result = await runDiscoveryPipeline(description, undefined, {
     skipMediaMirroring: true,
@@ -136,16 +196,24 @@ async function refreshInstagramPool(
     // prevent Viral Posts from ever searching the wider set. maxScCalls remains
     // the hard provider-cost ceiling for this refresh.
   });
-  const adapted = adaptDiscoveryResult(result);
-  const candidateCount = await persistAdaptedToPool({
+  const providerAdapted = adaptDiscoveryResult(result);
+  const providerCandidateCount = await persistAdaptedToPool({
     pool,
-    adapted,
+    adapted: providerAdapted,
     scCalls: result.scCallCount || 0,
     costEstimateUsd: result.costEstimateUsd,
   });
+  const featuredCandidateCount = await hydrateFeaturedSupply(pool);
+  console.info("[viralPosts.pool] instagram_supply_mix", {
+    poolId: pool.id,
+    providerCandidates: providerCandidateCount,
+    featuredCandidates: featuredCandidateCount,
+    providerCalls: result.scCallCount || 0,
+  });
   return {
     scCalls: result.scCallCount || 0,
-    candidateCount,
+    candidateCount: providerCandidateCount + featuredCandidateCount,
+    featuredCandidateCount,
     costEstimateUsd: result.costEstimateUsd,
   };
 }
@@ -280,17 +348,19 @@ export async function refreshPoolById(
 
   const fresh = await poolRepo.countFreshPoolCandidates(pool.id);
   if (!opts?.force && fresh >= pool.minFreshCandidates) {
+    const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
       reason: "fresh_enough",
       fresh,
+      featuredCandidateCount,
     });
     return {
       poolId: pool.id,
       poolKey: pool.poolKey,
       status: "skipped_fresh",
       scCalls: 0,
-      candidateCount: fresh,
+      candidateCount: fresh + featuredCandidateCount,
     };
   }
 
@@ -299,17 +369,19 @@ export async function refreshPoolById(
   const minBudget =
     pool.platform === "tiktok" || pool.platform === "youtube" ? 3 : 5;
   if (remaining < minBudget) {
+    const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
       reason: "budget",
       used,
+      featuredCandidateCount,
     });
     return {
       poolId: pool.id,
       poolKey: pool.poolKey,
       status: "skipped_budget",
       scCalls: 0,
-      candidateCount: fresh,
+      candidateCount: fresh + featuredCandidateCount,
     };
   }
 
