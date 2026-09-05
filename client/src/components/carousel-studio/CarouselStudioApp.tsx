@@ -1,7 +1,6 @@
 /**
- * Carousel Studio: idea / web / YouTube generate real angles + remake slides.
+ * Focused Carousels editor: generate, edit, preview, and download remakes.
  * Remix stays mocked/disabled until a later source-analysis phase.
- * Visual port of docs/mockups/spyreels_carousel_studio_minimal_homepage_final.html
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -36,29 +35,28 @@ import {
   exportErrorMessage,
   slugifyCarouselName,
 } from "@/lib/carouselExport";
+import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import "./carouselStudio.css";
-import { StudioLibraryPage } from "./StudioLibraryPage";
 import {
   MOCK_DEFAULTS,
   MOCK_CUSTOMIZE_CHIPS,
   slugifyFilename,
   type SourceKey,
-  type NavPage,
   type CreateStep,
   type Platform,
 } from "./mockData";
-import {
-  STUDIO_LIBRARY_LIST_QUERY,
-  STUDIO_NAV_ITEMS,
-  mapStudioLibraryRows,
-} from "./studioLibrary";
 import { formatStudioPackageSummary } from "./studioPackage";
-import { studioSidebarRoleLabel } from "./studioSidebarRole";
+import { CarouselSocialPreview } from "./CarouselSocialPreview";
 import {
-  CAROUSEL_STUDIO_PATH,
-  parseStudioLaunchSearch,
+  aspectFromPlatform,
+  platformFromAspect,
+} from "./carouselPlatformFormat";
+import {
+  CAROUSELS_LIBRARY_PATH,
+  CAROUSELS_PATH,
+  buildCarouselEditHref,
 } from "./carouselsHub";
 
 type StoredDesignOverride = {
@@ -94,11 +92,6 @@ function toStudioDesignOverride(
     override.aspectRatio = aspectRatioOverride;
   }
   return override;
-}
-
-/** Same as Library: Instagram Post and LinkedIn both persist 4:5. */
-function aspectFromPlatform(_platform: Platform): CarouselDesignTokens["aspectRatio"] {
-  return "4:5";
 }
 
 function pickStudioSlideTitle(slots: Record<string, string> | undefined): string {
@@ -143,18 +136,17 @@ function useToast() {
   return { toastMsg, toast: setToastMsg };
 }
 
-const PAGE_TITLES: Record<NavPage, string> = {
-  create: "Create carousel",
-  library: "Library",
-  performance: "Performance",
-  brand: "Brand intelligence",
-};
-
-export function CarouselStudioApp() {
+export function CarouselStudioApp({
+  launchRemakeId = null,
+  launchContent = null,
+}: {
+  launchRemakeId?: number | null;
+  launchContent?: string | null;
+}) {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { toastMsg, toast } = useToast();
 
-  const [navPage, setNavPage] = useState<NavPage>("create");
   const [createStep, setCreateStep] = useState<CreateStep>("input");
   const [currentSource, setCurrentSource] = useState<SourceKey>("prompt");
   const [selectedStrategy, setSelectedStrategy] = useState<number | null>(null);
@@ -222,6 +214,7 @@ export function CarouselStudioApp() {
   const [hasGeneratedCarousel, setHasGeneratedCarousel] = useState(false);
   const [platform, setPlatform] = useState<Platform>("instagram");
 
+  const [socialPreviewOpen, setSocialPreviewOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageSuccess, setPackageSuccess] = useState(false);
@@ -244,10 +237,6 @@ export function CarouselStudioApp() {
   const utils = trpc.useUtils();
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
-  const libraryQuery = trpc.carouselRemake.list.useQuery(
-    STUDIO_LIBRARY_LIST_QUERY,
-    { enabled: navPage === "library" }
-  );
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
   const generateFromInputMutation =
     trpc.carouselStudio.generateFromInput.useMutation();
@@ -302,7 +291,7 @@ export function CarouselStudioApp() {
       ? remakeSlideStructure
       : studioTemplate?.slides ?? [];
   const currentSlideSpec = effectiveSlides[currentSlide] ?? effectiveSlides[0];
-  const editorVisible = createStep === "editor" && navPage === "create";
+  const editorVisible = createStep === "editor";
   const canDownload =
     hasGeneratedCarousel &&
     effectiveSlides.length > 0 &&
@@ -669,39 +658,6 @@ export function CarouselStudioApp() {
     void generateDirect();
   };
 
-  const startNewCarousel = () => {
-    resolveInFlightRef.current = null;
-    lastResolvedUrlRef.current = null;
-    setNavPage("create");
-    setCreateStep("input");
-    setCurrentSource("prompt");
-    const pending = pendingStudioSelectionViewState();
-    setSelectedStrategy(pending.selectedIndex);
-    setRecommendedBriefIndex(pending.recommendedBriefIndex);
-    setPlanReviewSession(false);
-    setReviewPlanBeforeGenerating(false);
-    setComposerInput("");
-    setInputAspectRatio("4:5");
-    setLinkStatus("idle");
-    setLinkError(null);
-    setRemakeId(null);
-    setLiveAngles(null);
-    setResolvedSource(null);
-    setIsPollingRemake(false);
-    setIsOpeningLibrary(false);
-    setRemakeTemplateId(null);
-    setRemakeSlotValues(null);
-    setRemakeSlideStructure(null);
-    setRemakeImageUrls(null);
-    setRemakeDesignOverride(null);
-    setRemakeAspectRatio("4:5");
-    setCurrentSlide(0);
-    setHistory([]);
-    setHasGeneratedCarousel(false);
-    setPlatform("instagram");
-    setDownloadModalOpen(false);
-  };
-
   useEffect(() => {
     const data = remakeStatusQuery.data;
     if (!data) return;
@@ -717,7 +673,7 @@ export function CarouselStudioApp() {
           if (isOpeningLibrary) {
             toast("This carousel has no slides to open.");
             setRemakeId(null);
-            setNavPage("library");
+            setLocation(CAROUSELS_LIBRARY_PATH);
           } else {
             toast("Carousel generated but slides were empty. Try again.");
             showCreateStep(planReviewSession ? "strategy" : "input");
@@ -741,6 +697,7 @@ export function CarouselStudioApp() {
         data.aspectRatioOverride === "9:16"
       ) {
         setRemakeAspectRatio(data.aspectRatioOverride);
+        setPlatform(platformFromAspect(data.aspectRatioOverride));
       }
       if (isPollingRemake || isOpeningLibrary || !hasGeneratedCarousel) {
         setRemakeSlotValues(normalizeCarouselSlideValues(data.slotValues) ?? {});
@@ -762,7 +719,7 @@ export function CarouselStudioApp() {
       if (isOpeningLibrary) {
         setIsOpeningLibrary(false);
         setRemakeId(null);
-        setNavPage("library");
+        setLocation(CAROUSELS_LIBRARY_PATH);
         return;
       }
       showCreateStep(planReviewSession ? "strategy" : "input");
@@ -776,19 +733,15 @@ export function CarouselStudioApp() {
     showCreateStep,
     toast,
     utils,
+    setLocation,
   ]);
-
-  useEffect(() => {
-    if (navPage !== "library") return;
-    void utils.carouselRemake.list.invalidate();
-  }, [navPage, utils]);
 
   useEffect(() => {
     if (!isOpeningLibrary) return;
     if (!remakeStatusQuery.isError) return;
     setIsOpeningLibrary(false);
     setRemakeId(null);
-    setNavPage("library");
+    setLocation(CAROUSELS_LIBRARY_PATH);
     toast(
       remakeStatusQuery.error.message || "Could not open that carousel."
     );
@@ -797,6 +750,7 @@ export function CarouselStudioApp() {
     remakeStatusQuery.isError,
     remakeStatusQuery.error,
     toast,
+    setLocation,
   ]);
 
   const clearStaleRemakeVisuals = useCallback(() => {
@@ -818,7 +772,6 @@ export function CarouselStudioApp() {
       clearStaleRemakeVisuals();
       setIsOpeningLibrary(true);
       setRemakeId(nextRemakeId);
-      setNavPage("create");
     },
     [clearStaleRemakeVisuals]
   );
@@ -831,20 +784,26 @@ export function CarouselStudioApp() {
 
   useEffect(() => {
     if (hubLaunchConsumedRef.current) return;
-    const intent = parseStudioLaunchSearch(window.location.search);
-    if (intent.kind === "none") return;
-    hubLaunchConsumedRef.current = true;
-    window.history.replaceState(null, "", CAROUSEL_STUDIO_PATH);
-    if (intent.kind === "open_remake") {
-      openCompletedFromLibraryRef.current(intent.remakeId);
+    if (launchRemakeId && launchRemakeId > 0) {
+      hubLaunchConsumedRef.current = true;
+      openCompletedFromLibraryRef.current(launchRemakeId);
       return;
     }
-    composerInputRef.current = intent.content;
-    setComposerInput(intent.content);
-    void generateDirectRef.current();
-  }, []);
+    if (launchContent?.trim()) {
+      hubLaunchConsumedRef.current = true;
+      composerInputRef.current = launchContent;
+      setComposerInput(launchContent);
+      void generateDirectRef.current();
+    }
+  }, [launchRemakeId, launchContent]);
 
-  const libraryCards = mapStudioLibraryRows(libraryQuery.data ?? []);
+  useEffect(() => {
+    if (remakeId == null) return;
+    const target = buildCarouselEditHref(remakeId);
+    if (window.location.pathname !== target) {
+      window.history.replaceState(null, "", target);
+    }
+  }, [remakeId]);
 
   const handleSlotChange = (slideId: string, slotId: string, value: string) => {
     saveHistory();
@@ -875,22 +834,22 @@ export function CarouselStudioApp() {
     if (remakeId != null && hasGeneratedCarousel) {
       updateAspectRatioMutation.mutate({ remakeId, aspectRatio: aspect });
     }
-    toast(next === "linkedin" ? "LinkedIn 4:5 format applied." : "Instagram 4:5 format applied.");
+    toast(
+      next === "linkedin"
+        ? "LinkedIn 1:1 format applied."
+        : "Instagram 4:5 format applied."
+    );
   };
 
   const openPackageModal = (downloadNow: boolean) => {
-    if (downloadNow && !canDownload) return;
+    if (!canDownload) return;
     setDownloadModalOpen(true);
     setPackageLoading(false);
     setPackageSuccess(true);
-    setPackageModalTitle(downloadNow ? "Preparing download" : "Package preview");
-    setPackageSuccessTitle(
-      downloadNow
-        ? "Preparing your carousel package…"
-        : "Everything will be bundled in one package."
-    );
+    setPackageModalTitle("Preparing download");
+    setPackageSuccessTitle("Preparing your carousel package…");
     setPackageSuccessText(formatStudioPackageSummary(effectiveSlides.length));
-    setDownloadAgainLabel(downloadNow ? "Download again" : "Download everything →");
+    setDownloadAgainLabel("Download again");
     if (downloadNow) generatePackage();
   };
 
@@ -937,19 +896,19 @@ export function CarouselStudioApp() {
     }
   };
 
-  const pageCrumb =
-    navPage === "create"
-      ? createStep === "editor"
-        ? "/ Current carousel"
-        : "/ New project"
-      : "";
-
-  const bottomTitle =
-    currentSource === "remix" ? "Hidden Profit Remix" : "Current carousel";
-  const bottomMeta = `${effectiveSlides.length} slides • Instagram + LinkedIn`;
-  const densityWarn =
-    currentSource === "remix" ? "Low density - good for saves" : "Review slide 4";
-  const perfScore = currentSource === "remix" ? "91" : "88";
+  const editorTitle =
+    pickStudioSlideTitle(displaySlideValues?.[effectiveSlides[0]?.id]) ||
+    remakeStatusQuery.data?.niche?.trim() ||
+    "Untitled carousel";
+  const saveStatus = updateSlotMutation.isPending || updateAspectRatioMutation.isPending
+    ? "Saving"
+    : updateSlotMutation.isError || updateAspectRatioMutation.isError
+      ? "Save failed"
+      : hasGeneratedCarousel
+        ? "Saved"
+        : createStep === "progress" || isOpeningLibrary
+          ? "Working"
+          : "";
 
   const packageFiles = effectiveSlides.map((slide, index) => {
     const number = String(index + 1).padStart(2, "0");
@@ -964,67 +923,35 @@ export function CarouselStudioApp() {
 
   return (
     <div className="cs">
-      <div className="app">
-        <aside className="sidebar">
-          <div className="brand">
-            <div className="brand-mark">
-              <span>S</span>
-            </div>
-            <span>Spyreels</span>
-          </div>
-          <div className="workspace">
-            Workspace<strong>Horeca Growth Lab</strong>
-          </div>
-          <nav className="nav">
-            {STUDIO_NAV_ITEMS.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={navPage === id ? "active" : ""}
-                onClick={() => setNavPage(id)}
-              >
-                <span className="dot" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-bottom">
-            <div className="plan">
-              <strong>Growth plan</strong>18 of 30 carousels left
-            </div>
-            <div className="user">
-              <div className="avatar">NP</div>
-              <div>
-                <strong>Noman</strong>
-                <small>{studioSidebarRoleLabel(user?.role)}</small>
-              </div>
-            </div>
-          </div>
-        </aside>
-
+      <div className="app editor-app">
         <main className="main">
           <header className="topbar">
-            <div className="crumbs">
-              <strong>{PAGE_TITLES[navPage]}</strong>{" "}
-              <span>{pageCrumb}</span>
+            <div className="editor-nav">
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setLocation(CAROUSELS_PATH)}
+              >
+                ← Back to Carousels
+              </button>
+              <div className="editor-title-block">
+                <strong>{editorTitle}</strong>
+                {saveStatus ? (
+                  <span className={`badge${saveStatus === "Saved" ? " safe" : ""}`}>
+                    {saveStatus}
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="top-actions">
               <button
                 type="button"
                 className="btn small ghost"
-                onClick={startNewCarousel}
-              >
-                New Carousel
-              </button>
-              <span
-                className={`badge${currentSource === "remix" ? " safe" : ""}`}
-              >
-                {currentSource === "remix" ? "Remix mode" : "Autosaved"}
-              </span>
-              <button
-                type="button"
-                className="btn small ghost"
-                onClick={() => openPackageModal(false)}
+                disabled={!editorVisible}
+                onClick={() => {
+                  if (!editorVisible) return;
+                  setSocialPreviewOpen(true);
+                }}
               >
                 Preview
               </button>
@@ -1035,7 +962,7 @@ export function CarouselStudioApp() {
                 aria-disabled={!canDownload}
                 title={
                   canDownload
-                    ? "Download all slides, caption, and hashtags"
+                    ? "Download all slides"
                     : "Generate a carousel before downloading"
                 }
                 onClick={() => {
@@ -1043,13 +970,13 @@ export function CarouselStudioApp() {
                   openPackageModal(true);
                 }}
               >
-                Download everything →
+                Download
               </button>
             </div>
           </header>
 
           <section className="content">
-            {navPage === "create" && isOpeningLibrary && !hasGeneratedCarousel && (
+            {isOpeningLibrary && !hasGeneratedCarousel && (
               <div className="page">
                 <div className="progress-box">
                   <div className="eyebrow">Library</div>
@@ -1059,7 +986,7 @@ export function CarouselStudioApp() {
               </div>
             )}
 
-            {navPage === "create" && !(isOpeningLibrary && !hasGeneratedCarousel) && (
+            {!(isOpeningLibrary && !hasGeneratedCarousel) && (
               <div className="page" id="createPage">
                 {createStep === "input" && (
                   <div id="inputStep">
@@ -1661,7 +1588,17 @@ export function CarouselStudioApp() {
                                 onClick={() => setCurrentSlide(i)}
                               >
                                 <div className="thumb-num">{i + 1}</div>
-                                <div className="thumb-preview">
+                                <div
+                                  className="thumb-preview"
+                                  style={{
+                                    aspectRatio:
+                                      remakeAspectRatio === "1:1"
+                                        ? "1 / 1"
+                                        : remakeAspectRatio === "9:16"
+                                          ? "9 / 16"
+                                          : "4 / 5",
+                                  }}
+                                >
                                   <div className="thumb-preview-scale">
                                     <CarouselRenderer
                                       template={studioTemplate}
@@ -1744,194 +1681,30 @@ export function CarouselStudioApp() {
                           ) : null}
                         </div>
                       </section>
-
-                      <aside className="panel ai-panel">
-                        <div className="panel-head">
-                          <h3>Quality</h3>
-                        </div>
-                        <div className="ai-content">
-                          <div className="quality">
-                            <div className="section-title">
-                              <h3>Performance score</h3>
-                              <strong style={{ fontSize: 24 }}>{perfScore}</strong>
-                            </div>
-                            <div className="quality-row">
-                              <span>Hook strength</span>
-                              <strong className="good">Excellent</strong>
-                            </div>
-                            <div className="quality-row">
-                              <span>Clarity</span>
-                              <strong className="good">Strong</strong>
-                            </div>
-                            <div className="quality-row">
-                              <span>Text density</span>
-                              <strong className="warn">{densityWarn}</strong>
-                            </div>
-                            <div className="quality-row">
-                              <span>Shareability</span>
-                              <strong className="good">High</strong>
-                            </div>
-                            <div className="quality-row">
-                              <span>Originality check</span>
-                              <strong className="warn">Pending</strong>
-                            </div>
-                          </div>
-
-                          {currentSource === "remix" && (
-                            <div className="remix-summary">
-                              <div className="dna-card">
-                                <strong>Remix source DNA</strong>
-                                Hook pattern: number + promise.
-                                <br />
-                                Retention device: visual contrast.
-                                <br />
-                                Slide rhythm: one idea per frame.
-                                <br />
-                                Output status: adapted, not copied.
-                                <button
-                                  type="button"
-                                  className="btn small ghost"
-                                  style={{ width: "100%", marginTop: 10 }}
-                                  onClick={() =>
-                                    toast(
-                                      "Side-by-side source comparison is available from the Remix analysis checkpoint."
-                                    )
-                                  }
-                                >
-                                  Compare to original
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </aside>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {navPage === "library" && (
-              <StudioLibraryPage
-                cards={libraryCards}
-                isLoading={libraryQuery.isLoading}
-                isError={libraryQuery.isError}
-                errorMessage={libraryQuery.error?.message ?? null}
-                onRetry={() => {
-                  void libraryQuery.refetch();
-                }}
-                onOpenCompleted={openCompletedFromLibrary}
-                onTryAgain={startNewCarousel}
-                onCreateNew={startNewCarousel}
-              />
-            )}
-
-            {navPage === "performance" && (
-              <div className="page empty-page">
-                <div className="eyebrow">Performance intelligence</div>
-                <h2>The AI learns what works for your audience.</h2>
-                <p className="sub">
-                  This is not a vanity dashboard. It shows what to repeat, stop,
-                  and improve.
-                </p>
-                <div className="stat-grid">
-                  <div className="stat">
-                    <span>Median saves</span>
-                    <strong>312</strong>
-                  </div>
-                  <div className="stat">
-                    <span>Best hook type</span>
-                    <strong>Contrarian</strong>
-                  </div>
-                  <div className="stat">
-                    <span>Follower conversion</span>
-                    <strong>2.8%</strong>
-                  </div>
-                  <div className="stat">
-                    <span>Posts above baseline</span>
-                    <strong>7 / 10</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {navPage === "brand" && (
-              <div className="page empty-page">
-                <div className="eyebrow">Brand intelligence</div>
-                <h2>Teach the AI how your content should sound and look.</h2>
-                <p className="sub">
-                  Your vocabulary, audience, colors, design style, and forbidden
-                  phrases live here.
-                </p>
-                <div className="source-card" style={{ maxWidth: 820 }}>
-                  <div className="source-body">
-                    <div className="field">
-                      <label>Brand name</label>
-                      <input
-                        className="text-input"
-                        defaultValue="Noman Peera • Restaurant Growth"
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Voice</label>
-                      <textarea
-                        className="source-input"
-                        style={{ minHeight: 100 }}
-                        defaultValue="Direct, practical, credible, slightly contrarian. Avoid generic motivational language and obvious AI phrases."
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Audience</label>
-                      <input
-                        className="text-input"
-                        defaultValue="Independent restaurant owners and operators"
-                      />
-                    </div>
-                    <button type="button" className="btn primary">
-                      Save brand profile
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </section>
         </main>
       </div>
 
-      <div
-        className={`bottom-bar${editorVisible ? " show" : ""}`}
-      >
-        <div>
-          <strong>{bottomTitle}</strong>
-          <div className="hint">{bottomMeta}</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => openPackageModal(false)}
-          >
-            Preview
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={!canDownload}
-            aria-disabled={!canDownload}
-            title={
-              canDownload
-                ? "Download all slides, caption, and hashtags"
-                : "Generate a carousel before downloading"
-            }
-            onClick={() => {
-              if (!canDownload) return;
-              openPackageModal(true);
-            }}
-          >
-            Download everything →
-          </button>
-        </div>
-      </div>
+      {socialPreviewOpen && studioTemplate && editorVisible ? (
+        <CarouselSocialPreview
+          platform={platform}
+          template={studioTemplate}
+          slides={effectiveSlides}
+          slideValues={displaySlideValues}
+          designOverride={studioDesignOverride}
+          imageUrls={remakeImageUrls ?? undefined}
+          handle={studioHandle}
+          displayName={user?.name}
+          currentSlide={currentSlide}
+          onSlideChange={setCurrentSlide}
+          onClose={() => setSocialPreviewOpen(false)}
+        />
+      ) : null}
 
       {downloadModalOpen && (
         <div className="modal-backdrop">

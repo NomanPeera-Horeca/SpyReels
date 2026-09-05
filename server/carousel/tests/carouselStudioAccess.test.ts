@@ -126,19 +126,23 @@ describe("Carousel Studio access source contract", () => {
     expect(remakeRouter).toContain("export async function assertCarouselRemakeQuota");
   });
 
-  it("does not use an admin client gate on the Studio page", () => {
-    expect(studioPage).not.toContain("isAdminPanelClient");
-    expect(studioPage).toContain("CarouselStudioApp");
-    expect(studioPage).toContain("LandingPage");
-    expect(studioPage).toMatch(/if\s*\(!user\)/);
+  it("does not use an admin client gate on the Carousel editor page", () => {
+    const editorPage = readFileSync(
+      join(here, "../../../client/src/pages/CarouselEditor.tsx"),
+      "utf8"
+    );
+    expect(editorPage).not.toContain("isAdminPanelClient");
+    expect(editorPage).toContain("CarouselStudioApp");
+    expect(editorPage).toContain("LandingPage");
+    expect(editorPage).toMatch(/if\s*\(!user\)/);
+    expect(studioPage).toContain("legacyStudioRedirectPath");
   });
 
-  it("keeps /carousel-studio as an authenticated URL-only beta route", () => {
+  it("keeps /carousel-studio as a backward-compatible redirect", () => {
     expect(appTsx).toContain('path="/carousel-studio"');
-    expect(appTsx).toContain("Authenticated Carousel Studio beta");
-    expect(appTsx).not.toMatch(
-      /Admin-only Carousel Studio: full-bleed, no DashboardLayout/
-    );
+    expect(appTsx).toContain('path="/carousels/:remakeId/edit"');
+    expect(appTsx).toContain('path="/carousels/new"');
+    expect(appTsx).toContain("Legacy Studio URL");
   });
 
   it("does not weaken other adminPanelProcedure routes", () => {
@@ -146,10 +150,12 @@ describe("Carousel Studio access source contract", () => {
     expect(adminRouter).toMatch(/ping:\s*adminPanelProcedure/);
   });
 
-  it("does not hardcode Admin in the Studio sidebar", () => {
-    expect(studioApp).not.toMatch(/<small>\s*Admin\s*<\/small>/);
-    expect(studioApp).toContain("studioSidebarRoleLabel");
-    expect(studioApp).toContain("user?.role");
+  it("does not render a second Studio application sidebar", () => {
+    expect(studioApp).not.toContain("STUDIO_NAV_ITEMS");
+    expect(studioApp).not.toMatch(/>Create<\/span>/);
+    expect(studioApp).not.toMatch(/>Performance</);
+    expect(studioApp).not.toMatch(/>Brand</);
+    expect(studioApp).toContain("Back to Carousels");
   });
 });
 

@@ -5,11 +5,15 @@ import { describe, expect, it } from "vitest";
 import {
   CAROUSEL_LIBRARY_PATH,
   CAROUSEL_STUDIO_PATH,
+  CAROUSELS_LIBRARY_PATH,
+  CAROUSELS_NEW_PATH,
   CAROUSELS_PATH,
   CAROUSELS_SIDEBAR_LABEL,
-  buildStudioGenerateHref,
-  buildStudioRemakeHref,
+  buildCarouselEditHref,
+  buildCarouselGenerateHref,
   isCarouselsNavActive,
+  legacyStudioRedirectPath,
+  parseCarouselEditRemakeId,
   parseStudioLaunchSearch,
   pickRecentCarousels,
 } from "./carouselsHub";
@@ -17,7 +21,7 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("carousels hub navigation", () => {
-  it("keeps the sidebar label as Carousels, not Carousel Library", () => {
+  it("keeps the sidebar label as Carousels, not Library", () => {
     const layout = readFileSync(
       join(here, "../DashboardLayout.tsx"),
       "utf8"
@@ -25,37 +29,57 @@ describe("carousels hub navigation", () => {
     expect(layout).toContain(`label: "${CAROUSELS_SIDEBAR_LABEL}"`);
     expect(layout).toContain(`path: "${CAROUSELS_PATH}"`);
     expect(layout).not.toMatch(/label:\s*"Carousel Library"/);
+    expect(layout).not.toMatch(/label:\s*"Library"/);
     expect(layout).toContain("isCarouselsNavActive");
   });
 
-  it("hands Generate and recent opens to existing Studio routes", () => {
+  it("hands Generate and recent opens to Carousels editor routes", () => {
     const studioApp = readFileSync(
       join(here, "./CarouselStudioApp.tsx"),
       "utf8"
     );
-    expect(studioApp).toContain("parseStudioLaunchSearch");
+    expect(studioApp).toContain("launchRemakeId");
+    expect(studioApp).toContain("launchContent");
     expect(studioApp).toContain("generateDirectRef.current()");
     expect(studioApp).toContain("openCompletedFromLibraryRef.current");
+    expect(studioApp).toContain("buildCarouselEditHref");
   });
 
-  it("registers the hub route and keeps the old library URL", () => {
+  it("registers Carousels-owned routes and keeps old URLs as redirects", () => {
     const app = readFileSync(join(here, "../../App.tsx"), "utf8");
     expect(app).toContain(`path="${CAROUSELS_PATH}"`);
+    expect(app).toContain(`path="${CAROUSELS_LIBRARY_PATH}"`);
+    expect(app).toContain(`path="${CAROUSELS_NEW_PATH}"`);
+    expect(app).toContain('path="/carousels/:remakeId/edit"');
     expect(app).toContain(`path="${CAROUSEL_LIBRARY_PATH}"`);
     expect(app).toContain(`path="${CAROUSEL_STUDIO_PATH}"`);
+    expect(app).toContain(`Redirect to="${CAROUSELS_LIBRARY_PATH}"`);
   });
 
-  it("marks hub and library as the Carousels nav item", () => {
+  it("marks hub, library, and editor as the Carousels nav item", () => {
     expect(isCarouselsNavActive("/carousels")).toBe(true);
+    expect(isCarouselsNavActive("/carousels/library")).toBe(true);
+    expect(isCarouselsNavActive("/carousels/118/edit")).toBe(true);
     expect(isCarouselsNavActive("/carousel-library")).toBe(true);
     expect(isCarouselsNavActive("/studio")).toBe(false);
   });
 
-  it("builds Studio launch URLs without changing generation APIs", () => {
-    expect(buildStudioGenerateHref("  menu idea  ")).toBe(
-      "/carousel-studio?content=menu+idea"
+  it("builds editor launch URLs without changing generation APIs", () => {
+    expect(buildCarouselGenerateHref("  menu idea  ")).toBe(
+      "/carousels/new?content=menu+idea"
     );
-    expect(buildStudioRemakeHref(118)).toBe("/carousel-studio?remakeId=118");
+    expect(buildCarouselEditHref(118)).toBe("/carousels/118/edit");
+    expect(parseCarouselEditRemakeId("/carousels/118/edit")).toBe(118);
+  });
+
+  it("redirects legacy Studio URLs into the Carousels product", () => {
+    expect(legacyStudioRedirectPath("?content=How+to+simplify")).toBe(
+      "/carousels/new?content=How+to+simplify"
+    );
+    expect(legacyStudioRedirectPath("?remakeId=118")).toBe(
+      "/carousels/118/edit"
+    );
+    expect(legacyStudioRedirectPath("")).toBe("/carousels");
   });
 
   it("parses Studio launch search for generate and reopen", () => {

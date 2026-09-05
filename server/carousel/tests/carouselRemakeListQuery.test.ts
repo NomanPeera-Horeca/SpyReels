@@ -167,10 +167,12 @@ describe("carouselRemake.list callers", () => {
     expect(libraryPage).not.toContain('sort: "newest"');
   });
 
-  it("has Studio request newest ordering", () => {
-    expect(studioApp).toContain("STUDIO_LIBRARY_LIST_QUERY");
-    expect(studioApp).not.toMatch(
-      /carouselRemake\.list\.useQuery\(\s*\{\s*limit:\s*50\s*\}/
+  it("has the Carousels hub request newest ordering for Recent", () => {
+    const hubPage = readFileSync(
+      join(here, "../../../client/src/pages/Carousels.tsx"),
+      "utf8"
     );
+    expect(hubPage).toContain('sort: "newest"');
+    expect(studioApp).not.toContain("STUDIO_LIBRARY_LIST_QUERY");
   });
 });

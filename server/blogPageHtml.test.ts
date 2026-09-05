@@ -223,6 +223,19 @@ describe("enrichSpaHtmlForPublicPath", () => {
   });
 
   it.each([
+    "/carousels",
+    "/carousels/library",
+    "/carousels/118/edit",
+    "/carousels/new",
+    "/carousel-studio",
+    "/carousel-library",
+  ])("does not title working Carousel app routes as Page Not Found: %s", async (pathname) => {
+    const out = await enrichSpaHtmlForPublicPath(SAMPLE_HTML, pathname, async () => undefined);
+    expect(out.status).toBe(200);
+    expect(out.html).not.toContain("Page Not Found | SpyReels");
+  });
+
+  it.each([
     "/free-tools/ai-script-generator",
     "/free-tools/tiktok-script-generator",
     "/free-tools/instagram-reels-script-generator",

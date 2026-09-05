@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Images, LayoutGrid } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   CAROUSEL_TEMPLATES,
@@ -23,8 +24,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { buildCarouselEditHref } from "@/components/carousel-studio/carouselsHub";
+import { CAROUSEL_LIBRARY_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
+import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
 
 export default function CarouselLibrary() {
+  const [, setLocation] = useLocation();
+  useCarouselDocumentTitle(CAROUSEL_LIBRARY_DOCUMENT_TITLE);
   const [previewTemplate, setPreviewTemplate] =
     useState<CarouselTemplate | null>(null);
   const [openRemakeId, setOpenRemakeId] = useState<number | null>(null);
@@ -69,8 +75,7 @@ export default function CarouselLibrary() {
   function openSavedRemake(remakeId: number, templateId: string) {
     const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId) ?? null;
     if (!template) return;
-    setPreviewTemplate(template);
-    setOpenRemakeId(remakeId);
+    setLocation(buildCarouselEditHref(remakeId));
   }
 
   function openContentRemake(remakeId: number, templateId: string) {
@@ -79,9 +84,7 @@ export default function CarouselLibrary() {
       toast.error("Generated template is unavailable");
       return;
     }
-    void utils.carouselRemake.list.invalidate();
-    setPreviewTemplate(template);
-    setOpenRemakeId(remakeId);
+    setLocation(buildCarouselEditHref(remakeId));
   }
 
   function closePreview() {

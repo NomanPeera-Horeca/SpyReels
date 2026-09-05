@@ -45,9 +45,10 @@ describe("Download package modal (source)", () => {
     expect(mockData).not.toContain("export function getPackageHashtags");
   });
 
-  it("uses the same package summary helper for preview and download", () => {
+  it("uses the package summary helper for download only", () => {
     const uses = studioApp.match(/formatStudioPackageSummary\(/g) ?? [];
-    expect(uses.length).toBeGreaterThanOrEqual(3);
+    expect(uses.length).toBeGreaterThanOrEqual(2);
+    expect(studioApp).toContain("CarouselSocialPreview");
     expect(studioApp).not.toMatch(/images, 1 caption, hashtags included/);
     expect(studioApp).not.toMatch(/adding the caption/);
     expect(studioApp).not.toMatch(/including hashtags/);

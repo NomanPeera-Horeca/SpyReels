@@ -1,25 +1,10 @@
 /**
- * Authenticated Carousel Studio.
- * Full-bleed page: mounted outside DashboardLayout in App.tsx.
+ * Legacy /carousel-studio URL. Redirects into the Carousels product.
  */
-import { useAuth } from "@/_core/hooks/useAuth";
-import { CarouselStudioApp } from "@/components/carousel-studio/CarouselStudioApp";
-import LandingPage from "@/pages/LandingPage";
+import { Redirect, useSearch } from "wouter";
+import { legacyStudioRedirectPath } from "@/components/carousel-studio/carouselsHub";
 
 export default function CarouselStudio() {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        Loading…
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LandingPage />;
-  }
-
-  return <CarouselStudioApp />;
+  const search = useSearch();
+  return <Redirect to={legacyStudioRedirectPath(search)} />;
 }
