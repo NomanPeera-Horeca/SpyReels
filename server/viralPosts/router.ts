@@ -11,6 +11,10 @@ import {
   isAnyViralPostsPlatformEnabled,
   isViralPostsLive,
 } from "./featureFlag";
+import {
+  saveViralCandidateCanonical,
+  unsaveViralCandidateCanonical,
+} from "./canonicalSaved";
 import * as repo from "./repository";
 import {
   getFeedHistory,
@@ -134,7 +138,10 @@ export const viralPostsRouter = router({
       if (!candidate) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" });
       }
-      await repo.saveCandidate(ctx.user.id, candidateId);
+      await Promise.all([
+        repo.saveCandidate(ctx.user.id, candidateId),
+        saveViralCandidateCanonical(ctx.user.id, candidateId),
+      ]);
       return { ok: true as const, postId: input.postId, saved: true };
     }),
 
@@ -142,7 +149,10 @@ export const viralPostsRouter = router({
     .input(z.object({ postId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const candidateId = parseCandidateId(input.postId);
-      await repo.unsaveCandidate(ctx.user.id, candidateId);
+      await Promise.all([
+        repo.unsaveCandidate(ctx.user.id, candidateId),
+        unsaveViralCandidateCanonical(ctx.user.id, candidateId),
+      ]);
       return { ok: true as const, postId: input.postId, saved: false };
     }),
 
