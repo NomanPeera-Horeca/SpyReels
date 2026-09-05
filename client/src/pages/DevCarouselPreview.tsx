@@ -3,10 +3,44 @@
  * Temporary preview to visually confirm carousel slide layouts.
  * Remove once the real carousel library UI ships. Do not link from nav or marketing.
  */
+import { useEffect, useMemo, useState } from "react";
 import { CAROUSEL_TEMPLATE_FIVE_MISTAKES } from "@shared/carouselTemplates";
+import type {
+  CarouselImageUrlMap,
+  CarouselSlideSpec,
+  CarouselSlotValues,
+} from "@shared/carouselTemplates";
 import { CarouselRenderer } from "@/components/CarouselRenderer";
 
+type QaDump = {
+  slideStructureJson?: CarouselSlideSpec[];
+  slotValuesJson?: Record<string, CarouselSlotValues>;
+  imageUrlsJson?: CarouselImageUrlMap;
+  selectedBrief?: { title?: string };
+};
+
+declare global {
+  interface Window {
+    __QA_CAROUSEL_DUMP__?: QaDump;
+  }
+}
+
 export default function DevCarouselPreview() {
+  const [dump, setDump] = useState<QaDump | null>(null);
+  const search = typeof window === "undefined" ? "" : window.location.search;
+  const params = useMemo(() => new URLSearchParams(search), [search]);
+  const roadmap = params.get("roadmap");
+
+  useEffect(() => {
+    const injected = window.__QA_CAROUSEL_DUMP__;
+    if (injected?.slideStructureJson) {
+      setDump(injected);
+    }
+  }, []);
+
+  const slides = dump?.slideStructureJson;
+  const title = dump?.selectedBrief?.title || CAROUSEL_TEMPLATE_FIVE_MISTAKES.name;
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-6xl space-y-4">
@@ -14,16 +48,23 @@ export default function DevCarouselPreview() {
           THROWAWAY DEV PREVIEW. Not a product surface. Remove before shipping
           carousel library UI.
         </p>
-        <h1 className="text-xl font-semibold tracking-tight">
-          {CAROUSEL_TEMPLATE_FIVE_MISTAKES.name}
-        </h1>
-        <p className="max-w-2xl text-sm text-neutral-400">
-          {CAROUSEL_TEMPLATE_FIVE_MISTAKES.description}
-        </p>
-        <p className="text-xs text-neutral-500">
-          {CAROUSEL_TEMPLATE_FIVE_MISTAKES.sourceAttribution}
-        </p>
-        <CarouselRenderer template={CAROUSEL_TEMPLATE_FIVE_MISTAKES} />
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {roadmap ? (
+          <p className="text-xs text-neutral-500">Roadmap QA set: {roadmap}</p>
+        ) : null}
+        {slides && slides.length > 0 ? (
+          <CarouselRenderer
+            template={{
+              ...CAROUSEL_TEMPLATE_FIVE_MISTAKES,
+              slides,
+            }}
+            slides={slides}
+            slideValues={dump?.slotValuesJson}
+            imageUrls={dump?.imageUrlsJson}
+          />
+        ) : (
+          <CarouselRenderer template={CAROUSEL_TEMPLATE_FIVE_MISTAKES} />
+        )}
       </div>
     </div>
   );

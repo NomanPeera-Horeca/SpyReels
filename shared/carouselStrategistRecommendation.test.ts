@@ -208,6 +208,19 @@ describe("applyCarouselFormatRecommendation", () => {
     expect(picked.brief?.contentFormat).toBe("story");
   });
 
+  it("keeps Roadmap when the strategist recommends Roadmap", () => {
+    const briefs = [
+      sampleBrief("comparison", "high"),
+      sampleBrief("roadmap", "mid"),
+      sampleBrief("framework", "low"),
+    ];
+    const picked = selectRecommendedCreativeBriefWithFormat({
+      briefs,
+      recommendation: { recommendedFormat: "roadmap", formatConfidence: 0.83 },
+    });
+    expect(picked.brief?.contentFormat).toBe("roadmap");
+  });
+
   it("keeps Framework when the strategist recommends Framework", () => {
     const briefs = [
       sampleBrief("comparison", "high"),

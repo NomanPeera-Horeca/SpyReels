@@ -56,6 +56,10 @@ import {
   buildFrameworkFamilySlides,
   canUseFrameworkFamily,
 } from "@shared/carouselFrameworkFamily";
+import {
+  buildRoadmapFamilySlides,
+  canUseRoadmapFamily,
+} from "@shared/carouselRoadmapFamily";
 import { generateCarouselVisualDirection } from "./generateCarouselVisualDirection";
 import { resolveSlideImage } from "./resolveSlideImage";
 import {
@@ -1100,6 +1104,26 @@ export async function generateCarouselRemake(
           );
         }
         effectiveSlides = buildFrameworkFamilySlides({
+          template,
+          planningIR,
+          compositionIR: visualDirection.compositionIR,
+        });
+      } else if (planningIR && canUseRoadmapFamily(planningIR)) {
+        const visualDirection = await withGenerationStage(
+          telemetry,
+          "visual_direction",
+          () => generateCarouselVisualDirection(planningIR)
+        );
+        console.log(
+          `[carouselRemake] ${remakeId}: Visual Director source=${visualDirection.source} attempts=${visualDirection.attempts}`
+        );
+        if (visualDirection.source === "baseline_fallback") {
+          console.warn(
+            `[carouselRemake] ${remakeId}: Visual Director fell back to baseline composition`,
+            visualDirection.issues.slice(0, 5).join("; ")
+          );
+        }
+        effectiveSlides = buildRoadmapFamilySlides({
           template,
           planningIR,
           compositionIR: visualDirection.compositionIR,

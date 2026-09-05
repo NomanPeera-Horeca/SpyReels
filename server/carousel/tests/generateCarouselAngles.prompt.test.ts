@@ -206,7 +206,7 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("exactly one intentional final closing");
   });
 
-  it("teaches format fit for contrast, story, list, and framework without vs routing", () => {
+  it("teaches format fit for contrast, story, list, framework, and roadmap without vs routing", () => {
     const user = buildCarouselAnglesUserPrompt({
       sourceContent:
         "Cheap restaurant equipment vs buying the right equipment the first time",
@@ -219,6 +219,9 @@ describe("generateCarouselAngles planning guidance", () => {
     expect(user).toContain("Score relevance as format fit");
     expect(user).toContain("Do not force comparison just because two subjects appear");
     expect(user).toContain("Do not treat a contrast word as automatic comparison");
+    expect(user).toContain("consider roadmap");
+    expect(user).toContain("keep roadmap relevance high");
+    expect(compact).toContain("consider roadmap");
     expect(compact).toContain("include a comparison candidate");
     expect(compact).toContain("Score relevance as format fit");
     expect(user).not.toMatch(/if the (?:source|prompt) contains ["']vs["']/i);
