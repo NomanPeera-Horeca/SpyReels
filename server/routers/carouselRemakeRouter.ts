@@ -48,6 +48,12 @@ import {
   type StoredCarouselDesignOverride,
 } from "@shared/carouselDesignOverride";
 import { resolveSlideImage } from "../carousel/resolveSlideImage";
+import {
+  assertOwnedEditorImageSlot,
+  assertOwnedEditorTextSlot,
+  resolveOwnedEditorSlides,
+  slidesForRemake,
+} from "../carousel/ownedEditorSlots";
 import { carouselRemakes, users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -782,6 +788,8 @@ export const carouselRemakeRouter = router({
         .select({
           id: carouselRemakes.id,
           status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          slideStructureJson: carouselRemakes.slideStructureJson,
           slotValuesJson: carouselRemakes.slotValuesJson,
         })
         .from(carouselRemakes)
@@ -804,6 +812,12 @@ export const carouselRemakeRouter = router({
           message: "Remake must be completed before editing slide text",
         });
       }
+
+      assertOwnedEditorTextSlot(
+        resolveOwnedEditorSlides(row.templateId, row.slideStructureJson),
+        input.slideId,
+        input.slotId
+      );
 
       const prev = (row.slotValuesJson ?? {}) as Record<
         string,
@@ -1028,6 +1042,8 @@ export const carouselRemakeRouter = router({
         .select({
           id: carouselRemakes.id,
           status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          slideStructureJson: carouselRemakes.slideStructureJson,
           slotStyleOverridesJson: carouselRemakes.slotStyleOverridesJson,
         })
         .from(carouselRemakes)
@@ -1050,6 +1066,12 @@ export const carouselRemakeRouter = router({
           message: "Remake must be completed before editing slide style",
         });
       }
+
+      assertOwnedEditorTextSlot(
+        resolveOwnedEditorSlides(row.templateId, row.slideStructureJson),
+        input.slideId,
+        input.slotId
+      );
 
       const current = normalizeCarouselSlotStyleMap(row.slotStyleOverridesJson);
       const next = upsertCarouselSlotStyleMap(
@@ -1436,6 +1458,12 @@ export const carouselRemakeRouter = router({
         });
       }
 
+      assertOwnedEditorImageSlot(
+        resolveOwnedEditorSlides(row.templateId, row.slideStructureJson),
+        input.slideId,
+        input.slotId
+      );
+
       const current =
         row.imageUrlsJson && typeof row.imageUrlsJson === "object"
           ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
@@ -1541,6 +1569,8 @@ export const carouselRemakeRouter = router({
         .select({
           id: carouselRemakes.id,
           status: carouselRemakes.status,
+          templateId: carouselRemakes.templateId,
+          slideStructureJson: carouselRemakes.slideStructureJson,
           imageFrameOverridesJson: carouselRemakes.imageFrameOverridesJson,
         })
         .from(carouselRemakes)
@@ -1563,6 +1593,12 @@ export const carouselRemakeRouter = router({
           message: "Remake must be completed before editing images",
         });
       }
+
+      assertOwnedEditorImageSlot(
+        resolveOwnedEditorSlides(row.templateId, row.slideStructureJson),
+        input.slideId,
+        input.slotId
+      );
 
       const current = normalizeCarouselImageFrameMap(row.imageFrameOverridesJson);
       const next = upsertCarouselImageFrameMap(
@@ -1895,16 +1931,6 @@ export const carouselRemakeRouter = router({
       return { remakeId: input.remakeId, deleted: true as const };
     }),
 });
-
-function slidesForRemake(
-  templateSlides: CarouselSlideSpec[] | undefined,
-  stored: unknown
-): CarouselSlideSpec[] {
-  if (Array.isArray(stored) && stored.length > 0) {
-    return stored as CarouselSlideSpec[];
-  }
-  return templateSlides ?? [];
-}
 
 function shareCoverSlideIdsForTemplate(
   templateId: string,

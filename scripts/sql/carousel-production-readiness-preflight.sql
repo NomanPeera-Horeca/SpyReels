@@ -1,0 +1,29 @@
+-- SELECT only. Do not run as part of the readiness branch.
+-- Do not apply ALTERs from this file. There are none.
+-- Use later, with explicit deploy approval, to see what production already has.
+
+SELECT
+  COLUMN_NAME,
+  COLUMN_TYPE,
+  IS_NULLABLE,
+  COLUMN_DEFAULT
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'carousel_remakes'
+ORDER BY ORDINAL_POSITION;
+
+SELECT
+  INDEX_NAME,
+  NON_UNIQUE,
+  COLUMN_NAME,
+  SEQ_IN_INDEX
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'carousel_remakes'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+
+SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'users'
+  AND COLUMN_NAME = 'instagramHandle';

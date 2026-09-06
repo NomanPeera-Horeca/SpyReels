@@ -120,6 +120,8 @@ describe("carousel text inspector architecture", () => {
     expect(app).toContain("replaceImageFrames");
     expect(app).toContain("carouselRemake.manageSlides");
     expect(app).toContain("carouselRemake.replaceEditorState");
+    expect(app).toContain("cancelPendingEditorSaves");
+    expect(app).toContain("flushPendingEditorSaves");
     expect(app).toContain("CarouselSlideRail");
     expect(app).not.toContain("slideEditsV2");
     const inspector = read("CarouselImageInspector.tsx");
