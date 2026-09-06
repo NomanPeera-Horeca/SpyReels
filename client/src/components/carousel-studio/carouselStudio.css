@@ -300,6 +300,23 @@
   .cs .text-inspector-align button{flex:1;border:1px solid var(--border);background:#121219;color:var(--muted);border-radius:8px;padding:7px 6px;text-transform:capitalize}
   .cs .text-inspector-align button.active{background:var(--panel-3);color:#fff}
   .cs .text-inspector-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted)}
+  .cs .text-inspector-ai{display:flex;flex-direction:column;gap:8px;padding-top:4px;border-top:1px solid var(--border)}
+  .cs .text-inspector-ai h4{margin:0;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .cs .text-inspector-ai-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .cs .text-inspector-ai-actions button,
+  .cs .text-inspector-ai-alts,
+  .cs .text-inspector-ai-choices button,
+  .cs .text-inspector-ai-preview-actions button{border:1px solid var(--border);background:#121219;color:#fff;border-radius:8px;padding:7px 8px;font-size:11px;text-align:left}
+  .cs .text-inspector-ai-alts{width:100%}
+  .cs .text-inspector-ai-status,
+  .cs .text-inspector-ai-error{margin:0;font-size:11px;line-height:1.4}
+  .cs .text-inspector-ai-error{color:#f2b8b5}
+  .cs .text-inspector-ai-choices,
+  .cs .text-inspector-ai-preview{display:flex;flex-direction:column;gap:6px}
+  .cs .text-inspector-ai-preview p{margin:0;padding:8px;border:1px solid var(--border);border-radius:8px;background:#0d0d12;font-size:12px;line-height:1.4}
+  .cs .text-inspector-ai-preview-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .cs .text-inspector-ai-preview-actions button{flex:1;min-width:72px;text-align:center}
+  .cs .text-inspector-ai-cancel{color:var(--muted)}
   .cs .design-inspector-section{display:flex;flex-direction:column;gap:10px}
   .cs .design-inspector-section h4{margin:0;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
   .cs .design-inspector-color{display:flex;align-items:center;gap:8px}

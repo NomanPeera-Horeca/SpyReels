@@ -26,7 +26,29 @@ describe("carousel text inspector architecture", () => {
     expect(app).toContain("carouselRemake.updateSlotValues");
     expect(app).toContain("handleSlotChange");
     expect(app).toContain("CarouselTextInspector");
+    expect(app).toContain("carouselRemake.rewriteSlot");
+    expect(app).toContain("handleAiSlotRewrite");
     expect(app).not.toContain("textEditsV2");
+    expect(app).not.toContain("aiCopyV2");
+    const inspector = read("CarouselTextInspector.tsx");
+    expect(inspector).toContain("Give me 3 alternatives");
+    expect(inspector).toContain("Make punchier");
+    expect(inspector).toContain("Use this");
+    expect(inspector).toContain("Try again");
+    expect(inspector).toContain("Making this punchier...");
+    expect(inspector).toContain("Shortening...");
+    expect(inspector).not.toContain("Working...");
+    expect(app).toContain("setAiPreviewText");
+    expect(app).not.toContain(
+      "handleSlotChange(textSelection.slideId, textSelection.slotId, result.text)"
+    );
+    const router = readFileSync(
+      join(here, "../../../../server/routers/carouselRemakeRouter.ts"),
+      "utf8"
+    );
+    expect(router).toContain("rewriteSlot:");
+    expect(router).toContain("Does not persist. Client applies via updateSlotValues.");
+    expect(router).not.toMatch(/rewriteSlot:[\s\S]*slotValuesJson:\s*next/);
   });
 
   it("keeps selection outlines on the editor stage only", () => {

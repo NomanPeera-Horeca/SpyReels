@@ -7,6 +7,14 @@ import {
   normalizedIndexFromOriginalIndex,
   selectRecommendedCreativeBrief,
 } from "@shared/carouselStudio";
+import {
+  buildCarouselSlotRewriteContext,
+  isCarouselSlotRewriteAction,
+} from "@shared/carouselSlotRewrite";
+import {
+  CarouselSlotRewriteError,
+  rewriteCarouselSlotCopy,
+} from "../carousel/rewriteCarouselSlotCopy";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import type { CarouselImageUrlMap, CarouselSlideSpec } from "@shared/carouselTemplates";
 import {
@@ -815,6 +823,118 @@ export const carouselRemakeRouter = router({
         .where(eq(carouselRemakes.id, input.remakeId));
 
       return { slotValues: next };
+    }),
+
+  /**
+   * True when a local/dev Anthropic key is configured for slot rewrite.
+   * Does not persist anything.
+   */
+  aiTextEditingAvailable: protectedProcedure.query(() => ({
+    enabled: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+  })),
+
+  /**
+   * Rewrite one selected text slot. Loads remake context from MySQL.
+   * Does not persist. Client applies via updateSlotValues.
+   */
+  rewriteSlot: protectedProcedure
+    .input(
+      z.object({
+        remakeId: z.number().int().positive(),
+        slideId: z.string().min(1).max(128),
+        slotId: z.string().min(1).max(128),
+        action: z.string().min(1).max(32),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!isCarouselSlotRewriteAction(input.action)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid rewrite action",
+        });
+      }
+      if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "AI text editing is not configured",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: carouselRemakes.id,
+          status: carouselRemakes.status,
+          niche: carouselRemakes.niche,
+          sourceUrl: carouselRemakes.sourceUrl,
+          angleOptionsJson: carouselRemakes.angleOptionsJson,
+          selectedAngleIndex: carouselRemakes.selectedAngleIndex,
+          slideStructureJson: carouselRemakes.slideStructureJson,
+          slotValuesJson: carouselRemakes.slotValuesJson,
+        })
+        .from(carouselRemakes)
+        .where(
+          and(
+            eq(carouselRemakes.id, input.remakeId),
+            eq(carouselRemakes.workspaceId, ctx.workspaceId),
+            isNull(carouselRemakes.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Remake not found" });
+      }
+      if (row.status !== "completed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Remake must be completed before editing slide text",
+        });
+      }
+
+      const built = buildCarouselSlotRewriteContext({
+        niche: row.niche,
+        sourceUrl: row.sourceUrl,
+        angleOptionsJson: row.angleOptionsJson,
+        selectedAngleIndex: row.selectedAngleIndex ?? null,
+        slideStructure: row.slideStructureJson,
+        slotValues: row.slotValuesJson,
+        slideId: input.slideId,
+        slotId: input.slotId,
+      });
+      if (!built.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            built.code === "INVALID_SLIDE"
+              ? "Slide not found"
+              : "Slot not found",
+        });
+      }
+
+      try {
+        const result = await rewriteCarouselSlotCopy(input.action, built.context);
+        return result;
+      } catch (error) {
+        if (error instanceof CarouselSlotRewriteError) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not rewrite that text. Try again.",
+        });
+      }
     }),
 
   /**
