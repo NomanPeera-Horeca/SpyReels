@@ -64,6 +64,22 @@ export const VIRAL_POOL_DEFAULTS = {
   tiktokPoolMaxSearchCalls: 6,
   /** Skip seed-handle scraping when search already admitted at least this many current-pool rows. */
   tiktokPoolMinSearchAdmittedToSkipSeeds: 5,
+  /**
+   * Instagram Popular-first: hard ceiling for Popular search + selective enrichment
+   * inside one pool refresh. Remaining maxScCalls stay available for hashtag fallback.
+   */
+  instagramPoolMaxPopularScCalls: 18,
+  /** Popular search phrases attempted before enrichment. */
+  instagramPoolMaxPopularQueries: 5,
+  /** Unique creators profile-enriched from Popular shortlist. */
+  instagramPoolMaxPopularProfileCalls: 8,
+  /** Selective /v1/instagram/post enrichments for likes/comments recovery. */
+  instagramPoolMaxPopularPostDetailCalls: 5,
+  /**
+   * Skip expensive hashtag/profile-drill fallback when Popular already admitted
+   * at least this many current-pillar rows (mirrors TikTok search skip threshold).
+   */
+  instagramPoolMinPopularAdmittedToSkipFallback: 5,
 } as const;
 
 /** Pillar key for platform seed pools (one pool per niche+platform). */

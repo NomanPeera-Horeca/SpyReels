@@ -12,6 +12,15 @@ import {
 import { loadFeaturedTransferableCandidates } from "./featuredSupply";
 import { discoverInstagramPoolCandidates } from "./instagramPoolDiscovery";
 import {
+  dedupeAdaptedCandidates,
+  dedupeSemanticReroutes,
+  discoverInstagramPopularFirstCandidates,
+  planInstagramAdaptiveBudgets,
+  shouldRunInstagramHashtagFallback,
+  shouldUseInstagramPopularDiscovery,
+  type InstagramPopularDiscoveryResult,
+} from "./instagramPopularDiscovery";
+import {
   discoverTikTokPoolCandidates,
   shouldRunTikTokSeedFallback,
   shouldUseTikTokSearchDiscovery,
@@ -251,43 +260,89 @@ async function refreshInstagramPool(
   featuredCandidateCount: number;
   costEstimateUsd?: number;
 }> {
-  const result = await discoverInstagramPoolCandidates({
-    niche: pool.niche,
-    pillar: pool.pillar,
-    maxScCalls,
+  let popular: InstagramPopularDiscoveryResult | null = null;
+  let popularScCalls = 0;
+
+  if (shouldUseInstagramPopularDiscovery(pool.pillar)) {
+    const { popularBudget } = planInstagramAdaptiveBudgets(maxScCalls);
+    popular = await discoverInstagramPopularFirstCandidates({
+      niche: pool.niche,
+      pillar: pool.pillar,
+      maxScCalls: popularBudget,
+    });
+    popularScCalls = popular.totalScCalls;
+  }
+
+  const leftover = Math.max(0, maxScCalls - popularScCalls);
+  const fallbackTriggered = shouldRunInstagramHashtagFallback({
+    admittedCount: popular?.adapted.length ?? 0,
+    remainingBudget: leftover,
   });
+  // Non-restaurant Instagram pools always use the existing hashtag/drill path.
+  const runFallback =
+    !shouldUseInstagramPopularDiscovery(pool.pillar) || fallbackTriggered;
+
+  const fallback = runFallback
+    ? await discoverInstagramPoolCandidates({
+        niche: pool.niche,
+        pillar: pool.pillar,
+        maxScCalls: leftover,
+      })
+    : null;
+
+  const adapted = dedupeAdaptedCandidates([
+    ...(popular?.adapted ?? []),
+    ...(fallback?.adapted ?? []),
+  ]);
+  const reroutes = dedupeSemanticReroutes([
+    ...(popular?.reroutedCandidates ?? []),
+    ...(fallback?.reroutedCandidates ?? []),
+  ]);
+  const scCalls = popularScCalls + (fallback?.totalScCalls ?? 0);
+  const costEstimateUsd =
+    (popular?.costEstimateUsd ?? 0) + (fallback?.costEstimateUsd ?? 0);
+
   const providerCandidateCount = await persistAdaptedToPool({
     pool,
-    adapted: result.adapted,
-    scCalls: result.totalScCalls,
-    costEstimateUsd: result.costEstimateUsd,
+    adapted,
+    scCalls,
+    costEstimateUsd,
   });
   const reroutedCandidateCount = await persistSemanticReroutes({
     sourcePool: pool,
-    reroutes: result.reroutedCandidates,
+    reroutes,
   });
   const featuredCandidateCount = await hydrateFeaturedSupply(pool);
   console.info("[viralPosts.pool] instagram_supply_mix", {
     poolId: pool.id,
+    popularFirst: Boolean(popular),
+    popularCalls: popular?.popularCalls ?? 0,
+    popularSuccesses: popular?.popularSuccesses ?? 0,
+    popularFailures: popular?.popularFailures ?? 0,
+    popularAdmitted: popular?.adapted.length ?? 0,
+    popularStrict: popular?.strictViral ?? 0,
+    popularScCalls,
+    fallbackTriggered: runFallback,
+    fallbackScCalls: fallback?.totalScCalls ?? 0,
     providerCandidates: providerCandidateCount,
     reroutedCandidates: reroutedCandidateCount,
     featuredCandidates: featuredCandidateCount,
-    providerCalls: result.totalScCalls,
-    shallowCalls: result.shallowScCalls,
-    drillCalls: result.drillScCalls,
-    hashtags: result.hashtagsUsed,
-    shallowCandidates: result.shallowCandidateCount,
-    uniqueShallowCreators: result.uniqueShallowCreators,
-    selectedCreators: result.selectedCreators.map((creator) => creator.handle),
-    drilledCreators: result.drilledCreatorHandles,
-    drilledReelsRead: result.drilledReelsRead,
-    drilledViralCandidates: result.drilledViralCandidates,
+    providerCalls: scCalls,
+    shallowCalls: fallback?.shallowScCalls ?? 0,
+    drillCalls: fallback?.drillScCalls ?? 0,
+    hashtags: fallback?.hashtagsUsed ?? [],
+    shallowCandidates: fallback?.shallowCandidateCount ?? 0,
+    uniqueShallowCreators: fallback?.uniqueShallowCreators ?? 0,
+    selectedCreators: fallback?.selectedCreators.map((creator) => creator.handle) ?? [],
+    drilledCreators: fallback?.drilledCreatorHandles ?? [],
+    drilledReelsRead: fallback?.drilledReelsRead ?? 0,
+    drilledViralCandidates: fallback?.drilledViralCandidates ?? 0,
   });
   return {
-    scCalls: result.totalScCalls,
+    scCalls,
     candidateCount: providerCandidateCount + featuredCandidateCount,
     featuredCandidateCount,
-    costEstimateUsd: result.costEstimateUsd,
+    costEstimateUsd,
   };
 }
 

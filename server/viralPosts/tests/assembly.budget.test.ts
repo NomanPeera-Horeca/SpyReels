@@ -7,6 +7,10 @@ describe("feed assembly budget contracts", () => {
     expect(VIRAL_POOL_DEFAULTS.refreshMaxScCalls).toBe(35);
     expect(VIRAL_POOL_DEFAULTS.exploreMaxScCalls).toBe(25);
     expect(VIRAL_POOL_DEFAULTS.dailyCallBudget).toBe(60);
+    expect(VIRAL_POOL_DEFAULTS.instagramPoolMaxPopularScCalls).toBe(18);
+    expect(
+      VIRAL_POOL_DEFAULTS.instagramPoolMaxPopularScCalls
+    ).toBeLessThanOrEqual(VIRAL_POOL_DEFAULTS.refreshMaxScCalls);
     // User feed assembly must never use these; they are background-only.
     expect(VIRAL_POOL_DEFAULTS.assemblyCandidateLimit).toBeGreaterThanOrEqual(
       40
