@@ -1562,3 +1562,222 @@ export async function searchReelsByHandle(
   console.log(`[Instagram] Handle search for @${profile.username} found ${allReels.length} reels`);
   return { reels: allReels.slice(0, maxResults), profile };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Hybrid search parsers (no invented metrics)                        */
+/* ------------------------------------------------------------------ */
+
+export type InstagramSearchPost = {
+  shortcode: string;
+  caption: string;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  publishedAt: Date | null;
+  ownerUsername: string;
+  ownerFollowerCount: number | null;
+  ownerIsVerified: boolean | null;
+  ownerIsPrivate: boolean | null;
+  thumbnailUrl: string | null;
+  videoUrl: string | null;
+  sourceUrl: string;
+};
+
+export type InstagramSearchResult = {
+  posts: InstagramSearchPost[];
+  rawCount: number;
+};
+
+function asSearchRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function optionalPositiveSearchMetric(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function firstSearchString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function searchCaption(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  const record = asSearchRecord(raw);
+  return firstSearchString(record.text, record.caption);
+}
+
+export function extractInstagramSearchRows(data: unknown): unknown[] {
+  const root = asSearchRecord(data);
+  for (const key of ["posts", "reels", "items", "results"]) {
+    if (Array.isArray(root[key])) return root[key] as unknown[];
+  }
+  const nested = asSearchRecord(root.data);
+  for (const key of ["posts", "reels", "items", "results"]) {
+    if (Array.isArray(nested[key])) return nested[key] as unknown[];
+  }
+  return [];
+}
+
+/**
+ * Normalize Popular, keyword Reel, and hashtag search rows.
+ * Missing views/followers stay null. Does not invent metrics.
+ */
+export function parseInstagramSearchPost(raw: unknown): InstagramSearchPost | null {
+  const post = asSearchRecord(raw);
+  const shortcode = firstSearchString(post.shortcode, post.code, post.id).replace(
+    /^POLARIS_/,
+    ""
+  );
+  if (!shortcode) return null;
+
+  const owner = asSearchRecord(post.owner ?? post.user);
+  const ownerUsername = firstSearchString(
+    owner.username,
+    owner.user_name,
+    post.ownerUsername
+  ).replace(/^@/, "");
+  const sourceUrl =
+    firstSearchString(post.url, post.reel_url, post.permalink) ||
+    `https://www.instagram.com/reel/${shortcode}/`;
+
+  const verified = owner.is_verified ?? owner.isVerified;
+  const isPrivate = owner.is_private ?? owner.isPrivate;
+
+  return {
+    shortcode,
+    caption: searchCaption(post.caption) || firstSearchString(post.description, post.title),
+    views: optionalPositiveSearchMetric(
+      post.play_count ?? post.video_play_count ?? post.video_view_count ?? post.view_count
+    ),
+    likes: optionalPositiveSearchMetric(post.like_count ?? post.likes),
+    comments: optionalPositiveSearchMetric(post.comment_count ?? post.comments),
+    publishedAt: coerceInstagramTakenAtRaw(
+      post.taken_at_timestamp ?? post.taken_at ?? post.timestamp ?? post.device_timestamp
+    ),
+    ownerUsername,
+    ownerFollowerCount: optionalPositiveSearchMetric(
+      owner.follower_count ??
+        owner.followersCount ??
+        owner.followerCount ??
+        owner.followers ??
+        asSearchRecord(owner.edge_followed_by).count
+    ),
+    ownerIsVerified: typeof verified === "boolean" ? verified : null,
+    ownerIsPrivate: typeof isPrivate === "boolean" ? isPrivate : null,
+    thumbnailUrl:
+      firstSearchString(post.display_url, post.thumbnail_url, post.thumbnail_src) || null,
+    videoUrl: firstSearchString(post.video_url) || null,
+    sourceUrl,
+  };
+}
+
+/**
+ * Parse `/v1/instagram/post` media. Accepts a full envelope or xdt_shortcode_media.
+ * Missing video_play_count / follower count stay null.
+ */
+export function parseInstagramPostDetail(raw: unknown): InstagramSearchPost | null {
+  const media = extractPostMediaFromResponse(raw) ?? raw;
+  const item = asSearchRecord(media);
+  const shortcode = firstSearchString(item.shortcode, item.code);
+  if (!shortcode) return null;
+
+  const owner = asSearchRecord(item.user ?? item.owner);
+  const captionEdge = (item.edge_media_to_caption as { edges?: Array<{ node?: { text?: unknown } }> } | undefined)
+    ?.edges?.[0]?.node?.text;
+  const ownerUsername = firstSearchString(owner.username).replace(/^@/, "");
+  const verified = owner.is_verified ?? owner.isVerified;
+  const isPrivate = owner.is_private ?? owner.isPrivate;
+
+  return {
+    shortcode,
+    caption:
+      searchCaption(item.caption) ||
+      (typeof captionEdge === "string" ? captionEdge : ""),
+    views: optionalPositiveSearchMetric(
+      item.video_play_count ?? item.play_count ?? item.view_count ?? item.video_view_count
+    ),
+    likes: optionalPositiveSearchMetric(
+      item.like_count ?? asSearchRecord(item.edge_media_preview_like).count
+    ),
+    comments: optionalPositiveSearchMetric(
+      item.comment_count ?? asSearchRecord(item.edge_media_to_parent_comment).count
+    ),
+    publishedAt: coerceInstagramTakenAtRaw(item.taken_at_timestamp ?? item.taken_at),
+    ownerUsername,
+    ownerFollowerCount: optionalPositiveSearchMetric(
+      asSearchRecord(owner.edge_followed_by).count ?? owner.follower_count
+    ),
+    ownerIsVerified: typeof verified === "boolean" ? verified : null,
+    ownerIsPrivate: typeof isPrivate === "boolean" ? isPrivate : null,
+    thumbnailUrl:
+      firstSearchString(
+        item.thumbnail_src,
+        item.display_url,
+        asSearchRecord(
+          Array.isArray(asSearchRecord(item.image_versions2).candidates)
+            ? (asSearchRecord(item.image_versions2).candidates as unknown[])[0]
+            : null
+        ).url
+      ) || null,
+    videoUrl:
+      firstSearchString(
+        item.video_url,
+        asSearchRecord(Array.isArray(item.video_versions) ? item.video_versions[0] : null).url
+      ) || null,
+    sourceUrl: `https://www.instagram.com/reel/${shortcode}/`,
+  };
+}
+
+export async function searchInstagramPopular(
+  query: string
+): Promise<InstagramSearchResult> {
+  const { status, data } = await scGet("/v1/instagram/search/popular", { query });
+  if (status < 200 || status >= 300) {
+    throw new Error(`Instagram Popular search failed: HTTP ${status}`);
+  }
+  const rows = extractInstagramSearchRows(data);
+  const posts = rows
+    .map((row) => parseInstagramSearchPost(row))
+    .filter((post): post is InstagramSearchPost => post !== null);
+  return { posts, rawCount: rows.length };
+}
+
+export async function searchInstagramKeywordReels(
+  query: string,
+  opts?: { datePosted?: string; page?: string }
+): Promise<InstagramSearchResult> {
+  const { status, data } = await scGet("/v2/instagram/reels/search", {
+    query,
+    date_posted: opts?.datePosted || "last-month",
+    page: opts?.page || "1",
+  });
+  if (status < 200 || status >= 300) {
+    throw new Error(`Instagram keyword Reel search failed: HTTP ${status}`);
+  }
+  const rows = extractInstagramSearchRows(data);
+  const posts = rows
+    .map((row) => parseInstagramSearchPost(row))
+    .filter((post): post is InstagramSearchPost => post !== null);
+  return { posts, rawCount: rows.length };
+}
+
+/**
+ * Single-attempt `/v1/instagram/post` enrichment so one selected Reel costs
+ * one credit. Reuses the existing post payload wrapper.
+ */
+export async function enrichInstagramPostByUrl(
+  url: string
+): Promise<InstagramSearchPost | null> {
+  const payload = await fetchInstagramPostPayload(url, {
+    preferUrl: url,
+    mode: "interactive",
+  });
+  if (!payload.ok) return null;
+  return parseInstagramPostDetail(payload.media);
+}
