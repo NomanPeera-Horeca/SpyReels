@@ -1077,6 +1077,33 @@ export function CarouselStudioApp({
     }
   }, []);
 
+  const cancelPendingEditorSaves = useCallback(() => {
+    pendingSlotSaveRef.current = null;
+    if (slotSaveTimerRef.current) {
+      clearTimeout(slotSaveTimerRef.current);
+      slotSaveTimerRef.current = null;
+    }
+    pendingStyleSaveRef.current = null;
+    if (styleSaveTimerRef.current) {
+      clearTimeout(styleSaveTimerRef.current);
+      styleSaveTimerRef.current = null;
+    }
+    pendingFrameSaveRef.current = null;
+    if (frameSaveTimerRef.current) {
+      clearTimeout(frameSaveTimerRef.current);
+      frameSaveTimerRef.current = null;
+    }
+    cancelPendingDesignSave();
+    setSaveQueued(false);
+  }, [cancelPendingDesignSave]);
+
+  const flushPendingEditorSaves = useCallback(() => {
+    flushSlotSave();
+    flushStyleSave();
+    flushFrameSave();
+    flushDesignSave();
+  }, [flushSlotSave, flushStyleSave, flushFrameSave, flushDesignSave]);
+
   const handleDesignChange = (patch: CarouselDesignOverridePatch) => {
     if (!studioTemplate) return;
     const next = applyCarouselDesignPatch(
@@ -1328,6 +1355,27 @@ export function CarouselStudioApp({
     }
     if (textSelection?.slideId === slideId) setTextSelection(null);
     if (imageSelection?.slideId === slideId) setImageSelection(null);
+    if (pendingSlotSaveRef.current?.slideId === slideId) {
+      pendingSlotSaveRef.current = null;
+      if (slotSaveTimerRef.current) {
+        clearTimeout(slotSaveTimerRef.current);
+        slotSaveTimerRef.current = null;
+      }
+    }
+    if (pendingStyleSaveRef.current?.slideId === slideId) {
+      pendingStyleSaveRef.current = null;
+      if (styleSaveTimerRef.current) {
+        clearTimeout(styleSaveTimerRef.current);
+        styleSaveTimerRef.current = null;
+      }
+    }
+    if (pendingFrameSaveRef.current?.slideId === slideId) {
+      pendingFrameSaveRef.current = null;
+      if (frameSaveTimerRef.current) {
+        clearTimeout(frameSaveTimerRef.current);
+        frameSaveTimerRef.current = null;
+      }
+    }
     manageSlidesMutation.mutate({
       remakeId,
       action: "delete",
@@ -1337,20 +1385,14 @@ export function CarouselStudioApp({
 
   useEffect(() => {
     const onLeave = () => {
-      flushSlotSave();
-      flushStyleSave();
-      flushFrameSave();
-      flushDesignSave();
+      flushPendingEditorSaves();
     };
     window.addEventListener("beforeunload", onLeave);
     return () => {
       window.removeEventListener("beforeunload", onLeave);
-      flushSlotSave();
-      flushStyleSave();
-      flushFrameSave();
-      flushDesignSave();
+      flushPendingEditorSaves();
     };
-  }, [flushSlotSave, flushStyleSave, flushFrameSave, flushDesignSave]);
+  }, [flushPendingEditorSaves]);
 
   useEffect(() => {
     setTextSelection(null);
@@ -1479,7 +1521,10 @@ export function CarouselStudioApp({
               <button
                 type="button"
                 className="btn small ghost"
-                onClick={() => setLocation(CAROUSELS_PATH)}
+                onClick={() => {
+                  flushPendingEditorSaves();
+                  setLocation(CAROUSELS_PATH);
+                }}
               >
                 ← Back to Carousels
               </button>
@@ -2250,7 +2295,7 @@ export function CarouselStudioApp({
                                     ? (parsed.designOverride ?? null)
                                     : remakeDesignOverride;
                                 const activeId = effectiveSlides[currentSlide]?.id;
-                                cancelPendingDesignSave();
+                                cancelPendingEditorSaves();
                                 setRemakeSlideStructure(slideStructure);
                                 setRemakeSlotValues(slotValues);
                                 setRemakeSlotStyles(slotStyles);
