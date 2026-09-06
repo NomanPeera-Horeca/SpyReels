@@ -220,6 +220,8 @@ export function CarouselStudioApp({
   const [aiRewriteError, setAiRewriteError] = useState<string | null>(null);
   const [imageSelection, setImageSelection] =
     useState<CarouselImageSelection | null>(null);
+  const [aiImagePreviewUrl, setAiImagePreviewUrl] = useState<string | null>(null);
+  const [aiImageError, setAiImageError] = useState<string | null>(null);
   const [remakeSlotStyles, setRemakeSlotStyles] =
     useState<CarouselSlotStyleMap>({});
   const [remakeImageFrames, setRemakeImageFrames] =
@@ -307,6 +309,12 @@ export function CarouselStudioApp({
     undefined,
     { enabled: remakeId != null }
   );
+  const aiImageGenerationQuery =
+    trpc.carouselRemake.aiImageGenerationAvailable.useQuery(undefined, {
+      enabled: remakeId != null,
+    });
+  const regenerateSlideImageMutation =
+    trpc.carouselRemake.regenerateSlideImage.useMutation();
   const replaceSlotMutation = trpc.carouselRemake.replaceSlotValues.useMutation({
     onSuccess: () => {
       void utils.carouselRemake.list.invalidate();
@@ -1135,6 +1143,11 @@ export function CarouselStudioApp({
     setAiRewriteError(null);
   }, [textSelection?.slideId, textSelection?.slotId]);
 
+  useEffect(() => {
+    setAiImagePreviewUrl(null);
+    setAiImageError(null);
+  }, [imageSelection?.slideId, imageSelection?.slotId]);
+
   const handleAiSlotRewrite = async (action: CarouselSlotRewriteAction) => {
     if (!textSelection || remakeId == null || rewriteSlotMutation.isPending) {
       return;
@@ -1226,6 +1239,53 @@ export function CarouselStudioApp({
       setSaveQueued(false);
       flushFrameSave();
     }, 500);
+  };
+
+  const handleGenerateAnotherImage = async () => {
+    if (!imageSelection || remakeId == null || regenerateSlideImageMutation.isPending) {
+      return;
+    }
+    setAiImageError(null);
+    try {
+      const result = await regenerateSlideImageMutation.mutateAsync({
+        remakeId,
+        slideId: imageSelection.slideId,
+        slotId: imageSelection.slotId,
+      });
+      if (!result.url?.trim()) {
+        setAiImageError("Couldn't generate another image. Try again.");
+        return;
+      }
+      setAiImagePreviewUrl(result.url);
+    } catch {
+      setAiImageError("Couldn't generate another image. Try again.");
+    }
+  };
+
+  const handleUseAiImagePreview = async () => {
+    if (!imageSelection || remakeId == null || !aiImagePreviewUrl?.trim()) return;
+    saveHistory();
+    setSaveQueued(true);
+    try {
+      const result = await updateImageUrlsMutation.mutateAsync({
+        remakeId,
+        slideId: imageSelection.slideId,
+        slotId: imageSelection.slotId,
+        url: aiImagePreviewUrl,
+      });
+      setRemakeImageUrls(result.imageUrls);
+      setAiImagePreviewUrl(null);
+      setAiImageError(null);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to save image");
+    } finally {
+      setSaveQueued(false);
+    }
+  };
+
+  const handleCancelAiImagePreview = () => {
+    setAiImagePreviewUrl(null);
+    setAiImageError(null);
   };
 
   const handleReplaceImageFile = async (file: File) => {
@@ -2422,9 +2482,25 @@ export function CarouselStudioApp({
                               imageSelection.slotId
                             ]
                           }
+                          generateEnabled={
+                            aiImageGenerationQuery.data?.enabled === true
+                          }
+                          generating={regenerateSlideImageMutation.isPending}
+                          generateError={aiImageError}
+                          previewUrl={aiImagePreviewUrl}
                           onReplaceFile={(file) => {
                             void handleReplaceImageFile(file);
                           }}
+                          onGenerateAnother={() => {
+                            void handleGenerateAnotherImage();
+                          }}
+                          onUsePreview={() => {
+                            void handleUseAiImagePreview();
+                          }}
+                          onTryAgain={() => {
+                            void handleGenerateAnotherImage();
+                          }}
+                          onCancelPreview={handleCancelAiImagePreview}
                           onFrameChange={(patch) =>
                             handleImageFrameChange(
                               imageSelection.slideId,

@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 import {
+  applyCarouselImageFrame,
   CAROUSEL_IMAGE_ZOOM_MAX,
   CAROUSEL_IMAGE_ZOOM_MIN,
   type CarouselImageFrameOverride,
@@ -10,9 +11,15 @@ type CarouselImageInspectorProps = {
   slotId: string;
   imageUrl: string;
   frame: CarouselImageFrameOverride | undefined;
-  regenerating?: boolean;
+  generateEnabled?: boolean;
+  generating?: boolean;
+  generateError?: string | null;
+  previewUrl?: string | null;
   onReplaceFile: (file: File) => void;
-  onRegenerate?: () => void;
+  onGenerateAnother?: () => void;
+  onUsePreview?: () => void;
+  onTryAgain?: () => void;
+  onCancelPreview?: () => void;
   onFrameChange: (patch: CarouselImageFramePatch) => void;
 };
 
@@ -20,15 +27,26 @@ export function CarouselImageInspector({
   slotId,
   imageUrl,
   frame,
-  regenerating = false,
+  generateEnabled = false,
+  generating = false,
+  generateError = null,
+  previewUrl = null,
   onReplaceFile,
-  onRegenerate,
+  onGenerateAnother,
+  onUsePreview,
+  onTryAgain,
+  onCancelPreview,
   onFrameChange,
 }: CarouselImageInspectorProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const posX = frame?.posX ?? 50;
   const posY = frame?.posY ?? 50;
   const zoom = frame?.zoom ?? 1;
+  const displayUrl = previewUrl || imageUrl;
+  const previewStyle = applyCarouselImageFrame(
+    displayUrl ? { backgroundImage: `url(${displayUrl})` } : {},
+    frame
+  ) as CSSProperties;
 
   return (
     <aside className="panel inspector-panel" aria-label="Image">
@@ -38,10 +56,7 @@ export function CarouselImageInspector({
           <span className="text-inspector-role">Slot {slotId}</span>
         </div>
         <div className="text-inspector-body">
-          <div
-            className="image-inspector-preview"
-            style={{ backgroundImage: `url(${imageUrl})` }}
-          />
+          <div className="image-inspector-preview" style={previewStyle} />
           <input
             ref={fileRef}
             type="file"
@@ -60,15 +75,45 @@ export function CarouselImageInspector({
           >
             Replace image
           </button>
-          {onRegenerate ? (
+          {generateEnabled && onGenerateAnother ? (
             <button
               type="button"
               className="btn small ghost"
-              disabled={regenerating}
-              onClick={onRegenerate}
+              disabled={generating}
+              onClick={onGenerateAnother}
             >
-              {regenerating ? "Regenerating…" : "Regenerate with AI"}
+              Generate another
             </button>
+          ) : null}
+          {generating ? (
+            <p className="text-inspector-ai-status" role="status">
+              Generating another image...
+            </p>
+          ) : null}
+          {generateError ? (
+            <p className="text-inspector-ai-error" role="alert">
+              {generateError}
+            </p>
+          ) : null}
+          {previewUrl ? (
+            <div className="text-inspector-ai-preview">
+              <div className="text-inspector-ai-preview-actions">
+                <button type="button" disabled={generating} onClick={onUsePreview}>
+                  Use this
+                </button>
+                <button type="button" disabled={generating} onClick={onTryAgain}>
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  className="text-inspector-ai-cancel"
+                  disabled={generating}
+                  onClick={onCancelPreview}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : null}
           <label className="text-inspector-field">
             Horizontal

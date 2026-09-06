@@ -15,12 +15,13 @@ import {
   CarouselSlotRewriteError,
   rewriteCarouselSlotCopy,
 } from "../carousel/rewriteCarouselSlotCopy";
+import {
+  CarouselImageRegenerateError,
+  regenerateOwnedSlideImageCandidate,
+  topicFromStoredBrief,
+} from "../carousel/regenerateOwnedSlideImage";
 import { CAROUSEL_TEMPLATES_BY_ID } from "@shared/carouselTemplates";
 import type { CarouselImageUrlMap, CarouselSlideSpec } from "@shared/carouselTemplates";
-import {
-  isComparisonFamilySlide,
-  textContextForComparisonImageSlot,
-} from "@shared/carouselComparisonFamily";
 import {
   normalizeCarouselSlotStyleMap,
   upsertCarouselSlotStyleMap,
@@ -833,6 +834,10 @@ export const carouselRemakeRouter = router({
     enabled: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
   })),
 
+  aiImageGenerationAvailable: protectedProcedure.query(() => ({
+    enabled: Boolean(process.env.OPENAI_API_KEY?.trim()),
+  })),
+
   /**
    * Rewrite one selected text slot. Loads remake context from MySQL.
    * Does not persist. Client applies via updateSlotValues.
@@ -1635,8 +1640,8 @@ export const carouselRemakeRouter = router({
     }),
 
   /**
-   * Regenerate only the selected image slot via the existing resolveSlideImage path.
-   * Does not rewrite copy, strategy, or other image slots.
+   * Generate one candidate for the selected image slot via resolveSlideImage.
+   * Does not persist. Client applies via updateImageUrls.
    */
   regenerateSlideImage: protectedProcedure
     .input(
@@ -1647,6 +1652,13 @@ export const carouselRemakeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (!process.env.OPENAI_API_KEY?.trim()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "AI image generation is not configured",
+        });
+      }
+
       const db = await getDb();
       if (!db) {
         throw new TRPCError({
@@ -1661,6 +1673,8 @@ export const carouselRemakeRouter = router({
           status: carouselRemakes.status,
           templateId: carouselRemakes.templateId,
           niche: carouselRemakes.niche,
+          angleOptionsJson: carouselRemakes.angleOptionsJson,
+          selectedAngleIndex: carouselRemakes.selectedAngleIndex,
           slotValuesJson: carouselRemakes.slotValuesJson,
           slideStructureJson: carouselRemakes.slideStructureJson,
           imageUrlsJson: carouselRemakes.imageUrlsJson,
@@ -1688,61 +1702,35 @@ export const carouselRemakeRouter = router({
 
       const template = CAROUSEL_TEMPLATES_BY_ID.get(row.templateId);
       const slides = slidesForRemake(template?.slides, row.slideStructureJson);
-      const slide = slides.find((item) => item.id === input.slideId);
-      const imageSlot = slide?.imageSlots?.find((slot) => slot.id === input.slotId);
-      if (!slide || !imageSlot) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "That slide has no matching image slot",
-        });
-      }
-
-      const slideValues =
-        row.slotValuesJson && typeof row.slotValuesJson === "object"
-          ? ((row.slotValuesJson as Record<string, Record<string, string>>)[
-              input.slideId
-            ] ?? {})
-          : {};
-      const textContext = imageTextContextForOwnedSlot(
-        slide,
-        slideValues,
-        input.slotId
-      );
-      const url = await resolveSlideImage(
-        imageSlot.searchQueryHint ?? "",
-        row.niche,
-        undefined,
-        textContext,
-        {
+      try {
+        const result = await regenerateOwnedSlideImageCandidate({
+          niche: row.niche,
+          topic: topicFromStoredBrief(
+            row.angleOptionsJson,
+            row.selectedAngleIndex ?? null
+          ),
+          slides,
           slideId: input.slideId,
-          imageSlotId: input.slotId,
+          slotId: input.slotId,
+          slotValues: row.slotValuesJson,
+          imageUrls: row.imageUrlsJson,
+        });
+        return { remakeId: input.remakeId, url: result.url };
+      } catch (error) {
+        if (error instanceof CarouselImageRegenerateError) {
+          throw new TRPCError({
+            code:
+              error.code === "INVALID_SLIDE" || error.code === "INVALID_SLOT"
+                ? "BAD_REQUEST"
+                : "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
         }
-      );
-      if (!url) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Image generation did not return a URL",
+          message: "Couldn't generate another image. Try again.",
         });
       }
-
-      const current =
-        row.imageUrlsJson && typeof row.imageUrlsJson === "object"
-          ? ({ ...(row.imageUrlsJson as CarouselImageUrlMap) } as CarouselImageUrlMap)
-          : {};
-      const next = applyOwnedImageUrl(
-        current,
-        input.slideId,
-        url,
-        input.slotId,
-        shareCoverSlideIdsForTemplate(row.templateId, row.slideStructureJson)
-      );
-
-      await db
-        .update(carouselRemakes)
-        .set({ imageUrlsJson: next })
-        .where(eq(carouselRemakes.id, input.remakeId));
-
-      return { remakeId: input.remakeId, imageUrls: next, url };
     }),
 
   /**
@@ -1928,25 +1916,6 @@ function applyOwnedImageUrl(
     return fanOutCarouselCoverUrl(current, url, sharedSlideIds);
   }
   return upsertCarouselImageUrlMap(current, slideId, url, slotId);
-}
-
-function imageTextContextForOwnedSlot(
-  slide: CarouselSlideSpec,
-  slideVals: Record<string, string>,
-  imageSlotId: string
-): string {
-  if (isComparisonFamilySlide(slide) && (slide.imageSlots?.length ?? 0) > 1) {
-    const sideCopy = textContextForComparisonImageSlot(slideVals, imageSlotId);
-    if (sideCopy) return sideCopy;
-  }
-  const preferred = [
-    slideVals.headline,
-    slideVals.title,
-    slideVals.body,
-    slideVals.support,
-    slideVals.subhead,
-  ];
-  return preferred.filter((value) => value?.trim()).join(" / ");
 }
 
 type OwnedEditorRemakeRow = {

@@ -114,8 +114,10 @@ describe("carousel text inspector architecture", () => {
     expect(app).toContain("carouselRemake.uploadSlideImage");
     expect(app).toContain("carouselRemake.updateImageUrls");
     expect(app).toContain("carouselRemake.updateImageFrame");
-    expect(app).not.toContain("carouselRemake.regenerateSlideImage");
-    expect(app).not.toContain("onRegenerate");
+    expect(app).toContain("carouselRemake.regenerateSlideImage");
+    expect(app).toContain("handleGenerateAnotherImage");
+    expect(app).toContain("setAiImagePreviewUrl");
+    expect(app).not.toContain("imageEditsV2");
     expect(app).toContain("replaceImageUrls");
     expect(app).toContain("replaceImageFrames");
     expect(app).toContain("carouselRemake.manageSlides");
@@ -123,13 +125,22 @@ describe("carousel text inspector architecture", () => {
     expect(app).toContain("CarouselSlideRail");
     expect(app).not.toContain("slideEditsV2");
     const inspector = read("CarouselImageInspector.tsx");
-    expect(inspector).toContain("onRegenerate?");
-    expect(inspector).toContain("Regenerate with AI");
+    expect(inspector).toContain("Generate another");
+    expect(inspector).toContain("Use this");
+    expect(inspector).toContain("Try again");
+    expect(inspector).toContain("Generating another image...");
+    expect(inspector).not.toContain("Regenerate with AI");
+    expect(inspector).not.toContain("Describe what you want");
     const router = readFileSync(
       join(here, "../../../../server/routers/carouselRemakeRouter.ts"),
       "utf8"
     );
     expect(router).toContain("regenerateSlideImage:");
+    expect(router).toContain("aiImageGenerationAvailable:");
+    expect(router).toContain("Does not persist. Client applies via updateImageUrls.");
+    expect(router).not.toMatch(
+      /regenerateSlideImage:[\s\S]*imageUrlsJson:\s*next/
+    );
     expect(router).toContain("manageSlides:");
     expect(router).toContain("replaceEditorState:");
     expect(router).toContain("updateDesignOverride:");

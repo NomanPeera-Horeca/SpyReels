@@ -17,20 +17,37 @@ function extractSlideSubject(textContext: string | undefined): string {
   return firstSegment.replace(/\s+/g, " ").slice(0, 90);
 }
 
+export type VisionImagePromptOptions = {
+  topic?: string | null;
+  slidePurpose?: string | null;
+  slotPurpose?: string | null;
+  requireTopicFit?: boolean;
+};
+
 /** Text-only gpt-image prompt when no source visual is available (Path C). */
 export function buildTextOnlyImagePrompt(
   niche: string,
   searchQueryHint: string,
-  textContext?: string
+  textContext?: string,
+  options?: VisionImagePromptOptions
 ): string {
   const subject = extractSlideSubject(textContext);
   const nichePart = niche.trim();
   const stylePart = searchQueryHint.trim();
+  const topic = options?.topic?.trim() ?? "";
+  const slidePurpose = options?.slidePurpose?.trim() ?? "";
+  const slotPurpose = options?.slotPurpose?.trim() ?? "";
   const parts: string[] = [];
   if (nichePart) parts.push(`Niche: ${nichePart}`);
+  if (topic) parts.push(`Carousel topic: ${topic}`);
   if (subject) parts.push(`Slide message: ${subject}`);
+  if (slidePurpose) parts.push(`Slide job: ${slidePurpose}`);
+  if (slotPurpose) parts.push(`Image slot: ${slotPurpose}`);
   if (stylePart) parts.push(`Visual mood: ${stylePart}`);
   const context = parts.join(". ");
+  if (options?.requireTopicFit) {
+    return `A high-quality, realistic photo for a social media carousel slide. ${context}. The photo must visually belong to this topic and slide. Do not invent an unrelated scene. No captions, headlines, logos, watermarks, fake UI, random letters, or borders.`;
+  }
   return `A high-quality, realistic photo for a social media carousel slide. ${context}. No text, no logos, no watermarks, no borders.`;
 }
 
@@ -44,16 +61,23 @@ export async function buildVisionGroundedImagePrompt(
   sourceImage: string | null,
   slideText: string,
   niche: string,
-  searchQueryHint = ""
+  searchQueryHint = "",
+  options?: VisionImagePromptOptions
 ): Promise<string> {
   const trimmedSource = sourceImage?.trim() || null;
   if (!trimmedSource) {
-    return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText);
+    return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText, options);
   }
 
   const slideLine = extractSlideSubject(slideText) || slideText.trim().slice(0, 120);
   const nichePart = niche.trim() || "General creators";
   const stylePart = searchQueryHint.trim();
+  const topic = options?.topic?.trim() ?? "";
+  const slidePurpose = options?.slidePurpose?.trim() ?? "";
+  const slotPurpose = options?.slotPurpose?.trim() ?? "";
+  const topicRule = options?.requireTopicFit
+    ? " The new photo must clearly belong to the carousel topic and this slide. Do not drift into a generic influencer, beach, laptop, or unrelated food shot unless that is the actual subject."
+    : "";
 
   try {
     const response = await invokeLLM({
@@ -62,7 +86,9 @@ export async function buildVisionGroundedImagePrompt(
         {
           role: "system",
           content: withAiFormattingRules(
-            "You write image-generation prompts for Instagram carousel slide backgrounds. Given a source photo and the remade slide text, describe a NEW photo that visually rhymes with the source (subject type, mood, composition, color palette, lighting) while fitting the slide message. Do not literally illustrate the caption as text-on-image. Do not copy logos, watermarks, or identifiable faces. Reply with ONLY the image prompt as plain text, one paragraph, no quotes or labels."
+            options?.requireTopicFit
+              ? "You write image-generation prompts for Instagram carousel slide backgrounds. Given a source photo and the remade slide text, describe a NEW photo that visually rhymes with the source (subject type, mood, composition, color palette, lighting) while fitting the slide message. Do not make a pixel copy. Do not literally illustrate the caption as text-on-image. Do not copy logos, watermarks, captions, fake UI, or identifiable faces. Reply with ONLY the image prompt as plain text, one paragraph, no quotes or labels."
+              : "You write image-generation prompts for Instagram carousel slide backgrounds. Given a source photo and the remade slide text, describe a NEW photo that visually rhymes with the source (subject type, mood, composition, color palette, lighting) while fitting the slide message. Do not literally illustrate the caption as text-on-image. Do not copy logos, watermarks, or identifiable faces. Reply with ONLY the image prompt as plain text, one paragraph, no quotes or labels."
           ),
         },
         {
@@ -71,9 +97,13 @@ export async function buildVisionGroundedImagePrompt(
             {
               type: "text",
               text: `Niche / audience: ${nichePart}
-Slide headline / text: ${slideLine || "(no text)"}
-${stylePart ? `Style hint: ${stylePart}\n` : ""}
-Write a gpt-image-1.5 prompt for a high-quality realistic photo (portrait orientation). No text, logos, watermarks, or borders in the image.`,
+${topic ? `Carousel topic: ${topic}\n` : ""}Slide headline / text: ${slideLine || "(no text)"}
+${slidePurpose ? `Slide job: ${slidePurpose}\n` : ""}${slotPurpose ? `Image slot: ${slotPurpose}\n` : ""}${stylePart ? `Style hint: ${stylePart}\n` : ""}
+Write a gpt-image-1.5 prompt for a high-quality realistic photo (portrait orientation). ${
+                options?.requireTopicFit
+                  ? `Create a fresh image, not a copy.${topicRule} No captions, headlines, logos, watermarks, fake UI, random letters, or borders in the image.`
+                  : "No text, logos, watermarks, or borders in the image."
+              }`,
             },
             {
               type: "image_url",
@@ -102,7 +132,7 @@ Write a gpt-image-1.5 prompt for a high-quality realistic photo (portrait orient
     );
   }
 
-  return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText);
+  return buildTextOnlyImagePrompt(niche, searchQueryHint, slideText, options);
 }
 
 type GeneratedImageOutcome = {
@@ -248,6 +278,10 @@ export type ResolveSlideImageOptions = {
   slideId?: string;
   imageSlotId?: string;
   telemetry?: GenerationTelemetryContext;
+  topic?: string | null;
+  slidePurpose?: string | null;
+  slotPurpose?: string | null;
+  requireTopicFit?: boolean;
 };
 
 /**
@@ -299,7 +333,13 @@ export async function resolveSlideImage(
         options?.sourceImage ?? null,
         textContext ?? "",
         niche,
-        searchQueryHint
+        searchQueryHint,
+        {
+          topic: options?.topic,
+          slidePurpose: options?.slidePurpose,
+          slotPurpose: options?.slotPurpose,
+          requireTopicFit: options?.requireTopicFit,
+        }
       )
   );
   console.log(
