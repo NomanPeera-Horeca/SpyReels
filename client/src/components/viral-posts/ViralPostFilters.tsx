@@ -35,7 +35,7 @@ export function ViralPostFilters({
   const [draft, setDraft] = useState<ExploreAdvancedFilters>(filters);
 
   const openDrawer = () => {
-    setDraft(filters);
+    setDraft(normalizeExploreFilters(filters));
     setDrawerOpen(true);
   };
 
@@ -94,7 +94,7 @@ export function ViralPostFilters({
                 onChange={(checked) =>
                   setDraft((d) => ({
                     ...d,
-                    platforms: { ...d.platforms, instagram: checked },
+                    platforms: { ...d.platforms, instagram: checked, youtube: false },
                   }))
                 }
               />
@@ -104,83 +104,7 @@ export function ViralPostFilters({
                 onChange={(checked) =>
                   setDraft((d) => ({
                     ...d,
-                    platforms: { ...d.platforms, tiktok: checked },
-                  }))
-                }
-              />
-            </FilterGroup>
-
-            <FilterGroup title="Momentum">
-              <CheckRow
-                label="Breaking out"
-                checked={draft.momentum.breakingOut}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    momentum: { ...d.momentum, breakingOut: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="Rising fast"
-                checked={draft.momentum.risingFast}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    momentum: { ...d.momentum, risingFast: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="Proven format"
-                checked={draft.momentum.provenFormat}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    momentum: { ...d.momentum, provenFormat: checked },
-                  }))
-                }
-              />
-            </FilterGroup>
-
-            <FilterGroup title="Video style">
-              <CheckRow
-                label="Talking head"
-                checked={draft.videoStyles.talkingHead}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    videoStyles: { ...d.videoStyles, talkingHead: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="Storytelling"
-                checked={draft.videoStyles.storytelling}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    videoStyles: { ...d.videoStyles, storytelling: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="Educational"
-                checked={draft.videoStyles.educational}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    videoStyles: { ...d.videoStyles, educational: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="Faceless / B-roll"
-                checked={draft.videoStyles.faceless}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    videoStyles: { ...d.videoStyles, faceless: checked },
+                    platforms: { ...d.platforms, tiktok: checked, youtube: false },
                   }))
                 }
               />

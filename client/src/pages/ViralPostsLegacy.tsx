@@ -27,6 +27,10 @@ import type {
 } from "@/lib/viralPosts/types";
 import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
 import type { ViralDailyFeedResponse } from "@shared/viralPosts";
+import {
+  applyExplorePostFilters,
+  exploreEmptyCopy,
+} from "@shared/viralPostsExploreFilters";
 
 function parseTab(raw: string | null): ViralPostsTab {
   if (raw === "explore" || raw === "saved" || raw === "for-you") return raw;
@@ -155,8 +159,6 @@ export default function ViralPosts() {
   const searchQuery = trpc.viralPosts.search.useQuery(
     {
       query: exploreSubmitted,
-      rising: exploreQuick === "rising",
-      proven: exploreQuick === "proven",
     },
     {
       enabled: tab === "explore" && exploreSubmitted.trim().length >= 3,
@@ -190,29 +192,29 @@ export default function ViralPosts() {
     [feed?.items, hiddenCreatorKeys]
   );
 
-  const explorePosts = useMemo(() => {
-    const items = searchQuery.data?.items ?? [];
-    const platformEnabled =
-      exploreFilters.platforms.instagram ||
-      exploreFilters.platforms.tiktok ||
-      exploreFilters.platforms.youtube;
-    return items.filter((p) => {
-      const key = (p.creatorId || p.creatorHandle || "")
-        .toLowerCase()
-        .replace(/^@/, "");
-      if (key && hiddenCreatorKeys.has(key)) return false;
-      if (!platformEnabled) return true;
-      if (p.platform === "tiktok") return exploreFilters.platforms.tiktok;
-      if (p.platform === "youtube") return exploreFilters.platforms.youtube;
-      return exploreFilters.platforms.instagram;
-    });
-  }, [
-    searchQuery.data?.items,
-    hiddenCreatorKeys,
-    exploreFilters.platforms.instagram,
-    exploreFilters.platforms.tiktok,
-    exploreFilters.platforms.youtube,
-  ]);
+  const explorePosts = useMemo(
+    () =>
+      applyExplorePostFilters({
+        posts: searchQuery.data?.items ?? [],
+        platforms: exploreFilters.platforms,
+        postedWithin: exploreFilters.postedWithin,
+        quickFilter: exploreQuick,
+        hiddenCreatorKeys,
+      }),
+    [
+      searchQuery.data?.items,
+      exploreFilters.platforms,
+      exploreFilters.postedWithin,
+      exploreQuick,
+      hiddenCreatorKeys,
+    ]
+  );
+  const exploreEmpty = exploreEmptyCopy({
+    platforms: exploreFilters.platforms,
+    usingSearch: exploreSubmitted.trim().length >= 3,
+    rawResultCount: searchQuery.data?.items.length ?? 0,
+    quickFilter: exploreQuick,
+  });
 
   const exploreSearching =
     tab === "explore" &&
@@ -714,7 +716,6 @@ export default function ViralPosts() {
               onFiltersChange={setExploreFilters}
               onApply={() => {
                 toast.success("Filters applied");
-                if (exploreSubmitted) void searchQuery.refetch();
               }}
               onReset={() => {
                 setExploreFilters(DEFAULT_EXPLORE_FILTERS);
@@ -754,16 +755,8 @@ export default function ViralPosts() {
             <ViralPostGrid
               posts={explorePosts}
               loading={false}
-              emptyTitle={
-                (searchQuery.data?.items.length ?? 0) > 0
-                  ? "No posts match these filters"
-                  : "No exact matches yet"
-              }
-              emptyDescription={
-                (searchQuery.data?.items.length ?? 0) > 0
-                  ? "Turn on Instagram in Filters, or clear Rising / Proven."
-                  : "Try a broader topic, or use one of the suggested searches above."
-              }
+              emptyTitle={exploreEmpty.title}
+              emptyDescription={exploreEmpty.description}
               {...cardHandlers}
             />
           )}

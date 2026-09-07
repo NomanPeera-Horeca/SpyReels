@@ -20,12 +20,11 @@ import type {
   ViralPostsTab,
 } from "@/lib/viralPosts/types";
 import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
-
-function creatorKey(post: ViralPost): string {
-  return (post.creatorId || post.creatorHandle || "")
-    .toLowerCase()
-    .replace(/^@/, "");
-}
+import {
+  applyExplorePostFilters,
+  exploreEmptyCopy,
+  explorePostCreatorKey,
+} from "@shared/viralPostsExploreFilters";
 
 export default function ViralPostsExplore() {
   const [, setLocation] = useLocation();
@@ -58,11 +57,11 @@ export default function ViralPostsExplore() {
     staleTime: 60_000,
   });
 
+  // Rising / Proven / platforms / date are applied client-side so toggling
+  // filters does not spend additional ScrapeCreators calls.
   const searchQuery = trpc.viralPosts.search.useQuery(
     {
       query: submittedQuery,
-      rising: quickFilter === "rising",
-      proven: quickFilter === "proven",
     },
     {
       enabled: submittedQuery.trim().length >= 3,
@@ -79,62 +78,45 @@ export default function ViralPostsExplore() {
     submittedQuery.trim().length >= 3 && searchQuery.isFetching;
   const usingSearch = submittedQuery.trim().length >= 3;
 
-  const posts = useMemo(() => {
-    const source = usingSearch
-      ? searchQuery.data?.items ?? []
-      : browseQuery.data?.items ?? [];
+  const posts = useMemo(
+    () =>
+      applyExplorePostFilters({
+        posts: usingSearch
+          ? searchQuery.data?.items ?? []
+          : browseQuery.data?.items ?? [],
+        platforms: filters.platforms,
+        postedWithin: filters.postedWithin,
+        quickFilter,
+        hiddenCreatorKeys,
+        dismissedPostIds,
+        savedOverrides,
+      }),
+    [
+      usingSearch,
+      searchQuery.data?.items,
+      browseQuery.data?.items,
+      filters.platforms,
+      filters.postedWithin,
+      quickFilter,
+      hiddenCreatorKeys,
+      dismissedPostIds,
+      savedOverrides,
+    ]
+  );
 
-    const anyPlatform =
-      filters.platforms.instagram ||
-      filters.platforms.tiktok ||
-      filters.platforms.youtube;
+  const rawResultCount = usingSearch
+    ? searchQuery.data?.items.length ?? 0
+    : browseQuery.data?.items.length ?? 0;
 
-    return source
-      .map((post) =>
-        savedOverrides[post.id] == null
-          ? post
-          : { ...post, saved: savedOverrides[post.id] }
-      )
-      .filter((post) => {
-        if (dismissedPostIds.has(post.id)) return false;
-        const key = creatorKey(post);
-        if (key && hiddenCreatorKeys.has(key)) return false;
-
-        if (anyPlatform) {
-          if (post.platform === "tiktok" && !filters.platforms.tiktok) return false;
-          if (post.platform === "youtube" && !filters.platforms.youtube) return false;
-          if (
-            post.platform !== "tiktok" &&
-            post.platform !== "youtube" &&
-            !filters.platforms.instagram
-          ) {
-            return false;
-          }
-        }
-
-        if (!usingSearch && quickFilter === "rising") {
-          return (
-            post.trendStatus === "rising-fast" ||
-            post.trendStatus === "breaking-out"
-          );
-        }
-        if (!usingSearch && quickFilter === "proven") {
-          return post.trendStatus === "proven-format";
-        }
-        return true;
-      });
-  }, [
-    browseQuery.data?.items,
-    searchQuery.data?.items,
+  const emptyCopy = exploreEmptyCopy({
+    platforms: filters.platforms,
     usingSearch,
-    filters.platforms.instagram,
-    filters.platforms.tiktok,
-    filters.platforms.youtube,
+    rawResultCount,
     quickFilter,
-    hiddenCreatorKeys,
-    dismissedPostIds,
-    savedOverrides,
-  ]);
+  });
+
+  const noPlatformSelected =
+    !filters.platforms.instagram && !filters.platforms.tiktok;
 
   const setTab = useCallback(
     (next: ViralPostsTab) => {
@@ -225,7 +207,7 @@ export default function ViralPostsExplore() {
 
   const handleHideCreator = useCallback(
     async (post: ViralPost) => {
-      const key = creatorKey(post);
+      const key = explorePostCreatorKey(post);
       if (key) {
         setHiddenCreatorKeys((prev) => new Set(prev).add(key));
       }
@@ -464,21 +446,9 @@ export default function ViralPostsExplore() {
         ) : (
           <ViralPostGrid
             posts={posts}
-            loading={!usingSearch && browseQuery.isLoading}
-            emptyTitle={
-              usingSearch
-                ? "No exact matches yet"
-                : quickFilter === "all"
-                  ? "No browse posts available yet"
-                  : "No posts match this filter"
-            }
-            emptyDescription={
-              usingSearch
-                ? "Try a broader topic, or clear the search to browse your niche."
-                : quickFilter === "all"
-                  ? "Your niche pool is refreshing. Try again shortly or search for a topic now."
-                  : "Clear Rising / Proven or adjust the platform filters."
-            }
+            loading={!usingSearch && browseQuery.isLoading && !noPlatformSelected}
+            emptyTitle={emptyCopy.title}
+            emptyDescription={emptyCopy.description}
             {...cardHandlers}
           />
         )}
