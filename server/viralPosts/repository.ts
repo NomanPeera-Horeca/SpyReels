@@ -13,6 +13,7 @@ import {
 import { getDb } from "../db";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import type { ViralFeedbackType } from "@shared/viralPosts";
+import { viralPostCanonicalKey } from "@shared/viralPosts";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
 
 const DB_OP_TIMEOUT_MS = 20_000;
@@ -428,6 +429,31 @@ export async function getSavedCandidateIds(
     .from(viralPostSaves)
     .where(eq(viralPostSaves.userId, userId));
   return new Set(rows.map((r) => r.candidateId));
+}
+
+/**
+ * Saved identity keys as platform:sourceId so Explore/Saved/feed flags
+ * stay aligned even when callers hold different candidate row references.
+ */
+export async function getSavedCanonicalKeys(
+  userId: number
+): Promise<Set<string>> {
+  const db = await getDb();
+  if (!db) return new Set();
+  const rows = await db
+    .select({
+      platform: viralPostCandidates.platform,
+      sourceId: viralPostCandidates.sourceId,
+    })
+    .from(viralPostSaves)
+    .innerJoin(
+      viralPostCandidates,
+      eq(viralPostSaves.candidateId, viralPostCandidates.id)
+    )
+    .where(eq(viralPostSaves.userId, userId));
+  return new Set(
+    rows.map((row) => viralPostCanonicalKey(row.platform, row.sourceId))
+  );
 }
 
 export async function getSavedCandidates(userId: number) {

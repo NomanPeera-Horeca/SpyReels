@@ -46,6 +46,69 @@ export function normalizeViralPostsExplorePlatforms(platforms: {
   };
 }
 
+/**
+ * Canonical Viral Posts identity: platform + external post id.
+ * Used for save-state consistency across Explore / Saved / feeds.
+ * Older rows with blank platform normalize to instagram.
+ */
+export function normalizeViralPostPlatform(
+  platform: string | null | undefined
+): ViralPostPlatform {
+  const clean = (platform || "").trim().toLowerCase();
+  if (clean === "tiktok") return "tiktok";
+  if (clean === "youtube") return "youtube";
+  return "instagram";
+}
+
+export function viralPostCanonicalKey(
+  platform: string | null | undefined,
+  sourceId: string | null | undefined
+): string {
+  return `${normalizeViralPostPlatform(platform)}:${(sourceId || "").trim()}`;
+}
+
+export function viralPostCanonicalKeyFromPost(post: {
+  platform?: string | null;
+  sourceId?: string | null;
+}): string {
+  return viralPostCanonicalKey(post.platform, post.sourceId);
+}
+
+/** Apply optimistic saved overrides keyed by canonical platform:sourceId. */
+export function applyViralPostSavedOverrides<
+  T extends {
+    id: string;
+    platform?: string | null;
+    sourceId?: string | null;
+    saved: boolean;
+  }
+>(posts: T[], savedOverrides: Record<string, boolean> | undefined): T[] {
+  if (!savedOverrides || Object.keys(savedOverrides).length === 0) return posts;
+  return posts.map((post) => {
+    const key = viralPostCanonicalKeyFromPost(post);
+    const byKey = savedOverrides[key];
+    if (byKey != null) return { ...post, saved: byKey };
+    const byId = savedOverrides[post.id];
+    if (byId != null) return { ...post, saved: byId };
+    return post;
+  });
+}
+
+/** Deduplicate saved rows that share the same platform + sourceId. */
+export function dedupeViralPostsByCanonicalKey<
+  T extends { platform?: string | null; sourceId?: string | null }
+>(posts: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const post of posts) {
+    const key = viralPostCanonicalKeyFromPost(post);
+    if (!key.endsWith(":") && seen.has(key)) continue;
+    if (!key.endsWith(":")) seen.add(key);
+    out.push(post);
+  }
+  return out;
+}
+
 export type ViralFeedbackType =
   | "more_like_this"
   | "not_relevant"

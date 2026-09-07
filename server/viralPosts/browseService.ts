@@ -3,6 +3,7 @@ import type {
   ViralPost,
   ViralPostPlatform,
 } from "@shared/viralPosts";
+import { viralPostCanonicalKey } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
 import {
   users,
@@ -265,7 +266,7 @@ export async function browseViralPosts(userId: number): Promise<{
     }),
     repo.getHiddenCreatorKeys(userId),
     repo.getRecentlyDismissedCandidateIds(userId),
-    repo.getSavedCandidateIds(userId),
+    repo.getSavedCanonicalKeys(userId),
   ]);
 
   let poolRefreshStarted = false;
@@ -337,7 +338,13 @@ export async function browseViralPosts(userId: number): Promise<{
 
   return {
     items: selected.map(({ row, adapted }) =>
-      toViralPost(row.candidate, adapted, saved.has(row.candidate.id))
+      toViralPost(
+        row.candidate,
+        adapted,
+        saved.has(
+          viralPostCanonicalKey(row.candidate.platform, row.candidate.sourceId)
+        )
+      )
     ),
     niche,
     poolRefreshStarted,

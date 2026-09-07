@@ -1,5 +1,8 @@
 import type { ViralPost, ViralTrendStatus } from "./viralPosts";
-import { isViralPostsV1Platform } from "./viralPosts";
+import {
+  applyViralPostSavedOverrides,
+  isViralPostsV1Platform,
+} from "./viralPosts";
 
 export type ExploreQuickFilter = "all" | "rising" | "proven";
 export type ExplorePostedWithin = "24h" | "7d" | "30d";
@@ -116,13 +119,7 @@ export function applyExplorePostFilters<T extends ExploreFilterablePost>(args: {
   const nowMs = args.nowMs ?? Date.now();
   const overrides = args.savedOverrides;
 
-  return args.posts
-    .map((post) => {
-      if (overrides && overrides[post.id] != null) {
-        return { ...post, saved: overrides[post.id]! };
-      }
-      return post;
-    })
+  return applyViralPostSavedOverrides(args.posts, overrides)
     .filter((post) => {
       if (dismissed.has(post.id)) return false;
       const key = explorePostCreatorKey(post);

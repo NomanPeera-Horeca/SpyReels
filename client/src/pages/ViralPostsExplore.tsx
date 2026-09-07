@@ -25,6 +25,10 @@ import {
   exploreEmptyCopy,
   explorePostCreatorKey,
 } from "@shared/viralPostsExploreFilters";
+import {
+  invalidateViralPostsSaveQueries,
+  viralPostSaveOverrideKey,
+} from "@/lib/viralPosts/savedState";
 
 export default function ViralPostsExplore() {
   const [, setLocation] = useLocation();
@@ -141,9 +145,10 @@ export default function ViralPostsExplore() {
 
   const handleToggleSave = useCallback(
     async (post: ViralPost) => {
-      const current = savedOverrides[post.id] ?? post.saved;
+      const overrideKey = viralPostSaveOverrideKey(post);
+      const current = savedOverrides[overrideKey] ?? post.saved;
       const next = !current;
-      setSavedOverrides((prev) => ({ ...prev, [post.id]: next }));
+      setSavedOverrides((prev) => ({ ...prev, [overrideKey]: next }));
       try {
         if (current) {
           await unsaveMutation.mutateAsync({ postId: post.id });
@@ -152,13 +157,9 @@ export default function ViralPostsExplore() {
           await saveMutation.mutateAsync({ postId: post.id });
           toast.success("Saved");
         }
-        await Promise.all([
-          utils.viralPosts.browse.invalidate(),
-          utils.viralPosts.search.invalidate(),
-          utils.viralPosts.getSaved.invalidate(),
-        ]);
+        await invalidateViralPostsSaveQueries(utils.viralPosts);
       } catch (err) {
-        setSavedOverrides((prev) => ({ ...prev, [post.id]: current }));
+        setSavedOverrides((prev) => ({ ...prev, [overrideKey]: current }));
         toast.error(err instanceof Error ? err.message : "Could not update saved post");
       }
     },

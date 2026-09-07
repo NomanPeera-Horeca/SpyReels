@@ -6,7 +6,7 @@ import type {
   ViralPostPlatform,
   ViralSearchResponse,
 } from "@shared/viralPosts";
-import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN } from "@shared/viralPosts";
+import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN, viralPostCanonicalKey, dedupeViralPostsByCanonicalKey } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
 import {
   users,
@@ -630,7 +630,7 @@ export async function getOrCreateDailyFeed(args: {
         scCallCount: 0,
         costEstimateUsd: 0,
       }),
-      repo.getSavedCandidateIds(args.userId),
+      repo.getSavedCanonicalKeys(args.userId),
       resolveMirroredVideoUrls(picked.map((p) => p.row)),
     ]);
 
@@ -664,7 +664,7 @@ export async function getOrCreateDailyFeed(args: {
         relevanceLabel: p.adapted.relevanceLabel,
         relevanceReason: p.adapted.relevanceReason,
         contentPillar: p.adapted.contentPillar,
-        saved: saved.has(p.row.id),
+        saved: saved.has(viralPostCanonicalKey(p.row.platform, p.row.sourceId)),
         shownAt: new Date(),
         hook: p.adapted.hook,
         format: p.adapted.format,
@@ -739,7 +739,7 @@ async function loadFeedResponse(
 ): Promise<ViralDailyFeedResponse> {
   const [rows, saved, hidden, dismissed] = await Promise.all([
     repo.getFeedItemsWithCandidates(existing.id),
-    repo.getSavedCandidateIds(userId),
+    repo.getSavedCanonicalKeys(userId),
     repo.getHiddenCreatorKeys(userId),
     repo.getRecentlyDismissedCandidateIds(userId),
   ]);
@@ -778,7 +778,7 @@ function mapDailyFeedToResponse(
   existing: ViralPostDailyFeed,
   rows: Awaited<ReturnType<typeof repo.getFeedItemsWithCandidates>>,
   opts: {
-    saved: Set<number>;
+    saved: Set<string>;
     hidden: Set<string>;
     dismissed: Set<number>;
     fromCache: boolean;
@@ -799,7 +799,7 @@ function mapDailyFeedToResponse(
         relevanceLabel: item.relevanceLabel,
         relevanceReason: item.relevanceReason,
         contentPillar: item.contentPillar,
-        saved: opts.saved.has(candidate.id),
+        saved: opts.saved.has(viralPostCanonicalKey(candidate.platform, candidate.sourceId)),
         dismissed: opts.dismissed.has(candidate.id),
         shownAt: item.shownAt,
         mirroredVideoUrl:
@@ -851,7 +851,7 @@ export async function getFeedHistory(args: {
   const page = hasMore ? rows.slice(0, limit) : rows;
 
   const [saved, hidden, dismissed] = await Promise.all([
-    repo.getSavedCandidateIds(args.userId),
+    repo.getSavedCanonicalKeys(args.userId),
     repo.getHiddenCreatorKeys(args.userId),
     repo.getRecentlyDismissedCandidateIds(args.userId),
   ]);
@@ -1174,7 +1174,7 @@ export async function searchViralPosts(args: {
   const cacheKey = normalizeSearchCacheKey(args.userId, q);
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.at < SEARCH_CACHE_MS) {
-    const saved = await repo.getSavedCandidateIds(args.userId);
+    const saved = await repo.getSavedCanonicalKeys(args.userId);
     const durationMs = Date.now() - requestStarted;
     console.info("[viralPosts] search_cache_hit", {
       userId: args.userId,
@@ -1191,7 +1191,7 @@ export async function searchViralPosts(args: {
       serverDurationMs: durationMs,
       items: cached.items.map((i) => ({
         ...i,
-        saved: saved.has(Number(i.id)),
+        saved: saved.has(viralPostCanonicalKey(i.platform, i.sourceId)),
       })),
     };
   }
@@ -1245,13 +1245,13 @@ export async function searchViralPosts(args: {
       })
       .slice(0, EXPLORE_RESULT_LIMIT);
 
-    const saved = await repo.getSavedCandidateIds(args.userId);
+    const saved = await repo.getSavedCanonicalKeys(args.userId);
     const items = ranked.map((p) =>
       candidateToViralPost(p.row, {
         relevanceLabel: p.adapted.relevanceLabel,
         relevanceReason: p.adapted.relevanceReason,
         contentPillar: p.adapted.contentPillar,
-        saved: saved.has(p.row.id),
+        saved: saved.has(viralPostCanonicalKey(p.row.platform, p.row.sourceId)),
         hook: p.adapted.hook,
         format: p.adapted.format,
       })
@@ -1305,11 +1305,12 @@ export function normalizeSearchCacheKey(userId: number, query: string): string {
 
 export async function getSavedViralPosts(userId: number): Promise<ViralPost[]> {
   const rows = await repo.getSavedCandidates(userId);
-  return rows.map(({ candidate }) =>
+  const items = rows.map(({ candidate }) =>
     candidateToViralPost(candidate, {
       relevanceLabel: "Saved",
       relevanceReason: "You saved this post for later.",
       saved: true,
     })
   );
+  return dedupeViralPostsByCanonicalKey(items);
 }

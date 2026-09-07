@@ -31,6 +31,12 @@ import {
   applyExplorePostFilters,
   exploreEmptyCopy,
 } from "@shared/viralPostsExploreFilters";
+import {
+  invalidateViralPostsSaveQueries,
+  patchSavedFlagInPosts,
+  viralPostSaveOverrideKey,
+} from "@/lib/viralPosts/savedState";
+import { viralPostCanonicalKeyFromPost } from "@shared/viralPosts";
 
 function parseTab(raw: string | null): ViralPostsTab {
   if (raw === "explore" || raw === "saved" || raw === "for-you") return raw;
@@ -292,7 +298,36 @@ export default function ViralPosts() {
     async (post: ViralPost) => {
       const prev = post.saved;
       const next = !prev;
+      const key = viralPostSaveOverrideKey(post);
       patchFeedSaved(post.id, next);
+      utils.viralPosts.getSaved.setData(undefined, (old) => {
+        if (!old) return old;
+        if (!next) {
+          return {
+            ...old,
+            items: old.items.filter(
+              (item) =>
+                item.id !== post.id &&
+                viralPostCanonicalKeyFromPost(item) !== key
+            ),
+          };
+        }
+        const exists = old.items.some(
+          (item) =>
+            item.id === post.id || viralPostCanonicalKeyFromPost(item) === key
+        );
+        if (exists) {
+          return {
+            ...old,
+            items: patchSavedFlagInPosts(old.items, post, true),
+          };
+        }
+        return { ...old, items: [{ ...post, saved: true }, ...old.items] };
+      });
+      utils.viralPosts.browse.setData(undefined, (old) => {
+        if (!old) return old;
+        return { ...old, items: patchSavedFlagInPosts(old.items, post, next) };
+      });
       try {
         if (prev) {
           await unsaveMutation.mutateAsync({ postId: post.id });
@@ -301,9 +336,10 @@ export default function ViralPosts() {
           await saveMutation.mutateAsync({ postId: post.id });
           toast.success("Saved");
         }
-        await utils.viralPosts.getSaved.invalidate();
+        await invalidateViralPostsSaveQueries(utils.viralPosts);
       } catch {
         patchFeedSaved(post.id, prev);
+        await invalidateViralPostsSaveQueries(utils.viralPosts);
       }
     },
     [patchFeedSaved, saveMutation, unsaveMutation, utils]
@@ -774,23 +810,41 @@ export default function ViralPosts() {
             </p>
           </div>
           <SavedPostFilters value={savedFilter} onChange={setSavedFilter} />
-          <ViralPostGrid
-            posts={savedPosts}
-            loading={savedQuery.isLoading}
-            emptyTitle={
-              savedFilter === "remade"
-                ? "No remade posts yet"
-                : savedFilter === "unused"
-                  ? "No posts matching filters"
-                  : "No saved posts yet"
-            }
-            emptyDescription={
-              savedFilter === "all"
-                ? "Save a post from For You or Explore and it will appear here."
-                : "Try another saved filter."
-            }
-            {...cardHandlers}
-          />
+          {savedQuery.error ? (
+            <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-14 text-center">
+              <h3 className="text-lg font-bold text-[#f6f4fb]">
+                We couldn't load saved posts
+              </h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-[#a9a4b8]">
+                {savedQuery.error.message || "Please try again."}
+              </p>
+              <Button
+                type="button"
+                className="mt-4 bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+                onClick={() => void savedQuery.refetch()}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : (
+            <ViralPostGrid
+              posts={savedPosts}
+              loading={savedQuery.isLoading}
+              emptyTitle={
+                savedFilter === "remade"
+                  ? "No remade posts yet"
+                  : savedFilter === "unused"
+                    ? "No posts matching filters"
+                    : "No saved posts yet"
+              }
+              emptyDescription={
+                savedFilter === "all"
+                  ? "Save a post from For You or Explore and it will appear here."
+                  : "Try another saved filter."
+              }
+              {...cardHandlers}
+            />
+          )}
         </section>
       ) : null}
 

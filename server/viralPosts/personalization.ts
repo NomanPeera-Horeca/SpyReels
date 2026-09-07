@@ -5,6 +5,10 @@ import {
   type ScrapeJob,
 } from "../../drizzle/schema";
 import {
+  normalizeViralPostPlatform,
+  viralPostCanonicalKey,
+} from "@shared/viralPosts";
+import {
   getCollectedReelsByWorkspace,
   getDb,
   getOnboardingState,
@@ -114,9 +118,7 @@ function normalizeHandle(value: string | null | undefined): string | null {
 }
 
 function normalizePlatform(value: string | null | undefined): AdaptedCandidate["platform"] {
-  const platform = (value || "instagram").toLowerCase();
-  if (platform === "tiktok" || platform === "youtube") return platform;
-  return "instagram";
+  return normalizeViralPostPlatform(value);
 }
 
 export function canonicalCandidateKey(
@@ -125,7 +127,7 @@ export function canonicalCandidateKey(
     sourceId: string;
   }
 ): string {
-  return `${normalizePlatform(candidate.platform)}:${candidate.sourceId.trim()}`;
+  return viralPostCanonicalKey(candidate.platform, candidate.sourceId);
 }
 
 function createEmptySignals(): ViralPersonalizationSignals {

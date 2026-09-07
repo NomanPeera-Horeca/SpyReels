@@ -249,9 +249,10 @@ describe("applyExplorePostFilters", () => {
       platforms: basePlatforms,
       postedWithin: "30d",
       quickFilter: "all",
-      savedOverrides: { "1": true },
+      savedOverrides: { "instagram:1": true },
       nowMs,
     });
+    // post() sets sourceId from id by default in helper below
     expect(items[0]?.saved).toBe(true);
   });
 
