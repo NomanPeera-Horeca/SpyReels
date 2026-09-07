@@ -1,5 +1,9 @@
 import { Images } from "lucide-react";
 import { useLocation } from "wouter";
+import {
+  CAROUSEL_TEMPLATES_BY_ID,
+  type CarouselSlideSpec,
+} from "@shared/carouselTemplates";
 import { CarouselLanding } from "@/components/carousel-studio/CarouselLanding";
 import { detectCarouselSource } from "@/components/carousel-studio/carouselSourceDetector";
 import { createCarouselLaunchId } from "@/components/carousel-studio/carouselLaunchSession";
@@ -29,15 +33,26 @@ export default function Carousels() {
   const recent = pickRecentCarousels(
     remakesQuery.data ?? [],
     CAROUSELS_RECENT_LIMIT
-  ).map((remake) => ({
-    id: remake.id,
-    title:
-      remake.title?.trim() ||
-      remake.niche?.trim() ||
-      "Untitled carousel",
-    createdAt: remake.createdAt,
-    thumbnailUrl: remake.thumbnailUrl,
-  }));
+  ).map((remake) => {
+    const template = CAROUSEL_TEMPLATES_BY_ID.get(remake.templateId) ?? null;
+    return {
+      id: remake.id,
+      title:
+        remake.title?.trim() ||
+        remake.niche?.trim() ||
+        template?.name ||
+        "Untitled carousel",
+      createdAt: remake.createdAt,
+      thumbnailUrl: remake.thumbnailUrl,
+      template,
+      slides: Array.isArray(remake.slideStructure)
+        ? (remake.slideStructure as CarouselSlideSpec[])
+        : null,
+      slideValues: remake.slotValues,
+      imageUrls: remake.imageUrls,
+      aspectRatio: remake.aspectRatioOverride,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-4xl">

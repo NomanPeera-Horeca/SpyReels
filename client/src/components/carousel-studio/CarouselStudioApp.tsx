@@ -269,7 +269,7 @@ export function CarouselStudioApp({
     CarouselDesignTokens["aspectRatio"]
   >("4:5");
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [designInspectorOpen, setDesignInspectorOpen] = useState(false);
+  const [designInspectorOpen, setDesignInspectorOpen] = useState(true);
   const [textSelection, setTextSelection] =
     useState<CarouselTextSelection | null>(null);
   const [aiAlternatives, setAiAlternatives] = useState<string[]>([]);
@@ -1060,7 +1060,7 @@ export function CarouselStudioApp({
       setCurrentSlide(0);
       setTextSelection(null);
       setImageSelection(null);
-      setDesignInspectorOpen(false);
+      setDesignInspectorOpen(true);
       setHistory([]);
       setHasGeneratedCarousel(true);
       setIsOpeningLibrary(false);

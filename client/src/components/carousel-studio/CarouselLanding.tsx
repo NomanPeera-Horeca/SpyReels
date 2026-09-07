@@ -1,11 +1,18 @@
 import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
+import type { CarouselSlideValuesById } from "@/components/CarouselRenderer";
+import type {
+  CarouselImageUrlMap,
+  CarouselSlideSpec,
+  CarouselTemplate,
+} from "@shared/carouselTemplates";
 import {
   detectCarouselSource,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
   type CarouselDetectedSource,
 } from "./carouselSourceDetector";
+import { CarouselRecentThumb } from "./CarouselRecentThumb";
 import "./carouselStudioCreate.css";
 
 export type CarouselLandingRecentItem = {
@@ -13,6 +20,12 @@ export type CarouselLandingRecentItem = {
   title: string;
   createdAt: Date | string;
   thumbnailUrl?: string | null;
+  /** Live first-slide preview (preferred over photo-only thumbnail). */
+  template?: CarouselTemplate | null;
+  slides?: CarouselSlideSpec[] | null;
+  slideValues?: CarouselSlideValuesById | null;
+  imageUrls?: CarouselImageUrlMap | null;
+  aspectRatio?: string | null;
 };
 
 const PASTE_HELPERS = [
@@ -262,15 +275,15 @@ export function CarouselLanding({
                   onOpenRecent(item.id);
                 }}
               >
-                {item.thumbnailUrl ? (
-                  <img
-                    className="carousel-mini-thumb"
-                    src={item.thumbnailUrl}
-                    alt=""
-                  />
-                ) : (
-                  <span className="carousel-mini-thumb" aria-hidden />
-                )}
+                <CarouselRecentThumb
+                  title={item.title}
+                  thumbnailUrl={item.thumbnailUrl}
+                  template={item.template}
+                  slides={item.slides}
+                  slideValues={item.slideValues}
+                  imageUrls={item.imageUrls}
+                  aspectRatio={item.aspectRatio}
+                />
                 <span className="carousel-recent-name">{item.title}</span>
                 {when ? (
                   <span className="carousel-recent-time">{when}</span>

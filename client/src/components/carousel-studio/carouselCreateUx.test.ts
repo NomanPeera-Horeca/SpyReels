@@ -33,6 +33,12 @@ describe("carousel create UX reuse", () => {
     expect(studio).not.toContain("PROGRESS_STAGE_ROWS");
     expect(hub).toContain("CarouselLanding");
     expect(hub).toContain("buildCarouselGenerateHref");
+    expect(hub).toContain("slideStructure");
+    expect(hub).toContain("slotValues");
+    expect(landing).toContain("CarouselRecentThumb");
+    const recentThumb = read("CarouselRecentThumb.tsx");
+    expect(recentThumb).toContain("CarouselRenderer");
+    expect(recentThumb).toContain("thumbnailUrl");
   });
 
   it("does not simulate loading stages with timers", () => {

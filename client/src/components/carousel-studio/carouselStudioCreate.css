@@ -242,6 +242,30 @@
   border: 1px solid var(--cl-border);
   background: var(--cl-panel-2);
   object-fit: cover;
+  display: block;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.carousel-mini-thumb-live {
+  position: relative;
+}
+
+.carousel-mini-thumb-stage {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.carousel-mini-thumb-stage > div,
+.carousel-mini-thumb-stage [data-carousel-slide-id],
+.carousel-mini-thumb-stage [data-carousel-slide-id] > * {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .carousel-recent-name {
