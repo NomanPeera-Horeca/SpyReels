@@ -1,0 +1,146 @@
+name: Public Web Pilot
+
+on:
+  push:
+    branches:
+      - feature/public-web-architecture-v2
+    paths:
+      - "public-web/**"
+      - "server/_core/publicWebPilotProxy.ts"
+      - "server/_core/publicWebPilotProxy.test.ts"
+      - "server/_core/vite.ts"
+      - "shared/publicRouteOwnership.ts"
+      - "shared/publicRouteOwnership.test.ts"
+      - "shared/spaNavigateFallback.ts"
+      - "shared/spaNavigateFallback.test.ts"
+      - "shared/publicWebIndexing.ts"
+      - "shared/publicWebIndexing.test.ts"
+      - "client/src/lib/researchPendingHandle.ts"
+      - "client/src/lib/researchPendingHandle.test.ts"
+      - "vite.config.ts"
+      - ".env.example"
+      - ".github/workflows/public-web-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install SpyReels dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test route ownership and pilot proxy guards
+        run: pnpm vitest run shared/publicRouteOwnership.test.ts shared/spaNavigateFallback.test.ts shared/publicWebIndexing.test.ts server/_core/publicWebPilotProxy.test.ts client/src/lib/researchPendingHandle.test.ts
+
+      - name: Typecheck existing SpyReels integration
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm exec tsc --noEmit
+
+      - name: Install public web dependencies
+        working-directory: public-web
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Chromium for browser QA
+        working-directory: public-web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Typecheck public web
+        working-directory: public-web
+        run: pnpm check
+
+      - name: Build public web
+        working-directory: public-web
+        run: pnpm build
+
+      - name: Start public web
+        working-directory: public-web
+        run: |
+          pnpm start > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health endpoint
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: Validate raw Viral Reel Finder HTML
+        run: |
+          curl --fail --silent http://127.0.0.1:3100/features/viral-reel-finder > /tmp/viral-reel-finder.html
+
+          grep -q "Any Instagram account" /tmp/viral-reel-finder.html
+          grep -q "Free Instagram Reel Finder" /tmp/viral-reel-finder.html
+          grep -q "Three steps from competitor account to a useful content direction" /tmp/viral-reel-finder.html
+          grep -q "Questions about the Instagram Reel Finder" /tmp/viral-reel-finder.html
+          grep -q 'href="https://spyreels.ai/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
+          grep -q 'href="https://spyreels.ai/free-tools/tiktok-viral-video-finder"' /tmp/viral-reel-finder.html
+          grep -q 'href="https://spyreels.ai/free-tools/instagram-reels-script-generator"' /tmp/viral-reel-finder.html
+          grep -q 'href="https://spyreels.ai/free-tools/viral-hooks"' /tmp/viral-reel-finder.html
+          grep -q 'rel="canonical" href="https://spyreels.ai/features/viral-reel-finder"' /tmp/viral-reel-finder.html
+          grep -q 'application/ld+json' /tmp/viral-reel-finder.html
+          grep -q 'spyreels-logo.png' /tmp/viral-reel-finder.html
+          grep -q 'Company' /tmp/viral-reel-finder.html
+          grep -q 'Free Tools' /tmp/viral-reel-finder.html
+
+          if grep -q "seo-crawler-snapshot" /tmp/viral-reel-finder.html; then
+            echo "Legacy crawler snapshot must not exist in the Next.js pilot HTML."
+            exit 1
+          fi
+
+          if grep -qi "Outlier score" /tmp/viral-reel-finder.html; then
+            echo "The landing page must not present the removed outlier-score marketing UI."
+            exit 1
+          fi
+
+          if grep -qi "Research my own account" /tmp/viral-reel-finder.html; then
+            echo "Do not reintroduce the ambiguous demo-account research CTA."
+            exit 1
+          fi
+
+          if grep -q "hero-demo-v1.mp4" /tmp/viral-reel-finder.html; then
+            echo "Do not reintroduce the generic talking-head video into this product-led page."
+            exit 1
+          fi
+
+          echo "Raw HTML pilot checks passed."
+
+      - name: Browser-test the full Viral Reel Finder journey
+        working-directory: public-web
+        run: pnpm test:e2e
+
+      - name: Upload browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-browser-qa-${{ github.run_id }}
+          path: |
+            public-web/test-results
+            public-web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true

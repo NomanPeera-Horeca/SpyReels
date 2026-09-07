@@ -14,6 +14,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { applyLandingAuthHandoff } from "@/lib/researchPendingHandle";
 
 const PUBLIC_NAV_LINKS = [
   { href: "/#features", label: "Features", type: "anchor" as const },
@@ -33,24 +34,6 @@ const PUBLIC_NAV_LINKS = [
     highlight: true,
   },
 ];
-
-function safeReturnTo(value: string | null): string | undefined {
-  const trimmed = value?.trim();
-  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) return undefined;
-  return trimmed;
-}
-
-function stashResearchHandleFromQuery(raw: string | null): void {
-  const handle = raw?.trim().replace(/^@+/, "").toLowerCase();
-  if (!handle || !/^[a-z0-9._]{1,30}$/i.test(handle)) return;
-  try {
-    sessionStorage.setItem("spyreels:research_pending_handle", handle);
-    sessionStorage.setItem("spyreels:research_autostart", "1");
-    sessionStorage.setItem("spyreels:research_pending_platform", "instagram");
-  } catch {
-    // Session storage is a best-effort enhancement.
-  }
-}
 
 export function PublicHeader({
   onBeforeAuthOpen,
@@ -72,17 +55,14 @@ export function PublicHeader({
   useEffect(() => {
     if (loading || typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    const requestedMode = url.searchParams.get("auth");
-    if (requestedMode !== "login" && requestedMode !== "signup") return;
+    const handoff = applyLandingAuthHandoff(url.search);
+    if (!handoff.auth) return;
 
-    const requestedReturnTo = safeReturnTo(url.searchParams.get("returnTo"));
-    stashResearchHandleFromQuery(url.searchParams.get("researchHandle"));
-
-    if (requestedReturnTo) setQueryReturnTo(requestedReturnTo);
-    setAuthMode(requestedMode);
+    if (handoff.returnTo) setQueryReturnTo(handoff.returnTo);
+    setAuthMode(handoff.auth);
 
     if (user) {
-      window.location.href = requestedReturnTo || "/";
+      window.location.href = handoff.returnTo || "/";
       return;
     }
 

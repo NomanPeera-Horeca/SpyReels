@@ -34,11 +34,15 @@ export default function CarouselEditor() {
 
   if (isNewRoute) {
     const intent = parseStudioLaunchSearch(search.startsWith("?") ? search : `?${search}`);
-    const content = intent.kind === "generate" ? intent.content : "";
-    if (!content) {
+    if (intent.kind !== "generate" || !intent.content) {
       return <Redirect to={CAROUSELS_PATH} />;
     }
-    return <CarouselStudioApp launchContent={content} />;
+    return (
+      <CarouselStudioApp
+        launchContent={intent.content}
+        launchId={intent.launchId}
+      />
+    );
   }
 
   const remakeId = Number(params?.remakeId);

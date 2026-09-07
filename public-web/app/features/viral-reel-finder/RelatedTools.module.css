@@ -1,0 +1,59 @@
+.section {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 56px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.headingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.headingRow h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  color: #8d8d9b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.links a {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #b8b8c4;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.links a:hover {
+  border-color: rgba(167, 139, 250, 0.28);
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 40px 0;
+  }
+
+  .links {
+    flex-direction: column;
+  }
+}

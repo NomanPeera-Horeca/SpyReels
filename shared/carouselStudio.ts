@@ -264,25 +264,14 @@ export const CAROUSEL_REMAKE_PROGRESS_STAGES = [
 export type CarouselRemakeProgressStage =
   (typeof CAROUSEL_REMAKE_PROGRESS_STAGES)[number];
 
-/** True when the trimmed input should be resolved as a URL, not a freeform idea. */
-export function looksLikeCarouselSourceUrl(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed || /\s/.test(trimmed)) return false;
-  if (/^https?:\/\//i.test(trimmed)) return true;
-  if (/^www\./i.test(trimmed)) return true;
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-export function normalizeCarouselSourceUrl(raw: string): string {
-  const trimmed = raw.trim();
-  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
-  return trimmed;
-}
+export {
+  CAROUSEL_DETECTED_SOURCE_KINDS,
+  detectCarouselSource,
+  looksLikeCarouselSourceUrl,
+  normalizeCarouselSourceUrl,
+  type CarouselDetectedSource,
+  type CarouselDetectedSourceKind,
+} from "./carouselSourceDetector";
 
 /** Neutral remake-niche placeholder when Studio has no explicit audience/pillar override. */
 export const STUDIO_INFER_FROM_SOURCE_NICHE = "infer from source";

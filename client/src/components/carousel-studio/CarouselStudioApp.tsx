@@ -8,6 +8,7 @@ import {
   buildReviewPlanViewModel,
   buildStudioNicheOverride,
   formatCarouselEnumLabel,
+  detectCarouselSource,
   looksLikeCarouselSourceUrl,
   normalizeCarouselSourceUrl,
   normalizeStoredCarouselBriefs,
@@ -15,9 +16,20 @@ import {
   selectRecommendedCreativeBrief,
   studioGenerateActionEnabled,
   studioPlannedSlideCount,
-  type CarouselRemakeProgressStage,
   type NormalizedCarouselBrief,
 } from "@shared/carouselStudio";
+import {
+  CAROUSEL_EDITOR_HANDOFF_MS,
+  CAROUSEL_CUSTOMER_PROGRESS_STEPS,
+  normalizePlannedSlideCount,
+  resolveCarouselLoadingView,
+  shouldOpenEditorFromRemakeStatus,
+  shouldResumeCarouselLoading,
+  shouldWatchCarouselRemakeStatus,
+} from "@shared/carouselLoadingProgress";
+import { CAROUSEL_CREATE_EVENT } from "@shared/carouselCreateAnalytics";
+import { CarouselLanding } from "./CarouselLanding";
+import { CarouselLoading } from "./CarouselLoading";
 import {
   CAROUSEL_TEMPLATES_BY_ID,
   normalizeSlideImages,
@@ -91,12 +103,31 @@ import {
 import {
   CAROUSELS_LIBRARY_PATH,
   CAROUSELS_PATH,
+  CAROUSELS_RECENT_LIMIT,
   buildCarouselEditHref,
+  buildCarouselGenerateHref,
+  pickRecentCarousels,
 } from "./carouselsHub";
+import {
+  bindCarouselLaunchRemake,
+  clearCarouselLaunchTicket,
+  createCarouselLaunchId,
+  hasCarouselLaunchStartedInPage,
+  markCarouselLaunchStarted,
+  markCarouselLaunchStartedInPage,
+  readCarouselLaunchTicket,
+  resolveCarouselLaunchReplay,
+} from "./carouselLaunchSession";
+import { trackCarouselCreateEvent } from "./trackCarouselCreateEvent";
 
 function pickStudioSlideTitle(slots: Record<string, string> | undefined): string {
   if (!slots) return "Untitled slide";
   return slots.headline?.trim() || slots.title?.trim() || slots.kicker?.trim() || "Untitled slide";
+}
+
+function pickRealSlideTitle(slots: Record<string, string> | undefined): string {
+  if (!slots) return "";
+  return slots.headline?.trim() || slots.title?.trim() || slots.kicker?.trim() || "";
 }
 
 const INPUT_ASPECT_OPTIONS: Array<{
@@ -107,24 +138,6 @@ const INPUT_ASPECT_OPTIONS: Array<{
   { value: "4:5", label: "4:5" },
   { value: "9:16", label: "9:16" },
 ];
-
-const PROGRESS_STAGE_ROWS: Array<{
-  id: CarouselRemakeProgressStage;
-  label: string;
-}> = [
-  { id: "writing_copy", label: "Writing slide copy" },
-  { id: "generating_images", label: "Generating images" },
-  { id: "saving", label: "Saving your carousel" },
-];
-
-function progressStageIndex(
-  stage: string | null | undefined
-): number {
-  if (stage === "writing_copy") return 0;
-  if (stage === "generating_images") return 1;
-  if (stage === "saving") return 2;
-  return -1;
-}
 
 function useToast() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -139,9 +152,11 @@ function useToast() {
 export function CarouselStudioApp({
   launchRemakeId = null,
   launchContent = null,
+  launchId: launchIdProp = null,
 }: {
   launchRemakeId?: number | null;
   launchContent?: string | null;
+  launchId?: string | null;
 }) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -194,6 +209,50 @@ export function CarouselStudioApp({
   } | null>(null);
   const [isPollingRemake, setIsPollingRemake] = useState(false);
   const [isOpeningLibrary, setIsOpeningLibrary] = useState(false);
+  const [plannedSlideCount, setPlannedSlideCount] = useState<number | null>(null);
+  const [openingEditor, setOpeningEditor] = useState(false);
+  const cancelledGenerationRef = useRef(false);
+  const generateLockRef = useRef(false);
+  const generateRunIdRef = useRef(0);
+  const activeLaunchIdRef = useRef<string | null>(null);
+  const lastTrackedStageRef = useRef<string | null>(null);
+  const openingEditorTimerRef = useRef<number | null>(null);
+
+  const clearHandoffTimer = useCallback(() => {
+    if (openingEditorTimerRef.current == null) return;
+    window.clearTimeout(openingEditorTimerRef.current);
+    openingEditorTimerRef.current = null;
+  }, []);
+
+  const releaseGenerateLock = useCallback(() => {
+    generateLockRef.current = false;
+  }, []);
+
+  const beginGenerateRun = useCallback(() => {
+    generateRunIdRef.current += 1;
+    cancelledGenerationRef.current = false;
+    generateLockRef.current = true;
+    return generateRunIdRef.current;
+  }, []);
+
+  const isStaleGenerateRun = useCallback((runId: number) => {
+    return (
+      cancelledGenerationRef.current || runId !== generateRunIdRef.current
+    );
+  }, []);
+
+  const abandonGenerateRun = useCallback(() => {
+    generateRunIdRef.current += 1;
+    cancelledGenerationRef.current = true;
+    generateLockRef.current = false;
+    clearHandoffTimer();
+  }, [clearHandoffTimer]);
+
+  useEffect(() => {
+    return () => {
+      abandonGenerateRun();
+    };
+  }, [abandonGenerateRun]);
 
   const [remakeTemplateId, setRemakeTemplateId] = useState<string | null>(null);
   const [remakeSlotValues, setRemakeSlotValues] =
@@ -288,6 +347,10 @@ export function CarouselStudioApp({
   );
   const defaultNicheQuery = trpc.carouselRemake.defaultNiche.useQuery();
   const defaultHandleQuery = trpc.carouselRemake.defaultHandle.useQuery();
+  const remakeListQuery = trpc.carouselRemake.list.useQuery({
+    limit: 20,
+    sort: "newest",
+  });
   const generateAnglesMutation = trpc.carouselStudio.generateAngles.useMutation();
   const generateFromInputMutation =
     trpc.carouselStudio.generateFromInput.useMutation();
@@ -418,7 +481,12 @@ export function CarouselStudioApp({
   const remakeStatusQuery = trpc.carouselRemake.status.useQuery(
     { remakeId: remakeId ?? 0 },
     {
-      enabled: remakeId != null,
+      enabled: shouldWatchCarouselRemakeStatus({
+        remakeId,
+        createStep,
+        isOpeningLibrary,
+        openingEditor,
+      }),
       refetchInterval: (query) => {
         const status = query.state.data?.status;
         return status === "processing" || status === "pending" ? 2000 : false;
@@ -701,6 +769,14 @@ export function CarouselStudioApp({
       mode,
     });
     setRemakeId(data.remakeId);
+    if (activeLaunchIdRef.current) {
+      bindCarouselLaunchRemake(activeLaunchIdRef.current, data.remakeId);
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.remakeBound, {
+        remake_id: data.remakeId,
+        launch_id: activeLaunchIdRef.current,
+        surface: "studio",
+      });
+    }
     setLiveAngles(briefs);
     setRecommendedBriefIndex(next.recommendedBriefIndex);
     setSelectedStrategy(next.selectedIndex);
@@ -710,11 +786,19 @@ export function CarouselStudioApp({
       sourceImage: data.sourceImage,
       sourceReelId: data.sourceReelId,
     });
+    const selected = briefs[next.selectedIndex ?? next.recommendedBriefIndex ?? 0];
+    if (selected) {
+      const planned = normalizePlannedSlideCount(
+        studioPlannedSlideCount(selected.estimatedSlideCount)
+      );
+      if (planned != null) setPlannedSlideCount(planned);
+    }
     if (data.sourceUrl) setCurrentSource("web");
   };
 
   /** Plan-review path: generate real angles, then stop on the review screen. */
   const findAnglesForReview = async () => {
+    if (generateLockRef.current || generateAnglesMutation.isPending) return;
     const prepared = await prepareSourceForGenerate();
     if (!prepared) return;
     setHasGeneratedCarousel(false);
@@ -746,6 +830,7 @@ export function CarouselStudioApp({
 
   const startGenerate = async (angleIndex: number) => {
     // angleIndex is the Review Plan display index. Server maps it to the stored index.
+    if (generateLockRef.current) return;
     if (!remakeId || !liveAngles || liveAngles.length === 0) {
       toast("Plan data is missing. Generate again from the input screen.");
       showCreateStep("input");
@@ -759,6 +844,7 @@ export function CarouselStudioApp({
       toast("Source content is missing. Go back and generate the plan again.");
       return;
     }
+    const runId = beginGenerateRun();
     setHasGeneratedCarousel(false);
     setRemakeSlotValues(null);
     setRemakeSlideStructure(null);
@@ -766,6 +852,8 @@ export function CarouselStudioApp({
     setRemakeTemplateId(null);
     setCurrentSlide(0);
     setSelectedStrategy(angleIndex);
+    clearHandoffTimer();
+    setOpeningEditor(false);
     setIsPollingRemake(true);
     showCreateStep("progress");
     try {
@@ -776,7 +864,10 @@ export function CarouselStudioApp({
         sourceImage: resolvedSource?.sourceImage ?? undefined,
         sourceReelId: resolvedSource?.sourceReelId ?? undefined,
       });
+      if (isStaleGenerateRun(runId)) return;
     } catch (err) {
+      if (isStaleGenerateRun(runId)) return;
+      releaseGenerateLock();
       setIsPollingRemake(false);
       const message =
         err instanceof Error ? err.message : "Could not start carousel generation.";
@@ -787,41 +878,88 @@ export function CarouselStudioApp({
 
   /** Default path: briefs server-side, auto-pick the recommended index, then remake. */
   const generateDirect = async () => {
+    if (generateLockRef.current) return;
+    const runId = beginGenerateRun();
     const prepared = await prepareSourceForGenerate();
-    if (!prepared) return;
+    if (!prepared) {
+      if (!isStaleGenerateRun(runId)) releaseGenerateLock();
+      return;
+    }
+    if (isStaleGenerateRun(runId)) return;
     setHasGeneratedCarousel(false);
     const pending = pendingStudioSelectionViewState();
     setSelectedStrategy(pending.selectedIndex);
     setRecommendedBriefIndex(pending.recommendedBriefIndex);
     setPlanReviewSession(false);
+    setRemakeId(null);
+    setLiveAngles(null);
     setRemakeSlotValues(null);
     setRemakeSlideStructure(null);
     setRemakeImageUrls(null);
     setRemakeTemplateId(null);
     setCurrentSlide(0);
+    clearHandoffTimer();
+    setOpeningEditor(false);
     setIsPollingRemake(true);
     showCreateStep("progress");
+    if (activeLaunchIdRef.current) {
+      const existing = readCarouselLaunchTicket();
+      const ticketContent =
+        existing?.launchId === activeLaunchIdRef.current
+          ? existing.content
+          : launchContent?.trim() || prepared.content;
+      markCarouselLaunchStarted(activeLaunchIdRef.current, ticketContent);
+    }
+    trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.generateStarted, {
+      source_kind: detectCarouselSource(prepared.content).kind,
+      launch_id: activeLaunchIdRef.current,
+      surface: "studio",
+    });
     try {
       const data = await generateFromInputMutation.mutateAsync(
         buildStudioGenerateInput(prepared)
       );
+      if (isStaleGenerateRun(runId)) return;
+      const planned = normalizePlannedSlideCount(data.estimatedSlideCount);
+      if (planned != null) setPlannedSlideCount(planned);
       if (!data.remakeId) {
+        clearCarouselLaunchTicket();
+        releaseGenerateLock();
         setIsPollingRemake(false);
         toast("Generation did not return a remake id. Try again.");
+        trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.failed, {
+          launch_id: activeLaunchIdRef.current,
+          error_code: "missing_remake_id",
+          surface: "studio",
+        });
         showCreateStep("input");
         return;
       }
       applyAnglesResponse(data, "generateFromInput");
     } catch (err) {
+      if (isStaleGenerateRun(runId)) return;
+      clearCarouselLaunchTicket();
+      releaseGenerateLock();
       setIsPollingRemake(false);
       const message =
         err instanceof Error ? err.message : "Could not generate carousel.";
       toast(message);
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.failed, {
+        launch_id: activeLaunchIdRef.current,
+        error_code: "generate_from_input",
+        surface: "studio",
+      });
       showCreateStep("input");
     }
   };
 
   const handlePrimaryGenerate = () => {
+    if (generateLockRef.current || isBusyGenerating) return;
+    trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.submit, {
+      source_kind: detectCarouselSource(composerInputRef.current).kind,
+      launch_id: activeLaunchIdRef.current,
+      surface: "studio",
+    });
     if (reviewPlanBeforeGenerating) {
       void findAnglesForReview();
       return;
@@ -832,13 +970,52 @@ export function CarouselStudioApp({
   useEffect(() => {
     const data = remakeStatusQuery.data;
     if (!data) return;
+
+    if (
+      shouldResumeCarouselLoading({
+        isOpeningLibrary,
+        status: data.status,
+      })
+    ) {
+      cancelledGenerationRef.current = false;
+      generateLockRef.current = true;
+      const briefs = Array.isArray(data.angleOptions) ? data.angleOptions : [];
+      const selected =
+        briefs[data.selectedAngleIndex ?? data.recommendedBriefIndex ?? 0];
+      const planned = normalizePlannedSlideCount(
+        selected ? studioPlannedSlideCount(selected.estimatedSlideCount) : null
+      );
+      if (planned != null) setPlannedSlideCount(planned);
+      setIsPollingRemake(true);
+      setIsOpeningLibrary(false);
+      showCreateStep("progress");
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.resumed, {
+        remake_id: remakeId,
+        launch_id: activeLaunchIdRef.current,
+        reason: "processing_remake",
+        surface: "studio",
+      });
+      return;
+    }
+
     if (data.status === "completed") {
       const structure = Array.isArray(data.slideStructure)
         ? (data.slideStructure as CarouselSlideSpec[])
         : [];
       const template = CAROUSEL_TEMPLATES_BY_ID.get(data.templateId);
+      const canOpenEditor = shouldOpenEditorFromRemakeStatus({
+        status: data.status,
+        cancelled: cancelledGenerationRef.current,
+        isPollingRemake,
+        isOpeningLibrary,
+        openingEditor,
+        createStep,
+      });
       if (!template || structure.length === 0) {
-        if (isPollingRemake || isOpeningLibrary) {
+        if (canOpenEditor) {
+          releaseGenerateLock();
+          clearHandoffTimer();
+          setOpeningEditor(false);
           setIsPollingRemake(false);
           setIsOpeningLibrary(false);
           if (isOpeningLibrary) {
@@ -872,31 +1049,79 @@ export function CarouselStudioApp({
         setRemakeAspectRatio(data.aspectRatioOverride);
         setPlatform(platformFromAspect(data.aspectRatioOverride));
       }
-      if (isPollingRemake || isOpeningLibrary || !hasGeneratedCarousel) {
-        setRemakeSlotValues(normalizeCarouselSlideValues(data.slotValues) ?? {});
-        setRemakeSlotStyles(
-          normalizeCarouselSlotStyleMap(data.slotStyleOverrides)
-        );
-        setRemakeImageFrames(
-          normalizeCarouselImageFrameMap(data.imageFrameOverrides)
-        );
-        setCurrentSlide(0);
-        setTextSelection(null);
-        setImageSelection(null);
-        setDesignInspectorOpen(false);
-        setHistory([]);
-        setHasGeneratedCarousel(true);
-        setIsOpeningLibrary(false);
-        showCreateStep("editor");
+      if (!canOpenEditor) return;
+      setRemakeSlotValues(normalizeCarouselSlideValues(data.slotValues) ?? {});
+      setRemakeSlotStyles(
+        normalizeCarouselSlotStyleMap(data.slotStyleOverrides)
+      );
+      setRemakeImageFrames(
+        normalizeCarouselImageFrameMap(data.imageFrameOverrides)
+      );
+      setCurrentSlide(0);
+      setTextSelection(null);
+      setImageSelection(null);
+      setDesignInspectorOpen(false);
+      setHistory([]);
+      setHasGeneratedCarousel(true);
+      setIsOpeningLibrary(false);
+      if (openingEditor) {
+        setIsPollingRemake(false);
+        return;
       }
-      if (isPollingRemake) {
+      if (isPollingRemake || createStep === "progress") {
+        setOpeningEditor(true);
+        setIsPollingRemake(false);
         void utils.carouselRemake.list.invalidate();
+        clearHandoffTimer();
+        openingEditorTimerRef.current = window.setTimeout(() => {
+          if (cancelledGenerationRef.current) {
+            releaseGenerateLock();
+            return;
+          }
+          setOpeningEditor(false);
+          releaseGenerateLock();
+          trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.editorOpened, {
+            remake_id: remakeId,
+            launch_id: activeLaunchIdRef.current,
+            surface: "studio",
+          });
+          showCreateStep("editor");
+        }, CAROUSEL_EDITOR_HANDOFF_MS);
+        return;
       }
+      releaseGenerateLock();
       setIsPollingRemake(false);
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.editorOpened, {
+        remake_id: remakeId,
+        launch_id: activeLaunchIdRef.current,
+        surface: "studio",
+      });
+      showCreateStep("editor");
       return;
     }
     if (data.status === "failed") {
+      if (cancelledGenerationRef.current) {
+        releaseGenerateLock();
+        return;
+      }
+      if (
+        !isPollingRemake &&
+        !isOpeningLibrary &&
+        createStep !== "progress"
+      ) {
+        return;
+      }
+      releaseGenerateLock();
+      clearHandoffTimer();
+      setOpeningEditor(false);
       setIsPollingRemake(false);
+      clearCarouselLaunchTicket();
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.failed, {
+        remake_id: remakeId,
+        launch_id: activeLaunchIdRef.current,
+        error_code: "remake_failed",
+        surface: "studio",
+      });
       toast(data.errorMessage || "Carousel generation failed.");
       if (isOpeningLibrary) {
         setIsOpeningLibrary(false);
@@ -908,14 +1133,18 @@ export function CarouselStudioApp({
     }
   }, [
     remakeStatusQuery.data,
+    remakeId,
     isPollingRemake,
     isOpeningLibrary,
-    hasGeneratedCarousel,
+    openingEditor,
+    createStep,
     planReviewSession,
     showCreateStep,
     toast,
     utils,
     setLocation,
+    clearHandoffTimer,
+    releaseGenerateLock,
   ]);
 
   useEffect(() => {
@@ -947,7 +1176,10 @@ export function CarouselStudioApp({
     setHasGeneratedCarousel(false);
     setIsPollingRemake(false);
     setPlanReviewSession(false);
-  }, []);
+    setPlannedSlideCount(null);
+    setOpeningEditor(false);
+    clearHandoffTimer();
+  }, [clearHandoffTimer]);
 
   const openCompletedFromLibrary = useCallback(
     (nextRemakeId: number) => {
@@ -971,13 +1203,57 @@ export function CarouselStudioApp({
       openCompletedFromLibraryRef.current(launchRemakeId);
       return;
     }
-    if (launchContent?.trim()) {
-      hubLaunchConsumedRef.current = true;
-      composerInputRef.current = launchContent;
-      setComposerInput(launchContent);
-      void generateDirectRef.current();
+    const content = launchContent?.trim();
+    if (!content) return;
+    hubLaunchConsumedRef.current = true;
+    composerInputRef.current = content;
+    setComposerInput(content);
+
+    let launchId = launchIdProp?.trim() || "";
+    if (!launchId) {
+      launchId = createCarouselLaunchId();
+      const nextHref = buildCarouselGenerateHref(content, launchId);
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (currentHref !== nextHref) {
+        window.history.replaceState(null, "", nextHref);
+      }
     }
-  }, [launchRemakeId, launchContent]);
+    activeLaunchIdRef.current = launchId;
+
+    const replay = resolveCarouselLaunchReplay({
+      launchId,
+      content,
+      ticket: readCarouselLaunchTicket(),
+      startedInThisPage: hasCarouselLaunchStartedInPage(launchId),
+    });
+    if (replay.action === "resume") {
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.resumed, {
+        remake_id: replay.remakeId,
+        launch_id: launchId,
+        reason: "launch_ticket",
+        surface: "studio",
+      });
+      openCompletedFromLibraryRef.current(replay.remakeId);
+      return;
+    }
+    if (replay.action === "skip_in_flight") {
+      trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.launchDeduped, {
+        launch_id: launchId,
+        source_kind: detectCarouselSource(content).kind,
+        surface: "studio",
+      });
+      return;
+    }
+
+    markCarouselLaunchStartedInPage(launchId);
+    markCarouselLaunchStarted(launchId, content);
+    trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.launch, {
+      launch_id: launchId,
+      source_kind: detectCarouselSource(content).kind,
+      surface: "studio",
+    });
+    void generateDirectRef.current();
+  }, [launchRemakeId, launchContent, launchIdProp]);
 
   useEffect(() => {
     if (remakeId == null) return;
@@ -986,6 +1262,47 @@ export function CarouselStudioApp({
       window.history.replaceState(null, "", target);
     }
   }, [remakeId]);
+
+  useEffect(() => {
+    if (createStep !== "progress") return;
+    const view = resolveCarouselLoadingView({
+      sourceKind: detectCarouselSource(
+        resolvedSource?.sourceUrl || composerInput
+      ).kind,
+      isStartingGeneration: isBusyGenerating,
+      hasRemakeId: remakeId != null,
+      hasAngles: Boolean(liveAngles && liveAngles.length > 0),
+      remakeStatus: remakeStatusQuery.data?.status,
+      progressStage: remakeStatusQuery.data?.progressStage,
+      plannedSlideCount,
+      slideTitles: [],
+      hasImages: Boolean(
+        remakeImageUrls && Object.keys(remakeImageUrls).length > 0
+      ),
+      openingEditor,
+    });
+    const stepId = CAROUSEL_CUSTOMER_PROGRESS_STEPS[view.stepIndex]?.id;
+    if (!stepId || lastTrackedStageRef.current === stepId) return;
+    lastTrackedStageRef.current = stepId;
+    trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.stageChanged, {
+      step_id: stepId,
+      remake_id: remakeId,
+      launch_id: activeLaunchIdRef.current,
+      surface: "studio",
+    });
+  }, [
+    createStep,
+    composerInput,
+    isBusyGenerating,
+    remakeId,
+    liveAngles,
+    remakeStatusQuery.data?.status,
+    remakeStatusQuery.data?.progressStage,
+    plannedSlideCount,
+    remakeImageUrls,
+    openingEditor,
+    resolvedSource?.sourceUrl,
+  ]);
 
   const pendingSlotSaveRef = useRef<{
     slideId: string;
@@ -1511,6 +1828,36 @@ export function CarouselStudioApp({
       pickStudioSlideTitle(displaySlideValues?.[effectiveSlides[0]?.id]),
       36
     ) || "spyreels-carousel";
+  const landingRecent = pickRecentCarousels(
+    remakeListQuery.data ?? [],
+    CAROUSELS_RECENT_LIMIT
+  ).map((remake) => ({
+    id: remake.id,
+    title: remake.title?.trim() || remake.niche?.trim() || "Untitled carousel",
+    createdAt: remake.createdAt,
+    thumbnailUrl: remake.thumbnailUrl,
+  }));
+  const loadingSourceKind = detectCarouselSource(
+    resolvedSource?.sourceUrl || composerInput
+  ).kind;
+  const loadingSlideTitles = effectiveSlides.map((slide) =>
+    pickRealSlideTitle(displaySlideValues?.[slide.id])
+  );
+  const loadingHasImages = Boolean(
+    remakeImageUrls && Object.keys(remakeImageUrls).length > 0
+  );
+  const handleCancelLoading = () => {
+    abandonGenerateRun();
+    clearCarouselLaunchTicket();
+    setOpeningEditor(false);
+    setIsPollingRemake(false);
+    trackCarouselCreateEvent(CAROUSEL_CREATE_EVENT.cancelled, {
+      remake_id: remakeId,
+      launch_id: activeLaunchIdRef.current,
+      surface: "studio",
+    });
+    showCreateStep("input");
+  };
 
   return (
     <div className="cs">
@@ -1612,61 +1959,35 @@ export function CarouselStudioApp({
               <div className="page" id="createPage">
                 {createStep === "input" && (
                   <div id="inputStep">
-                    <section className="hero">
-                      <h1>What do you want to turn into a carousel?</h1>
-                      <div className="source-card">
-                        <div className="source-body">
-                          <div className="minimal-composer">
-                            <textarea
-                              className="source-input"
-                              aria-label="Carousel topic or link"
-                              placeholder="Enter a topic or idea, or paste a blog, news, or YouTube link."
-                              value={composerInput}
-                              onChange={(e) => {
-                                const next = e.target.value;
-                                setComposerInput(next);
-                                if (!next.trim()) {
-                                  setResolvedSource(null);
-                                  setLinkStatus("idle");
-                                  setLinkError(null);
-                                  lastResolvedUrlRef.current = null;
-                                  setCurrentSource("prompt");
-                                }
-                              }}
-                              onPaste={(e) => {
-                                const pasted = e.clipboardData.getData("text");
-                                if (looksLikeCarouselSourceUrl(pasted)) {
-                                  window.setTimeout(() => {
-                                    void resolvePastedLink(pasted);
-                                  }, 0);
-                                }
-                              }}
-                              onBlur={() => {
-                                void resolvePastedLink(composerInput);
-                              }}
-                            />
-                            {linkStatus === "loading" && (
-                              <div className="link-status" role="status">
-                                <span className="link-spinner" aria-hidden />
-                                Reading the link and pulling in its content...
-                              </div>
-                            )}
-                            {linkStatus === "error" && linkError && (
-                              <div className="link-status error" role="alert">
-                                {linkError}
-                              </div>
-                            )}
-                            {linkStatus === "ready" &&
-                              resolvedSource?.sourceImage && (
-                                <div className="source-thumb-chip">
-                                  <img
-                                    src={resolvedSource.sourceImage}
-                                    alt=""
-                                  />
-                                  <span>Source preview</span>
-                                </div>
-                              )}
-
+                    <CarouselLanding
+                      idea={composerInput}
+                      onIdeaChange={(next) => {
+                        setComposerInput(next);
+                        if (!next.trim()) {
+                          setResolvedSource(null);
+                          setLinkStatus("idle");
+                          setLinkError(null);
+                          lastResolvedUrlRef.current = null;
+                          setCurrentSource("prompt");
+                        }
+                      }}
+                      onCreate={(content) => {
+                        setComposerInput(content);
+                        composerInputRef.current = content;
+                        handlePrimaryGenerate();
+                      }}
+                      submitting={isBusyGenerating || linkStatus === "loading"}
+                      submitLabel={
+                        reviewPlanBeforeGenerating ? "Review plan →" : undefined
+                      }
+                      submittingLabel={
+                        reviewPlanBeforeGenerating && isFindingAngles
+                          ? "Preparing plan..."
+                          : undefined
+                      }
+                      recent={landingRecent}
+                      onOpenRecent={(id) => openCompletedFromLibrary(id)}
+                    >
                             <div className="aspect-row" role="group" aria-label="Aspect ratio">
                               {INPUT_ASPECT_OPTIONS.map((opt) => (
                                 <button
@@ -1805,31 +2126,8 @@ export function CarouselStudioApp({
                                   </div>
                                 </details>
                               </div>
-
-                              <button
-                                type="button"
-                                className="btn primary composer-primary"
-                                disabled={
-                                  isBusyGenerating || linkStatus === "loading"
-                                }
-                                aria-disabled={
-                                  isBusyGenerating || linkStatus === "loading"
-                                }
-                                onClick={handlePrimaryGenerate}
-                              >
-                                {reviewPlanBeforeGenerating
-                                  ? isFindingAngles
-                                    ? "Preparing plan..."
-                                    : "Review plan →"
-                                  : isBusyGenerating
-                                    ? "Generating..."
-                                    : "Generate →"}
-                              </button>
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
+                    </CarouselLanding>
                   </div>
                 )}
 
@@ -2153,44 +2451,21 @@ export function CarouselStudioApp({
 
                 {createStep === "progress" && (
                   <div id="progressStep">
-                    <div className="progress-box">
-                      <div className="eyebrow">Spyreels AI is working</div>
-                      <h2>Building your carousel</h2>
-                      <p className="sub">
-                        {progressStageIndex(
-                          remakeStatusQuery.data?.progressStage
-                        ) < 0
-                          ? "Starting generation..."
-                          : PROGRESS_STAGE_ROWS[
-                              Math.max(
-                                0,
-                                progressStageIndex(
-                                  remakeStatusQuery.data?.progressStage
-                                )
-                              )
-                            ]?.label}
-                      </p>
-                      <div className="progress-list">
-                        {PROGRESS_STAGE_ROWS.map((row, i) => {
-                          const current = progressStageIndex(
-                            remakeStatusQuery.data?.progressStage
-                          );
-                          const done = current > i;
-                          const active = current === i;
-                          return (
-                            <div
-                              key={row.id}
-                              className={`progress-row${done ? " done" : ""}${active ? " active" : ""}`}
-                            >
-                              <span className="status">
-                                {done ? "✓" : i + 1}
-                              </span>
-                              <span>{row.label}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <CarouselLoading
+                      sourceKind={loadingSourceKind}
+                      isStartingGeneration={isBusyGenerating}
+                      hasRemakeId={remakeId != null}
+                      hasAngles={Boolean(liveAngles && liveAngles.length > 0)}
+                      remakeStatus={remakeStatusQuery.data?.status}
+                      progressStage={remakeStatusQuery.data?.progressStage}
+                      plannedSlideCount={plannedSlideCount}
+                      slideTitles={loadingSlideTitles}
+                      hasImages={loadingHasImages}
+                      openingEditor={openingEditor}
+                      onCancel={
+                        openingEditor ? undefined : handleCancelLoading
+                      }
+                    />
                   </div>
                 )}
 

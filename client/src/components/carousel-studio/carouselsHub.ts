@@ -12,9 +12,13 @@ export function buildCarouselEditHref(remakeId: number): string {
   return `${CAROUSELS_PATH}/${remakeId}/edit`;
 }
 
-export function buildCarouselGenerateHref(content: string): string {
+export function buildCarouselGenerateHref(
+  content: string,
+  launchId?: string
+): string {
   const params = new URLSearchParams();
   params.set("content", content.trim());
+  if (launchId?.trim()) params.set("launch", launchId.trim());
   return `${CAROUSELS_NEW_PATH}?${params.toString()}`;
 }
 
@@ -51,7 +55,7 @@ export function isCarouselsNavActive(location: string): boolean {
 
 export type StudioLaunchIntent =
   | { kind: "open_remake"; remakeId: number }
-  | { kind: "generate"; content: string }
+  | { kind: "generate"; content: string; launchId: string | null }
   | { kind: "none" };
 
 export function parseStudioLaunchSearch(search: string): StudioLaunchIntent {
@@ -65,7 +69,8 @@ export function parseStudioLaunchSearch(search: string): StudioLaunchIntent {
     }
   }
   const content = params.get("content")?.trim() ?? "";
-  if (content) return { kind: "generate", content };
+  const launchId = params.get("launch")?.trim() || null;
+  if (content) return { kind: "generate", content, launchId };
   return { kind: "none" };
 }
 

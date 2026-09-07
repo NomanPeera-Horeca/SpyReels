@@ -85,6 +85,9 @@ describe("carousels hub navigation", () => {
     expect(buildCarouselGenerateHref("  menu idea  ")).toBe(
       "/carousels/new?content=menu+idea"
     );
+    expect(buildCarouselGenerateHref("  menu idea  ", "launch-a")).toBe(
+      "/carousels/new?content=menu+idea&launch=launch-a"
+    );
     expect(buildCarouselEditHref(118)).toBe("/carousels/118/edit");
     expect(parseCarouselEditRemakeId("/carousels/118/edit")).toBe(118);
   });
@@ -103,6 +106,14 @@ describe("carousels hub navigation", () => {
     expect(parseStudioLaunchSearch("?content=How+to+simplify")).toEqual({
       kind: "generate",
       content: "How to simplify",
+      launchId: null,
+    });
+    expect(
+      parseStudioLaunchSearch("?content=How+to+simplify&launch=launch-a")
+    ).toEqual({
+      kind: "generate",
+      content: "How to simplify",
+      launchId: "launch-a",
     });
     expect(parseStudioLaunchSearch("?remakeId=118")).toEqual({
       kind: "open_remake",
